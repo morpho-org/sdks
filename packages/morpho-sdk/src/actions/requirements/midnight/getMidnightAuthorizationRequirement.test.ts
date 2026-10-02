@@ -1,7 +1,10 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import {
+  getChainAddress,
+  registerCustomAddresses,
+} from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Chain, zeroAddress } from "viem";
+import { type Chain, getAddress, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -12,6 +15,13 @@ import {
   UnsupportedMidnightAuthorizationTargetError,
 } from "../../../types/index.js";
 import { getMidnightAuthorizationRequirement } from "./getMidnightAuthorizationRequirement.js";
+
+const midnightBundlesV2 = getAddress(
+  "0x00000000000000000000000000000000000b2002",
+);
+registerCustomAddresses({
+  addresses: { [midnightChainId]: { midnightBundlesV2 } },
+});
 
 const midnightTestChain = {
   id: midnightChainId,
@@ -79,7 +89,7 @@ describe("getMidnightAuthorizationRequirement", () => {
     expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
   });
 
-  test.each([midnightAddresses.midnightBundles])(
+  test.each([midnightAddresses.midnightBundles, midnightBundlesV2])(
     "behavior: accepts supported target %s",
     async (authorized) => {
       const handle = createMockClient(midnightTestChain);

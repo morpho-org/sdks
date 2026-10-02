@@ -119,6 +119,7 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
         assets,
       );
     }
+    // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.collateral.market, collateralIndex);
   }
 };
@@ -138,8 +139,10 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * @throws {InvalidTreeError} when `root` is zero, or `payload` or `groups` is empty.
  * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
  * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
- * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
- * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+ * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+ * @throws {ChainIdMismatchError} when the collateral market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the collateral market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a collateral index is not configured on the market.
  * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.

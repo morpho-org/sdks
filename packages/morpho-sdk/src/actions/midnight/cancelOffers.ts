@@ -41,8 +41,9 @@ export interface MidnightCancelOffersParams {
  * @returns A deep-frozen `Transaction<MidnightCancelOffersAction>` targeting `MidnightBundlesV2`.
  * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
  * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
- * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
- * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+ * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @example
  * ```ts

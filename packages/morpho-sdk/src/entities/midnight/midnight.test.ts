@@ -1030,6 +1030,19 @@ describe("MorphoMidnight", () => {
         ...overrides,
       });
 
+    test("error: ChainIdMismatchError", async () => {
+      await expect(
+        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeLend({
+          accountAddress: midnightAddresses.maker,
+          offers: rateTree(makerOffer({ buy: true })),
+          deadline: maxUint256,
+          validation: offerValidation,
+          loanToken: midnightAddresses.loanToken,
+          loanAssets: 1_000n,
+        }),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
+
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({ handle, token: midnightAddresses.loanToken, result: 0n });
@@ -1154,6 +1167,17 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
         ...overrides,
       });
+
+    test("error: ChainIdMismatchError", async () => {
+      await expect(
+        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeBorrow({
+          accountAddress: midnightAddresses.maker,
+          offers: rateTree(makerOffer({ buy: false })),
+          deadline: maxUint256,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
 
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);

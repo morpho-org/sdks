@@ -199,6 +199,54 @@ describe("Midnight cancel-and-make on fork", () => {
     await expect(isRootRatified(client, repost.root)).resolves.toBe(true);
   });
 
+  test("error: reverts the whole repost when a cancelled group is consumed above its ceiling", async ({
+    client,
+  }) => {
+    await deployMidnightBundlesV2(client);
+    await client.deal({
+      erc20: usdc,
+      account: client.account.address,
+      amount: parseUnits("10", 6),
+    });
+    const midnightEntity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id);
+
+    const first = await midnightEntity.cancelAndMakeLend({
+      accountAddress: client.account.address,
+      offers: rateTree(client, { buy: true, group: groupA }),
+      deadline: maxUint256,
+      validation,
+      loanToken: usdc,
+      loanAssets: parseUnits("1", 6),
+    });
+    await fulfilRequirements(client, first);
+    await client.sendTransaction(first.buildTx());
+
+    // Simulates a partial fill of groupA after the repost was prepared.
+    await client.writeContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "setConsumed",
+      args: [groupA, 1n, client.account.address],
+    });
+
+    const repost = await midnightEntity.cancelAndMakeLend({
+      accountAddress: client.account.address,
+      offers: rateTree(client, { buy: true, group: groupB }),
+      cancellations: [{ group: groupA, maxConsumed: 0n }],
+      deadline: maxUint256,
+      validation,
+      loanToken: usdc,
+      loanAssets: parseUnits("1", 6),
+    });
+    await fulfilRequirements(client, repost);
+
+    await expect(client.sendTransaction(repost.buildTx())).rejects.toThrow();
+    await expect(consumed(client, groupA)).resolves.toBe(1n);
+    await expect(isRootRatified(client, repost.root)).resolves.toBe(false);
+  });
+
   test("supplies collateral and publishes borrow offers in one transaction", async ({
     client,
   }) => {

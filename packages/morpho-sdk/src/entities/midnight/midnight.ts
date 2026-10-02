@@ -655,7 +655,12 @@ export class MorphoMidnight {
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
    * @throws {NonPositiveInputError} when `loanAssets` is non-positive.
-   * @throws {NegativeInputError} when `reservedLoanAssets`, `deadline`, or a `maxConsumed` ceiling is negative.
+   * @throws {NegativeInputError} when `reservedLoanAssets` or a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightOfferSideMismatchError} when an offer is not lend-side.
@@ -752,7 +757,12 @@ export class MorphoMidnight {
    * @throws {MidnightMarketAddressMismatchError} when the collateral market targets another Midnight deployment.
    * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
    * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.
-   * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
@@ -1085,8 +1095,9 @@ export class MorphoMidnight {
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
-   * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
-   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
