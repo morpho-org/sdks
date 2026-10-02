@@ -1,3 +1,4 @@
+import type { InputMarketParams as BlueMarketParams } from "@morpho-org/blue-sdk";
 import type {
   AccrualPosition,
   Market,
@@ -71,6 +72,20 @@ export interface CancelAndMakeLendParams extends CancelAndMakeParams {
   readonly loanAssets: bigint;
   /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. */
   readonly reservedLoanAssets?: bigint;
+}
+
+/** Parameters for the Midnight Blue-funded lend maker flow. */
+export interface SupplyBlueMakeLendParams extends CancelAndMakeParams {
+  /**
+   * Morpho Blue market the parked assets are supplied to; its loan token must match every offer.
+   * The contract does not check supply share-price slippage: use only markets protected against
+   * supply-share-price inflation. Markets with no supply shares are rejected.
+   */
+  readonly blueMarket: BlueMarketParams;
+  /** Loan assets pulled from the maker and supplied to `blueMarket` for the maker's callback. */
+  readonly assetsToPark: bigint;
+  /** Salt selecting the maker's `BlueBuyCallback`. Defaults to the zero hash. */
+  readonly callbackSalt?: Hex;
 }
 
 /** Parameters for the Midnight cancel-and-make-borrow maker flow. */

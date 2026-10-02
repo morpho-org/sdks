@@ -527,6 +527,12 @@ export interface MidnightCancelAndMakeAction
       readonly groups: readonly Hex[];
       readonly cancellations: readonly MidnightGroupCancellation[];
       readonly collateralSupplies: readonly MidnightCollateralTransfer[];
+      /** Loan assets parked on Morpho Blue for the maker's `BlueBuyCallback`, when any. */
+      readonly blueSupply?: {
+        readonly market: InputMarketParams;
+        readonly assets: bigint;
+        readonly callbackSalt: Hex;
+      };
       readonly deadline: bigint;
     }
   > {}

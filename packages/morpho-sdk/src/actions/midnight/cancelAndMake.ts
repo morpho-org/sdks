@@ -1,3 +1,4 @@
+import type { InputMarketParams as BlueMarketParams } from "@morpho-org/blue-sdk";
 import {
   InvalidTreeError,
   type MarketParams,
@@ -60,6 +61,16 @@ export interface MidnightOfferPublication {
   readonly payload: Hex;
   /** Optional delegated root-activation signature. */
   readonly rootSignature?: MidnightRootActivationSignature;
+  /**
+   * Optional loan assets pulled from the maker and supplied to `market` on Morpho Blue for the
+   * maker's `BlueBuyCallback` derived from `callbackSalt`. Offers funded by it must set that
+   * callback and `abi.encode(market)` as callback data. Share-price slippage is not checked.
+   */
+  readonly blueSupply?: {
+    readonly market: BlueMarketParams;
+    readonly assets: bigint;
+    readonly callbackSalt: Hex;
+  };
   /** Optional collateral supplied to `market` for the maker before activation. */
   readonly collateral?: {
     readonly market: MarketParams;
@@ -160,6 +171,12 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
       throw new MidnightReplacementGroupCancelledError({ group });
     }
   }
+  if (params.blueSupply != null && params.blueSupply.assets <= 0n) {
+    throw new NonPositiveInputError(
+      "blueSupply.assets",
+      params.blueSupply.assets,
+    );
+  }
   if (params.collateral == null) return;
   validateMidnightMarket({
     market: params.collateral.market,
@@ -182,15 +199,17 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
 
 /**
  * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake` for `msg.sender`: cancel previous
- * groups under consumption guards, optionally supply collateral, activate `root`, and publish `payload`.
+ * groups under consumption guards, optionally park loan assets on Morpho Blue for the maker's
+ * `BlueBuyCallback` or supply collateral, activate `root`, and publish `payload`.
  * Without `ratifier`, `root`, `groups` and `payload`, it only cancels groups (`cancelOffers` uses this).
  * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  *
  * The contract does not check that `payload` matches `root`; callers must derive both from the
  * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
- * `cancelAndMakeBorrow(...)`, which do so and resolve approvals and authorization.
+ * `cancelAndMakeBorrow(...)` or `supplyBlueMakeLend(...)`, which do so and resolve approvals and
+ * authorization.
  *
- * @param params - Offer root, payload, cancellations, optional collateral, and deadline.
+ * @param params - Offer root, payload, cancellations, optional Blue supply or collateral, and deadline.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment or, when publishing,
  *   no PriceRatifierV1/RateRatifierV1 deployment.
@@ -206,6 +225,7 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * @throws {MidnightMarketAddressMismatchError} when the collateral market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a collateral index is not configured on the market.
  * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.
+ * @throws {NonPositiveInputError} when `blueSupply.assets` is non-positive.
  * @example
  * ```ts
  * import { midnightCancelAndMake } from "@morpho-org/morpho-sdk";
@@ -238,6 +258,20 @@ export const midnightCancelAndMake = (
   const supplies = (params.collateral?.supplies ?? []).map(
     ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
   );
+  const blueSupply =
+    params.blueSupply == null
+      ? undefined
+      : {
+          market: {
+            loanToken: params.blueSupply.market.loanToken,
+            collateralToken: params.blueSupply.market.collateralToken,
+            oracle: params.blueSupply.market.oracle,
+            irm: params.blueSupply.market.irm,
+            lltv: params.blueSupply.market.lltv,
+          },
+          assets: params.blueSupply.assets,
+          callbackSalt: params.blueSupply.callbackSalt,
+        };
   const signature = params.rootSignature ?? {
     height: 0n,
     nonce: 0n,
@@ -254,9 +288,9 @@ export const midnightCancelAndMake = (
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
-        emptyBlueMarket,
-        0n,
-        zeroHash,
+        blueSupply?.market ?? emptyBlueMarket,
+        blueSupply?.assets ?? 0n,
+        blueSupply?.callbackSalt ?? zeroHash,
         params.collateral == null
           ? emptyMidnightMarket
           : MarketUtils.toStruct(params.collateral.market),
@@ -290,6 +324,7 @@ export const midnightCancelAndMake = (
         groups: [...(params.groups ?? [])],
         cancellations,
         collateralSupplies: supplies,
+        ...(blueSupply && { blueSupply }),
         deadline: params.deadline,
       },
     },

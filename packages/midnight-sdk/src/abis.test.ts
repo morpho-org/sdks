@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  blueBuyCallbackFactoryAbi,
   midnightBundlesAbi,
   midnightBundlesV2Abi,
   priceRatifierV1Abi,
@@ -124,6 +125,22 @@ describe("rateRatifierV1Abi", () => {
       "Unauthorized",
       "UnauthorizedTaker",
       "WorsePrice",
+    ]);
+  });
+});
+
+describe("blueBuyCallbackFactoryAbi", () => {
+  test("behavior: exposes callback derivation and lookup", () => {
+    const functions = blueBuyCallbackFactoryAbi
+      .filter((entry) => entry.type === "function")
+      .map((entry) => entry.name);
+
+    expect(functions).toEqual([
+      "BLUE",
+      "MIDNIGHT",
+      "callbackOf",
+      "createBlueBuyCallback",
+      "isBlueBuyCallback",
     ]);
   });
 });
