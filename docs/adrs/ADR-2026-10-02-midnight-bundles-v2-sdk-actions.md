@@ -69,6 +69,8 @@ Rules shared by the taker actions:
   entrypoints do not accept it.
 - Sell actions account for V2 withdrawing the sender's existing credit before taking offers, so a
   borrow by a sender with credit nets that credit first.
+- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list, so it never encodes the
+  same call as `takeBorrow`.
 - Collateral supplies and withdrawals are lists of `{ collateralIndex, assets }`; `maxUint256`
   `assets` on a withdrawal means the sender's full balance at execution.
 
@@ -85,6 +87,8 @@ Rules shared by the maker actions:
 - The publishing maker actions (`cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `supplyCollateralMakeBorrow`) reject an empty offer set, so they always activate a non-zero root;
   `cancelOffers` is the only action that cancels without a replacement.
+- `supplyBlueMakeLend` rejects `assetsToPark = 0` and `supplyCollateralMakeBorrow` rejects an empty
+  collateral-supply list, so neither encodes the same call as its `cancelAndMake*` counterpart.
 - `supplyBlueMakeLend` rejects any offer whose callback is not the `BlueBuyCallback` derived for
   `accountAddress`, so parked assets always back the published offers.
 - The root and the publication payload are derived deterministically from the offers input, so
@@ -129,12 +133,13 @@ encoding follow from that:
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
-- `morpho-sdk` 7.0.0 keeps the established method and action names of the migrated flows
+- `morpho-sdk` 7.0.0 keeps the established method names of the migrated flows
   (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
   replaced by the target union. The V1-only permit types `PermitKind` and `MidnightTokenPermit`
-  are removed with them. The migration guide lists each.
+  are removed with them. The four V1 flows also keep their action names. The migration guide lists
+  each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
 - `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
@@ -142,8 +147,11 @@ encoding follow from that:
   marked `@deprecated` in favour of `cancelAndMakeLend` and `cancelAndMakeBorrow` and follow the
   standard deprecation lifecycle.
 - `supplyCollateralMakeBorrow` did not use V1 either, but it is retyped in place rather than
-  deprecated: its V2 successor serves the same intent under the same name, and the prior
-  non-atomic flow can leave collateral supplied with no live offer when publication fails.
+  deprecated. Its action changes from `mempoolSubmitOffers` to `midnightCancelAndMake` and it gets
+  its own output type; `MakeOffersOutput` and the `mempoolSubmitOffers` builder stay unchanged for
+  `makeLend` and `makeBorrow`. It is retyped in place because its V2 successor serves the same
+  intent under the same name, and the prior non-atomic flow can leave collateral supplied with no
+  live offer when publication fails.
 - The route replacement of the migrated flows invokes a narrow lifecycle exception, added
   to `AGENTS.md` §7 with this record. It does not waive the major changeset, migration guide or
   maintained-dependent audit.
@@ -165,7 +173,8 @@ selection.
   a permit → requirement unit tests and pinned-fork integration tests per method.
 - Maker actions reject offers whose maker differs from `accountAddress`, offers whose ratifier is
   not the activated `PriceRatifierV1` or `RateRatifierV1`, replacement groups that are also being
-  cancelled, an empty offer set on a publishing action, and a `supplyBlueMakeLend` offer whose
+  cancelled, an empty offer set on a publishing action, `assetsToPark = 0` on `supplyBlueMakeLend`,
+  an empty collateral-supply list on either `supplyCollateral*` action, and a `supplyBlueMakeLend` offer whose
   callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
