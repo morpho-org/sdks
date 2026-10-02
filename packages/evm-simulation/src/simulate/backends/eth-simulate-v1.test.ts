@@ -1,4 +1,9 @@
-import { type Address, getAddress, numberToHex } from "viem";
+import {
+  type Address,
+  BlockNotFoundError,
+  getAddress,
+  numberToHex,
+} from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -526,6 +531,23 @@ describe.sequential("executePlan", () => {
     const error = await executePlan(params).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(InvalidSimulationResponseError);
     expect((error as Error).message).toContain("unavailable");
+    expect((error as Error).cause).toBeInstanceOf(BlockNotFoundError);
+  });
+
+  test.each([
+    ["absent", {}],
+    ["null", { logs: null }],
+  ])("ok: %s per-call logs are treated as no transfers", async (_, patch) => {
+    const { logs: _logs, ...call } = okCalls(1)[0]!;
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(
+        rpc(simulateResult([{ ...call, ...patch } as unknown as CallResult])),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const execution = await executePlan(params);
+    expect(execution.transactions[0]!.result.logs).toEqual([]);
   });
 
   test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {

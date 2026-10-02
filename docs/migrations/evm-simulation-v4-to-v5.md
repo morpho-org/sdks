@@ -42,7 +42,7 @@ block that is neither the pinned state block nor its immediate successor (or a
 successor whose `parentHash` does not match), a block timestamp earlier than
 the pinned block's, a per-call result that fails normalization (for example a
 non-quantity `gasUsed` or a log without a `topics` array), and a pinned state
-block whose hash changed during the
+block whose hash changed, or that the node no longer serves, during the
 simulation. Callers that bypass `ExternalServiceError` to proceed unsimulated
 must handle all seven as hard failures. `ExternalServiceError` remains for
 transport failures, timeouts and malformed JSON-RPC envelopes.

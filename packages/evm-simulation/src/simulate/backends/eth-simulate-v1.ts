@@ -130,7 +130,8 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *   other than the pinned state block or its successor, a successor whose
  *   `parentHash` is not the pinned hash, a block timestamp earlier than the
  *   pinned block's, a per-call result that fails normalization, or a
- *   state-block hash that changed mid-flight).
+ *   state-block hash that changed, or a pinned block the node no longer
+ *   serves, mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts or the
  *   node reports a bundle-level revert (code 3 / insufficient funds).
  * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
@@ -278,12 +279,19 @@ export async function executePlan(params: {
       error instanceof ExternalServiceError &&
       error.cause instanceof BlockNotFoundError
     )
-      return null;
+      return error;
     throw error;
   });
-  if (stateBlockAfter?.hash !== stateBlock.hash) {
+  if (
+    stateBlockAfter instanceof ExternalServiceError ||
+    stateBlockAfter.hash !== stateBlock.hash
+  ) {
+    const after =
+      stateBlockAfter instanceof ExternalServiceError
+        ? "unavailable"
+        : stateBlockAfter.hash;
     throw new InvalidSimulationResponseError(
-      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter?.hash ?? "unavailable"}. Re-submit the simulation.`,
+      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${after}. Re-submit the simulation.`,
       {
         context: {
           stage: "transport",
@@ -291,6 +299,9 @@ export async function executePlan(params: {
           mode: plan.request.mode,
           blockNumber: stateBlock.number,
         },
+        ...(stateBlockAfter instanceof ExternalServiceError && {
+          cause: stateBlockAfter.cause,
+        }),
       },
     );
   }
