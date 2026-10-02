@@ -40,7 +40,7 @@ export interface Review {
   readonly commit_id: string | null;
   readonly id: number;
   readonly state: string;
-  readonly user: { readonly login: string } | null;
+  readonly user: { readonly login: string; readonly type?: string } | null;
 }
 
 /** Injectable `fetch` boundary so the GitHub API can be stubbed in tests. */
@@ -132,7 +132,9 @@ function isReview(value: unknown): value is Review {
     user === null ||
     (typeof user === "object" &&
       user != null &&
-      typeof (user as { login?: unknown }).login === "string");
+      typeof (user as { login?: unknown }).login === "string" &&
+      (!("type" in user) ||
+        typeof (user as { type?: unknown }).type === "string"));
 
   return (
     (body === null || typeof body === "string") &&

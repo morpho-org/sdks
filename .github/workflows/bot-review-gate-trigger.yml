@@ -1,0 +1,16 @@
+name: Bot review gate trigger
+
+# Untrusted relay: the default-branch `Bot review gate` workflow re-evaluates the event head.
+# Carries no data and grants no permissions.
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Relays review events to the Bot review gate workflow."

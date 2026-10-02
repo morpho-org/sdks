@@ -1,0 +1,55 @@
+name: Bot review gate
+
+# Publishes `bot-review-gate` only from the default-branch workflow; both triggers load this file
+# from that branch, and the evaluator checks out its code.
+# Review events arrive through the no-permission `Bot review gate trigger` relay, which carries no data.
+# Review-triggered runs evaluate every open PR at the event head SHA and post nothing if none are open.
+# Push-triggered runs fetch the triggering PR and require its head to match the event SHA.
+# The verdict covers every open PR at the head commit, since statuses are per commit.
+# Only approvers with write access or higher count.
+# Runs are serialized per SHA; any failure or cancellation posts `error`.
+# A PR can still add its own workflow that posts this context: GitHub Actions required statuses
+# cannot distinguish workflows. `.github/` is protected by @morpho-org/security CODEOWNERS;
+# closing that gap fully requires an App-sourced status.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_run:
+    workflows: ["Bot review gate trigger"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-review-gate-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'pull_request_target' || github.event.workflow_run.event == 'pull_request_review'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/ci/bot-review-gate.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+      - if: failure() || cancelled()
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=error -f context=bot-review-gate -f description="Bot review gate run failed; re-run this workflow." -f target_url="$RUN_URL"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
