@@ -1,18 +1,29 @@
 # evm-simulation Conventions
 
-- Simulate EVM bundles through Tenderly RPC (`tenderly_simulateTransaction` / `tenderly_simulateBundle`) first when configured for the chain; fall back to `eth_simulateV1` only for `ExternalServiceError`.
-- Keep the simulation pipeline staged as validation, authorization resolution, backend execution, parsing, and retention checks.
+- Simulate EVM bundles only through `eth_simulateV1`. RPC failures, timeouts, unsupported configuration and execution reverts propagate as typed errors; never select another provider, retry execution, or return a successful result after failure. Give the sole execution the full `timeoutMs` budget (default 5000 ms) — one shared `AbortSignal` covers `eth_chainId`, `eth_getBlock*` and `eth_simulateV1`.
+- Keep the simulation pipeline staged as request parsing → chain identity → single block resolution → quoted-asset metadata resolution → state-read and execution planning → `eth_simulateV1` boundary (simulation with in-block state reads → response parsing → reorg check) → transfer derivation → quoted balance/position decoding → slippage checks → retention assertion.
+- The boundary requires an endpoint supporting `eth_simulateV1` with per-call `from` and `traceTransfers`; no `stateOverrides` are used. There is no fallback backend.
+- No balance inflation: `value` transfers are funded by the sender's real native balance. `validation: false` means gas is not charged, which is how gas is separated from economic effects.
+- Block advancement is observed, not required: geth-style nodes report the simulated block as `stateBlockNumber + 1` while Anvil reports the pinned block itself. The boundary accepts exactly the pinned block or pinned+1; consumers must read `block.blockNumber`/`block.blockTimestamp` on the returned execution, never assume +1.
+- Native slippage amounts come from net `traceTransfers` movements on user calls; no baseline `eth_getBalance` read is needed. `validation: false` excludes gas charges; `calls`/`txIdx` index user transactions only.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
-- Keep backend outputs normalized to `RawSimulationResult`; add new backends under `src/simulate/backends/` with colocated parity tests.
-- Encode signature authorizations as `approve(spender, amount ?? maxUint256)` and prepend them to the simulated bundle.
+- Keep RPC I/O under `src/simulate/backends/` and outputs normalized to the internal `SimulationExecution` type. Colocated transport-boundary tests cover request/response shapes and failures; pinned Anvil forks prove sequential state, real native funding, and standalone-bundle retention.
+- Preview `authorizations` are converted from SDK requirements into ordered simulation preparation calls. Do not verify permission/nonce read-back or re-derive authorization policy; preparation and transaction reverts propagate. Preview success does not validate future signatures.
+- `limits.operations` contains caller-selected actions/subjects and the shared `SlippageLimits` quote and WAD-scaled percentage tolerance. No calldata decoding, inferred constraints, default economic limits, or implicit health-policy checks. Only compare quoted amounts against the supplied tolerance; reject empty quotes and missing tolerances. Omitted limits skip checks. Missing evidence for a quoted amount throws a typed error. No separate penalty or refund checks.
+- Read only quoted token/account balances or market/account position shares, deduplicated across entries. Resolve underlying tokens only for asset quotes without an explicit asset. No limits means no slippage reads. Do not add general state reporting, factory discovery, or full vault entity fetching.
+- State-based bounds cover the named subject across the entire bundle. Never label these aggregate measurements with a transaction index. Return the checked quote and tolerance. Preparation and state-read calls never receive a public `txIdx`.
 - Enforce retention by net `(restricted address, token)` balance across the blue-sdk `bundles` registry plus `midnightBundles` with `DUST_THRESHOLD = 100n`; skip only chains that catalog neither.
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
-- Add chains through caller `SimulationConfig.chains`; the per-chain `ChainSimulationConfig` is a discriminated union enforcing at least one of `tenderlyRpc` or `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
+- Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
+
+- The unreleased v5 stack follows the narrow lifecycle exception in root `AGENTS.md` §7, which covers both the SDK-1291 Tenderly backend removal and the SDK-1293 legacy authorization-variant removal; SDK-1293 replaced the legacy authorization variants, narrowed `SimulateParams.blockNumber` to exclude `"pending"`, and cut the runtime over to the new input/authorization/limit types.
 
 ## Continuous Improvement
 
-- Keep backend I/O isolated behind normalized simulation results; public simulation behavior should not depend on hidden backend state.
+- Keep backend I/O isolated behind normalized execution results; public simulation behavior should not depend on hidden backend state.
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer typed failures and explicit backend support rules over broad catch/fallback logic.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
+
+- `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used through its root entry point for the requirements adapter and its `/abis` subpath for Morpho ABIs. Address lookups come from `@morpho-org/blue-sdk`. Every morpho-sdk bump requires the root AGENTS.md §7 dependent package bump audit for evm-simulation.
