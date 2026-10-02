@@ -1,5 +1,5 @@
 import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
-
+import { DEFAULT_LLTV_BUFFER } from "@morpho-org/morpho-sdk";
 import { SimulationValidationError } from "../../errors.js";
 import {
   DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS,
@@ -74,6 +74,10 @@ describe("resolveEffectiveLimits", () => {
     ];
     const resolved = resolveEffectiveLimits({ operations });
     expect(resolved.operations).toEqual(operations);
+  });
+
+  test("behavior: pins the LLTV buffer floor to morpho-sdk's builder buffer", () => {
+    expect(DEFAULT_MIN_LLTV_BUFFER_WAD).toBe(DEFAULT_LLTV_BUFFER);
   });
 
   test("behavior: result is deep-frozen", () => {
