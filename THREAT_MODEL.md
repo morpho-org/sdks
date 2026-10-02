@@ -148,7 +148,7 @@ treat an attacker-chosen value supplied by the integrator as a vulnerability.
   they were asked to build for (`ChainIdMismatchError`). They cannot detect a client whose transport
   points at a different network than the chain it declares; that falls under [RPC](#rpc).
 - **Addresses passed as arguments.** Vault, market, receiver and `userAddress` values are used as
-  given after shape and checksum validation. Choosing them is the integrator's responsibility.
+  given; choosing them is the integrator's responsibility.
 - **Address registry.** Per-chain contract addresses ship in `@morpho-org/morpho-ts`.
   `registerCustomAddresses` adds entries for new chains or missing periphery, rejects malformed or
   wrongly checksummed addresses, and refuses to override an existing entry

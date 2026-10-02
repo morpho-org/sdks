@@ -91,7 +91,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 | [`@morpho-org/wdk-protocol-lending-morpho-evm`](./packages/wdk-protocol-lending-morpho-evm) | Yes | WDK lending module, including ERC-4337 and paymaster flows. |
 | [`@morpho-org/liquidity-sdk-viem`](./packages/liquidity-sdk-viem) | Limited | Deprecated (see its [`DEPRECATED.md`](./packages/liquidity-sdk-viem/DEPRECATED.md)). Reports are accepted, but fixes are not guaranteed. |
 | [`@morpho-org/test`](./packages/test), [`@morpho-org/morpho-test`](./packages/morpho-test) | No | Test fixtures and harnesses, not meant for production. Supply-chain issues in their published tarballs are still in scope. |
-| `@morpho-org/consumer-sdk` | No | Legacy package, deprecated. Fixes ship only in the maintained packages above. |
+| `@morpho-org/consumer-sdk` | No | Legacy predecessor of `@morpho-org/morpho-sdk`; not maintained in this repository. |
 | CI/CD, release scripts and workflows in this repository | Yes | Anything that could change what is published to npm. |
 
 ### Vulnerability classes in scope
@@ -123,9 +123,9 @@ These are the guarantees the codebase commits to ([`AGENTS.md`](./AGENTS.md) §5
 
 | Invariant | What it means | Where it is enforced |
 | --- | --- | --- |
-| Deposit routing | Vault deposits, withdrawals and redemptions go through the audited periphery (VaultBundlesV1, VaultExitBundlesV1), and Blue writes through BlueBundlesV1, never through ad-hoc call sequences. | `morpho-sdk` actions; see [its README](./packages/morpho-sdk/README.md#how-it-works). |
+| Deposit routing | Vault deposits, `withdraw`, `redeem`, `inKindRedeem` and `forceWithdraw` go through the audited periphery (VaultBundlesV1, VaultExitBundlesV1), and Blue writes through BlueBundlesV1. The one exception is Vault V2 `forceRedeem`, a direct `VaultV2.multicall` of caller-supplied `forceDeallocate` calls followed by the redeem. | `morpho-sdk` actions; see [its README](./packages/morpho-sdk/README.md#how-it-works). |
 | Inflation-attack guard | Deposits carry a maximum share price derived from accrued vault state and a bounded slippage tolerance, so a manipulated share price makes the transaction revert. | `computeVaultMaxSharePrice` and `MAX_ABSOLUTE_SHARE_PRICE` in [`packages/morpho-sdk/src/helpers`](./packages/morpho-sdk/src/helpers). |
-| LLTV buffer | Borrows and collateral withdrawals keep the position at least `DEFAULT_LLTV_BUFFER` (0.5%) below the liquidation LTV unless the integrator overrides it. | `DEFAULT_LLTV_BUFFER`, `validatePositionHealth` and `validatePositionHealthAfterWithdraw`. |
+| LLTV buffer | Borrows and collateral withdrawals keep the position at least `DEFAULT_LLTV_BUFFER` (0.5%) below the liquidation LTV. The buffer is fixed, not configurable. | `DEFAULT_LLTV_BUFFER`, `validatePositionHealth` and `validatePositionHealthAfterWithdraw`. |
 | Bounded slippage | Slippage tolerance is non-negative and at most `MAX_SLIPPAGE_TOLERANCE` (10%). | `validateSlippageTolerance`. |
 | `chainId` validation | Entities and actions refuse to build for a client on a different chain than expected. | `validateChainId` (`ChainIdMismatchError`), `validateMidnightMarketChainId`. |
 | Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
@@ -136,7 +136,7 @@ Every invariant above has unit or fork tests next to its implementation (`*.test
 Two architectural rules from [`AGENTS.md`](./AGENTS.md) also carry security weight:
 
 - **Action-layer purity (§1).** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
-- **Typed failures (§2, §3).** SDK source never throws a bare `Error`; every failure mode is a named, exported class, so integrators can handle each one explicitly.
+- **Typed failures (§2, §3).** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
 
 ## Supported versions
 
@@ -153,7 +153,7 @@ Security fixes ship only in the latest major line of each maintained package. Pr
 | `@morpho-org/wdk-protocol-lending-morpho-evm` | 2.x | < 2 |
 | `@morpho-org/liquidity-sdk-viem` | Deprecated; no fix guaranteed | all |
 | `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered | — |
-| `@morpho-org/consumer-sdk` | No longer maintained | all |
+| `@morpho-org/consumer-sdk` | Not maintained in this repository | all |
 
 When a new major is released, the previous major stops receiving fixes. Packages are deprecated following [ADR-2026-05-13](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md). Current versions are in each package's `package.json` and `CHANGELOG.md`.
 
@@ -174,15 +174,17 @@ Packages are released with [Changesets](https://github.com/changesets/changesets
 
 Every version published by this pipeline carries an SLSA provenance attestation signed through Sigstore, tying it to the commit and workflow that built it.
 
-```bash
-# Verify registry signatures and provenance for everything in your lockfile
-npm audit signatures
+`npm audit signatures` checks registry signatures, and provenance attestations where they exist, for an npm-installed `node_modules` tree. It does not fail on a version that has no provenance and does not show which repository built it. pnpm and Yarn have no equivalent command.
 
-# Show the attestation for one version
-npm view @morpho-org/morpho-sdk@<version> dist.attestations
+To check where a version was built, read the subject of its provenance attestation:
+
+```bash
+curl -s "$(npm view @morpho-org/morpho-sdk@<version> dist.attestations.url)" \
+  | jq -r '.attestations[] | select(.predicateType | test("slsa")) | .bundle.dsseEnvelope.payload' \
+  | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-The attestation should name the `morpho-org/sdks` repository and the `.github/workflows/push.yml` workflow. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
+The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/push.yml"`, on `refs/heads/main` (or `refs/heads/next` for prereleases). The "Provenance" panel on the package's npmjs.com page shows the same information. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
 
 ## Dependency policy
 
@@ -196,7 +198,7 @@ The attestation should name the `morpho-org/sdks` repository and the `.github/wo
 ### Recommendations for consumers
 
 - Commit your lockfile and install with `npm ci` or `pnpm install --frozen-lockfile` in CI.
-- Run `npm audit signatures` after installing.
+- Run `npm audit signatures` after installing with npm, and check provenance of new `@morpho-org/*` versions as described in [Verifying a release](#verifying-a-release).
 - Pin `@morpho-org/*` to exact versions, or use `overrides` / `resolutions` for transitive ones, if you need stricter control.
 - Watch this repository's [releases](https://github.com/morpho-org/sdks/releases) and [security advisories](https://github.com/morpho-org/sdks/security/advisories) to learn about fixes.
 
@@ -212,7 +214,7 @@ Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings 
 
 ### Continuous checks
 
-- **Automated PR review.** Every non-draft PR is reviewed by Claude through [`claude.yml`](./.github/workflows/claude.yml), using the review personas in [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). The security-focused ones are [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (transaction parameters, permits, Action-layer purity, the invariants above), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (swallowed errors) and, for CI and release changes, [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md).
+- **Automated PR review.** Every non-draft PR from a branch in this repository (except Dependabot's) is reviewed automatically by Claude through [`claude.yml`](./.github/workflows/claude.yml), using the review personas in [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). The security-focused ones are [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (transaction parameters, permits, Action-layer purity, the invariants above), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (swallowed errors) and, for CI and release changes, [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md).
 - **Workflow audit.** [`zizmor.yml`](./.github/workflows/zizmor.yml) audits every GitHub Actions workflow on each PR and uploads findings to code scanning.
 - **Pinned actions.** Third-party GitHub Actions are pinned to full commit SHAs and run with least-privilege `permissions:`.
 - **Release monitoring.** [`npm-release-watch.yml`](./.github/workflows/npm-release-watch.yml) checks npm every 10 minutes for new `@morpho-org/*` publishes and opens an issue for each so it can be matched against an expected release.
@@ -224,7 +226,7 @@ Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings 
 - **Handle typed errors explicitly.** Catch the specific error classes you expect and let others propagate. Never catch a validation error (for example `ChainIdMismatchError`, `ExcessiveSlippageToleranceError`, `ExpiredDeadlineError`) and retry with the check removed.
 - **Do not edit built transactions.** Returned transactions are deep-frozen. Do not copy and change `to`, `data` or `value`; build a new one with new inputs.
 - **Set `userAddress` to the real submitter.** Bundles act on `msg.sender`, and signature helpers verify the signer, so `userAddress` must be the account that signs and sends.
-- **Keep slippage and deadlines tight.** Use the smallest slippage tolerance your flow can tolerate (the SDK caps it at 10%) and short deadlines for signature-based operations. Keep the default LLTV buffer unless you have a reason to change it.
+- **Keep slippage and deadlines tight.** Use the smallest slippage tolerance your flow can tolerate (the SDK caps it at 10%) and short deadlines for signature-based operations.
 - **Send `value` only for native flows.** Native amounts are wrapped into the chain's wrapped native token, and the SDK rejects them for any other asset. Do not add `value` to a transaction the SDK built without it.
 - **Sign only what you built.** Present permit and Permit2 signatures produced by the SDK for the transaction you are about to send, and do not reuse them across chains or spenders.
 - **Simulate before broadcasting.** Run the bundle through [`@morpho-org/evm-simulation`](./packages/evm-simulation) and show the user the balance changes. A simulation is only as honest as its backend ([`THREAT_MODEL.md`](./THREAT_MODEL.md)).
