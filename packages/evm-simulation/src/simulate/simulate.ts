@@ -76,8 +76,8 @@ import { parseRequest } from "./request/index.js";
  *   state block nor its immediate successor, a successor whose `parentHash`
  *   is not the pinned hash, a block timestamp earlier than the pinned
  *   block's, a per-call result that fails normalization — non-quantity
- *   `gasUsed`, non-iterable `logs`, malformed log `topics`/`address`/`data` —
- *   or a state-block hash that changed mid-flight) or an
+ *   `gasUsed`, a present but non-array `logs`, malformed log `topics`/`address`/`data` —
+ *   or a state-block hash that changed (or a pinned block no longer served) mid-flight) or an
  *   endpoint whose `eth_chainId` differs from `params.chainId` (checked
  *   before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained

@@ -105,7 +105,7 @@ const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
  *   its immediate successor — including a successor whose `parentHash` is not
  *   the pinned hash or one whose timestamp is earlier than the pinned state
  *   block's — or a per-call result that fails normalization (non-quantity
- *   `gasUsed`, non-iterable `logs`, malformed log `topics`/`address`/`data`).
+ *   `gasUsed`, a present but non-array `logs`, malformed log `topics`/`address`/`data`).
  * @throws {SimulationRevertedError} When a user-transaction call failed;
  *   `details` carries the frozen `{ transactionIndex, result }[]` of the
  *   user transactions.
