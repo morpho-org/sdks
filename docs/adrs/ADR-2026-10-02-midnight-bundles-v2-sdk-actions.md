@@ -1,11 +1,11 @@
 # ADR-2026-10-02: Route Midnight actions through MidnightBundlesV2
 
-| Field      | Value                                                                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                          |
-| **Date**   | 2026-10-02                                                                                                        |
-| **Author** | @jinmel                                                                                                           |
-| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor, `evm-simulation` patch |
+| Field      | Value                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| **Status** | accepted                                                                                  |
+| **Date**   | 2026-10-02                                                                                |
+| **Author** | @jinmel                                                                                   |
+| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor |
 
 _Status is the only field that changes after acceptance._
 
@@ -135,13 +135,12 @@ encoding follow from that:
 ### Public surface and semver
 
 - `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
-  `midnightBundlesV2` address and deployment-block keys per chain (minor). `evm-simulation` adds
-  `midnightBundlesV2` to the restricted addresses of its bundle-retention guard, next to
-  `midnightBundles` (patch). `morpho-sdk` re-exports `midnightBundlesV2Abi` from `/midnight/abis`
-  and `/abis`, next to `midnightBundlesAbi`, and the V2 struct types under their raw names from
-  `/midnight/types` and under `Midnight`-qualified aliases from `/types`. `CollateralTransfer`
-  (`MidnightCollateralTransfer`) is the one type for collateral supplies and withdrawals in action
-  inputs; the V1 `MidnightCollateralSupply`, which carried the inline permit, is removed.
+  `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
+  `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, next to `midnightBundlesAbi`, and the V2
+  struct types under their raw names from `/midnight/types` and under `Midnight`-qualified aliases
+  from `/types`. `CollateralTransfer` (`MidnightCollateralTransfer`) is the one type for collateral
+  supplies and withdrawals in action inputs; the V1 `MidnightCollateralSupply`, which carried the
+  inline permit, is removed.
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
@@ -181,8 +180,6 @@ selection.
 
 ## Invariants
 
-- A simulation that ends with value held by `midnightBundlesV2` fails the `evm-simulation`
-  bundle-retention guard → a retention unit test on the V2 address.
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
 - No `morpho-sdk` 7.0.0 action encodes a `midnightBundlesV1*` selector → a unit test over every
