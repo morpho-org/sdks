@@ -1092,6 +1092,7 @@ export class MorphoMidnight {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.

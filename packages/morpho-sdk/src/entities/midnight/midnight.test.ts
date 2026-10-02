@@ -1521,6 +1521,25 @@ describe("MorphoMidnight", () => {
       });
     });
 
+    test("behavior: appends metadata", () => {
+      const handle = createMockClient(midnightTestChain);
+      const tx = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: { metadata: { origin: "a1b2c3d4" } },
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      )
+        .cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          deadline: maxUint256,
+        })
+        .buildTx();
+
+      expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+    });
+
     test("behavior: already authorized returns no requirements", async () => {
       const handle = createMockClient(midnightTestChain);
       mockMidnightAuthorization(handle, true);
