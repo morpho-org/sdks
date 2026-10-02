@@ -118,12 +118,10 @@ at the SDK level. The differences are at the protocol layer:
   contract-ratified offers with prices fixed until market maturity.
 - **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
   collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
-  `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call.
-- **Maker routing**: `makeLend` and `makeBorrow` build and validate offer trees, collect an
-  Ecrecover root signature or SetterRatifier transaction, then submit the payload to the Midnight
-  mempool. `supplyCollateralMakeBorrow` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake`
-  call that cancels optional groups, supplies collateral, ratifies a PriceRatifierV1/RateRatifierV1
-  root and publishes the payload atomically.
+  `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
+- **Maker routing**: `cancelAndMakeLend` and `cancelAndMakeBorrow` validate a PriceRatifierV1 or
+  RateRatifierV1 offer tree, then encode one `midnightBundlesV2CancelAndMake` call that cancels
+  replaced groups, optionally supplies collateral, activates the root and publishes the payload.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 

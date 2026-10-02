@@ -1,62 +1,113 @@
 # Migrating `@morpho-org/morpho-sdk` from v6 to v7
 
-## Midnight `supplyCollateralMakeBorrow`
+Version 7 publishes Midnight maker offers through MidnightBundlesV2 in one transaction. The v6
+flow sent a separate root-ratification transaction or root signature, then posted the offers to
+MidnightMempool. v7 removes that route instead of keeping it selectable; stay on v6 if you
+still need it.
 
-`MorphoMidnight.supplyCollateralMakeBorrow` keeps its name but no longer returns a chain of
-prerequisite transactions followed by a mempool submission. It returns one
-`MidnightBundlesV2.midnightBundlesV2CancelAndMake` transaction that, for `msg.sender`:
-
-1. cancels each listed prior offer group, reverting everything if a group's consumption exceeds its `maxConsumed`;
-2. pulls and supplies every collateral transfer;
-3. authorizes the tree's ratifier on Midnight and ratifies the root directly;
-4. logs the payload to the Midnight mempool.
-
-There is no V1 route or opt-in flag. Stay on v6 to keep the separate-transaction flow.
-
-> **Chain availability.** No chain registers `midnightBundlesV2` yet. Until a verified deployment
-> ships, register one with `registerCustomAddresses({ addresses: { [chainId]: { midnightBundlesV2 } } })`;
-> otherwise the method throws `UnknownAddressError`.
+## Maker methods
 
 | v6 | v7 |
 | --- | --- |
-| `collateralAssets`, optional `collateralIndex` | `collateralSupplies: readonly { collateralIndex, assets }[]`, one entry per collateral index. |
-| `reservedCollateralAssets` | Removed. Approvals cover exactly the supplied amounts. |
-| `offers: TreeInput` (Ecrecover or Setter tree) | `offers`: a `priceV1` or `rateV1` tree or tree request whose offers use the chain's `priceRatifierV1` / `rateRatifierV1`. Other trees throw `UnsupportedMidnightBundlesV2RatifierError`. |
-| — | Optional `cancellations: readonly { group, maxConsumed }[]`. |
-| — | Required `deadline` (pass `maxUint256` for no expiry). |
-| `validation: OfferValidationParams` | `validation` without `ratification`; the tree route is fixed. |
+| `makeLend` | `cancelAndMakeLend` |
+| `makeBorrow` | `cancelAndMakeBorrow` |
+| `supplyCollateralMakeBorrow` | `cancelAndMakeBorrow` with `collateral` |
 
-| v6 output | v7 output |
-| --- | --- |
-| `MidnightMakeOffersOutput` | `MidnightSupplyCollateralMakeBorrowOutput` (from `@morpho-org/morpho-sdk/entities`) |
-| `ratifierType: "ecrecover" \| "setter"` | `ratifierType: "priceV1" \| "rateV1"` |
-| Requirements: ERC-20 approval to `Midnight`, `midnightSupplyCollateral`, ratifier authorization, root signature or setter ratification | Requirements: ERC-20 approval per collateral token to `MidnightBundlesV2`, and Midnight authorization of `MidnightBundlesV2` |
-| `buildTx(signatures)` → `mempoolSubmitOffers` action | `buildTx()` → `midnightSupplyCollateralMakeBorrow` action targeting `MidnightBundlesV2` |
+One MidnightBundlesV2 call now cancels the groups you are replacing, optionally supplies borrow
+collateral, authorizes the ratifier, activates the new root, and publishes the payload. If any
+cancelled group was filled beyond its `maxConsumed` before the transaction lands, the whole call
+reverts and nothing is published.
 
 ```ts
 // v6
-const output = await midnight.supplyCollateralMakeBorrow({
-  accountAddress: maker,
-  market,
-  offers: tree,
-  collateralAssets: parseUnits("2", 18),
-});
-const tx = output.buildTx(signatures);
+const output = await midnight.makeLend({ accountAddress, offers, loanToken, loanAssets });
+const tx = output.buildTx(await signRequirements(await output.getRequirements()));
 
-// v7
-const output = await midnight.supplyCollateralMakeBorrow({
-  accountAddress: maker,
-  market,
-  offers: { type: "priceV1", entries: [{ offer: borrowOffer }] },
-  collateralSupplies: [{ collateralIndex: 0n, assets: parseUnits("2", 18) }],
+// v7: repost over previousGroup; pass `cancellations: []` for a fresh publication
+const output = await midnight.cancelAndMakeLend({
+  accountAddress,
+  offers,
   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-  deadline: maxUint256,
+  deadline,
+  loanToken,
+  loanAssets,
 });
-for (const requirement of await output.getRequirements()) {
-  await walletClient.sendTransaction(requirement);
-}
 const tx = output.buildTx();
 ```
 
-V2 accepts no inline token permits; use the returned approval requirements. The low-level
-`midnightSupplyCollateralMakeBorrow` builder encodes the same call from a precomputed root and payload.
+```ts
+// v6
+await midnight.supplyCollateralMakeBorrow({ accountAddress, offers, market, collateralAssets });
+
+// v7
+await midnight.cancelAndMakeBorrow({
+  accountAddress,
+  offers,
+  collateral: { market, supplies: [{ collateralIndex: 0n, assets: collateralAssets }] },
+  deadline,
+});
+```
+
+## Ratifiers
+
+Offers must use PriceRatifierV1 or RateRatifierV1. Pass a `Tree<"priceV1">`, a `Tree<"rateV1">`,
+or the matching tree-create request; every offer's `ratifier` must be the tree's ratifier
+(`MidnightOfferRatifierMismatchError`). Ecrecover and Setter trees are no longer accepted by
+maker methods. `getOffersData` follows the same rule and now returns the V1 payload and ratifier
+address.
+
+## Ownership and requirements
+
+- MidnightBundlesV2 acts on `msg.sender`. `accountAddress` must be the sender and the maker of every
+  offer; there is no `onBehalf`.
+- `getRequirements()` returns only onchain transactions: the MidnightBundlesV2 Midnight
+  authorization, the lend-side loan-token approval to Midnight for later fills, and borrow-side
+  collateral approvals to MidnightBundlesV2. It no longer returns a root signature or a
+  SetterRatifier root transaction, so `buildTx()` takes no signatures.
+- Replacement offers need fresh groups. A group cannot be both published and cancelled
+  (`MidnightReplacementGroupCancelledError`).
+
+## Renamed and changed types
+
+| v6 | v7 |
+| --- | --- |
+| `MidnightMakeOffersParams` | `MidnightCancelAndMakeOffersParams` |
+| `MidnightMakeLendParams` | `MidnightCancelAndMakeLendParams` |
+| `MidnightSupplyCollateralMakeBorrowParams` | `MidnightCancelAndMakeBorrowParams` (optional `collateral`) |
+| `MidnightMakeOffersOutput` | `MidnightCancelAndMakeOutput` |
+
+- `MidnightCancelAndMakeBorrowParams` moves `market`, `collateralIndex` and `collateralAssets` into
+  `collateral: { market, supplies: [{ collateralIndex, assets }] }`. `reservedCollateralAssets` is
+  removed: the collateral approval now covers only the supplied amounts and goes to
+  MidnightBundlesV2 instead of Midnight.
+- `offers` accepts only `MidnightMakerTreeInput` (a PriceRatifierV1 or RateRatifierV1 tree or
+  `Tree.create` request) instead of any `TreeInput`.
+- `MidnightOfferValidationParams` no longer accepts `ratification`; the ratifier comes from the tree.
+- `MidnightOffersData.ratifierType` is `"priceV1" | "rateV1"` instead of `"ecrecover" | "setter"`.
+- `MidnightOffersData.setterPayload` is replaced by `payload`, set for every tree.
+- `UnknownMidnightRatifierError` takes `{ ratifier, priceRatifierV1, rateRatifierV1 }` instead of
+  `{ ratifier, ecrecoverRatifier, setterRatifier }`.
+
+## Removed exports
+
+- Actions and requirements: `mempoolSubmitOffers`, `setterRatifierRatifyRoot`,
+  `getSetterRatifierRatifyRootRequirement`.
+- Types: `MempoolSubmitOffersAction`, `SetterRatifierRatifyRootAction`,
+  `MidnightOfferRootSignatureAction`, `MidnightOfferRootSignatureArgs`,
+  `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`,
+  `MidnightMakeLendParams`, `MidnightMakeOffersParams`, `MidnightMakeOffersOutput`,
+  `MidnightSupplyCollateralMakeBorrowParams`.
+- Helpers and errors: `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
+  `selectRequirementSignatures`, `MissingMidnightOfferRootSignatureError`,
+  `MidnightOfferRootMismatchError`, `MidnightOfferRootOwnerMismatchError`,
+  `MidnightOfferRootRatifierMismatchError`, `MidnightOfferRootOfferCountMismatchError`,
+  `UnpreparedMidnightOfferRootSignatureError`.
+- `getMidnightAuthorizationRequirement` no longer accepts the Ecrecover or Setter ratifier as a
+  target; MidnightBundlesV2 authorizes the V1 ratifier itself.
+
+The Ecrecover and Setter protocol utilities in `@morpho-org/midnight-sdk` are unchanged.
+
+## Deployment
+
+No chain registers `midnightBundlesV2` yet. Register a deployment with `registerCustomAddresses`
+before calling the maker methods.

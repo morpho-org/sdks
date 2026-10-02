@@ -3,10 +3,14 @@ import {
   MarketParams,
   midnightAbi,
   midnightBundlesAbi,
-  setterRatifierAbi,
+  midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
+import {
+  getChainAddress,
+  registerCustomAddresses,
+} from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, getAddress, type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -16,14 +20,24 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import { MidnightMarketAddressMismatchError } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
+import { midnightCancelAndMake } from "./cancelAndMake.js";
 import { midnightCancelOffer } from "./cancelOffer.js";
 import { midnightRedeem } from "./redeem.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
-import { setterRatifierRatifyRoot } from "./setterRatifierRatifyRoot.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 import { midnightTakeLend } from "./takeLend.js";
+
+registerCustomAddresses({
+  addresses: {
+    [midnightChainId]: {
+      midnightBundlesV2: getAddress(
+        "0x00000000000000000000000000000000000b2002",
+      ),
+    },
+  },
+});
 
 const group =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
@@ -181,17 +195,6 @@ describe("Midnight calldata encoders", () => {
         expect(repayment.args[4][0]?.assets).toBe(units);
         expect(repayment.args[8]).toBe(optionalAmount);
 
-        const rootRatification = decodeFunctionData({
-          abi: setterRatifierAbi,
-          data: setterRatifierRatifyRoot({
-            chainId: midnightChainId,
-            maker: midnightAddresses.maker,
-            root: group,
-            isRootRatified: flag,
-          }).data,
-        });
-        expect(rootRatification.args[2]).toBe(flag);
-
         const collateralSupply = decodeFunctionData({
           abi: midnightAbi,
           data: midnightSupplyCollateral({
@@ -257,6 +260,60 @@ describe("Midnight calldata encoders", () => {
         expect(lend.args[0]).toBe(assets);
         expect(lend.args[1]).toBe(optionalAmount);
       }),
+      { seed: 42 },
+    );
+  });
+
+  test("property: preserves cancelAndMake inputs through ABI encoding", () => {
+    const bytes32 = fc
+      .uint8Array({ minLength: 32, maxLength: 32 })
+      .map((b) => `0x${Buffer.from(b).toString("hex")}` as Hex)
+      .filter((h) => BigInt(h) !== 0n);
+    fc.assert(
+      fc.property(
+        fc.record({
+          root: bytes32,
+          cancelled: bytes32,
+          maxConsumed: uint128,
+          assets: positiveUint128,
+          deadline: fc.bigInt({ min: 1n, max: maxUint256 }),
+          withCollateral: fc.boolean(),
+        }),
+        ({
+          root,
+          cancelled,
+          maxConsumed,
+          assets,
+          deadline,
+          withCollateral,
+        }) => {
+          fc.pre(cancelled.toLowerCase() !== group);
+          const decoded = decodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            data: midnightCancelAndMake({
+              chainId: midnightChainId,
+              ratifier: getChainAddress(midnightChainId, "rateRatifierV1"),
+              root,
+              groups: [group],
+              payload: "0x1234",
+              cancellations: [{ group: cancelled, maxConsumed }],
+              deadline,
+              ...(withCollateral && {
+                collateral: {
+                  market: midnightMarket,
+                  supplies: [{ collateralIndex: 0n, assets }],
+                },
+              }),
+            }).data,
+          });
+          expect(decoded.args[4]).toEqual(
+            withCollateral ? [{ collateralIndex: 0n, assets }] : [],
+          );
+          expect(decoded.args[6]).toBe(root);
+          expect(decoded.args[13]).toEqual([{ group: cancelled, maxConsumed }]);
+          expect(decoded.args[15]).toBe(deadline);
+        },
+      ),
       { seed: 42 },
     );
   });
