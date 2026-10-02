@@ -44,6 +44,8 @@ position and takes no native funding.
 
 ## MidnightBundlesV2 (canonical statement)
 
+Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md).
+
 - **One action per intent, not per entrypoint.** V2 has one maker entrypoint
   (`midnightBundlesV2CancelAndMake`) and four taker entrypoints; the arguments select the intent
   (empty lists, zero `newRoot`, `assetsToPark`, `reduceOnly`, `repayEnabled`, empty `offerFills`).
