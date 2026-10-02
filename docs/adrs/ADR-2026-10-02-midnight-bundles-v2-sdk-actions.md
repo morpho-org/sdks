@@ -38,11 +38,12 @@ fallback. Products that need V1 stay on the 6.x major, which remains published.
 
 ### One action per intent
 
-The SDK exposes one entity method and one pure action builder per product intent, not per
-entrypoint. Each action fixes the intent-selecting arguments and exposes only the inputs that vary
-within that intent. Actions sharing an entrypoint share one encoder.
+The SDK exposes one entity method per product intent, not per entrypoint. Each method fixes the
+intent-selecting arguments and exposes only the inputs that vary within that intent. Each taker
+intent has its own pure action builder; the maker intents share the `midnightCancelAndMake` builder,
+whose arguments the entity methods fill.
 
-| Entity method | Pure action | Entrypoint | Fixed arguments |
+| Entity method | Pure action builder | Entrypoint | Fixed arguments |
 | --- | --- | --- | --- |
 | `cancelOffers` | `midnightCancelAndMake` | `CancelAndMake` | `newRoot = 0`, `assetsToPark = 0`, no collateral supplies |
 | `cancelAndMakeLend` | `midnightCancelAndMake` | `CancelAndMake` | lend-side offers, `assetsToPark = 0`, no collateral supplies |
@@ -79,8 +80,12 @@ Rules shared by the maker actions:
   root with a signature, which `buildTx` encodes as `v, r, s`; a contract-wallet maker encodes
   `v = r = s = 0`. The ratifier authorization, root activation and payload publication happen
   inside the bundle call, so they are no longer separate requirements.
-- The root-activation signature and the publication payload reach `buildTx` only through the
-  signature's `args`, as required by ADR-2026-09-23-stateless-entity-flows.
+- The root and the publication payload are derived deterministically from the offers input, so
+  every handle built from the same inputs encodes the same values, with or without a signature.
+- For an EOA maker, the root-activation values `v, r, s`, `signatureHeight`, `signatureNonce` and
+  `signatureDeadline` reach `buildTx` only through the signature's `args`, as required by
+  ADR-2026-09-23-stateless-entity-flows. A contract-wallet maker and `cancelOffers` take no
+  signature.
 
 ### Every entrypoint acts for the sender
 
@@ -89,9 +94,17 @@ encoding follow from that:
 
 - Action inputs name that account as `accountAddress`; there is no `taker`, `onBehalf` or `maker`
   input distinct from the sender. Maker actions reject offers whose maker is not `accountAddress`.
-- Token requirements are ERC-20 approvals from `accountAddress` to `MidnightBundlesV2` for exactly
-  the assets the call pulls: the buy target bound, collateral supplies, and `assetsToPark`.
-  ERC-2612 and Permit2 requirements are not produced, because V2 accepts no inline permit.
+- Token requirements for the bundle call are ERC-20 approvals from `accountAddress` to
+  `MidnightBundlesV2` for exactly the assets the call pulls: `targetBuyerAssets` on an
+  assets-target buy, `maxBuyerAssets` on a units-target buy, each collateral supply, and
+  `assetsToPark`. ERC-2612 and Permit2 requirements are not produced, because V2 accepts no inline
+  permit.
+- A full repay (`targetUnits = maxUint256`) still sets a finite `maxBuyerAssets` at or above the
+  sender's debt; the unused remainder is returned.
+- Lend offers that the maker funds directly (`cancelAndMakeLend`) keep the maker's loan-token
+  approval to `midnight`, sized to the offered and reserved loan assets, because Midnight pulls
+  those tokens from the maker when the offer is taken. Offers funded through the Blue callback do
+  not need it.
 - Every V2 action requires `accountAddress` to have authorized `MidnightBundlesV2` on Midnight;
   `getRequirements()` returns that authorization when it is missing. `MidnightBundlesV2` and the
   V1 ratifiers are added to the supported Midnight authorization targets.
@@ -101,8 +114,11 @@ encoding follow from that:
 ### Public surface and semver
 
 - `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
-  `midnightBundlesV2` address and deployment block per chain (minor). The V1 ABI and address remain
-  exported and are marked `@deprecated`; their removal is a later decision.
+  `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
+  `midnightBundlesV2Abi` from `/midnight` and its root facade, next to `midnightBundlesAbi`.
+- The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
+  and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
+  `morpho-ts`. Their removal is a later decision.
 - `morpho-sdk` 7.0.0 keeps the established method and action names of the migrated flows
   (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
@@ -110,10 +126,14 @@ encoding follow from that:
   replaced by the target union. The migration guide lists each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
+- `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
 - `makeLend` and `makeBorrow` do not use V1 and are not covered by the route replacement: they are
   marked `@deprecated` in favour of `cancelAndMakeLend` and `cancelAndMakeBorrow` and follow the
   standard deprecation lifecycle.
-- The V1-to-V2 route replacement of the migrated flows invokes a narrow lifecycle exception, added
+- `supplyCollateralMakeBorrow` did not use V1 either, but it is retyped in place rather than
+  deprecated: its V2 successor serves the same intent under the same name, and the prior
+  non-atomic flow can leave collateral supplied with no live offer when publication fails.
+- The route replacement of the migrated flows invokes a narrow lifecycle exception, added
   to `AGENTS.md` §7 with this record. It does not waive the major changeset, migration guide or
   maintained-dependent audit.
 
@@ -125,7 +145,7 @@ selection.
 
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
-- No `morpho-sdk` source outside deprecated exports encodes a V1 entrypoint → this check prints
+- No `morpho-sdk` source encodes a V1 entrypoint → this check prints
   nothing:
 
   ```sh
@@ -134,8 +154,9 @@ selection.
 
 - Each action fixes the intent arguments in the table above → encoder tests decode calldata and
   assert `reduceOnly`, `repayEnabled`, `newRoot`, `assetsToPark` and list emptiness per action.
-- Requirements name `MidnightBundlesV2` as approval spender and Midnight authorization target and
-  never return a permit → requirement unit tests and pinned-fork integration tests per method.
+- Requirements for assets the bundle call pulls name `MidnightBundlesV2` as approval spender,
+  every V2 action requires Midnight authorization of `MidnightBundlesV2`, and no V2 requirement is
+  a permit → requirement unit tests and pinned-fork integration tests per method.
 - Maker actions reject offers whose maker differs from `accountAddress` and replacement groups that
   are also being cancelled → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
