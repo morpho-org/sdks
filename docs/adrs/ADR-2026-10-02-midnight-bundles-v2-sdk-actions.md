@@ -5,7 +5,7 @@
 | **Status** | accepted                                                                                    |
 | **Date**   | 2026-10-02                                                                                  |
 | **Author** | @jinmel                                                                                     |
-| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor   |
+| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor, `evm-simulation` patch |
 
 _Status is the only field that changes after acceptance._
 
@@ -60,8 +60,9 @@ whose arguments the entity methods fill.
 Rules shared by the taker actions:
 
 - The amount target is a discriminated union, `{ type: "assets", … } | { type: "units", … }`, which
-  selects the assets-target or units-target entrypoint. Each arm carries its own aggregate bound
-  (`maxBuyerAssets` or `minUnits` on buys, `minSellerAssets` or `maxUnits` on sells).
+  selects the assets-target or units-target entrypoint. Each arm carries its own aggregate bound:
+  on buys, the assets arm takes `minUnits` and the units arm `maxBuyerAssets`; on sells, the assets
+  arm takes `maxUnits` and the units arm `minSellerAssets`.
   `repayWithdrawCollateral` takes no offers, so its target is instead
   `repay: { type: "assets", assets } | { type: "full", maxBuyerAssets }`. `assets = 0` encodes a
   withdraw-only call. It takes no referral fee, so an assets repay repays exactly `assets`, and
@@ -132,8 +133,10 @@ encoding follow from that:
 ### Public surface and semver
 
 - `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
-  `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
-  `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, next to `midnightBundlesAbi`, and the
+  `midnightBundlesV2` address and deployment-block keys per chain (minor). `evm-simulation` adds
+  `midnightBundlesV2` to the restricted addresses of its bundle-retention guard, next to
+  `midnightBundles` (patch). `morpho-sdk` re-exports `midnightBundlesV2Abi` from `/midnight/abis`
+  and `/abis`, next to `midnightBundlesAbi`, and the
   V2 struct types under their raw names from `/midnight/types` and under `Midnight`-qualified
   aliases from `/types`. `CollateralTransfer` (`MidnightCollateralTransfer`) is the one type for
   collateral supplies and withdrawals in action inputs; the V1 `MidnightCollateralSupply`, which
@@ -178,6 +181,8 @@ selection.
 
 ## Invariants
 
+- A simulation that ends with value held by `midnightBundlesV2` fails the `evm-simulation`
+  bundle-retention guard → a retention unit test on the V2 address.
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
 - No `morpho-sdk` 7.0.0 action encodes a `midnightBundlesV1*` selector → a unit test over every
