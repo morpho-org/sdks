@@ -44,6 +44,35 @@ const emptyMidnightMarket = {
   liquidatorGate: zeroAddress,
 } as const;
 
+const validateParams = ({
+  cancellations,
+  deadline,
+}: MidnightCancelOffersParams): void => {
+  if (cancellations.length === 0) {
+    throw new EmptyMidnightGroupCancellationsError();
+  }
+  if (deadline < 0n) {
+    throw new NegativeInputError("deadline", deadline);
+  }
+  const groups = new Set<string>();
+  for (const [index, { group, maxConsumed }] of cancellations.entries()) {
+    const field = `cancellations[${index}].maxConsumed`;
+    if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
+    if (maxConsumed > maxUint128) {
+      throw new InputExceedsMaxError({
+        field,
+        value: maxConsumed,
+        max: maxUint128,
+      });
+    }
+    const key = group.toLowerCase();
+    if (groups.has(key)) {
+      throw new DuplicateMidnightGroupCancellationError({ index, group });
+    }
+    groups.add(key);
+  }
+};
+
 /**
  * Encodes a `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call that only cancels offer groups.
  *
@@ -77,32 +106,7 @@ const emptyMidnightMarket = {
 export const midnightCancelOffers = (
   params: MidnightCancelOffersParams,
 ): Readonly<Transaction<MidnightCancelOffersAction>> => {
-  if (params.cancellations.length === 0) {
-    throw new EmptyMidnightGroupCancellationsError();
-  }
-  if (params.deadline < 0n) {
-    throw new NegativeInputError("deadline", params.deadline);
-  }
-  const groups = new Set<string>();
-  for (const [
-    index,
-    { group, maxConsumed },
-  ] of params.cancellations.entries()) {
-    const field = `cancellations[${index}].maxConsumed`;
-    if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
-    if (maxConsumed > maxUint128) {
-      throw new InputExceedsMaxError({
-        field,
-        value: maxConsumed,
-        max: maxUint128,
-      });
-    }
-    const key = group.toLowerCase();
-    if (groups.has(key)) {
-      throw new DuplicateMidnightGroupCancellationError({ index, group });
-    }
-    groups.add(key);
-  }
+  validateParams(params);
 
   const cancellations = params.cancellations.map(({ group, maxConsumed }) => ({
     group,
@@ -116,23 +120,23 @@ export const midnightCancelOffers = (
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
-        emptyBlueMarket,
-        0n,
-        zeroHash,
-        emptyMidnightMarket,
-        [],
-        zeroAddress,
-        zeroHash,
-        0n,
-        0n,
-        0n,
-        0,
-        zeroHash,
-        zeroHash,
-        cancellations,
-        "0x",
-        params.deadline,
-        zeroAddress,
+        emptyBlueMarket, // blueMarket
+        0n, // assetsToPark
+        zeroHash, // callbackSalt
+        emptyMidnightMarket, // market
+        [], // collateralSupplies
+        zeroAddress, // ratifier
+        zeroHash, // newRoot
+        0n, // signatureHeight
+        0n, // signatureNonce
+        0n, // signatureDeadline
+        0, // v
+        zeroHash, // r
+        zeroHash, // s
+        cancellations, // groupsToCancel
+        "0x", // payload
+        params.deadline, // deadline
+        zeroAddress, // wrappedNative
       ],
     }),
   };
