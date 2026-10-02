@@ -47,12 +47,60 @@ const resolve = (
     supportSignature,
   });
 
+const resolveWithMax = (
+  handle: ReturnType<typeof createMockClient<typeof mainnet>>,
+  maxShareAllowance: bigint,
+) =>
+  getVaultBundlesSharesRequirements(handle.client, {
+    vaultData,
+    version: "vaultV1",
+    owner,
+    chainId: mainnet.id,
+    requiredShareAllowance,
+    maxShareAllowance,
+    deadline: Time.timestamp() + Time.s.from.h(1n),
+    supportSignature: true,
+  });
+
 describe("getVaultBundlesSharesRequirements", () => {
   test("default: no requirement when the allowance already equals the cap", async () => {
     const handle = createMockClient(mainnet);
     mockAllowance(handle, requiredShareAllowance);
 
     await expect(resolve(handle, false)).resolves.toEqual([]);
+  });
+
+  test.each([
+    requiredShareAllowance,
+    requiredShareAllowance + 1n,
+    requiredShareAllowance + 10n,
+  ])(
+    "behavior: no requirement when the allowance %s is within the accepted range",
+    async (allowance) => {
+      const handle = createMockClient(mainnet);
+      mockAllowance(handle, allowance);
+
+      await expect(
+        resolveWithMax(handle, requiredShareAllowance + 10n),
+      ).resolves.toEqual([]);
+    },
+  );
+
+  test("behavior: resets an allowance above the accepted range with an exact approval", async () => {
+    const handle = createMockClient(mainnet);
+    mockAllowance(handle, requiredShareAllowance + 11n);
+
+    const requirements = await resolveWithMax(
+      handle,
+      requiredShareAllowance + 10n,
+    );
+
+    expect(requirements.map(({ action }) => action)).toEqual([
+      {
+        type: "erc20Approval",
+        args: { spender, amount: requiredShareAllowance },
+      },
+    ]);
   });
 
   test("behavior: replaces an oversized allowance with an exact approval", async () => {

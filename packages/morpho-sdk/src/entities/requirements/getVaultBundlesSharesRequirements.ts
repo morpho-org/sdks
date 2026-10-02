@@ -18,16 +18,19 @@ import {
  * Resolves the exact vault-share approval or ERC-2612 requirement for a VaultBundlesV1 exit.
  *
  * The exit burns however many shares the vault prices at execution time, so the share allowance is
- * the only cap on that burn. A leftover allowance above `requiredShareAllowance` therefore does not
- * satisfy the requirement: it is replaced by an onchain approval for exactly the computed cap. Only
- * an insufficient allowance may be raised through an ERC-2612 permit, because VaultBundlesV1 skips a
- * permit whose nonce was already consumed and the leftover allowance would then stay in force.
+ * the only cap on that burn. An allowance within `[requiredShareAllowance, maxShareAllowance]`
+ * satisfies the requirement; one above `maxShareAllowance` is replaced by an onchain approval for
+ * exactly the computed cap. Only an insufficient allowance may be raised through an ERC-2612 permit,
+ * because VaultBundlesV1 skips a permit whose nonce was already consumed and the leftover allowance
+ * would then stay in force.
  *
  * @internal
  *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
- * @param params - Vault snapshot, owner, exact allowance, and deadline values.
- * @returns No requirement when the allowance already equals `requiredShareAllowance`, otherwise one
+ * @param params - Vault snapshot, owner, allowance bounds, and deadline values. `maxShareAllowance`
+ *   defaults to `requiredShareAllowance`, which accepts only an exact match.
+ * @returns No requirement when the allowance is within `[requiredShareAllowance,
+ *   maxShareAllowance]`, otherwise one
  *   approval that sets it to exactly that cap, or one permit when the allowance is below the cap
  *   and signatures are supported.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
@@ -41,6 +44,7 @@ export const getVaultBundlesSharesRequirements = async (
     readonly owner: Address;
     readonly chainId: number;
     readonly requiredShareAllowance: bigint;
+    readonly maxShareAllowance?: bigint;
     readonly deadline: bigint;
     readonly supportSignature: boolean;
   },
@@ -58,12 +62,13 @@ export const getVaultBundlesSharesRequirements = async (
     functionName: "allowance",
     args: [params.owner, spender],
   });
-  // Asset-mode withdrawals carry no onchain share cap, so the allowance itself is the cap. A
-  // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`,
-  // so only an exact match skips the approval or permit that resets it to the computed cap.
-  if (allowance === params.requiredShareAllowance) return [];
-  // An oversized allowance is only ever lowered onchain: `TokenLib.submitPermit` skips a permit
-  // whose nonce was already consumed, which would silently leave the stale cap in force.
+  // Asset-mode withdrawals carry no onchain share cap, so the allowance itself is the cap. Only an
+  // allowance up to `maxShareAllowance` skips the approval or permit that resets it to the cap.
+  if (
+    allowance >= params.requiredShareAllowance &&
+    allowance <= (params.maxShareAllowance ?? params.requiredShareAllowance)
+  )
+    return [];
   if (allowance < params.requiredShareAllowance && params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,
