@@ -2,9 +2,9 @@ import { maxUint128, zeroAddress } from "viem";
 import {
   DuplicateMidnightGroupCancellationError,
   InputExceedsMaxError,
+  type MidnightGroupCancellation,
   NegativeInputError,
 } from "../../types/index.js";
-import type { MidnightGroupCancellation } from "./cancelOffers.js";
 
 /** @internal Blue market placeholder for MidnightBundlesV2 calls that park no assets. */
 export const emptyBlueMarket = {

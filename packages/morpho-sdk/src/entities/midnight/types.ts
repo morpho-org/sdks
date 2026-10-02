@@ -10,15 +10,13 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
-import type {
-  MidnightBundlesV2CollateralSupply,
-  MidnightGroupCancellation,
-} from "../../actions/midnight/index.js";
+import type { MidnightBundlesV2CollateralSupply } from "../../actions/midnight/index.js";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
   MempoolSubmitOffersAction,
+  MidnightGroupCancellation,
   MidnightOfferRootSignature,
   MidnightSupplyCollateralMakeBorrowAction,
 } from "../../types/action.js";

@@ -18,13 +18,13 @@ import {
   DuplicateMidnightCollateralSupplyError,
   EmptyMidnightCollateralSuppliesError,
   type Metadata,
+  type MidnightGroupCancellation,
   type MidnightSupplyCollateralMakeBorrowAction,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 import { emptyBlueMarket, validateGroupCancellations } from "./bundlesV2.js";
-import type { MidnightGroupCancellation } from "./cancelOffers.js";
 
 /** One collateral transfer pulled from `msg.sender` and supplied to its Midnight position. */
 export interface MidnightBundlesV2CollateralSupply {

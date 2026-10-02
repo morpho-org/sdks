@@ -57,6 +57,7 @@ import {
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
   EmptyMidnightCollateralSuppliesError,
+  EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
@@ -2144,6 +2145,44 @@ describe("MorphoMidnight", () => {
       });
       expect(tx.to).toBe(midnightBundlesV2);
       expect(tx.action.args).toEqual({ cancellations, deadline: maxUint256 });
+    });
+
+    test("behavior: already authorized returns no requirements", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+      const output = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).cancelOffers({
+        accountAddress: midnightAddresses.maker,
+        cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+        deadline: maxUint256,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+    });
+
+    test("error: invalid cancellations throw before requirements", () => {
+      expect(() =>
+        new MorphoMidnight(client, midnightChainId).cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [],
+          deadline: maxUint256,
+        }),
+      ).toThrow(EmptyMidnightGroupCancellationsError);
+    });
+
+    test("error: ChainIdMismatchError", () => {
+      expect(() =>
+        new MorphoMidnight(client, midnightChainId + 1).cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          deadline: maxUint256,
+        }),
+      ).toThrow(ChainIdMismatchError);
     });
   });
 

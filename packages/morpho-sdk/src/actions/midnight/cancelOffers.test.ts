@@ -1,5 +1,8 @@
 import { midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
-import { registerCustomAddresses } from "@morpho-org/morpho-ts";
+import {
+  registerCustomAddresses,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
 import {
   decodeFunctionData,
   getAddress,
@@ -154,6 +157,16 @@ describe("midnightCancelOffers", () => {
         deadline: maxUint256,
       }),
     ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
+    expect(() =>
+      midnightCancelOffers({
+        chainId: 1,
+        cancellations: [{ group: zeroHash, maxConsumed: 0n }],
+        deadline: maxUint256,
+      }),
+    ).toThrow(UnknownAddressError);
   });
 
   test("behavior: MidnightBundlesV2 is an accepted Midnight authorization target", () => {

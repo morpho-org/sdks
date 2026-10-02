@@ -28,7 +28,6 @@ import {
   type WalletClient,
 } from "viem";
 import {
-  type MidnightGroupCancellation,
   mempoolSubmitOffers,
   midnightCancelOffer,
   midnightCancelOffers,
@@ -58,6 +57,7 @@ import {
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
   type MidnightCancelOffersAction,
+  type MidnightGroupCancellation,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -1204,14 +1204,29 @@ export class MorphoMidnight {
    * `maxConsumed` ceiling, so fills landing before execution never leave a partial cancel.
    *
    * @param params - Maker account, groups with consumption ceilings, and deadline.
-   * @param params.accountAddress - Maker sending the transaction; V2 cancels for `msg.sender`.
+   * @param params.accountAddress - Maker that must send the transaction; V2 cancels for `msg.sender`,
+   *   so sending from another account cancels that account's groups instead.
    * @param params.cancellations - Offer groups and the largest consumption accepted for each.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
+   * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
+   * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
    * @example
    * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, maxUint256, type Address, type Hex } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * declare const maker: Address;
+   * declare const group: Hex;
+   * const client = createPublicClient({ chain: base, transport: http() }).extend(
+   *   morphoViemExtension(),
+   * );
+   * const midnight = client.morpho.midnight(base.id);
    * const output = midnight.cancelOffers({
    *   accountAddress: maker,
    *   cancellations: [{ group, maxConsumed: 0n }],
@@ -1230,6 +1245,13 @@ export class MorphoMidnight {
       "midnightBundlesV2",
     );
 
+    const tx = midnightCancelOffers({
+      chainId: this.chainId,
+      cancellations: params.cancellations,
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+    });
+
     return {
       getRequirements: async () => {
         const authorization = await getMidnightAuthorizationRequirement({
@@ -1240,13 +1262,7 @@ export class MorphoMidnight {
         });
         return authorization ? [authorization] : [];
       },
-      buildTx: () =>
-        midnightCancelOffers({
-          chainId: this.chainId,
-          cancellations: params.cancellations,
-          deadline: params.deadline,
-          metadata: this.client.options.metadata,
-        }),
+      buildTx: () => tx,
     };
   }
 

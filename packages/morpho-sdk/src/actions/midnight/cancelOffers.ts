@@ -1,30 +1,26 @@
 import { midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, type Hex, zeroAddress, zeroHash } from "viem";
+import { encodeFunctionData, zeroAddress, zeroHash } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   EmptyMidnightGroupCancellationsError,
   type Metadata,
   type MidnightCancelOffersAction,
+  type MidnightGroupCancellation,
   NegativeInputError,
   type Transaction,
 } from "../../types/index.js";
 import { emptyBlueMarket, validateGroupCancellations } from "./bundlesV2.js";
 
-/** One offer group to cancel, guarded by the maximum consumption accepted at execution. */
-export interface MidnightGroupCancellation {
-  /** Offer group id to mark fully consumed. */
-  readonly group: Hex;
-  /** Largest current group consumption accepted; the whole call reverts above it. */
-  readonly maxConsumed: bigint;
-}
-
 /** Parameters for encoding a guarded Midnight Bundles V2 batch offer-group cancellation. */
 export interface MidnightCancelOffersParams {
+  /** Chain id used to resolve `MidnightBundlesV2`. */
   readonly chainId: number;
+  /** Offer groups and their consumption ceilings, each group at most once. */
   readonly cancellations: readonly MidnightGroupCancellation[];
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
+  /** Optional analytics metadata appended to calldata. */
   readonly metadata?: Metadata;
 }
 
@@ -42,7 +38,7 @@ const emptyMidnightMarket = {
 /**
  * Encodes a `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call that only cancels offer groups.
  *
- * Every group is marked fully consumed for `msg.sender`. Execution reverts as a whole if any
+ * Every group is marked fully consumed for `msg.sender`, so send the transaction from the maker. Execution reverts as a whole if any
  * group's consumption exceeds its `maxConsumed` ceiling, so intervening fills never leave a
  * partially cancelled batch. No root is published, no assets are parked, and no collateral moves.
  *
@@ -58,9 +54,10 @@ const emptyMidnightMarket = {
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @example
  * ```ts
- * import { maxUint256 } from "viem";
+ * import { maxUint256, type Hex } from "viem";
  * import { midnightCancelOffers } from "@morpho-org/morpho-sdk";
  *
+ * declare const group: Hex;
  * const tx = midnightCancelOffers({
  *   chainId: 8453,
  *   cancellations: [{ group, maxConsumed: 0n }],
