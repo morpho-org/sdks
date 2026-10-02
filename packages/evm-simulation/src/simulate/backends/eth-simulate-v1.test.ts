@@ -517,6 +517,17 @@ describe.sequential("executePlan", () => {
     );
   });
 
+  test("error: InvalidSimulationResponseError when the pinned block vanishes before the reorg check", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc(simulateResult(okCalls(1))))
+      .mockResolvedValueOnce(rpc(null));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect((error as Error).message).toContain("unavailable");
+  });
+
   test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc("0x1"))

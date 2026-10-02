@@ -1,5 +1,6 @@
 import {
   BaseError,
+  BlockNotFoundError,
   createPublicClient,
   ExecutionRevertedError,
   http,
@@ -268,12 +269,21 @@ export async function executePlan(params: {
 
   // Reorg window: the pinned state block must still carry the same hash
   // after simulation, or the result may describe a different chain tip.
+  // A pinned block the node no longer serves is the same reorg signal as a
+  // changed hash, so it must not degrade into a bypassable transport error.
   const stateBlockAfter = await rpc("eth_getBlock", () =>
     client.getBlock({ blockNumber: stateBlock.number }),
-  );
-  if (stateBlockAfter.hash !== stateBlock.hash) {
+  ).catch((error: unknown) => {
+    if (
+      error instanceof ExternalServiceError &&
+      error.cause instanceof BlockNotFoundError
+    )
+      return null;
+    throw error;
+  });
+  if (stateBlockAfter?.hash !== stateBlock.hash) {
     throw new InvalidSimulationResponseError(
-      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
+      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter?.hash ?? "unavailable"}. Re-submit the simulation.`,
       {
         context: {
           stage: "transport",
