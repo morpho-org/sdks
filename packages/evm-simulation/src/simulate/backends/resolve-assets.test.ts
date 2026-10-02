@@ -167,9 +167,9 @@ describe("resolveAssets", () => {
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
   });
-  test("error: a non-viem metadata failure maps to ExternalServiceError", async () => {
+  test("error: an unknown rpc failure maps to ExternalServiceError", async () => {
     const handle = createMockClient(mainnet);
-    handle.request.mockRejectedValue(new Error("request aborted"));
+    handle.request.mockRejectedValue(new Error("unexpected failure"));
     await expect(
       resolveAssets({
         client: handle.client,
@@ -178,6 +178,44 @@ describe("resolveAssets", () => {
         blockNumber: 1n,
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+  test("error: an aborted request maps to ExternalServiceError", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      Object.assign(new Error("request aborted"), { name: "AbortError" }),
+    );
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+  test("error: empty asset() return data becomes missing evidence", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockResolvedValue("0x");
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+  });
+  test("error: short asset() return data becomes missing evidence", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockResolvedValue("0x1234");
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
   });
   test("error: TimeoutError maps to ExternalServiceError", async () => {
     const handle = createMockClient(mainnet);

@@ -1,13 +1,15 @@
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import {
-  AbiDecodingZeroDataError,
   type Address,
   BaseError,
   type Client,
   ContractFunctionRevertedError,
-  ContractFunctionZeroDataError,
   erc4626Abi,
+  HttpRequestError,
   isAddressEqual,
+  RpcError,
+  RpcRequestError,
+  TimeoutError,
   zeroAddress,
 } from "viem";
 import { readContract } from "viem/actions";
@@ -88,10 +90,7 @@ export async function resolveAssets(params: {
           if (
             cause instanceof BaseError &&
             cause.walk(
-              (error) =>
-                error instanceof ContractFunctionRevertedError ||
-                error instanceof ContractFunctionZeroDataError ||
-                error instanceof AbiDecodingZeroDataError,
+              (error) => error instanceof ContractFunctionRevertedError,
             ) !== null
           ) {
             throw new MissingVerificationEvidenceError(
@@ -99,8 +98,25 @@ export async function resolveAssets(params: {
               { cause },
             );
           }
-          throw new ExternalServiceError(
-            "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
+          if (
+            (cause instanceof BaseError &&
+              cause.walk(
+                (error) =>
+                  error instanceof HttpRequestError ||
+                  error instanceof TimeoutError ||
+                  error instanceof RpcRequestError ||
+                  error instanceof RpcError ||
+                  (error instanceof Error && error.name === "AbortError"),
+              ) !== null) ||
+            (cause instanceof Error && cause.name === "AbortError")
+          ) {
+            throw new ExternalServiceError(
+              "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
+              { cause },
+            );
+          }
+          throw new MissingVerificationEvidenceError(
+            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
             { cause },
           );
         }
