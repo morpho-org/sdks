@@ -184,6 +184,7 @@ export function parseSimulationResponse(params: {
         logs: (call.logs ?? []).map((log): RawLog => {
           if (
             !Array.isArray(log.topics) ||
+            log.topics.some((topic) => typeof topic !== "string") ||
             typeof log.address !== "string" ||
             (log.data !== undefined && typeof log.data !== "string")
           )
