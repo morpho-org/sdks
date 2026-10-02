@@ -81,7 +81,10 @@ interface SimulationCheckContext extends SimulationContextBase {
   readonly expected?: bigint | boolean | Address | Hash;
   /** Value observed in the simulation, same domain as `expected`. */
   readonly observed?: bigint | boolean | Address | Hash;
-  /** Index into the caller's `transactions`; preview preparation never shifts it. */
+  /**
+   * Reserved; not populated for caller-transaction reverts, whose index is on
+   * `SimulationRevertedError.details[].transactionIndex`.
+   */
   readonly failedTransactionIndex?: number;
 }
 
@@ -104,7 +107,10 @@ export type SimulationPreparationContext = SimulationContextBase & {
   readonly preparationCallIndex?: number;
 };
 
-/** Context of a revert while executing a bundle transaction. */
+/**
+ * Reserved execution-stage context; `SimulationRevertedError` carries none for
+ * caller-transaction or node reverts (see `details[].transactionIndex`).
+ */
 export type SimulationExecutionContext = SimulationCheckContext &
   SimulationOperationSubject & { readonly stage: "execution" };
 
