@@ -519,6 +519,14 @@ export interface MidnightCancelOffersAction
     }
   > {}
 
+/** Collateral pulled from the maker and supplied to Midnight before offers are published. */
+export interface MidnightCollateralTransfer {
+  /** Index of the collateral in the market's `collateralParams`. */
+  readonly collateralIndex: bigint;
+  /** Collateral assets pulled from the maker. */
+  readonly assets: bigint;
+}
+
 /** Metadata for an atomic Midnight Bundles V2 offer publication or repost. */
 export interface MidnightCancelAndMakeAction
   extends BaseAction<
@@ -528,10 +536,7 @@ export interface MidnightCancelAndMakeAction
       readonly root: Hex;
       readonly groups: readonly Hex[];
       readonly cancellations: readonly MidnightGroupCancellation[];
-      readonly collateralSupplies: readonly {
-        readonly collateralIndex: bigint;
-        readonly assets: bigint;
-      }[];
+      readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly deadline: bigint;
     }
   > {}

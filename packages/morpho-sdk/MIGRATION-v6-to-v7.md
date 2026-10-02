@@ -23,7 +23,7 @@ reverts and nothing is published.
 const output = await midnight.makeLend({ accountAddress, offers, loanToken, loanAssets });
 const tx = output.buildTx(await signRequirements(await output.getRequirements()));
 
-// v7: pass no cancellations for a fresh publication
+// v7: repost over previousGroup; pass `cancellations: []` for a fresh publication
 const output = await midnight.cancelAndMakeLend({
   accountAddress,
   offers,

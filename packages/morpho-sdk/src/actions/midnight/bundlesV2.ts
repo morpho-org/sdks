@@ -1,4 +1,5 @@
 import { maxUint128, zeroAddress } from "viem";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   DuplicateMidnightGroupCancellationError,
   InputExceedsMaxError,
@@ -32,9 +33,7 @@ export const toBundlesV2Cancellations = (params: {
   readonly cancellations: readonly MidnightGroupCancellation[];
   readonly deadline: bigint;
 }): MidnightGroupCancellation[] => {
-  if (params.deadline < 0n) {
-    throw new NegativeInputError("deadline", params.deadline);
-  }
+  validateDeadline(params.deadline);
   const groups = new Set<string>();
   return params.cancellations.map(({ group, maxConsumed }, index) => {
     const field = `cancellations[${index}].maxConsumed`;

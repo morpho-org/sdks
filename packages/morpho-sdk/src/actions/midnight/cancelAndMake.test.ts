@@ -3,6 +3,7 @@ import {
   MarketParams,
   MarketUtils,
   midnightBundlesV2Abi,
+  UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import {
   getChainAddress,
@@ -25,8 +26,8 @@ import {
 import {
   DuplicateMidnightGroupCancellationError,
   InputExceedsMaxError,
+  MidnightMarketAddressMismatchError,
   MidnightReplacementGroupCancelledError,
-  NegativeInputError,
   NonPositiveInputError,
   UnknownMidnightRatifierError,
 } from "../../types/index.js";
@@ -143,6 +144,42 @@ describe("midnightCancelAndMake", () => {
     expect(decoded.args[4]).toEqual([{ collateralIndex: 0n, assets: 10n }]);
   });
 
+  test("behavior: appends metadata", () => {
+    const tx = midnightCancelAndMake({
+      ...params,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: MidnightMarketAddressMismatchError", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        collateral: {
+          market: new MarketParams({
+            ...midnightMarket,
+            midnight: zeroAddress,
+          }),
+          supplies: [{ collateralIndex: 0n, assets: 10n }],
+        },
+      }),
+    ).toThrow(MidnightMarketAddressMismatchError);
+  });
+
+  test("error: UnknownCollateralIndexError", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        collateral: {
+          market,
+          supplies: [{ collateralIndex: 1n, assets: 10n }],
+        },
+      }),
+    ).toThrow(UnknownCollateralIndexError);
+  });
+
   test("error: UnknownMidnightRatifierError", () => {
     expect(() =>
       midnightCancelAndMake({
@@ -191,8 +228,8 @@ describe("midnightCancelAndMake", () => {
         ],
       }),
     ).toThrow(DuplicateMidnightGroupCancellationError);
-    expect(() => midnightCancelAndMake({ ...params, deadline: -1n })).toThrow(
-      NegativeInputError,
+    expect(() => midnightCancelAndMake({ ...params, deadline: 0n })).toThrow(
+      NonPositiveInputError,
     );
   });
 

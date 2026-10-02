@@ -18,6 +18,7 @@ import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js"
 import {
   type Metadata,
   type MidnightCancelAndMakeAction,
+  type MidnightCollateralTransfer,
   type MidnightGroupCancellation,
   MidnightReplacementGroupCancelledError,
   NonPositiveInputError,
@@ -29,14 +30,6 @@ import {
   emptyMidnightMarket,
   toBundlesV2Cancellations,
 } from "./bundlesV2.js";
-
-/** Collateral pulled from the maker and supplied to Midnight before offers are published. */
-export interface MidnightCollateralTransfer {
-  /** Index of the collateral in the market's `collateralParams`. */
-  readonly collateralIndex: bigint;
-  /** Collateral assets pulled from the maker. */
-  readonly assets: bigint;
-}
 
 /**
  * Delegated root-activation signature passed to the ratifier's `setIsRootRatifiedWithSig`.

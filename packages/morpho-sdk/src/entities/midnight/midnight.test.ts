@@ -1209,6 +1209,34 @@ describe("MorphoMidnight", () => {
       ]);
     });
 
+    test("behavior: sums repeated supplies into one approval", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+      const output = await prepare(handle, {
+        collateral: {
+          market,
+          supplies: [
+            { collateralIndex: 0n, assets: 2_000n },
+            { collateralIndex: 0n, assets: 500n },
+          ],
+        },
+      });
+
+      expect(
+        (await output.getRequirements()).map(({ action }) => action),
+      ).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 2_500n },
+        },
+      ]);
+    });
+
     test("error: MarketIdMismatchError", async () => {
       await expect(
         prepare(createMockClient(midnightTestChain), {

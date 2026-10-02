@@ -16,7 +16,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `BundlesPermitKind` discriminator; plus `resolveBundlesTokenRequirements`, consumed by the
   entity-layer resolver `entities/requirements/getBundlesTokenRequirements.ts`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
-- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
+- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, and Midnight authorization.
 
 ## Common builder pattern
 
@@ -24,7 +24,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
    `VaultBundlesV1` entrypoint directly. **Blue write paths**
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly; batch `cancelOffers` encodes one
+   `MidnightBundles` function call directly; batch `cancelOffers` and maker `midnightCancelAndMake` each encode one
    `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call. Other **direct calls** (Midnight
    collateral supply / redeem / single-group `cancelOffer`) encode their target contract call directly. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;

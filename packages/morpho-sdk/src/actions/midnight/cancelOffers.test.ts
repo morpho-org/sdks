@@ -19,6 +19,7 @@ import {
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
 import { midnightCancelOffers } from "./cancelOffers.js";
@@ -132,7 +133,7 @@ describe("midnightCancelOffers", () => {
     ).toThrow(DuplicateMidnightGroupCancellationError);
   });
 
-  test("error: NegativeInputError on negative ceiling or deadline", () => {
+  test("error: NegativeInputError on negative ceiling", () => {
     expect(() =>
       midnightCancelOffers({
         chainId: midnightChainId,
@@ -144,9 +145,9 @@ describe("midnightCancelOffers", () => {
       midnightCancelOffers({
         chainId: midnightChainId,
         cancellations: [{ group: groupA, maxConsumed: 0n }],
-        deadline: -1n,
+        deadline: 0n,
       }),
-    ).toThrow(NegativeInputError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: InputExceedsMaxError on ceiling above uint128", () => {

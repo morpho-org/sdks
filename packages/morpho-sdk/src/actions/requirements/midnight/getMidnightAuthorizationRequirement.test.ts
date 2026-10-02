@@ -1,4 +1,5 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Chain, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
@@ -100,16 +101,25 @@ describe("getMidnightAuthorizationRequirement", () => {
     },
   );
 
-  test("error: UnsupportedMidnightAuthorizationTargetError", async () => {
-    const { client } = createMockClient(midnightTestChain);
+  test.each([
+    zeroAddress,
+    midnightAddresses.ecrecoverRatifier,
+    midnightAddresses.setterRatifier,
+    getChainAddress(midnightChainId, "priceRatifierV1"),
+    getChainAddress(midnightChainId, "rateRatifierV1"),
+  ])(
+    "error: UnsupportedMidnightAuthorizationTargetError for %s",
+    async (authorized) => {
+      const { client } = createMockClient(midnightTestChain);
 
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized: zeroAddress,
-      }),
-    ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
-  });
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
+    },
+  );
 });

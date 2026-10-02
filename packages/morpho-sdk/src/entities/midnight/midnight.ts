@@ -14,7 +14,6 @@ import {
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Hex, isAddressEqual } from "viem";
 import {
-  type MidnightCancelAndMakeParams,
   midnightCancelAndMake,
   midnightCancelOffer,
   midnightCancelOffers,
@@ -63,7 +62,6 @@ import type {
   CancelAndMakeBorrowParams,
   CancelAndMakeLendParams,
   CancelAndMakeOutput,
-  CancelAndMakeParams,
   GetOffersDataParams,
   GetPositionDataParams,
   MidnightActionOutput,
@@ -229,20 +227,21 @@ export class MorphoMidnight {
    *
    * @param params - Maker account, raw offer or group inputs, and optional API validation controls.
    * @param params.accountAddress - Maker expected on every offer.
-   * @param params.offers - Offer, group, tree, or list accepted by `Tree.create`.
+   * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.validation - Optional Midnight mempool API request controls.
-   * @returns Prepared tree data used by maker flows.
+   * @returns Prepared tree, groups, ratifier, and encoded payload used by maker flows.
    * @throws {ChainIdMismatchError} when the client chain differs from this entity's chain.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
    * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
    * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
    * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
-   * @throws {UnknownMidnightRatifierError} when the tree uses an unsupported ratifier.
+   * @throws {UnknownAddressError} when the chain has no deployment for the tree's V1 ratifier.
+   * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @example
    * ```ts
    * const offersData = await midnight.getOffersData({
    *   accountAddress: maker,
-   *   offers: [offer],
+   *   offers: { type: "rateV1", entries: [{ offer, rate }] },
    * });
    * ```
    */
@@ -698,7 +697,16 @@ export class MorphoMidnight {
         });
       }
     });
-    const tx = this.buildCancelAndMakeTx({ data, params });
+    const tx = midnightCancelAndMake({
+      chainId: this.chainId,
+      ratifier: data.ratifier,
+      root: data.tree.root,
+      groups: data.groups,
+      payload: data.payload,
+      cancellations: params.cancellations ?? [],
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+    });
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {
@@ -786,13 +794,19 @@ export class MorphoMidnight {
         }
       }
     }
-    const tx = this.buildCancelAndMakeTx({
-      data,
-      params,
+    const tx = midnightCancelAndMake({
+      chainId: this.chainId,
+      ratifier: data.ratifier,
+      root: data.tree.root,
+      groups: data.groups,
+      payload: data.payload,
       collateral:
         market == null
           ? undefined
           : { market, supplies: params.collateral?.supplies ?? [] },
+      cancellations: params.cancellations ?? [],
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
     });
     const midnightBundlesV2 = getChainAddress(
       this.chainId,
@@ -1111,24 +1125,6 @@ export class MorphoMidnight {
         this.getBundlesV2AuthorizationRequirements(params.accountAddress),
       buildTx: () => tx,
     };
-  }
-
-  private buildCancelAndMakeTx(params: {
-    readonly data: OffersData;
-    readonly params: CancelAndMakeParams;
-    readonly collateral?: MidnightCancelAndMakeParams["collateral"];
-  }) {
-    return midnightCancelAndMake({
-      chainId: this.chainId,
-      ratifier: params.data.ratifier,
-      root: params.data.tree.root,
-      groups: params.data.groups,
-      payload: params.data.payload,
-      collateral: params.collateral,
-      cancellations: params.params.cancellations ?? [],
-      deadline: params.params.deadline,
-      metadata: this.client.options.metadata,
-    });
   }
 
   private async getBundlesV2AuthorizationRequirements(

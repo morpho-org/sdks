@@ -9,12 +9,12 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
-import type { MidnightCollateralTransfer } from "../../actions/midnight/cancelAndMake.js";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
   MidnightCancelAndMakeAction,
+  MidnightCollateralTransfer,
   MidnightGroupCancellation,
 } from "../../types/action.js";
 
