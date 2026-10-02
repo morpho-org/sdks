@@ -28,7 +28,7 @@ There is no V1 route or opt-in flag. Stay on v6 to keep the separate-transaction
 
 | v6 output | v7 output |
 | --- | --- |
-| `MakeOffersOutput` | `SupplyCollateralMakeBorrowOutput` |
+| `MidnightMakeOffersOutput` | `MidnightSupplyCollateralMakeBorrowOutput` (from `@morpho-org/morpho-sdk/entities`) |
 | `ratifierType: "ecrecover" \| "setter"` | `ratifierType: "priceV1" \| "rateV1"` |
 | Requirements: ERC-20 approval to `Midnight`, `midnightSupplyCollateral`, ratifier authorization, root signature or setter ratification | Requirements: ERC-20 approval per collateral token to `MidnightBundlesV2`, and Midnight authorization of `MidnightBundlesV2` |
 | `buildTx(signatures)` → `mempoolSubmitOffers` action | `buildTx()` → `midnightSupplyCollateralMakeBorrow` action targeting `MidnightBundlesV2` |

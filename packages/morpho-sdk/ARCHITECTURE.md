@@ -119,8 +119,11 @@ at the SDK level. The differences are at the protocol layer:
 - **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
   collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
   `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call.
-- **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
-  signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
+- **Maker routing**: `makeLend` and `makeBorrow` build and validate offer trees, collect an
+  Ecrecover root signature or SetterRatifier transaction, then submit the payload to the Midnight
+  mempool. `supplyCollateralMakeBorrow` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake`
+  call that cancels optional groups, supplies collateral, ratifies a PriceRatifierV1/RateRatifierV1
+  root and publishes the payload atomically.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 

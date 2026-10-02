@@ -132,6 +132,7 @@ export type {
   OfferValidationParams as MidnightOfferValidationParams,
   RedeemParams as MidnightRedeemParams,
   RepayWithdrawCollateralParams as MidnightRepayWithdrawCollateralParams,
+  SupplyCollateralMakeBorrowOutput as MidnightSupplyCollateralMakeBorrowOutput,
   SupplyCollateralMakeBorrowParams as MidnightSupplyCollateralMakeBorrowParams,
   SupplyCollateralParams as MidnightSupplyCollateralParams,
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,

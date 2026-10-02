@@ -61,6 +61,7 @@ import {
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  MidnightCancellationReusesOfferGroupError,
   MidnightMarketAddressMismatchError,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
@@ -1824,6 +1825,41 @@ describe("MorphoMidnight", () => {
       expect(output.buildTx().action.args.ratifier).toBe(
         midnightAddresses.rateRatifierV1,
       );
+    });
+
+    test("behavior: deduplicates groups in first-seen order", async () => {
+      const groupA = `0x${"0a".repeat(32)}` as Hex;
+      const groupB = `0x${"0b".repeat(32)}` as Hex;
+      const output = await midnight().supplyCollateralMakeBorrow(
+        params({
+          offers: Tree.create({
+            type: "priceV1",
+            entries: [
+              { offer: borrowOffer({ group: groupA, maxAssets: 1n }) },
+              { offer: borrowOffer({ group: groupB, maxAssets: 2n }) },
+              { offer: borrowOffer({ group: groupA, maxAssets: 3n }) },
+            ],
+          }),
+        }),
+      );
+      const { args } = output.buildTx().action;
+
+      expect(output.groups).toEqual([groupA, groupB]);
+      expect(args.groups).toEqual([groupA, groupB]);
+      expect(args.offers).toBe(3);
+    });
+
+    test("error: MidnightCancellationReusesOfferGroupError", async () => {
+      const tree = priceTree();
+
+      await expect(
+        midnight().supplyCollateralMakeBorrow(
+          params({
+            offers: tree,
+            cancellations: [{ group: tree.offers[0]!.group, maxConsumed: 0n }],
+          }),
+        ),
+      ).rejects.toThrow(MidnightCancellationReusesOfferGroupError);
     });
 
     test("error: UnsupportedMidnightBundlesV2RatifierError", async () => {

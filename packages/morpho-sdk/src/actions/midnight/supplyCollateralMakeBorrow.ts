@@ -4,11 +4,16 @@ import {
   MarketUtils,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import {
+  deepFreeze,
+  getChainAddress,
+  getChainAddresses,
+} from "@morpho-org/morpho-ts";
 import {
   type Address,
   encodeFunctionData,
   type Hex,
+  isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -18,24 +23,19 @@ import {
   DuplicateMidnightCollateralSupplyError,
   EmptyMidnightCollateralSuppliesError,
   type Metadata,
+  type MidnightBundlesV2CollateralSupply,
+  MidnightCancellationReusesOfferGroupError,
   type MidnightGroupCancellation,
   type MidnightSupplyCollateralMakeBorrowAction,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
+  UnsupportedMidnightBundlesV2RatifierError,
 } from "../../types/index.js";
 import { emptyBlueMarket, validateGroupCancellations } from "./bundlesV2.js";
 
-/** One collateral transfer pulled from `msg.sender` and supplied to its Midnight position. */
-export interface MidnightBundlesV2CollateralSupply {
-  /** Index into the market's `collateralParams`. */
-  readonly collateralIndex: bigint;
-  /** Collateral assets to supply. */
-  readonly assets: bigint;
-}
-
 /** Parameters for encoding an atomic Midnight Bundles V2 collateral supply and borrow-offer publication. */
-export interface MidnightSupplyCollateralMakeBorrowParams {
+export interface MidnightSupplyCollateralMakeBorrowActionParams {
   readonly chainId: number;
   readonly market: MarketInput;
   readonly collateralSupplies: readonly MidnightBundlesV2CollateralSupply[];
@@ -76,6 +76,7 @@ export interface MidnightSupplyCollateralMakeBorrowParams {
  * @param params.deadline - Bundle execution deadline timestamp.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralMakeBorrowAction>` targeting `MidnightBundlesV2`.
+ * @throws {UnsupportedMidnightBundlesV2RatifierError} when `ratifier` is not the chain's PriceRatifierV1 or RateRatifierV1.
  * @throws {EmptyMidnightCollateralSuppliesError} when no collateral transfer is provided.
  * @throws {NonPositiveInputError} when a collateral transfer amount is non-positive.
  * @throws {DuplicateMidnightCollateralSupplyError} when a collateral index appears twice.
@@ -84,6 +85,7 @@ export interface MidnightSupplyCollateralMakeBorrowParams {
  * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
  * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
  * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears twice.
+ * @throws {MidnightCancellationReusesOfferGroupError} when a cancelled group is also in `groups`.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -106,8 +108,24 @@ export interface MidnightSupplyCollateralMakeBorrowParams {
  * ```
  */
 export const midnightSupplyCollateralMakeBorrow = (
-  params: MidnightSupplyCollateralMakeBorrowParams,
+  params: MidnightSupplyCollateralMakeBorrowActionParams,
 ): Readonly<Transaction<MidnightSupplyCollateralMakeBorrowAction>> => {
+  const to = getChainAddress(params.chainId, "midnightBundlesV2");
+  const { priceRatifierV1, rateRatifierV1 } = getChainAddresses(params.chainId);
+  if (
+    !(
+      (priceRatifierV1 != null &&
+        isAddressEqual(params.ratifier, priceRatifierV1)) ||
+      (rateRatifierV1 != null &&
+        isAddressEqual(params.ratifier, rateRatifierV1))
+    )
+  ) {
+    throw new UnsupportedMidnightBundlesV2RatifierError({
+      ratifier: params.ratifier,
+      priceRatifierV1,
+      rateRatifierV1,
+    });
+  }
   if (params.collateralSupplies.length === 0) {
     throw new EmptyMidnightCollateralSuppliesError();
   }
@@ -139,12 +157,19 @@ export const midnightSupplyCollateralMakeBorrow = (
     indices.add(collateralIndex);
   }
   const cancellations = validateGroupCancellations(params.cancellations ?? []);
-  const collateralSupplies = params.collateralSupplies.map(
-    ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
-  );
+  for (const [index, { group }] of cancellations.entries()) {
+    if (params.groups.some((g) => g.toLowerCase() === group.toLowerCase())) {
+      throw new MidnightCancellationReusesOfferGroupError({ index, group });
+    }
+  }
+  const collateralSupplies: MidnightBundlesV2CollateralSupply[] =
+    params.collateralSupplies.map(({ collateralIndex, assets }) => ({
+      collateralIndex,
+      assets,
+    }));
 
   let tx = {
-    to: getChainAddress(params.chainId, "midnightBundlesV2"),
+    to,
     value: 0n,
     data: encodeFunctionData({
       abi: midnightBundlesV2Abi,

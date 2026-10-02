@@ -544,24 +544,26 @@ export interface MidnightCancelOffersAction
     }
   > {}
 
+/** One collateral transfer pulled from `msg.sender` and supplied to its Midnight position. */
+export interface MidnightBundlesV2CollateralSupply {
+  /** Index into the market's `collateralParams`. */
+  readonly collateralIndex: bigint;
+  /** Collateral assets to supply. */
+  readonly assets: bigint;
+}
+
 /** Metadata for an atomic Midnight Bundles V2 collateral supply and borrow-offer publication. */
 export interface MidnightSupplyCollateralMakeBorrowAction
   extends BaseAction<
     "midnightSupplyCollateralMakeBorrow",
     {
       readonly market: Hex;
-      readonly collateralSupplies: readonly {
-        readonly collateralIndex: bigint;
-        readonly assets: bigint;
-      }[];
+      readonly collateralSupplies: readonly MidnightBundlesV2CollateralSupply[];
       readonly ratifier: Address;
       readonly root: Hex;
       readonly groups: readonly Hex[];
       readonly offers: number;
-      readonly cancellations: readonly {
-        readonly group: Hex;
-        readonly maxConsumed: bigint;
-      }[];
+      readonly cancellations: readonly MidnightGroupCancellation[];
       readonly deadline: bigint;
     }
   > {}

@@ -4,7 +4,11 @@ import {
   midnightBundlesV2Abi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { registerCustomAddresses } from "@morpho-org/morpho-ts";
+import {
+  ChainId,
+  registerCustomAddresses,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
 import {
   decodeFunctionData,
   getAddress,
@@ -15,6 +19,7 @@ import {
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  midnightAddresses,
   midnightChainId,
   midnightMarket,
   midnightMarketId,
@@ -23,8 +28,10 @@ import {
   DuplicateMidnightCollateralSupplyError,
   DuplicateMidnightGroupCancellationError,
   EmptyMidnightCollateralSuppliesError,
+  MidnightCancellationReusesOfferGroupError,
   NegativeInputError,
   NonPositiveInputError,
+  UnsupportedMidnightBundlesV2RatifierError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralMakeBorrow } from "./supplyCollateralMakeBorrow.js";
 
@@ -35,7 +42,7 @@ registerCustomAddresses({
   addresses: { [midnightChainId]: { midnightBundlesV2 } },
 });
 
-const ratifier = getAddress("0x00000000000000000000000000000000000C0001");
+const ratifier = midnightAddresses.priceRatifierV1;
 const root = `0x${"aa".repeat(32)}` as Hex;
 const groupA = `0x${"11".repeat(32)}` as Hex;
 const groupB = `0x${"22".repeat(32)}` as Hex;
@@ -168,5 +175,37 @@ describe("midnightSupplyCollateralMakeBorrow", () => {
         ],
       }),
     ).toThrow(DuplicateMidnightGroupCancellationError);
+    expect(() =>
+      midnightSupplyCollateralMakeBorrow({
+        ...base,
+        cancellations: [
+          { group: groupA.toUpperCase() as Hex, maxConsumed: 0n },
+        ],
+      }),
+    ).toThrow(MidnightCancellationReusesOfferGroupError);
+  });
+
+  test("error: UnsupportedMidnightBundlesV2RatifierError", () => {
+    expect(() =>
+      midnightSupplyCollateralMakeBorrow({
+        ...base,
+        ratifier: getAddress("0x00000000000000000000000000000000000C0001"),
+      }),
+    ).toThrow(UnsupportedMidnightBundlesV2RatifierError);
+    expect(
+      midnightSupplyCollateralMakeBorrow({
+        ...base,
+        ratifier: midnightAddresses.rateRatifierV1,
+      }).action.args.ratifier,
+    ).toBe(midnightAddresses.rateRatifierV1);
+  });
+
+  test("error: UnknownAddressError", () => {
+    expect(() =>
+      midnightSupplyCollateralMakeBorrow({
+        ...base,
+        chainId: ChainId.EthMainnet,
+      }),
+    ).toThrow(UnknownAddressError);
   });
 });

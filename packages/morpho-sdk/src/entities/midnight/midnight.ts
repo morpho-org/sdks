@@ -13,7 +13,6 @@ import {
   RateRatifierV1,
   SetterRatifierUtils,
   Tree,
-  type TreeSnapshot,
 } from "@morpho-org/midnight-sdk";
 import {
   deepFreeze,
@@ -843,9 +842,16 @@ export class MorphoMidnight {
    * @throws {NonPositiveInputError} when a collateral transfer amount is non-positive.
    * @throws {DuplicateMidnightCollateralSupplyError} when a collateral index appears twice.
    * @throws {UnknownCollateralIndexError} when a collateral index is not configured on the market.
+   * @throws {InvalidTreeError} when the offer tree is empty, all padding, or duplicated.
+   * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+   * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears twice.
+   * @throws {MidnightCancellationReusesOfferGroupError} when a cancelled group is also published by the tree.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @example
    * ```ts
+   * import { maxUint256 } from "viem";
+   *
    * const output = await midnight.supplyCollateralMakeBorrow({
    *   accountAddress: maker,
    *   market: marketData.params,
@@ -928,15 +934,10 @@ export class MorphoMidnight {
     encode("0x");
 
     await tree.mempoolValidate({ ...params.validation, chainId: this.chainId });
-    const descriptor = tree.toDescriptor();
     const payload = await Payload.encode(
       tree.type === "priceV1"
-        ? PriceRatifierV1.ratify({
-            tree: descriptor as TreeSnapshot<"priceV1">,
-          })
-        : RateRatifierV1.ratify({
-            tree: descriptor as TreeSnapshot<"rateV1">,
-          }),
+        ? PriceRatifierV1.ratify({ tree: tree.toDescriptor() })
+        : RateRatifierV1.ratify({ tree: tree.toDescriptor() }),
     );
     const approvals = new Map<string, { token: Address; amount: bigint }>();
     for (const { collateralIndex, assets } of params.collateralSupplies) {

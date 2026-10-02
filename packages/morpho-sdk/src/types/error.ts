@@ -1612,6 +1612,15 @@ export class UnsupportedMidnightBundlesV2RatifierError extends Error {
   }
 }
 
+/** Thrown when a Midnight Bundles V2 call would cancel a group it also publishes. */
+export class MidnightCancellationReusesOfferGroupError extends Error {
+  constructor(params: { readonly index: number; readonly group: Hex }) {
+    super(
+      `cancellations[${params.index}] cancels group "${params.group}", which the new offer tree publishes. Its offers would be unfillable; remove the cancellation or use a new group id.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight flow needs at least one takeable offer. */
 export class EmptyMidnightTakeableOffersError extends Error {
   constructor() {
