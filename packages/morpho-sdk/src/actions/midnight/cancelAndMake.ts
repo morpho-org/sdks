@@ -259,25 +259,25 @@ export const midnightCancelAndMake = (
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
-        emptyBlueMarket,
-        0n,
-        zeroHash,
+        emptyBlueMarket, // blueMarket
+        0n, // assetsToPark
+        zeroHash, // callbackSalt
         params.collateral == null
           ? emptyMidnightMarket
-          : MarketUtils.toStruct(params.collateral.market),
-        supplies,
-        params.ratifier ?? zeroAddress,
-        params.root ?? zeroHash,
-        signature.height,
-        signature.nonce,
-        signature.deadline,
-        signature.v,
-        signature.r,
-        signature.s,
-        cancellations,
-        params.payload ?? "0x",
-        params.deadline,
-        zeroAddress,
+          : MarketUtils.toStruct(params.collateral.market), // market
+        supplies, // collateralSupplies
+        params.ratifier ?? zeroAddress, // ratifier
+        params.root ?? zeroHash, // newRoot
+        signature.height, // signatureHeight
+        signature.nonce, // signatureNonce
+        signature.deadline, // signatureDeadline
+        signature.v, // v
+        signature.r, // r
+        signature.s, // s
+        cancellations, // groupsToCancel
+        params.payload ?? "0x", // payload
+        params.deadline, // deadline
+        zeroAddress, // wrappedNative
       ],
     }),
   };
