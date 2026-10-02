@@ -175,8 +175,8 @@ encoding follow from that:
   major changeset, migration guide or maintained-dependent audit.
 
 This decision does not cover native-token wrapping, the callback model behind `supplyBlueMakeLend`
-beyond the derived-callback check, Blue market safety policy for parked assets, or quote and offer
-selection.
+beyond the derived-callback check, Blue market safety policy for parked assets, quote and offer
+selection, or `evm-simulation`, whose bundle-retention guard is unchanged.
 
 ## Invariants
 
