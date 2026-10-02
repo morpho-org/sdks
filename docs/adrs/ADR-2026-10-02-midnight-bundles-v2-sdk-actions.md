@@ -52,7 +52,7 @@ whose arguments the entity methods fill.
 | `supplyCollateralMakeBorrow` | `midnightCancelAndMake` | `CancelAndMake` | borrow-side offers, non-empty collateral supplies, `assetsToPark = 0` |
 | `takeLend` | `midnightTakeLend` | `BuyWith{Units,Assets}Target…` | `reduceOnly = false`, `repayEnabled = false`, no collateral withdrawals |
 | `takeRepayWithdrawCollateral` | `midnightTakeRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`; `repayEnabled` is an input |
-| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWithUnitsTarget…` | `repayEnabled = true`, empty `offerFills`; full repay encodes `targetUnits = maxUint256` |
+| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWithUnitsTarget…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; full repay encodes `targetUnits = maxUint256` |
 | `takeBorrow` | `midnightTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, no collateral supplies |
 | `supplyCollateralTakeBorrow` | `midnightSupplyCollateralTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, non-empty collateral supplies |
 | `takeWithdraw` | `midnightTakeWithdraw` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = true`, no collateral supplies |
@@ -80,6 +80,9 @@ Rules shared by the maker actions:
   root with a signature, which `buildTx` encodes as `v, r, s`; a contract-wallet maker encodes
   `v = r = s = 0`. The ratifier authorization, root activation and payload publication happen
   inside the bundle call, so they are no longer separate requirements.
+- Maker actions reject offers whose ratifier is not the chain's `priceRatifierV1` or
+  `rateRatifierV1`, and offer sets whose offers do not all share the ratifier the call activates,
+  so a cancellation never lands without a takeable replacement root.
 - The root and the publication payload are derived deterministically from the offers input, so
   every handle built from the same inputs encodes the same values, with or without a signature.
 - For an EOA maker, the root-activation values `v, r, s`, `signatureHeight`, `signatureNonce` and
@@ -97,7 +100,8 @@ encoding follow from that:
 - Token requirements for the bundle call are ERC-20 approvals from `accountAddress` to
   `MidnightBundlesV2` for exactly the assets the call pulls: `targetBuyerAssets` on an
   assets-target buy, `maxBuyerAssets` on a units-target buy, each collateral supply, and
-  `assetsToPark`. ERC-2612 and Permit2 requirements are not produced, because V2 accepts no inline
+  `assetsToPark`. Buy-side referral fees are paid out of that pulled amount, so they never raise
+  the approval. ERC-2612 and Permit2 requirements are not produced, because V2 accepts no inline
   permit.
 - A full repay (`targetUnits = maxUint256`) still sets a finite `maxBuyerAssets` at or above the
   sender's debt; the unused remainder is returned.
@@ -115,7 +119,8 @@ encoding follow from that:
 
 - `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
   `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
-  `midnightBundlesV2Abi` from `/midnight` and its root facade, next to `midnightBundlesAbi`.
+  `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, next to `midnightBundlesAbi`, and the
+  V2 struct types from `/midnight/types` and its root barrel.
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
@@ -123,7 +128,8 @@ encoding follow from that:
   (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
-  replaced by the target union. The migration guide lists each.
+  replaced by the target union. The V1-only permit types `PermitKind` and `MidnightTokenPermit`
+  are removed with them. The migration guide lists each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
 - `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
@@ -152,8 +158,9 @@ selection.
 - Requirements for assets the bundle call pulls name `MidnightBundlesV2` as approval spender,
   every V2 action requires Midnight authorization of `MidnightBundlesV2`, and no V2 requirement is
   a permit → requirement unit tests and pinned-fork integration tests per method.
-- Maker actions reject offers whose maker differs from `accountAddress` and replacement groups that
-  are also being cancelled → typed-error unit tests.
+- Maker actions reject offers whose maker differs from `accountAddress`, offers whose ratifier is
+  not the activated `PriceRatifierV1` or `RateRatifierV1`, and replacement groups that are also
+  being cancelled → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
 - Revisit if `MidnightBundlesV2` gains an entrypoint, an `onBehalf` argument or inline permits, or
