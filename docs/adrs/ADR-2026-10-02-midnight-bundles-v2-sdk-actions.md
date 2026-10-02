@@ -145,13 +145,8 @@ selection.
 
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
-- No `morpho-sdk` source encodes a V1 entrypoint → this check prints
-  nothing:
-
-  ```sh
-  rg -l 'midnightBundlesV1' packages/morpho-sdk/src --glob '!*.test.ts'
-  ```
-
+- No `morpho-sdk` 7.0.0 action encodes a `midnightBundlesV1*` selector → a unit test over every
+  Midnight action builder's encoded calldata.
 - Each action fixes the intent arguments in the table above → encoder tests decode calldata and
   assert `reduceOnly`, `repayEnabled`, `newRoot`, `assetsToPark` and list emptiness per action.
 - Requirements for assets the bundle call pulls name `MidnightBundlesV2` as approval spender,
