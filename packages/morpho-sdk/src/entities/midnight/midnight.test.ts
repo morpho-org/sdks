@@ -1532,7 +1532,7 @@ describe("MorphoMidnight", () => {
       )
         .cancelOffers({
           accountAddress: midnightAddresses.maker,
-          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
           deadline: maxUint256,
         })
         .buildTx();
