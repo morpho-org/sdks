@@ -146,7 +146,12 @@ encoding follow from that:
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
   replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types
-  `PermitKind` and `MidnightTokenPermit` are removed with them. `supplyCollateralMakeBorrow`
+  `PermitKind` and `MidnightTokenPermit` are removed with them. V2 root activation adds its own
+  signature requirement, with its own action `type` and args carrying `v, r, s`,
+  `signatureHeight`, `signatureNonce` and `signatureDeadline`, as an additive member of
+  `SignatureRequirementAction`, `RequirementSignatureArgs` and `RequirementSignature`. The
+  `MidnightOfferRootSignature*` types and `MidnightActionSignatures` stay unchanged for `makeLend`
+  and `makeBorrow`. `supplyCollateralMakeBorrow`
   replaces `collateralAssets` and `collateralIndex` with the collateral-supply list, removes
   `reservedCollateralAssets` because approvals cover only the pulled assets, and no longer accepts
   `EcrecoverRatifier`- or `SetterRatifier`-ratified offers. The four V1 flows also keep their
