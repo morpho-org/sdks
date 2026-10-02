@@ -82,6 +82,8 @@ export interface ChainAddresses {
   midnight?: `0x${string}`;
   /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
   midnightBundles?: `0x${string}`;
+  /** MidnightBundlesV2 periphery contract for maker cancel-and-make and taker flows acting on `msg.sender`. */
+  midnightBundlesV2?: `0x${string}`;
   /** BlueBuyCallback factory for parking Midnight buy-offer funds in Morpho Blue markets. */
   midnightBlueBuyCallbackFactory?: `0x${string}`;
   /** Midnight onchain mempool log contract used by app and orderbook flows for offer payload publication. */

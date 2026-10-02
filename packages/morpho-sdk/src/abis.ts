@@ -32,6 +32,7 @@ export {
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,
   midnightAbi,
   midnightBundlesAbi,
+  midnightBundlesV2Abi,
   priceRatifierV1Abi as midnightPriceRatifierV1Abi,
   rateRatifierV1Abi as midnightRateRatifierV1Abi,
   setterRatifierAbi as midnightSetterRatifierAbi,

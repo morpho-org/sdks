@@ -1560,6 +1560,24 @@ export class MidnightAmountExceedsMaxOfferCapError extends Error {
   }
 }
 
+/** Thrown when a Midnight batch cancellation has no offer groups. */
+export class EmptyMidnightGroupCancellationsError extends Error {
+  constructor() {
+    super(
+      "Midnight group cancellations cannot be empty. Pass at least one offer group to cancel.",
+    );
+  }
+}
+
+/** Thrown when a Midnight batch cancellation lists the same offer group twice. */
+export class DuplicateMidnightGroupCancellationError extends Error {
+  constructor(params: { readonly index: number; readonly group: Hex }) {
+    super(
+      `Midnight group cancellation "${params.index}" repeats group "${params.group}". Pass each offer group once.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight flow needs at least one takeable offer. */
 export class EmptyMidnightTakeableOffersError extends Error {
   constructor() {

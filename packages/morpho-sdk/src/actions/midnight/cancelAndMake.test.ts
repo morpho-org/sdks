@@ -1,0 +1,228 @@
+import { midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
+import {
+  registerCustomAddresses,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import {
+  decodeFunctionData,
+  getAddress,
+  type Hex,
+  maxUint128,
+  maxUint256,
+  zeroAddress,
+  zeroHash,
+} from "viem";
+import { describe, expect, test } from "vitest";
+import { midnightChainId } from "../../../test/fixtures/midnight.js";
+import {
+  DuplicateMidnightGroupCancellationError,
+  EmptyMidnightGroupCancellationsError,
+  InputExceedsMaxError,
+  NegativeInputError,
+  NonPositiveInputError,
+} from "../../types/index.js";
+import { midnightSetIsAuthorized } from "./authorization.js";
+import { midnightCancelAndMake } from "./cancelAndMake.js";
+
+const midnightBundlesV2 = getAddress(
+  "0x00000000000000000000000000000000000b2002",
+);
+registerCustomAddresses({
+  addresses: { [midnightChainId]: { midnightBundlesV2 } },
+});
+
+const groupA = `0x${"11".repeat(32)}` as Hex;
+const groupB = `0x${"22".repeat(32)}` as Hex;
+
+describe("midnightCancelAndMake", () => {
+  test("default", () => {
+    const cancellations = [
+      { group: groupA, maxConsumed: 0n },
+      { group: groupB, maxConsumed: 5n },
+    ];
+    const tx = midnightCancelAndMake({
+      chainId: midnightChainId,
+      cancellations,
+      deadline: maxUint256,
+    });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(tx.to).toBe(midnightBundlesV2);
+    expect(tx.value).toBe(0n);
+    expect(decoded.functionName).toBe("midnightBundlesV2CancelAndMake");
+    expect(decoded.args).toEqual([
+      {
+        loanToken: zeroAddress,
+        collateralToken: zeroAddress,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      },
+      0n,
+      zeroHash,
+      {
+        chainId: 0n,
+        midnight: zeroAddress,
+        loanToken: zeroAddress,
+        collateralParams: [],
+        maturity: 0n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      },
+      [],
+      zeroAddress,
+      zeroHash,
+      0n,
+      0n,
+      0n,
+      0,
+      zeroHash,
+      zeroHash,
+      cancellations,
+      "0x",
+      maxUint256,
+      zeroAddress,
+    ]);
+    expect(tx.action).toEqual({
+      type: "midnightCancelAndMake",
+      args: { cancellations, deadline: maxUint256 },
+    });
+    expect(Object.isFrozen(tx.action.args.cancellations[0])).toBe(true);
+  });
+
+  test("behavior: appends metadata and does not freeze caller input", () => {
+    const cancellations = [{ group: groupA, maxConsumed: maxUint128 }];
+    const tx = midnightCancelAndMake({
+      chainId: midnightChainId,
+      cancellations,
+      deadline: 1n,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+    expect(Object.isFrozen(cancellations[0])).toBe(false);
+  });
+
+  test("error: EmptyMidnightGroupCancellationsError on no groups", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [],
+        deadline: maxUint256,
+      }),
+    ).toThrow(EmptyMidnightGroupCancellationsError);
+  });
+
+  test("error: DuplicateMidnightGroupCancellationError on repeated group", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [
+          { group: groupA, maxConsumed: 0n },
+          {
+            group: groupA.toUpperCase().replace("0X", "0x") as Hex,
+            maxConsumed: 1n,
+          },
+        ],
+        deadline: maxUint256,
+      }),
+    ).toThrow(DuplicateMidnightGroupCancellationError);
+  });
+
+  test("error: NegativeInputError on negative ceiling", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [{ group: groupA, maxConsumed: -1n }],
+        deadline: maxUint256,
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test.each([0n, -1n])(
+    "error: NonPositiveInputError on deadline %s",
+    (deadline) => {
+      expect(() =>
+        midnightCancelAndMake({
+          chainId: midnightChainId,
+          cancellations: [{ group: groupA, maxConsumed: 0n }],
+          deadline,
+        }),
+      ).toThrow(NonPositiveInputError);
+    },
+  );
+
+  test("error: InputExceedsMaxError on deadline above uint256", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [{ group: groupA, maxConsumed: 0n }],
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: InputExceedsMaxError on ceiling above uint128", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [{ group: groupA, maxConsumed: maxUint128 + 1n }],
+        deadline: maxUint256,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: 1,
+        cancellations: [{ group: zeroHash, maxConsumed: 0n }],
+        deadline: maxUint256,
+      }),
+    ).toThrow(UnknownAddressError);
+  });
+
+  test("behavior: MidnightBundlesV2 is an accepted Midnight authorization target", () => {
+    const tx = midnightSetIsAuthorized({
+      chainId: midnightChainId,
+      authorized: midnightBundlesV2,
+      onBehalf: zeroAddress,
+    });
+
+    expect(tx.action.args.authorized).toBe(midnightBundlesV2);
+  });
+
+  test("property: groupsToCancel and deadline round-trip through calldata", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(
+          fc.record({
+            group: fc
+              .uint8Array({ minLength: 32, maxLength: 32 })
+              .map((bytes): Hex => `0x${Buffer.from(bytes).toString("hex")}`),
+            maxConsumed: fc.bigInt({ min: 0n, max: maxUint128 }),
+          }),
+          { minLength: 1, maxLength: 8, selector: ({ group }) => group },
+        ),
+        fc.bigInt({ min: 1n, max: maxUint256 }),
+        (cancellations, deadline) => {
+          const { args } = decodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            data: midnightCancelAndMake({
+              chainId: midnightChainId,
+              cancellations,
+              deadline,
+            }).data,
+          });
+          expect(args[13]).toEqual(cancellations);
+          expect(args[15]).toBe(deadline);
+        },
+      ),
+    );
+  });
+});

@@ -10,6 +10,7 @@ import {
   Tree,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
+import { registerCustomAddresses } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -21,6 +22,7 @@ import {
   createWalletClient,
   custom,
   erc20Abi,
+  getAddress,
   type Hex,
   maxUint256,
   numberToHex,
@@ -49,6 +51,7 @@ import {
   AccrualPositionUserMismatchError,
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
+  EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
@@ -2053,6 +2056,106 @@ describe("MorphoMidnight", () => {
 
       expect(requirements).toEqual([]);
       expect(tx.action.args.group).toBe(data.groups[0]);
+    });
+  });
+
+  describe("cancelOffers", () => {
+    const midnightBundlesV2 = getAddress(
+      "0x00000000000000000000000000000000000b2002",
+    );
+    registerCustomAddresses({
+      addresses: { [midnightChainId]: { midnightBundlesV2 } },
+    });
+
+    test("behavior: authorizes and targets MidnightBundlesV2", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, false);
+      const cancellations = [
+        { group: offersData().groups[0]!, maxConsumed: 0n },
+      ];
+      const output = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).cancelOffers({
+        accountAddress: midnightAddresses.maker,
+        cancellations,
+        deadline: maxUint256,
+      });
+
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action).toEqual({
+        type: "midnightAuthorization",
+        args: {
+          authorized: midnightBundlesV2,
+          isAuthorized: true,
+          onBehalf: midnightAddresses.maker,
+        },
+      });
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.args).toEqual({ cancellations, deadline: maxUint256 });
+    });
+
+    test("behavior: appends metadata", () => {
+      const handle = createMockClient(midnightTestChain);
+      const tx = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: { metadata: { origin: "a1b2c3d4" } },
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      )
+        .cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          deadline: maxUint256,
+        })
+        .buildTx();
+
+      expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+    });
+
+    test("behavior: already authorized returns no requirements", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+      const output = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).cancelOffers({
+        accountAddress: midnightAddresses.maker,
+        cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+        deadline: maxUint256,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+    });
+
+    test("error: invalid cancellations throw before requirements", () => {
+      expect(() =>
+        new MorphoMidnight(client, midnightChainId).cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [],
+          deadline: maxUint256,
+        }),
+      ).toThrow(EmptyMidnightGroupCancellationsError);
+    });
+
+    test("error: ChainIdMismatchError", () => {
+      expect(() =>
+        new MorphoMidnight(client, midnightChainId + 1).cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          deadline: maxUint256,
+        }),
+      ).toThrow(ChainIdMismatchError);
     });
   });
 

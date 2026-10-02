@@ -108,6 +108,7 @@ export function assertNoBundlesRetention(
     for (const addr of Object.values(addresses.bundles).filter(isDefined))
       restrictedAddresses.add(getAddress(addr));
   }
+  // TODO: restrict `midnightBundlesV2` too, once it has a deployment-block key.
   if (addresses.midnightBundles) {
     restrictedAddresses.add(getAddress(addresses.midnightBundles));
   }
