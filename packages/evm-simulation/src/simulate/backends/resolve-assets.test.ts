@@ -167,18 +167,15 @@ describe("resolveAssets", () => {
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
   });
-  test("error: an already-aborted signal maps metadata failure to ExternalServiceError", async () => {
+  test("error: a non-viem metadata failure maps to ExternalServiceError", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(new Error("request aborted"));
-    const controller = new AbortController();
-    controller.abort();
     await expect(
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
         operations: [limit],
         blockNumber: 1n,
-        signal: controller.signal,
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
   });

@@ -39,7 +39,6 @@ export async function resolveAssets(params: {
   readonly morpho: Address;
   readonly operations: readonly OperationLimit[];
   readonly blockNumber: bigint;
-  readonly signal?: AbortSignal;
 }): Promise<readonly ResolvedSlippageOperation[]> {
   const { client, morpho, operations, blockNumber } = params;
   const tokens = new Map<string, readonly [Address, Address]>();

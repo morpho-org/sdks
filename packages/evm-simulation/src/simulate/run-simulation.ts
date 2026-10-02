@@ -84,7 +84,6 @@ export async function runSimulation(params: {
     morpho,
     operations: limits.operations,
     blockNumber: pinnedBlock.number,
-    signal,
   });
   const observations = planStateReads({ operations: resolved, owner, morpho });
 
