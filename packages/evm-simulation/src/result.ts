@@ -1,6 +1,6 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
-import type { PendingAuthorization } from "./authorizations.js";
+import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationLimits, SimulationOperationSubject } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
@@ -18,7 +18,7 @@ export type SimulatedOperation = {
 /** Approval calls simulated before the user transactions for one pending authorization. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
-  readonly authorization: PendingAuthorization;
+  readonly authorization: SimulationAuthorization;
   readonly calls: readonly {
     readonly transaction: SimulationTransaction;
     readonly result: SimulationCall;
