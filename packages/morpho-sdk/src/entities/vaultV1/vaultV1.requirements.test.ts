@@ -1,4 +1,8 @@
-import { type AccrualVault, getChainAddresses } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  getChainAddresses,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import {
@@ -21,6 +25,7 @@ import {
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../constants.js";
 import {
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
@@ -42,6 +47,26 @@ const countAllowanceReads = (
     const [request] = (call.params ?? []) as readonly [{ data?: string }];
     return request?.data?.startsWith(ALLOWANCE_SELECTOR) === true;
   }).length;
+
+const mockShareAllowance = (
+  handle: ReturnType<typeof createMockClient>,
+  allowance: bigint,
+) =>
+  mockRead(handle, {
+    address: IN_KIND_VAULT,
+    abi: erc20Abi,
+    functionName: "allowance",
+    result: allowance,
+  });
+
+const approvedShareAmounts = async (handle: {
+  readonly getRequirements: () => Promise<
+    readonly Parameters<typeof isRequirementApproval>[0][]
+  >;
+}) =>
+  (await handle.getRequirements())
+    .filter(isRequirementApproval)
+    .map(({ action }) => action.args.amount);
 
 const prepareDeposit = (handle: ReturnType<typeof createMockClient>) =>
   handle.client
@@ -430,6 +455,35 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     });
 
     expect(await withdraw.getRequirements()).toEqual([]);
+  });
+
+  test("behavior: accepts a stale allowance within one slippage tolerance above the cap", async () => {
+    const handle = createMockClient(mainnet);
+    mockShareAllowance(handle, 0n);
+    const withdraw = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .withdraw({
+        amount: 10n ** 12n,
+        userAddress: IN_KIND_USER,
+        vaultData: inKindVaultV1Data(),
+      });
+    const [requiredShareAllowance] = await approvedShareAmounts(withdraw);
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+    const maxShareAllowance = MathLib.wDivDown(
+      requiredShareAllowance,
+      MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+    );
+    expect(maxShareAllowance).toBeGreaterThan(requiredShareAllowance);
+
+    mockShareAllowance(handle, maxShareAllowance);
+    expect(await withdraw.getRequirements()).toEqual([]);
+
+    mockShareAllowance(handle, maxShareAllowance + 1n);
+    expect(await approvedShareAmounts(withdraw)).toEqual([
+      requiredShareAllowance,
+    ]);
   });
 
   test("behavior: pins the derived share cap across re-resolutions", async () => {
@@ -915,6 +969,61 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
         targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, 100n),
         slippageTolerance: 0n,
       });
+
+  test("behavior: assets mode accepts an allowance within one slippage tolerance above the cap", async () => {
+    const handle = createMockClient(mainnet);
+    mockShareAllowance(handle, 0n);
+    const slippageTolerance = 10n ** 16n;
+    const migration = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .migrateToV2({
+        assets: 10n ** 12n,
+        userAddress: IN_KIND_USER,
+        sourceVault: migrationSnapshot(IN_KIND_VAULT, 10n ** 12n),
+        targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, 10n ** 12n),
+        slippageTolerance,
+      });
+    const [requiredShareAllowance] = await approvedShareAmounts(migration);
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+    const maxShareAllowance = MathLib.wDivDown(
+      requiredShareAllowance,
+      MathLib.WAD - slippageTolerance,
+    );
+
+    mockShareAllowance(handle, maxShareAllowance);
+    expect(await migration.getRequirements()).toEqual([]);
+
+    mockShareAllowance(handle, maxShareAllowance + 1n);
+    expect(await approvedShareAmounts(migration)).toEqual([
+      requiredShareAllowance,
+    ]);
+  });
+
+  test("behavior: shares mode still requires an exact allowance", async () => {
+    const handle = createMockClient(mainnet);
+    const shares = 10n ** 12n;
+    mockShareAllowance(handle, shares + 1n);
+    const migration = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .migrateToV2({
+        shares,
+        userAddress: IN_KIND_USER,
+        // Shares mode converts through the accrued source vault instead of the share-cap preview.
+        sourceVault: {
+          address: IN_KIND_VAULT,
+          asset: IN_KIND_ASSET,
+          allocations: new Map(),
+          accrueInterest: () => ({ toAssets: () => shares }),
+        } as never,
+        targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, shares),
+        slippageTolerance: 10n ** 16n,
+      });
+
+    expect(await approvedShareAmounts(migration)).toEqual([shares]);
+  });
 
   test("behavior: re-reads the share allowance after the approval is executed", async () => {
     const handle = createMockClient(mainnet);
