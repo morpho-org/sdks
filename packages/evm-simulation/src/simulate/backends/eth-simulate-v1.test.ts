@@ -1,4 +1,10 @@
-import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
+import {
+  type Address,
+  BlockNotFoundError,
+  getAddress,
+  numberToHex,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -177,6 +183,32 @@ describe.sequential("executePlan", () => {
     );
   });
 
+  test.each([
+    ["non-quantity gas", { gasUsed: "invalid" }],
+    ["non-array logs", { logs: {} }],
+    ["malformed log", { logs: [{ address: USDC, topics: [123], data: "0x" }] }],
+  ])("error: InvalidSimulationResponseError for %s", async (_, patch) => {
+    const calls = okCalls(3);
+    calls[1] = { ...calls[1], ...patch } as unknown as CallResult;
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["absent", "null"])(
+    "behavior: %s per-call logs are treated as no transfers",
+    async (variant) => {
+      const calls = okCalls(3);
+      if (variant === "absent") delete calls[1]?.logs;
+      else calls[1] = { ...calls[1], logs: null } as unknown as CallResult;
+      respondHappy(calls);
+      const execution = await executePlan(params);
+      expect(execution.calls[1]?.result.logs).toEqual([]);
+    },
+  );
+
   // Anvil reports the pinned block itself; advancement is not required.
   test("behavior: accepts a simulated block equal to the state block", async () => {
     fetchMock
@@ -233,6 +265,15 @@ describe.sequential("executePlan", () => {
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
+  });
+
+  test("error: InvalidSimulationResponseError when the pinned block disappears", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
+      .mockResolvedValueOnce(rpc(null));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect((error as Error).cause).toBeInstanceOf(BlockNotFoundError);
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
   });
 
   test("error: MissingVerificationEvidenceError when a state read fails", async () => {

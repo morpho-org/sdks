@@ -1,5 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { BaseError, type Hex, type SimulateBlocksReturnType } from "viem";
+import { type Hex, isAddress, isHex } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
@@ -48,16 +48,42 @@ export interface SimulationExecution {
   readonly stateReads: readonly ExecutedStateRead[];
 }
 
-type SimulatedCall = SimulateBlocksReturnType[number]["calls"][number];
+const isQuantity = (value: unknown): value is string =>
+  typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value);
+const isObject = (value: unknown): value is object =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const readField = (object: object, key: string): unknown =>
+  Reflect.get(object, key);
 
-/** The revert message viem carried on a failed call, trimmed to `shortMessage`. */
-const callErrorMessage = (call: SimulatedCall): string | undefined =>
-  "error" in call && call.error instanceof BaseError
-    ? call.error.shortMessage
-    : undefined;
+interface RawCallResult {
+  readonly status: "0x0" | "0x1";
+  readonly returnData: Hex;
+  readonly gasUsed: string;
+  readonly logs?: readonly RawLog[];
+  readonly error?: { readonly message?: string };
+}
+
+interface RawBlockResult {
+  readonly number: string;
+  readonly timestamp: string;
+  readonly hash: Hex;
+  readonly parentHash?: Hex;
+  readonly calls: readonly RawCallResult[];
+}
+
+const isSimulateV1Response = (
+  value: unknown,
+): value is readonly [RawBlockResult] =>
+  Array.isArray(value) &&
+  value.length === 1 &&
+  isObject(value[0]) &&
+  isQuantity(readField(value[0], "number")) &&
+  isQuantity(readField(value[0], "timestamp")) &&
+  isHex(readField(value[0], "hash")) &&
+  Array.isArray(readField(value[0], "calls"));
 
 /**
- * Parse a formatted {@link simulateBlocks} result into a
+ * Parse a raw `eth_simulateV1` result into a
  * {@link SimulationExecution}.
  *
  * The response must be exactly one block at the pinned state block or its
@@ -67,13 +93,13 @@ const callErrorMessage = (call: SimulatedCall): string | undefined =>
  * and rejects any other height. Consumers must read
  * `block.blockNumber`/`block.blockTimestamp` and never assume +1.
  *
- * @param params - The plan, the formatted `eth_simulateV1` result, and the
+ * @param params - The plan, the raw `eth_simulateV1` result, and the
  *   resolved state block.
  * @returns Deep-frozen execution: tagged calls plus one
  *   {@link ExecutedStateRead} per planned state read.
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
- *   block, on a call-count mismatch, or on a simulated block that is neither
- *   the pinned state block nor its immediate successor.
+ *   block, on a call-count mismatch, a malformed per-call result, or on a
+ *   simulated block that is neither the pinned state block nor its immediate successor.
  * @throws {SimulationRevertedError} When a preparation or user-transaction
  *   call failed; the `details` payload carries tagged user call results only.
  * @throws {MissingVerificationEvidenceError} When a planned state read fails.
@@ -81,7 +107,7 @@ const callErrorMessage = (call: SimulatedCall): string | undefined =>
  */
 export function parseSimulationResponse(params: {
   readonly plan: ExecutionPlan;
-  readonly blocks: SimulateBlocksReturnType;
+  readonly blocks: unknown;
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
   readonly stateBlockTimestamp: bigint;
@@ -94,15 +120,16 @@ export function parseSimulationResponse(params: {
     blockNumber: params.stateBlockNumber,
   };
 
-  const block = blocks[0];
-  if (block === undefined || blocks.length !== 1) {
+  if (!isSimulateV1Response(blocks)) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
       { context: errorContext },
     );
   }
 
-  const { number: blockNumber, timestamp: blockTimestamp } = block;
+  const block = blocks[0];
+  const blockNumber = BigInt(block.number);
+  const blockTimestamp = BigInt(block.timestamp);
   if (
     blockNumber !== params.stateBlockNumber &&
     blockNumber !== params.stateBlockNumber + 1n
@@ -140,17 +167,48 @@ export function parseSimulationResponse(params: {
 
   const calls = block.calls.map((call, index) => {
     const planned = plan.calls[index]!;
-    const logs: RawLog[] = (call.logs ?? []).map((log) => ({
-      address: log.address,
-      topics: log.topics,
-      data: log.data,
-    }));
-    const result: SimulationCall = {
-      logs,
-      status: call.status === "success",
-      returnData: call.data,
-      gasUsed: call.gasUsed,
-    };
+    let result: SimulationCall;
+    try {
+      if (
+        !isObject(call) ||
+        (call.status !== "0x0" && call.status !== "0x1") ||
+        !isHex(call.returnData) ||
+        !isQuantity(call.gasUsed) ||
+        (call.logs != null && !Array.isArray(call.logs))
+      )
+        throw new InvalidSimulationResponseError(
+          `eth_simulateV1 returned a malformed call result at position ${index}.`,
+          { context: errorContext },
+        );
+      result = {
+        logs: (call.logs ?? []).map((log): RawLog => {
+          if (
+            !isAddress(log.address) ||
+            !Array.isArray(log.topics) ||
+            log.topics.some((topic: unknown) => !isHex(topic)) ||
+            (log.data !== undefined && !isHex(log.data))
+          )
+            throw new InvalidSimulationResponseError(
+              `eth_simulateV1 returned a malformed log at call position ${index}.`,
+              { context: errorContext },
+            );
+          return {
+            address: log.address,
+            topics: log.topics,
+            data: log.data ?? "0x",
+          };
+        }),
+        status: call.status === "0x1",
+        returnData: call.returnData,
+        gasUsed: BigInt(call.gasUsed),
+      };
+    } catch (cause) {
+      if (cause instanceof InvalidSimulationResponseError) throw cause;
+      throw new InvalidSimulationResponseError(
+        `eth_simulateV1 returned a malformed call result at position ${index}.`,
+        { context: errorContext, cause },
+      );
+    }
     return { planned, result, call };
   });
 
@@ -160,7 +218,7 @@ export function parseSimulationResponse(params: {
   );
   if (failedUserCall && failedUserCall.planned.type === "transaction") {
     throw new SimulationRevertedError(
-      callErrorMessage(failedUserCall.call) ?? "Simulation failed",
+      failedUserCall.call.error?.message ?? "Simulation failed",
       deepFreeze(
         calls
           .filter(
@@ -191,7 +249,7 @@ export function parseSimulationResponse(params: {
     } => entry.planned.type === "preparation" && !entry.result.status,
   );
   if (failedPreparation) {
-    const message = callErrorMessage(failedPreparation.call);
+    const message = failedPreparation.call.error?.message;
     throw new SimulationRevertedError(
       `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
       undefined,
@@ -211,7 +269,7 @@ export function parseSimulationResponse(params: {
   for (const { planned, result, call } of calls) {
     if (planned.type !== "stateRead") continue;
     if (!result.status) {
-      const message = callErrorMessage(call);
+      const message = call.error?.message;
       throw new MissingVerificationEvidenceError(
         `State read "${planned.read.id}" failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
         {
@@ -228,7 +286,7 @@ export function parseSimulationResponse(params: {
     stateReads.push({
       phase: planned.phase,
       read: planned.read,
-      returnData: call.data,
+      returnData: call.returnData,
     });
   }
 

@@ -76,6 +76,8 @@ WAD-scaled fraction (`10_000000000000000n` = 1%, `1e18` = 100%). Tolerance must
 be between 0 and 100% inclusive; it has no default. Omit `limits` to skip checks.
 Unquoted amounts stay unchecked. The simulator never decodes calldata or fetches
 a quote to infer constraints.
+Unknown input keys are rejected as `SimulationValidationError` rather than
+silently ignored.
 
 Non-empty `limits.operations` and preview authorizations require a Morpho Blue
 address registered in blue-sdk's `getChainAddresses`; otherwise

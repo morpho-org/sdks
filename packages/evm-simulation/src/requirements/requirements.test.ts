@@ -485,6 +485,61 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
+  test("error: AuthorizationRequestMismatchError on a permit2SignatureTransfer requirement without typedData", () => {
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const { typedData: _typedData, ...action } = requirement.action;
+    const tampered = { ...requirement, action } as ActionRequirement;
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on an authorization signature requirement without typedData", async () => {
+    const requirement = await blueAuthorizationSignatureRequirement({});
+    const { typedData: _typedData, ...action } = requirement.action;
+    const tampered = { ...requirement, action } as ActionRequirement;
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: UnsupportedOperationError on a call requirement with an unsupported action type", () => {
+    const unsupportedCall = {
+      to: TOKEN,
+      value: 0n,
+      data: "0x12345678",
+      action: { type: "vaultV2Deposit", args: {} },
+    } as unknown as ActionRequirement;
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [unsupportedCall],
+      }),
+    ).toThrowError(UnsupportedOperationError);
+  });
+
   test("error: authorization context carries the failing requirement index", () => {
     const noTypedData = permitRequirement({});
     const { typedData: _typedData, ...action } = noTypedData.action;

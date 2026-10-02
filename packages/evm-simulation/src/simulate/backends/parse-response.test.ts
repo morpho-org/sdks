@@ -3,7 +3,7 @@ import {
   encodeFunctionResult,
   erc20Abi,
   getAddress,
-  type SimulateBlocksReturnType,
+  numberToHex,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -52,44 +52,40 @@ const allowanceHex = (value: bigint): `0x${string}` =>
     result: value,
   });
 
-// viem's simulateBlocks formats the RPC result; build that same shape.
 const buildBlocks = (
   plan: ReturnType<typeof makePlan>,
   overrides: Record<
     number,
     { status?: "failure" | "success"; data?: `0x${string}` }
   > = {},
-): SimulateBlocksReturnType =>
-  [
-    {
-      number: 24_000_001n,
-      timestamp: NOW,
-      hash: `0x${"cd".repeat(32)}`,
-      parentHash: `0x${"ab".repeat(32)}`,
-      calls: plan.calls.map((call, index) => {
-        const override = overrides[index] ?? {};
-        const status = override.status ?? "success";
-        const data =
-          override.data ??
-          (call.type === "stateRead" && call.read.kind === "erc20.balance"
-            ? allowanceHex(1n)
-            : "0x");
-        return {
-          status,
-          data,
-          gasUsed: 256n,
-          logs: [],
-          ...(status === "success"
-            ? { result: null }
-            : { error: new Error("reverted") }),
-        };
-      }),
-    },
-  ] as unknown as SimulateBlocksReturnType;
+) => [
+  {
+    number: numberToHex(24_000_001n),
+    timestamp: numberToHex(NOW),
+    hash: `0x${"cd".repeat(32)}`,
+    parentHash: `0x${"ab".repeat(32)}`,
+    calls: plan.calls.map((call, index) => {
+      const override = overrides[index] ?? {};
+      const status = override.status ?? "success";
+      const data =
+        override.data ??
+        (call.type === "stateRead" && call.read.kind === "erc20.balance"
+          ? allowanceHex(1n)
+          : "0x");
+      return {
+        status: status === "success" ? "0x1" : "0x0",
+        returnData: data,
+        gasUsed: numberToHex(256n),
+        logs: [],
+        ...(status === "success" ? {} : { error: { message: "reverted" } }),
+      };
+    }),
+  },
+];
 
 const parse = (
   plan: ReturnType<typeof makePlan>,
-  blocks: SimulateBlocksReturnType,
+  blocks: ReturnType<typeof buildBlocks>,
 ) =>
   parseSimulationResponse({
     plan,

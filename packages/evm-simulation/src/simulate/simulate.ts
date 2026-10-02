@@ -47,11 +47,12 @@ import { runSimulation } from "./run-simulation.js";
  * @param params.mode - `"final"` (default) or `"preview"`.
  * @param params.authorizations - Preview-only typed authorization descriptors.
  * @param params.limits - Optional quotes and percentage tolerances; unquoted amounts require no reads.
- * @param params.blockNumber - Optional pinned block number or `BlockTag`.
+ * @param params.blockNumber - Optional pinned block number or `BlockTag` other
+ *   than `"pending"`.
  *   Defaults to `latest`, resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, or share quotes for
+ *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
@@ -64,8 +65,10 @@ import { runSimulation } from "./run-simulation.js";
  *   unavailable or empty/invalid after a non-transport read.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
- *   state block nor its immediate successor, a block timestamp earlier than
- *   the pinned block's, a state-block hash that changed mid-flight, or an
+ *   state block nor its immediate successor, a successor with a mismatched
+ *   `parentHash`, a block timestamp earlier than the pinned block's, a
+ *   malformed per-call result, a state-block hash that changed or a pinned
+ *   block that vanished mid-flight, or an
  *   endpoint whose `eth_chainId` differs from `params.chainId`; chain identity
  *   is checked before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained

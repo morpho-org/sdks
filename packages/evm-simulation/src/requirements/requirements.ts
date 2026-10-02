@@ -156,6 +156,7 @@ const toBlueAuthorization = (
  * ```ts
  * import { toSimulationAuthorizations } from "@morpho-org/evm-simulation";
  * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+ * import { vaults } from "@morpho-org/morpho-test";
  * import { createPublicClient, http, type Address } from "viem";
  * import { mainnet } from "viem/chains";
  *
@@ -163,7 +164,7 @@ const toBlueAuthorization = (
  *   const client = createPublicClient({ chain: mainnet, transport: http() })
  *     .extend(morphoViemExtension());
  *   const vault = client.morpho.vaultV1(
- *     "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+ *     vaults[mainnet.id].steakUsdc.address,
  *     mainnet.id,
  *   );
  *   const vaultData = await vault.getData();

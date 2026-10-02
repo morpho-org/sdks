@@ -35,14 +35,16 @@ SDK-1293 section for the changed `SimulationRevertedError.details` shape.
 Two failures that v4 reported as the bypassable `ExternalServiceError` now
 throw the non-bypassable `InvalidSimulationResponseError`: a malformed
 `eth_simulateV1` block envelope and a call count that does not match the
-request. Four checks are new — v4 did not perform them and returned a
+request. Five checks are new — v4 did not perform them and returned a
 successful result — and also throw `InvalidSimulationResponseError`: an
 endpoint whose `eth_chainId` differs from the configured chain, a simulated
 block that is neither the pinned state block nor its immediate successor (or a
 successor whose `parentHash` does not match), a block timestamp earlier than
-the pinned block's, and a pinned state block whose hash changed during the
+the pinned block's, a per-call result that fails normalization (for example a
+non-quantity `gasUsed` or a log without a `topics` array), and a pinned state
+block whose hash changed, or that the node no longer serves, during the
 simulation. Callers that bypass `ExternalServiceError` to proceed unsimulated
-must handle all six as hard failures. `ExternalServiceError` remains for
+must handle all seven as hard failures. `ExternalServiceError` remains for
 transport failures, timeouts and malformed JSON-RPC envelopes.
 Failures and timeouts reject the call; they do not produce a successful result.
 
@@ -62,7 +64,10 @@ typed as `bigint | Exclude<BlockTag, "pending">` — `"pending"` has no stable h
 rejected at runtime. Instead of the two
 legacy variants, preview mode accepts five typed authorization descriptors:
 `erc20Approval`, `erc2612Permit`, `permit2SignatureTransfer`,
-`blueAuthorization`, and `blueAuthorizationSignature`.
+`blueAuthorization`, and `blueAuthorizationSignature`. `parseRequest` rejects
+unknown keys on `SimulateParams`, transactions, authorizations and limits with
+`SimulationValidationError` (`<path>.<key>: unknown field`); v4 ignored extra
+properties.
 
 ```ts
 // v4
@@ -119,7 +124,9 @@ transfer reporting, and `verification.operations` for checked quotes.
 
 ## Release exception and audit
 
-Root `AGENTS.md` §7's EVM simulation v5 retirement exception permits
+Root `AGENTS.md` §7's EVM simulation v5 retirement exception
+(`ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` and
+`ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`) permits
 `evm-simulation` 5.0.0 to remove `TenderlyRpcConfig`,
 `ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior
 (SDK-1291), the two legacy authorization variants of

@@ -1,11 +1,12 @@
 import {
   BaseError,
+  BlockNotFoundError,
   type Client,
   ExecutionRevertedError,
   InsufficientFundsError,
+  numberToHex,
   type PublicClient,
 } from "viem";
-import { simulateBlocks } from "viem/actions";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
@@ -27,7 +28,9 @@ import type { PinnedBlock } from "./resolve-pinned-block.js";
 const isNodeRevert = (error: unknown): error is Error =>
   error instanceof ExecutionRevertedError ||
   error instanceof InsufficientFundsError ||
-  (error instanceof Error && "code" in error && error.code === 3);
+  (error instanceof Error &&
+    (("code" in error && error.code === 3) ||
+      /insufficient funds/i.test(error.message)));
 
 /**
  * Trim a caught error to a safe message: viem's `shortMessage` drops the
@@ -153,8 +156,8 @@ export async function assertEndpointChain(params: {
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (bad shape, call-count mismatch, block
  *   other than the pinned state block or its successor, a block timestamp
- *   earlier than the pinned block's, or a state-block hash that changed
- *   mid-flight).
+ *   earlier than the pinned block's, a per-call result that fails normalization,
+ *   or a state-block hash that changed or is no longer served mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts or the
  *   node reports a bundle-level revert (code 3 / insufficient funds).
  * @internal
@@ -166,23 +169,26 @@ export async function executePlan(params: {
 }): Promise<SimulationExecution> {
   const { client, plan, stateBlock } = params;
 
-  // viem's simulateBlocks serializes per-call senders (`account` → `from`)
-  // and formats the result for us.
   const response = await rpc("eth_simulateV1", () =>
-    simulateBlocks(client, {
-      blocks: [
+    client.request({
+      method: "eth_simulateV1",
+      params: [
         {
-          calls: plan.calls.map((call) => ({
-            account: call.transaction.from,
-            to: call.transaction.to,
-            data: call.transaction.data,
-            value: call.transaction.value,
-          })),
+          blockStateCalls: [
+            {
+              calls: plan.calls.map((call) => ({
+                from: call.transaction.from,
+                to: call.transaction.to,
+                data: call.transaction.data,
+                value: numberToHex(call.transaction.value),
+              })),
+            },
+          ],
+          traceTransfers: true,
+          validation: false,
         },
+        numberToHex(stateBlock.number),
       ],
-      traceTransfers: true,
-      validation: false,
-      blockNumber: stateBlock.number,
     }),
   );
 
@@ -203,10 +209,24 @@ export async function executePlan(params: {
   // after simulation, or the result may describe a different chain tip.
   const stateBlockAfter = await rpc("eth_getBlock", () =>
     client.getBlock({ blockNumber: stateBlock.number }),
-  );
-  if (stateBlockAfter.hash !== stateBlock.hash) {
+  ).catch((error: unknown) => {
+    if (
+      error instanceof ExternalServiceError &&
+      error.cause instanceof BlockNotFoundError
+    )
+      return error;
+    throw error;
+  });
+  if (
+    stateBlockAfter instanceof ExternalServiceError ||
+    stateBlockAfter.hash !== stateBlock.hash
+  ) {
+    const after =
+      stateBlockAfter instanceof ExternalServiceError
+        ? "unavailable"
+        : stateBlockAfter.hash;
     throw new InvalidSimulationResponseError(
-      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
+      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${after}. Re-submit the simulation.`,
       {
         context: {
           stage: "transport",
@@ -214,6 +234,9 @@ export async function executePlan(params: {
           mode: plan.request.mode,
           blockNumber: stateBlock.number,
         },
+        ...(stateBlockAfter instanceof ExternalServiceError && {
+          cause: stateBlockAfter.cause,
+        }),
       },
     );
   }

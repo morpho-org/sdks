@@ -9,6 +9,7 @@ import {
   isAddressEqual,
   isHex,
   maxUint256,
+  zeroAddress,
 } from "viem";
 import type {
   Eip712Domain,
@@ -21,7 +22,11 @@ import type {
   OperationType,
   SimulationLimits,
 } from "../../limits.js";
-import type { SimulateParams, SimulationMode } from "../../params.js";
+import {
+  SIMULATION_MODES,
+  type SimulateParams,
+  type SimulationMode,
+} from "../../params.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
  * @internal
@@ -771,9 +776,9 @@ const OPERATION_SPECS: Record<
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
  *
- * The public types own the key shape; runtime validation checks values —
- * address and hex formats, uint256 ranges, typed-data field lists — and rejects
- * legacy `{type: "approval"}` / `{type: "signature"}` authorizations and Permit2
+ * The public types own the key shape; runtime validation rejects unknown keys
+ * (`<path>.<key>: unknown field`), checks values — address and hex formats,
+ * uint256 ranges, typed-data field lists — and rejects legacy `{type: "approval"}` / `{type: "signature"}` authorizations and Permit2
  * `PermitSingle` payloads rather than silently reinterpreting them. Cross-field
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
@@ -782,7 +787,8 @@ const OPERATION_SPECS: Record<
  * @param input - Caller input (`SimulateParams`-shaped).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
- * @throws {SimulationValidationError} On any value or cross-field violation.
+ * @throws {SimulationValidationError} On any unknown key, value or cross-field
+ *   violation.
  * @internal
  */
 export function parseRequest(input: SimulateParams): ParsedRequest {
@@ -838,6 +844,12 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       });
       const from = check.address(readField(tx, "from"), `${path}.from`);
       const to = check.address(readField(tx, "to"), `${path}.to`);
+      if (from !== undefined && isAddressEqual(from, zeroAddress)) {
+        fieldErrors.push(`${path}.from: must be a non-zero address`);
+      }
+      if (to !== undefined && isAddressEqual(to, zeroAddress)) {
+        fieldErrors.push(`${path}.to: must be a non-zero address`);
+      }
       const data = check.hex(readField(tx, "data"), `${path}.data`);
       const rawValue = readField(tx, "value");
       const value =
@@ -853,11 +865,12 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   const rawMode = input.mode;
   let mode: SimulationMode = "final";
   if (rawMode !== undefined) {
-    if (rawMode === "preview" || rawMode === "final") {
-      mode = rawMode;
+    const found = SIMULATION_MODES.find((m) => m === rawMode);
+    if (found !== undefined) {
+      mode = found;
     } else {
       fieldErrors.push(
-        `mode: must be "preview" or "final" (got ${String(rawMode)})`,
+        `mode: must be one of ${SIMULATION_MODES.map((m) => `"${m}"`).join(", ")} (got ${String(rawMode)})`,
       );
     }
   }
@@ -868,15 +881,18 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   if (rawBlockNumber !== undefined) {
     if (typeof rawBlockNumber === "bigint" && rawBlockNumber >= 0n) {
       blockNumber = rawBlockNumber;
-    } else if (
-      typeof rawBlockNumber === "string" &&
-      (BLOCK_TAGS as readonly string[]).includes(rawBlockNumber)
-    ) {
-      blockNumber = rawBlockNumber as Exclude<BlockTag, "pending">;
     } else {
-      fieldErrors.push(
-        'blockNumber: must be a non-negative bigint or one of "latest", "earliest", "safe", "finalized"',
-      );
+      const tag =
+        typeof rawBlockNumber === "string"
+          ? BLOCK_TAGS.find((t) => t === rawBlockNumber)
+          : undefined;
+      if (tag !== undefined) {
+        blockNumber = tag;
+      } else {
+        fieldErrors.push(
+          `blockNumber: must be a non-negative bigint or one of ${BLOCK_TAGS.map((t) => `"${t}"`).join(", ")}`,
+        );
+      }
     }
   }
 
