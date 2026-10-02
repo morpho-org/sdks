@@ -13,7 +13,7 @@
 
 | Secret | Reached by | Intended scope | Sensitivity |
 |---|---|---|---|
-| `MAINNET_RPC_URL`, `BASE_RPC_URL`, `ARBITRUM_RPC_URL` | `test` job (`push.yml` → `test.yml`) | repo-level, **every branch** — no `if` gate | **Low** — provider endpoints, at worst a metered key; no write capability, trivially rotatable |
+| `MAINNET_RPC_URL`, `BASE_RPC_URL`, `ARBITRUM_RPC_URL` | `fork` job (`push.yml` → `test.yml` → `test-packages.yml`); `unit` receives no secrets | repo-level, **every branch** — no `if` gate | **Low** — provider endpoints, at worst a metered key; no write capability, trivially rotatable |
 | `VERSION_APP_ID`, `VERSION_APP_PRIVATE_KEY` | `version-pr` job (`push.yml` → `version-pr.yml`) | **`main`/`next` only**, via `if: github.ref_name == 'main' \|\| github.ref_name == 'next'` | **High** — GitHub App key; `create-github-app-token` mints a `contents: write` / `pull-requests: write` installation token |
 | npm publish auth | `publish` job (`publish.yml`) | OIDC trusted publishing — **no stored token**; privileged job carries `environment: prod` | **Critical** — publishes packages under the org identity |
 | `ANTHROPIC_SDK_API_KEY` | `claude` job (`claude.yml`) — passed to the SHA-pinned Claude action and to the failure-only log scrubber | repo-level, gated by the job `if`: same-repo, non-draft, non-Dependabot `pull_request` heads, or `@claude` mentions from `OWNER`/`MEMBER`/`COLLABORATOR` (bots fall through to the action's `allowed_bots`); **never fork-exposed** | **Medium** — metered Anthropic API key; no repo write capability, rotatable |
