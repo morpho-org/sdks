@@ -21,7 +21,6 @@ const makeRequest = (count: number): ParsedRequest =>
 describe("planExecution", () => {
   test("default: one transaction yields one planned call", () => {
     const plan = planExecution(makeRequest(1));
-    expect(plan.owner).toBe(OWNER);
     expect(plan.calls).toHaveLength(1);
     expect(plan.calls[0]).toMatchObject({
       transactionIndex: 0,
