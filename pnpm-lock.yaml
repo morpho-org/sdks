@@ -155,7 +155,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       fast-check:
-        specifier: ^4.9.0
+        specifier: 'catalog:'
         version: 4.9.0
       typescript:
         specifier: 'catalog:'
