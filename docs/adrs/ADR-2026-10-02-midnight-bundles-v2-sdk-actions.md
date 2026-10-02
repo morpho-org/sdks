@@ -51,8 +51,8 @@ whose arguments the entity methods fill.
 | `supplyBlueMakeLend` | `midnightCancelAndMake` | `CancelAndMake` | lend-side offers whose callback is the maker's derived `BlueBuyCallback`, `assetsToPark > 0` |
 | `supplyCollateralMakeBorrow` | `midnightCancelAndMake` | `CancelAndMake` | borrow-side offers, non-empty collateral supplies, `assetsToPark = 0` |
 | `takeLend` | `midnightTakeLend` | `BuyWith{Units,Assets}Target…` | `reduceOnly = false`, `repayEnabled = false`, no collateral withdrawals |
-| `takeRepayWithdrawCollateral` | `midnightTakeRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`; `repayEnabled` is an input |
-| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWithUnitsTarget…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; full repay encodes `targetUnits = maxUint256` |
+| `takeRepayWithdrawCollateral` | `midnightTakeRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, non-empty `offerFills`; `repayEnabled` is an input |
+| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; an assets repay encodes `targetBuyerAssets = assets`, a full repay encodes `targetUnits = maxUint256` |
 | `takeBorrow` | `midnightTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, no collateral supplies |
 | `supplyCollateralTakeBorrow` | `midnightSupplyCollateralTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, non-empty collateral supplies |
 | `takeWithdraw` | `midnightTakeWithdraw` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = true`, no collateral supplies |
@@ -62,6 +62,9 @@ Rules shared by the taker actions:
 - The amount target is a discriminated union, `{ type: "assets", … } | { type: "units", … }`, which
   selects the assets-target or units-target entrypoint. Each arm carries its own aggregate bound
   (`maxBuyerAssets` or `minUnits` on buys, `minSellerAssets` or `maxUnits` on sells).
+  `repayWithdrawCollateral` takes no offers, so its target is instead
+  `repay: { type: "assets", assets } | { type: "full", maxBuyerAssets }`. `assets = 0` encodes a
+  withdraw-only call.
 - `reduceOnly` and `repayEnabled` are never free inputs of a lending or borrowing action; only
   `takeRepayWithdrawCollateral` exposes `repayEnabled`, as its direct-repayment fallback.
 - Referral fee (`referralFeePct`, `referralFeeRecipient`) is an optional input on every taker action
@@ -70,7 +73,8 @@ Rules shared by the taker actions:
 - Sell actions account for V2 withdrawing the sender's existing credit before taking offers, so a
   borrow by a sender with credit nets that credit first.
 - `supplyCollateralTakeBorrow` rejects an empty collateral-supply list, so it never encodes the
-  same call as `takeBorrow`.
+  same call as `takeBorrow`. `takeRepayWithdrawCollateral` rejects an empty `offerFills` list, so
+  it never encodes the same call as `repayWithdrawCollateral`.
 - Collateral supplies and withdrawals are lists of `{ collateralIndex, assets }`; `maxUint256`
   `assets` on a withdrawal means the sender's full balance at execution.
 
@@ -137,7 +141,7 @@ encoding follow from that:
   (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
-  replaced by the target union. The V1-only permit types `PermitKind` and `MidnightTokenPermit`
+  replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types `PermitKind` and `MidnightTokenPermit`
   are removed with them. The four V1 flows also keep their action names. The migration guide lists
   each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
@@ -174,8 +178,10 @@ selection.
 - Maker actions reject offers whose maker differs from `accountAddress`, offers whose ratifier is
   not the activated `PriceRatifierV1` or `RateRatifierV1`, replacement groups that are also being
   cancelled, an empty offer set on a publishing action, `assetsToPark = 0` on `supplyBlueMakeLend`,
-  an empty collateral-supply list on either `supplyCollateral*` action, and a `supplyBlueMakeLend` offer whose
-  callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
+  an empty collateral-supply list on `supplyCollateralMakeBorrow`, and a `supplyBlueMakeLend` offer
+  whose callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
+- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list and
+  `takeRepayWithdrawCollateral` rejects an empty `offerFills` list → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
 - Revisit if `MidnightBundlesV2` gains an entrypoint, an `onBehalf` argument or inline permits, or
