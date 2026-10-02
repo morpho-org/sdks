@@ -10,6 +10,7 @@ import {
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
+  Token,
 } from "@morpho-org/blue-sdk";
 import { addressesRegistry } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
@@ -29,19 +30,31 @@ import { WethUsdsBlue } from "../test/fixtures/blue.js";
 import { vaultBundlesV1Abi } from "./abis.js";
 import {
   blueBorrow,
+  blueRefinance,
   blueRepay,
+  blueRepayWithdrawCollateral,
+  blueSupply,
   blueSupplyCollateral,
+  blueSupplyCollateralBorrow,
   blueWithdraw,
   blueWithdrawCollateral,
 } from "./actions/blue/index.js";
+import { encodeBlueSignatureAuthorization } from "./actions/requirements/encode/encodeBlueSignatureAuthorization.js";
 import { encodeErc20Approval } from "./actions/requirements/encode/encodeErc20Approval.js";
+import { encodeErc20Permit } from "./actions/requirements/encode/encodeErc20Permit.js";
+import { encodeErc20Permit2SignatureTransfer } from "./actions/requirements/encode/encodeErc20Permit2SignatureTransfer.js";
+import { encodeVaultSharesPermit } from "./actions/requirements/encode/encodeVaultSharesPermit.js";
 import {
   vaultV1Deposit,
+  vaultV1InKindRedeem,
+  vaultV1MigrateToV2,
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "./actions/vaultV1/index.js";
 import {
   vaultV2Deposit,
+  vaultV2ForceWithdraw,
+  vaultV2InKindRedeem,
   vaultV2Redeem,
   vaultV2Withdraw,
 } from "./actions/vaultV2/index.js";
@@ -76,6 +89,7 @@ import {
   NonPositiveInputError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
+  UnsupportedAuthorizationOperatorError,
   UnsupportedErc20ApprovalSpenderError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
@@ -87,10 +101,16 @@ const vaultAddress: Address = "0x00000000000000000000000000000000000000A2";
 const assetAddress: Address = "0x00000000000000000000000000000000000000A3";
 const deadline = 1_900_000_000n;
 const marketParams = new MarketParams(WethUsdsBlue);
+const destinationMarketParams = new MarketParams({
+  ...WethUsdsBlue,
+  oracle: "0x00000000000000000000000000000000000000a4",
+});
+const adapter: Address = "0x00000000000000000000000000000000000000A5";
 
 type RegistryEntry = {
   readonly bundles?: {
     readonly vaultBundlesV1?: Address;
+    readonly vaultExitBundlesV1?: Address;
     readonly blueBundlesV1?: Address;
   };
 } & Record<string, unknown>;
@@ -103,6 +123,11 @@ const vaultChains = registry.flatMap(({ chainId, addresses }) =>
   addresses.bundles?.vaultBundlesV1 == null
     ? []
     : [{ chainId, periphery: addresses.bundles.vaultBundlesV1 }],
+);
+const vaultExitChains = registry.flatMap(({ chainId, addresses }) =>
+  addresses.bundles?.vaultExitBundlesV1 == null
+    ? []
+    : [{ chainId, periphery: addresses.bundles.vaultExitBundlesV1 }],
 );
 const blueChains = registry.flatMap(({ chainId, addresses }) =>
   addresses.bundles?.blueBundlesV1 == null
@@ -163,10 +188,62 @@ describe("[INV-01] Deposit routing", () => {
         vaultV2Withdraw({ vault, args: { amount: 1n, userAddress, deadline } }),
         vaultV1Redeem({ vault, args: { shares: 1n, userAddress, deadline } }),
         vaultV2Redeem({ vault, args: { shares: 1n, userAddress, deadline } }),
+        vaultV1MigrateToV2({
+          vault,
+          args: {
+            assets: 1n,
+            targetVault: adapter,
+            targetAsset: assetAddress,
+            maxSharePriceVaultV2: MathLib.RAY,
+            userAddress,
+            deadline,
+          },
+        }),
       ];
       for (const transaction of transactions) {
         expect(transaction.to, `chain ${chainId}`).toBe(periphery);
         expect(isAddressEqual(transaction.to, vaultAddress)).toBe(false);
+      }
+    }
+  });
+
+  test("vault in-kind redeem and force-withdraw target VaultExitBundlesV1 on every registered chain", () => {
+    expect(vaultExitChains.length).toBeGreaterThan(0);
+    for (const { chainId, periphery } of vaultExitChains) {
+      const vault = { chainId, address: vaultAddress };
+      const transactions = [
+        vaultV1InKindRedeem({
+          vault,
+          args: {
+            amount: 1n,
+            marketParamsList: [marketParams],
+            userAddress,
+            deadline,
+          },
+        }),
+        vaultV2InKindRedeem({
+          vault,
+          args: {
+            adapter,
+            amount: 1n,
+            marketParamsList: [marketParams],
+            userAddress,
+            deadline,
+          },
+        }),
+        vaultV2ForceWithdraw({
+          vault,
+          args: {
+            adapter,
+            exitAssets: 1n,
+            minSharePriceE27: 1n,
+            userAddress,
+            deadline,
+          },
+        }),
+      ];
+      for (const transaction of transactions) {
+        expect(transaction.to, `chain ${chainId}`).toBe(periphery);
       }
     }
   });
@@ -176,6 +253,37 @@ describe("[INV-01] Deposit routing", () => {
     for (const { chainId, periphery } of blueChains) {
       const market = { chainId, marketParams };
       const transactions = [
+        blueSupply({ market, args: { userAddress, assets: 1n, deadline } }),
+        blueSupplyCollateralBorrow({
+          market,
+          args: {
+            userAddress,
+            collateralAssets: 1n,
+            borrowAssets: 1n,
+            maxLtv: 0n,
+            deadline,
+          },
+        }),
+        blueRepayWithdrawCollateral({
+          market,
+          args: {
+            userAddress,
+            repayAssets: 1n,
+            repayShares: 0n,
+            maxRepayAssets: 1n,
+            collateralAssets: 1n,
+            maxLtv: 0n,
+            deadline,
+          },
+        }),
+        blueRefinance({
+          market: {
+            chainId,
+            sourceMarketParams: marketParams,
+            destinationMarketParams,
+          },
+          args: { userAddress, maxLtv: 0n, deadline },
+        }),
         blueSupplyCollateral({
           market,
           args: { userAddress, collateralAssets: 1n, deadline },
@@ -469,33 +577,31 @@ describe("[INV-05] chainId validation", () => {
 });
 
 describe("[INV-06] Authorization", () => {
+  const unregisteredSpender = (addresses: unknown) => {
+    const registered = JSON.stringify(addresses).toLowerCase();
+    return fc
+      .uint8Array({ minLength: 20, maxLength: 20 })
+      .map((bytes) => `0x${Buffer.from(bytes).toString("hex")}` as Address)
+      .filter((spender) => !registered.includes(spender.slice(2)));
+  };
+
   test("approvals to an unregistered spender are rejected on every registered chain", () => {
-    for (const { chainId, periphery } of blueChains) {
-      const addresses = registry.find(
-        (entry) => entry.chainId === chainId,
-      )?.addresses;
-      const registered = JSON.stringify(addresses).toLowerCase();
+    for (const { chainId, addresses } of registry) {
       fc.assert(
-        fc.property(
-          fc
-            .uint8Array({ minLength: 20, maxLength: 20 })
-            .map(
-              (bytes) => `0x${Buffer.from(bytes).toString("hex")}` as Address,
-            )
-            .filter((spender) => !registered.includes(spender.slice(2))),
-          (spender) => {
-            expect(() =>
-              encodeErc20Approval({
-                token: assetAddress,
-                spender,
-                amount: 1n,
-                chainId,
-              }),
-            ).toThrow(UnsupportedErc20ApprovalSpenderError);
-          },
-        ),
+        fc.property(unregisteredSpender(addresses), (spender) => {
+          expect(() =>
+            encodeErc20Approval({
+              token: assetAddress,
+              spender,
+              amount: 1n,
+              chainId,
+            }),
+          ).toThrow(UnsupportedErc20ApprovalSpenderError);
+        }),
         { numRuns: 20 },
       );
+    }
+    for (const { chainId, periphery } of blueChains) {
       expect(() =>
         encodeErc20Approval({
           token: assetAddress,
@@ -505,6 +611,51 @@ describe("[INV-06] Authorization", () => {
         }),
       ).not.toThrow();
     }
+  });
+
+  test("permits and Morpho authorizations to an unregistered spender are rejected", async () => {
+    const { client } = createMockClient(mainnet);
+    const addresses = registry.find(
+      ({ chainId }) => chainId === mainnet.id,
+    )?.addresses;
+    await fc.assert(
+      fc.asyncProperty(unregisteredSpender(addresses), async (spender) => {
+        const common = { chainId: mainnet.id, nonce: 0n, amount: 1n, deadline };
+        expect(() =>
+          encodeErc20Permit2SignatureTransfer({
+            ...common,
+            token: assetAddress,
+            spender,
+          }),
+        ).toThrow(UnsupportedErc20ApprovalSpenderError);
+        expect(() =>
+          encodeVaultSharesPermit({
+            ...common,
+            vault: new Token({ address: vaultAddress, name: "Vault" }),
+            version: "vaultV2",
+            owner: userAddress,
+            spender,
+          }),
+        ).toThrow(UnsupportedErc20ApprovalSpenderError);
+        await expect(
+          encodeErc20Permit(client, {
+            ...common,
+            token: assetAddress,
+            owner: userAddress,
+            spender,
+          }),
+        ).rejects.toBeInstanceOf(UnsupportedErc20ApprovalSpenderError);
+        await expect(
+          encodeBlueSignatureAuthorization(client, {
+            chainId: mainnet.id,
+            nonce: 0n,
+            owner: userAddress,
+            authorized: spender,
+          }),
+        ).rejects.toBeInstanceOf(UnsupportedAuthorizationOperatorError);
+      }),
+      { numRuns: 20 },
+    );
   });
 
   test("a signature from another account than userAddress is rejected", async () => {

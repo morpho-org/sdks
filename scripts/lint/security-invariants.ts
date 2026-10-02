@@ -19,21 +19,44 @@ export const parseDocumentedIds = (markdown: string): string[] => {
   return ids;
 };
 
-/** Returns the invariant IDs tagged as `[INV-NN]` in a test file's source. */
-export const parseTaggedIds = (source: string): string[] => [
-  ...new Set(
-    [...source.matchAll(new RegExp(`\\[(${ID_PATTERN.source})\\]`, "g"))].map(
-      (match) => match[1] as string,
-    ),
-  ),
-];
+const SKIPPING_MODIFIERS = new Set(["skip", "todo", "fails"]);
+
+/**
+ * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`.
+ * Tags on skipped or todo blocks are returned separately so they do not count as coverage.
+ */
+export const parseTaggedIds = (
+  source: string,
+): { readonly active: string[]; readonly skipped: string[] } => {
+  const active = new Set<string>();
+  const skipped = new Set<string>();
+  const pattern = new RegExp(
+    `\\b(?:describe|test|it)(?:\\.(\\w+))?\\(\\s*["'\`]\\[(${ID_PATTERN.source})\\]`,
+    "g",
+  );
+  for (const [, modifier, id] of source.matchAll(pattern))
+    (modifier != null && SKIPPING_MODIFIERS.has(modifier)
+      ? skipped
+      : active
+    ).add(id as string);
+  return { active: [...active], skipped: [...skipped] };
+};
 
 /** Compares documented and tagged IDs; returns one message per mismatch. */
-export const checkInvariants = (
-  documented: readonly string[],
-  tagged: ReadonlyMap<string, readonly string[]>,
-): string[] => {
+export const checkInvariants = ({
+  documented,
+  tagged,
+  skipped = new Map(),
+}: {
+  readonly documented: readonly string[];
+  readonly tagged: ReadonlyMap<string, readonly string[]>;
+  readonly skipped?: ReadonlyMap<string, readonly string[]>;
+}): string[] => {
   const errors: string[] = [];
+  for (const [id, files] of skipped)
+    errors.push(
+      `[${id}] is tagged on a skipped or todo block in ${files.join(", ")}; skipped blocks do not count as coverage.`,
+    );
   if (documented.length === 0)
     errors.push(
       "SECURITY.md declares no invariant IDs (expected rows like `| INV-01 | … |`).",
@@ -72,11 +95,18 @@ const main = (): void => {
     readFileSync(join(root, "SECURITY.md"), "utf-8"),
   );
   const tagged = new Map<string, string[]>();
-  for (const file of collectTestFiles(join(root, "packages")))
-    for (const id of parseTaggedIds(readFileSync(file, "utf-8")))
-      tagged.set(id, [...(tagged.get(id) ?? []), relative(root, file)]);
+  const skipped = new Map<string, string[]>();
+  for (const file of collectTestFiles(join(root, "packages"))) {
+    const ids = parseTaggedIds(readFileSync(file, "utf-8"));
+    for (const [found, into] of [
+      [ids.active, tagged],
+      [ids.skipped, skipped],
+    ] as const)
+      for (const id of found)
+        into.set(id, [...(into.get(id) ?? []), relative(root, file)]);
+  }
 
-  const errors = checkInvariants(documented, tagged);
+  const errors = checkInvariants({ documented, tagged, skipped });
   if (errors.length > 0) {
     for (const error of errors) console.error(error);
     process.exit(1);
