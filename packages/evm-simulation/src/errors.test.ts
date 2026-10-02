@@ -150,8 +150,8 @@ describe("BlacklistViolationError", () => {
   it("attaches assetChanges when provided", () => {
     const changes = [
       {
-        address: "0x00000000000000000000000000000000000000ab",
-        token: "0x00000000000000000000000000000000000000cd",
+        address: "0x00000000000000000000000000000000000000AB",
+        token: "0x00000000000000000000000000000000000000cD",
         netRetained: 100n,
       },
     ] as const;
