@@ -587,7 +587,7 @@ const createChecks = (): FieldChecks => {
         );
         return undefined;
       }
-      const spec = OPERATION_SPECS[type as LimitOperationType];
+      const spec = OPERATION_SPECS[type as OperationType];
       const requiredAddresses = new Set(spec.requiredAddresses);
       check.keys(operation, {
         allow: [
@@ -728,9 +728,8 @@ const VAULT_SUBJECT = {
   addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: ["vault"],
 } as const;
-type LimitOperationType = OperationType;
 const OPERATION_SPECS: Record<
-  LimitOperationType,
+  OperationType,
   {
     readonly markets: readonly string[];
     readonly addresses: readonly string[];

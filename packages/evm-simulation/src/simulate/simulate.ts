@@ -62,7 +62,7 @@ import { runSimulation } from "./run-simulation.js";
  *   Blue address absent from blue-sdk's `getChainAddresses`.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
  * @throws {MissingVerificationEvidenceError} when a planned state read fails
- *   or returns empty/invalid data, native outgoing traces do not cover value
+ *   or returns empty data, native outgoing traces do not cover value
  *   sent, or required metadata reverts or returns empty/invalid data.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
