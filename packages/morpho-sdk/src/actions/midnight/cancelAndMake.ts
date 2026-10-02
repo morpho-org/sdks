@@ -74,6 +74,55 @@ export interface MidnightCancelAndMakeParams {
   readonly metadata?: Metadata;
 }
 
+const validateParams = (params: MidnightCancelAndMakeParams): void => {
+  const priceRatifierV1 = getChainAddress(params.chainId, "priceRatifierV1");
+  const rateRatifierV1 = getChainAddress(params.chainId, "rateRatifierV1");
+  if (
+    !isAddressEqual(params.ratifier, priceRatifierV1) &&
+    !isAddressEqual(params.ratifier, rateRatifierV1)
+  ) {
+    throw new UnknownMidnightRatifierError({
+      ratifier: params.ratifier,
+      priceRatifierV1,
+      rateRatifierV1,
+    });
+  }
+  if (params.root === zeroHash) {
+    throw new InvalidTreeError("Offer root cannot be zero.");
+  }
+  if (params.payload === "0x") {
+    throw new InvalidTreeError("Offer payload cannot be empty.");
+  }
+  if (params.groups.length === 0) {
+    throw new InvalidTreeError("Offer groups cannot be empty.");
+  }
+  const cancelled = new Set(
+    params.cancellations.map(({ group }) => group.toLowerCase()),
+  );
+  for (const group of params.groups) {
+    if (cancelled.has(group.toLowerCase())) {
+      throw new MidnightReplacementGroupCancelledError({ group });
+    }
+  }
+  if (params.collateral == null) return;
+  validateMidnightMarket({
+    market: params.collateral.market,
+    chainId: params.chainId,
+  });
+  for (const [
+    index,
+    { collateralIndex, assets },
+  ] of params.collateral.supplies.entries()) {
+    if (assets <= 0n) {
+      throw new NonPositiveInputError(
+        `collateral.supplies[${index}].assets`,
+        assets,
+      );
+    }
+    MarketUtils.getCollateralByIndex(params.collateral.market, collateralIndex);
+  }
+};
+
 /**
  * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake` for `msg.sender`: cancel previous
  * groups under consumption guards, optionally supply collateral, activate `root`, and publish `payload`.
@@ -118,60 +167,11 @@ export interface MidnightCancelAndMakeParams {
 export const midnightCancelAndMake = (
   params: MidnightCancelAndMakeParams,
 ): Readonly<Transaction<MidnightCancelAndMakeAction>> => {
-  const priceRatifierV1 = getChainAddress(params.chainId, "priceRatifierV1");
-  const rateRatifierV1 = getChainAddress(params.chainId, "rateRatifierV1");
-  if (
-    !isAddressEqual(params.ratifier, priceRatifierV1) &&
-    !isAddressEqual(params.ratifier, rateRatifierV1)
-  ) {
-    throw new UnknownMidnightRatifierError({
-      ratifier: params.ratifier,
-      priceRatifierV1,
-      rateRatifierV1,
-    });
-  }
-  if (params.root === zeroHash) {
-    throw new InvalidTreeError("Offer root cannot be zero.");
-  }
-  if (params.payload === "0x") {
-    throw new InvalidTreeError("Offer payload cannot be empty.");
-  }
-  if (params.groups.length === 0) {
-    throw new InvalidTreeError("Offer groups cannot be empty.");
-  }
+  validateParams(params);
   const cancellations = toBundlesV2Cancellations(params);
-  const cancelled = new Set(
-    cancellations.map(({ group }) => group.toLowerCase()),
-  );
-  for (const group of params.groups) {
-    if (cancelled.has(group.toLowerCase())) {
-      throw new MidnightReplacementGroupCancelledError({ group });
-    }
-  }
-
   const supplies = (params.collateral?.supplies ?? []).map(
-    ({ collateralIndex, assets }, index) => {
-      if (assets <= 0n) {
-        throw new NonPositiveInputError(
-          `collateral.supplies[${index}].assets`,
-          assets,
-        );
-      }
-      return { collateralIndex, assets };
-    },
+    ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
   );
-  if (params.collateral != null) {
-    validateMidnightMarket({
-      market: params.collateral.market,
-      chainId: params.chainId,
-    });
-    for (const { collateralIndex } of supplies) {
-      MarketUtils.getCollateralByIndex(
-        params.collateral.market,
-        collateralIndex,
-      );
-    }
-  }
   const signature = params.rootSignature ?? {
     height: 0n,
     nonce: 0n,

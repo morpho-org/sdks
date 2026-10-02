@@ -24,8 +24,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
    `VaultBundlesV1` entrypoint directly. **Blue write paths**
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly; batch `cancelOffers` and maker `midnightCancelAndMake` each encode one
-   `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call. Other **direct calls** (Midnight
+   `MidnightBundles` (V1) or `MidnightBundlesV2` entrypoint call directly (see
+   [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
    collateral supply / redeem / single-group `cancelOffer`) encode their target contract call directly. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
@@ -41,6 +41,34 @@ standalone contract wraps the value internally, so these paths do not add a toke
 Direct BlueBundlesV1 funding sends the native amount as `tx.value`; it is exclusive with an ERC-20
 token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
 position and takes no native funding.
+
+## MidnightBundlesV2 (canonical statement)
+
+Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md).
+
+- **One action per intent, not per entrypoint.** V2 has one maker entrypoint
+  (`midnightBundlesV2CancelAndMake`) and four taker entrypoints; the arguments select the intent
+  (empty lists, zero `newRoot`, `assetsToPark`, `reduceOnly`, `repayEnabled`, empty `offerFills`).
+  Each builder fixes its intent-selecting arguments and exposes only the inputs that vary within
+  that intent; never expose them as free inputs. Reject inputs that would make one intent encode
+  another intent's call (for example an empty collateral list on a collateral flow) with a typed error.
+- **Every entrypoint acts for `msg.sender`.** Inputs name that account `accountAddress`; there is no
+  `taker`, `onBehalf` or `maker` distinct from it, and maker offers must have
+  `maker === accountAddress`.
+- **Requirements.** Token requirements are plain ERC-20 approvals from `accountAddress` to
+  `midnightBundlesV2` for exactly the pulled assets; V2 takes no inline permit, so never produce
+  ERC-2612 or Permit2 requirements. Every V2 action requires Midnight authorization of
+  `midnightBundlesV2`, resolved lazily at the entity layer.
+- **Encoding.** Target `getChainAddress(chainId, "midnightBundlesV2")`. Pass every positional
+  argument, labelling each with its contract parameter name in a trailing comment. Arguments of a
+  skipped step get zero values (all-zero `blueMarket` / `market` structs, `zeroHash`, `[]`, `"0x"`);
+  the contract does not read them.
+- **Group cancellations** are `{ group, maxConsumed }` lists: reject negative or above-`uint128`
+  ceilings and duplicate groups. Replacement offers must use groups not in the cancellation list.
+- **Root activation** targets `PriceRatifierV1` or `RateRatifierV1` only. An EOA maker's
+  `v, r, s`, `signatureHeight`, `signatureNonce` and `signatureDeadline` reach `buildTx` only
+  through the signature's `args`; a contract-wallet maker encodes `v = r = s = 0`.
+- **Native funding** is out of scope: encode `value = 0` and `wrappedNative = zeroAddress`.
 
 ## Shared liquidity / reallocations (canonical statement)
 
