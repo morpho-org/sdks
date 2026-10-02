@@ -681,6 +681,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
       assets: amount,
       slippageTolerance,
     });
+    // A Safe approval can execute after the caller re-prepared the exit from a fresher snapshot, so
+    // accept an allowance up to one slippage tolerance above the cap instead of resetting it.
+    const maxShareAllowance = MathLib.wDivDown(
+      requiredShareAllowance,
+      MathLib.WAD - slippageTolerance,
+    );
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
@@ -696,6 +702,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
+          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
         });
@@ -1061,6 +1068,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
         assets: assets ?? 0n,
         slippageTolerance,
       });
+    // In shares mode the calldata pins the burn, so only an exact allowance is accepted there.
+    const maxShareAllowance =
+      shares ??
+      MathLib.wDivDown(requiredShareAllowance, MathLib.WAD - slippageTolerance);
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     const { userAddress } = params;
     const sourceAsset = params.sourceVault.asset;
@@ -1094,6 +1105,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
+          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
         });

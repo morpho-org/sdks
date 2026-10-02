@@ -1,4 +1,8 @@
-import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVaultV2,
+  getChainAddresses,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import {
@@ -20,6 +24,7 @@ import {
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../constants.js";
 import {
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
@@ -671,6 +676,56 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     });
 
     expect(await withdraw.getRequirements()).toEqual([]);
+  });
+
+  test("behavior: accepts a stale allowance within one slippage tolerance above the cap", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const withdraw = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id)
+      .withdraw({
+        amount: 10n ** 12n,
+        userAddress: IN_KIND_USER,
+        vaultData: inKindVaultV2Data(),
+      });
+    const [approval] = (await withdraw.getRequirements()).filter(
+      isRequirementApproval,
+    );
+    const requiredShareAllowance = approval?.action.args.amount;
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+    const maxShareAllowance = MathLib.wDivDown(
+      requiredShareAllowance,
+      MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+    );
+    expect(maxShareAllowance).toBeGreaterThan(requiredShareAllowance);
+
+    // A Safe approval executed for a cap prepared from an older snapshot stays usable.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: maxShareAllowance,
+    });
+    expect(await withdraw.getRequirements()).toEqual([]);
+
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: maxShareAllowance + 1n,
+    });
+    expect(
+      (await withdraw.getRequirements())
+        .filter(isRequirementApproval)
+        .map(({ action }) => action.args.amount),
+    ).toEqual([requiredShareAllowance]);
   });
 
   test("behavior: pins the derived share cap across re-resolutions", async () => {
