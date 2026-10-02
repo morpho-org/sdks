@@ -24,10 +24,12 @@ import {
   midnightMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
+  ChainIdMismatchError,
   DuplicateMidnightGroupCancellationError,
   InputExceedsMaxError,
   MidnightMarketAddressMismatchError,
   MidnightReplacementGroupCancelledError,
+  NegativeInputError,
   NonPositiveInputError,
   UnknownMidnightRatifierError,
 } from "../../types/index.js";
@@ -228,9 +230,30 @@ describe("midnightCancelAndMake", () => {
         ],
       }),
     ).toThrow(DuplicateMidnightGroupCancellationError);
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        cancellations: [{ group: groupB, maxConsumed: -1n }],
+      }),
+    ).toThrow(NegativeInputError);
     expect(() => midnightCancelAndMake({ ...params, deadline: 0n })).toThrow(
       NonPositiveInputError,
     );
+  });
+
+  test("error: ChainIdMismatchError on a collateral market from another chain", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        collateral: {
+          market: new MarketParams({
+            ...midnightMarket,
+            chainId: midnightMarket.chainId + 1n,
+          }),
+          supplies: [{ collateralIndex: 0n, assets: 1n }],
+        },
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 
   test("error: NonPositiveInputError on a zero collateral supply", () => {

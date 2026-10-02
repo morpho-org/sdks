@@ -23,6 +23,7 @@ import {
   padHex,
   parseEther,
   parseUnits,
+  toFunctionSelector,
   toHex,
   zeroAddress,
 } from "viem";
@@ -242,7 +243,9 @@ describe("Midnight cancel-and-make on fork", () => {
     });
     await fulfilRequirements(client, repost);
 
-    await expect(client.sendTransaction(repost.buildTx())).rejects.toThrow();
+    await expect(client.sendTransaction(repost.buildTx())).rejects.toThrow(
+      toFunctionSelector("ConsumedAboveMax()"),
+    );
     await expect(consumed(client, groupA)).resolves.toBe(1n);
     await expect(isRootRatified(client, repost.root)).resolves.toBe(false);
   });

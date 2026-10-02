@@ -61,7 +61,7 @@ live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directl
 RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
 prerequisites.
 
-- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
@@ -325,7 +325,7 @@ graph LR
         MN1 --> MNM[maker offer submission]
         MN1 --> MNP[position actions]
         MNT --> MNB[MidnightBundles]
-        MNM --> MNMP[Midnight mempool]
+        MNM --> MNB2[MidnightBundlesV2]
         MNP --> MNC[Midnight / MidnightBundles]
     end
 
@@ -337,7 +337,7 @@ graph LR
     MV1 -.->|approval / permit| REQ
     MV2 -.->|approval / permit| REQ
     MM1 -.->|approval / permit / authorization| REQ
-    MN1 -.->|approval / authorization / root signature or ratification| REQ
+    MN1 -.->|approval / authorization| REQ
 
     style VBV1 fill:#e8f5e9,stroke:#4caf50
     style BBV1 fill:#e8f5e9,stroke:#4caf50
