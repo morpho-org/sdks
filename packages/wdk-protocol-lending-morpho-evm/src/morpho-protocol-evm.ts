@@ -1274,7 +1274,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * async function withdrawUsdt(account: WalletAccountEvm): Promise<WithdrawResult> {
    *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires an exact VaultBundlesV1 share allowance; use prepareWithdraw() otherwise.
+   *   // Requires a VaultBundlesV1 share allowance within the accepted cap range; use prepareWithdraw() otherwise.
    *   return morpho.withdraw({ token: USDT, amount: 1_000_000n });
    * }
    * ```
@@ -1292,7 +1292,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   /**
-   * Quotes a vault withdrawal after checking its exact share-allowance requirement.
+   * Quotes a vault withdrawal after checking its share-allowance requirement.
    *
    * If an approval or permit is needed, use {@link prepareWithdraw}, satisfy its requirements,
    * and call that same handle's `quote()` or `quote(signedPermit)` to retain its share cap.
@@ -1317,7 +1317,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * export async function quoteWithdrawal(account: WalletAccountReadOnlyEvm) {
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires the exact share allowance for this withdrawal to be already in place.
+   *   // Requires a share allowance within the accepted cap range to be already in place.
    *   return morpho.quoteWithdraw({ token: "0xdAC17F958D2ee523a2206206994597C13D831ec7", amount: 1_000_000n });
    *   // Resolves to { fee: bigint }.
    * }
