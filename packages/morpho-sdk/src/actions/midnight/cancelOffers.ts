@@ -1,17 +1,20 @@
 import { midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, maxUint128, zeroAddress, zeroHash } from "viem";
+import { encodeFunctionData, zeroAddress, zeroHash } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  DuplicateMidnightGroupCancellationError,
   EmptyMidnightGroupCancellationsError,
-  InputExceedsMaxError,
   type Metadata,
   type MidnightCancelOffersAction,
   type MidnightGroupCancellation,
   NegativeInputError,
   type Transaction,
 } from "../../types/index.js";
+import {
+  emptyBlueMarket,
+  emptyMidnightMarket,
+  toBundlesV2Cancellations,
+} from "./bundlesV2.js";
 
 /** Parameters for encoding a guarded Midnight Bundles V2 batch offer-group cancellation. */
 export interface MidnightCancelOffersParams {
@@ -24,25 +27,6 @@ export interface MidnightCancelOffersParams {
   /** Optional analytics metadata appended to calldata. */
   readonly metadata?: Metadata;
 }
-
-const emptyBlueMarket = {
-  loanToken: zeroAddress,
-  collateralToken: zeroAddress,
-  oracle: zeroAddress,
-  irm: zeroAddress,
-  lltv: 0n,
-} as const;
-
-const emptyMidnightMarket = {
-  chainId: 0n,
-  midnight: zeroAddress,
-  loanToken: zeroAddress,
-  collateralParams: [],
-  maturity: 0n,
-  rcfThreshold: 0n,
-  enterGate: zeroAddress,
-  liquidatorGate: zeroAddress,
-} as const;
 
 /**
  * Encodes a `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call that only cancels offer groups.
@@ -83,31 +67,7 @@ export const midnightCancelOffers = (
   if (params.deadline < 0n) {
     throw new NegativeInputError("deadline", params.deadline);
   }
-  const groups = new Set<string>();
-  for (const [
-    index,
-    { group, maxConsumed },
-  ] of params.cancellations.entries()) {
-    const field = `cancellations[${index}].maxConsumed`;
-    if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
-    if (maxConsumed > maxUint128) {
-      throw new InputExceedsMaxError({
-        field,
-        value: maxConsumed,
-        max: maxUint128,
-      });
-    }
-    const key = group.toLowerCase();
-    if (groups.has(key)) {
-      throw new DuplicateMidnightGroupCancellationError({ index, group });
-    }
-    groups.add(key);
-  }
-
-  const cancellations = params.cancellations.map(({ group, maxConsumed }) => ({
-    group,
-    maxConsumed,
-  }));
+  const cancellations = toBundlesV2Cancellations(params.cancellations);
 
   let tx = {
     to: getChainAddress(params.chainId, "midnightBundlesV2"),
