@@ -462,7 +462,7 @@ export interface PreparedMorphoWithdraw {
    *   according to the wallet's payment configuration.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
-   *   share allowance does not exactly match the prepared cap.
+   *   share allowance is outside the prepared cap's accepted range `[cap, cap / (1 - slippageTolerance)]`.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read or encoding fails.
@@ -510,8 +510,8 @@ export interface PreparedMorphoWithdraw {
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The withdrawal fee quote without a transaction hash.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
-   * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the exact
-   *   share allowance is not in place. Satisfy this handle's requirements before quoting again.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the share
+   *   allowance is outside `[cap, cap / (1 - slippageTolerance)]`. Satisfy this handle's requirements before quoting again.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
@@ -1251,9 +1251,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Withdraws assets from the configured Morpho vault.
    *
    * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares, so it
-   * needs a share allowance equal to the derived share cap. That allowance is the only cap on the
+   * needs a share allowance within `[cap, cap / (1 - slippageTolerance)]` of the derived share cap. That allowance is the only cap on the
    * burn, so this method resolves the prepared withdrawal's requirements first and submits only
-   * when none are outstanding — a leftover allowance above the cap counts as outstanding. Use
+   * when none are outstanding — a leftover allowance above that range counts as outstanding. Use
    * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
    * prepared-operation handle.
    *
@@ -1264,8 +1264,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The withdraw result.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
-   * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
-   *   already in place, so the withdrawal must go through {@link prepareWithdraw}.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is not already
+   *   within `[cap, cap / (1 - slippageTolerance)]`, so the withdrawal must go through {@link prepareWithdraw}.
    * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
    * @example
    * ```ts
@@ -1274,7 +1274,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * async function withdrawUsdt(account: WalletAccountEvm): Promise<WithdrawResult> {
    *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires an exact VaultBundlesV1 share allowance; use prepareWithdraw() otherwise.
+   *   // Requires a VaultBundlesV1 share allowance within the accepted cap range; use prepareWithdraw() otherwise.
    *   return morpho.withdraw({ token: USDT, amount: 1_000_000n });
    * }
    * ```
@@ -1292,7 +1292,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   /**
-   * Quotes a vault withdrawal after checking its exact share-allowance requirement.
+   * Quotes a vault withdrawal after checking its share-allowance requirement.
    *
    * If an approval or permit is needed, use {@link prepareWithdraw}, satisfy its requirements,
    * and call that same handle's `quote()` or `quote(signedPermit)` to retain its share cap.
@@ -1305,7 +1305,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {ChainIdMismatchError} when the provider is on another chain.
-   * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is absent.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is outside
+   *   `[cap, cap / (1 - slippageTolerance)]`.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
    * @throws {Error} when the withdrawal options or account configuration are invalid, or quoting fails.
@@ -1316,7 +1317,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * export async function quoteWithdrawal(account: WalletAccountReadOnlyEvm) {
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires the exact share allowance for this withdrawal to be already in place.
+   *   // Requires a share allowance within the accepted cap range to be already in place.
    *   return morpho.quoteWithdraw({ token: "0xdAC17F958D2ee523a2206206994597C13D831ec7", amount: 1_000_000n });
    *   // Resolves to { fee: bigint }.
    * }
