@@ -1,0 +1,14 @@
+---
+"@morpho-org/evm-simulation": major
+---
+
+Cut `simulate()` over to the v5 public types and a pinned `eth_simulateV1` boundary.
+
+BREAKING CHANGES:
+
+- `SimulateParams` is now an options object with `mode`; `authorizations` are accepted only in `"preview"` and `"pending"` block tags are rejected at runtime. `SimulationAuthorization` is now the union of the five typed variants (`erc20Approval`, `erc2612Permit`, `permit2SignatureTransfer`, `blueAuthorization`, `blueAuthorizationSignature`); the legacy `{type: "approval"}` and `{type: "signature"}` variants are removed.
+- `SimulationTransaction` fields and `SimulateParams` inputs are `readonly`; `simulationTxs` echoes exactly the caller's normalized transactions (`txIdx` in `transfers` and `calls` indexes user transactions).
+- `value` transfers are funded by the sender's real native balance (no balance inflation); `validation: false` keeps gas uncharged so gas stays separated from economic effects.
+- `blockNumber` no longer accepts `"pending"`.
+- `InvalidSimulationResponseError` (non-bypassable) replaces `ExternalServiceError` for a malformed `eth_simulateV1` block envelope and a call-count mismatch. New checks that v4 did not perform (it returned success) also throw it: an endpoint whose `eth_chainId` disagrees with the configured chain, a simulated block that is neither the pinned state block nor its immediate successor (with matching `parentHash`), a block timestamp earlier than the pinned block's, and a pinned state block whose hash changed mid-simulation.
+- Node-level code `3`/"insufficient funds" `eth_simulateV1` failures are `SimulationRevertedError`: `details` is a URL-free `{ code, shortMessage }` record for a node-level revert (the viem error rides on `cause`), or the frozen `{ transactionIndex, result }[]` of the user transactions when one of them reverted.

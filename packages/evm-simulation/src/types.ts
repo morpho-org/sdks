@@ -1,49 +1,26 @@
-import type { Address, BlockTag, Hex } from "viem";
+import type { Address, Hex } from "viem";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 // Shapes the caller constructs once and passes into `simulate()`.
 
-/**
- * Credentials for the Tenderly Node Web3 Gateway. The `rpcUrl` is the
- * chain-specific gateway URL with the access key embedded in the path,
- * e.g. `https://mainnet.gateway.tenderly.co/{ACCESS_KEY}`.
- */
-export interface TenderlyRpcConfig {
-  rpcUrl: string;
+/** Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`. */
+export interface ChainSimulationConfig {
+  /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
+  readonly simulateV1Url: string;
 }
-
-/**
- * Per-chain backend capabilities. Exactly one configuration shape per chain;
- * the discriminated union enforces that **at least one** of `tenderlyRpc`
- * (primary) or `simulateV1Url` (fallback) is supplied.
- */
-export type ChainSimulationConfig =
-  | {
-      /** Tenderly RPC config — `tenderly_simulateTransaction` / `tenderly_simulateBundle`. */
-      tenderlyRpc: TenderlyRpcConfig;
-      /** JSON-RPC URL supporting `eth_simulateV1`. Optional when Tenderly is set. */
-      simulateV1Url?: string;
-    }
-  | {
-      tenderlyRpc?: TenderlyRpcConfig;
-      simulateV1Url: string;
-    };
 
 /**
  * Top-level configuration for `simulate`.
  *
- * Every chain entry must declare at least one backend (Tenderly RPC primary,
- * `eth_simulateV1` fallback, or both). Calling `simulate` for a `chainId`
- * missing from `chains` throws `UnsupportedChainError`.
+ * Every chain entry must supply an `eth_simulateV1` endpoint. An absent chain
+ * or missing endpoint throws `UnsupportedChainError`; execution never selects
+ * another provider after a failure.
  */
 export interface SimulationConfig {
-  /** Per-chain simulation capabilities. */
+  /** Per-chain simulation endpoints. */
   chains: Map<number, ChainSimulationConfig>;
   logger?: SimulationLogger;
-  /**
-   * Overall timeout budget in ms (default 5000). Tenderly gets ~60% of budget.
-   * On timeout/failure, fallback gets remaining time (deadline - now).
-   */
+  /** Overall execution timeout budget in ms (default 5000). */
   timeoutMs?: number;
 }
 
@@ -55,32 +32,16 @@ export interface SimulationConfig {
  * in a bundle — the orchestrator rejects mixed senders with `SimulationValidationError`.
  */
 export interface SimulationTransaction {
-  from: Address;
-  to: Address;
-  data: Hex;
-  value?: bigint;
+  readonly from: Address;
+  readonly to: Address;
+  readonly data: Hex;
+  readonly value?: bigint;
 }
-
-/**
- * How the caller expresses a token authorization that must be in place before the
- * main transactions run. The package decides HOW to simulate each one:
- * - "approval" → prepend tx as-is
- * - "signature" → today: encode approve(spender, amount); future: ecrecover override?
- */
-export type SimulationAuthorization =
-  | { type: "approval"; transaction: SimulationTransaction }
-  | {
-      type: "signature";
-      token: Address;
-      spender: Address;
-      /** Defaults to maxUint256. Caller can set explicit amount for tokens that don't support max approval. */
-      amount?: bigint;
-    };
 
 /**
  * Net balance change for a single asset (one token) within an account's entry.
  * Native ETH uses viem's `ethAddress` sentinel as `token`. `symbol`/`decimals`
- * are best-effort and may be absent, notably on the `eth_simulateV1` fallback.
+ * are optional metadata; the log-derived `eth_simulateV1` output omits them.
  */
 export interface AssetChange {
   readonly token: Address;
@@ -94,12 +55,11 @@ export interface AssetChange {
  * Net per-token balance changes for one account over the whole bundle. Returned
  * for every account that nets a non-zero change, the sender and counterparties
  * alike (the zero address is kept for mints/burns). Accounts and their `changes`
- * are sorted by address for deterministic, cross-backend output.
+ * are sorted by address for deterministic output.
  *
- * Both backends report the full net native-ETH delta, including ETH moved via
- * internal calls (e.g. a `WETH.withdraw` refund): Tenderly derives it from its
- * trace, and the `eth_simulateV1` fallback runs with `traceTransfers` so the
- * node synthesizes native moves as transfer logs under viem's `ethAddress`.
+ * The backend reports the full net native-ETH delta, including ETH moved via
+ * internal calls (e.g. a `WETH.withdraw` refund). `traceTransfers` makes the
+ * node synthesize native moves as transfer logs under viem's `ethAddress`.
  */
 export interface AccountAssetChanges {
   readonly account: Address;
@@ -116,10 +76,9 @@ export interface Transfer {
   readonly to: Address;
   readonly amount: bigint;
   /**
-   * Index into `SimulationResult.simulationTxs` of the transaction that
-   * emitted the underlying log. For bundles with prepended authorization
-   * approvals, indices `[0, simulationTxs.length - params.transactions.length)`
-   * are authorization txs; the remainder are caller-supplied.
+   * Index into `SimulationResult.simulationTxs` of the user transaction that
+   * emitted the underlying log. `txIdx` only ever indexes caller-supplied
+   * transactions.
    */
   readonly txIdx: number;
 }
@@ -127,19 +86,18 @@ export interface Transfer {
 /**
  * Happy-path return of `simulate`. All failures throw typed errors.
  *
- * - `simulationTxs` is the full resolved transaction list (including
- *   prepended authorization txs).
+ * - `simulationTxs` are exactly the caller's ordered transactions, normalized
+ *   (checksummed `from`/`to`, `value` defaulted to `0n`).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the net per-asset balance change over the whole bundle,
- *   grouped by account (sender and counterparties), normalized to the same
- *   shape across backends — see `AccountAssetChanges`.
+ *   grouped by account (sender and counterparties) — see `AccountAssetChanges`.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
- *   transfer to its emitting transaction.
+ *   transfer to its emitting user transaction.
  */
 export interface SimulationResult {
-  /** The full resolved transaction list (including prepended authorization txs). */
-  readonly simulationTxs: readonly SimulationTransaction[];
+  /** Exactly the caller's ordered transactions, normalized. */
+  readonly simulationTxs: readonly Readonly<SimulationTransaction>[];
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
    * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas used.
@@ -158,33 +116,11 @@ export interface SimulationLogger {
   error(message: string, data?: Record<string, unknown>): void;
 }
 
-/**
- * Input to `simulate`. Pin a `blockNumber` for deterministic / historical
- * simulation; omit to simulate against `latest`.
- */
-export interface SimulateParams {
-  chainId: number;
-  transactions: SimulationTransaction[];
-  authorizations?: SimulationAuthorization[];
-  blockNumber?: bigint | BlockTag;
-}
-
-// ─── Internal (consumed by backends / pipeline) ───────────────────────────────
-
-/**
- * Internal raw result from a simulation adapter before normalization.
- * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
- * backend; `assetChanges` is the bundle-level aggregate grouped by account.
- */
-export interface RawSimulationResult {
-  calls: RawCall[];
-  assetChanges: AccountAssetChanges[];
-}
+// ─── Internal (consumed by backend / pipeline) ───────────────────────────────
 
 /**
  * Normalized EVM log emitted by a single simulated call. The shape is the
- * common subset both backends (`eth_simulateV1` via viem and Tenderly RPC)
- * produce after schema validation. Returned indirectly via
+ * log shape produced by `eth_simulateV1` via viem. Returned indirectly via
  * `SimulationCall.logs` and consumed by the SDK's transfer parser.
  */
 export interface RawLog {
@@ -194,16 +130,15 @@ export interface RawLog {
 }
 
 /**
- * Internal mirror of `SimulationCall`, mutable during construction by the
- * simulation backends.
+ * Input-side mirror of `SimulationCall` accepted by the transfer parser.
  *
  * @internal
  */
 export interface RawCall {
-  logs: RawLog[];
-  status: boolean;
-  returnData: Hex;
-  gasUsed: bigint;
+  readonly logs: readonly RawLog[];
+  readonly status: boolean;
+  readonly returnData: Hex;
+  readonly gasUsed: bigint;
 }
 
 /**
@@ -220,7 +155,7 @@ export interface SimulationCall {
    * True iff the call succeeded. The bundle as a whole reverts via
    * `SimulationRevertedError` before the result is returned, so on a
    * successful `simulate()` every entry is `true` today. Field kept for
-   * forward-compatibility with backends that may surface per-call status.
+   * per-call inspection alongside logs and return data.
    */
   readonly status: boolean;
   /** Return data from the top-level call. */
