@@ -206,41 +206,86 @@ const collectTestFiles = (dir: string, files: string[] = []): string[] => {
   return files;
 };
 
-/** Whether a Vitest project `include` glob matches `file`, a repo-relative path. */
+/** The `include` and `exclude` globs of one Vitest project. */
+export type VitestProject = {
+  readonly include: readonly string[];
+  readonly exclude: readonly string[];
+};
+
+/** Whether some Vitest project includes and does not exclude `file`, a repo-relative path. */
 export const isIncludedByVitest = (
   file: string,
-  includes: readonly string[],
-): boolean => includes.some((glob) => matchesGlob(file, glob));
+  projects: readonly VitestProject[],
+): boolean =>
+  projects.some(
+    ({ include, exclude }) =>
+      include.some((glob) => matchesGlob(file, glob)) &&
+      !exclude.some((glob) => matchesGlob(file, glob)),
+  );
 
-const vitestIncludes = async (root: string): Promise<string[]> => {
+/**
+ * Groups each file's tags by ID. Tags in a file that no Vitest project runs all go into
+ * `skipped`, since such a file never runs.
+ */
+export const groupTags = (
+  files: readonly {
+    readonly path: string;
+    readonly active: readonly string[];
+    readonly skipped: readonly string[];
+    readonly runs: boolean;
+  }[],
+): { tagged: Map<string, string[]>; skipped: Map<string, string[]> } => {
+  const tagged = new Map<string, string[]>();
+  const skipped = new Map<string, string[]>();
+  for (const { path, active, skipped: notRun, runs } of files)
+    for (const [found, into] of [
+      [runs ? active : [], tagged],
+      [runs ? notRun : [...active, ...notRun], skipped],
+    ] as const)
+      for (const id of found) into.set(id, [...(into.get(id) ?? []), path]);
+  return { tagged, skipped };
+};
+
+type VitestTestConfig = {
+  readonly include?: string[];
+  readonly exclude?: string[];
+};
+
+const vitestProjects = async (root: string): Promise<VitestProject[]> => {
   const { default: config } = (await import(
     join(root, "vitest.config.ts")
   )) as {
-    default: { test?: { projects?: { test?: { include?: string[] } }[] } };
+    default: {
+      test?: VitestTestConfig & {
+        projects?: { extends?: boolean; test?: VitestTestConfig }[];
+      };
+    };
   };
-  return (config.test?.projects ?? []).flatMap(
-    (project) => project.test?.include ?? [],
-  );
+  return (config.test?.projects ?? []).map((project) => ({
+    include: project.test?.include ?? [],
+    exclude: [
+      ...(project.extends ? (config.test?.exclude ?? []) : []),
+      ...(project.test?.exclude ?? []),
+    ],
+  }));
 };
 
 const main = async (): Promise<void> => {
   const root = fileURLToPath(new URL("../..", import.meta.url));
-  const includes = await vitestIncludes(root);
+  const projects = await vitestProjects(root);
   const documented = parseDocumentedIds(
     readFileSync(join(root, "SECURITY.md"), "utf-8"),
   );
-  const tagged = new Map<string, string[]>();
-  const skipped = new Map<string, string[]>();
-  for (const file of collectTestFiles(join(root, "packages"))) {
-    const path = relative(root, file);
-    const ids = parseTaggedIds(readFileSync(file, "utf-8"), path);
-    const runs = isIncludedByVitest(path, includes);
-    for (const [found, into] of [
-      [runs ? ids.active : [], tagged],
-      [runs ? ids.skipped : [...ids.active, ...ids.skipped], skipped],
-    ] as const)
-      for (const id of found) into.set(id, [...(into.get(id) ?? []), path]);
-  }
+  const { tagged, skipped } = groupTags(
+    collectTestFiles(join(root, "packages")).map((file) => {
+      const path = relative(root, file);
+      return {
+        path,
+        ...parseTaggedIds(readFileSync(file, "utf-8"), path),
+        runs: isIncludedByVitest(path, projects),
+      };
+    }),
+  );
 
   const errors = checkInvariants({ documented, tagged, skipped });
   if (errors.length > 0) {
