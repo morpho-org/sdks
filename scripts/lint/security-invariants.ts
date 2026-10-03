@@ -37,23 +37,75 @@ export const parseDocumentedIds = (markdown: string): string[] => {
 const SKIPPING_MODIFIERS = new Set(["skip", "todo", "fails"]);
 
 /**
+ * Walks `source`, tracking strings and comments. Returns the source with comments blanked out
+ * (newlines kept) and, for each `(` in code, the index of its matching `)`.
+ */
+const scan = (
+  source: string,
+): { readonly code: string; readonly closing: Map<number, number> } => {
+  const chars = source.split("");
+  const closing = new Map<number, number>();
+  const open: number[] = [];
+  let i = 0;
+  while (i < chars.length) {
+    const char = chars[i];
+    const next = chars[i + 1];
+    if (char === "/" && (next === "/" || next === "*")) {
+      const end =
+        next === "/"
+          ? source.indexOf("\n", i)
+          : source.indexOf("*/", i + 2) + 2;
+      const stop = end <= 1 || end === -1 ? chars.length : end;
+      for (; i < stop; i++) if (chars[i] !== "\n") chars[i] = " ";
+    } else if (char === '"' || char === "'" || char === "`") {
+      for (i++; i < chars.length && chars[i] !== char; i++)
+        if (chars[i] === "\\") i++;
+      i++;
+    } else {
+      if (char === "(") open.push(i);
+      else if (char === ")") {
+        const start = open.pop();
+        if (start != null) closing.set(start, i);
+      }
+      i++;
+    }
+  }
+  return { code: chars.join(""), closing };
+};
+
+/**
  * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`.
- * Tags on skipped, todo or fails blocks are returned separately so they do not count as coverage.
+ * Tags in comments are ignored. Tags on, or nested inside, skipped, todo or fails blocks are
+ * returned separately so they do not count as coverage.
  */
 export const parseTaggedIds = (
   source: string,
 ): { readonly active: string[]; readonly skipped: string[] } => {
+  const { code, closing } = scan(source);
+  const calls = [
+    ...code.matchAll(
+      /(?<![\w$.])(?:describe|test|it)((?:\.\w+)*)\s*\(\s*(?:["'`]\[(INV-\d{2})\])?/g,
+    ),
+  ].map((match) => {
+    const modifiers = (match[1] ?? "").split(".").slice(1);
+    const paren = match.index + match[0].indexOf("(");
+    return {
+      id: match[2],
+      start: match.index,
+      end: closing.get(paren) ?? code.length,
+      skipping: modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)),
+    };
+  });
+  const skippedRanges = calls.filter((call) => call.skipping);
   const active = new Set<string>();
   const skipped = new Set<string>();
-  const pattern = new RegExp(
-    `\\b(?:describe|test|it)(?:\\.(\\w+))?\\(\\s*["'\`]\\[(${ID_PATTERN.source})\\]`,
-    "g",
-  );
-  for (const [, modifier, id] of source.matchAll(pattern))
-    (modifier != null && SKIPPING_MODIFIERS.has(modifier)
-      ? skipped
-      : active
-    ).add(id as string);
+  for (const call of calls) {
+    if (call.id == null) continue;
+    const isSkipped = skippedRanges.some(
+      (range) => range.start <= call.start && call.start < range.end,
+    );
+    (isSkipped ? skipped : active).add(call.id);
+  }
   return { active: [...active], skipped: [...skipped] };
 };
 
