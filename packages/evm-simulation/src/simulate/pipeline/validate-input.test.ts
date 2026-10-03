@@ -1,6 +1,9 @@
 import { type Address, type Hex, zeroAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams, SimulationAuthorization } from "../../types.js";
+import type {
+  LegacySimulateParams,
+  SimulationAuthorization,
+} from "../../types.js";
 import { validateInput } from "./validate-input.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
@@ -9,7 +12,9 @@ const VAULT: Address = "0x3333333333333333333333333333333333333333";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const SPENDER: Address = "0x4444444444444444444444444444444444444444";
 
-function params(overrides: Partial<SimulateParams> = {}): SimulateParams {
+function params(
+  overrides: Partial<LegacySimulateParams> = {},
+): LegacySimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12" as Hex }],

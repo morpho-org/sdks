@@ -176,15 +176,16 @@ Every version published by this pipeline carries an SLSA provenance attestation 
 
 `npm audit signatures` checks registry signatures, and provenance attestations where they exist, for an npm-installed `node_modules` tree. It does not fail on a version that has no provenance and does not show which repository built it. pnpm and Yarn have no equivalent command.
 
-To check where a version was built, read the subject of its provenance attestation:
+To check where a version was built, read the subject of its provenance attestation. Set `VERSION` to the version you want to check:
 
 ```bash
-curl -s "$(npm view @morpho-org/morpho-sdk@<version> dist.attestations.url)" \
+VERSION=6.4.0
+curl -s "$(npm view "@morpho-org/morpho-sdk@$VERSION" dist.attestations.url)" \
   | jq -r '.attestations[] | select(.predicateType | test("slsa")) | .bundle.dsseEnvelope.payload' \
   | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/push.yml"`, on `refs/heads/main` (or `refs/heads/next` for prereleases). The "Provenance" panel on the package's npmjs.com page shows the same information. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
+The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/push.yml"`, on `refs/heads/main` (or `refs/heads/next` for prereleases). This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
 
 ## Dependency policy
 

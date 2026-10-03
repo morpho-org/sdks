@@ -312,7 +312,7 @@ describe("assertNoBundlesRetention", () => {
       // Only USDC retention flagged; DAI is net zero.
       expect(changes).toHaveLength(1);
       expect(changes[0]!.token?.toLowerCase()).toBe(USDC.toLowerCase());
-      expect(changes[0]!.netRetained).toBe("1000000");
+      expect(changes[0]!.netRetained).toBe(1000000n);
     }
   });
 
@@ -337,7 +337,7 @@ describe("assertNoBundlesRetention", () => {
       const entry = changes[0]!;
       expect(entry.address?.toLowerCase()).toBe(BUNDLES_TARGET.toLowerCase());
       expect(entry.token?.toLowerCase()).toBe(USDC.toLowerCase());
-      expect(entry.netRetained).toBe("777");
+      expect(entry.netRetained).toBe(777n);
     }
   });
 
@@ -436,13 +436,12 @@ describe("assertNoBundlesRetention", () => {
   });
 
   // ─── Native ETH ──────────────────────────────────────────────────────────
-  // Native ETH emits no event log, so it never reaches `transfers` on the
-  // Tenderly primary backend — it must be read from `assetChanges`. Regression
-  // suite for Cantina finding 1440 (retained native ETH silently passing the guard).
+  // Native ETH emits no event log of its own, so it must be read from
+  // `assetChanges`. Regression suite for Cantina finding 1440 (retained native
+  // ETH silently passing the guard).
   const ONE_ETH = 1_000000000000000000n;
 
-  it("behavior: throws when bundles contract retains native ETH reported only in assetChanges (Tenderly path)", () => {
-    // Tenderly derives native ETH into assetChanges and emits no transfer log.
+  it("behavior: throws when bundles contract retains native ETH reported only in assetChanges", () => {
     // Before the fix this resolved instead of throwing (finding 1440).
     expect(() =>
       assertNoBundlesRetention({
@@ -488,7 +487,7 @@ describe("assertNoBundlesRetention", () => {
       expect(changes).toHaveLength(1);
       expect(changes[0]!.token?.toLowerCase()).toBe(ethAddress.toLowerCase());
       // Counted once (assetChanges), not doubled with the synthetic log.
-      expect(changes[0]!.netRetained).toBe(ONE_ETH.toString());
+      expect(changes[0]!.netRetained).toBe(ONE_ETH);
     }
   });
 
