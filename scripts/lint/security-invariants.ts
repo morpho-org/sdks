@@ -87,6 +87,29 @@ const titleOf = (node: unknown): string | undefined => {
   return undefined;
 };
 
+const isFunction = (node: unknown): boolean =>
+  isNode(node) &&
+  (node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression");
+
+/** Whether a Vitest options object such as `{ skip: true }` may skip the block. */
+const skipsByOptions = (node: unknown): boolean =>
+  isNode(node) &&
+  node.type === "ObjectExpression" &&
+  (node.properties as AstNode[]).some(
+    (property) =>
+      property.type === "Property" &&
+      isNode(property.key) &&
+      SKIPPING_MODIFIERS.has(
+        (property.key.name ?? property.key.value) as string,
+      ) &&
+      !(
+        isNode(property.value) &&
+        property.value.type === "Literal" &&
+        property.value.value === false
+      ),
+  );
+
 /**
  * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`, parsing the
  * file as TypeScript. A tag counts as active only if its block always runs: tags on, or nested
@@ -95,10 +118,11 @@ const titleOf = (node: unknown): string | undefined => {
  */
 export const parseTaggedIds = (
   source: string,
+  file = "test.ts",
 ): { readonly active: string[]; readonly skipped: string[] } => {
-  const { program, errors } = parseSync("test.ts", source, { lang: "ts" });
+  const { program, errors } = parseSync(file, source, { lang: "ts" });
   if (errors.length > 0)
-    throw new Error(`Cannot parse test file: ${errors[0]?.message}`);
+    throw new Error(`Cannot parse ${file}: ${errors[0]?.message}`);
   const active = new Set<string>();
   const skipped = new Set<string>();
   /** Visits `value` and returns whether it contains a test that runs. */
@@ -113,18 +137,20 @@ export const parseTaggedIds = (
       value.type === "CallExpression"
         ? testCallee(value.callee as AstNode)
         : undefined;
+    const args = (value.arguments ?? []) as unknown[];
     const isSkipped =
       inSkipped ||
-      (call?.modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)) ??
-        false);
+      (call != null &&
+        (call.modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)) ||
+          skipsByOptions(args[1])));
     let runs = false;
     for (const [key, child] of Object.entries(value))
       if (key !== "type") runs = visit(child, isSkipped) || runs;
     if (call == null) return runs;
-    const runsHere = !isSkipped && (call.name !== "describe" || runs);
-    const id = titleOf((value.arguments as unknown[])[0])?.match(
-      TAG_PATTERN,
-    )?.[1];
+    const runsHere =
+      !isSkipped &&
+      (call.name === "describe" ? runs : args.slice(1).some(isFunction));
+    const id = titleOf(args[0])?.match(TAG_PATTERN)?.[1];
     if (id != null) (runsHere ? active : skipped).add(id);
     return runsHere || runs;
   };
@@ -145,7 +171,7 @@ export const checkInvariants = ({
   const errors: string[] = [];
   for (const [id, files] of skipped)
     errors.push(
-      `[${id}] is tagged in ${files.join(", ")} only on blocks that may not run (skip, todo, fails, skipIf, runIf, or a suite with no runnable test); such blocks do not count as coverage.`,
+      `[${id}] is tagged in ${files.join(", ")} on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, or a suite with no runnable test); such blocks do not count as coverage.`,
     );
   if (documented.length === 0)
     errors.push(
@@ -187,7 +213,10 @@ const main = (): void => {
   const tagged = new Map<string, string[]>();
   const skipped = new Map<string, string[]>();
   for (const file of collectTestFiles(join(root, "packages"))) {
-    const ids = parseTaggedIds(readFileSync(file, "utf-8"));
+    const ids = parseTaggedIds(
+      readFileSync(file, "utf-8"),
+      relative(root, file),
+    );
     for (const [found, into] of [
       [ids.active, tagged],
       [ids.skipped, skipped],

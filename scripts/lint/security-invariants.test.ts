@@ -89,10 +89,26 @@ describe("parseTaggedIds", () => {
     ).toEqual({ active: [], skipped: ["INV-01", "INV-02"] });
   });
 
-  test("error: throws on a file that does not parse", () => {
-    expect(() => parseTaggedIds('describe("[INV-01] a", () => {')).toThrow(
-      "Cannot parse test file",
-    );
+  test("behavior: does not count a test without a function", () => {
+    expect(
+      parseTaggedIds(
+        'test("[INV-01] a"); describe("[INV-02] b", () => { it("x"); });',
+      ),
+    ).toEqual({ active: [], skipped: ["INV-01", "INV-02"] });
+  });
+
+  test("behavior: treats skip, todo and fails options as skipping", () => {
+    expect(
+      parseTaggedIds(
+        'test("[INV-01] a", { skip: true }, () => {}); describe("[INV-02] b", { todo: x }, () => { test("y", () => {}); }); test("[INV-03] c", { skip: false, timeout: 1 }, () => {});',
+      ),
+    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02"] });
+  });
+
+  test("error: throws with the file name on a file that does not parse", () => {
+    expect(() =>
+      parseTaggedIds('describe("[INV-01] a", () => {', "a.test.ts"),
+    ).toThrow("Cannot parse a.test.ts");
   });
 });
 
@@ -139,7 +155,7 @@ describe("checkInvariants", () => {
         skipped: new Map([["INV-01", ["b.test.ts"]]]),
       }),
     ).toEqual([
-      "[INV-01] is tagged in b.test.ts only on blocks that may not run (skip, todo, fails, skipIf, runIf, or a suite with no runnable test); such blocks do not count as coverage.",
+      "[INV-01] is tagged in b.test.ts on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, or a suite with no runnable test); such blocks do not count as coverage.",
     ]);
   });
 
