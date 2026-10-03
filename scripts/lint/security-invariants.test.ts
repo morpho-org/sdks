@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   checkInvariants,
+  groupTags,
   isIncludedByVitest,
   parseDocumentedIds,
   parseTaggedIds,
@@ -171,17 +172,53 @@ describe("checkInvariants", () => {
 });
 
 describe("isIncludedByVitest", () => {
-  const includes = ["packages/morpho-sdk/src/**/*.test.ts"];
+  const projects = [
+    {
+      include: ["packages/morpho-sdk/src/**/*.test.ts"],
+      exclude: ["packages/morpho-sdk/src/legacy/**"],
+    },
+  ];
 
   test("behavior: matches a file a project includes", () => {
     expect(
-      isIncludedByVitest("packages/morpho-sdk/src/a/b.test.ts", includes),
+      isIncludedByVitest("packages/morpho-sdk/src/a/b.test.ts", projects),
     ).toBe(true);
   });
 
   test("behavior: rejects a file no project includes", () => {
     expect(
-      isIncludedByVitest("packages/morpho-sdk/test/b.test.ts", includes),
+      isIncludedByVitest("packages/morpho-sdk/test/b.test.ts", projects),
     ).toBe(false);
+  });
+
+  test("behavior: rejects a file a project includes but excludes", () => {
+    expect(
+      isIncludedByVitest("packages/morpho-sdk/src/legacy/b.test.ts", projects),
+    ).toBe(false);
+  });
+});
+
+describe("groupTags", () => {
+  test("behavior: counts every tag in a file no project runs as skipped", () => {
+    const { tagged, skipped } = groupTags([
+      {
+        path: "a.test.ts",
+        active: ["INV-01"],
+        skipped: ["INV-02"],
+        runs: true,
+      },
+      {
+        path: "b.test.ts",
+        active: ["INV-01", "INV-03"],
+        skipped: [],
+        runs: false,
+      },
+    ]);
+    expect(Object.fromEntries(tagged)).toEqual({ "INV-01": ["a.test.ts"] });
+    expect(Object.fromEntries(skipped)).toEqual({
+      "INV-02": ["a.test.ts"],
+      "INV-01": ["b.test.ts"],
+      "INV-03": ["b.test.ts"],
+    });
   });
 });
