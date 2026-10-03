@@ -218,54 +218,37 @@ async function listRecentIssues({
   ];
   const issues: ExistingIssue[] = [];
   for (const query of queries) {
-    issues.push(
-      ...(await listIssuePages({ repository, headers, query, fetchImpl })),
-    );
+    for (let page = 1; ; page += 1) {
+      const url = new URL(`${GITHUB_API_URL}/repos/${repository}/issues`);
+      url.search = new URLSearchParams({
+        ...query,
+        creator: "github-actions[bot]",
+        per_page: "100",
+        page: String(page),
+      }).toString();
+      const response = await fetchImpl(url, { headers, redirect: "error" });
+      if (!response.ok) {
+        throw new Error(`GitHub issue listing failed (${response.status}).`);
+      }
+      const listed = (await response.json()) as {
+        title?: string;
+        state?: string;
+        closed_at?: string | null;
+        pull_request?: unknown;
+      }[];
+      for (const issue of listed) {
+        if (issue.pull_request != null || typeof issue.title !== "string")
+          continue;
+        issues.push({
+          title: issue.title,
+          state: issue.state ?? "open",
+          closedAtMs: issue.closed_at ? Date.parse(issue.closed_at) : null,
+        });
+      }
+      if (listed.length < 100) break;
+    }
   }
   return issues;
-}
-
-async function listIssuePages({
-  repository,
-  headers,
-  query,
-  fetchImpl,
-}: {
-  readonly repository: string;
-  readonly headers: Record<string, string>;
-  readonly query: Record<string, string>;
-  readonly fetchImpl: Fetch;
-}): Promise<ExistingIssue[]> {
-  const issues: ExistingIssue[] = [];
-  for (let page = 1; ; page += 1) {
-    const url = new URL(`${GITHUB_API_URL}/repos/${repository}/issues`);
-    url.search = new URLSearchParams({
-      ...query,
-      creator: "github-actions[bot]",
-      per_page: "100",
-      page: String(page),
-    }).toString();
-    const response = await fetchImpl(url, { headers, redirect: "error" });
-    if (!response.ok) {
-      throw new Error(`GitHub issue listing failed (${response.status}).`);
-    }
-    const listed = (await response.json()) as {
-      title?: string;
-      state?: string;
-      closed_at?: string | null;
-      pull_request?: unknown;
-    }[];
-    for (const issue of listed) {
-      if (issue.pull_request != null || typeof issue.title !== "string")
-        continue;
-      issues.push({
-        title: issue.title,
-        state: issue.state ?? "open",
-        closedAtMs: issue.closed_at ? Date.parse(issue.closed_at) : null,
-      });
-    }
-    if (listed.length < 100) return issues;
-  }
 }
 
 /**
@@ -391,7 +374,10 @@ export async function main(
           nowMs,
           fetchImpl,
         });
-        if (isTracked(incident.title, { issues: existing, nowMs })) continue;
+        if (isTracked(incident.title, { issues: existing, nowMs })) {
+          process.stdout.write(`already tracked: ${incident.title}\n`);
+          continue;
+        }
         const response = await fetchImpl(
           `${GITHUB_API_URL}/repos/${repository}/issues`,
           {

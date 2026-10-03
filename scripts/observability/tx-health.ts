@@ -91,8 +91,6 @@ export interface OutcomeRow {
   readonly firstSeenMs: number;
 }
 
-const toSeconds = (ms: number) => Math.floor(ms / 1000);
-
 /**
  * Builds the ClickHouse query returning {@link OutcomeRow} groups for a consumer.
  *
@@ -104,7 +102,7 @@ export function buildOutcomeQuery(
   consumer: Consumer,
   windows: Windows,
 ): string {
-  const end = toSeconds(windows.nowMs);
+  const end = Math.floor(windows.nowMs / 1000);
   const currentStart = end - windows.currentHours * 3600;
   const baselineStart = currentStart - windows.baselineHours * 3600;
   const excludedActions = consumer.excludedActions
@@ -280,6 +278,16 @@ export const DEFAULT_THRESHOLDS = {
   minRateRatio: 2,
   minZScore: 4,
 } as const satisfies Thresholds;
+
+/** Impact cutoffs that rank a detected regression; only `medium` and above open issues. */
+const SEVERITY_CUTOFFS = {
+  highExcessFailures: 25,
+  highRate: 0.5,
+  highRateMinFailures: 10,
+  mediumExcessFailures: 10,
+  /** Points by which new releases' failure share must exceed their attempt share. */
+  releaseCorrelationMargin: 0.2,
+} as const;
 
 /** Current-window counts of one app release within a regression. */
 interface ReleaseBreakdown {
@@ -476,9 +484,11 @@ export function detectRegressions(
         actionType: pair.actionType,
         chainId: pair.chainId,
         severity:
-          excessFailures >= 25 || (currentRate >= 0.5 && current.failures >= 10)
+          excessFailures >= SEVERITY_CUTOFFS.highExcessFailures ||
+          (currentRate >= SEVERITY_CUTOFFS.highRate &&
+            current.failures >= SEVERITY_CUTOFFS.highRateMinFailures)
             ? "high"
-            : excessFailures >= 10
+            : excessFailures >= SEVERITY_CUTOFFS.mediumExcessFailures
               ? "medium"
               : "low",
         current: { ...current, rate: currentRate },
@@ -493,7 +503,7 @@ export function detectRegressions(
         releaseCorrelated:
           fresh.failures / current.failures -
             fresh.attempts / current.attempts >=
-          0.2,
+          SEVERITY_CUTOFFS.releaseCorrelationMargin,
       });
     }
   }

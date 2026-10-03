@@ -96,7 +96,8 @@ spender, receiver or amount, replayable permit or signature, missing slippage bo
 
 Regressions of one signal on one chain become one incident, because actions failing together on a
 chain usually share a cause. The incident title is the deduplication key: the watch skips titles
-with an open issue or one closed less than 48 hours ago.
+with an open issue or one closed less than 48 hours ago, and logs `already tracked: <title>`. New
+evidence on a tracked incident (more actions, higher severity) is not posted to the open issue yet.
 
 A release is marked "new" when it first appears inside the current window. An incident is
 release-correlated when new releases account for at least 20 points more of the failures than of the
@@ -105,6 +106,10 @@ attempts.
 ### Backtest
 
 Replaying the detector at midnight UTC for each of the 21 days up to 2026-10-03:
+
+> This replay used the first revision of the query. Failures with no `error_category` now count as
+> `tx_failure`, and releases that are not commit SHAs read as not logged. Re-run the replay before
+> retuning thresholds.
 
 | Day | Incidents that would have opened |
 | -- | -- |
