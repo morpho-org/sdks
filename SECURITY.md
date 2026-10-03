@@ -142,20 +142,20 @@ Two architectural rules from [`AGENTS.md`](./AGENTS.md) also carry security weig
 
 Security fixes ship only in the latest major line of each maintained package. Previous majors stay installable on npm but receive no fixes; upgrade to the latest major.
 
-| Package | Supported | Unsupported |
-| --- | --- | --- |
-| `@morpho-org/morpho-sdk` | 6.x | < 6 |
-| `@morpho-org/blue-sdk` | 7.x | < 7 |
-| `@morpho-org/blue-sdk-viem` | 6.x | < 6 |
-| `@morpho-org/morpho-ts` | 3.x | < 3 |
-| `@morpho-org/midnight-sdk` | 1.x | — |
-| `@morpho-org/evm-simulation` | 4.x | < 4 |
-| `@morpho-org/wdk-protocol-lending-morpho-evm` | 2.x | < 2 |
-| `@morpho-org/liquidity-sdk-viem` | Deprecated; no fix guaranteed | all |
-| `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered | — |
-| `@morpho-org/consumer-sdk` | Not maintained in this repository | all |
+| Package | Supported |
+| --- | --- |
+| `@morpho-org/morpho-sdk` | Latest major |
+| `@morpho-org/blue-sdk` | Latest major |
+| `@morpho-org/blue-sdk-viem` | Latest major |
+| `@morpho-org/morpho-ts` | Latest major |
+| `@morpho-org/midnight-sdk` | Latest major |
+| `@morpho-org/evm-simulation` | Latest major |
+| `@morpho-org/wdk-protocol-lending-morpho-evm` | Latest major |
+| `@morpho-org/liquidity-sdk-viem` | Deprecated; no fix guaranteed |
+| `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered |
+| `@morpho-org/consumer-sdk` | Not maintained in this repository |
 
-When a new major is released, the previous major stops receiving fixes. Packages are deprecated following [ADR-2026-05-13](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md). Current versions are in each package's `package.json` and `CHANGELOG.md`.
+When a new major is released, the previous major stops receiving fixes. Packages are deprecated following [ADR-2026-05-13](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md). The latest major is the one tagged `latest` on npm (`npm view <package> version`); each package's `CHANGELOG.md` lists its releases.
 
 ## Release integrity and verification
 
