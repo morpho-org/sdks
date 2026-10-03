@@ -26,7 +26,7 @@ const wrongChain = {
 } as const satisfies Chain;
 
 describe("getMidnightApprovalRequirements", () => {
-  test("throws ChainIdMismatchError when the client chain differs", async () => {
+  test("[INV-05] throws ChainIdMismatchError when the client chain differs", async () => {
     const { client } = createMockClient(wrongChain);
 
     await expect(

@@ -20,6 +20,13 @@ describe("parseDocumentedIds", () => {
     expect(parseDocumentedIds("See [INV-03] and INV-04.")).toEqual([]);
   });
 
+  test("error: malformed ID cells", () => {
+    for (const cell of ["`INV-08`", "**INV-08**", "INV-100"])
+      expect(() => parseDocumentedIds(`${table}| ${cell} | New |\n`)).toThrow(
+        /Malformed invariant IDs/,
+      );
+  });
+
   test("error: duplicate IDs", () => {
     expect(() => parseDocumentedIds(`${table}| INV-01 | Again |\n`)).toThrow(
       /Duplicate invariant IDs/,
