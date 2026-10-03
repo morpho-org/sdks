@@ -78,38 +78,6 @@ const testCallee = (
   return undefined;
 };
 
-const titleOf = (node: unknown): string | undefined => {
-  if (!isNode(node)) return undefined;
-  if (node.type === "Literal" && typeof node.value === "string")
-    return node.value;
-  if (node.type === "TemplateLiteral")
-    return (node.quasis as { value: { cooked: string } }[])[0]?.value.cooked;
-  return undefined;
-};
-
-const isFunction = (node: unknown): boolean =>
-  isNode(node) &&
-  (node.type === "ArrowFunctionExpression" ||
-    node.type === "FunctionExpression");
-
-/** Whether a Vitest options object such as `{ skip: true }` may skip the block. */
-const skipsByOptions = (node: unknown): boolean =>
-  isNode(node) &&
-  node.type === "ObjectExpression" &&
-  (node.properties as AstNode[]).some(
-    (property) =>
-      property.type === "Property" &&
-      isNode(property.key) &&
-      SKIPPING_MODIFIERS.has(
-        (property.key.name ?? property.key.value) as string,
-      ) &&
-      !(
-        isNode(property.value) &&
-        property.value.type === "Literal" &&
-        property.value.value === false
-      ),
-  );
-
 /**
  * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`, parsing the
  * file as TypeScript. A tag counts as active only if its block always runs: tags on, or nested
@@ -138,20 +106,52 @@ export const parseTaggedIds = (
       value.type === "CallExpression"
         ? testCallee(value.callee as AstNode)
         : undefined;
-    const args = (value.arguments ?? []) as unknown[];
+    const args = (value.arguments ?? []) as AstNode[];
+    const [title, options] = args;
+    // A Vitest options object such as `{ skip: true }` may also skip the block.
+    const skippedByOptions =
+      options?.type === "ObjectExpression" &&
+      (options.properties as AstNode[]).some(
+        ({ type, key, value: option }) =>
+          type === "Property" &&
+          isNode(key) &&
+          SKIPPING_MODIFIERS.has((key.name ?? key.value) as string) &&
+          !(
+            isNode(option) &&
+            option.type === "Literal" &&
+            option.value === false
+          ),
+      );
     const isSkipped =
       inSkipped ||
       (call != null &&
         (call.modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)) ||
-          skipsByOptions(args[1])));
+          skippedByOptions));
     let runs = false;
     for (const [key, child] of Object.entries(value))
       if (key !== "type") runs = visit(child, isSkipped) || runs;
     if (call == null) return runs;
     const runsHere =
       !isSkipped &&
-      (call.name === "describe" ? runs : args.slice(1).some(isFunction));
-    const id = titleOf(args[0])?.match(TAG_PATTERN)?.[1];
+      (call.name === "describe"
+        ? runs
+        : args
+            .slice(1)
+            .some(
+              ({ type }) =>
+                type === "ArrowFunctionExpression" ||
+                type === "FunctionExpression",
+            ));
+    const titleText =
+      title?.type === "Literal"
+        ? title.value
+        : title?.type === "TemplateLiteral"
+          ? (title.quasis as { value: { cooked: string } }[])[0]?.value.cooked
+          : undefined;
+    const id =
+      typeof titleText === "string"
+        ? titleText.match(TAG_PATTERN)?.[1]
+        : undefined;
     if (id != null) (runsHere ? active : skipped).add(id);
     return runsHere || runs;
   };
@@ -251,7 +251,8 @@ type VitestTestConfig = {
   readonly exclude?: string[];
 };
 
-const vitestProjects = async (root: string): Promise<VitestProject[]> => {
+const main = async (): Promise<void> => {
+  const root = fileURLToPath(new URL("../..", import.meta.url));
   const { default: config } = (await import(
     join(root, "vitest.config.ts")
   )) as {
@@ -261,18 +262,15 @@ const vitestProjects = async (root: string): Promise<VitestProject[]> => {
       };
     };
   };
-  return (config.test?.projects ?? []).map((project) => ({
-    include: project.test?.include ?? [],
-    exclude: [
-      ...(project.extends ? (config.test?.exclude ?? []) : []),
-      ...(project.test?.exclude ?? []),
-    ],
-  }));
-};
-
-const main = async (): Promise<void> => {
-  const root = fileURLToPath(new URL("../..", import.meta.url));
-  const projects = await vitestProjects(root);
+  const projects: VitestProject[] = (config.test?.projects ?? []).map(
+    (project) => ({
+      include: project.test?.include ?? [],
+      exclude: [
+        ...(project.extends ? (config.test?.exclude ?? []) : []),
+        ...(project.test?.exclude ?? []),
+      ],
+    }),
+  );
   const documented = parseDocumentedIds(
     readFileSync(join(root, "SECURITY.md"), "utf-8"),
   );
