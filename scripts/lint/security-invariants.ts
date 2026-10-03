@@ -5,26 +5,33 @@ import { isMain } from "../ci/workflow.ts";
 
 const ID_PATTERN = /INV-\d{2}/;
 
-/** Returns the invariant IDs declared in the SECURITY.md "Security invariants" table. */
+/**
+ * Returns the invariant IDs declared in the SECURITY.md "Security invariants" table: every row after
+ * the `| ID |` header and its separator, until the first non-table line. Each row must start with
+ * an `INV-NN` cell.
+ */
 export const parseDocumentedIds = (markdown: string): string[] => {
-  const ids = [
-    ...markdown.matchAll(
-      new RegExp(`^\\|\\s*(${ID_PATTERN.source})\\s*\\|`, "gm"),
-    ),
-  ].map((match) => match[1] as string);
-  const malformed = [...markdown.matchAll(/^\|([^|\n]*INV[^|\n]*)\|/gm)]
-    .map((match) => (match[1] as string).trim())
-    .filter((cell) => !new RegExp(`^${ID_PATTERN.source}$`).test(cell));
+  const lines = markdown.split("\n");
+  const header = lines.findIndex((line) => /^\|\s*ID\s*\|/.test(line));
+  if (header === -1) return [];
+  const rows: string[] = [];
+  for (const line of lines.slice(header + 2)) {
+    if (!line.startsWith("|")) break;
+    rows.push((line.split("|")[1] ?? "").trim());
+  }
+  const malformed = rows.filter(
+    (cell) => !new RegExp(`^${ID_PATTERN.source}$`).test(cell),
+  );
   if (malformed.length > 0)
     throw new Error(
-      `Malformed invariant IDs in SECURITY.md (expected INV-NN): ${malformed.join(", ")}`,
+      `Malformed invariant IDs in SECURITY.md (expected INV-NN): ${malformed.map((cell) => `"${cell}"`).join(", ")}`,
     );
-  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const duplicates = rows.filter((id, index) => rows.indexOf(id) !== index);
   if (duplicates.length > 0)
     throw new Error(
       `Duplicate invariant IDs in SECURITY.md: ${duplicates.join(", ")}`,
     );
-  return ids;
+  return rows;
 };
 
 const SKIPPING_MODIFIERS = new Set(["skip", "todo", "fails"]);
