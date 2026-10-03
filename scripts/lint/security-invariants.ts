@@ -113,7 +113,8 @@ const skipsByOptions = (node: unknown): boolean =>
 /**
  * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`, parsing the
  * file as TypeScript. A tag counts as active only if its block always runs: tags on, or nested
- * inside, skip/todo/fails/skipIf/runIf blocks, and tagged suites with no runnable test, are
+ * inside, skip/todo/fails/skipIf/runIf blocks or blocks with a `{ skip/todo/fails }` options
+ * object, tests with no function, and tagged suites with no runnable test, are
  * returned separately so they do not count as coverage.
  */
 export const parseTaggedIds = (
