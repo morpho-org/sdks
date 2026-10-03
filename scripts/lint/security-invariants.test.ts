@@ -41,49 +41,58 @@ describe("parseTaggedIds", () => {
   test("default", () => {
     expect(
       parseTaggedIds(
-        'describe("[INV-01] a", () => {}); test("[INV-01] b"); it.each([])("[INV-02] c");',
+        'describe("[INV-01] a", () => { test("[INV-01] b", () => {}); }); it.each([])("[INV-02] c", () => {});',
       ),
-    ).toEqual({ active: ["INV-01"], skipped: [] });
+    ).toEqual({ active: ["INV-01", "INV-02"], skipped: [] });
   });
 
   test("behavior: counts tags opening test titles, with any quote", () => {
     expect(
       parseTaggedIds(
-        "describe('[INV-01] a'); test(`[INV-02] b`); it(\"[INV-03] c\");",
+        "describe('[INV-01] a', () => { test(`[INV-02] b`, () => {}); }); it(\"[INV-03] c\", () => {});",
       ),
-    ).toEqual({ active: ["INV-01", "INV-02", "INV-03"], skipped: [] });
+    ).toEqual({ active: ["INV-02", "INV-01", "INV-03"], skipped: [] });
   });
 
   test("behavior: ignores tags in comments, strings and later in a title", () => {
     expect(
       parseTaggedIds(
-        '// [INV-01]\nconst s = "[INV-02]";\ntest("covers [INV-03]");',
+        '// describe("[INV-01] a", () => {});\n/* test("[INV-02] b"); */\nconst s = "[INV-03]";\ntest("covers [INV-04]", () => {});',
       ),
     ).toEqual({ active: [], skipped: [] });
   });
 
-  test("behavior: reports skipped, todo and fails blocks separately", () => {
+  test("behavior: reports skip, todo, fails, skipIf and runIf blocks separately", () => {
     expect(
       parseTaggedIds(
-        'describe.skip("[INV-01] a"); test.todo("[INV-02] b"); test.only("[INV-03] c"); test.fails("[INV-04] d");',
+        'test.skip("[INV-01] a", () => {}); test.todo("[INV-02] b"); test.only("[INV-03] c", () => {}); test.fails("[INV-04] d", () => {}); test.skipIf(x)("[INV-05] e", () => {}); test.runIf(x)("[INV-06] f", () => {});',
       ),
-    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02", "INV-04"] });
-  });
-
-  test("behavior: ignores commented-out test calls", () => {
-    expect(
-      parseTaggedIds(
-        '// describe("[INV-01] a", () => {});\n/* test("[INV-02] b"); */',
-      ),
-    ).toEqual({ active: [], skipped: [] });
+    ).toEqual({
+      active: ["INV-03"],
+      skipped: ["INV-01", "INV-02", "INV-04", "INV-05", "INV-06"],
+    });
   });
 
   test("behavior: treats tags nested in a skipped suite as skipped", () => {
     expect(
       parseTaggedIds(
-        'describe.skip("parent", () => { describe("child", () => { test("[INV-01] a", () => {}); }); });\ndescribe("other", () => { test.fails("[INV-02] b", () => {}); test("[INV-03] c", () => {}); });',
+        'describe.skip("p", () => { describe("c", () => { test("[INV-01] a", () => {}); }); });\ndescribe.skipIf(x)("q", () => { expect(f).toThrow(/\\)/); test("[INV-02] b", () => {}); });\ndescribe("r", () => { expect(g).toMatch(/\'/); test("[INV-03] c", () => {}); });',
       ),
     ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02"] });
+  });
+
+  test("behavior: does not count a tagged suite with no runnable test", () => {
+    expect(
+      parseTaggedIds(
+        'describe("[INV-01] a", () => { test.skip("x", () => {}); }); describe("[INV-02] b", () => {});',
+      ),
+    ).toEqual({ active: [], skipped: ["INV-01", "INV-02"] });
+  });
+
+  test("error: throws on a file that does not parse", () => {
+    expect(() => parseTaggedIds('describe("[INV-01] a", () => {')).toThrow(
+      "Cannot parse test file",
+    );
   });
 });
 
@@ -130,7 +139,7 @@ describe("checkInvariants", () => {
         skipped: new Map([["INV-01", ["b.test.ts"]]]),
       }),
     ).toEqual([
-      "[INV-01] is tagged on a skipped, todo or fails block in b.test.ts; such blocks do not count as coverage.",
+      "[INV-01] is tagged in b.test.ts only on blocks that may not run (skip, todo, fails, skipIf, runIf, or a suite with no runnable test); such blocks do not count as coverage.",
     ]);
   });
 

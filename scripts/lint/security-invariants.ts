@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseSync } from "vite";
 import { isMain } from "../ci/workflow.ts";
 
 const ID_PATTERN = /INV-\d{2}/;
@@ -34,78 +35,100 @@ export const parseDocumentedIds = (markdown: string): string[] => {
   return rows;
 };
 
-const SKIPPING_MODIFIERS = new Set(["skip", "todo", "fails"]);
+const TEST_FUNCTIONS = new Set(["describe", "test", "it"]);
+/** Modifiers that skip a block, or may skip it depending on a runtime condition. */
+const SKIPPING_MODIFIERS = new Set([
+  "skip",
+  "todo",
+  "fails",
+  "skipIf",
+  "runIf",
+]);
+const TAG_PATTERN = new RegExp(`^\\[(${ID_PATTERN.source})\\]`);
 
-/**
- * Walks `source`, tracking strings and comments. Returns the source with comments blanked out
- * (newlines kept) and, for each `(` in code, the index of its matching `)`.
- */
-const scan = (
-  source: string,
-): { readonly code: string; readonly closing: Map<number, number> } => {
-  const chars = source.split("");
-  const closing = new Map<number, number>();
-  const open: number[] = [];
-  let i = 0;
-  while (i < chars.length) {
-    const char = chars[i];
-    const next = chars[i + 1];
-    if (char === "/" && (next === "/" || next === "*")) {
-      const end =
-        next === "/"
-          ? source.indexOf("\n", i)
-          : source.indexOf("*/", i + 2) + 2;
-      const stop = end <= 1 || end === -1 ? chars.length : end;
-      for (; i < stop; i++) if (chars[i] !== "\n") chars[i] = " ";
-    } else if (char === '"' || char === "'" || char === "`") {
-      for (i++; i < chars.length && chars[i] !== char; i++)
-        if (chars[i] === "\\") i++;
-      i++;
-    } else {
-      if (char === "(") open.push(i);
-      else if (char === ")") {
-        const start = open.pop();
-        if (start != null) closing.set(start, i);
+interface AstNode {
+  readonly type: string;
+  readonly [key: string]: unknown;
+}
+
+const isNode = (value: unknown): value is AstNode =>
+  typeof value === "object" &&
+  value != null &&
+  typeof (value as { type?: unknown }).type === "string";
+
+/** Returns the function and modifiers of a Vitest call such as `test.skipIf(x)(…)`, or `undefined`. */
+const testCallee = (
+  callee: AstNode,
+): { readonly name: string; readonly modifiers: string[] } | undefined => {
+  if (callee.type === "Identifier")
+    return TEST_FUNCTIONS.has(callee.name as string)
+      ? { name: callee.name as string, modifiers: [] }
+      : undefined;
+  if (callee.type === "CallExpression")
+    return testCallee(callee.callee as AstNode);
+  if (callee.type === "MemberExpression" && isNode(callee.property)) {
+    const inner = testCallee(callee.object as AstNode);
+    return (
+      inner && {
+        ...inner,
+        modifiers: [...inner.modifiers, callee.property.name as string],
       }
-      i++;
-    }
+    );
   }
-  return { code: chars.join(""), closing };
+  return undefined;
+};
+
+const titleOf = (node: unknown): string | undefined => {
+  if (!isNode(node)) return undefined;
+  if (node.type === "Literal" && typeof node.value === "string")
+    return node.value;
+  if (node.type === "TemplateLiteral")
+    return (node.quasis as { value: { cooked: string } }[])[0]?.value.cooked;
+  return undefined;
 };
 
 /**
- * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`.
- * Tags in comments are ignored. Tags on, or nested inside, skipped, todo or fails blocks are
+ * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`, parsing the
+ * file as TypeScript. A tag counts as active only if its block always runs: tags on, or nested
+ * inside, skip/todo/fails/skipIf/runIf blocks, and tagged suites with no runnable test, are
  * returned separately so they do not count as coverage.
  */
 export const parseTaggedIds = (
   source: string,
 ): { readonly active: string[]; readonly skipped: string[] } => {
-  const { code, closing } = scan(source);
-  const calls = [
-    ...code.matchAll(
-      /(?<![\w$.])(?:describe|test|it)((?:\.\w+)*)\s*\(\s*(?:["'`]\[(INV-\d{2})\])?/g,
-    ),
-  ].map((match) => {
-    const modifiers = (match[1] ?? "").split(".").slice(1);
-    const paren = match.index + match[0].indexOf("(");
-    return {
-      id: match[2],
-      start: match.index,
-      end: closing.get(paren) ?? code.length,
-      skipping: modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)),
-    };
-  });
-  const skippedRanges = calls.filter((call) => call.skipping);
+  const { program, errors } = parseSync("test.ts", source, { lang: "ts" });
+  if (errors.length > 0)
+    throw new Error(`Cannot parse test file: ${errors[0]?.message}`);
   const active = new Set<string>();
   const skipped = new Set<string>();
-  for (const call of calls) {
-    if (call.id == null) continue;
-    const isSkipped = skippedRanges.some(
-      (range) => range.start <= call.start && call.start < range.end,
-    );
-    (isSkipped ? skipped : active).add(call.id);
-  }
+  /** Visits `value` and returns whether it contains a test that runs. */
+  const visit = (value: unknown, inSkipped: boolean): boolean => {
+    if (Array.isArray(value))
+      return value.reduce<boolean>(
+        (found, item) => visit(item, inSkipped) || found,
+        false,
+      );
+    if (!isNode(value)) return false;
+    const call =
+      value.type === "CallExpression"
+        ? testCallee(value.callee as AstNode)
+        : undefined;
+    const isSkipped =
+      inSkipped ||
+      (call?.modifiers.some((modifier) => SKIPPING_MODIFIERS.has(modifier)) ??
+        false);
+    let runs = false;
+    for (const [key, child] of Object.entries(value))
+      if (key !== "type") runs = visit(child, isSkipped) || runs;
+    if (call == null) return runs;
+    const runsHere = !isSkipped && (call.name !== "describe" || runs);
+    const id = titleOf((value.arguments as unknown[])[0])?.match(
+      TAG_PATTERN,
+    )?.[1];
+    if (id != null) (runsHere ? active : skipped).add(id);
+    return runsHere || runs;
+  };
+  visit(program, false);
   return { active: [...active], skipped: [...skipped] };
 };
 
@@ -122,7 +145,7 @@ export const checkInvariants = ({
   const errors: string[] = [];
   for (const [id, files] of skipped)
     errors.push(
-      `[${id}] is tagged on a skipped, todo or fails block in ${files.join(", ")}; such blocks do not count as coverage.`,
+      `[${id}] is tagged in ${files.join(", ")} only on blocks that may not run (skip, todo, fails, skipIf, runIf, or a suite with no runnable test); such blocks do not count as coverage.`,
     );
   if (documented.length === 0)
     errors.push(
