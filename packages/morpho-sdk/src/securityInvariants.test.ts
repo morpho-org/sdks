@@ -411,7 +411,7 @@ describe("[INV-02] Inflation-attack guard", () => {
             abi: vaultBundlesV1Abi,
             data: transaction.data,
           });
-          expect(args).toContain(maxSharePrice);
+          expect(args[2]).toBe(maxSharePrice);
         }
 
         const migration = vaultV1MigrateToV2({
@@ -433,7 +433,7 @@ describe("[INV-02] Inflation-attack guard", () => {
           abi: vaultBundlesV1Abi,
           data: migration.data,
         });
-        expect(args).toContain(maxSharePrice);
+        expect(args[4]).toBe(maxSharePrice);
       }),
     );
   });
