@@ -19,6 +19,7 @@ export default defineConfig({
       include: [
         "packages/**/src/**/*.{ts,tsx}",
         "scripts/ci/**/*.ts",
+        "scripts/observability/**/*.ts",
         "scripts/release/**/*.ts",
       ],
       exclude: [

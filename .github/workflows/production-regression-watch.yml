@@ -1,0 +1,43 @@
+# Detect production regressions of SDK-generated transactions and open issues
+# for the Devin RCA automation (SDK-1351).
+name: production regression watch
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-regression-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    # Off until the Better Stack SQL secrets exist and the variable is set to 'true'.
+    if: github.repository == 'morpho-org/sdks' && vars.PRODUCTION_REGRESSION_WATCH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Watch production regressions
+        env:
+          BETTERSTACK_SQL_URL: ${{ secrets.BETTERSTACK_SQL_URL }}
+          BETTERSTACK_SQL_USERNAME: ${{ secrets.BETTERSTACK_SQL_USERNAME }}
+          BETTERSTACK_SQL_PASSWORD: ${{ secrets.BETTERSTACK_SQL_PASSWORD }}
+          # morpho-apps is private: a read-only token is needed to resolve SDK versions.
+          CONSUMER_REPOSITORY_TOKEN: ${{ secrets.CONSUMER_REPOSITORY_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/observability/watch-production-regressions.ts
