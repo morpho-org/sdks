@@ -18,10 +18,13 @@ describe("parseDocumentedIds", () => {
 
   test("behavior: ignores IDs outside table rows", () => {
     expect(parseDocumentedIds("See [INV-03] and INV-04.")).toEqual([]);
+    expect(
+      parseDocumentedIds(`${table}\n| Other | table |\n| INV-09 | x |\n`),
+    ).toEqual(["INV-01", "INV-02"]);
   });
 
   test("error: malformed ID cells", () => {
-    for (const cell of ["`INV-08`", "**INV-08**", "INV-100"])
+    for (const cell of ["`INV-08`", "**INV-08**", "INV-100", "", "Oracle"])
       expect(() => parseDocumentedIds(`${table}| ${cell} | New |\n`)).toThrow(
         /Malformed invariant IDs/,
       );
