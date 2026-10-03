@@ -1,4 +1,5 @@
 export * from "./authorization.js";
+export * from "./cancelAndMake.js";
 export * from "./cancelOffer.js";
 export * from "./mempoolSubmitOffers.js";
 export * from "./redeem.js";

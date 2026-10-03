@@ -22,6 +22,7 @@ import {
 } from "viem";
 import {
   mempoolSubmitOffers,
+  midnightCancelAndMake,
   midnightCancelOffer,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
@@ -46,7 +47,9 @@ import {
   type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
+  type MidnightGroupCancellation,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -132,6 +135,7 @@ export type MidnightActions = Pick<
   | "redeem"
   | "repayWithdrawCollateral"
   | "cancelOffer"
+  | "cancelOffers"
 >;
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
@@ -1118,6 +1122,77 @@ export class MorphoMidnight {
           onBehalf: params.accountAddress,
           metadata: this.client.options.metadata,
         }),
+    };
+  }
+
+  /**
+   * Prepares guarded cancellation of several maker offer groups through `MidnightBundlesV2`.
+   *
+   * The transaction reverts as a whole when any group's consumption exceeds its
+   * `maxConsumed` ceiling, so fills landing before execution never leave a partial cancel.
+   *
+   * @param params - Maker account, groups with consumption ceilings, and deadline.
+   * @param params.accountAddress - Maker that must send the transaction; V2 cancels for `msg.sender`,
+   *   so sending from another account cancels that account's groups instead.
+   * @param params.cancellations - Offer groups and the largest consumption accepted for each.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
+   * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
+   * @example
+   * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, maxUint256, type Address, type Hex } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * declare const maker: Address;
+   * declare const group: Hex;
+   * const client = createPublicClient({ chain: base, transport: http() }).extend(
+   *   morphoViemExtension(),
+   * );
+   * const midnight = client.morpho.midnight(base.id);
+   * const output = midnight.cancelOffers({
+   *   accountAddress: maker,
+   *   cancellations: [{ group, maxConsumed: 0n }],
+   *   deadline: maxUint256,
+   * });
+   * ```
+   */
+  cancelOffers(params: {
+    readonly accountAddress: Address;
+    readonly cancellations: readonly MidnightGroupCancellation[];
+    readonly deadline: bigint;
+  }): MidnightActionOutput<MidnightCancelAndMakeAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const midnightBundlesV2 = getChainAddress(
+      this.chainId,
+      "midnightBundlesV2",
+    );
+
+    const tx = midnightCancelAndMake({
+      chainId: this.chainId,
+      cancellations: params.cancellations,
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+    });
+
+    return {
+      getRequirements: async () => {
+        const authorization = await getMidnightAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          owner: params.accountAddress,
+          authorized: midnightBundlesV2,
+        });
+        return authorization ? [authorization] : [];
+      },
+      buildTx: () => tx,
     };
   }
 

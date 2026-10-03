@@ -526,6 +526,24 @@ export interface MidnightCancelOfferAction
     }
   > {}
 
+/** One offer group to cancel, guarded by the maximum consumption accepted at execution. */
+export interface MidnightGroupCancellation {
+  /** Offer group id to mark fully consumed. */
+  readonly group: Hex;
+  /** Largest current group consumption accepted; the whole call reverts above it. */
+  readonly maxConsumed: bigint;
+}
+
+/** Metadata for a Midnight Bundles V2 maker bundle: guarded offer-group cancellation. */
+export interface MidnightCancelAndMakeAction
+  extends BaseAction<
+    "midnightCancelAndMake",
+    {
+      readonly cancellations: readonly MidnightGroupCancellation[];
+      readonly deadline: bigint;
+    }
+  > {}
+
 /**
  * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
@@ -563,7 +581,8 @@ export type TransactionAction =
   | MempoolSubmitOffersAction
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
-  | MidnightCancelOfferAction;
+  | MidnightCancelOfferAction
+  | MidnightCancelAndMakeAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:

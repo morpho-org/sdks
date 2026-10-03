@@ -117,7 +117,8 @@ at the SDK level. The differences are at the protocol layer:
 - **Fixed-rate markets**: Midnight represents lending and borrowing through signed or
   contract-ratified offers with prices fixed until market maturity.
 - **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
-  collateral supply, credit redemption, and cancellation call Midnight directly.
+  collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
+  `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
 - **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
   signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
