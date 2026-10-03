@@ -628,7 +628,7 @@ describe("MorphoBlue position validation", () => {
     ).toThrow(MissingAccrualPositionError);
   });
 
-  test("error: supply, debt, and collateral bounds", () => {
+  test("[INV-07] error: supply, debt, and collateral bounds", () => {
     const entity = makeEntity();
     const supplyPosition = makePosition(marketParams, {
       supplyShares: 10n,
@@ -678,7 +678,7 @@ describe("MorphoBlue position validation", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("error: BorrowExceedsSafeLtvError on borrow and fee-bearing migration", () => {
+  test("[INV-03] error: BorrowExceedsSafeLtvError on borrow and fee-bearing migration", () => {
     const entity = makeEntity();
     expect(() =>
       entity.borrow({
@@ -755,7 +755,7 @@ describe("MorphoBlue position validation", () => {
     ).not.toThrow();
   });
 
-  test("error: WithdrawMakesPositionUnhealthyError after collateral withdrawal", () => {
+  test("[INV-03] error: WithdrawMakesPositionUnhealthyError after collateral withdrawal", () => {
     const entity = makeEntity();
     expect(() =>
       entity.withdrawCollateral({

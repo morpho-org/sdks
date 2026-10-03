@@ -12,6 +12,13 @@ export const parseDocumentedIds = (markdown: string): string[] => {
       new RegExp(`^\\|\\s*(${ID_PATTERN.source})\\s*\\|`, "gm"),
     ),
   ].map((match) => match[1] as string);
+  const malformed = [...markdown.matchAll(/^\|([^|\n]*INV[^|\n]*)\|/gm)]
+    .map((match) => (match[1] as string).trim())
+    .filter((cell) => !new RegExp(`^${ID_PATTERN.source}$`).test(cell));
+  if (malformed.length > 0)
+    throw new Error(
+      `Malformed invariant IDs in SECURITY.md (expected INV-NN): ${malformed.join(", ")}`,
+    );
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
   if (duplicates.length > 0)
     throw new Error(
