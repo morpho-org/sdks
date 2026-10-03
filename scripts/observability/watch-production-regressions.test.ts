@@ -188,7 +188,7 @@ describe("resolveSdkVersions", () => {
         token: "token",
         fetchImpl: fakeFetch({}),
       }),
-    ).resolves.toEqual({ error: 'release "" is not a commit SHA' });
+    ).resolves.toEqual({ error: "release is not a commit SHA" });
     await expect(
       resolveSdkVersions(RELEASE, {
         consumer,
@@ -315,6 +315,125 @@ describe("main", () => {
     );
   });
 
+  test("lists every open issue and closed issues of the last 7 days", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const fetchImpl = github();
+    await main({
+      argv: [],
+      cwd: repoWithPackages(),
+      nowMs: NOW_MS,
+      env: ENV,
+      fetchImpl,
+    });
+    const listings = fetchImpl.calls
+      .filter((call) => call.url.includes("/issues?"))
+      .map((call) => new URL(call.url).searchParams);
+    expect(listings.map((params) => params.get("state"))).toEqual([
+      "open",
+      "closed",
+    ]);
+    expect(listings[0]?.has("since")).toBe(false);
+    expect(listings[1]?.get("since")).toBe("2026-09-26T00:00:00.000Z");
+  });
+
+  test("finds a tracked incident on a later page", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const unrelated = Array.from({ length: 100 }, (_, index) => ({
+      title: `other ${index}`,
+      state: "open",
+      closed_at: null,
+    }));
+    const fetchImpl = fakeFetch({
+      [SQL_ENV.BETTERSTACK_SQL_URL]: () => new Response(REGRESSED),
+      "https://api.github.com/repos/morpho-org/morpho-apps/contents/": () =>
+        new Response("{}"),
+      "https://api.github.com/repos/morpho-org/sdks/issues?state=open&creator=github-actions%5Bbot%5D&per_page=100&page=1":
+        () => new Response(JSON.stringify(unrelated)),
+      "https://api.github.com/repos/morpho-org/sdks/issues?state=open&creator=github-actions%5Bbot%5D&per_page=100&page=2":
+        () =>
+          new Response(
+            JSON.stringify([{ title: TITLE, state: "open", closed_at: null }]),
+          ),
+      "https://api.github.com/repos/morpho-org/sdks/issues?state=closed": () =>
+        new Response("[]"),
+    });
+    await main({
+      argv: [],
+      cwd: repoWithPackages(),
+      nowMs: NOW_MS,
+      env: ENV,
+      fetchImpl,
+    });
+    expect(
+      fetchImpl.calls.some(
+        (call) => call.init?.method === "POST" && call.url.endsWith("/issues"),
+      ),
+    ).toBe(false);
+  });
+
+  test.each([
+    {
+      step: "the issue listing",
+      listing: 500,
+      creation: 201,
+      message: "GitHub issue listing failed (500).",
+    },
+    {
+      step: "the issue creation",
+      listing: 200,
+      creation: 403,
+      message: "GitHub issue creation failed (403).",
+    },
+  ])(
+    "fails the run when $step fails",
+    async ({ listing, creation, message }) => {
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      const fetchImpl = fakeFetch({
+        [SQL_ENV.BETTERSTACK_SQL_URL]: () => new Response(REGRESSED),
+        "https://api.github.com/repos/morpho-org/morpho-apps/contents/": () =>
+          new Response("{}"),
+        "https://api.github.com/repos/morpho-org/sdks/issues?": () =>
+          new Response("[]", { status: listing }),
+        "https://api.github.com/repos/morpho-org/sdks/issues": () =>
+          new Response("{}", { status: creation }),
+      });
+      await expect(
+        main({
+          argv: [],
+          cwd: repoWithPackages(),
+          nowMs: NOW_MS,
+          env: ENV,
+          fetchImpl,
+        }),
+      ).rejects.toThrow(message);
+    },
+  );
+
+  test("fails closed when the current window has no events", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const fetchImpl = fakeFetch({
+      [SQL_ENV.BETTERSTACK_SQL_URL]: () =>
+        new Response(
+          outcome({
+            window: "baseline",
+            successes: 990,
+            simulationFailures: 10,
+          }),
+        ),
+    });
+    await expect(
+      main({
+        argv: [],
+        cwd: repoWithPackages(),
+        nowMs: NOW_MS,
+        env: ENV,
+        fetchImpl,
+      }),
+    ).rejects.toThrow("vvrm-app: no tx_outcome events in the current window.");
+  });
+
   test("fails closed when the query returns no rows", async () => {
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -329,7 +448,7 @@ describe("main", () => {
         env: ENV,
         fetchImpl,
       }),
-    ).rejects.toThrow("vvrm-app: no tx_outcome events in the queried windows.");
+    ).rejects.toThrow("vvrm-app: no tx_outcome events in the current window.");
   });
 
   test("fails closed without GitHub credentials outside dry-run", async () => {

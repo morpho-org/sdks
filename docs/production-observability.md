@@ -25,8 +25,8 @@ flowchart LR
 
 | Step | Owner | State |
 | -- | -- | -- |
-| Detection | `production-regression-watch` workflow | **This PR** (off until secrets exist) |
-| Incident issue with evidence and SDK versions | same | **This PR** |
+| Detection | `production-regression-watch` workflow | Shipped in #1264 (off until secrets exist) |
+| Incident issue with evidence and SDK versions | same | Shipped in #1264 |
 | RCA, attribution, routing | Devin Automation on the issue | Prompt below; created after merge |
 | SDK fix | RCA session, SDK PR flow | Existing PR, review and changeset flow |
 | Release | `publish.yml` | Existing |
@@ -53,8 +53,8 @@ Each signal has its own rate. They are never summed into one failure rate.
 
 | Signal | Failures | Attempts | Matches dashboard panel |
 | -- | -- | -- | -- |
-| `simulation_failure` | `simulation_failed` failures minus bypassed ones | successes + simulation failures | Simulation failure rate |
-| `tx_failure` | failures except `simulation_failed`, `safe_proposal_pending`, `timeout_receipt_polling` | successes + those failures | TX success rate, Flow×chain error rate |
+| `simulation_failure` | `simulation_failed` failures minus bypassed ones | successes + `tx_failure` failures + those simulation failures (a bypassed failure counts once, as a success) | Simulation failure rate |
+| `tx_failure` | failures except `simulation_failed`, `safe_proposal_pending`, `timeout_receipt_polling`, including failures with no `error_category` | successes + those failures | TX success rate, Flow×chain error rate |
 | `onchain_revert` | `transaction_reverted_onchain` | same as `tx_failure` | — (subset of `tx_failure`) |
 
 `user_rejected` is not a failure. `signature` is out of both signals and `approval_tx` is out of the
@@ -191,22 +191,30 @@ collection must be readable by the SQL credentials.
 
 ## Enabling the watch
 
-1. Create a Better Stack connection with read access to the VVRM source, then store
-   `BETTERSTACK_SQL_URL`, `BETTERSTACK_SQL_USERNAME` and `BETTERSTACK_SQL_PASSWORD` as repository
-   secrets.
-2. Store `CONSUMER_REPOSITORY_TOKEN`, a fine-grained token with `contents: read` on
+1. Create the GitHub environment `production-regression-watch` with a deployment-branch policy
+   that allows only `main`. All the secrets below are environment secrets, so a workflow run from
+   another branch cannot read them.
+2. Create a Better Stack connection with read access to the VVRM source, then store
+   `BETTERSTACK_SQL_URL`, `BETTERSTACK_SQL_USERNAME` and `BETTERSTACK_SQL_PASSWORD` in that
+   environment.
+3. Store `CONSUMER_REPOSITORY_TOKEN` there too: a fine-grained token with `contents: read` on
    `morpho-org/morpho-apps`. Without it the issues say the SDK versions are unresolved.
-3. Run the workflow once by hand, then set the repository variable
-   `PRODUCTION_REGRESSION_WATCH_ENABLED` to `true`.
+4. Set the repository variable `PRODUCTION_REGRESSION_WATCH_ENABLED` to `true`, then run the
+   workflow once by hand from `main` to check it. The variable gates manual runs too.
 
 Locally, `node scripts/observability/watch-production-regressions.ts --dry-run --input rows.ndjson
---now <ISO time>` prints the issues it would open from a saved query result.
+--now <ISO time>` prints the issues it would open from a saved query result. `--input` holds one
+consumer's rows, so it only works while `CONSUMERS` has a single entry.
+
+Telemetry labels are client-reported. Rows whose `action_type` or `chain_id` is not a plain
+identifier are dropped and counted in the run log, and a `tx_release` that is not a commit SHA is
+treated as not logged, so forged labels cannot reach the issue text.
 
 ## Phases
 
 | Phase | Scope |
 | -- | -- |
-| 1 (this PR) | Hourly detector, incident issues, design, RCA prompt |
+| 1 (#1264) | Hourly detector, incident issues, design, RCA prompt |
 | 2 | Enable secrets; create the RCA automation; daily forensic window; production verification comment on close |
 | 3 | `sdk_action` and `revert_selector` labels in VVRM; second consumer |
 

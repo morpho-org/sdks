@@ -13,7 +13,7 @@ import {
   DEFAULT_WINDOWS,
   detectRegressions,
   groupIncidents,
-  type OutcomeRow,
+  type ParsedOutcomes,
   parseOutcomeRows,
   renderIncidentBody,
   type SdkVersions,
@@ -139,7 +139,7 @@ export async function resolveSdkVersions(
   },
 ): Promise<SdkVersions> {
   if (!/^[0-9a-f]{40}$/.test(release)) {
-    return { error: `release "${release}" is not a commit SHA` };
+    return { error: "release is not a commit SHA" };
   }
   try {
     const response = await fetchImpl(
@@ -208,13 +208,40 @@ async function listRecentIssues({
   readonly nowMs: number;
   readonly fetchImpl: Fetch;
 }): Promise<ExistingIssue[]> {
+  // `since` filters on `updated_at`: list every open issue, and only recent closed ones.
+  const queries: Record<string, string>[] = [
+    { state: "open" },
+    {
+      state: "closed",
+      since: new Date(nowMs - DEDUP_LOOKBACK_MS).toISOString(),
+    },
+  ];
+  const issues: ExistingIssue[] = [];
+  for (const query of queries) {
+    issues.push(
+      ...(await listIssuePages({ repository, headers, query, fetchImpl })),
+    );
+  }
+  return issues;
+}
+
+async function listIssuePages({
+  repository,
+  headers,
+  query,
+  fetchImpl,
+}: {
+  readonly repository: string;
+  readonly headers: Record<string, string>;
+  readonly query: Record<string, string>;
+  readonly fetchImpl: Fetch;
+}): Promise<ExistingIssue[]> {
   const issues: ExistingIssue[] = [];
   for (let page = 1; ; page += 1) {
     const url = new URL(`${GITHUB_API_URL}/repos/${repository}/issues`);
     url.search = new URLSearchParams({
-      state: "all",
+      ...query,
       creator: "github-actions[bot]",
-      since: new Date(nowMs - DEDUP_LOOKBACK_MS).toISOString(),
       per_page: "100",
       page: String(page),
     }).toString();
@@ -295,9 +322,9 @@ export async function main(
   let createdCount = 0;
 
   for (const consumer of CONSUMERS) {
-    let rows: OutcomeRow[];
+    let parsed: ParsedOutcomes;
     try {
-      rows = parseOutcomeRows(
+      parsed = parseOutcomeRows(
         values.input != null
           ? readFileSync(values.input, "utf8")
           : await queryBetterStack(buildOutcomeQuery(consumer, windows), {
@@ -309,10 +336,16 @@ export async function main(
       errors.push(`${consumer.id}: ${getErrorMessage(error)}`);
       continue;
     }
-    if (rows.length === 0) {
-      // No tx_outcome at all means broken telemetry, not a healthy app.
+    const { rows, rejectedRows } = parsed;
+    if (rejectedRows > 0) {
+      process.stderr.write(
+        `${consumer.id}: dropped ${rejectedRows} rows with an invalid action type or chain id.\n`,
+      );
+    }
+    // No tx_outcome in the last window means broken telemetry, not a healthy app.
+    if (!rows.some((row) => row.window === "current")) {
       errors.push(
-        `${consumer.id}: no tx_outcome events in the queried windows.`,
+        `${consumer.id}: no tx_outcome events in the current window.`,
       );
       continue;
     }

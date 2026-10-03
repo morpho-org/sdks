@@ -115,20 +115,20 @@ export function buildOutcomeQuery(
     .join("");
 
   return `SELECT
-  label('action_type') AS action_type,
-  label('chain_id') AS chain_id,
+  ifNull(label('action_type'), '') AS action_type,
+  ifNull(label('chain_id'), '') AS chain_id,
   ifNull(label('tx_release'), '') AS release,
   if(dt >= toDateTime(${currentStart}), 'current', 'baseline') AS window,
   sumIf(logs_count, label('outcome') = 'success') AS successes,
-  sumIf(logs_count, label('outcome') = 'failure' AND label('error_category') NOT IN ('safe_proposal_pending', 'timeout_receipt_polling', 'simulation_failed')) AS tx_failures,
-  sumIf(logs_count, label('outcome') = 'failure' AND label('error_category') = 'simulation_failed') AS simulation_failures,
-  sumIf(logs_count, label('outcome') = 'success' AND label('bypassed_simulation_failure') = 'true') AS bypassed_simulation_failures,
-  sumIf(logs_count, label('outcome') = 'failure' AND label('error_category') = 'transaction_reverted_onchain') AS onchain_reverts,
+  sumIf(logs_count, label('outcome') = 'failure' AND ifNull(label('error_category'), '') NOT IN ('safe_proposal_pending', 'timeout_receipt_polling', 'simulation_failed')) AS tx_failures,
+  sumIf(logs_count, label('outcome') = 'failure' AND ifNull(label('error_category'), '') = 'simulation_failed') AS simulation_failures,
+  sumIf(logs_count, label('outcome') = 'success' AND ifNull(label('bypassed_simulation_failure'), '') = 'true') AS bypassed_simulation_failures,
+  sumIf(logs_count, label('outcome') = 'failure' AND ifNull(label('error_category'), '') = 'transaction_reverted_onchain') AS onchain_reverts,
   toUnixTimestamp(min(dt)) AS first_seen
 FROM ${consumer.metricsCollection}
 WHERE dt >= toDateTime(${baselineStart}) AND dt < toDateTime(${end})
   AND label('metadata_event') = 'tx_outcome'
-  AND label('action_type') NOT IN (${excludedActions})${excludedPredicates}
+  AND ifNull(label('action_type'), '') NOT IN (${excludedActions})${excludedPredicates}
 GROUP BY action_type, chain_id, release, window
 ORDER BY action_type, chain_id, release, window
 FORMAT JSONEachRow`;
@@ -154,18 +154,35 @@ function readString(row: Record<string, unknown>, key: string): string {
   return value;
 }
 
+// Labels are client-reported and end up in issues read by the RCA agent: allowlist them.
+const ACTION_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const CHAIN_ID_PATTERN = /^[1-9][0-9]{0,9}$/;
+const RELEASE_PATTERN = /^[0-9a-f]{40}$/;
+
+/** Rows of a {@link buildOutcomeQuery} result, and how many were dropped. */
+export interface ParsedOutcomes {
+  readonly rows: OutcomeRow[];
+  /** Rows dropped because their action type or chain id is not a plain identifier. */
+  readonly rejectedRows: number;
+}
+
 /**
  * Parses the `JSONEachRow` body returned for {@link buildOutcomeQuery}.
  *
+ * Rows whose action type or chain id is not a plain identifier are dropped
+ * and counted; a release that is not a commit SHA is treated as not logged.
+ *
  * @param body Newline-delimited JSON rows.
- * @returns The parsed rows.
- * @throws If a row is not JSON or misses an expected column.
+ * @returns The parsed rows and the number of rejected rows.
+ * @throws {SyntaxError} when a row is not JSON.
+ * @throws {Error} when a row misses an expected column.
  */
-export function parseOutcomeRows(body: string): OutcomeRow[] {
-  return body
+export function parseOutcomeRows(body: string): ParsedOutcomes {
+  let rejectedRows = 0;
+  const rows = body
     .split("\n")
     .filter((line) => line.trim() !== "")
-    .map((line) => {
+    .flatMap((line): OutcomeRow[] => {
       const row = JSON.parse(line) as Record<string, unknown>;
       const window = readString(row, "window");
       if (window !== "current" && window !== "baseline") {
@@ -173,10 +190,20 @@ export function parseOutcomeRows(body: string): OutcomeRow[] {
           `Expected window "current" or "baseline", got "${window}".`,
         );
       }
-      return {
-        actionType: readString(row, "action_type"),
-        chainId: readString(row, "chain_id"),
-        release: readString(row, "release"),
+      const actionType = readString(row, "action_type");
+      const chainId = readString(row, "chain_id");
+      const release = readString(row, "release");
+      if (
+        !ACTION_TYPE_PATTERN.test(actionType) ||
+        !CHAIN_ID_PATTERN.test(chainId)
+      ) {
+        rejectedRows += 1;
+        return [];
+      }
+      const outcome: OutcomeRow = {
+        actionType,
+        chainId,
+        release: RELEASE_PATTERN.test(release) ? release : "",
         window,
         successes: readCount(row, "successes"),
         txFailures: readCount(row, "tx_failures"),
@@ -188,7 +215,9 @@ export function parseOutcomeRows(body: string): OutcomeRow[] {
         onchainReverts: readCount(row, "onchain_reverts"),
         firstSeenMs: readCount(row, "first_seen") * 1000,
       };
+      return [outcome];
     });
+  return { rows, rejectedRows };
 }
 
 /** Failures and attempts of one signal, with the dashboard's denominators. */
@@ -222,10 +251,7 @@ export function countSignal(row: OutcomeRow, signal: Signal): Counts | null {
   );
   return {
     failures: simulationFailures,
-    attempts:
-      nonSimulationAttempts +
-      row.simulationFailures -
-      row.bypassedSimulationFailures,
+    attempts: nonSimulationAttempts + simulationFailures,
   };
 }
 
@@ -552,6 +578,8 @@ export type SdkVersions =
   | { readonly packages: Readonly<Record<string, string>> }
   | { readonly error: string };
 
+const EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 
 /**
@@ -599,7 +627,11 @@ export function renderIncidentBody(
         : "error" in versions
           ? `SDK versions unresolved: ${versions.error}`
           : Object.entries(versions.packages)
-              .map(([name, version]) => `\`${name}@${version}\``)
+              .map(([name, version]) =>
+                EXACT_VERSION_PATTERN.test(version)
+                  ? `\`${name}@${version}\``
+                  : `\`${name}\` declared as \`${version}\` (not an exact version; check the lockfile)`,
+              )
               .join(", ") || "no SDK dependency";
     return `- ${label}: ${detail}`;
   });

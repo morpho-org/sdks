@@ -18,6 +18,8 @@ jobs:
   watch:
     # Off until the Better Stack SQL secrets exist and the variable is set to 'true'.
     if: github.repository == 'morpho-org/sdks' && vars.PRODUCTION_REGRESSION_WATCH_ENABLED == 'true'
+    # Secrets live in this environment, whose deployment-branch policy allows only main.
+    environment: production-regression-watch
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

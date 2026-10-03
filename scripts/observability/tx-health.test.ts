@@ -53,6 +53,10 @@ describe("buildOutcomeQuery", () => {
       "FROM remote(t384553_vvrm_app_vercel_otel_metrics)",
     );
     expect(query).toContain("NOT IN ('aaveV3MigrateToVaultV2', 'unknown', '')");
+    expect(query).toContain("ifNull(label('chain_id'), '') AS chain_id");
+    expect(query).toContain(
+      "label('outcome') = 'failure' AND ifNull(label('error_category'), '') NOT IN (",
+    );
     expect(query).toContain(
       "AND NOT (label('action_type') = 'wrapLegacyMorpho'",
     );
@@ -83,7 +87,7 @@ describe("parseOutcomeRows", () => {
       onchain_reverts: "1",
       first_seen: "1790000000",
     })}\n\n`;
-    expect(parseOutcomeRows(body)).toEqual([
+    expect(parseOutcomeRows(body).rows).toEqual([
       {
         actionType: "borrow",
         chainId: "1",
@@ -97,6 +101,35 @@ describe("parseOutcomeRows", () => {
         firstSeenMs: 1_790_000_000_000,
       },
     ]);
+  });
+
+  test("drops rows with labels that are not plain identifiers", () => {
+    const line = (labels: Record<string, string>) =>
+      JSON.stringify({
+        action_type: "borrow",
+        chain_id: "1",
+        release: "a".repeat(40),
+        window: "current",
+        successes: "1",
+        tx_failures: "0",
+        simulation_failures: "0",
+        bypassed_simulation_failures: "0",
+        onchain_reverts: "0",
+        first_seen: "0",
+        ...labels,
+      });
+    const parsed = parseOutcomeRows(
+      [
+        line({}),
+        line({ action_type: "borrow`\n@someone" }),
+        line({ action_type: "" }),
+        line({ chain_id: "1 on chain 2" }),
+        line({ chain_id: "" }),
+        line({ release: "main`](https://evil)" }),
+      ].join("\n"),
+    );
+    expect(parsed.rejectedRows).toBe(4);
+    expect(parsed.rows.map((r) => r.release)).toEqual(["a".repeat(40), ""]);
   });
 
   test.each([
@@ -150,6 +183,15 @@ describe("countSignal", () => {
       failures: 3,
       attempts: 16,
     });
+  });
+
+  test("never counts more bypassed than logged simulation failures", () => {
+    expect(
+      countSignal(
+        { ...outcomes, simulationFailures: 1, bypassedSimulationFailures: 3 },
+        "simulation_failure",
+      ),
+    ).toEqual({ failures: 0, attempts: 13 });
   });
 
   test("skips actions outside a signal's scope", () => {
@@ -239,6 +281,17 @@ describe("detectRegressions", () => {
         { consumer: VVRM, windows: WINDOWS },
       ),
     ).toEqual([]);
+  });
+
+  test("rates a low-volume total break as high", () => {
+    const [regression] = detectRegressions(
+      [
+        HEALTHY_BASELINE,
+        row({ window: "current", successes: 10, simulationFailures: 12 }),
+      ],
+      { consumer: VVRM, windows: WINDOWS },
+    );
+    expect(regression).toMatchObject({ excessFailures: 12, severity: "high" });
   });
 
   test("requires the rate to at least double", () => {
@@ -442,5 +495,36 @@ describe("renderIncidentBody", () => {
         sdkVersions: new Map([[OLD_RELEASE, { packages: {} }]]),
       }),
     ).toContain(": no SDK dependency");
+  });
+
+  test("does not present a range as an exact version", () => {
+    const rows = [
+      HEALTHY_BASELINE,
+      row({ window: "current", successes: 100, simulationFailures: 30 }),
+    ];
+    const [incident] = groupIncidents(
+      detectRegressions(rows, { consumer: VVRM, windows: WINDOWS }),
+    );
+    if (incident == null) throw new Error("expected an incident");
+    expect(
+      renderIncidentBody(incident, {
+        windows: WINDOWS,
+        dashboardUrl: VVRM.dashboardUrl,
+        consumerRepository: VVRM.repository,
+        sdkVersions: new Map([
+          [
+            OLD_RELEASE,
+            {
+              packages: {
+                "@morpho-org/blue-sdk": "7.2.0-next.1",
+                "@morpho-org/morpho-sdk": "^6.4.0",
+              },
+            },
+          ],
+        ]),
+      }),
+    ).toContain(
+      "`@morpho-org/blue-sdk@7.2.0-next.1`, `@morpho-org/morpho-sdk` declared as `^6.4.0` (not an exact version; check the lockfile)",
+    );
   });
 });
