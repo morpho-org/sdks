@@ -69,6 +69,22 @@ describe("parseTaggedIds", () => {
       ),
     ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02", "INV-04"] });
   });
+
+  test("behavior: ignores commented-out test calls", () => {
+    expect(
+      parseTaggedIds(
+        '// describe("[INV-01] a", () => {});\n/* test("[INV-02] b"); */',
+      ),
+    ).toEqual({ active: [], skipped: [] });
+  });
+
+  test("behavior: treats tags nested in a skipped suite as skipped", () => {
+    expect(
+      parseTaggedIds(
+        'describe.skip("parent", () => { describe("child", () => { test("[INV-01] a", () => {}); }); });\ndescribe("other", () => { test.fails("[INV-02] b", () => {}); test("[INV-03] c", () => {}); });',
+      ),
+    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02"] });
+  });
 });
 
 describe("checkInvariants", () => {
