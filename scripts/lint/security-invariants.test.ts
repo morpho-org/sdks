@@ -111,7 +111,7 @@ describe("checkInvariants", () => {
         skipped: new Map([["INV-01", ["b.test.ts"]]]),
       }),
     ).toEqual([
-      "[INV-01] is tagged on a skipped or todo block in b.test.ts; skipped blocks do not count as coverage.",
+      "[INV-01] is tagged on a skipped, todo or fails block in b.test.ts; such blocks do not count as coverage.",
     ]);
   });
 

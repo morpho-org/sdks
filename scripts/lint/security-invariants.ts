@@ -31,7 +31,7 @@ const SKIPPING_MODIFIERS = new Set(["skip", "todo", "fails"]);
 
 /**
  * Returns the invariant IDs that open a `describe`/`test`/`it` title as `[INV-NN]`.
- * Tags on skipped or todo blocks are returned separately so they do not count as coverage.
+ * Tags on skipped, todo or fails blocks are returned separately so they do not count as coverage.
  */
 export const parseTaggedIds = (
   source: string,
@@ -63,7 +63,7 @@ export const checkInvariants = ({
   const errors: string[] = [];
   for (const [id, files] of skipped)
     errors.push(
-      `[${id}] is tagged on a skipped or todo block in ${files.join(", ")}; skipped blocks do not count as coverage.`,
+      `[${id}] is tagged on a skipped, todo or fails block in ${files.join(", ")}; such blocks do not count as coverage.`,
     );
   if (documented.length === 0)
     errors.push(
