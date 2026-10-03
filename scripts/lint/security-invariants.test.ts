@@ -59,12 +59,12 @@ describe("parseTaggedIds", () => {
     ).toEqual({ active: [], skipped: [] });
   });
 
-  test("behavior: reports skipped and todo blocks separately", () => {
+  test("behavior: reports skipped, todo and fails blocks separately", () => {
     expect(
       parseTaggedIds(
-        'describe.skip("[INV-01] a"); test.todo("[INV-02] b"); test.only("[INV-03] c");',
+        'describe.skip("[INV-01] a"); test.todo("[INV-02] b"); test.only("[INV-03] c"); test.fails("[INV-04] d");',
       ),
-    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02"] });
+    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02", "INV-04"] });
   });
 });
 
