@@ -61,7 +61,7 @@ describe("getUnusedPermit2Nonce", () => {
     ).resolves.toBe(42n);
   });
 
-  test("error: ChainIdMismatchError when the client targets another chain", async () => {
+  test("[INV-05] error: ChainIdMismatchError when the client targets another chain", async () => {
     const handle = createMockClient(mainnet);
     await expect(
       getUnusedPermit2Nonce(handle.client, { owner, chainId: base.id }),

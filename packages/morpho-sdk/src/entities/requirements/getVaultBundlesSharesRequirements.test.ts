@@ -177,7 +177,7 @@ describe("getVaultBundlesSharesRequirements", () => {
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 
-  test("error: ChainIdMismatchError before reading an allowance", async () => {
+  test("[INV-05] error: ChainIdMismatchError before reading an allowance", async () => {
     const client = createPublicClient({
       chain: mainnet,
       transport: http("https://rpc.example"),
