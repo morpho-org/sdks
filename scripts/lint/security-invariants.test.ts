@@ -100,9 +100,12 @@ describe("parseTaggedIds", () => {
   test("behavior: treats skip, todo and fails options as skipping", () => {
     expect(
       parseTaggedIds(
-        'test("[INV-01] a", { skip: true }, () => {}); describe("[INV-02] b", { todo: x }, () => { test("y", () => {}); }); test("[INV-03] c", { skip: false, timeout: 1 }, () => {});',
+        'test("[INV-01] a", { skip: true }, () => {}); describe("[INV-02] b", { todo: x }, () => { test("y", () => {}); }); test("[INV-03] c", { skip: false, timeout: 1 }, () => {}); test("[INV-04] d", { "skip": true }, () => {}); test("[INV-05] e", function () {});',
       ),
-    ).toEqual({ active: ["INV-03"], skipped: ["INV-01", "INV-02"] });
+    ).toEqual({
+      active: ["INV-03", "INV-05"],
+      skipped: ["INV-01", "INV-02", "INV-04"],
+    });
   });
 
   test("error: throws with the file name on a file that does not parse", () => {
