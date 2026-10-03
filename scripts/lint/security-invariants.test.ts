@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   checkInvariants,
+  isIncludedByVitest,
   parseDocumentedIds,
   parseTaggedIds,
 } from "./security-invariants.ts";
@@ -158,7 +159,7 @@ describe("checkInvariants", () => {
         skipped: new Map([["INV-01", ["b.test.ts"]]]),
       }),
     ).toEqual([
-      "[INV-01] is tagged in b.test.ts on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, or a suite with no runnable test); such blocks do not count as coverage.",
+      "[INV-01] is tagged in b.test.ts on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, a suite with no runnable test, or a file no Vitest project includes); such blocks do not count as coverage.",
     ]);
   });
 
@@ -166,5 +167,21 @@ describe("checkInvariants", () => {
     expect(checkInvariants({ documented: [], tagged: new Map() })).toHaveLength(
       1,
     );
+  });
+});
+
+describe("isIncludedByVitest", () => {
+  const includes = ["packages/morpho-sdk/src/**/*.test.ts"];
+
+  test("behavior: matches a file a project includes", () => {
+    expect(
+      isIncludedByVitest("packages/morpho-sdk/src/a/b.test.ts", includes),
+    ).toBe(true);
+  });
+
+  test("behavior: rejects a file no project includes", () => {
+    expect(
+      isIncludedByVitest("packages/morpho-sdk/test/b.test.ts", includes),
+    ).toBe(false);
   });
 });

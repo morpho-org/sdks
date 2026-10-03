@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, matchesGlob, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSync } from "vite";
 import { isMain } from "../ci/workflow.ts";
@@ -172,7 +172,7 @@ export const checkInvariants = ({
   const errors: string[] = [];
   for (const [id, files] of skipped)
     errors.push(
-      `[${id}] is tagged in ${files.join(", ")} on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, or a suite with no runnable test); such blocks do not count as coverage.`,
+      `[${id}] is tagged in ${files.join(", ")} on blocks that may not run (skip, todo, fails, skipIf, runIf, skip/todo/fails options, a test without a function, a suite with no runnable test, or a file no Vitest project includes); such blocks do not count as coverage.`,
     );
   if (documented.length === 0)
     errors.push(
@@ -206,24 +206,40 @@ const collectTestFiles = (dir: string, files: string[] = []): string[] => {
   return files;
 };
 
-const main = (): void => {
+/** Whether a Vitest project `include` glob matches `file`, a repo-relative path. */
+export const isIncludedByVitest = (
+  file: string,
+  includes: readonly string[],
+): boolean => includes.some((glob) => matchesGlob(file, glob));
+
+const vitestIncludes = async (root: string): Promise<string[]> => {
+  const { default: config } = (await import(
+    join(root, "vitest.config.ts")
+  )) as {
+    default: { test?: { projects?: { test?: { include?: string[] } }[] } };
+  };
+  return (config.test?.projects ?? []).flatMap(
+    (project) => project.test?.include ?? [],
+  );
+};
+
+const main = async (): Promise<void> => {
   const root = fileURLToPath(new URL("../..", import.meta.url));
+  const includes = await vitestIncludes(root);
   const documented = parseDocumentedIds(
     readFileSync(join(root, "SECURITY.md"), "utf-8"),
   );
   const tagged = new Map<string, string[]>();
   const skipped = new Map<string, string[]>();
   for (const file of collectTestFiles(join(root, "packages"))) {
-    const ids = parseTaggedIds(
-      readFileSync(file, "utf-8"),
-      relative(root, file),
-    );
+    const path = relative(root, file);
+    const ids = parseTaggedIds(readFileSync(file, "utf-8"), path);
+    const runs = isIncludedByVitest(path, includes);
     for (const [found, into] of [
-      [ids.active, tagged],
-      [ids.skipped, skipped],
+      [runs ? ids.active : [], tagged],
+      [runs ? ids.skipped : [...ids.active, ...ids.skipped], skipped],
     ] as const)
-      for (const id of found)
-        into.set(id, [...(into.get(id) ?? []), relative(root, file)]);
+      for (const id of found) into.set(id, [...(into.get(id) ?? []), path]);
   }
 
   const errors = checkInvariants({ documented, tagged, skipped });
@@ -236,4 +252,4 @@ const main = (): void => {
   );
 };
 
-if (isMain(import.meta.url)) main();
+if (isMain(import.meta.url)) await main();
