@@ -413,6 +413,27 @@ describe("[INV-02] Inflation-attack guard", () => {
           });
           expect(args).toContain(maxSharePrice);
         }
+
+        const migration = vaultV1MigrateToV2({
+          vault: {
+            chainId: mainnet.id,
+            address: vaultAddress,
+            asset: assetAddress,
+          },
+          args: {
+            assets: 1n,
+            targetVault: adapter,
+            targetAsset: assetAddress,
+            maxSharePriceVaultV2: maxSharePrice,
+            userAddress,
+            deadline,
+          },
+        });
+        const { args } = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: migration.data,
+        });
+        expect(args).toContain(maxSharePrice);
       }),
     );
   });
@@ -551,6 +572,9 @@ describe("[INV-05] chainId validation", () => {
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
     await expect(
       morpho.blue(marketParams, base.id).getMarketData(),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    await expect(
+      morpho.midnight(base.id).getMarketData(`0x${"00".repeat(32)}`),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
   });
 
