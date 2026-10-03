@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { isMain } from "../ci/workflow.ts";
 
 const ID_PATTERN = /INV-\d{2}/;
 
@@ -116,8 +117,4 @@ const main = (): void => {
   );
 };
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-)
-  main();
+if (isMain(import.meta.url)) main();

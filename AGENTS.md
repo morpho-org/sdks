@@ -278,7 +278,7 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 ## Details for shared skills
 
 - Test command: `pnpm test run --project <name>` for a single package (project names in `vitest.config.ts`; `pnpm test` runs the full vitest suite). Go through the `test` script, not bare `vitest`: it wraps vitest in `dotenv --`, which fork projects need for their pinned RPC URLs.
-- Checks: `pnpm lint` (Biome `check` plus jsdoc-coverage, address, script-typecheck and knip gates) and `pnpm build` (recursive `tsc` build of all packages).
+- Checks: `pnpm lint` (Biome `check` plus jsdoc-coverage, address, security-invariants, script-typecheck and knip gates) and `pnpm build` (recursive `tsc` build of all packages).
 - Knowledge homes: [`MISSION.md`](./MISSION.md) for principles, this file for engineering rules, [`docs/adrs/`](./docs/adrs/) for frozen decision records, [`docs/jsdoc-style.md`](./docs/jsdoc-style.md) for JSDoc style, and per-package `AGENTS.md` files for package rules and glossaries.
 - Automated reviewer: Claude reviews every non-draft same-repo PR automatically via [`.github/workflows/claude.yml`](./.github/workflows/claude.yml) and can be summoned with an `@claude` mention in a comment or review (gated to OWNER/MEMBER/COLLABORATOR); the same workflow re-requests Codex via an `@codex review` comment. Locally, `/review-pr-{ci,gh,local}` runs the in-repo review engine.
 - Release policy: Changesets — every semver-relevant change to published package source ships a changeset; merging to `main`/`next` refreshes a release PR and merging that publishes to npm (see §7 and [`docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md`](./docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md)).

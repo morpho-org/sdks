@@ -871,7 +871,7 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("error: MidnightRedeemExceedsCreditError", () => {
+    test("[INV-07] error: MidnightRedeemExceedsCreditError", () => {
       const market = marketData();
 
       expect(() =>
