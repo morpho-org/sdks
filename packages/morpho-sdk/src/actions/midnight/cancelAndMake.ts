@@ -9,7 +9,6 @@ import {
   type Address,
   encodeFunctionData,
   type Hex,
-  isAddressEqual,
   maxUint128,
   zeroAddress,
   zeroHash,
@@ -19,6 +18,7 @@ import { validateDeadline } from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   DuplicateMidnightGroupCancellationError,
+  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   type Metadata,
@@ -30,7 +30,6 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
-  UnknownMidnightRatifierError,
 } from "../../types/index.js";
 
 /**
@@ -51,7 +50,10 @@ export interface MidnightRootActivationSignature {
 
 /** Offer root activated and published by a Midnight Bundles V2 maker bundle. */
 export interface MidnightOfferPublication {
-  /** PriceRatifierV1 or RateRatifierV1 that ratifies `root`. */
+  /**
+   * Ratifier that activates `root`. MidnightBundlesV2 authorizes it over the maker's whole
+   * Midnight account, so pass a trusted contract.
+   */
   readonly ratifier: Address;
   /** Offer tree root to activate. */
   readonly root: Hex;
@@ -75,7 +77,7 @@ export interface MidnightOfferPublication {
  * without publication fields, a cancellation of offer groups only.
  */
 export type MidnightCancelAndMakeParams = {
-  /** Chain id used to resolve `MidnightBundlesV2` and the V1 ratifiers. */
+  /** Chain id used to resolve `MidnightBundlesV2`. */
   readonly chainId: number;
   /** Offer groups to cancel, each with its largest accepted consumption. Empty for a new publication. */
   readonly cancellations: readonly MidnightGroupCancellation[];
@@ -137,18 +139,6 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
     }
     return;
   }
-  const priceRatifierV1 = getChainAddress(params.chainId, "priceRatifierV1");
-  const rateRatifierV1 = getChainAddress(params.chainId, "rateRatifierV1");
-  if (
-    !isAddressEqual(params.ratifier, priceRatifierV1) &&
-    !isAddressEqual(params.ratifier, rateRatifierV1)
-  ) {
-    throw new UnknownMidnightRatifierError({
-      ratifier: params.ratifier,
-      priceRatifierV1,
-      rateRatifierV1,
-    });
-  }
   if (params.root === zeroHash) {
     throw new InvalidTreeError("Offer root cannot be zero.");
   }
@@ -170,6 +160,9 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
     );
   }
   if (params.collateral == null) return;
+  if (params.collateral.supplies.length === 0) {
+    throw new EmptyMidnightCollateralSuppliesError();
+  }
   validateMidnightMarket({
     market: params.collateral.market,
     chainId: params.chainId,
@@ -203,10 +196,9 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  *
  * @param params - Offer root, payload, cancellations, optional Blue supply or collateral, and deadline.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
- * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment or, when publishing,
- *   no PriceRatifierV1/RateRatifierV1 deployment.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @throws {EmptyMidnightGroupCancellationsError} when nothing is published and no groups are cancelled.
- * @throws {UnknownMidnightRatifierError} when `ratifier` is not the chain's PriceRatifierV1 or RateRatifierV1.
+ * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
  * @throws {InvalidTreeError} when `root` is zero, or `payload` or `groups` is empty.
  * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
  * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
@@ -280,25 +272,25 @@ export const midnightCancelAndMake = (
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
-        blueSupply?.market ?? emptyBlueMarket,
-        blueSupply?.assets ?? 0n,
-        blueSupply?.callbackSalt ?? zeroHash,
+        blueSupply?.market ?? emptyBlueMarket, // blueMarket
+        blueSupply?.assets ?? 0n, // assetsToPark
+        blueSupply?.callbackSalt ?? zeroHash, // callbackSalt
         params.collateral == null
           ? emptyMidnightMarket
-          : MarketUtils.toStruct(params.collateral.market),
-        supplies,
-        params.ratifier ?? zeroAddress,
-        params.root ?? zeroHash,
-        signature.height,
-        signature.nonce,
-        signature.deadline,
-        signature.v,
-        signature.r,
-        signature.s,
-        cancellations,
-        params.payload ?? "0x",
-        params.deadline,
-        zeroAddress,
+          : MarketUtils.toStruct(params.collateral.market), // market
+        supplies, // collateralSupplies
+        params.ratifier ?? zeroAddress, // ratifier
+        params.root ?? zeroHash, // newRoot
+        signature.height, // signatureHeight
+        signature.nonce, // signatureNonce
+        signature.deadline, // signatureDeadline
+        signature.v, // v
+        signature.r, // r
+        signature.s, // s
+        cancellations, // groupsToCancel
+        params.payload ?? "0x", // payload
+        params.deadline, // deadline
+        zeroAddress, // wrappedNative
       ],
     }),
   };

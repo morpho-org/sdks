@@ -28,13 +28,13 @@ import {
 import {
   ChainIdMismatchError,
   DuplicateMidnightGroupCancellationError,
+  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   MidnightMarketAddressMismatchError,
   MidnightReplacementGroupCancelledError,
   NegativeInputError,
   NonPositiveInputError,
-  UnknownMidnightRatifierError,
 } from "../../types/index.js";
 import { midnightCancelAndMake } from "./cancelAndMake.js";
 
@@ -194,13 +194,25 @@ describe("midnightCancelAndMake", () => {
     ).toThrow(UnknownCollateralIndexError);
   });
 
-  test("error: UnknownMidnightRatifierError", () => {
+  test("error: EmptyMidnightCollateralSuppliesError", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        ratifier: getChainAddress(midnightChainId, "setterRatifier"),
+        collateral: { market, supplies: [] },
       }),
-    ).toThrow(UnknownMidnightRatifierError);
+    ).toThrow(EmptyMidnightCollateralSuppliesError);
+  });
+
+  test("behavior: accepts an unregistered ratifier address", () => {
+    const ratifier = getAddress("0x000000000000000000000000000000000000dEaD");
+    const tx = midnightCancelAndMake({ ...params, ratifier });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args[5]).toBe(ratifier);
+    expect(tx.action.args.ratifier).toBe(ratifier);
   });
 
   test("error: InvalidTreeError on empty root, payload, or groups", () => {

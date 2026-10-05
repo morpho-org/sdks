@@ -31,8 +31,8 @@ these deposits. There is no Bundler3 fallback.
 - Prepared vault deposits expire after two hours and enforce the signed permit's deadline; `slippageTolerance` still bounds `maxSharePrice`.
 - Prepared supply methods recheck the live provider chain on every call. Handle `ChainIdMismatchError`, re-exported by this package, if the wallet switches away from the configured vault chain.
 - Permit2 SignatureTransfer nonces are resolved automatically (lowest unused nonce) by token `get*Requirements` calls and the prepared deposit's `getRequirements`. Pass an explicit unused `permit2Nonce` only when concurrent flows for one owner must partition nonces.
-- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` resolves that requirement before submitting and throws the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
-- Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance that does not equal the derived cap — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
+- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance between the SDK's derived share cap and that cap divided by `1 - slippageTolerance` — a prerequisite version 1 withdrawals did not have. `withdraw(options)` resolves that requirement before submitting and throws the new `UnresolvedVaultWithdrawRequirementsError` unless such an allowance is already in place.
+- Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance outside that range — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
 - Constructor-level `slippageTolerance` now also bounds vault withdrawals: it widens the derived share cap the same way it widens the vault-deposit share-price bound.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
 - Blue writes now expire after two hours instead of using an unbounded deadline; signed calls preserve the requirement signature's deadline.
@@ -124,10 +124,10 @@ reused after its deadline throws `ExpiredDeadlineError` instead of returning sta
 
 The share allowance is the only cap on how many shares the exit burns, so `withdraw(options)`
 resolves the same requirement before submitting and throws
-`UnresolvedVaultWithdrawRequirementsError` when one is outstanding — including when a larger
-leftover allowance would let a share-price loss burn past the derived cap.
+`UnresolvedVaultWithdrawRequirementsError` when one is outstanding — including when a leftover
+allowance above that range would let a share-price loss burn past the derived cap.
 
-`quoteWithdraw(options)` and unsigned `prepared.quote()` also check the exact share allowance
+`quoteWithdraw(options)` and unsigned `prepared.quote()` also check the share allowance
 before estimating gas and throw `UnresolvedVaultWithdrawRequirementsError` when it is outstanding.
 For a first withdrawal, satisfy the requirements and quote through the same prepared handle as
 shown above, so the quote uses the approved share cap or the corresponding signed permit.

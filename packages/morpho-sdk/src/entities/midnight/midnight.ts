@@ -939,6 +939,7 @@ export class MorphoMidnight {
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @throws {MarketIdMismatchError} when an offer targets another market than `collateral.market`.
+   * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
@@ -1264,6 +1265,7 @@ export class MorphoMidnight {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.

@@ -1,165 +1,310 @@
 import {
-  type Address,
-  type BlockTag,
+  BaseError,
+  BlockNotFoundError,
   createPublicClient,
   ExecutionRevertedError,
-  getAddress,
   http,
-  maxUint256,
+  numberToHex,
 } from "viem";
 import {
   ExternalServiceError,
+  InvalidSimulationResponseError,
+  SimulationPackageError,
   SimulationRevertedError,
-  SimulationValidationError,
+  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
-import type {
-  AccountAssetChanges,
-  RawCall,
-  RawSimulationResult,
-  SimulationTransaction,
-  Transfer,
-} from "../../types.js";
-import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
-import { parseTransfers } from "../parsing/index.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
+import type { SimulationExecution } from "./parse-response.js";
+import { parseSimulationResponse } from "./parse-response.js";
 
 /**
- * Simulate transactions using eth_simulateV1 (viem simulateCalls).
- *
- * Uses stateOverride to set the user's ETH balance high enough to avoid
- * false "insufficient balance for gas" reverts.
- *
- * Runs with `traceTransfers` enabled, so the node synthesizes native-ETH moves
- * (the top-level `value` *and* ETH moved through internal calls — e.g. a
- * `WETH.withdraw` refund or a swap that pays out ETH) as `Transfer` events from
- * the native sentinel. Derives `assetChanges` (net per-token deltas grouped by
- * account) entirely from the emitted transfer logs, with native ETH normalized
- * to viem's `ethAddress`. Top-level `value` is intentionally *not* added on top:
- * `traceTransfers` already logs it, so adding it would double-count.
+ * Classify a node-level revert: viem's `ExecutionRevertedError`, or a raw
+ * JSON-RPC error — code 3 for "execution reverted", plus an "insufficient
+ * funds" message for an unfundable `value` transfer under real native
+ * funding (the numeric code varies by node, so the message is matched).
  */
-export async function simulateV1(params: {
+const isNodeRevert = (error: unknown): error is Error =>
+  error instanceof ExecutionRevertedError ||
+  (error instanceof Error &&
+    "code" in error &&
+    (error.code === 3 || /insufficient funds/i.test(error.message)));
+
+/**
+ * Trim a caught error to a safe message: viem's `shortMessage` drops the
+ * URL/request-body details its `message` embeds. The original error is always
+ * kept as `cause` for logging.
+ */
+const safeMessage = (error: unknown): string =>
+  error instanceof BaseError ? error.shortMessage : String(error);
+
+/** The JSON-RPC methods this boundary calls. */
+type RpcLabel = "eth_getBlock" | "eth_chainId" | "eth_simulateV1";
+
+/** Map a caught error to the boundary's typed failure for `label`. */
+const toBoundaryError = (
+  label: RpcLabel,
+  error: unknown,
+): SimulationPackageError => {
+  if (error instanceof SimulationPackageError) return error;
+  // A node-level revert is a property of the bundle, not the backend. The
+  // execution-stage context requires an operation-keyed subject and a
+  // node-level revert precedes operation decoding, so no context attaches.
+  // `details` carries only the URL-free code/shortMessage; the raw viem
+  // error (which embeds the RPC URL) is kept as `cause` only.
+  if (label === "eth_simulateV1" && isNodeRevert(error)) {
+    const reverted = new SimulationRevertedError(
+      error instanceof BaseError
+        ? error.details || error.shortMessage
+        : error.message,
+      {
+        code:
+          "code" in error && typeof error.code !== "undefined"
+            ? error.code
+            : undefined,
+        shortMessage:
+          error instanceof BaseError ? error.shortMessage : error.message,
+      },
+      "UNKNOWN_REVERT",
+    );
+    reverted.cause = error;
+    return reverted;
+  }
+  return new ExternalServiceError(`${label} error: ${safeMessage(error)}`, {
+    cause: error,
+  });
+};
+
+/** Run one RPC call; anything thrown becomes a typed boundary error. */
+const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
+  try {
+    return await call();
+  } catch (error) {
+    throw toBoundaryError(label, error);
+  }
+};
+
+/**
+ * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
+ * collect the pinned execution.
+ *
+ * The boundary performs these steps under one shared abort/timeout budget:
+ *
+ * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
+ *    mismatch means the configured endpoint reports the wrong chain
+ *    (`InvalidSimulationResponseError`, transport stage), not a simulation
+ *    failure. It runs first so a misconfigured endpoint cannot fail earlier
+ *    as a bypassable {@link ExternalServiceError}.
+ * 2. **Single block resolution** — the request's `blockNumber`/tag/`latest`
+ *    resolves to one concrete state block (`stateBlock*`). `latest` is
+ *    therefore resolved exactly once; the simulation below pins that number
+ *    so a drifting head cannot smear the result across blocks.
+ * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
+ *    calls with their per-call `from`, `traceTransfers: true` so the node
+ *    synthesizes native-ETH moves as transfer logs, and
+ *    `validation: false`. Validation-off means gas is not charged, which is
+ *    how gas is separated from economic effects. **No balance override is
+ *    applied** — `value` transfers are funded by the sender's real native
+ *    balance.
+ * 4. **Response validation** — the response is parsed before the reorg
+ *    re-fetch so revert/mismatch evidence already in hand surfaces instead
+ *    of being downgraded to a bypassable {@link ExternalServiceError} by a
+ *    failing re-fetch. The simulated block must be exactly
+ *    `stateBlockNumber` or `stateBlockNumber + 1`: geth-style nodes report
+ *    the former's successor while Anvil reports the pinned block itself.
+ *    The result records whatever the node returns; consumers must read
+ *    {@link ExecutionBlock.blockNumber} and never assume +1.
+ * 5. **Reorg check** — the state block is re-fetched last to detect a reorg
+ *    that swapped its hash mid-flight (`InvalidSimulationResponseError`).
+ *
+ * The endpoint must support `eth_simulateV1` with per-call `from`; there is
+ * no fallback backend.
+ *
+ * @param params - RPC endpoint, the plan to execute, and the pipeline's
+ *   abort signal. The block pin rides on `plan.request.blockNumber`.
+ * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
+ *   results and the resolved {@link ExecutionBlock}.
+ * @throws {ExternalServiceError} For transport failures, timeouts,
+ *   malformed JSON-RPC envelopes, or a state block without number/hash.
+ * @throws {InvalidSimulationResponseError} For a chain mismatch or a
+ *   response that cannot be trusted (bad shape, call-count mismatch, block
+ *   other than the pinned state block or its successor, a successor whose
+ *   `parentHash` is not the pinned hash, a block timestamp earlier than the
+ *   pinned block's, a per-call result that fails normalization, or a
+ *   state-block hash that changed, or a pinned block the node no longer
+ *   serves, mid-flight).
+ * @throws {SimulationRevertedError} When a user transaction reverts or the
+ *   node reports a bundle-level revert (code 3 / insufficient funds).
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
+ * @internal
+ */
+export async function executePlan(params: {
   rpcUrl: string;
-  chainId: number;
-  transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
-  wNative?: Address | null;
+  plan: ExecutionPlan;
   signal?: AbortSignal;
-}): Promise<RawSimulationResult> {
-  const { rpcUrl, transactions, blockNumber, wNative, signal } = params;
+}): Promise<SimulationExecution> {
+  const { rpcUrl, plan, signal } = params;
+  const blockNumber = plan.request.blockNumber ?? "latest";
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
       fetchOptions: signal ? { signal } : undefined,
+      // A failed request must not consume another attempt or a fresh budget.
+      retryCount: 0,
+      // The pipeline abort signal owns the overall execution deadline.
+      timeout: signal ? 0 : undefined,
     }),
   });
 
-  const firstTx = transactions[0];
-  if (!firstTx) {
-    throw new SimulationValidationError(
-      "At least one transaction is required",
-      [],
+  // The configured endpoint must serve the request's chain — checked first
+  // so a misconfigured endpoint fails non-bypassably instead of surfacing a
+  // bypassable transport error on the block lookup below. Error contexts
+  // require a resolved `blockNumber`, so tag requests carry none.
+  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
+  if (rpcChainId !== plan.request.chainId) {
+    throw new InvalidSimulationResponseError(
+      `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
+      {
+        ...(typeof blockNumber === "bigint"
+          ? {
+              context: {
+                stage: "transport" as const,
+                chainId: plan.request.chainId,
+                mode: plan.request.mode,
+                blockNumber,
+              },
+            }
+          : {}),
+      },
     );
   }
 
-  const sender = getAddress(firstTx.from);
-
-  // eth_simulateV1 executes all calls as the same account. Reject mixed senders
-  // to avoid silently simulating under the wrong address.
-  const mixedSender = transactions.find((tx) => getAddress(tx.from) !== sender);
-  if (mixedSender) {
-    throw new SimulationValidationError(
-      "All transactions must have the same from address for eth_simulateV1",
-      [`expected ${sender}, got ${mixedSender.from}`],
-    );
-  }
-
-  const calls = transactions.map((tx) => ({
-    to: tx.to,
-    data: tx.data,
-    value: tx.value,
-  }));
-
-  const blockParam =
-    typeof blockNumber === "bigint"
-      ? { blockNumber }
-      : blockNumber !== undefined
-        ? { blockTag: blockNumber }
-        : {};
-
-  try {
-    const simulationResult = await client.simulateCalls({
-      account: sender,
-      calls,
-      ...blockParam,
-      // Synthesize native-ETH moves (top-level value + internal calls) as
-      // Transfer logs from the native sentinel, so `parseTransfers` captures
-      // ETH that emits no real log (e.g. a WETH.withdraw refund).
-      traceTransfers: true,
-      // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
-      // Without this, valid ERC20 flows fail when the sender has low ETH.
-      // Use half of uint256 (not the ceiling) so the override leaves headroom
-      // for inbound native ETH — e.g. a WETH.withdraw refund or a swap payout
-      // would overflow the recipient balance and revert the value transfer if
-      // the sender were pinned at maxUint256.
-      stateOverrides: [{ address: sender, balance: maxUint256 / 2n }],
-    });
-
-    const results = simulationResult.results;
-
-    if (!Array.isArray(results)) {
-      throw new ExternalServiceError(
-        "eth_simulateV1 returned unexpected response format",
-      );
-    }
-
-    const failedResult = results.find((r) => r.status !== "success");
-    if (failedResult) {
-      throw new SimulationRevertedError(
-        failedResult.error?.message ?? "Simulation failed",
-        results,
-      );
-    }
-
-    const rawCalls: RawCall[] = results.map((r) => ({
-      logs: (r.logs ?? []).map((log) => ({
-        address: log.address,
-        topics: [...log.topics],
-        data: log.data ?? "0x",
-      })),
-      status: r.status === "success",
-      returnData: r.data ?? "0x",
-      gasUsed: r.gasUsed,
-    }));
-
-    return {
-      calls: rawCalls,
-      assetChanges: toAssetChanges(parseTransfers(rawCalls, { wNative })),
-    };
-  } catch (error) {
-    if (error instanceof SimulationRevertedError) throw error;
-    if (error instanceof ExternalServiceError) throw error;
-    // A node-level "execution reverted" is a property of the bundle, not the backend.
-    if (error instanceof ExecutionRevertedError)
-      throw new SimulationRevertedError(error.shortMessage, error);
+  // Resolve the state block exactly once so `latest` cannot drift.
+  const block = await rpc("eth_getBlock", () =>
+    client.getBlock(
+      typeof blockNumber === "bigint"
+        ? { blockNumber }
+        : { blockTag: blockNumber },
+    ),
+  );
+  if (block.number === null || block.hash === null) {
     throw new ExternalServiceError(
-      `eth_simulateV1 error: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
+      "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
     );
   }
-}
+  const stateBlock = {
+    number: block.number,
+    hash: block.hash,
+    timestamp: block.timestamp,
+  };
 
-/**
- * Reduce parsed transfer logs to net per-token balance changes grouped by
- * account. With `traceTransfers` enabled, native ETH (top-level and internal)
- * arrives as transfer logs under viem's `ethAddress`, so no separate top-level
- * `value` accounting is needed — doing so would double-count.
- */
-function toAssetChanges(transfers: Transfer[]): AccountAssetChanges[] {
-  const entries: AssetChangeEntry[] = [];
-
-  for (const { token, from, to, amount } of transfers) {
-    entries.push({ account: to, token, diff: amount });
-    entries.push({ account: from, token, diff: -amount });
+  // Feature gate once the state block is pinned (every error context carries
+  // `blockNumber`): preview authorizations and consumer limits parse and
+  // normalize, but are rejected until PR5/PR6 verify them rather than
+  // silently ignored.
+  if (plan.request.authorizations.length > 0) {
+    throw new UnsupportedVerificationFeatureError(
+      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
+      {
+        context: {
+          stage: "preparation",
+          mode: plan.request.mode,
+          chainId: plan.request.chainId,
+          blockNumber: stateBlock.number,
+          authorizationIndex: 0,
+        },
+      },
+    );
+  }
+  if (plan.request.limits !== undefined) {
+    throw new UnsupportedVerificationFeatureError(
+      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
+      {
+        context: {
+          stage: "validation",
+          mode: plan.request.mode,
+          chainId: plan.request.chainId,
+          blockNumber: stateBlock.number,
+        },
+      },
+    );
   }
 
-  return groupAssetChanges(entries);
+  // Raw request: per-call `from` is honored and the response is parsed by
+  // this package — not by viem's simulateCalls/simulateBlocks wrappers.
+  const response = await rpc("eth_simulateV1", () =>
+    client.request({
+      method: "eth_simulateV1",
+      params: [
+        {
+          blockStateCalls: [
+            {
+              calls: plan.calls.map((call) => ({
+                from: call.transaction.from,
+                to: call.transaction.to,
+                data: call.transaction.data,
+                value: numberToHex(call.transaction.value),
+              })),
+            },
+          ],
+          traceTransfers: true,
+          validation: false,
+        },
+        numberToHex(stateBlock.number),
+      ],
+    }),
+  );
+
+  // Response parsing is validation, not transport — it runs before the
+  // reorg re-fetch so evidence already in hand reaches the caller as
+  // InvalidSimulationResponseError / SimulationRevertedError instead of
+  // being downgraded to a bypassable ExternalServiceError by a failing
+  // re-fetch.
+  const execution = parseSimulationResponse({
+    plan,
+    response,
+    stateBlockNumber: stateBlock.number,
+    stateBlockHash: stateBlock.hash,
+    stateBlockTimestamp: stateBlock.timestamp,
+  });
+
+  // Reorg window: the pinned state block must still carry the same hash
+  // after simulation, or the result may describe a different chain tip.
+  // A pinned block the node no longer serves is the same reorg signal as a
+  // changed hash, so it must not degrade into a bypassable transport error.
+  const stateBlockAfter = await rpc("eth_getBlock", () =>
+    client.getBlock({ blockNumber: stateBlock.number }),
+  ).catch((error: unknown) => {
+    if (
+      error instanceof ExternalServiceError &&
+      error.cause instanceof BlockNotFoundError
+    )
+      return error;
+    throw error;
+  });
+  if (
+    stateBlockAfter instanceof ExternalServiceError ||
+    stateBlockAfter.hash !== stateBlock.hash
+  ) {
+    const after =
+      stateBlockAfter instanceof ExternalServiceError
+        ? "unavailable"
+        : stateBlockAfter.hash;
+    throw new InvalidSimulationResponseError(
+      `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${after}. Re-submit the simulation.`,
+      {
+        context: {
+          stage: "transport",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: stateBlock.number,
+        },
+        ...(stateBlockAfter instanceof ExternalServiceError && {
+          cause: stateBlockAfter.cause,
+        }),
+      },
+    );
+  }
+
+  return execution;
 }

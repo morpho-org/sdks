@@ -16,6 +16,7 @@ import {
   computeMinForceWithdrawSharePrice,
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
+  computeVaultShareAllowanceCeiling,
 } from "./slippage.js";
 
 const slippage03 = (3n * MathLib.WAD) / 1000n; // 0.3%
@@ -354,5 +355,60 @@ describe("computeVaultMaxShareAllowance", () => {
       ),
       { numRuns: 100, seed: 20_260_907 },
     );
+  });
+});
+
+describe("computeVaultShareAllowanceCeiling", () => {
+  test("behavior: divides the cap by one minus the slippage, rounding down", () => {
+    expect(
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance: 990n,
+        slippageTolerance: MathLib.WAD / 100n,
+      }),
+    ).toBe(1000n);
+    expect(
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance: 991n,
+        slippageTolerance: MathLib.WAD / 100n,
+      }),
+    ).toBe(1001n);
+  });
+
+  test("behavior: zero slippage accepts only the cap", () => {
+    expect(
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance: 12_345n,
+        slippageTolerance: 0n,
+      }),
+    ).toBe(12_345n);
+  });
+
+  test("invariant: the ceiling is never below the cap", () => {
+    fc.assert(
+      fc.property(
+        fc.bigInt({ min: 0n, max: 2n ** 200n }),
+        fc.bigInt({ min: 0n, max: MAX_SLIPPAGE_TOLERANCE }),
+        (requiredShareAllowance, slippageTolerance) => {
+          expect(
+            computeVaultShareAllowanceCeiling({
+              requiredShareAllowance,
+              slippageTolerance,
+            }),
+          ).toBeGreaterThanOrEqual(requiredShareAllowance);
+        },
+      ),
+    );
+  });
+
+  test.each([
+    [-1n, NegativeInputError],
+    [MAX_SLIPPAGE_TOLERANCE + 1n, ExcessiveSlippageToleranceError],
+  ])("error: rejects slippage %s", (slippageTolerance, ErrorClass) => {
+    expect(() =>
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance: 1n,
+        slippageTolerance,
+      }),
+    ).toThrow(ErrorClass);
   });
 });

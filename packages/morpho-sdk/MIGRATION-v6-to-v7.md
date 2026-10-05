@@ -18,6 +18,10 @@ collateral, authorizes the ratifier, activates the new root, and publishes the p
 cancelled group was filled beyond its `maxConsumed` before the transaction lands, the whole call
 reverts and nothing is published.
 
+If `collateral` is provided to `cancelAndMakeBorrow`, its `supplies` list must contain at least one
+entry. An explicit empty list throws `EmptyMidnightCollateralSuppliesError`; omit `collateral` when
+no collateral is supplied.
+
 ```ts
 // v6
 const output = await midnight.makeLend({ accountAddress, offers, loanToken, loanAssets });
@@ -85,8 +89,6 @@ address.
 - `MidnightOfferValidationParams` no longer accepts `ratification`; the ratifier comes from the tree.
 - `MidnightOffersData.ratifierType` is `"priceV1" | "rateV1"` instead of `"ecrecover" | "setter"`.
 - `MidnightOffersData.setterPayload` is replaced by `payload`, set for every tree.
-- `UnknownMidnightRatifierError` takes `{ ratifier, priceRatifierV1, rateRatifierV1 }` instead of
-  `{ ratifier, ecrecoverRatifier, setterRatifier }`.
 
 ## Removed exports
 
@@ -101,9 +103,14 @@ address.
   `selectRequirementSignatures`, `MissingMidnightOfferRootSignatureError`,
   `MidnightOfferRootMismatchError`, `MidnightOfferRootOwnerMismatchError`,
   `MidnightOfferRootRatifierMismatchError`, `MidnightOfferRootOfferCountMismatchError`,
-  `UnpreparedMidnightOfferRootSignatureError`.
+  `UnpreparedMidnightOfferRootSignatureError`, `UnknownMidnightRatifierError`.
+
 - `getMidnightAuthorizationRequirement` no longer accepts the Ecrecover or Setter ratifier as a
   target; MidnightBundlesV2 authorizes the V1 ratifier itself.
+
+There is no replacement for `UnknownMidnightRatifierError`: the pure `midnightCancelAndMake`
+builder accepts any ratifier address, and entity methods derive the registered ratifier from the
+tree type.
 
 The Ecrecover and Setter protocol utilities in `@morpho-org/midnight-sdk` are unchanged.
 

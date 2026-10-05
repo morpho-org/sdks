@@ -1,4 +1,8 @@
 import type { InputMarketParams } from "@morpho-org/blue-sdk";
+import type {
+  CollateralTransfer as MidnightCollateralTransfer,
+  GroupCancellation as MidnightGroupCancellation,
+} from "@morpho-org/midnight-sdk";
 import type { Address, Hex, TypedDataDefinition, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
 import {
@@ -6,6 +10,11 @@ import {
   UnexpectedRequirementSignatureError,
   UnsupportedRequirementSignatureError,
 } from "./error.js";
+
+export type {
+  CollateralTransfer as MidnightCollateralTransfer,
+  GroupCancellation as MidnightGroupCancellation,
+} from "@morpho-org/midnight-sdk";
 
 /**
  * Serves as the common discriminated action-metadata base shared by both
@@ -500,22 +509,6 @@ export interface MidnightCancelOfferAction
       readonly onBehalf: Address;
     }
   > {}
-
-/** One offer group to cancel, guarded by the maximum consumption accepted at execution. */
-export interface MidnightGroupCancellation {
-  /** Offer group id to mark fully consumed. */
-  readonly group: Hex;
-  /** Largest current group consumption accepted; the whole call reverts above it. */
-  readonly maxConsumed: bigint;
-}
-
-/** Collateral pulled from the maker and supplied to Midnight before offers are published. */
-export interface MidnightCollateralTransfer {
-  /** Index of the collateral in the market's `collateralParams`. */
-  readonly collateralIndex: bigint;
-  /** Collateral assets pulled from the maker. */
-  readonly assets: bigint;
-}
 
 /**
  * Loan assets supplied to a Morpho Blue market for the maker's `BlueBuyCallback` derived from
