@@ -3201,6 +3201,25 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toEqual([29n]);
   });
 
+  test("behavior: applies a custom allocatorCapHeadroom", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 40n,
+    });
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          allocatorCapHeadroom,
+          operation: { type: "borrow", amount: 20n },
+        })
+        .reallocations.map(({ assets }) => assets);
+
+    // 1% keeps the 90% target; 25% leaves 30 under the cap, so only the shortfall moves.
+    expect(legs()).toEqual([34n]);
+    expect(legs(MathLib.WAD / 4n)).toEqual([20n]);
+  });
+
   test("behavior: falls back to the full-cap target plan when the full-cap shortfall plan falls short", () => {
     const fixture = {
       targetSupply: 100n,
