@@ -70,6 +70,7 @@ export { SIMULATION_MODES } from "./params.js";
 export { toSimulationAuthorizations } from "./requirements/index.js";
 export type {
   AuthorizationPreparation,
+  CheckedPositionHealth,
   SimulatedOperation,
   SimulationVerification,
   VerifiedSimulationResult,

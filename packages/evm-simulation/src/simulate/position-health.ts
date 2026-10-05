@@ -23,7 +23,7 @@ const accrueId = (marketId: MarketId) => `accrue:${marketId}`.toLowerCase();
 const marketReadId = (marketId: MarketId) => `market:${marketId}`.toLowerCase();
 const priceId = (marketId: MarketId) => `price:${marketId}`.toLowerCase();
 const positionId = (marketId: MarketId, account: Address) =>
-  `position:${marketId}:${account}`.toLowerCase();
+  `health-position:${marketId}:${account}`.toLowerCase();
 
 /**
  * Plan the calls run after the bundle: accrue interest, then read the
@@ -142,7 +142,7 @@ export function verifyPositionHealth(params: {
     const ltv = MarketUtils.getLtv(position, { ...market }) ?? 0n;
     const violation = (expected: bigint, reason: string) =>
       new ConsumerLimitViolationError(
-        `Position on "${marketId}" of ${account} has an LTV of ${ltv} after the bundle, ${reason} ${expected} (WAD).`,
+        `Position on "${marketId}" of "${account}" has LTV "${ltv}" after the bundle, ${reason} "${expected}" (WAD). Reduce the borrow or add collateral in the bundle.`,
         {
           context: {
             stage: "verification",

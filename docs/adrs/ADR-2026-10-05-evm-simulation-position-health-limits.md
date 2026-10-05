@@ -34,7 +34,7 @@ market totals, the oracle price and the position. Each entry must then pass two 
 - When `maxLtv` is set, the LTV after the bundle, rounded up, is at most `maxLtv`.
 
 A position without debt passes. A failed check throws `ConsumerLimitViolationError`. Its context
-has `stage: "verification"`, `account`, `field: "position:<marketId>:<account>"` (lowercase),
+has `stage: "verification"`, `account`, `field: "health-position:<marketId>:<account>"` (lowercase),
 `expected` (the LLTV or `maxLtv`) and `observed` (the LTV). A market that is not created, or a
 failed params read, throws `MissingVerificationEvidenceError`, or `ExternalServiceError` when the
 transport fails. Empty return data from a post-bundle read is `MissingVerificationEvidenceError`;

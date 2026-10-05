@@ -428,9 +428,23 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     ];
     const healthy = await simulate(configFor(client), {
       chainId: mainnet.id,
-      limits: { positions: [{ marketId: CbbtcUsdcBlue.id }] },
+      limits: {
+        operations: [
+          {
+            type: "blueSupplyCollateralBorrow",
+            marketId: CbbtcUsdcBlue.id,
+            quote: {
+              assetsReceived: borrowAssets,
+              assetsPaid: collateralAssets,
+            },
+            slippageTolerance: 0n,
+          },
+        ],
+        positions: [{ marketId: CbbtcUsdcBlue.id }],
+      },
       transactions,
     });
+    expect(healthy.verification.operations).toHaveLength(1);
     const [position] = healthy.verification.positions;
     expect(position).toMatchObject({
       marketId: CbbtcUsdcBlue.id,

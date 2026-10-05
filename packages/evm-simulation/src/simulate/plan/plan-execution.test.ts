@@ -65,6 +65,25 @@ describe("planExecution", () => {
     ]);
   });
 
+  test("order: afterReads run only after the txs and the after reads", () => {
+    const afterRead = makeBalanceRead(TARGET, OWNER);
+    const calls = planExecution({
+      request: makeRequest(1),
+      owner: OWNER,
+      preparations: [],
+      reads,
+      afterReads: [afterRead],
+    }).calls.map((c) =>
+      c.type === "stateRead" ? `${c.phase}:${c.read.id}` : c.type,
+    );
+    expect(calls).toEqual([
+      `before:${reads[0]!.id}`,
+      "transaction",
+      `after:${reads[0]!.id}`,
+      `after:${afterRead.id}`,
+    ]);
+  });
+
   test("user txs keep public transactionIndex; reads run from zeroAddress", () => {
     const calls = plan(1).calls;
     const tx = calls.find((c) => c.type === "transaction");

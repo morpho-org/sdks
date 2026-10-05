@@ -1,4 +1,4 @@
-import { MarketParams } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import {
   decodeFunctionData,
@@ -181,6 +181,21 @@ describe("planStateReads", () => {
 const decodeCtx = { chainId: 1, mode: "final", blockNumber: 1n } as const;
 
 describe("decodeStateRead", () => {
+  test("error: a non-slippage read kind is rejected", () => {
+    expect(() =>
+      decodeStateRead(
+        {
+          kind: "oracle.price",
+          id: "price:0x01",
+          to: zeroAddress,
+          data: "0x",
+          marketId: "0x01" as MarketId,
+        },
+        "0x01",
+        decodeCtx,
+      ),
+    ).toThrow(InvalidSimulationResponseError);
+  });
   test("default: balance", () => {
     const read = planStateReads({
       operations: [{ limit: { ...limit, quote: { sharesMinted: 1n } } }],

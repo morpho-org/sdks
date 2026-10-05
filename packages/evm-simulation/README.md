@@ -123,7 +123,7 @@ For `vaultV1InKindRedeem` and `vaultV2InKindRedeem`, `assetsReceived` measures
 only the receiver's wallet balance of the vault asset (the idle portion); it
 does not measure in-kind Morpho positions.
 
-Only slippage is checked; there are no separate refund or penalty checks.
+Operation limits check only slippage; there are no separate refund or penalty checks.
 `sharesMinted` and `sharesBurned` quotes for `blueSupplyCollateral` and
 `blueWithdrawCollateral` are invalid and throw `SimulationValidationError`
 during request parsing. `MissingVerificationEvidenceError` reports runtime
@@ -140,6 +140,23 @@ slippage reads. Quotes with an asset amount resolve `asset()` or market paramete
 when an explicit `assetPaid` or `assetReceived` was not supplied; share-only quotes need no metadata
 reads. No vault factories, full entities, allocations, risk metrics, allowances,
 or nonces are fetched for slippage.
+
+For example, a Vault V2 deposit quoting assets paid and shares minted makes four
+in-bundle view calls — the sender's asset balance and the `account`'s share balance, each before
+and after execution — plus one `asset()` read unless `assetPaid` is supplied. `verification.operations[].checkedLimits` records the quote
+and tolerance checked. The result does not include broad state snapshots or diffs;
+`transfers` and `assetChanges` remain available.
+
+The result's historical `VerifiedSimulationResult` name does not imply that
+unchecked outcomes are economically verified.
+
+Preview authorizations remain an adapter from `getRequirements()` through
+`toSimulationAuthorizations` into preparation calls. No permission or nonce
+read-back policy runs. Successful execution establishes success under the
+simulated permissions; it does not prove that a future signature is valid.
+Preparation and user-transaction failures still propagate. Final mode executes
+actual calldata without preparation. State reads and preparation calls do not
+receive public transaction indices.
 
 ### Position health
 
@@ -169,23 +186,6 @@ After the user transactions, the simulation calls `accrueInterest`, then reads
 `ConsumerLimitViolationError`, with `expected` set to the LLTV or `maxLtv` and
 `observed` set to the LTV. An uncreated market throws `MissingVerificationEvidenceError`.
 Entries need no slippage quote. Without `limits.positions`, nothing extra is read.
-
-For example, a Vault V2 deposit quoting assets paid and shares minted makes four
-in-bundle view calls — the sender's asset balance and the `account`'s share balance, each before
-and after execution — plus one `asset()` read unless `assetPaid` is supplied. `verification.operations[].checkedLimits` records the quote
-and tolerance checked. The result does not include broad state snapshots or diffs;
-`transfers` and `assetChanges` remain available.
-
-The result's historical `VerifiedSimulationResult` name does not imply that
-unchecked outcomes are economically verified.
-
-Preview authorizations remain an adapter from `getRequirements()` through
-`toSimulationAuthorizations` into preparation calls. No permission or nonce
-read-back policy runs. Successful execution establishes success under the
-simulated permissions; it does not prove that a future signature is valid.
-Preparation and user-transaction failures still propagate. Final mode executes
-actual calldata without preparation. State reads and preparation calls do not
-receive public transaction indices.
 
 See [AGENTS.md](./AGENTS.md) for pipeline conventions and retention rules.
 

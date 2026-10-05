@@ -197,6 +197,10 @@ export function decodeStateRead(
       { context: { stage: "verification", ...context, field: read.id } },
     );
   }
+  if (read.kind !== "erc20.balance" && read.kind !== "morpho.position")
+    throw new InvalidSimulationResponseError(
+      `Cannot decode "${read.id}" as a slippage observation: its kind is "${read.kind}".`,
+    );
   try {
     if (read.kind === "erc20.balance")
       return decodeFunctionResult({

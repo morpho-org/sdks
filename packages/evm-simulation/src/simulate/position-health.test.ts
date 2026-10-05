@@ -54,7 +54,7 @@ function returnData(position: {
       }),
     ],
     [
-      `position:${marketId}:${account}`.toLowerCase(),
+      `health-position:${marketId}:${account}`.toLowerCase(),
       encodeFunctionResult({
         abi: blueAbi,
         functionName: "position",
@@ -145,7 +145,7 @@ describe("verifyPositionHealth", () => {
     expect((error as ConsumerLimitViolationError).context).toMatchObject({
       stage: "verification",
       account: owner,
-      field: `position:${marketId}:${owner}`.toLowerCase(),
+      field: `health-position:${marketId}:${owner}`.toLowerCase(),
       expected: params.lltv,
       observed: 801_000000000000000n,
     });
