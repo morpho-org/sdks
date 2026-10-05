@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -112,7 +112,8 @@ export function verifyReleaseMatch(
 }
 
 /**
- * Checks `SHA256SUMS` lists exactly the tarballs and that each digest matches.
+ * Checks `SHA256SUMS` lists exactly the tarballs, that each digest matches, and
+ * that the directory holds nothing but regular `.tgz` files and `SHA256SUMS`.
  *
  * @param dir - Tarball directory.
  * @returns The tarball names, sorted.
@@ -129,9 +130,15 @@ export function verifyChecksums(dir: string): string[] {
     }
     sums.set(match[2], match[1]);
   }
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".tgz"))
-    .sort();
+  // Packing may have run dependency code, so nothing but tarballs may ride along.
+  const files: string[] = [];
+  for (const name of readdirSync(dir).sort()) {
+    if (name === "SHA256SUMS") continue;
+    if (!name.endsWith(".tgz") || !lstatSync(join(dir, name)).isFile()) {
+      throw new Error(`Unexpected "${name}" next to the tarballs.`);
+    }
+    files.push(name);
+  }
   if (files.length === 0) throw new Error(`No tarballs in "${dir}".`);
   for (const file of files) {
     const digest = createHash("sha256")
