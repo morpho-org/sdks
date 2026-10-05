@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import {
-  lstatSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, join, matchesGlob, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -18,13 +12,13 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 const RULES = {
   // Linear team keys of the morpho-labs workspace.
   "linear-key":
-    /\b(?:APPS|API|CRTR|INTEG|MAR|MKT|PLA|PRO|ROU|SDK|SEC|VAU|VRM)-\d+\b/g,
-  "linear-url": /\blinear\.app\b/g,
-  "slack-url": /\b(?:[a-z0-9-]+\.)?slack\.com\b/g,
-  "notion-url": /\bnotion\.(?:so|site)\b/g,
-  "devin-session": /\b(?:app\.)?devin\.ai\/sessions\b/g,
-  "internal-repo": /\bmorpho-org\/sdks-internal\b/g,
-  "internal-host": /\b(?:[a-z0-9-]+\.)*internal\.morpho\.[a-z]+\b/g,
+    /\b(?:APPS|API|CRTR|INTEG|MAR|MKT|PLA|PRO|ROU|SDK|SEC|VAU|VRM)-\d+\b/gi,
+  "linear-url": /\blinear\.app\b/gi,
+  "slack-url": /\b(?:[a-z0-9-]+\.)?slack\.com\b/gi,
+  "notion-url": /\bnotion\.(?:so|site)\b/gi,
+  "devin-session": /\b(?:app\.)?devin\.ai\/sessions\b/gi,
+  "internal-repo": /\bmorpho-org\/sdks-internal\b/gi,
+  "internal-host": /\b(?:[a-z0-9-]+\.)*internal\.morpho\.[a-z]+\b/gi,
   "private-key": /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
   "github-token":
     /\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b/g,
@@ -117,7 +111,8 @@ export function parsePolicy(policy: unknown): ScanPolicy {
 }
 
 /**
- * Finds every rule match in text files. Binary files (with a NUL byte) are skipped.
+ * Finds every rule match in files. NUL bytes are dropped first, so UTF-16 text and
+ * text inside binaries are still scanned.
  *
  * @param files - Files to scan.
  * @param blockedTerms - Extra case-insensitive terms to block.
@@ -134,17 +129,19 @@ export function scanFiles(
     );
     rules.push([
       "blocked-term",
-      new RegExp(`\\b(?:${escaped.join("|")})\\b`, "gi"),
+      new RegExp(`(?<!\\w)(?:${escaped.join("|")})(?!\\w)`, "gi"),
     ]);
   }
 
   const findings: Finding[] = [];
   for (const { path, content } of files) {
-    if (content.includes(0)) continue;
-    const lines = content.toString("utf8").split("\n");
-    for (const [index, text] of lines.entries()) {
+    const text = content.includes(0)
+      ? Buffer.from(content.filter((byte) => byte !== 0))
+      : content;
+    const lines = text.toString("utf8").split("\n");
+    for (const [index, line] of lines.entries()) {
       for (const [rule, pattern] of rules) {
-        for (const [match] of text.matchAll(pattern)) {
+        for (const [match] of line.matchAll(pattern)) {
           findings.push({ path, line: index + 1, rule, match });
         }
       }
@@ -209,24 +206,123 @@ export function readTree(dir: string, prefix = ""): ScannedFile[] {
   return files;
 }
 
+/** One entry as npm's bundled node-tar reads it. */
+interface TarReadEntry {
+  readonly path: string;
+  readonly type: string;
+  on(event: "data", listener: (chunk: Buffer) => void): unknown;
+  on(event: "end", listener: () => void): unknown;
+  resume(): unknown;
+}
+
+/** The part of node-tar used to read archives. */
+export interface TarReader {
+  list(options: {
+    file: string;
+    strict: boolean;
+    onReadEntry: (entry: TarReadEntry) => void;
+  }): Promise<unknown>;
+}
+
+function loadBundledTar(): TarReader {
+  const npmRoot = execFileSync("npm", ["root", "-g"], {
+    encoding: "utf8",
+  }).trim();
+  const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
+    "tar",
+  );
+  if (
+    typeof tar !== "object" ||
+    tar === null ||
+    !("list" in tar) ||
+    typeof tar.list !== "function"
+  ) {
+    throw new Error(`Bundled tar at "${npmRoot}" does not expose list().`);
+  }
+  return tar as TarReader;
+}
+
 /**
- * Reads every file in npm tarballs. Paths look like `<tarball>.tgz:package/...`.
+ * Reads every file in npm tarballs with npm's bundled node-tar, the parser npm
+ * publish uses. Paths look like `<tarball>.tgz:package/...`.
  *
  * @param tarballs - Paths to `.tgz` files.
+ * @param reader - node-tar; defaults to the copy bundled with npm.
  * @returns The files.
+ * @throws If a tarball holds anything other than regular files and directories.
  */
-export function readTarballs(tarballs: readonly string[]): ScannedFile[] {
+export async function readTarballs(
+  tarballs: readonly string[],
+  reader: TarReader = loadBundledTar(),
+): Promise<ScannedFile[]> {
   const files: ScannedFile[] = [];
   for (const tarball of tarballs) {
-    const dir = mkdtempSync(join(tmpdir(), "public-scan-"));
-    try {
-      execFileSync("tar", ["-xzf", tarball, "-C", dir, "--no-same-owner"]);
-      files.push(...readTree(dir, `${basename(tarball)}:`));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+    const irregular: string[] = [];
+    await reader.list({
+      file: tarball,
+      strict: true,
+      onReadEntry: (entry) => {
+        if (entry.type !== "File" && entry.type !== "OldFile") {
+          if (entry.type !== "Directory") {
+            irregular.push(`${entry.path} (${entry.type})`);
+          }
+          entry.resume();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        entry.on("data", (chunk) => chunks.push(chunk));
+        entry.on("end", () =>
+          files.push({
+            path: `${basename(tarball)}:${entry.path}`,
+            content: Buffer.concat(chunks),
+          }),
+        );
+      },
+    });
+    if (irregular.length > 0) {
+      throw new Error(
+        `"${tarball}" has entries that are not regular files: ${irregular.join(", ")}.`,
+      );
     }
   }
   return files;
+}
+
+/**
+ * Decides the outcome of a scan run.
+ *
+ * @param result - Findings after exceptions, how many tree files and tarballs were
+ * read (`undefined` when not requested), and the policy path for messages.
+ * @returns The exit code and the lines to print.
+ */
+export function evaluate(result: {
+  blocking: readonly Finding[];
+  unused: readonly ScanException[];
+  treeFiles?: number;
+  tarballs?: number;
+  scannedFiles: number;
+  policyPath: string;
+}): { exitCode: 0 | 1; errors: string[]; summary?: string } {
+  const errors: string[] = [];
+  if (result.treeFiles === 0) errors.push("The tree is empty.");
+  if (result.tarballs === 0) errors.push("No .tgz files to scan.");
+  for (const { path, line, rule, match } of result.blocking) {
+    errors.push(`${path}:${line}: ${rule}: ${JSON.stringify(match)}`);
+  }
+  // Stale exceptions only fail the tree scan: tarballs hold a subset of the tree.
+  if (result.treeFiles !== undefined) {
+    for (const { path, rule, match } of result.unused) {
+      errors.push(
+        `Unused exception: ${rule} ${JSON.stringify(match)} in "${path}". Remove it from "${result.policyPath}".`,
+      );
+    }
+  }
+  if (errors.length > 0) return { exitCode: 1, errors };
+  return {
+    exitCode: 0,
+    errors,
+    summary: `Scanned ${result.scannedFiles} files: nothing internal found.`,
+  };
 }
 
 if (import.meta.main) {
@@ -243,35 +339,30 @@ if (import.meta.main) {
     );
   }
   const policy = parsePolicy(JSON.parse(readFileSync(values.policy, "utf8")));
+  const treeFiles = values.tree ? readTree(values.tree) : undefined;
+  const tarballs = values.tarballs
+    ? readdirSync(values.tarballs)
+        .filter((name) => name.endsWith(".tgz"))
+        .sort()
+        .map((name) => join(values.tarballs as string, name))
+    : undefined;
   const files = [
-    ...(values.tree ? readTree(values.tree) : []),
-    ...(values.tarballs
-      ? readTarballs(
-          readdirSync(values.tarballs)
-            .filter((name) => name.endsWith(".tgz"))
-            .sort()
-            .map((name) => join(values.tarballs as string, name)),
-        )
-      : []),
+    ...(treeFiles ?? []),
+    ...(tarballs ? await readTarballs(tarballs) : []),
   ];
   const { blocking, unused } = applyExceptions(
     scanFiles(files, policy.blockedTerms),
     policy.exceptions,
   );
-  for (const { path, line, rule, match } of blocking) {
-    console.error(`${path}:${line}: ${rule}: ${JSON.stringify(match)}`);
-  }
-  // Stale exceptions only fail the tree scan: tarballs hold a subset of the tree.
-  if (values.tree) {
-    for (const { path, rule, match } of unused) {
-      console.error(
-        `Unused exception: ${rule} ${JSON.stringify(match)} in "${path}". Remove it from "${values.policy}".`,
-      );
-    }
-  }
-  if (blocking.length > 0 || (values.tree && unused.length > 0)) {
-    process.exitCode = 1;
-  } else {
-    console.log(`Scanned ${files.length} files: nothing internal found.`);
-  }
+  const { exitCode, errors, summary } = evaluate({
+    blocking,
+    unused,
+    treeFiles: treeFiles?.length,
+    tarballs: tarballs?.length,
+    scannedFiles: files.length,
+    policyPath: values.policy,
+  });
+  for (const error of errors) console.error(error);
+  if (summary) console.log(summary);
+  process.exitCode = exitCode;
 }
