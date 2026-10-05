@@ -133,10 +133,6 @@ interface SimulationContext {
 }
 
 /** Creates isolated transaction-scoped state for one simulation. @internal */
-// BluePublicAllocator caps are per vault and target adapter.
-const getAllocatorCapTargetKey = ({ vault, to }: VaultV2BlueReallocation) =>
-  `${vault.toLowerCase()}:${to.adapter.toLowerCase()}`;
-
 const createSimulationContext = (): SimulationContext => ({
   donatedPenaltyAssets: {},
   firstTotalAssets: {},
@@ -1105,10 +1101,10 @@ export class VaultV2BlueReallocationData
       const capBoundTargets = friendly.allocatorCapBoundTargets;
       let reallocatedAssets = 0n;
       let unboundAssets = 0n;
-      for (const reallocation of reallocations) {
-        reallocatedAssets += reallocation.assets;
-        if (!capBoundTargets.has(getAllocatorCapTargetKey(reallocation)))
-          unboundAssets += reallocation.assets;
+      for (const { vault, to, assets } of reallocations) {
+        reallocatedAssets += assets;
+        const key = `${vault.toLowerCase()}:${to.adapter.toLowerCase()}`;
+        if (!capBoundTargets.has(key)) unboundAssets += assets;
       }
       return {
         reallocations,
@@ -1184,7 +1180,7 @@ export class VaultV2BlueReallocationData
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2BlueReallocationData;
     readonly context: SimulationContext;
-    /** Vault/target-adapter keys of accepted legs reaching their allocator max-in net of the kept headroom. */
+    /** Lowercased `vault:targetAdapter` keys of accepted legs reaching their allocator max-in net of the kept headroom. */
     readonly allocatorCapBoundTargets: ReadonlySet<string>;
   } {
     if (options.enabled === false)
@@ -1702,8 +1698,9 @@ export class VaultV2BlueReallocationData
         allocatorHeadroom: acceptedAllocatorHeadroom,
       } = largest;
       if (acceptedReallocation.assets >= acceptedAllocatorHeadroom)
+        // BluePublicAllocator caps are per vault and target adapter.
         allocatorCapBoundTargets.add(
-          getAllocatorCapTargetKey(acceptedReallocation),
+          `${acceptedReallocation.vault.toLowerCase()}:${acceptedReallocation.to.adapter.toLowerCase()}`,
         );
       const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
       let touchedVaultPairs = reserves.touchedPairs.get(touchedVaultKey);
