@@ -762,7 +762,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       },
     );
 
-    test("error: ExcessiveSlippageToleranceError above the SDK maximum", () => {
+    test("[INV-04] error: ExcessiveSlippageToleranceError above the SDK maximum", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
