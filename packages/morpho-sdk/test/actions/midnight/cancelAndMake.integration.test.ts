@@ -10,6 +10,7 @@ import {
   midnightAbi,
   midnightBundlesV2Abi,
   Offer,
+  priceRatifierV1Abi,
   rateRatifierV1Abi,
   Tree,
 } from "@morpho-org/midnight-sdk";
@@ -52,6 +53,7 @@ const test = createViemTest(base, {
 });
 
 const midnight = getChainAddress(ChainId.BaseMainnet, "midnight");
+const priceRatifierV1 = getChainAddress(ChainId.BaseMainnet, "priceRatifierV1");
 const rateRatifierV1 = getChainAddress(ChainId.BaseMainnet, "rateRatifierV1");
 const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
 const wNative = getChainAddress(ChainId.BaseMainnet, "wNative");
@@ -183,10 +185,44 @@ const rateTree = (
     ],
   });
 
+const priceTree = (
+  client: AnvilTestClient<typeof base>,
+  params: { readonly buy: boolean; readonly group: Hex },
+) =>
+  Tree.create({
+    type: "priceV1",
+    entries: [
+      {
+        offer: Offer.create({
+          market,
+          buy: params.buy,
+          maker: client.account.address,
+          expiry: market.maturity,
+          tick: 5_000n,
+          group: params.group,
+          ratifier: priceRatifierV1,
+          receiverIfMakerIsSeller: params.buy
+            ? zeroAddress
+            : client.account.address,
+          maxUnits: 0n,
+          maxAssets: parseUnits("1", 6),
+        }),
+      },
+    ],
+  });
+
 const isRootRatified = (client: AnvilTestClient<typeof base>, root: Hex) =>
   client.readContract({
     address: rateRatifierV1,
     abi: rateRatifierV1Abi,
+    functionName: "isRootRatified",
+    args: [client.account.address, root],
+  });
+
+const isPriceRootRatified = (client: AnvilTestClient<typeof base>, root: Hex) =>
+  client.readContract({
+    address: priceRatifierV1,
+    abi: priceRatifierV1Abi,
     functionName: "isRootRatified",
     args: [client.account.address, root],
   });
@@ -253,6 +289,33 @@ describe("Midnight cancel-and-make on fork", () => {
 
     await expect(consumed(client, groupA)).resolves.toBe(maxUint128);
     await expect(isRootRatified(client, repost.root)).resolves.toBe(true);
+  });
+
+  test("publishes lend offers through PriceRatifierV1", async ({ client }) => {
+    await deployMidnightBundlesV2(client);
+    await client.deal({
+      erc20: usdc,
+      account: client.account.address,
+      amount: parseUnits("10", 6),
+    });
+    const midnightEntity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id);
+
+    const output = await midnightEntity.cancelAndMakeLend({
+      accountAddress: client.account.address,
+      offers: priceTree(client, { buy: true, group: groupA }),
+      deadline: maxUint256,
+      validation,
+      loanToken: usdc,
+      loanAssets: parseUnits("1", 6),
+    });
+    await fulfilRequirements(client, output);
+    const hash = await client.sendTransaction(output.buildTx());
+    const receipt = await client.waitForTransactionReceipt({ hash });
+
+    expect(receipt.status).toBe("success");
+    await expect(isPriceRootRatified(client, output.root)).resolves.toBe(true);
   });
 
   test("error: reverts the whole repost when a cancelled group is consumed above its ceiling", async ({
