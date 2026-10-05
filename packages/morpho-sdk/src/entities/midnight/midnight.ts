@@ -36,6 +36,7 @@ import {
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
+  midnightTakeWithdraw,
 } from "../../actions/midnight/index.js";
 import {
   getMidnightApprovalRequirements,
@@ -69,6 +70,7 @@ import {
   type MidnightTakeBorrowAction,
   type MidnightTakeLendAction,
   type MidnightTakeRepayWithdrawCollateralAction,
+  type MidnightTakeWithdrawAction,
   MissingAccrualPositionError,
   NegativeInputError,
   NoMidnightCreditToRedeemError,
@@ -91,6 +93,7 @@ import type {
   TakeBorrowParams,
   TakeLendParams,
   TakeRepayWithdrawCollateralParams,
+  TakeWithdrawParams,
 } from "./types.js";
 
 /**
@@ -126,6 +129,7 @@ export type MidnightActions = Pick<
   | "getOffersData"
   | "takeLend"
   | "takeBorrow"
+  | "takeWithdraw"
   | "supplyCollateralTakeBorrow"
   | "takeRepayWithdrawCollateral"
   | "supplyCollateral"
@@ -458,6 +462,67 @@ export class MorphoMidnight {
   ): MidnightActionOutput<MidnightTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const tx = midnightTakeBorrow({
+      chainId: this.chainId,
+      market: params.marketData.params,
+      target: params.target,
+      receiver: params.receiver ?? params.accountAddress,
+      takeableOffers: params.takeableOffers,
+      deadline: params.deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+      metadata: this.client.options.metadata,
+    });
+
+    return {
+      getRequirements: () =>
+        this.getBundlesV2AuthorizationRequirements(params.accountAddress),
+      buildTx: () => tx,
+    };
+  }
+
+  /**
+   * Prepares a reduce-only `MidnightBundlesV2` sell that withdraws `accountAddress`'s credit.
+   *
+   * The bundle first redeems as much credit as the target and market liquidity allow, then sells
+   * the rest to lend-side offers. `reduceOnly` is always set, so it never opens debt. Use `redeem`
+   * for a direct redemption without offers.
+   *
+   * @param params - Lender, market snapshot, sell target, offers, deadline, receiver, and optional referral fee.
+   * @param params.accountAddress - Lender; must send the transaction, since V2 acts for `msg.sender`.
+   * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
+   * @param params.target - `{ type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }`.
+   * @param params.receiver - Optional loan-asset recipient; defaults to `accountAddress`.
+   * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
+   * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
+   * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
+   * @throws {NegativeInputError} when `minSellerAssets` is negative.
+   * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
+   * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
+   * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+   * @example
+   * ```ts
+   * const output = midnight.takeWithdraw({
+   *   accountAddress: lender,
+   *   marketData,
+   *   target: { type: "units", units: credit, minSellerAssets: 990_000n },
+   *   takeableOffers: quote.data.takeableOffers,
+   *   deadline: maxUint256,
+   * });
+   * ```
+   */
+  takeWithdraw(
+    params: TakeWithdrawParams,
+  ): MidnightActionOutput<MidnightTakeWithdrawAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const tx = midnightTakeWithdraw({
       chainId: this.chainId,
       market: params.marketData.params,
       target: params.target,

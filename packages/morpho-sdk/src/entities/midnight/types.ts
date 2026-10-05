@@ -193,6 +193,19 @@ export interface TakeBorrowParams
   readonly deadline: bigint;
 }
 
+/** Parameters for the Midnight credit-withdrawal taker flow. */
+export interface TakeWithdrawParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets received with a credit-unit cap, or credit units sold with a loan-asset floor. */
+  readonly target: MidnightSellTarget;
+  /** Recipient of the withdrawn loan assets. Defaults to `accountAddress`. */
+  readonly receiver?: Address;
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
+}
+
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
 export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
   /** Collateral supplied before borrowing; must not be empty. */

@@ -141,6 +141,7 @@ export type {
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,
   TakeBorrowParams as MidnightTakeBorrowParams,
   TakeLendParams as MidnightTakeLendParams,
+  TakeWithdrawParams as MidnightTakeWithdrawParams,
 } from "./midnight/index.js";
 export {
   type MidnightActionOutput,

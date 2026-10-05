@@ -475,6 +475,19 @@ export interface MidnightTakeBorrowAction
     }
   > {}
 
+/** Metadata for a reduce-only Midnight bundle that redeems credit, then sells the rest to offers. */
+export interface MidnightTakeWithdrawAction
+  extends BaseAction<
+    "midnightTakeWithdraw",
+    {
+      readonly market: Hex;
+      readonly target: MidnightSellTarget;
+      readonly receiver: Address;
+      readonly takeableOffers: number;
+      readonly deadline: bigint;
+    }
+  > {}
+
 /** Metadata for a Midnight bundle that supplies collateral and borrows from fixed-rate offers. */
 export interface MidnightSupplyCollateralTakeBorrowAction
   extends BaseAction<
@@ -610,6 +623,7 @@ export type TransactionAction =
   | MidnightAuthorizationAction
   | MidnightTakeLendAction
   | MidnightTakeBorrowAction
+  | MidnightTakeWithdrawAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
   | MidnightRedeemAction

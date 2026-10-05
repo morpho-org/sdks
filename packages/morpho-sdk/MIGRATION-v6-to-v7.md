@@ -102,6 +102,10 @@ midnight.takeLend({
   `repayEnabled` is true, then withdraws `collateralWithdrawals` to `collateralReceiver`
   (default `accountAddress`). It takes a `MidnightBuyTarget` and needs the same approval and
   authorization as `takeLend`.
+- New `takeWithdraw` (and the `midnightTakeWithdraw` builder) withdraws the sender's credit: it
+  redeems what market liquidity allows, then sells the rest of a `MidnightSellTarget` to lend-side
+  offers with `reduceOnly` set, so it never opens debt. It needs only MidnightBundlesV2
+  authorization. `redeem` stays the direct, offer-free path.
 
 ## repayWithdrawCollateral
 

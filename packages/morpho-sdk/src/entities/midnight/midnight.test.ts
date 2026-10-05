@@ -488,6 +488,50 @@ describe("MorphoMidnight", () => {
     });
   });
 
+  describe("takeWithdraw", () => {
+    const params = {
+      marketData: marketData(),
+      accountAddress: midnightAddresses.taker,
+      target: { type: "units", units: 1_000n, minSellerAssets: 990n },
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, false);
+
+      const output = midnightWithHandle(handle).takeWithdraw(params);
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.type).toBe("midnightTakeWithdraw");
+      expect(tx.action.args).toMatchObject({
+        target: params.target,
+        receiver: midnightAddresses.taker,
+      });
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.taker,
+          },
+        },
+      ]);
+    });
+
+    test("behavior: forwards an explicit receiver", () => {
+      const tx = midnight()
+        .takeWithdraw({ ...params, receiver: midnightAddresses.maker })
+        .buildTx();
+
+      expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
+    });
+  });
+
   describe("supplyCollateralTakeBorrow", () => {
     const params = {
       marketData: marketData(),

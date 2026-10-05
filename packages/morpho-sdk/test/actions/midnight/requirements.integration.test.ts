@@ -353,6 +353,77 @@ describe("Midnight requirements on fork", () => {
     },
   );
 
+  test("executes take-withdraw output and rejects selling past credit", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1", 6);
+    await installTestOracle(client);
+    await deployMidnightBundlesV2(client);
+    await client.deal({ erc20: usdc, amount });
+    const midnightEntity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id);
+    const lend = midnightEntity.takeLend({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: amount, maxBuyerAssets: amount },
+      takeableOffers: [
+        await prepareTakeableOffer({ client, buy: false, units: 2n * amount }),
+      ],
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    for (const requirement of await lend.getRequirements()) {
+      if (!("to" in requirement)) {
+        throw new Error("expected an onchain call requirement");
+      }
+      await client.sendTransaction(requirement);
+    }
+    await client.sendTransaction(lend.buildTx());
+    const readCredit = () =>
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "credit",
+        args: [marketId, client.account.address],
+      });
+    const credit = await readCredit();
+    expect(credit).toBe(amount);
+
+    const lendOffer = await prepareTakeableOffer({
+      client,
+      buy: true,
+      units: 4n * amount,
+    });
+    const withdraw = (units: bigint) =>
+      midnightEntity.takeWithdraw({
+        marketData,
+        accountAddress: client.account.address,
+        target: { type: "units", units, minSellerAssets: 0n },
+        takeableOffers: [lendOffer],
+        deadline: maxUint256,
+      });
+    // reduceOnly: selling more units than the credit would open debt, so it reverts.
+    await expect(
+      client.sendTransaction(withdraw(2n * credit).buildTx()),
+    ).rejects.toThrow();
+
+    const balanceBefore = await client.balanceOf({ erc20: usdc });
+    await client.sendTransaction(withdraw(credit).buildTx());
+    await expect(readCredit()).resolves.toBe(0n);
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "debt",
+        args: [marketId, client.account.address],
+      }),
+    ).resolves.toBe(0n);
+    await expect(client.balanceOf({ erc20: usdc })).resolves.toBeGreaterThan(
+      balanceBefore,
+    );
+  });
+
   test("executes supply-collateral and take-borrow outputs", async ({
     client,
   }) => {
