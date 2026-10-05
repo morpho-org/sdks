@@ -104,6 +104,13 @@ describe("verifyArtifact", () => {
       },
     ],
     [
+      "no tarballs",
+      (dir: string) => {
+        rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
+        write(dir, { "tarballs/SHA256SUMS": "" });
+      },
+    ],
+    [
       "a malformed checksum line",
       (dir: string) => write(dir, { "tarballs/SHA256SUMS": "nope\n" }),
     ],

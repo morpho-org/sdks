@@ -136,4 +136,7 @@ jobs:
         run: |
           tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
           node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public"
+          # The artifact only agrees with itself; regenerate from git to tie it to this commit.
+          node scripts/release/public-snapshot/generate.ts --sha "$GITHUB_SHA" --out "$RUNNER_TEMP/expected"
+          cmp "$RUNNER_TEMP/expected/public-tree.json" "$RUNNER_TEMP/public/public-tree.json"
           node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/public/tarballs"
