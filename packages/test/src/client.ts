@@ -20,6 +20,7 @@ import {
   type TestActions,
   type TestRpcSchema,
   type UnionPartialBy,
+  type WaitForTransactionReceiptParameters,
   type WaitForTransactionReceiptReturnType,
   type WalletActions,
   type WalletRpcSchema,
@@ -30,6 +31,7 @@ import {
 import {
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
+  waitForTransactionReceipt as viem_waitForTransactionReceipt,
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
@@ -145,7 +147,19 @@ export const createAnvilTestClient = <chain extends Chain>(
     .extend((client) => {
       let automine: boolean;
 
+      // Anvil never replaces transactions, and viem's replacement check skips
+      // blocks mined while it runs, which can hang the wait at 50 ms polling.
+      const waitForTransactionReceipt = (
+        args: WaitForTransactionReceiptParameters<chain>,
+      ) =>
+        viem_waitForTransactionReceipt(client, {
+          checkReplacement: false,
+          ...args,
+        });
+
       return {
+        waitForTransactionReceipt,
+
         async timestamp() {
           const latestBlock = await client.getBlock();
 
@@ -268,7 +282,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           args: DeployContractParameters<abi, chain, HDAccount>,
         ) {
           const hash = await client.deployContract(args);
-          const receipt = await client.waitForTransactionReceipt({ hash });
+          const receipt = await waitForTransactionReceipt({ hash });
 
           if (receipt.contractAddress == null)
             throw Error("no contract address");
@@ -300,7 +314,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_writeContract(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },
@@ -318,7 +332,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_sendTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },
@@ -326,7 +340,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_sendRawTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },
