@@ -138,3 +138,20 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - Failover to another backend with the same chain id is accepted. EIP-155 bytes are valid on every node of that chain.
 - `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - A stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
+
+## Integrator inputs and the address registry
+
+The SDK trusts the inputs its integrator passes in and the configuration it registers. It does not
+treat an attacker-chosen value supplied by the integrator as a vulnerability.
+
+- **Client and chain pairing.** Entities and actions check that the viem client reports the chain
+  they were asked to build for (`ChainIdMismatchError`). They cannot detect a client whose transport
+  points at a different network than the chain it declares; that falls under [RPC](#rpc).
+- **Addresses passed as arguments.** Vault, market, receiver and `userAddress` values are used as
+  given; choosing them is the integrator's responsibility.
+- **Address registry.** Per-chain contract addresses ship in `@morpho-org/morpho-ts`.
+  `registerCustomAddresses` adds entries for new chains or missing periphery, rejects malformed or
+  wrongly checksummed addresses, and refuses to override an existing entry
+  (`RegistryValueAlreadyRegisteredError`). Addresses an integrator registers are part of its trusted
+  configuration. A wrong address in the shipped registry is in scope; see
+  [`SECURITY.md`](./SECURITY.md#scope).
