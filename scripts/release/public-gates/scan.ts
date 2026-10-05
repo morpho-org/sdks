@@ -40,7 +40,7 @@ const RULES = {
   // after `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`);
   // `\"` catches code embedded in JSON.
   "wallet-key":
-    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.[\w$]+)*(?:\[["'`]\w+["'`]\]|\(["'`]\w+["'`]\))?\s*)*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\]|\(["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\))?\s*)*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|\?\?|\|\|)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
