@@ -5,7 +5,8 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside } from "./helpers.ts";
+import { isPathInside } from "../paths.ts";
+import { getErrorMessage } from "./helpers.ts";
 
 const DEFAULT_BASE_REF = "HEAD^";
 const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
