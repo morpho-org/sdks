@@ -35,14 +35,14 @@ const RULES = {
   // hex values (market ids, hashes) are everywhere. No leading boundary, so
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   "wallet-key":
-    /(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
   mnemonic:
-    /(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
+    /(?:(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
   "url-credentials":
-    /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]+:(?!\d+@\d|\$\{)[^\s/@"'`]+@/gi,
+    /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]*:(?!\d+@\d+(?![\w.])|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
     /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/g,
 } as const satisfies Record<string, RegExp>;
@@ -121,7 +121,7 @@ export function parsePolicy(policy: unknown): ScanPolicy {
       );
     }
     const { path, rule, match } = exception as ScanException;
-    if (rule !== "blocked-term" && !(rule in RULES)) {
+    if (rule !== "blocked-term" && !Object.hasOwn(RULES, rule)) {
       throw new Error(`Exception for "${path}" names unknown rule "${rule}".`);
     }
     const id = JSON.stringify([path, rule, match]);
