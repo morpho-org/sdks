@@ -3380,12 +3380,37 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       targetBorrow: 100n,
       allocatorTargetCap: 19n,
     });
-
-    expect(() =>
+    const compute = () =>
       data.computeVaultV2BlueReallocations(targetParams.id, {
         operation: { type: "borrow", amount: 20n },
-      }),
-    ).toThrow(InsufficientSharedLiquidityError);
+      });
+    const thrown = () => {
+      try {
+        compute();
+      } catch (error) {
+        return error;
+      }
+    };
+    const params = { shortfall: 20n, available: 19n };
+
+    expect(thrown()).toBeInstanceOf(InsufficientSharedLiquidityError);
+    expect(thrown()).toMatchObject({ params });
+
+    // `available` keeps the best pass when the last pass moves less.
+    const { data: shortData } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 19n,
+      sourceSupply: 10n,
+    });
+    const clone = data.clone.bind(data);
+    vi.spyOn(data, "clone")
+      .mockImplementationOnce(clone)
+      .mockImplementationOnce(clone)
+      .mockImplementationOnce(clone)
+      .mockImplementation(() => shortData.clone());
+
+    expect(thrown()).toMatchObject({ params });
   });
 
   test.each([

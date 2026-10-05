@@ -36,7 +36,8 @@ export interface VaultV2BluePublicAllocatorOptions {
    * their cap were already moving. A plan of only the shortfall leaves the
    * market fully utilized, so a competing borrow or withdraw landing first can
    * still make it revert. If the shortfall cannot be covered while keeping the
-   * headroom, the plan uses the full cap for the shortfall only.
+   * headroom, the plan uses the full cap, first for the shortfall only and
+   * then toward the utilization target if that is still short.
    * Must not exceed WAD (100%). Set to `0n` to disable.
    *
    * @default DEFAULT_ALLOCATOR_CAP_HEADROOM (1%)
