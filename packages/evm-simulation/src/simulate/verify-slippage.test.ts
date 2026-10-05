@@ -118,6 +118,30 @@ describe("verifySlippage", () => {
       verifySlippage({ ...input, transfers: input.transfers.slice(0, 1) }),
     ).toThrow(ConsumerLimitViolationError);
   });
+  test("behavior: error context reports the pinned state block, not the execution block", () => {
+    const plan = planStateReads({
+      operations: [{ limit }],
+      owner,
+      morpho: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    const error = (() => {
+      try {
+        verifySlippage({
+          ctx,
+          operations: plan.operations,
+          before: new Map([[id, 20n]]),
+          after: new Map([[id, 118n]]),
+          transfers: [],
+          requestTransactions: [],
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).toMatchObject({ context: { blockNumber: 1n } });
+  });
   test("behavior: a native assetsReceived quote uses incoming traces", () => {
     const nativeLimit = {
       ...limit,

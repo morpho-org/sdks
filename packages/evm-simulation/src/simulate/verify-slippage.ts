@@ -35,7 +35,7 @@ export function verifySlippage(params: {
       stage: "verification" as const,
       chainId: ctx.chainId,
       mode: ctx.mode,
-      blockNumber: ctx.block.blockNumber,
+      blockNumber: ctx.block.stateBlockNumber,
       ...subject,
     };
     const observed: { -readonly [K in keyof SlippageQuote]: SlippageQuote[K] } =
