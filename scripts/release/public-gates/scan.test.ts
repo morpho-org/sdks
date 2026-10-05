@@ -64,6 +64,10 @@ describe("scanFiles", () => {
     ["devin-session", "https://App.Devin.ai/sessions/abc"],
     ["internal-repo", "Morpho-Org/SDKs-Internal"],
     ["internal-host", "API.Internal.Morpho.dev"],
+    ["wallet-key", `PRIVATE_KEY=0x${"ab".repeat(32)}`],
+    ["wallet-key", `privateKey: "${"cd".repeat(32)}"`],
+    ["mnemonic", `MNEMONIC="${Array(12).fill("abandon").join(" ")}"`],
+    ["url-credentials", "https://user:hunter2@rpc.example.com"],
   ])("flags %s", (rule, text) => {
     expect(scanFiles([file("a.md", `ok\n${text}\n`)])).toEqual([
       expect.objectContaining({ path: "a.md", line: 2, rule }),
@@ -75,7 +79,8 @@ describe("scanFiles", () => {
       scanFiles([
         file(
           "a.md",
-          "ERC-4626, EIP-2612, MYSDK-12, SDK-v2, morpho-org/sdks, notion of slack",
+          "ERC-4626, EIP-2612, MYSDK-12, SDK-v2, morpho-org/sdks, notion of slack, http://localhost:8545@19000000, https://x:${TOKEN}@github.com, market 0x" +
+            "ab".repeat(32),
         ),
       ]),
     ).toEqual([]);
@@ -139,6 +144,13 @@ describe("applyExceptions", () => {
     expect(unused).toEqual([]);
   });
 
+  test("doesn't allow the same text and path under another rule", () => {
+    const other = { ...allowed, rule: "blocked-term" } as const;
+    const { blocking, unused } = applyExceptions(findings, [other]);
+    expect(blocking).toHaveLength(3);
+    expect(unused).toEqual([other]);
+  });
+
   test("reports exceptions that match nothing", () => {
     const stale = { ...allowed, match: "SDK-9" };
     expect(applyExceptions(findings, [stale]).unused).toEqual([stale]);
@@ -187,7 +199,10 @@ describe("readTree and readTarballs", () => {
 
   test("scan tarball contents under the tarball name", async () => {
     const dir = tempDir();
-    write(dir, { "package/lib/index.js": "// see SDK-7\n" });
+    write(dir, {
+      "package/package.json": "{}",
+      "package/lib/index.js": "// see SDK-7\n",
+    });
     const tarball = join(dir, "pkg-1.0.0.tgz");
     execFileSync("tar", ["-czf", tarball, "-C", dir, "package"]);
     expect(scanFiles(await readTarballs([tarball]))).toEqual([
@@ -208,6 +223,16 @@ describe("readTree and readTarballs", () => {
     execFileSync("tar", ["-czf", tarball, "-C", dir, "package"]);
     await expect(readTarballs([tarball])).rejects.toThrow(
       "package/leak (SymbolicLink)",
+    );
+  });
+
+  test("reject tarballs without package/package.json", async () => {
+    const dir = tempDir();
+    write(dir, { "package/index.js": "" });
+    const tarball = join(dir, "pkg-1.0.0.tgz");
+    execFileSync("tar", ["-czf", tarball, "-C", dir, "package"]);
+    await expect(readTarballs([tarball])).rejects.toThrow(
+      "has no package/package.json",
     );
   });
 });

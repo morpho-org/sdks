@@ -21,13 +21,20 @@ export interface TarEntry {
   readonly type: string;
 }
 
+/** An entry as node-tar streams it while listing. */
+export interface TarStreamEntry extends TarEntry {
+  on(event: "data", listener: (chunk: Buffer) => void): unknown;
+  on(event: "end", listener: () => void): unknown;
+  resume(): unknown;
+}
+
 /** The minimal node-tar interface needed to list an archive. */
 export interface EntryLister {
   /** Lists archive entries and invokes the callback for each one. */
   list(opts: {
     file: string;
     strict: boolean;
-    onReadEntry: (entry: TarEntry) => void;
+    onReadEntry: (entry: TarStreamEntry) => void;
   }): Promise<unknown>;
 }
 
