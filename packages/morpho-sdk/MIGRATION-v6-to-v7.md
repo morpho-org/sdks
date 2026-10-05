@@ -97,6 +97,11 @@ midnight.takeLend({
   instead of a count.
 - New types: `MidnightBuyTarget`, `MidnightSellTarget`, `MidnightReferralFeeParams`.
   `MidnightCollateralSupply` is removed; use `MidnightCollateralTransfer`.
+- New `takeRepayWithdrawCollateral` (and the `midnightTakeRepayWithdrawCollateral` builder) repays
+  debt by taking borrow-side offers with `reduceOnly` set, repays the rest directly when
+  `repayEnabled` is true, then withdraws `collateralWithdrawals` to `collateralReceiver`
+  (default `accountAddress`). It takes a `MidnightBuyTarget` and needs the same approval and
+  authorization as `takeLend`.
 
 ## Ratifiers
 

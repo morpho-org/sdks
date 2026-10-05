@@ -513,6 +513,22 @@ export interface MidnightRedeemAction
     }
   > {}
 
+/** Metadata for a Midnight reduce-only bundle that repays debt through offers, then withdraws collateral. */
+export interface MidnightTakeRepayWithdrawCollateralAction
+  extends BaseAction<
+    "midnightTakeRepayWithdrawCollateral",
+    {
+      readonly market: Hex;
+      readonly target: MidnightBuyTarget;
+      readonly repayEnabled: boolean;
+      readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+      readonly collateralReceiver: Address;
+      readonly takeableOffers: number;
+      readonly maxContinuousFee: bigint;
+      readonly deadline: bigint;
+    }
+  > {}
+
 /** Metadata for a Midnight bundle that repays credit and/or withdraws collateral. */
 export interface MidnightRepayWithdrawCollateralAction
   extends BaseAction<
@@ -597,6 +613,7 @@ export type TransactionAction =
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
   | MidnightRedeemAction
+  | MidnightTakeRepayWithdrawCollateralAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction
   | MidnightCancelAndMakeAction;

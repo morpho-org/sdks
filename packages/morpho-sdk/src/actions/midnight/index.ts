@@ -8,4 +8,5 @@ export * from "./supplyCollateral.js";
 export * from "./supplyCollateralTakeBorrow.js";
 export * from "./takeBorrow.js";
 export * from "./takeLend.js";
+export * from "./takeRepayWithdrawCollateral.js";
 export * from "./types.js";

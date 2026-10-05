@@ -495,4 +495,92 @@ describe("Midnight requirements on fork", () => {
       }),
     ).resolves.toBeLessThan(debtBeforeRepay);
   });
+
+  test("executes take-repay-withdraw-collateral with direct repayment fallback", async ({
+    client,
+  }) => {
+    const collateralAssets = parseEther("1");
+    const loanAssets = parseUnits("1", 6);
+    await installTestOracle(client);
+    await deployMidnightBundlesV2(client);
+    await client.deal({ erc20: wNative, amount: collateralAssets });
+    const lendOffer = await prepareTakeableOffer({
+      client,
+      buy: true,
+      units: 2n * loanAssets,
+    });
+    const midnightEntity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id);
+    const borrow = midnightEntity.supplyCollateralTakeBorrow({
+      marketData,
+      accountAddress: client.account.address,
+      collateralSupplies: [{ collateralIndex: 0n, assets: collateralAssets }],
+      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
+      takeableOffers: [lendOffer],
+      deadline: maxUint256,
+    });
+    for (const requirement of await borrow.getRequirements()) {
+      if (!("to" in requirement)) {
+        throw new Error("expected an onchain call requirement");
+      }
+      await client.sendTransaction(requirement);
+    }
+    await client.sendTransaction(borrow.buildTx());
+    const debt = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "debt",
+      args: [marketId, client.account.address],
+    });
+    expect(debt).toBeGreaterThan(0n);
+
+    // The offer covers half the debt; repayEnabled repays the rest directly.
+    const borrowOffer = await prepareTakeableOffer({
+      client,
+      buy: false,
+      units: debt / 2n,
+    });
+    await client.deal({ erc20: usdc, amount: 2n * debt });
+    const repay = midnightEntity.takeRepayWithdrawCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: maxUint256, maxBuyerAssets: 2n * debt },
+      takeableOffers: [borrowOffer],
+      repayEnabled: true,
+      collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    const repayRequirements = await repay.getRequirements();
+    expect(
+      repayRequirements.map((requirement) => requirement.action.type),
+    ).toEqual(["erc20Approval"]);
+    for (const requirement of repayRequirements) {
+      if (!("to" in requirement)) {
+        throw new Error("expected an onchain call requirement");
+      }
+      await client.sendTransaction(requirement);
+    }
+    await client.sendTransaction(repay.buildTx());
+
+    const account = client.account.address;
+    const read = (functionName: "debt" | "credit") =>
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName,
+        args: [marketId, account],
+      });
+    await expect(read("debt")).resolves.toBe(0n);
+    await expect(read("credit")).resolves.toBe(0n);
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        args: [marketId, account, 0n],
+      }),
+    ).resolves.toBe(0n);
+  });
 });

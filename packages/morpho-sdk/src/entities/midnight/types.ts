@@ -199,6 +199,25 @@ export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
   readonly collateralSupplies: readonly MidnightCollateralTransfer[];
 }
 
+/** Parameters for the Midnight offer-based repay-and-withdraw-collateral taker flow. */
+export interface TakeRepayWithdrawCollateralParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets paid with a unit floor, or debt units repaid with a loan-asset cap. */
+  readonly target: MidnightBuyTarget;
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
+  /** Repays the rest of the target directly to Midnight when offers do not fill it. */
+  readonly repayEnabled: boolean;
+  /** Collateral withdrawn after repaying. Defaults to none. */
+  readonly collateralWithdrawals?: readonly MidnightCollateralTransfer[];
+  /** Recipient of withdrawn collateral. Defaults to `accountAddress`. */
+  readonly collateralReceiver?: Address;
+  /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
+  readonly maxContinuousFee: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
+}
+
 /** Parameters for the Midnight supply-collateral flow. */
 export interface SupplyCollateralParams extends MarketActionParams {
   readonly collateralAssets: bigint;

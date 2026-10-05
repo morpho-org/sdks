@@ -36,6 +36,7 @@ import {
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
   midnightTakeLend,
+  midnightTakeRepayWithdrawCollateral,
 } from "../../actions/midnight/index.js";
 import {
   getMidnightApprovalRequirements,
@@ -69,6 +70,7 @@ import {
   type MidnightSupplyCollateralTakeBorrowAction,
   type MidnightTakeBorrowAction,
   type MidnightTakeLendAction,
+  type MidnightTakeRepayWithdrawCollateralAction,
   MissingAccrualPositionError,
   NegativeInputError,
   NoMidnightCreditToRedeemError,
@@ -90,6 +92,7 @@ import type {
   SupplyCollateralTakeBorrowParams,
   TakeBorrowParams,
   TakeLendParams,
+  TakeRepayWithdrawCollateralParams,
 } from "./types.js";
 
 /**
@@ -126,6 +129,7 @@ export type MidnightActions = Pick<
   | "takeLend"
   | "takeBorrow"
   | "supplyCollateralTakeBorrow"
+  | "takeRepayWithdrawCollateral"
   | "supplyCollateral"
   | "cancelAndMakeLend"
   | "cancelAndMakeBorrow"
@@ -556,6 +560,92 @@ export class MorphoMidnight {
           collateralAmounts,
           params.accountAddress,
         ),
+      buildTx: () => tx,
+    };
+  }
+
+  /**
+   * Prepares a `MidnightBundlesV2` reduce-only buy that repays `accountAddress`'s debt by taking
+   * borrow-side offers, optionally repays the remainder directly, then withdraws collateral.
+   *
+   * `reduceOnly` is always set, so the buy never opens a lender position.
+   *
+   * @param params - Borrower, market snapshot, buy target, offers, repay fallback, withdrawals, fee cap, deadline and optional referral fee.
+   * @param params.accountAddress - Borrower; must send the transaction, since V2 acts for `msg.sender`.
+   * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
+   * @param params.target - `{ type: "assets", assets, minUnits }` or `{ type: "units", units, maxBuyerAssets }`.
+   * @param params.takeableOffers - Borrow-side offers returned by the Midnight API.
+   * @param params.repayEnabled - Whether the unfilled remainder is repaid directly to Midnight.
+   * @param params.collateralWithdrawals - Optional collateral withdrawals; `maxUint256` assets withdraws the whole balance.
+   * @param params.collateralReceiver - Optional collateral recipient; defaults to `accountAddress`.
+   * @param params.maxContinuousFee - Largest market continuous fee accepted; pass `maxUint256` for no cap.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee paid out of the pulled assets.
+   * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
+   * @returns Lazy loan-token approval and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
+   * @throws {NonPositiveInputError} when the target amount, a withdrawal amount or `deadline` is not positive.
+   * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
+   * @throws {MidnightCollateralIndexOutOfBoundsError} when a withdrawal names an unknown collateral.
+   * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
+   * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
+   * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+   * @example
+   * ```ts
+   * const output = midnight.takeRepayWithdrawCollateral({
+   *   accountAddress: borrower,
+   *   marketData,
+   *   target: { type: "units", units: 1_000_000n, maxBuyerAssets: 990_000n },
+   *   takeableOffers: quote.data.takeableOffers,
+   *   repayEnabled: true,
+   *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+   *   maxContinuousFee: maxUint256,
+   *   deadline: maxUint256,
+   * });
+   * ```
+   */
+  takeRepayWithdrawCollateral(
+    params: TakeRepayWithdrawCollateralParams,
+  ): MidnightActionOutput<MidnightTakeRepayWithdrawCollateralAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const market = params.marketData.params;
+    const tx = midnightTakeRepayWithdrawCollateral({
+      chainId: this.chainId,
+      market,
+      target: params.target,
+      takeableOffers: params.takeableOffers,
+      repayEnabled: params.repayEnabled,
+      collateralWithdrawals: params.collateralWithdrawals ?? [],
+      collateralReceiver: params.collateralReceiver ?? params.accountAddress,
+      maxContinuousFee: params.maxContinuousFee,
+      deadline: params.deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+      metadata: this.client.options.metadata,
+    });
+    const pulledAssets =
+      params.target.type === "assets"
+        ? params.target.assets
+        : params.target.maxBuyerAssets;
+
+    return {
+      getRequirements: async () => [
+        ...(await getMidnightApprovalRequirements({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          token: market.loanToken,
+          owner: params.accountAddress,
+          spender: tx.to,
+          amount: pulledAssets,
+        })),
+        ...(await this.getBundlesV2AuthorizationRequirements(
+          params.accountAddress,
+        )),
+      ],
       buildTx: () => tx,
     };
   }

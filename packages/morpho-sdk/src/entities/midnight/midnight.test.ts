@@ -572,6 +572,78 @@ describe("MorphoMidnight", () => {
     });
   });
 
+  describe("takeRepayWithdrawCollateral", () => {
+    const params = {
+      marketData: marketData(),
+      accountAddress: midnightAddresses.taker,
+      target: { type: "units", units: 1_000n, maxBuyerAssets: 990n },
+      takeableOffers: [midnightApiTake()],
+      repayEnabled: true,
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    } as const;
+
+    test("default", () => {
+      const tx = midnight().takeRepayWithdrawCollateral(params).buildTx();
+
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.args).toEqual({
+        market: midnightMarketId,
+        target: { type: "units", units: 1_000n, maxBuyerAssets: 990n },
+        repayEnabled: true,
+        collateralWithdrawals: [],
+        collateralReceiver: midnightAddresses.taker,
+        takeableOffers: 1,
+        maxContinuousFee: maxUint256,
+        deadline: maxUint256,
+      });
+    });
+
+    test("behavior: forwards withdrawals and an explicit collateral receiver", () => {
+      const tx = midnight()
+        .takeRepayWithdrawCollateral({
+          ...params,
+          collateralWithdrawals: [{ collateralIndex: 0n, assets: 5n }],
+          collateralReceiver: midnightAddresses.maker,
+        })
+        .buildTx();
+
+      expect(tx.action.args.collateralWithdrawals).toEqual([
+        { collateralIndex: 0n, assets: 5n },
+      ]);
+      expect(tx.action.args.collateralReceiver).toBe(midnightAddresses.maker);
+    });
+
+    test("behavior: requirements approve the asset cap to MidnightBundlesV2 and authorize it", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+
+      const requirements = await midnightWithHandle(handle)
+        .takeRepayWithdrawCollateral(params)
+        .getRequirements();
+
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 990n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.taker,
+          },
+        },
+      ]);
+    });
+  });
+
   describe("supplyCollateral", () => {
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
