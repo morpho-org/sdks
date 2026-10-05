@@ -130,7 +130,7 @@ describe("ChainUtils explorer URL helpers", () => {
       4_663,
       {
         name: "Robinhood Chain",
-        explorerUrl: "https://robinhoodchain.blockscout.com",
+        explorerUrl: "https://robin.etherscan.io",
         identifier: "robinhood",
         nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       },
