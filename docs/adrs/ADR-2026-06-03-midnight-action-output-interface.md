@@ -1,11 +1,11 @@
 # ADR-2026-06-03: Midnight action flow implementation
 
-| Field      | Value     |
-| ---------- | --------- |
-| **Status** | accepted  |
-| **Date**   | 2026-06-03 |
-| **Author** | Romain / Carapulse draft |
-| **Scope**  | Package: `morpho-sdk` / Midnight SDK |
+| Field      | Value                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| **Status** | accepted; maker mempool route superseded by ADR-2026-10-02-remove-midnight-mempool-maker-route |
+| **Date**   | 2026-06-03                                                                                     |
+| **Author** | Romain / Carapulse draft                                                                       |
+| **Scope**  | Package: `morpho-sdk` / Midnight SDK                                                           |
 
 _Migrated from TIB-2026-06-03-midnight-action-output-interface. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 

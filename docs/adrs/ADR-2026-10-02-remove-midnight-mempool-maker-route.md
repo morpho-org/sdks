@@ -80,4 +80,6 @@ No removal outside this list inherits this exception.
 
 - Supersedes, in part,
   [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](./ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md).
+- Supersedes, in part, the maker mempool route in
+  [`ADR-2026-06-03-midnight-action-output-interface`](./ADR-2026-06-03-midnight-action-output-interface.md).
 - Precedent: [`ADR-2026-09-17-remove-bundler3-primitives-without-deprecation`](./ADR-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
