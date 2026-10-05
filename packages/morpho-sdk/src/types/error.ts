@@ -1046,15 +1046,10 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
     readonly chainId: number;
     readonly permit2?: Address;
     readonly midnight?: Address;
-    readonly midnightBundles?: Address;
     readonly supportedSpenders?: readonly (Address | undefined)[];
   }) {
     const supported = (
-      params.supportedSpenders ?? [
-        params.permit2,
-        params.midnight,
-        params.midnightBundles,
-      ]
+      params.supportedSpenders ?? [params.permit2, params.midnight]
     )
       .filter((address) => address != null)
       .join('", "');

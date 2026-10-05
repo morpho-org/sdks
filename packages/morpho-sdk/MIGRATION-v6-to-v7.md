@@ -107,6 +107,20 @@ midnight.takeLend({
   offers with `reduceOnly` set, so it never opens debt. It needs only MidnightBundlesV2
   authorization. `redeem` stays the direct, offer-free path.
 
+## Removed MidnightBundles (V1) support
+
+v7 no longer routes anything through the V1 `midnightBundles` contract:
+
+- `midnightBundlesAbi` is no longer re-exported from `@morpho-org/morpho-sdk` or
+  `@morpho-org/morpho-sdk/midnight`. Import it from `@morpho-org/midnight-sdk` if you still need it.
+- `RequirementSpenderKey` drops `"midnightBundles"`. `encodeErc20Approval` and
+  `getMidnightApprovalRequirements` reject a `midnightBundles` spender, and `encodeErc20Permit` no
+  longer signs permits for it (V2 takes no inline permits).
+- `midnightSetIsAuthorized` and `getMidnightAuthorizationRequirement` accept only
+  `midnightBundlesV2` as the authorized operator. Revoke an existing V1 grant with Midnight's
+  `setIsAuthorized(midnightBundles, false, account)` directly.
+- `UnsupportedErc20ApprovalSpenderError` no longer takes a `midnightBundles` constructor field.
+
 ## repayWithdrawCollateral
 
 `repayWithdrawCollateral` now calls MidnightBundlesV2 for the sender (no `onBehalf`). It repays

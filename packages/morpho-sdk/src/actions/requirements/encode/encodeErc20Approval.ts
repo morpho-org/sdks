@@ -53,7 +53,6 @@ export const encodeErc20Approval = (
     allowed: [
       "permit2",
       "midnight",
-      "midnightBundles",
       "midnightBundlesV2",
       "vaultExitBundlesV1",
       "vaultBundlesV1",

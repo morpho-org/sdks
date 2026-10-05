@@ -96,7 +96,7 @@ export const encodeErc20Permit = async (
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: ["midnightBundles", "vaultBundlesV1", "blueBundlesV1"],
+    allowed: ["vaultBundlesV1", "blueBundlesV1"],
   });
 
   const now = Time.timestamp();

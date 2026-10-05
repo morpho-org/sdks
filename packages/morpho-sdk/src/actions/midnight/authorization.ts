@@ -40,7 +40,7 @@ export interface MidnightSetIsAuthorizedParams {
  *
  * const tx = midnightSetIsAuthorized({
  *   chainId: 8453,
- *   authorized: midnightBundles,
+ *   authorized: midnightBundlesV2,
  *   onBehalf: user,
  * });
  * ```

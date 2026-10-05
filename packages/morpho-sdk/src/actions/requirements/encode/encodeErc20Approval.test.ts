@@ -86,7 +86,6 @@ describe("encodeErc20Approval", () => {
 
   test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
-    { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
     { name: "MidnightBundlesV2", spender: midnightBundlesV2 },
   ])("behavior: encodes an approval for $name", ({ spender }) => {
     const transaction = encodeErc20Approval({

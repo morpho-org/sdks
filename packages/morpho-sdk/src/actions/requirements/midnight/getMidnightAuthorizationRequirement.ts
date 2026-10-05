@@ -40,7 +40,7 @@ export interface GetMidnightAuthorizationRequirementParams {
  *   viemClient: client,
  *   chainId: 8453,
  *   owner: user,
- *   authorized: midnightBundles,
+ *   authorized: midnightBundlesV2,
  * });
  * if (tx) {
  *   await walletClient.sendTransaction({

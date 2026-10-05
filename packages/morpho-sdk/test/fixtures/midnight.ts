@@ -15,7 +15,6 @@ const midnightLiquidationCursor = 250000000000000000n;
 
 export const midnightAddresses = {
   midnight: getChainAddress(midnightChainId, "midnight"),
-  midnightBundles: getChainAddress(midnightChainId, "midnightBundles"),
   midnightMempool: getChainAddress(midnightChainId, "midnightMempool"),
   ecrecoverRatifier: getChainAddress(midnightChainId, "ecrecoverRatifier"),
   setterRatifier: getChainAddress(midnightChainId, "setterRatifier"),

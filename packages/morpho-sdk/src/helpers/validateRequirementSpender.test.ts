@@ -11,8 +11,8 @@ describe("validateRequirementSpender", () => {
     expect(() =>
       validateRequirementSpender({
         chainId: midnightChainId,
-        spender: midnightAddresses.midnightBundles,
-        allowed: ["midnightBundles"],
+        spender: midnightAddresses.midnight,
+        allowed: ["midnight"],
       }),
     ).not.toThrow();
   });
@@ -21,7 +21,7 @@ describe("validateRequirementSpender", () => {
     expect(() =>
       validateRequirementSpender({
         chainId: midnightChainId,
-        spender: midnightAddresses.midnightBundles,
+        spender: midnightAddresses.taker,
         allowed: ["midnight"],
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);

@@ -187,7 +187,7 @@ describe("Midnight requirements on fork", () => {
   }) => {
     const amount = parseUnits("1", 6);
     const owner = client.account.address;
-    const spender = getChainAddress(ChainId.BaseMainnet, "midnightBundles");
+    const spender = getChainAddress(ChainId.BaseMainnet, "midnight");
 
     const requirements = await getMidnightApprovalRequirements({
       viemClient: client,
@@ -232,7 +232,7 @@ describe("Midnight requirements on fork", () => {
     client,
   }) => {
     const owner = client.account.address;
-    const authorized = getChainAddress(ChainId.BaseMainnet, "midnightBundles");
+    const authorized = await deployMidnightBundlesV2(client);
     const requirement = await getMidnightAuthorizationRequirement({
       viemClient: client,
       chainId: base.id,

@@ -43,7 +43,7 @@ describe("getMidnightApprovalRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
+        spender: midnightBundlesV2,
         amount: 1n,
       }),
     ).rejects.toThrow(ChainIdMismatchError);
@@ -58,7 +58,7 @@ describe("getMidnightApprovalRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
+        spender: midnightBundlesV2,
         amount: 0n,
       }),
     ).resolves.toEqual([]);
@@ -73,7 +73,7 @@ describe("getMidnightApprovalRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
+        spender: midnightBundlesV2,
         amount: -1n,
       }),
     ).rejects.toThrow(NegativeInputError);
@@ -96,7 +96,6 @@ describe("getMidnightApprovalRequirements", () => {
 
   test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
-    { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
     { name: "MidnightBundlesV2", spender: midnightBundlesV2 },
   ])(
     "returns an approval for $name when allowance is insufficient",
@@ -140,7 +139,7 @@ describe("getMidnightApprovalRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
+        spender: midnightBundlesV2,
         amount: 1_000n,
       }),
     ).resolves.toEqual([]);

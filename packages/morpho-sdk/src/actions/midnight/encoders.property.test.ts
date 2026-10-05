@@ -143,7 +143,7 @@ describe("Midnight calldata encoders", () => {
           abi: midnightAbi,
           data: midnightSetIsAuthorized({
             chainId: midnightChainId,
-            authorized: midnightAddresses.midnightBundles,
+            authorized: getChainAddress(midnightChainId, "midnightBundlesV2"),
             onBehalf: midnightAddresses.taker,
             isAuthorized: flag,
           }).data,

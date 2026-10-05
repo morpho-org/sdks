@@ -51,7 +51,7 @@ export interface GetMidnightApprovalRequirementsParams {
  *   chainId: 8453,
  *   token: loanToken,
  *   owner: user,
- *   spender: midnightBundles,
+ *   spender: midnightBundlesV2,
  *   amount: 1_000_000n,
  * });
  * if (approvals.length === 0) {
@@ -70,7 +70,7 @@ export const getMidnightApprovalRequirements = async (
   validateRequirementSpender({
     chainId: params.chainId,
     spender: params.spender,
-    allowed: ["midnight", "midnightBundles", "midnightBundlesV2"],
+    allowed: ["midnight", "midnightBundlesV2"],
   });
   if (params.amount === 0n) return [];
 

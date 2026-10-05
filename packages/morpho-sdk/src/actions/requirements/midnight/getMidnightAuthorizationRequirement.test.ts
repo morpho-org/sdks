@@ -44,7 +44,7 @@ describe("getMidnightAuthorizationRequirement", () => {
         viemClient: client,
         chainId: midnightChainId,
         owner: midnightAddresses.taker,
-        authorized: midnightAddresses.midnightBundles,
+        authorized: midnightBundlesV2,
       }),
     ).rejects.toThrow(ChainIdMismatchError);
   });
@@ -63,7 +63,7 @@ describe("getMidnightAuthorizationRequirement", () => {
         viemClient: handle.client,
         chainId: midnightChainId,
         owner: midnightAddresses.taker,
-        authorized: midnightAddresses.midnightBundles,
+        authorized: midnightBundlesV2,
       }),
     ).resolves.toBeNull();
   });
@@ -81,15 +81,15 @@ describe("getMidnightAuthorizationRequirement", () => {
       viemClient: handle.client,
       chainId: midnightChainId,
       owner: midnightAddresses.taker,
-      authorized: midnightAddresses.midnightBundles,
+      authorized: midnightBundlesV2,
     });
 
     expect(tx?.to).toBe(midnightAddresses.midnight);
     expect(tx?.action.type).toBe("midnightAuthorization");
-    expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
+    expect(tx?.action.args.authorized).toBe(midnightBundlesV2);
   });
 
-  test.each([midnightAddresses.midnightBundles, midnightBundlesV2])(
+  test.each([midnightBundlesV2])(
     "behavior: accepts supported target %s",
     async (authorized) => {
       const handle = createMockClient(midnightTestChain);
