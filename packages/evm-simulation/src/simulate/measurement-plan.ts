@@ -117,8 +117,6 @@ export function operationMeasurementPlan(
     case "vaultV2Redeem":
     case "vaultV2ForceWithdraw":
     case "vaultV2ForceRedeem":
-    case "vaultV1InKindRedeem":
-    case "vaultV2InKindRedeem":
       return {
         subject: {
           operation: limit.type,
@@ -127,6 +125,21 @@ export function operationMeasurementPlan(
         assetsPaid: vault(limit.vault),
         assetsReceived: vault(limit.vault),
         sharesMinted: balance(limit.vault),
+        sharesBurned: balance(limit.vault),
+      };
+    case "vaultV1InKindRedeem":
+    case "vaultV2InKindRedeem":
+      return {
+        subject: {
+          operation: limit.type,
+          vault: limit.vault,
+          ...(limit.marketId === undefined ? {} : { marketId: limit.marketId }),
+        },
+        assetsPaid: vault(limit.vault),
+        assetsReceived: vault(limit.vault),
+        ...(limit.marketId === undefined
+          ? {}
+          : { sharesMinted: position(limit.marketId, "supplyShares") }),
         sharesBurned: balance(limit.vault),
       };
     case "vaultV1MigrateToV2":

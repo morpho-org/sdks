@@ -590,6 +590,7 @@ const createChecks = (): FieldChecks => {
         return undefined;
       }
       const spec = OPERATION_SPECS[type as OperationType];
+      const requiredMarkets = new Set(spec.requiredMarkets);
       const requiredAddresses = new Set(spec.requiredAddresses);
       check.keys(operation, {
         allow: [
@@ -604,10 +605,9 @@ const createChecks = (): FieldChecks => {
       const errorsBefore = errors.length;
       const out = { type } as OperationLimit;
       for (const field of spec.markets) {
-        const value = check.marketId(
-          readField(operation, field),
-          `${path}.${field}`,
-        );
+        const raw = readField(operation, field);
+        if (raw === undefined && !requiredMarkets.has(field)) continue;
+        const value = check.marketId(raw, `${path}.${field}`);
         if (value !== undefined) Reflect.set(out, field, value);
       }
       for (const field of spec.addresses) {
@@ -724,26 +724,35 @@ const QUOTE_FIELDS = [
 ] as const satisfies readonly (keyof SlippageQuote)[];
 const MARKET_SUBJECT = {
   markets: ["marketId"],
+  requiredMarkets: ["marketId"],
   addresses: ["account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: [],
 } as const satisfies {
   readonly markets: readonly LimitKey[];
+  readonly requiredMarkets: readonly LimitKey[];
   readonly addresses: readonly LimitKey[];
   readonly requiredAddresses: readonly LimitKey[];
 };
 const VAULT_SUBJECT = {
   markets: [],
+  requiredMarkets: [],
   addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: ["vault"],
 } as const satisfies {
   readonly markets: readonly LimitKey[];
+  readonly requiredMarkets: readonly LimitKey[];
   readonly addresses: readonly LimitKey[];
   readonly requiredAddresses: readonly LimitKey[];
 };
+const VAULT_IN_KIND_REDEEM_SUBJECT = {
+  ...VAULT_SUBJECT,
+  markets: ["marketId"],
+} as const;
 const OPERATION_SPECS: Record<
   OperationType,
   {
     readonly markets: readonly LimitKey[];
+    readonly requiredMarkets: readonly LimitKey[];
     readonly addresses: readonly LimitKey[];
     readonly requiredAddresses: readonly LimitKey[];
   }
@@ -759,6 +768,7 @@ const OPERATION_SPECS: Record<
   blueRefinance: {
     ...MARKET_SUBJECT,
     markets: ["sourceMarketId", "targetMarketId"],
+    requiredMarkets: ["sourceMarketId", "targetMarketId"],
   },
   vaultV1Deposit: VAULT_SUBJECT,
   vaultV2Deposit: VAULT_SUBJECT,
@@ -768,10 +778,11 @@ const OPERATION_SPECS: Record<
   vaultV2Redeem: VAULT_SUBJECT,
   vaultV2ForceWithdraw: VAULT_SUBJECT,
   vaultV2ForceRedeem: VAULT_SUBJECT,
-  vaultV1InKindRedeem: VAULT_SUBJECT,
-  vaultV2InKindRedeem: VAULT_SUBJECT,
+  vaultV1InKindRedeem: VAULT_IN_KIND_REDEEM_SUBJECT,
+  vaultV2InKindRedeem: VAULT_IN_KIND_REDEEM_SUBJECT,
   vaultV1MigrateToV2: {
     markets: [],
+    requiredMarkets: [],
     addresses: [
       "sourceVault",
       "targetVault",

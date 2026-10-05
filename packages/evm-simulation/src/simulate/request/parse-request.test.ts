@@ -481,6 +481,67 @@ describe("parseRequest", () => {
     });
   });
 
+  test("behavior: accepts marketId on an in-kind redemption limit", () => {
+    const marketId = `0x${"11".repeat(32)}` as const;
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2InKindRedeem",
+            vault: SPENDER,
+            marketId,
+            quote: { sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    });
+    expect(request.limits?.operations?.[0]).toMatchObject({ marketId });
+  });
+
+  test.each([
+    {
+      name: "marketId on a non-in-kind vault limit",
+      operation: {
+        type: "vaultV2Deposit",
+        vault: SPENDER,
+        marketId: `0x${"11".repeat(32)}`,
+        quote: { sharesMinted: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError: "limits.operations[0].marketId: unknown field",
+    },
+    {
+      name: "in-kind sharesMinted without marketId",
+      operation: {
+        type: "vaultV2InKindRedeem",
+        vault: SPENDER,
+        quote: { sharesMinted: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError:
+        'limits.operations[0].quote.sharesMinted: cannot be measured for "vaultV2InKindRedeem"',
+    },
+  ])("error: rejects $name", ({ operation, fieldError }) => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { operations: [operation as never] },
+        });
+      } catch (caughtError) {
+        return caughtError;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(error).toMatchObject({
+      fieldErrors: expect.arrayContaining([fieldError]),
+    });
+  });
+
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
       try {

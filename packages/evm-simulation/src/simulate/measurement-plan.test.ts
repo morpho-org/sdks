@@ -126,8 +126,6 @@ const cases: {
       "vaultV2Redeem",
       "vaultV2ForceWithdraw",
       "vaultV2ForceRedeem",
-      "vaultV1InKindRedeem",
-      "vaultV2InKindRedeem",
     ] as const
   ).map((type) => ({
     type,
@@ -136,6 +134,16 @@ const cases: {
       assetsPaid: vaultSource(vault),
       assetsReceived: vaultSource(vault),
       sharesMinted: balance(vault),
+      sharesBurned: balance(vault),
+    },
+  })),
+  ...(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const).map((type) => ({
+    type,
+    expected: {
+      subject: { operation: type, vault, marketId },
+      assetsPaid: vaultSource(vault),
+      assetsReceived: vaultSource(vault),
+      sharesMinted: position(marketId, "supplyShares"),
       sharesBurned: balance(vault),
     },
   })),
@@ -175,4 +183,22 @@ describe("operationMeasurementPlan", () => {
       expect(operationMeasurementPlan(limitFor(type))).toEqual(expected);
     },
   );
+});
+
+describe("operationMeasurementPlan in-kind redemption", () => {
+  test("behavior: without marketId, sharesMinted has no source", () => {
+    expect(
+      operationMeasurementPlan({
+        type: "vaultV2InKindRedeem",
+        vault,
+        quote: { sharesBurned: 1n },
+        slippageTolerance: 0n,
+      }),
+    ).toEqual({
+      subject: { operation: "vaultV2InKindRedeem", vault },
+      assetsPaid: vaultSource(vault),
+      assetsReceived: vaultSource(vault),
+      sharesBurned: balance(vault),
+    });
+  });
 });

@@ -4,7 +4,10 @@ import {
   getChainAddresses,
   MarketParams,
 } from "@morpho-org/blue-sdk";
-import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+import {
+  morphoViemExtension,
+  previewVaultV2InKindRedeem,
+} from "@morpho-org/morpho-sdk";
 import { blueBundlesV1Abi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -1222,6 +1225,86 @@ describe.sequential("simulate pipeline — vault exits", () => {
     });
     expect(result.verification.operations[0]!.operation).toBe(
       "vaultV2InKindRedeem",
+    );
+  }, 240_000);
+
+  test("V2 in-kind redemption credits the quoted Blue position", async ({
+    client,
+  }) => {
+    await depositV2Shares(client, parseUnits("1000", 6));
+    const morphoClient = client.extend(
+      morphoViemExtension({ supportSignature: false }),
+    ).morpho;
+    const vault = morphoClient.vaultV2(KEYROCK, mainnet.id);
+    const vaultData = await vault.getData();
+    const adapter = vaultData.accrualAdapters[0];
+    if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+      throw new Error("Keyrock vault has no Blue market adapter at the pin");
+    }
+    const { timestamp } = await client.getBlock();
+    const [choice] = previewVaultV2InKindRedeem(vaultData, {
+      requestedExitAssets: vaultData.assetBalance + parseUnits("100", 6),
+      timestamp,
+    });
+    if (choice === undefined || choice.netAssets === 0n) {
+      throw new Error("Keyrock vault has no in-kind market at the pin");
+    }
+    const market = adapter.markets.find(
+      (m) => m.id === choice.marketParams.id,
+    )!;
+    const exit = vault.inKindRedeem({
+      amount: choice.exitAssets,
+      marketParamsList: [choice.marketParams],
+      vaultData,
+      userAddress: client.account.address,
+      deadline: BigInt(Math.floor(Date.now() / 1_000)) + 3600n,
+    });
+    const auths = toSimulationAuthorizations({
+      chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
+      owner: client.account.address,
+      requirements: await exit.getRequirements(),
+    });
+    const tx = exit.buildTx();
+    const sharesMinted = market
+      .accrueInterest(timestamp)
+      .toSupplyShares(choice.netAssets);
+    const run = (quotedShares: bigint) =>
+      simulate(configFor(client), {
+        chainId: mainnet.id,
+        mode: "preview",
+        authorizations: auths,
+        limits: {
+          operations: [
+            {
+              type: "vaultV2InKindRedeem",
+              vault: KEYROCK,
+              marketId: choice.marketParams.id,
+              quote: { sharesMinted: quotedShares },
+              slippageTolerance: 10_000000000000000n,
+            },
+          ],
+        },
+        transactions: [
+          {
+            from: client.account.address,
+            to: tx.to,
+            data: tx.data,
+            value: tx.value,
+          },
+        ],
+      });
+
+    const result = await run(sharesMinted);
+    expect(result.verification.operations[0]).toMatchObject({
+      operation: "vaultV2InKindRedeem",
+      vault: KEYROCK,
+      marketId: choice.marketParams.id,
+      checkedLimits: { quote: { sharesMinted } },
+    });
+    await expect(run(sharesMinted * 2n)).rejects.toBeInstanceOf(
+      ConsumerLimitViolationError,
     );
   }, 240_000);
 });

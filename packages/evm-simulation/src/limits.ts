@@ -82,6 +82,8 @@ export interface VaultOperationSubject {
   readonly operation: VaultOperationType;
   /** Vault the operation acts on. */
   readonly vault: Address;
+  /** Blue market whose supply position an in-kind redemption credits. */
+  readonly marketId?: MarketId;
 }
 
 /** Subject of a Vault V1 → V2 migration. */
@@ -106,7 +108,8 @@ export type SimulationOperationSubject =
 export interface SlippageQuote {
   /**
    * Expected net assets credited to the receiver. For in-kind vault redemptions,
-   * this measures only the wallet balance of the vault asset, not Morpho positions.
+   * this measures only the wallet balance of the vault asset; quote the credited
+   * Blue position with `sharesMinted` and `marketId`.
    */
   readonly assetsReceived?: bigint;
   /**
@@ -161,6 +164,12 @@ export type OperationLimit = SlippageLimits & {
     | {
         readonly type: VaultOperationType;
         readonly vault: Address;
+        /**
+         * In-kind redemptions only: Blue market whose supply position the
+         * redemption credits to `account`. With it, `sharesMinted` measures
+         * that position's supply shares; add one entry per market.
+         */
+        readonly marketId?: MarketId;
       }
     | {
         readonly type: "vaultV1MigrateToV2";
