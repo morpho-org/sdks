@@ -49,6 +49,7 @@ function commitAll(repo: string) {
 }
 
 describe("verifyArtifact", () => {
+  const sources = new Map<string, string>();
   function artifact() {
     const repo = tempDir();
     execFileSync("git", ["init", "-q", repo]);
@@ -74,11 +75,28 @@ describe("verifyArtifact", () => {
     execFileSync("sh", ["-c", "sha256sum ./*.tgz > SHA256SUMS"], {
       cwd: join(out, "tarballs"),
     });
+    sources.set(out, repo);
     return out;
   }
 
   test("accepts an untouched artifact", () => {
     expect(verifyArtifact(artifact()).files).toHaveLength(2);
+  });
+
+  test("accepts an artifact generated from the given commit", () => {
+    const dir = artifact();
+    const repo = sources.get(dir) ?? "";
+    expect(verifyArtifact(dir, { repo, sha: "HEAD" }).files).toHaveLength(2);
+  });
+
+  test("rejects an artifact that another commit doesn't produce", () => {
+    const dir = artifact();
+    const repo = sources.get(dir) ?? "";
+    write(repo, { "README.md": "changed\n" });
+    commitAll(repo);
+    expect(() => verifyArtifact(dir, { repo, sha: "HEAD" })).toThrow(
+      "doesn't match the tree generated",
+    );
   });
 
   test.each([

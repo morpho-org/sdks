@@ -4,14 +4,20 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   lstatSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, posix, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
-import type { PublicTreeManifest } from "../public-snapshot/generate.ts";
+import {
+  generatePublicSnapshot,
+  type PublicTreeManifest,
+} from "../public-snapshot/generate.ts";
 
 type FileMode = PublicTreeManifest["files"][number]["mode"];
 const MODES = [
@@ -72,10 +78,18 @@ export function parseManifest(value: unknown): PublicTreeManifest {
  * `public-tree.json`, with the same type, executable bit and SHA-256, and every
  * tarball must match `tarballs/SHA256SUMS`. Throws on the first difference.
  *
+ * With `source`, the tree is also regenerated from git at that commit and its
+ * `public-tree.json` must match byte for byte, which ties the artifact to the
+ * commit instead of only to itself.
+ *
  * @param dir - Artifact directory, as assembled by the public-snapshot workflow.
+ * @param source - Repository and commit the artifact must come from.
  * @returns The verified manifest.
  */
-export function verifyArtifact(dir: string): PublicTreeManifest {
+export function verifyArtifact(
+  dir: string,
+  source?: { readonly repo: string; readonly sha: string },
+): PublicTreeManifest {
   const manifestPath = join(dir, "public-tree.json");
   const sumsPath = join(dir, "tarballs", "SHA256SUMS");
   for (const path of [manifestPath, sumsPath]) {
@@ -84,6 +98,21 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
   const manifest = parseManifest(
     JSON.parse(readFileSync(manifestPath, "utf8")),
   );
+  if (source) {
+    const scratch = mkdtempSync(join(tmpdir(), "public-tree-expected-"));
+    try {
+      const outDir = join(scratch, "out");
+      generatePublicSnapshot({ ...source, outDir });
+      const expected = readFileSync(join(outDir, "public-tree.json"));
+      if (!expected.equals(readFileSync(manifestPath))) {
+        throw new Error(
+          `public-tree.json doesn't match the tree generated from ${source.sha}.`,
+        );
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
   const treeDir = join(dir, "tree");
 
   // Every non-directory entry, with the git mode it has on disk.
@@ -162,10 +191,14 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
 }
 
 if (import.meta.main) {
-  const { values } = parseArgs({ options: { dir: { type: "string" } } });
-  if (!values.dir)
-    throw new Error("Usage: verify-artifact.ts --dir <artifact>");
-  const manifest = verifyArtifact(values.dir);
+  const { values } = parseArgs({
+    options: { dir: { type: "string" }, sha: { type: "string" } },
+  });
+  if (!values.dir || !values.sha)
+    throw new Error(
+      "Usage: verify-artifact.ts --dir <artifact> --sha <commit>",
+    );
+  const manifest = verifyArtifact(values.dir, { repo: ".", sha: values.sha });
   console.log(
     `Artifact OK: ${manifest.files.length} files, tree ${manifest.treeHash}, from ${manifest.sourceCommit}.`,
   );
