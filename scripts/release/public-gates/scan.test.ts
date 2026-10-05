@@ -16,6 +16,7 @@ import {
   evaluate,
   POLICY_PATH,
   parsePolicy,
+  parseTargets,
   readTarballs,
   readTree,
   scanFiles,
@@ -274,6 +275,10 @@ test("don't scan the tarball name itself", () => {
 test.each([
   `process.env["PRIVATE_KEY"] ?? "${REAL_KEY}"`,
   `getEnv("PRIVATE_KEY") ?? "${REAL_KEY}"`,
+  `const privKey = "${REAL_KEY}";`,
+  `PRIV_KEY=${REAL_KEY}`,
+  `process.env.PRIVATE_KEY ?? process.env.FALLBACK ?? "${REAL_KEY}"`,
+  `env["PK"] || env["BACKUP"] || "${REAL_KEY}"`,
   `{"code":"const PRIVATE_KEY = \\"${REAL_KEY}\\";"}`,
 ])("flag a wallet key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
@@ -471,6 +476,23 @@ describe("evaluate", () => {
     expect(evaluate({ ...base, scannedFiles: 0, ...input })).toEqual({
       exitCode: 1,
       errors: [error],
+    });
+  });
+});
+
+describe("parseTargets", () => {
+  test.each([
+    ["an empty --tree", { tree: "", tarballs: "packs" }],
+    ["an empty --tarballs", { tree: "tree", tarballs: "" }],
+    ["no flags", {}],
+  ])("rejects %s", (_, flags) => {
+    expect(() => parseTargets(flags)).toThrow();
+  });
+
+  test("returns the given directories", () => {
+    expect(parseTargets({ tarballs: "packs" })).toEqual({
+      tree: undefined,
+      tarballs: "packs",
     });
   });
 });
