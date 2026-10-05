@@ -35,9 +35,10 @@ const RULES = {
   // hex values (market ids, hashes) are everywhere. No leading boundary, so
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|pk)["'`]?(?:\s*:\s*\w+)?\s*[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|pk)\w*["'`]?\s*(?::[^=;\n]{1,80})?[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+  // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
-    /(?:(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
+    /(?:(?:mnemonic|seed[_-]?phrase)\w*["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
@@ -135,23 +136,15 @@ export function parsePolicy(policy: unknown): ScanPolicy {
 
 // Published test values: the Hardhat/Anvil default mnemonic, its first account
 // key, and trivial keys such as 0x…01. Fixtures and the published test package use them.
-const PUBLIC_TEST_SECRETS = [
+const PUBLIC_TEST_SECRETS = new Set([
   "test test test test test test test test test test test junk",
   "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-];
-
-function isPublicTestSecret(rule: RuleId, match: string): boolean {
-  if (rule !== "wallet-key" && rule !== "mnemonic") return false;
-  const text = match.toLowerCase();
-  return (
-    /0{48}[0-9a-f]{16}\b/.test(text) ||
-    PUBLIC_TEST_SECRETS.some((secret) => text.includes(secret))
-  );
-}
+]);
 
 /**
  * Finds every rule match in files. NUL bytes are dropped first, so UTF-16 text and
- * text inside binaries are still scanned.
+ * text inside binaries are still scanned. A key or mnemonic whose value is exactly
+ * a published test value (Anvil defaults, keys like 0x…01) is skipped.
  *
  * @param files - Files to scan.
  * @param blockedTerms - Extra case-insensitive terms to block.
@@ -179,18 +172,30 @@ export function scanFiles(
       : content;
     // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
     const source = text.toString("utf8");
+    const fileFindings: Finding[] = [];
     const lineStarts = [0];
     for (let index = source.indexOf("\n"); index !== -1; ) {
       lineStarts.push(index + 1);
       index = source.indexOf("\n", index + 1);
     }
     for (const [rule, pattern] of rules) {
-      for (const { 0: match, index } of source.matchAll(pattern)) {
-        if (isPublicTestSecret(rule, match)) continue;
+      for (const { 0: match, index, groups } of source.matchAll(pattern)) {
+        const secret = groups?.secret?.toLowerCase().replace(/^0x/, "");
+        if (
+          secret !== undefined &&
+          (PUBLIC_TEST_SECRETS.has(secret) ||
+            /^0{48}[0-9a-f]{16}$/.test(secret))
+        ) {
+          continue;
+        }
         const line = lineStarts.findLastIndex((start) => start <= index) + 1;
-        findings.push({ path, line, rule, match });
+        fileFindings.push({ path, line, rule, match });
       }
     }
+    fileFindings.sort(
+      (a, b) => a.line - b.line || a.rule.localeCompare(b.rule),
+    );
+    findings.push(...fileFindings);
   }
   return findings;
 }
