@@ -145,8 +145,16 @@ export type DepositParameters<
  * @returns The extended test client.
  *
  * @example
- * const client = createAnvilTestClient(http(anvil.rpcUrl), mainnet);
- * const hash = await client.sendTransaction({ to, value }); // mined
+ * import { createAnvilTestClient } from "@morpho-org/test";
+ * import { http, parseEther, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createAnvilTestClient(http("http://127.0.0.1:8545"), mainnet);
+ * const hash = await client.sendTransaction({
+ *   to: zeroAddress,
+ *   value: parseEther("1"),
+ * });
+ * // => "0x…", already mined under automine
  */
 export const createAnvilTestClient = <chain extends Chain>(
   transport: HttpTransport,
