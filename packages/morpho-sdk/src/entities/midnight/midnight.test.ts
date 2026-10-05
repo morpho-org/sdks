@@ -642,6 +642,29 @@ describe("MorphoMidnight", () => {
         },
       ]);
     });
+    test("behavior: assets target approves the target assets", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+
+      const requirements = await midnightWithHandle(handle)
+        .takeRepayWithdrawCollateral({
+          ...params,
+          target: { type: "assets", assets: 500n, minUnits: 450n },
+        })
+        .getRequirements();
+
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 500n },
+        },
+      ]);
+    });
   });
 
   describe("supplyCollateral", () => {

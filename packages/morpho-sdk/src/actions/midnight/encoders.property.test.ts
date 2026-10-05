@@ -28,6 +28,7 @@ import { midnightSupplyCollateral } from "./supplyCollateral.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 import { midnightTakeLend } from "./takeLend.js";
+import { midnightTakeRepayWithdrawCollateral } from "./takeRepayWithdrawCollateral.js";
 
 registerCustomAddresses({
   addresses: {
@@ -261,6 +262,29 @@ describe("Midnight calldata encoders", () => {
           { collateralIndex: 0n, assets: amount },
         ]);
         expect(borrow.args[9]).toBe(deadline);
+
+        const repay = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: midnightTakeRepayWithdrawCollateral({
+            chainId: midnightChainId,
+            market: midnightMarket,
+            target: byUnits
+              ? { type: "units", units: amount, maxBuyerAssets: bound }
+              : { type: "assets", assets: amount, minUnits: bound },
+            takeableOffers: [midnightApiTake()],
+            repayEnabled: byUnits,
+            collateralWithdrawals: [{ collateralIndex: 0n, assets: amount }],
+            collateralReceiver: midnightAddresses.maker,
+            maxContinuousFee: bound,
+            deadline,
+          }).data,
+        });
+        expect(repay.args.slice(1, 5)).toEqual([amount, bound, true, byUnits]);
+        expect(repay.args.slice(6, 8)).toEqual([
+          [{ collateralIndex: 0n, assets: amount }],
+          midnightAddresses.maker,
+        ]);
+        expect(repay.args.slice(10, 12)).toEqual([bound, deadline]);
       }),
       { seed: 42 },
     );

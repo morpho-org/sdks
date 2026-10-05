@@ -108,6 +108,19 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
     ]);
   });
 
+  test("behavior: appends metadata", () => {
+    const tx = midnightTakeRepayWithdrawCollateral({
+      ...params,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+    expect(
+      decodeFunctionData({ abi: midnightBundlesV2Abi, data: tx.data })
+        .functionName,
+    ).toBe("midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral");
+  });
+
   test("error: zero assets target", () => {
     expect(() =>
       midnightTakeRepayWithdrawCollateral({
