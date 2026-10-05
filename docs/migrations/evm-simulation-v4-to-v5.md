@@ -119,7 +119,7 @@ for Blue shares, and existing transfer traces for native assets. Omitted limits
 produce no slippage reads. Use the existing `transfers` and `assetChanges` for
 transfer reporting, and `verification.operations` for checked quotes.
 
-## Release exception and audit
+## Release exception
 
 `evm-simulation` 5.0.0 removes `TenderlyRpcConfig`,
 `ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior,
@@ -128,13 +128,6 @@ narrows `SimulateParams.blockNumber` to exclude `"pending"` without a prior
 deprecation release. This is a one-time exception to the SDK's usual
 deprecate-then-remove policy; no other removal inherits it.
 
-The major changeset and this migration guide remain required. At the SDK 6.0.0
-baseline (`2e2595d59e9db8e3d7533b54d6fbffcf8107c274`), no workspace package has a
-direct runtime or peer dependency on `@morpho-org/evm-simulation`, so there are
-no dependent bumps or peer-range updates for this change. Re-audit at promotion.
-The `viem` peer range is unchanged. A Cantina major audit and public report link
-in the release CHANGELOG are required before release, and v4 remains available.
-
-The execution branches start from that exact release commit. At implementation
-time, refreshed `main` still contained SDK 5.13.0 and the SDK 6.0.0 release was
-on `next`; using the named release preserves the plan's v6 baseline requirement.
+No other workspace package depends on `@morpho-org/evm-simulation`, so no
+dependent package needs a bump. The `viem` peer range is unchanged, and v4
+remains available.
