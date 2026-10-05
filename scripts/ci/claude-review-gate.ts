@@ -18,7 +18,7 @@ import {
   readRequiredEnv,
   reportCliError,
   writeStdout,
-} from "./workflow.ts";
+} from "../workflow.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";

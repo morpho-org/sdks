@@ -37,7 +37,7 @@ import {
   readRequiredEnv,
   reportCliError,
   writeStdout,
-} from "./workflow.ts";
+} from "../workflow.ts";
 
 interface RunOptions {
   readonly argv?: readonly string[];

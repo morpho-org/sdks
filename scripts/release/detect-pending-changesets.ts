@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { isPathInside } from "../paths.ts";
-import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
+import { getErrorMessage, sanitizeLogLine } from "../publish/helpers.ts";
 
 const DEFAULT_CHANGESET_DIR = ".changeset";
 const PRE_STATE_FILE = "pre.json";

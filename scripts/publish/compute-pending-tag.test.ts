@@ -295,7 +295,7 @@ describe("main", () => {
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/compute-pending-tag.ts <manifest-path>",
+      "Usage: node scripts/publish/compute-pending-tag.ts <manifest-path>",
     );
   });
 

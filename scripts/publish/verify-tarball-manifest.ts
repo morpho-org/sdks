@@ -3,7 +3,7 @@
  * verify-tarball-manifest.ts — the publishConfig allowlist gate of
  * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
  *
- *   node scripts/ci/verify-tarball-manifest.ts <path/to/package.json>
+ *   node scripts/publish/verify-tarball-manifest.ts <path/to/package.json>
  *
  * Exits 0 and prints the validated `name@version` when the manifest's
  * `publishConfig` is restricted to the allowlist; exits 1 with an `::error::`
@@ -14,7 +14,7 @@
 
 import { lstatSync, readFileSync } from "node:fs";
 
-import { isMain, reportCliError, writeStdout } from "./workflow.ts";
+import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 
 const NPMJS_REGISTRY_URLS = new Set([
   "https://registry.npmjs.org",
@@ -126,12 +126,12 @@ export function verifyTarballManifest(
   return verifyManifestIdentity(manifest);
 }
 
-/** CLI entrypoint: `node scripts/ci/verify-tarball-manifest.ts <manifest-path>`. */
+/** CLI entrypoint: `node scripts/publish/verify-tarball-manifest.ts <manifest-path>`. */
 export function main(argv: readonly string[] = process.argv.slice(2)): void {
   const manifestPath = argv[0];
   if (manifestPath == null) {
     throw new Error(
-      "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
+      "Usage: node scripts/publish/verify-tarball-manifest.ts <manifest-path>",
     );
   }
 

@@ -157,7 +157,7 @@ export function main(
   const [tag, bodyFile] = args;
   if (tag == null || bodyFile == null) {
     throw new Error(
-      "Usage: node scripts/release/github-release-body.ts <tag> <body-file>",
+      "Usage: node scripts/publish/github-release-body.ts <tag> <body-file>",
     );
   }
 

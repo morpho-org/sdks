@@ -206,7 +206,7 @@ export function main(
   const [manifestPath] = args;
   if (manifestPath == null) {
     throw new Error(
-      "Usage: node scripts/release/compute-pending-tag.ts <manifest-path>",
+      "Usage: node scripts/publish/compute-pending-tag.ts <manifest-path>",
     );
   }
 

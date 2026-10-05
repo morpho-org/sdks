@@ -393,7 +393,7 @@ describe("main", () => {
 
   test("error: missing arguments", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/github-release-body.ts <tag> <body-file>",
+      "Usage: node scripts/publish/github-release-body.ts <tag> <body-file>",
     );
   });
 });

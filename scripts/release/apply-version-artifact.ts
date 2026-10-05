@@ -11,11 +11,11 @@ import {
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isPathInside } from "../paths.ts";
+import { getErrorMessage, sanitizeLogLine } from "../publish/helpers.ts";
 import {
   collectVersionChanges,
   isAllowedVersionPath,
 } from "./create-version-commit.ts";
-import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
 

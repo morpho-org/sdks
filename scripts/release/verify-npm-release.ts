@@ -7,18 +7,17 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-
-import { loadBundledPacote } from "../ci/read-tarball-identity.ts";
-import {
-  listTarballEntries,
-  loadBundledTar,
-  type TarEntry,
-} from "../ci/verify-tarball-collisions.ts";
 import {
   getErrorMessage,
   parseReleaseSpec,
   sanitizeLogLine,
-} from "./helpers.ts";
+} from "../publish/helpers.ts";
+import { loadBundledPacote } from "../publish/read-tarball-identity.ts";
+import {
+  listTarballEntries,
+  loadBundledTar,
+  type TarEntry,
+} from "../publish/verify-tarball-collisions.ts";
 
 // These verification values intentionally remain constants, not runtime options.
 const EXPECTED = {

@@ -282,11 +282,11 @@ jobs:
 
             # Fail closed on entries a case-insensitive or Windows consumer would
             # resolve to the same path (SDK-672/673), parsed with npm's bundled node-tar.
-            node scripts/ci/verify-tarball-collisions.ts "$tgz"
+            node scripts/publish/verify-tarball-collisions.ts "$tgz"
             # Read name/version through the exact code path `npm publish` uses
             # (pacote.manifest → node-tar extraction), so the identity we check
             # against the source allowlist is the identity npm will publish.
-            identity="$(node scripts/ci/read-tarball-identity.ts "$tgz")"
+            identity="$(node scripts/publish/read-tarball-identity.ts "$tgz")"
             IFS=$'\t' read -r name version <<<"$identity"
 
             # npm flattens every publishConfig key from the packed manifest
@@ -299,7 +299,7 @@ jobs:
             # the one npm will publish.
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
-            manifest_identity="$(node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
+            manifest_identity="$(node scripts/publish/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
             rm -rf "$tmpd"
             if [ "$manifest_identity" != "${name}@${version}" ]; then
               echo "::error::Tarball ${tgz##*/}: stored package/package.json identity '${manifest_identity}' differs from the identity npm would publish '${name}@${version}'; refusing to publish."
@@ -388,7 +388,7 @@ jobs:
           if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             while IFS= read -r -d '' manifest; do
               tag="$(
-                node scripts/release/compute-pending-tag.ts "$manifest"
+                node scripts/publish/compute-pending-tag.ts "$manifest"
               )"
 
               if [ -z "$tag" ]; then
@@ -498,7 +498,7 @@ jobs:
           for tag in "${tags[@]}"; do
             body_file="${releases_dir}/${tag//\//__}.md"
 
-            node scripts/release/github-release-body.ts "${tag}" "${body_file}"
+            node scripts/publish/github-release-body.ts "${tag}" "${body_file}"
 
             if gh release view "${tag}" >/dev/null 2>&1; then
               gh release edit "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"
