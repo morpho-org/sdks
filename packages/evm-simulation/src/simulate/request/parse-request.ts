@@ -28,6 +28,7 @@ import {
   type SimulateParams,
   type SimulationMode,
 } from "../../params.js";
+import { operationMeasurementPlan } from "../measurement-plan.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
  * @internal
@@ -640,16 +641,15 @@ const createChecks = (): FieldChecks => {
         }
         if (Object.keys(normalizedQuote).length === 0)
           errors.push(`${path}.quote: supply at least one quoted amount`);
-        if (
-          type === "blueSupplyCollateral" ||
-          type === "blueWithdrawCollateral"
-        ) {
-          for (const field of ["sharesMinted", "sharesBurned"] as const) {
-            if (normalizedQuote[field] !== undefined)
-              errors.push(
-                `${path}.quote.${field}: cannot be measured for "${type}"`,
-              );
-          }
+        const measurement = operationMeasurementPlan(out);
+        for (const field of ["sharesMinted", "sharesBurned"] as const) {
+          if (
+            normalizedQuote[field] !== undefined &&
+            measurement[field] === undefined
+          )
+            errors.push(
+              `${path}.quote.${field}: cannot be measured for "${type}"`,
+            );
         }
         Reflect.set(out, "quote", normalizedQuote);
       }

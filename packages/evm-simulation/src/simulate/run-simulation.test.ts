@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
+  MissingVerificationEvidenceError,
   UnsupportedChainError,
 } from "../errors.js";
 import type { SimulationConfig, SimulationTransaction } from "../types.js";
@@ -191,6 +192,54 @@ describe.sequential("runSimulation", () => {
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(ExternalServiceError);
     expect((error as Error).message).not.toContain(RPC_URL);
+  });
+
+  test("error: MissingVerificationEvidenceError carries context for an empty state read", async () => {
+    stubFetch(1, []);
+    let plannedReadId: string | undefined;
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => ({
+      ...execution(plan, stateBlock),
+      stateReads: plan.calls
+        .filter(
+          (call): call is Extract<PlannedCall, { type: "stateRead" }> =>
+            call.type === "stateRead",
+        )
+        .map((call) => {
+          plannedReadId ??= call.read.id;
+          return {
+            phase: call.phase,
+            read: call.read,
+            returnData: "0x" as Hex,
+          };
+        }),
+    }));
+    const error = await simulate(
+      { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+      {
+        chainId: 1,
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { sharesMinted: 1n },
+              slippageTolerance: 0n,
+            },
+          ],
+        },
+      },
+    ).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: STATE_BLOCK,
+        field: plannedReadId,
+      },
+    });
   });
 
   test("error: a user-call count mismatch is an invalid response", async () => {
