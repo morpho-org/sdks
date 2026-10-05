@@ -25,9 +25,10 @@ async function getReleaseLine(changeset: ReleaseChangeset): Promise<string> {
   const [firstLine, ...futureLines] = changeset.summary
     .split("\n")
     .map((line) => line.trimEnd());
-  return [`- ${firstLine}`, ...futureLines.map((line) => `  ${line}`)].join(
-    "\n",
-  );
+  return [
+    `- ${firstLine}`,
+    ...futureLines.map((line) => (line ? `  ${line}` : "")),
+  ].join("\n");
 }
 
 /**

@@ -9,10 +9,10 @@ describe("getReleaseLine", () => {
     ).resolves.toBe("- Fix rounding in `toAssets`.");
   });
 
-  test("behavior: indents continuation lines and trims trailing spaces", async () => {
+  test("behavior: indents continuation lines and leaves blank lines empty", async () => {
     await expect(
       changelog.getReleaseLine({ summary: "Title  \n\nBody line \n- item" }),
-    ).resolves.toBe("- Title\n  \n  Body line\n  - item");
+    ).resolves.toBe("- Title\n\n  Body line\n  - item");
   });
 
   test("behavior: ignores PR, commit and author metadata", async () => {
