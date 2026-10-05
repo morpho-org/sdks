@@ -1,11 +1,13 @@
 import { type MarketInput, MarketUtils } from "@morpho-org/midnight-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { type Address, maxUint256 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
+  InputExceedsMaxError,
   type Metadata,
   type MidnightCollateralTransfer,
+  type MidnightRepay,
   type MidnightRepayWithdrawCollateralAction,
   NonPositiveInputError,
   type Transaction,
@@ -16,10 +18,7 @@ import { midnightBundlesV2Buy } from "./bundlesV2Take.js";
 export interface MidnightRepayWithdrawCollateralParams {
   readonly chainId: number;
   readonly market: MarketInput;
-  /** Debt units repaid. `maxUint256` repays the sender's whole debt at execution; `0n` only withdraws. */
-  readonly repayUnits: bigint;
-  /** Loan assets pulled from the sender; the unused part is refunded. Must cover the repaid debt. */
-  readonly maxRepayAssets: bigint;
+  readonly repay: MidnightRepay;
   /** `assets: maxUint256` withdraws the sender's whole balance of that collateral at execution. */
   readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
   readonly collateralReceiver: Address;
@@ -29,23 +28,26 @@ export interface MidnightRepayWithdrawCollateralParams {
 }
 
 /**
- * Encodes a reduce-only `MidnightBundlesV2` units-target buy with no offers, so `repayUnits` of the
- * sender's debt is repaid directly, then collateral is withdrawn to `collateralReceiver`.
+ * Encodes a reduce-only `MidnightBundlesV2` buy with no offers, so the sender's debt is repaid
+ * directly, then collateral is withdrawn to `collateralReceiver`. An `assets` repay uses the
+ * assets-target entrypoint with `minUnits = assets` (a direct repay counts one unit per asset); a
+ * `full` repay uses the units-target entrypoint with `targetUnits = maxUint256`.
  *
  * Prefer `client.morpho.midnight(chainId).repayWithdrawCollateral(...)` in app flows so the
  * loan-token approval and Midnight authorization requirements are resolved first.
  *
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.market - Midnight market whose position is updated.
- * @param params.repayUnits - Debt units repaid; `maxUint256` for the full debt, `0n` to only withdraw.
- * @param params.maxRepayAssets - Loan assets pulled from the sender and refunded when unused.
+ * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`.
  * @param params.collateralWithdrawals - Collateral withdrawals; `assets: maxUint256` withdraws the full balance.
  * @param params.collateralReceiver - Recipient of the withdrawn collateral.
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundlesV2`.
- * @throws {NegativeInputError} when `repayUnits` or `maxRepayAssets` is negative.
- * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, or `deadline` is not positive.
+ * @throws {NegativeInputError} when `repay.assets` is negative.
+ * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, `repay.maxBuyerAssets` is zero, or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `repay.maxBuyerAssets` is `maxUint256` or `deadline` exceeds uint256.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
@@ -58,8 +60,7 @@ export interface MidnightRepayWithdrawCollateralParams {
  * const tx = midnightRepayWithdrawCollateral({
  *   chainId: 8453,
  *   market: marketData.params,
- *   repayUnits: maxUint256,
- *   maxRepayAssets: 1_010_000n,
+ *   repay: { type: "full", maxBuyerAssets: 1_010_000n },
  *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
  *   collateralReceiver: user,
  *   deadline: maxUint256,
@@ -69,8 +70,28 @@ export interface MidnightRepayWithdrawCollateralParams {
 export const midnightRepayWithdrawCollateral = (
   params: MidnightRepayWithdrawCollateralParams,
 ): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
-  if (params.repayUnits === 0n && params.collateralWithdrawals.length === 0) {
+  const { repay } = params;
+  if (
+    repay.type === "assets" &&
+    repay.assets === 0n &&
+    params.collateralWithdrawals.length === 0
+  ) {
     throw new NonPositiveInputError("repay or withdraw amount", 0n);
+  }
+  if (repay.type === "full") {
+    if (repay.maxBuyerAssets <= 0n) {
+      throw new NonPositiveInputError(
+        "repay.maxBuyerAssets",
+        repay.maxBuyerAssets,
+      );
+    }
+    if (repay.maxBuyerAssets === maxUint256) {
+      throw new InputExceedsMaxError({
+        field: "repay.maxBuyerAssets",
+        value: repay.maxBuyerAssets,
+        max: maxUint256 - 1n,
+      });
+    }
   }
 
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
@@ -91,11 +112,14 @@ export const midnightRepayWithdrawCollateral = (
   let tx = midnightBundlesV2Buy({
     chainId: params.chainId,
     market: params.market,
-    target: {
-      type: "units",
-      units: params.repayUnits,
-      maxBuyerAssets: params.maxRepayAssets,
-    },
+    target:
+      repay.type === "assets"
+        ? { type: "assets", assets: repay.assets, minUnits: repay.assets }
+        : {
+            type: "units",
+            units: maxUint256,
+            maxBuyerAssets: repay.maxBuyerAssets,
+          },
     reduceOnly: true,
     repayEnabled: true,
     offerFills: [],
@@ -115,8 +139,7 @@ export const midnightRepayWithdrawCollateral = (
       type: "midnightRepayWithdrawCollateral",
       args: {
         market: MarketUtils.toId(params.market),
-        repayUnits: params.repayUnits,
-        maxRepayAssets: params.maxRepayAssets,
+        repay,
         collateralWithdrawals: params.collateralWithdrawals.map(
           ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
         ),
