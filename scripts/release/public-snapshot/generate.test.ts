@@ -73,6 +73,22 @@ function commitRepo(
   return { repo, sha: run("rev-parse", "HEAD") };
 }
 
+function commitStaged(repo: string): void {
+  execFileSync("git", [
+    "-C",
+    repo,
+    "-c",
+    "user.name=test",
+    "-c",
+    "user.email=test@example.com",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-qm",
+    "change",
+  ]);
+}
+
 const INCLUDE = ["README.md", "packages/*/package.json", "packages/*/src/**"];
 
 describe("generatePublicSnapshot", () => {
@@ -95,6 +111,23 @@ describe("generatePublicSnapshot", () => {
     expect(
       JSON.parse(readFileSync(join(outDir, "public-tree.json"), "utf8")),
     ).toEqual(manifest);
+    const treeListing = execFileSync("git", [
+      "-C",
+      repo,
+      "ls-tree",
+      "-r",
+      manifest.treeHash,
+    ])
+      .toString()
+      .trim()
+      .split("\n")
+      .map((line) => {
+        const [meta = "", path] = line.split("\t");
+        return { path, mode: meta.split(" ")[0] };
+      });
+    expect(treeListing).toEqual(
+      manifest.files.map(({ path, mode }) => ({ path, mode })),
+    );
   });
 
   test("behavior: two runs on the same commit give the same tree hash", () => {
@@ -143,19 +176,7 @@ describe("generatePublicSnapshot", () => {
       "--chmod=+x",
       "README.md",
     ]);
-    execFileSync("git", [
-      "-C",
-      repo,
-      "-c",
-      "user.name=test",
-      "-c",
-      "user.email=test@example.com",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "chmod",
-    ]);
+    commitStaged(repo);
     const outDir = tempDir();
 
     generatePublicSnapshot({ repo, sha: "HEAD", outDir });
@@ -170,19 +191,7 @@ describe("generatePublicSnapshot", () => {
     const { repo } = commitRepo(BASE_FILES, [...INCLUDE, "LINK.md"]);
     symlinkSync("README.md", join(repo, "LINK.md"));
     execFileSync("git", ["-C", repo, "add", "LINK.md"]);
-    execFileSync("git", [
-      "-C",
-      repo,
-      "-c",
-      "user.name=test",
-      "-c",
-      "user.email=test@example.com",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "link",
-    ]);
+    commitStaged(repo);
     const outDir = tempDir();
 
     generatePublicSnapshot({ repo, sha: "HEAD", outDir });
@@ -215,19 +224,7 @@ describe("generatePublicSnapshot", () => {
     const { repo } = commitRepo(BASE_FILES, [...INCLUDE, "LINK.md"]);
     symlinkSync("MISSION.md", join(repo, "LINK.md"));
     execFileSync("git", ["-C", repo, "add", "LINK.md"]);
-    execFileSync("git", [
-      "-C",
-      repo,
-      "-c",
-      "user.name=test",
-      "-c",
-      "user.email=test@example.com",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "link",
-    ]);
+    commitStaged(repo);
 
     expect(() =>
       generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
@@ -262,6 +259,84 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"@morpho-org/a" depends on "@morpho-org/internal"');
   });
 
+  test("error: an absolute symlink fails the run", () => {
+    const { repo } = commitRepo(BASE_FILES, [...INCLUDE, "LINK.md"]);
+    symlinkSync("/README.md", join(repo, "LINK.md"));
+    execFileSync("git", ["-C", repo, "add", "LINK.md"]);
+    commitStaged(repo);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
+    ).toThrow('Symlink "LINK.md" points to "/README.md"');
+  });
+
+  test("error: a symlink escaping the repository fails the run", () => {
+    const { repo } = commitRepo(BASE_FILES, [...INCLUDE, "LINK.md"]);
+    symlinkSync("../README.md", join(repo, "LINK.md"));
+    execFileSync("git", ["-C", repo, "add", "LINK.md"]);
+    commitStaged(repo);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
+    ).toThrow('Symlink "LINK.md" points to "../README.md"');
+  });
+
+  test("error: a submodule in the public tree fails the run", () => {
+    const { repo, sha } = commitRepo(BASE_FILES, INCLUDE);
+    execFileSync("git", [
+      "-C",
+      repo,
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `160000,${sha},packages/a/src/sub`,
+    ]);
+    commitStaged(repo);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
+    ).toThrow('"packages/a/src/sub" is a submodule');
+  });
+
+  test.each([
+    "public/scripts/release/x.ts",
+    "public/.agents/x.md",
+    "public/.changeset/config.json",
+    "public/.github/AGENTS.md",
+  ])("error: %s mapping to a hard-denied path fails the run", (path) => {
+    const { repo, sha } = commitRepo({ ...BASE_FILES, [path]: "x\n" }, INCLUDE);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow(`"${path}" maps to "${path.slice(7)}", which is hard-denied`);
+  });
+
+  test.each([
+    { name: "missing", allowlist: { includes: ["README.md"] } },
+    { name: "empty", allowlist: { include: [] } },
+    { name: "non-string", allowlist: { include: [1] } },
+  ])("error: a $name include list fails the run", ({ allowlist }) => {
+    const { repo } = commitRepo(BASE_FILES, INCLUDE);
+    writeFileSync(join(repo, ALLOWLIST_PATH), JSON.stringify(allowlist));
+    execFileSync("git", ["-C", repo, "add", ALLOWLIST_PATH]);
+    commitStaged(repo);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
+    ).toThrow('must have a non-empty "include" array');
+  });
+
+  test("error: a package manifest without a name fails the run", () => {
+    const { repo, sha } = commitRepo(
+      { ...BASE_FILES, "packages/a/package.json": "{}" },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"packages/a/package.json" has no package name');
+  });
+
   test("error: refuses a non-empty output directory", () => {
     const { repo, sha } = commitRepo(BASE_FILES, INCLUDE);
     const outDir = tempDir();
@@ -277,6 +352,10 @@ describe("isDenied", () => {
   test.each([
     ".github/CODEOWNERS",
     ".agents/x.md",
+    ".claude/settings.json",
+    ".codex/config.toml",
+    ".review/x.md",
+    "docs/templates/ADR.md",
     ".changeset/config.json",
     "scripts/release/helpers.ts",
     "scripts/ci/workflow.ts",
