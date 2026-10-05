@@ -37,6 +37,7 @@ const limit: OperationLimit = {
   quote: { assetsPaid: 10n },
   slippageTolerance: 0n,
 };
+const ctx = { chainId: 1, mode: "final" } as const;
 
 describe("resolveAssets", () => {
   test("default: no limits cause no RPC reads", async () => {
@@ -45,6 +46,7 @@ describe("resolveAssets", () => {
       await resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [],
         blockNumber: 1n,
       }),
@@ -60,6 +62,7 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations,
       blockNumber: 1n,
     });
@@ -78,6 +81,7 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations: [limit, limit],
       blockNumber: 10n,
     });
@@ -107,6 +111,7 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations,
       blockNumber: 1n,
     });
@@ -132,6 +137,7 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations: [
         {
           type: "blueSupply",
@@ -155,6 +161,7 @@ describe("resolveAssets", () => {
     const request = resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations: [
         {
           type: "blueRepayWithdrawCollateral",
@@ -192,6 +199,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -217,10 +225,21 @@ describe("resolveAssets", () => {
     const error = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations: [limit],
       blockNumber: 1n,
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 1n,
+        operation: "vaultV2Deposit",
+        field: "assetsPaid",
+      },
+    });
     const chain = (error as MissingVerificationEvidenceError).cause;
     expect(chain).toBeInstanceOf(BaseError);
     const names: string[] = [];
@@ -245,6 +264,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -263,6 +283,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -277,6 +298,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -289,6 +311,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -303,6 +326,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -315,6 +339,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -327,6 +352,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -341,6 +367,7 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
+        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
@@ -357,6 +384,7 @@ describe("resolveAssets", () => {
     const error = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
+      ...ctx,
       operations: [
         {
           type: "blueBorrow",
@@ -371,5 +399,15 @@ describe("resolveAssets", () => {
     expect((error as Error).message).toContain(
       `market:${marketId.toLowerCase()}`,
     );
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 1n,
+        operation: "blueBorrow",
+        field: "assetsReceived",
+      },
+    });
   });
 });

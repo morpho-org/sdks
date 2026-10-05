@@ -83,6 +83,8 @@ export async function runSimulation(params: {
     client,
     morpho,
     operations: limits.operations,
+    chainId: request.chainId,
+    mode: request.mode,
     blockNumber: pinnedBlock.number,
   });
   const observations = planStateReads({ operations: resolved, owner, morpho });
