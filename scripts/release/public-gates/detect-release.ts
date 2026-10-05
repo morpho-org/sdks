@@ -4,10 +4,9 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-export interface ReleasedPackage {
-  readonly name: string;
-  readonly version: string;
-}
+import type { publicIdentity } from "../../publish/pack.ts";
+
+export type ReleasedPackage = NonNullable<ReturnType<typeof publicIdentity>>;
 
 /**
  * Lists the public packages whose version a commit changes. A commit is a release

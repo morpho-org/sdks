@@ -44,19 +44,7 @@ jobs:
       - run: pnpm exec vitest run --project '!*-fork'
 
       - name: Pack publishable tarballs
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="${RUNNER_TEMP}/tarballs"
-          mkdir -p "$out"
-          while IFS= read -r -d '' manifest; do
-            dir="$(dirname "$manifest")"
-            if [ "$(cd "$dir" && node -p "require('./package.json').private === true")" = "true" ]; then
-              continue
-            fi
-            ( cd "$dir" && pnpm pack --pack-destination "$out" )
-          done < <(find packages -mindepth 2 -maxdepth 2 -name package.json -print0)
-          for tgz in "$out"/*.tgz; do
-            node scripts/publish/verify-tarball-collisions.ts "$tgz"
-            node scripts/publish/read-tarball-identity.ts "$tgz"
-          done
+        run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"
+
+      - name: Verify tarballs
+        run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs"
