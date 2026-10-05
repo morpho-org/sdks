@@ -26,7 +26,7 @@ The optional `logger` continues to receive parsing and retention warnings.
 Keep handling `SimulationRevertedError`, `BlacklistViolationError`,
 `ExternalServiceError`, `SimulationValidationError`, and `UnsupportedChainError`
 by class identity. Their class identities and codes are preserved; see the
-authorization migration section for the changed `SimulationRevertedError.details` shape.
+[Authorization migration](#authorization-migration) section for the changed `SimulationRevertedError.details` shape.
 Two failures that v4 reported as the bypassable `ExternalServiceError` now
 throw the non-bypassable `InvalidSimulationResponseError`: a malformed
 `eth_simulateV1` block envelope and a call count that does not match the
@@ -53,7 +53,7 @@ still rejects net inbound value above 100 raw units per restricted address/token
 ## Authorization migration
 
 v5 removed the legacy `{type: "approval"}` and `{type: "signature"}`
-authorization variants and cut the runtime over to the new input types.
+authorization variants and cut the runtime over to the typed authorization descriptors below.
 Callers now pass `SimulateParams` with `mode` defaulting to `"final"`. `blockNumber` is
 typed as `bigint | Exclude<BlockTag, "pending">` — `"pending"` has no stable hash and is
 rejected at runtime. Instead of the two
@@ -125,7 +125,8 @@ Root `AGENTS.md` §7's EVM simulation v5 retirement exception
 (`ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` and
 `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`) permits
 `evm-simulation` 5.0.0 to remove `TenderlyRpcConfig`,
-`ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior, the two legacy authorization variants of
+`ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior,
+the two legacy authorization variants of
 `SimulateParams.authorizations`, and to narrow `SimulateParams.blockNumber`
 to exclude `"pending"` without the prior
 successor-introduction, `@deprecated`, and published
