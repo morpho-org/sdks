@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, onTestFinished, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 
 import {
   applyExceptions,
@@ -21,12 +21,11 @@ import {
   scanFiles,
 } from "./scan.ts";
 
-// Tests run concurrently, so each one removes only its own directories.
-function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "public-gates-test-"));
-  onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
+// Tests run concurrently, where onTestFinished can't tell tests apart, so one
+// root holds every test's directory and is removed at the end.
+const testRoot = mkdtempSync(join(tmpdir(), "public-gates-test-"));
+afterAll(() => rmSync(testRoot, { recursive: true, force: true }));
+const tempDir = () => mkdtempSync(join(testRoot, "t-"));
 
 function write(root: string, files: Record<string, string>) {
   for (const [path, content] of Object.entries(files)) {
@@ -68,6 +67,17 @@ describe("scanFiles", () => {
     ["wallet-key", `privateKey: "${"cd".repeat(32)}"`],
     ["mnemonic", `MNEMONIC="${Array(12).fill("abandon").join(" ")}"`],
     ["url-credentials", "https://user:hunter2@rpc.example.com"],
+    ["url-credentials", "wss://user:hunter2@rpc.example.com"],
+    ["url-credentials", "https://user:1234@rpc.example.com"],
+    ["wallet-key", `DEPLOYER_PRIVATE_KEY=0x${"ab".repeat(32)}`],
+    ["wallet-key", `deployerPrivateKey: "0x${"ab".repeat(32)}"`],
+    ["wallet-key", `SECRET_KEY=${"ab".repeat(32)}`],
+    ["wallet-key", `TEST_PK=0x${"ab".repeat(32)}`],
+    ["mnemonic", `TEST_MNEMONIC="${Array(12).fill("abandon").join(" ")}"`],
+    ["mnemonic", `seed_phrase: "${Array(24).fill("zoo").join(" ")}"`],
+    ["github-token", `github_pat_${"a".repeat(22)}`],
+    ["rpc-key", `https://mainnet.infura.io/v3/${"a".repeat(32)}`],
+    ["notion-url", "https://morpho.notion.site/page"],
   ])("flags %s", (rule, text) => {
     expect(scanFiles([file("a.md", `ok\n${text}\n`)])).toEqual([
       expect.objectContaining({ path: "a.md", line: 2, rule }),
@@ -150,6 +160,17 @@ describe("applyExceptions", () => {
     const { blocking, unused } = applyExceptions(findings, [other]);
     expect(blocking).toHaveLength(3);
     expect(unused).toEqual([other]);
+  });
+
+  test("never allows a tarball finding, even under a matching glob", () => {
+    const wide = { ...allowed, path: "**/CHANGELOG.md" } as const;
+    const { blocking } = applyExceptions(
+      scanFiles([file("a-1.0.0.tgz:package/CHANGELOG.md", "SDK-1")]),
+      [wide],
+    );
+    expect(blocking.map(({ path }) => path)).toEqual([
+      "a-1.0.0.tgz:package/CHANGELOG.md",
+    ]);
   });
 
   test("reports exceptions that match nothing", () => {
