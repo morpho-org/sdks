@@ -73,6 +73,11 @@ describe("scanFiles", () => {
     ["url-credentials", "postgres://admin:483920@10.0.0.5:5432/db"],
     ["url-credentials", "https://u:1234@1inch.example"],
     ["wallet-key", `privateKeyToAccount("0x${"ab".repeat(32)}")`],
+    ["wallet-key", `const DEPLOYER_PRIVATE_KEY =\n  "0x${"ab".repeat(32)}";`],
+    ["wallet-key", `privateKeyToAccount(\n  "0x${"ab".repeat(32)}",\n);`],
+    ["wallet-key", `const privateKey: Hex = "0x${"ab".repeat(32)}";`],
+    ["rpc-key", `https://eth-mainnet.g.ALCHEMY.COM/v2/${"K".repeat(32)}`],
+    ["rpc-key", `https://mainnet.infura.io/v3/${"A".repeat(32)}`],
     ["wallet-key", `hdKeyToAccount(\`${"ab".repeat(32)}\`)`],
     ["mnemonic", `mnemonicToAccount("${Array(12).fill("abandon").join(" ")}")`],
     ["wallet-key", `DEPLOYER_PRIVATE_KEY=0x${"ab".repeat(32)}`],
@@ -183,6 +188,14 @@ describe("applyExceptions", () => {
     const stale = { ...allowed, match: "SDK-9" };
     expect(applyExceptions(findings, [stale]).unused).toEqual([stale]);
   });
+});
+
+test.each([
+  `privateKeyToAccount(\n  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",\n);`,
+  `PRIVATE_KEY=0x${"0".repeat(63)}1`,
+  `mnemonicToAccount("test test test test test test test test test test test junk")`,
+])("ignore the published test secret in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
 
 describe("parsePolicy", () => {

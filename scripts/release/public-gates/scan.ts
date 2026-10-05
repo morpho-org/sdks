@@ -35,7 +35,7 @@ const RULES = {
   // hex values (market ids, hashes) are everywhere. No leading boundary, so
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|pk)["'`]?(?:\s*:\s*\w+)?\s*[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
@@ -44,7 +44,7 @@ const RULES = {
   "url-credentials":
     /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]*:(?!\d+@\d+(?![\w.])|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
-    /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/g,
+    /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/gi,
 } as const satisfies Record<string, RegExp>;
 
 type RuleId = keyof typeof RULES | "blocked-term";
@@ -133,6 +133,22 @@ export function parsePolicy(policy: unknown): ScanPolicy {
   return policy as ScanPolicy;
 }
 
+// Published test values: the Hardhat/Anvil default mnemonic, its first account
+// key, and trivial keys such as 0x…01. Fixtures and the published test package use them.
+const PUBLIC_TEST_SECRETS = [
+  "test test test test test test test test test test test junk",
+  "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+];
+
+function isPublicTestSecret(rule: RuleId, match: string): boolean {
+  if (rule !== "wallet-key" && rule !== "mnemonic") return false;
+  const text = match.toLowerCase();
+  return (
+    /0{48}[0-9a-f]{16}\b/.test(text) ||
+    PUBLIC_TEST_SECRETS.some((secret) => text.includes(secret))
+  );
+}
+
 /**
  * Finds every rule match in files. NUL bytes are dropped first, so UTF-16 text and
  * text inside binaries are still scanned.
@@ -161,12 +177,18 @@ export function scanFiles(
     const text = content.includes(0)
       ? Buffer.from(content.filter((byte) => byte !== 0))
       : content;
-    const lines = text.toString("utf8").split("\n");
-    for (const [index, line] of lines.entries()) {
-      for (const [rule, pattern] of rules) {
-        for (const [match] of line.matchAll(pattern)) {
-          findings.push({ path, line: index + 1, rule, match });
-        }
+    // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
+    const source = text.toString("utf8");
+    const lineStarts = [0];
+    for (let index = source.indexOf("\n"); index !== -1; ) {
+      lineStarts.push(index + 1);
+      index = source.indexOf("\n", index + 1);
+    }
+    for (const [rule, pattern] of rules) {
+      for (const { 0: match, index } of source.matchAll(pattern)) {
+        if (isPublicTestSecret(rule, match)) continue;
+        const line = lineStarts.findLastIndex((start) => start <= index) + 1;
+        findings.push({ path, line, rule, match });
       }
     }
   }
