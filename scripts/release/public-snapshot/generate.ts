@@ -48,8 +48,7 @@ interface TreeEntry {
   path: string;
 }
 
-/** One file of the public tree, as recorded in `public-tree.json`. */
-export interface PublicTreeFile {
+interface PublicTreeFile {
   readonly path: string;
   readonly mode: "100644" | "100755" | "120000";
   readonly sha256: string;
@@ -118,7 +117,7 @@ function readBlobs(repo: string, shas: readonly string[]): Map<string, Buffer> {
  * @throws If an allowlist entry selects nothing, a `public/` file collides with an
  *   allowlisted path, or an entry is a submodule.
  */
-export function selectPublicEntries(
+function selectPublicEntries(
   entries: readonly TreeEntry[],
   include: readonly string[],
 ): TreeEntry[] {
