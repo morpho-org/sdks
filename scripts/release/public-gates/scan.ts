@@ -34,8 +34,10 @@ const RULES = {
   // Wallet keys and mnemonics only next to a key-like name, since bare 32-byte
   // hex values (market ids, hashes) are everywhere. No leading boundary, so
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
+  // A type annotation starts with a letter or backtick and is short, so it can't
+  // run across a key value. `??` and `||` catch hard-coded env fallbacks.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|pk)\w*["'`]?\s*(?::[^=;\n]{1,80})?[:=]|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|(?<![a-z])pk(?![a-z]))\w*["'`]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)\w*["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
