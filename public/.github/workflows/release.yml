@@ -86,16 +86,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Require npm with trusted publishing
-        shell: bash
-        run: |
-          set -euo pipefail
-          node -e '
-            const [a, b, c] = process.argv[1].split(".").map(Number);
-            if (!(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))))) {
-              console.error(`::error::npm ${process.argv[1]} < 11.5.1; trusted publishing unavailable`);
-              process.exit(1);
-            }
-          ' "$(npm --version)"
+        run: node scripts/publish/require-trusted-publishing-npm.ts
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -156,7 +147,13 @@ jobs:
 
           # Every current package version is on npm once publish succeeds, so any
           # missing tag or release is created, whichever run or commit skipped it.
-          mapfile -t tags < <(node scripts/publish/pack.ts --tags)
+          # Not process substitution: a failing command must fail the step.
+          node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
+          mapfile -t tags < "$RUNNER_TEMP/tags.txt"
+          if [ "${#tags[@]}" -eq 0 ]; then
+            echo "::error::No package tags found."
+            exit 1
+          fi
           releases_dir="${RUNNER_TEMP}/github-releases"
           mkdir -p "$releases_dir"
           for tag in "${tags[@]}"; do

@@ -84,6 +84,16 @@ describe("listReleasedPackages", () => {
     expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([]);
   });
 
+  test("fails on a public manifest without a version", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0" } },
+      { a: { name: "@x/a" } },
+    ]);
+    expect(() => listReleasedPackages({ repo, sha: "HEAD" })).toThrow(
+      "string name and version",
+    );
+  });
+
   test("fails when git can't read the parent commit", () => {
     const repo = repoWith([{ a: { name: "@x/a", version: "1.0.0" } }]);
     expect(() => listReleasedPackages({ repo, sha: "HEAD" })).toThrow();

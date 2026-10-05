@@ -3,58 +3,27 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
-import { listPublicPackages, type PublicPackage } from "./pack.ts";
+import { listPublicPackages, type PackageIdentity } from "./pack.ts";
 import {
   loadBundledPacote,
   type ManifestReader,
   readTarballIdentity,
 } from "./read-tarball-identity.ts";
 import {
+  type EntryLister,
+  loadBundledTar,
   type TarEntry,
   verifyTarballEntries,
 } from "./verify-tarball-collisions.ts";
 import { verifyTarballManifest } from "./verify-tarball-manifest.ts";
 
 /** A tarball cleared for publishing. */
-export interface ReleaseTarball {
+export interface ReleaseTarball extends PackageIdentity {
   readonly file: string;
-  readonly name: string;
-  readonly version: string;
-}
-
-/** One entry as npm's bundled node-tar reads it. */
-interface TarReadEntry extends TarEntry {
-  on(event: "data", listener: (chunk: Buffer) => void): unknown;
-  resume(): unknown;
-}
-
-/** The part of node-tar used to read archives. */
-export interface TarReader {
-  list(options: {
-    file: string;
-    strict: boolean;
-    onReadEntry: (entry: TarReadEntry) => void;
-  }): Promise<unknown>;
-}
-
-function loadBundledTar(npmRoot: string): TarReader {
-  const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
-    "tar",
-  );
-  if (
-    typeof tar !== "object" ||
-    tar === null ||
-    !("list" in tar) ||
-    typeof tar.list !== "function"
-  ) {
-    throw new Error(`Bundled tar at "${npmRoot}" does not expose list().`);
-  }
-  return tar as TarReader;
 }
 
 /**
@@ -111,7 +80,7 @@ export function verifyTarballStructure(
  * @param received - Identities read from the tarballs.
  */
 export function verifyReleaseMatch(
-  expected: readonly Pick<PublicPackage, "name" | "version">[],
+  expected: readonly PackageIdentity[],
   received: readonly ReleaseTarball[],
 ): void {
   const byName = new Map<string, ReleaseTarball>();
@@ -187,8 +156,8 @@ export function verifyChecksums(dir: string): string[] {
  */
 export async function verifyReleaseSet(options: {
   dir: string;
-  expected: readonly Pick<PublicPackage, "name" | "version">[];
-  tar: TarReader;
+  expected: readonly PackageIdentity[];
+  tar: EntryLister;
   pacote: ManifestReader;
 }): Promise<ReleaseTarball[]> {
   const received: ReleaseTarball[] = [];
