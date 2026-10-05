@@ -300,52 +300,58 @@ describe("Midnight requirements on fork", () => {
     );
   });
 
-  test("executes take-lend output after resolving requirements", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 6);
-    await installTestOracle(client);
-    await deployMidnightBundlesV2(client);
-    await client.deal({ erc20: usdc, amount });
-    const takeableOffer = await prepareTakeableOffer({
-      client,
-      buy: false,
-      units: 2n * amount,
-    });
-    const output = client
-      .extend(morphoViemExtension())
-      .morpho.midnight(base.id)
-      .takeLend({
-        marketData,
-        accountAddress: client.account.address,
-        target: { type: "assets", assets: amount, minUnits: 0n },
-        takeableOffers: [takeableOffer],
-        maxContinuousFee: maxUint256,
-        deadline: maxUint256,
+  const takeLendAmount = parseUnits("1", 6);
+  test.for([
+    { type: "assets", assets: takeLendAmount, minUnits: 0n },
+    { type: "units", units: takeLendAmount, maxBuyerAssets: takeLendAmount },
+  ] as const)(
+    "executes take-lend output ($type target) after resolving requirements",
+    async (target, { client }) => {
+      const amount = takeLendAmount;
+      await installTestOracle(client);
+      await deployMidnightBundlesV2(client);
+      await client.deal({ erc20: usdc, amount });
+      const takeableOffer = await prepareTakeableOffer({
+        client,
+        buy: false,
+        units: 2n * amount,
       });
-    const requirements = await output.getRequirements();
-    expect(requirements.map((requirement) => requirement.action.type)).toEqual([
-      "erc20Approval",
-      "midnightAuthorization",
-    ]);
-    for (const requirement of requirements) {
-      if (!("to" in requirement)) {
-        throw new Error("expected an onchain call requirement");
+      const output = client
+        .extend(morphoViemExtension())
+        .morpho.midnight(base.id)
+        .takeLend({
+          marketData,
+          accountAddress: client.account.address,
+          target,
+          takeableOffers: [takeableOffer],
+          maxContinuousFee: maxUint256,
+          deadline: maxUint256,
+        });
+      const requirements = await output.getRequirements();
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+      for (const requirement of requirements) {
+        if (!("to" in requirement)) {
+          throw new Error("expected an onchain call requirement");
+        }
+        await client.sendTransaction(requirement);
       }
-      await client.sendTransaction(requirement);
-    }
-    await expect(output.getRequirements()).resolves.toEqual([]);
+      await expect(output.getRequirements()).resolves.toEqual([]);
 
-    await client.sendTransaction(output.buildTx());
-    await expect(
-      client.readContract({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "credit",
-        args: [marketId, client.account.address],
-      }),
-    ).resolves.toBeGreaterThan(0n);
-  });
+      await client.sendTransaction(output.buildTx());
+      await expect(
+        client.readContract({
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "credit",
+          args: [marketId, client.account.address],
+        }),
+      ).resolves.toSatisfy((credit: bigint) =>
+        target.type === "units" ? credit === target.units : credit > 0n,
+      );
+    },
+  );
 
   test("executes supply-collateral and take-borrow outputs", async ({
     client,
@@ -392,7 +398,7 @@ describe("Midnight requirements on fork", () => {
     const borrow = midnightEntity.takeBorrow({
       marketData,
       accountAddress: client.account.address,
-      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
+      target: { type: "units", units: loanAssets, minSellerAssets: 0n },
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });
@@ -414,7 +420,7 @@ describe("Midnight requirements on fork", () => {
         functionName: "debt",
         args: [marketId, client.account.address],
       }),
-    ).resolves.toBeGreaterThan(0n);
+    ).resolves.toBe(loanAssets);
   });
 
   test("executes supply-collateral-take-borrow and repay outputs", async ({
@@ -437,7 +443,7 @@ describe("Midnight requirements on fork", () => {
       marketData,
       accountAddress: client.account.address,
       collateralSupplies: [{ collateralIndex: 0n, assets: collateralAssets }],
-      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
+      target: { type: "units", units: loanAssets, minSellerAssets: 0n },
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });

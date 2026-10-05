@@ -94,7 +94,7 @@ midnight.takeLend({
   taking offers, so a lender who borrows nets the credit first.
 - Action metadata exposes `target` instead of `assets`/`minUnits` or `loanAssets`/`maxUnits`, and
   drops `taker`. `MidnightSupplyCollateralTakeBorrowAction.collateralSupplies` is the supply list
-  instead of a count.
+  instead of a count, and `MidnightTakeBorrowAction.args` no longer has `collateralSupplies`.
 - New types: `MidnightBuyTarget`, `MidnightSellTarget`, `MidnightReferralFeeParams`.
   `MidnightCollateralSupply` is removed; use `MidnightCollateralTransfer`.
 

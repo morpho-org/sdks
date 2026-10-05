@@ -17,6 +17,7 @@ import {
   MidnightTakeableOfferMarketMismatchError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 
@@ -86,6 +87,22 @@ describe("midnightTakeBorrow", () => {
     expect(decoded.args.slice(1, 3)).toEqual([1_100n, 0n]);
   });
 
+  test("behavior: encodes the referral fee", () => {
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: midnightTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 16n,
+        referralFeeRecipient: midnightAddresses.maker,
+      }).data,
+    });
+
+    expect(decoded.args.slice(7, 9)).toEqual([
+      10n ** 16n,
+      midnightAddresses.maker,
+    ]);
+  });
+
   test("behavior: appends metadata", () => {
     const tx = midnightTakeBorrow({
       ...params,
@@ -135,6 +152,12 @@ describe("midnightTakeBorrow", () => {
         target: { type: "units", units: 1n, minSellerAssets: -1n },
       }),
     ).toThrow(NegativeInputError);
+  });
+
+  test("error: ReferralFeeRecipientMissingError", () => {
+    expect(() => midnightTakeBorrow({ ...params, referralFeePct: 1n })).toThrow(
+      ReferralFeeRecipientMissingError,
+    );
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {
