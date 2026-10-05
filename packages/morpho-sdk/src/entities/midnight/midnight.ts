@@ -12,6 +12,7 @@ import {
   MarketParams,
   MarketUtils,
   type MidnightFetchParams,
+  midnightBundlesV2Abi,
   Payload,
   PriceRatifierV1,
   RateRatifierV1,
@@ -778,7 +779,7 @@ export class MorphoMidnight {
    * @param params.callbackSalt - Salt selecting the maker's callback; defaults to the zero hash.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `blue`, `midnightBlueBuyCallbackFactory` or V1 ratifier deployment.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
    * @throws {NonPositiveInputError} when `assetsToPark` is non-positive.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {NonPositiveInputError} when `deadline` is not positive.
@@ -817,26 +818,37 @@ export class MorphoMidnight {
     const callbackSalt = params.callbackSalt ?? zeroHash;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
-    const [data, { result: callback }, [, totalSupplyShares]] =
-      await Promise.all([
-        this.getOffersData(params),
+    const bundlesV2 = getChainAddress(this.chainId, "midnightBundlesV2");
+    const blueReads = Promise.all([
+      readContract(this.client.viemClient, {
+        address: bundlesV2,
+        abi: midnightBundlesV2Abi,
+        functionName: "BLUE_BUY_CALLBACK_FACTORY",
+      }),
+      readContract(this.client.viemClient, {
+        address: bundlesV2,
+        abi: midnightBundlesV2Abi,
+        functionName: "BLUE",
+      }),
+    ]).then(([factory, blue]) =>
+      Promise.all([
         simulateContract(this.client.viemClient, {
           account: params.accountAddress,
-          address: getChainAddress(
-            this.chainId,
-            "midnightBlueBuyCallbackFactory",
-          ),
+          address: factory,
           abi: blueBuyCallbackFactoryAbi,
           functionName: "createBlueBuyCallback",
           args: [params.accountAddress, callbackSalt],
         }),
         readContract(this.client.viemClient, {
-          address: getChainAddress(this.chainId, "blue"),
+          address: blue,
           abi: blueAbi,
           functionName: "market",
           args: [blueMarketId],
         }),
-      ]);
+      ]),
+    );
+    const [data, [{ result: callback }, [, totalSupplyShares]]] =
+      await Promise.all([this.getOffersData(params), blueReads]);
     if (totalSupplyShares === 0n) {
       throw new EmptyBlueParkingMarketError({ marketId: blueMarketId });
     }
