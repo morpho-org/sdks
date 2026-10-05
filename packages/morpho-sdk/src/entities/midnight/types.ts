@@ -19,6 +19,7 @@ import type {
   MidnightCancelAndMakeAction,
   MidnightCollateralTransfer,
   MidnightGroupCancellation,
+  MidnightRepay,
   MidnightSellTarget,
 } from "../../types/action.js";
 
@@ -237,10 +238,8 @@ export interface RedeemParams {
 
 /** Parameters for the Midnight repay-and-withdraw-collateral flow. */
 export interface RepayWithdrawCollateralParams extends MarketActionParams {
-  /** Debt units repaid. `maxUint256` repays the whole debt at execution; `0n` only withdraws. */
-  readonly repayUnits: bigint;
-  /** Loan assets pulled and approved; the unused part is refunded. Must cover the repaid debt. */
-  readonly maxRepayAssets: bigint;
+  /** `{ type: "assets", assets }` repays exactly `assets` (`0n` only withdraws); `{ type: "full", maxBuyerAssets }` repays the whole debt at execution with a finite asset cap. */
+  readonly repay: MidnightRepay;
   /** `assets: maxUint256` withdraws the whole balance of that collateral. Defaults to none. */
   readonly collateralWithdrawals?: readonly MidnightCollateralTransfer[];
   /** Defaults to `accountAddress`. */

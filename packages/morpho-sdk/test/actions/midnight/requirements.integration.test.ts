@@ -478,8 +478,7 @@ describe("Midnight requirements on fork", () => {
     const repay = midnightEntity.repayWithdrawCollateral({
       marketData,
       accountAddress: client.account.address,
-      repayUnits: maxUint256,
-      maxRepayAssets: 4n * loanAssets,
+      repay: { type: "full", maxBuyerAssets: 4n * loanAssets },
       collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
       deadline: maxUint256,
     });
@@ -500,9 +499,10 @@ describe("Midnight requirements on fork", () => {
     );
     await client.deal({ erc20: usdc, amount: 4n * loanAssets });
     const repayRequirements = await repay.getRequirements();
+    // MidnightBundlesV2 was already authorized for the borrow above.
     expect(
       repayRequirements.map((requirement) => requirement.action.type),
-    ).toEqual(["erc20Approval", "midnightAuthorization"]);
+    ).toEqual(["erc20Approval"]);
     for (const requirement of repayRequirements) {
       if (!("to" in requirement)) {
         throw new Error("expected an onchain call requirement");

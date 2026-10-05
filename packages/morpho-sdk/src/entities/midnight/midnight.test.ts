@@ -1779,8 +1779,7 @@ describe("MorphoMidnight", () => {
       const output = midnightWithHandle(handle).repayWithdrawCollateral({
         marketData: marketData(),
         accountAddress: midnightAddresses.taker,
-        repayUnits: maxUint256,
-        maxRepayAssets: 1_010n,
+        repay: { type: "full", maxBuyerAssets: 1_010n },
         collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
         deadline: maxUint256,
       });
@@ -1789,8 +1788,7 @@ describe("MorphoMidnight", () => {
 
       expect(tx.to).toBe(midnightBundlesV2);
       expect(tx.action.args).toMatchObject({
-        repayUnits: maxUint256,
-        maxRepayAssets: 1_010n,
+        repay: { type: "full", maxBuyerAssets: 1_010n },
         collateralReceiver: midnightAddresses.taker,
       });
       expect(
@@ -1812,8 +1810,7 @@ describe("MorphoMidnight", () => {
       const output = midnightWithHandle(handle).repayWithdrawCollateral({
         marketData: marketData(),
         accountAddress: midnightAddresses.taker,
-        repayUnits: 0n,
-        maxRepayAssets: 0n,
+        repay: { type: "assets", assets: 0n },
         collateralWithdrawals: [{ collateralIndex: 0n, assets: 2_000n }],
         collateralReceiver: midnightAddresses.maker,
         deadline: maxUint256,
@@ -1830,8 +1827,7 @@ describe("MorphoMidnight", () => {
         midnight().repayWithdrawCollateral({
           marketData: marketData(),
           accountAddress: midnightAddresses.taker,
-          repayUnits: 0n,
-          maxRepayAssets: 0n,
+          repay: { type: "assets", assets: 0n },
           deadline: maxUint256,
         }),
       ).toThrow(NonPositiveInputError);

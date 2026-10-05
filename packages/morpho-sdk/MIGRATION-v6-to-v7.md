@@ -110,7 +110,7 @@ debt directly, without taking offers, and can withdraw several collaterals in th
 
 | v6 input | v7 input |
 | --- | --- |
-| `repayAssets` | `repayUnits` (`maxUint256` repays the full debt at execution time; `0n` for withdraw-only) and `maxRepayAssets` (finite loan-token cap) |
+| `repayAssets` | `repay: { type: "assets", assets }` (repays exactly `assets`; `0n` for withdraw-only) or `repay: { type: "full", maxBuyerAssets }` (repays the whole debt at execution time, pulling at most the finite `maxBuyerAssets`) |
 | `withdrawCollateralAssets`, `collateralIndex` | `collateralWithdrawals: [{ collateralIndex, assets }]` (`assets: maxUint256` withdraws the whole balance) |
 | — | optional `collateralReceiver` (defaults to `accountAddress`) |
 
@@ -122,17 +122,21 @@ midnight.repayWithdrawCollateral({ accountAddress, marketData, repayAssets, with
 midnight.repayWithdrawCollateral({
   accountAddress,
   marketData,
-  repayUnits: maxUint256,
-  maxRepayAssets,
+  repay: { type: "full", maxBuyerAssets },
   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
   deadline,
 });
 ```
 
-- Requirements approve `maxRepayAssets` of the loan token to MidnightBundlesV2 (skipped when it is
-  `0n`) and authorize MidnightBundlesV2 on Midnight. Unused assets are refunded.
-- `MidnightRepayWithdrawCollateralAction.args` exposes `repayUnits`, `maxRepayAssets` and the
-  `collateralWithdrawals` list, and drops `repayAssets` and `onBehalf`.
+- Requirements approve the pulled loan assets (`assets`, or `maxBuyerAssets` on a full repay) to
+  MidnightBundlesV2 (skipped when `0n`) and authorize MidnightBundlesV2 on Midnight. Unused assets
+  are refunded. A full repay rejects `maxBuyerAssets` of `0n` or `maxUint256`.
+- `MidnightRepayWithdrawCollateralAction.args` exposes `repay` and the `collateralWithdrawals`
+  list, and drops `repayAssets` and `onBehalf`.
+- The `midnightRepayWithdrawCollateral` builder takes the same `repay` and `collateralWithdrawals`
+  plus a required `collateralReceiver`; it drops `repayAssets`, `withdrawCollateralAssets`,
+  `collateralIndex` and `onBehalf`. Like the other V2 builders, it throws `UnknownAddressError`
+  unless `midnightBundlesV2` is registered for the chain (see `registerCustomAddresses`).
 
 ## Ratifiers
 

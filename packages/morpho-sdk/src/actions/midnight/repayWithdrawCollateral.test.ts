@@ -12,6 +12,7 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
 } from "../../types/index.js";
@@ -28,8 +29,7 @@ registerCustomAddresses({
 const params = {
   chainId: midnightChainId,
   market: midnightMarket,
-  repayUnits: maxUint256,
-  maxRepayAssets: 1_010n,
+  repay: { type: "full", maxBuyerAssets: 1_010n },
   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
   collateralReceiver: borrower,
   deadline: maxUint256,
@@ -50,8 +50,7 @@ describe("midnightRepayWithdrawCollateral", () => {
       type: "midnightRepayWithdrawCollateral",
       args: {
         market: midnightMarketId,
-        repayUnits: maxUint256,
-        maxRepayAssets: 1_010n,
+        repay: { type: "full", maxBuyerAssets: 1_010n },
         collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
         collateralReceiver: borrower,
         deadline: maxUint256,
@@ -72,29 +71,35 @@ describe("midnightRepayWithdrawCollateral", () => {
     ]);
   });
 
-  test("behavior: repay-only flow encodes no withdrawals", () => {
+  test("behavior: assets repay encodes the assets target with minUnits = assets", () => {
     const tx = midnightRepayWithdrawCollateral({
       ...params,
-      repayUnits: 500n,
-      maxRepayAssets: 500n,
+      repay: { type: "assets", assets: 500n },
       collateralWithdrawals: [],
     });
 
+    expect(decode(tx.data).functionName).toBe(
+      "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+    );
+    expect(tx.action.args.repay).toEqual({ type: "assets", assets: 500n });
+    // targetBuyerAssets, minUnits
     expect(decode(tx.data).args.slice(1, 3)).toEqual([500n, 500n]);
     expect(decode(tx.data).args[6]).toEqual([]);
   });
 
-  test("behavior: withdraw-only flow encodes zero target units", () => {
+  test("behavior: withdraw-only flow encodes a zero assets target", () => {
     const tx = midnightRepayWithdrawCollateral({
       ...params,
-      repayUnits: 0n,
-      maxRepayAssets: 0n,
+      repay: { type: "assets", assets: 0n },
       collateralWithdrawals: [
         { collateralIndex: 0n, assets: 2_000n },
         { collateralIndex: 0n, assets: maxUint256 },
       ],
     });
 
+    expect(decode(tx.data).functionName).toBe(
+      "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+    );
     expect(decode(tx.data).args.slice(1, 3)).toEqual([0n, 0n]);
     expect(decode(tx.data).args[6]).toEqual([
       { collateralIndex: 0n, assets: 2_000n },
@@ -115,8 +120,14 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
         ...params,
-        repayUnits: 0n,
+        repay: { type: "assets", assets: 0n },
         collateralWithdrawals: [],
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        repay: { type: "full", maxBuyerAssets: 0n },
       }),
     ).toThrow(NonPositiveInputError);
     expect(() =>
@@ -132,11 +143,20 @@ describe("midnightRepayWithdrawCollateral", () => {
 
   test("error: NegativeInputError", () => {
     expect(() =>
-      midnightRepayWithdrawCollateral({ ...params, repayUnits: -1n }),
+      midnightRepayWithdrawCollateral({
+        ...params,
+        repay: { type: "assets", assets: -1n },
+      }),
     ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when the full-repay cap is unbounded", () => {
     expect(() =>
-      midnightRepayWithdrawCollateral({ ...params, maxRepayAssets: -1n }),
-    ).toThrow(NegativeInputError);
+      midnightRepayWithdrawCollateral({
+        ...params,
+        repay: { type: "full", maxBuyerAssets: maxUint256 },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: UnknownCollateralIndexError", () => {
