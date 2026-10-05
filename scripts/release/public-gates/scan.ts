@@ -10,6 +10,7 @@ import {
   loadBundledTar,
 } from "../../ci/verify-tarball-collisions.ts";
 
+/** Default location of the scan policy, relative to the repository root. */
 export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
 /** Text that must never reach the public repository or npm. */
@@ -31,14 +32,17 @@ const RULES = {
   "slack-token": /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g,
   "anthropic-key": /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
   // Wallet keys and mnemonics only next to a key-like name, since bare 32-byte
-  // hex values (market ids, hashes) are everywhere.
+  // hex values (market ids, hashes) are everywhere. No leading boundary, so
+  // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   "wallet-key":
-    /\b(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
+    /(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
   mnemonic:
-    /\b(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
-  // A digits-only "password" is a port (`http://localhost:8545@<block>`), and
-  // `${VAR}` is filled in at run time.
-  "url-credentials": /\bhttps?:\/\/[^\s/:@"'`]+:(?!\d+@|\$\{)[^\s/@"'`]+@/gi,
+    /(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
+  // Any scheme (`https`, `wss`, ...). A port followed by a block number
+  // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
+  // at run time.
+  "url-credentials":
+    /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]+:(?!\d+@\d|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
     /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/g,
 } as const satisfies Record<string, RegExp>;
@@ -47,9 +51,13 @@ type RuleId = keyof typeof RULES | "blocked-term";
 
 /** One allowed occurrence: the same rule matching the same text in matching files. */
 export interface ScanException {
+  /** Glob (`matchesGlob`) over POSIX paths relative to the public tree root. */
   readonly path: string;
+  /** Rule that must report the occurrence. */
   readonly rule: RuleId;
+  /** Exact matched text. */
   readonly match: string;
+  /** Why the occurrence may stay public. */
   readonly reason: string;
 }
 
@@ -60,6 +68,7 @@ export interface ScanPolicy {
   readonly exceptions: readonly ScanException[];
 }
 
+/** One match of a rule: file, 1-based line, rule and matched text. */
 export interface Finding {
   readonly path: string;
   readonly line: number;
@@ -67,6 +76,7 @@ export interface Finding {
   readonly match: string;
 }
 
+/** A file to scan: tree path, or `<tarball>.tgz:package/...` for a tarball entry. */
 export interface ScannedFile {
   readonly path: string;
   readonly content: Buffer;
@@ -165,7 +175,9 @@ export function scanFiles(
 
 /**
  * Splits findings into blocking ones and allowed ones, and reports exceptions that
- * matched nothing so stale entries get removed.
+ * matched nothing so stale entries get removed. Tarball findings
+ * (`<tarball>.tgz:package/...`) always block, whatever the exception glob: an
+ * excepted file must not ship to npm.
  *
  * @param findings - Output of {@link scanFiles}.
  * @param exceptions - Allowed occurrences.
@@ -177,6 +189,7 @@ export function applyExceptions(
 ): { blocking: Finding[]; unused: ScanException[] } {
   const used = new Set<ScanException>();
   const blocking = findings.filter((finding) => {
+    if (finding.path.includes(".tgz:")) return true;
     const exception = exceptions.find(
       ({ path, rule, match }) =>
         rule === finding.rule &&
@@ -294,9 +307,8 @@ export function evaluate(result: {
   for (const { path, line, rule, match } of result.blocking) {
     errors.push(`${path}:${line}: ${rule}: ${JSON.stringify(match)}`);
   }
-  // Exceptions match tree paths, so a tarball-only run can't use them all; stale
-  // exceptions are reported on tree scans only. Tarball findings
-  // (`<name>.tgz:package/...`) have no exceptions: an excepted file must not ship.
+  // Exceptions apply to tree findings only, so stale exceptions are reported on
+  // tree scans only.
   if (result.treeFiles !== undefined) {
     for (const { path, rule, match } of result.unused) {
       errors.push(
