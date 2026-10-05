@@ -85,8 +85,6 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
     JSON.parse(readFileSync(manifestPath, "utf8")),
   );
   const treeDir = join(dir, "tree");
-  const sha256 = (content: Buffer | string) =>
-    createHash("sha256").update(content).digest("hex");
 
   // Every non-directory entry, with the git mode it has on disk.
   const entries = new Map<string, FileMode | "other">();
@@ -118,7 +116,7 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
     }
     const full = join(treeDir, file.path);
     const content = mode === "120000" ? readlinkSync(full) : readFileSync(full);
-    if (sha256(content) !== file.sha256) {
+    if (createHash("sha256").update(content).digest("hex") !== file.sha256) {
       throw new Error(`"${file.path}" differs from the manifest.`);
     }
   }
@@ -153,7 +151,7 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
   if (tarballs.length === 0) throw new Error("Artifact has no tarballs.");
   for (const name of tarballs) {
     const content = readFileSync(join(dir, "tarballs", name));
-    if (sums.get(name) !== sha256(content)) {
+    if (sums.get(name) !== createHash("sha256").update(content).digest("hex")) {
       throw new Error(`Tarball "${name}" doesn't match SHA256SUMS.`);
     }
   }
