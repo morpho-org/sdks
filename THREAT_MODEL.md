@@ -113,24 +113,23 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 - Forged `eth_getCode` suggests a `Setter` ratifier. The caller still chooses the ratifier on `Offer.create`.
 - A forged Vault V2 snapshot inflates share authority for an in-kind target. It also needs an attacker-registered `vaultExitBundlesV1` address in the integrator's own registry.
 
-#### `eth_simulateV1` responses and simulation chain (`evm-simulation`)
+#### `eth_simulateV1` responses (`evm-simulation`)
 
-Backend output is the only execution evidence the retention check sees. Format checks catch clumsy lies, but a lying endpoint can return a clean, well-formed success.
+The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below catch non-compliant, misconfigured or reorging endpoints — a dishonest endpoint can pass them all with a consistent forged response.
 
-- A `status: success` call with attached error data is treated as success.
-- Omitted `logs` are treated as no transfers. The spec requires `logs` on every successful call.
-- Incomplete ERC-20 logs hide retained tokens.
-- A node that ignores `traceTransfers` hides native transfers.
-- Malformed amount data can cancel a real residual. A node that forges data can omit the log instead.
-- Native `assetChanges` and logs disagree. That needs contradictory output from the node.
+- The state block is pinned once and re-fetched after the response is parsed; a hash change, or a pinned block the node no longer serves, mid-flight fails with `InvalidSimulationResponseError` (transport stage).
+- The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way. A same-height response (Anvil re-hashes the pinned block) is tied to the pinned state only by number and timestamp: its `parentHash` is the pinned block's own parent either way, so it cannot distinguish execution on block N's state from execution on N-1's; this residual is accepted.
+- A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
+- Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`, and a per-call value that fails normalization (a non-quantity `gasUsed`, a present but non-array `logs`, or a log whose `topics`, `address` or `data` are malformed) is rejected the same way; other per-call fields are trusted: a malformed value from a non-compliant node may be read as a revert (any `status` other than `"0x1"`) or pass through unchecked. An absent or `null` per-call `logs` is treated as no transfers, so a node that drops `logs` hides retained tokens.
+- Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
+- Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.
+- A forged `status`/`returnData` shapes the reported outcome; no check can tell it from a real one.
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
-- A truncated result fails with `ExternalServiceError`. A caller that bypasses it accepts an unsimulated bundle.
-- A failed or malformed response throws `ExternalServiceError`. There is no fallback endpoint, so a caller that bypasses it accepts an unsimulated bundle.
-- A dropped adapter refund plus a lost fallback trace hides native residue. The refund is fixed; what remains is a node hiding the trace.
-- A malicious token, not the endpoint, emits a fake `Transfer`. It is listed because the fix it proposes, reading balances from the node, adds nothing: a token that lies in its events can also lie in `balanceOf`.
-- The endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id. An honest endpoint on the wrong chain means the URL is set wrong, and the integrator owns that URL-to-chain mapping.
-- Results carry no chain or block provenance. The caller chooses both.
+- A truncated result (fewer calls than planned) is a non-bypassable `InvalidSimulationResponseError`.
+- A malicious token, not the endpoint, emits a fake `Transfer`. Reading balances from the node adds nothing: a token that lies in its events can also lie in `balanceOf`.
+- The endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id; an honest endpoint on the wrong chain is rejected by the chain-identity check above.
+- Results carry no block provenance: the pinned state block is resolved and checked internally but not returned on `SimulationResult`; callers that need a reproducible pin must pass an explicit `blockNumber`.
 
 #### Chain identity and transaction submission (`wdk-protocol-lending-morpho-evm`, `liquidity-sdk-viem`)
 

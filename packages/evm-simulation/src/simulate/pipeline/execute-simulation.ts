@@ -1,41 +1,45 @@
-import type { Address, BlockTag } from "viem";
-import type {
-  RawSimulationResult,
-  SimulationConfig,
-  SimulationTransaction,
-} from "../../types.js";
-import { simulateV1 } from "../backends/index.js";
+import type { SimulationConfig } from "../../types.js";
+import { executePlan } from "../backends/index.js";
+import type { SimulationExecution } from "../backends/parse-response.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { resolveChain } from "./resolve-chain.js";
 
-/** Default budget for the single `eth_simulateV1` request. */
+/** Total execution budget for a single `simulate()` call. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
- * Stage 4 of the simulate() pipeline.
+ * Execute the plan once through `eth_simulateV1` within the full timeout budget.
+ * The single `AbortSignal.timeout` is shared by the boundary's chain check,
+ * block resolution, and simulation request.
+ * @internal
+ * @param params - Configuration and the planned execution (which carries the
+ *   block pin on `plan.request.blockNumber`).
+ * @returns The executed transactions and the pinned block.
+ * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
+ * @throws {ExternalServiceError} When the RPC fails or times out.
+ * @throws {SimulationRevertedError} When execution reverts.
+ * @throws {InvalidSimulationResponseError} When the node response cannot be
+ *   trusted.
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
+ * @example
+ * ```ts
+ * import { executeSimulation } from "./execute-simulation.js";
  *
- * Runs the bundle through `eth_simulateV1` with the full `timeoutMs` budget.
- * Every failure — RPC error, timeout, or `SimulationRevertedError` — propagates
- * as-is; there is no second provider. viem's `http` transport may retry, but
- * every attempt shares the same `AbortSignal`, so only its inter-retry backoff
- * can extend wall-clock slightly past `timeoutMs`.
+ * await executeSimulation({ config, plan });
+ * ```
  */
 export async function executeSimulation(params: {
-  config: SimulationConfig;
-  chainId: number;
-  transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
-  wNative?: Address | null;
-}): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber, wNative } = params;
-  const { simulateV1Url } = resolveChain(config, chainId);
+  readonly config: SimulationConfig;
+  readonly plan: ExecutionPlan;
+}): Promise<SimulationExecution> {
+  const { config, plan } = params;
+  const chain = resolveChain(config, plan.request.chainId);
 
   // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
-  return await simulateV1({
-    rpcUrl: simulateV1Url,
-    chainId,
-    transactions,
-    blockNumber,
-    wNative,
+  return executePlan({
+    rpcUrl: chain.simulateV1Url,
+    plan,
     signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
 }
