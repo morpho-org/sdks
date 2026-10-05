@@ -16,7 +16,9 @@ import type {
 export type SimulatedOperation = {
   /** Quote and percentage tolerance checked against the named subject over the whole bundle. */
   readonly checkedLimits: SlippageLimits;
+  /** Resolved selector from the limit; defaults to the transaction sender. */
   readonly account: Address;
+  /** Resolved selector from the limit; defaults to the transaction sender. */
   readonly receiver: Address;
 } & SimulationOperationSubject;
 
@@ -35,7 +37,17 @@ export interface AuthorizationPreparation {
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
+  /**
+   * Block `eth_simulateV1` executed in: the pinned state block or its
+   * successor, depending on the node. Not a pin to pass back as
+   * `SimulateParams.blockNumber`.
+   */
   readonly blockNumber: bigint;
+  /**
+   * Block `eth_simulateV1` executed in: the pinned state block or its
+   * successor, depending on the node. Not a pin to pass back as
+   * `SimulateParams.blockNumber`.
+   */
   readonly blockTimestamp: bigint;
   /** Caller-supplied quotes and tolerances only; omitted limits remain unchecked. */
   readonly limits: Required<SimulationLimits>;

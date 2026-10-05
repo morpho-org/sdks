@@ -205,6 +205,106 @@ describe("verifySlippage", () => {
       }),
     ).toThrow(MissingVerificationEvidenceError);
   });
+  test("behavior: debt shares minted are capped and debt shares burned are floored", () => {
+    const borrow: OperationLimit = {
+      type: "blueBorrow",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+      quote: { sharesMinted: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    const borrowOps = [
+      {
+        limit: borrow,
+        measurements: [
+          {
+            field: "sharesMinted" as const,
+            type: "position" as const,
+            readId: "position",
+            shares: "borrowShares" as const,
+          },
+        ],
+      },
+    ];
+    const borrowBefore = new Map<string, StateValue>([
+      ["position", { supplyShares: 0n, borrowShares: 0n }],
+    ]);
+    const input = {
+      ctx,
+      operations: borrowOps,
+      before: borrowBefore,
+      transfers: [] as const,
+      requestTransactions: [] as const,
+    };
+    // A debt `sharesMinted` quote is a cap, not a floor: +1011 exceeds the 1%
+    // bound on 1000, +980 is inside it.
+    expect(() =>
+      verifySlippage({
+        ...input,
+        after: new Map([
+          ["position", { supplyShares: 0n, borrowShares: 1011n }],
+        ]),
+      }),
+    ).toThrow(ConsumerLimitViolationError);
+    expect(
+      verifySlippage({
+        ...input,
+        after: new Map([
+          ["position", { supplyShares: 0n, borrowShares: 980n }],
+        ]),
+      })[0]?.checkedLimits.quote,
+    ).toEqual({ sharesMinted: 1000n });
+
+    const repay: OperationLimit = {
+      type: "blueRepay",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+      quote: { sharesBurned: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    const repayOps = [
+      {
+        limit: repay,
+        measurements: [
+          {
+            field: "sharesBurned" as const,
+            type: "position" as const,
+            readId: "position",
+            shares: "borrowShares" as const,
+          },
+        ],
+      },
+    ];
+    const repayBefore = new Map<string, StateValue>([
+      ["position", { supplyShares: 0n, borrowShares: 2000n }],
+    ]);
+    // A debt `sharesBurned` quote is a floor: burning 980 is below the 1%
+    // bound on 1000, burning 1000 satisfies it.
+    expect(() =>
+      verifySlippage({
+        ctx,
+        operations: repayOps,
+        before: repayBefore,
+        after: new Map([
+          ["position", { supplyShares: 0n, borrowShares: 1020n }],
+        ]),
+        transfers: [],
+        requestTransactions: [],
+      }),
+    ).toThrow(ConsumerLimitViolationError);
+    expect(
+      verifySlippage({
+        ctx,
+        operations: repayOps,
+        before: repayBefore,
+        after: new Map([
+          ["position", { supplyShares: 0n, borrowShares: 1000n }],
+        ]),
+        transfers: [],
+        requestTransactions: [],
+      })[0]?.checkedLimits.quote,
+    ).toEqual({ sharesBurned: 1000n });
+  });
   test("error: incoming native refund does not cover outgoing value evidence", () => {
     const nativeLimit = {
       ...limit,

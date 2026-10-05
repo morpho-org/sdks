@@ -4,7 +4,8 @@ import { MissingVerificationEvidenceError } from "../errors.js";
 import type { SlippageQuote } from "../limits.js";
 import type { SimulatedOperation } from "../result.js";
 import type { Transfer } from "../types.js";
-import { type CheckContext, operationSubject } from "./context.js";
+import type { CheckContext } from "./context.js";
+import { operationMeasurementPlan } from "./measurement-plan.js";
 import { checkSlippage } from "./slippage.js";
 import type { SlippageOperationReads, StateValue } from "./state/read-state.js";
 
@@ -29,7 +30,7 @@ export function verifySlippage(params: {
 }): readonly SimulatedOperation[] {
   const { ctx, before, after, transfers, requestTransactions } = params;
   return params.operations.map(({ limit, measurements }) => {
-    const subject = operationSubject(limit);
+    const subject = operationMeasurementPlan(limit).subject;
     const context = {
       stage: "verification" as const,
       chainId: ctx.chainId,
