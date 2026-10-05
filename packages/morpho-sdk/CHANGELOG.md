@@ -1,5 +1,16 @@
 # @morpho-org/morpho-sdk
 
+## 6.5.0
+
+### Minor Changes
+
+- [#1265](https://github.com/morpho-org/sdks/pull/1265) [`a6911ee`](https://github.com/morpho-org/sdks/commit/a6911ee1cd598d5f3c9bbf694f78c4e441c0ccb6) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - `restructure` and `readContractRestructured` now throw named errors instead of a bare `Error`: `UnknownAbiFunctionError` when the ABI has no function with the requested name, `UnnamedAbiOutputsError` when the function's outputs are not all named, and `NonTupleReturnValueError` when the read returns a single value. Each extends `Error` and exposes `functionName`, so existing `catch` blocks keep working; only the message text changes. `morpho-sdk` re-exports the three errors under the same names from `/blue/errors` and `/errors`.
+
+### Patch Changes
+
+- Updated dependencies [[`a6911ee`](https://github.com/morpho-org/sdks/commit/a6911ee1cd598d5f3c9bbf694f78c4e441c0ccb6)]:
+  - @morpho-org/blue-sdk-viem@6.2.0
+
 ## 6.4.0
 
 ### Minor Changes
