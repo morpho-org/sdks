@@ -1,11 +1,78 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
+import { expectTypeOf } from "vitest";
 import {
+  AssetChangeMismatchError,
+  AuthorizationRequestMismatchError,
   BlacklistViolationError,
+  ConsumerLimitViolationError,
   ExternalServiceError,
+  FeeMismatchError,
+  InvalidSimulationResponseError,
+  isSimulationPackageError,
+  MarketConstraintViolationError,
+  MissingVerificationEvidenceError,
+  PermissionChangeMismatchError,
+  ProtocolBindingMismatchError,
+  SIMULATION_ERROR_CODES,
+  type SimulationErrorContext,
+  type SimulationExecutionContext,
+  type SimulationExecutionReason,
   SimulationPackageError,
+  type SimulationPreparationContext,
   SimulationRevertedError,
   SimulationValidationError,
+  type SimulationVerificationContext,
+  SlippageLimitExceededError,
+  StateChangeMismatchError,
+  UnexpectedSimulationError,
   UnsupportedChainError,
+  UnsupportedOperationError,
+  UnsupportedVerificationFeatureError,
 } from "./errors.js";
+import {
+  type BlueMarketOperationType,
+  OPERATION_TYPES,
+  type OperationType,
+  type SimulationOperationSubject,
+  type VaultOperationType,
+} from "./limits.js";
+import type { SimulatedOperation } from "./result.js";
+
+const CONTEXT: SimulationErrorContext = {
+  stage: "validation",
+  mode: "final",
+  chainId: 1,
+  blockNumber: 100n,
+};
+const EXECUTION: SimulationExecutionContext = {
+  stage: "execution",
+  mode: "preview",
+  chainId: 1,
+  blockNumber: 100n,
+  operation: "blueSupply",
+  marketId: "0xmarket" as MarketId,
+  failedTransactionIndex: 2,
+};
+
+const A = "0x0000000000000000000000000000000000000001";
+/** One well-formed subject per operation, keyed by operation group. */
+const SUBJECTS: Record<
+  OperationType,
+  Record<string, unknown>
+> = Object.fromEntries(
+  OPERATION_TYPES.map((operation) => {
+    if (operation === "blueAuthorization")
+      return [operation, { authorized: A }];
+    if (operation === "blueRefinance")
+      return [operation, { sourceMarketId: "0xa", targetMarketId: "0xb" }];
+    if (operation === "vaultV1MigrateToV2")
+      return [operation, { sourceVault: A, targetVault: A }];
+    return [
+      operation,
+      operation.startsWith("blue") ? { marketId: "0xa" } : { vault: A },
+    ];
+  }),
+) as Record<OperationType, Record<string, unknown>>;
 
 describe("error hierarchy", () => {
   it("every concrete error extends SimulationPackageError", () => {
@@ -81,7 +148,13 @@ describe("SimulationRevertedError", () => {
 
 describe("BlacklistViolationError", () => {
   it("attaches assetChanges when provided", () => {
-    const changes = [{ address: "0xabc", token: "0xdef", netRetained: "100" }];
+    const changes = [
+      {
+        address: "0x00000000000000000000000000000000000000AB",
+        token: "0x00000000000000000000000000000000000000cD",
+        netRetained: 100n,
+      },
+    ] as const;
     const err = new BlacklistViolationError("stuck", changes);
     expect(err.assetChanges).toBe(changes);
   });
@@ -120,5 +193,525 @@ describe("ExternalServiceError", () => {
     const cause = new Error("underlying fetch failure");
     const err = new ExternalServiceError("Tenderly 502", { cause });
     expect(err.cause).toBe(cause);
+  });
+});
+
+describe("verification error classes", () => {
+  const cases = [
+    [UnsupportedOperationError, "UNSUPPORTED_OPERATION"],
+    [ProtocolBindingMismatchError, "PROTOCOL_BINDING_MISMATCH"],
+    [UnsupportedVerificationFeatureError, "UNSUPPORTED_VERIFICATION_FEATURE"],
+    [InvalidSimulationResponseError, "INVALID_SIMULATION_RESPONSE"],
+    [MissingVerificationEvidenceError, "MISSING_VERIFICATION_EVIDENCE"],
+    [AuthorizationRequestMismatchError, "AUTHORIZATION_REQUEST_MISMATCH"],
+    [AssetChangeMismatchError, "ASSET_CHANGE_MISMATCH"],
+    [PermissionChangeMismatchError, "PERMISSION_CHANGE_MISMATCH"],
+    [StateChangeMismatchError, "STATE_CHANGE_MISMATCH"],
+    [MarketConstraintViolationError, "MARKET_CONSTRAINT_VIOLATION"],
+    [SlippageLimitExceededError, "SLIPPAGE_LIMIT_EXCEEDED"],
+    [FeeMismatchError, "FEE_MISMATCH"],
+    [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
+    [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
+  ] as const;
+
+  it.each(cases)("%s has its literal code and name", (Ctor, code) => {
+    const err = new Ctor("boom", { context: CONTEXT });
+    expect(err.code).toBe(code);
+    expect(err.name).toBe(Ctor.name);
+    expect(err).toBeInstanceOf(SimulationPackageError);
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it.each(cases)("%s stores a frozen copy of the context", (Ctor) => {
+    const err = new Ctor("boom", { context: EXECUTION });
+    expect(err.context).toEqual(EXECUTION);
+    expect(err.context).not.toBe(EXECUTION);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it.each(cases)("%s keeps the cause", (Ctor) => {
+    const cause = new Error("root");
+    const err = new Ctor("boom", { context: CONTEXT, cause });
+    expect(err.cause).toBe(cause);
+  });
+});
+
+describe("SimulationPackageError.context", () => {
+  it("is undefined on legacy constructors called without context", () => {
+    expect(new SimulationRevertedError("x").context).toBeUndefined();
+    expect(new BlacklistViolationError("x").context).toBeUndefined();
+    expect(new ExternalServiceError("x").context).toBeUndefined();
+    expect(new SimulationValidationError("x").context).toBeUndefined();
+    expect(new UnsupportedChainError(1).context).toBeUndefined();
+  });
+
+  it("is stored frozen when supplied to a legacy constructor", () => {
+    const err = new UnsupportedChainError(1, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it("is not forwarded into Error options", () => {
+    const err = new SimulationValidationError("x", undefined, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(err.cause).toBeUndefined();
+  });
+});
+
+describe("SimulationRevertedError.reasonCode", () => {
+  it("defaults to UNKNOWN_REVERT", () => {
+    expect(new SimulationRevertedError("x").reasonCode).toBe("UNKNOWN_REVERT");
+  });
+
+  it("carries the mapped cause", () => {
+    expect(
+      new SimulationRevertedError("x", undefined, "INSUFFICIENT_LIQUIDITY")
+        .reasonCode,
+    ).toBe("INSUFFICIENT_LIQUIDITY");
+  });
+
+  it("is the ADR union", () => {
+    expectTypeOf<SimulationExecutionReason>().toEqualTypeOf<
+      | "INSUFFICIENT_BALANCE"
+      | "INSUFFICIENT_ALLOWANCE"
+      | "INSUFFICIENT_LIQUIDITY"
+      | "POSITION_UNHEALTHY"
+      | "SLIPPAGE_EXCEEDED"
+      | "SIGNATURE_EXPIRED"
+      | "SIGNATURE_INVALID"
+      | "NONCE_ALREADY_USED"
+      | "CAP_EXCEEDED"
+      | "ACCESS_RESTRICTED"
+      | "UNKNOWN_REVERT"
+    >();
+  });
+});
+
+describe("SimulationErrorContext", () => {
+  it("is keyed by stage", () => {
+    expectTypeOf<SimulationErrorContext["stage"]>().toEqualTypeOf<
+      "validation" | "preparation" | "execution" | "verification" | "transport"
+    >();
+    expectTypeOf<
+      SimulationErrorContext["blockNumber"]
+    >().toEqualTypeOf<bigint>();
+    expectTypeOf<{
+      stage: "preparation";
+      mode: "preview";
+      chainId: 1;
+      blockNumber: 1n;
+    }>().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<{
+      stage: "verification";
+      mode: "final";
+      chainId: 1;
+      blockNumber: 1n;
+    }>().not.toExtend<SimulationErrorContext>();
+  });
+
+  it("keys execution/verification contexts by operation group", () => {
+    expectTypeOf<
+      SimulationVerificationContext["operation"]
+    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<SimulationVerificationContext>().toExtend<SimulationErrorContext>();
+    const base = {
+      stage: "verification",
+      mode: "final",
+      chainId: 1,
+      blockNumber: 1n,
+    } as const;
+    expectTypeOf<
+      typeof base & { operation: BlueMarketOperationType; marketId: MarketId }
+    >().toExtend<SimulationVerificationContext>();
+    expectTypeOf<
+      typeof base & { operation: "blueRefinance"; marketId: MarketId }
+    >().not.toExtend<SimulationVerificationContext>();
+    expectTypeOf<
+      typeof base & { operation: VaultOperationType; vault: `0x${string}` }
+    >().toExtend<SimulationVerificationContext>();
+    expectTypeOf<
+      typeof base & { operation: "vaultV1MigrateToV2"; vault: `0x${string}` }
+    >().not.toExtend<SimulationVerificationContext>();
+    expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
+    expectTypeOf<
+      SimulatedOperation["operation"]
+    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<{
+      transactionIndex: number;
+      operation: "blueRefinance";
+      vault: `0x${string}`;
+    }>().not.toExtend<SimulatedOperation>();
+    expectTypeOf<
+      typeof base & { operation: "blueSupply" }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & { operation: "blueRefinance"; sourceMarketId: MarketId }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & {
+        operation: "vaultV1MigrateToV2";
+        sourceVault: `0x${string}`;
+        targetVault: `0x${string}`;
+      }
+    >().toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & { operation: "blueAuthorization" }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & {
+        operation: "blueAuthorization";
+        authorized: `0x${string}`;
+      }
+    >().toExtend<SimulationErrorContext>();
+  });
+
+  it("SimulationRevertedError only accepts preparation or execution contexts", () => {
+    expectTypeOf<
+      NonNullable<
+        ConstructorParameters<typeof SimulationRevertedError>[3]
+      >["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
+    expectTypeOf<
+      NonNullable<SimulationRevertedError["context"]>["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
+  });
+
+  it("SimulationRevertedError stores a frozen preparation context", () => {
+    const preparation: SimulationPreparationContext = {
+      stage: "preparation",
+      mode: "preview",
+      chainId: 1,
+      blockNumber: 100n,
+      authorizationIndex: 1,
+      preparationCallIndex: 0,
+    };
+    const err = new SimulationRevertedError(
+      "x",
+      undefined,
+      "UNKNOWN_REVERT",
+      preparation,
+    );
+    expect(err.context).toEqual(preparation);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
+});
+
+describe("SimulationPackageError.name", () => {
+  it("falls back to the subclass name for consumer subclasses", () => {
+    class ConsumerError extends SimulationPackageError {
+      readonly code = "FEE_MISMATCH" as const;
+    }
+    expect(new ConsumerError("m").name).toBe("ConsumerError");
+  });
+
+  it("keeps the built-in name on subclasses of a built-in error", () => {
+    class MyValidationError extends SimulationValidationError {}
+    const err = new MyValidationError("m");
+    expect(err.name).toBe("SimulationValidationError");
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
+});
+
+describe("context on legacy errors", () => {
+  it("SimulationRevertedError keeps cause and freezes context", () => {
+    const cause = new Error("inner");
+    const err = new SimulationRevertedError("x", cause, undefined, EXECUTION);
+    expect(err.cause).toBe(cause);
+    expect(err.context).toEqual(EXECUTION);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(
+      new SimulationRevertedError("x", "raw", undefined, EXECUTION).context,
+    ).toEqual(EXECUTION);
+  });
+
+  it("BlacklistViolationError stores context", () => {
+    const err = new BlacklistViolationError("x", undefined, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it("verification errors extend SimulationPackageError directly", () => {
+    const err = new FeeMismatchError("x", { context: CONTEXT });
+    expect(Object.getPrototypeOf(FeeMismatchError)).toBe(
+      SimulationPackageError,
+    );
+    expect(err.context).toEqual(CONTEXT);
+    expectTypeOf(err.context).toEqualTypeOf<
+      SimulationErrorContext | undefined
+    >();
+  });
+});
+
+describe("SIMULATION_ERROR_CODES", () => {
+  const concrete = [
+    new SimulationRevertedError("x"),
+    new BlacklistViolationError("x"),
+    new ExternalServiceError("x"),
+    new SimulationValidationError("x"),
+    new UnsupportedChainError(1),
+    new UnsupportedOperationError("x", { context: CONTEXT }),
+    new ProtocolBindingMismatchError("x", { context: CONTEXT }),
+    new UnsupportedVerificationFeatureError("x", { context: CONTEXT }),
+    new InvalidSimulationResponseError("x", { context: CONTEXT }),
+    new MissingVerificationEvidenceError("x", { context: CONTEXT }),
+    new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
+    new AssetChangeMismatchError("x", { context: CONTEXT }),
+    new PermissionChangeMismatchError("x", { context: CONTEXT }),
+    new StateChangeMismatchError("x", { context: CONTEXT }),
+    new MarketConstraintViolationError("x", { context: CONTEXT }),
+    new SlippageLimitExceededError("x", { context: CONTEXT }),
+    new FeeMismatchError("x", { context: CONTEXT }),
+    new ConsumerLimitViolationError("x", { context: CONTEXT }),
+    new UnexpectedSimulationError("x", { context: CONTEXT }),
+  ];
+
+  it("lists exactly the codes of the concrete classes", () => {
+    expect(new Set(concrete.map((e) => e.code))).toEqual(
+      new Set(SIMULATION_ERROR_CODES),
+    );
+  });
+
+  it.each(concrete)("guard accepts plain $name", ({ name, code }) => {
+    expect(isSimulationPackageError({ name, message: "m", code })).toBe(true);
+  });
+
+  it.each(concrete)("guard rejects $code under a foreign name", ({ code }) => {
+    expect(
+      isSimulationPackageError({ name: "FetchError", message: "m", code }),
+    ).toBe(false);
+  });
+
+  it.each(
+    concrete.map((e, i) => ({
+      code: e.code,
+      name: concrete[(i + 1) % concrete.length]!.name,
+    })),
+  )(
+    "guard rejects $code under another package class name $name",
+    ({ code, name }) => {
+      expect(isSimulationPackageError({ name, message: "m", code })).toBe(
+        false,
+      );
+    },
+  );
+});
+
+describe("isSimulationPackageError", () => {
+  it("is true for instances", () => {
+    expect(isSimulationPackageError(new SimulationRevertedError("x"))).toBe(
+      true,
+    );
+    expect(
+      isSimulationPackageError(new FeeMismatchError("x", { context: CONTEXT })),
+    ).toBe(true);
+  });
+
+  it("is true for a plain object with a known code", () => {
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        message: "boom",
+        code: "FEE_MISMATCH",
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("is true for a plain object without context", () => {
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        message: "boom",
+        code: "FEE_MISMATCH",
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for a malformed context", () => {
+    const base = {
+      name: "FeeMismatchError",
+      message: "m",
+      code: "FEE_MISMATCH",
+    };
+    expect(isSimulationPackageError({ ...base, context: {} })).toBe(false);
+    expect(isSimulationPackageError({ ...base, context: [] })).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { stage: "bogus", mode: "final", chainId: 1, blockNumber: 1n },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "bogus",
+          chainId: 1,
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: "1",
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { stage: "validation", mode: "final", chainId: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: "1",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "preparation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "preparation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+          authorizationIndex: 0,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("is false without a message string", () => {
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        code: "FEE_MISMATCH",
+      }),
+    ).toBe(false);
+  });
+
+  it("is false without a name string", () => {
+    expect(
+      isSimulationPackageError({ message: "m", code: "FEE_MISMATCH" }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({ name: 1, message: "m", code: "FEE_MISMATCH" }),
+    ).toBe(false);
+  });
+
+  const base = { name: "FeeMismatchError", message: "m", code: "FEE_MISMATCH" };
+  const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
+
+  it("requires a known operation on execution and verification contexts", () => {
+    for (const stage of ["execution", "verification"]) {
+      expect(
+        isSimulationPackageError({ ...base, context: { ...ctx, stage } }),
+      ).toBe(false);
+      expect(
+        isSimulationPackageError({
+          ...base,
+          context: { ...ctx, stage, operation: "bogus", marketId: "0xa" },
+        }),
+      ).toBe(false);
+    }
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { ...ctx, stage: "transport" },
+      }),
+    ).toBe(true);
+    expect(isSimulationPackageError({ ...base, context: EXECUTION })).toBe(
+      true,
+    );
+  });
+
+  it.each(OPERATION_TYPES)(
+    "accepts %s with its subject and rejects it without",
+    (operation) => {
+      const subject = SUBJECTS[operation];
+      for (const stage of ["execution", "verification"]) {
+        expect(
+          isSimulationPackageError({
+            ...base,
+            context: { ...ctx, stage, operation, ...subject },
+          }),
+        ).toBe(true);
+        for (const key of Object.keys(subject)) {
+          const { [key]: _, ...partial } = subject;
+          expect(
+            isSimulationPackageError({
+              ...base,
+              context: { ...ctx, stage, operation, ...partial },
+            }),
+          ).toBe(false);
+        }
+      }
+    },
+  );
+
+  it("is false for an unknown code", () => {
+    expect(
+      isSimulationPackageError({
+        name: "Foo",
+        message: "m",
+        code: "NOPE",
+        context: {},
+      }),
+    ).toBe(false);
+  });
+
+  it("is false for null, plain Errors and non-object context", () => {
+    expect(isSimulationPackageError(null)).toBe(false);
+    expect(isSimulationPackageError(undefined)).toBe(false);
+    expect(isSimulationPackageError(new Error("x"))).toBe(false);
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        message: "m",
+        code: "FEE_MISMATCH",
+        context: "nope",
+      }),
+    ).toBe(false);
   });
 });

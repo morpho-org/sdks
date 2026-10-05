@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | accepted; Tenderly migration superseded by ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation |
+| **Status** | accepted; Tenderly migration superseded by ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation; legacy-authorization migration superseded by ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation |
 | **Date** | 2026-09-18; revised 2026-09-25 |
 | **Author** | @foulques, @jinmel |
 | **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
