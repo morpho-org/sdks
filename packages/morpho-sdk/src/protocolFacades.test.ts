@@ -13,7 +13,6 @@ import {
 } from "@morpho-org/morpho-sdk/blue/constants";
 import { Market as RawBlueMarket } from "@morpho-org/morpho-sdk/blue/entities";
 import {
-  AbiFunctionNotFoundError as RawBlueAbiFunctionNotFoundError,
   DivisionByZeroError as RawBlueDivisionByZeroError,
   InvalidAddressError as RawBlueInvalidAddressError,
   InvalidBitLengthError as RawBlueInvalidBitLengthError,
@@ -24,6 +23,7 @@ import {
   MarketParamsIdMismatchError as RawBlueMarketParamsIdMismatchError,
   NonTupleReturnValueError as RawBlueNonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
+  UnknownAbiFunctionError as RawBlueUnknownAbiFunctionError,
   UnknownDataError as RawBlueUnknownDataError,
   UnknownFactory as RawBlueUnknownFactory,
   UnknownMarketAllocationError as RawBlueUnknownMarketAllocationError,
@@ -67,7 +67,6 @@ import {
 } from "@morpho-org/morpho-sdk/constants";
 import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
-  AbiFunctionNotFoundError,
   BlueMarketParamsIdMismatchError,
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
@@ -88,6 +87,7 @@ import {
   NegativeValueError,
   NonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError,
+  UnknownAbiFunctionError,
   UnknownBlueDataError,
   UnknownBlueFactory,
   UnknownBlueMarketAllocationError,
@@ -204,7 +204,7 @@ describe("protocol facades", () => {
       RawBlueInvalidPermitDomainVerifyingContractError,
     ],
     [BlueMarketParamsIdMismatchError, RawBlueMarketParamsIdMismatchError],
-    [AbiFunctionNotFoundError, RawBlueAbiFunctionNotFoundError],
+    [UnknownAbiFunctionError, RawBlueUnknownAbiFunctionError],
     [NonTupleReturnValueError, RawBlueNonTupleReturnValueError],
     [UnnamedAbiOutputsError, RawBlueUnnamedAbiOutputsError],
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],

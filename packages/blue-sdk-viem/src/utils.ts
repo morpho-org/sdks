@@ -16,9 +16,9 @@ import {
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
 import {
-  AbiFunctionNotFoundError,
   InvalidNumberError,
   NonTupleReturnValueError,
+  UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
 } from "./error.js";
 
@@ -187,7 +187,7 @@ function zipParams<
  * @param outputs - Tuple output returned by viem.
  * @param parameters - ABI item lookup parameters matching the read that produced `outputs`.
  * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
- * @throws {AbiFunctionNotFoundError} When `parameters.name` matches no function item in the ABI.
+ * @throws {UnknownAbiFunctionError} When `parameters.name` matches no function item in the ABI.
  * @throws {UnnamedAbiOutputsError} When the function's ABI outputs are not all named.
  */
 export function restructure<
@@ -213,7 +213,7 @@ export function restructure<
       );
     }
     default:
-      throw new AbiFunctionNotFoundError(String(parameters.name));
+      throw new UnknownAbiFunctionError(String(parameters.name));
   }
 }
 

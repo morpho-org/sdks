@@ -3,9 +3,9 @@ import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  AbiFunctionNotFoundError,
   InvalidNumberError,
   NonTupleReturnValueError,
+  UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
 } from "./error.js";
 import {
@@ -148,7 +148,7 @@ describe("restructure", () => {
     });
   });
 
-  test("error: AbiFunctionNotFoundError when the function does not exist in the abi", () => {
+  test("error: UnknownAbiFunctionError when the function does not exist in the abi", () => {
     expect(() =>
       restructure([] as never, {
         abi: namedAbi,
@@ -156,7 +156,7 @@ describe("restructure", () => {
         name: "doesNotExist",
         args: [],
       }),
-    ).toThrow(AbiFunctionNotFoundError);
+    ).toThrow(UnknownAbiFunctionError);
   });
 
   test("error: UnnamedAbiOutputsError when ABI outputs lack names", () => {

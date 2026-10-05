@@ -2,7 +2,6 @@ import type { Address, ChainId, MarketId } from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  AbiFunctionNotFoundError,
   getUnsupportedVaultV2Adapter,
   InvalidNumberError,
   InvalidPermitDomainChainIdError,
@@ -10,6 +9,7 @@ import {
   isUnknownOfFactoryError,
   MarketParamsIdMismatchError,
   NonTupleReturnValueError,
+  UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
   UnsupportedPermitDomainExtensionsError,
 } from "./error.js";
@@ -32,7 +32,7 @@ describe("MarketParamsIdMismatchError", () => {
 
 describe("restructure errors", () => {
   test.each([
-    ["AbiFunctionNotFoundError", AbiFunctionNotFoundError],
+    ["UnknownAbiFunctionError", UnknownAbiFunctionError],
     ["UnnamedAbiOutputsError", UnnamedAbiOutputsError],
     ["NonTupleReturnValueError", NonTupleReturnValueError],
   ] as const)(

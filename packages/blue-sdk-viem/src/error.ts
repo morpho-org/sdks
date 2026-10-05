@@ -70,13 +70,13 @@ export class UnsupportedPermitDomainExtensionsError extends Error {
 }
 
 /** Thrown by `restructure` when the ABI has no function item matching the requested name. */
-export class AbiFunctionNotFoundError extends Error {
+export class UnknownAbiFunctionError extends Error {
   /** @param functionName - Function name looked up in the ABI. */
   constructor(public readonly functionName: string) {
     super(
       `ABI has no function named "${functionName}". Pass the ABI and function name of the read whose outputs are being restructured.`,
     );
-    this.name = "AbiFunctionNotFoundError";
+    this.name = "UnknownAbiFunctionError";
   }
 }
 
