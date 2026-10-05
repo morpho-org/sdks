@@ -86,7 +86,7 @@ export function releaseTag(pkg: Pick<PublicPackage, "name" | "version">) {
  * @param root - Repository root, already built.
  * @param out - Output directory.
  */
-export function packPublicPackages(root: string, out: string): void {
+function packPublicPackages(root: string, out: string): void {
   mkdirSync(out, { recursive: true });
   for (const { dir } of listPublicPackages(root)) {
     execFileSync("pnpm", ["pack", "--pack-destination", resolve(out)], {
@@ -112,7 +112,7 @@ export function packPublicPackages(root: string, out: string): void {
  *
  * @param argv - Command-line arguments.
  */
-export function main(argv: readonly string[] = process.argv.slice(2)): void {
+function main(argv: readonly string[] = process.argv.slice(2)): void {
   const { values } = parseArgs({
     args: [...argv],
     options: { out: { type: "string" }, tags: { type: "boolean" } },

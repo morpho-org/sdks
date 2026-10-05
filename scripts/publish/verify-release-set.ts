@@ -235,7 +235,7 @@ export async function verifyReleaseSet(options: {
  *
  * @param argv - Command-line arguments.
  */
-export async function main(
+async function main(
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<void> {
   const { positionals } = parseArgs({
