@@ -1,10 +1,5 @@
 # EVM simulation v4 → v5
 
-Status: unreleased integration stack. SDK-1291 implemented the backend cutover
-below, SDK-1293 replaced the legacy authorization variants, and SDK-1297
-completes the migration and acceptance suite. Do not publish this intermediate
-stack. SDK-556 owns publication.
-
 ## Configure the sole backend
 
 Remove `TenderlyRpcConfig` imports and `ChainSimulationConfig.tenderlyRpc`.
@@ -31,7 +26,7 @@ The optional `logger` continues to receive parsing and retention warnings.
 Keep handling `SimulationRevertedError`, `BlacklistViolationError`,
 `ExternalServiceError`, `SimulationValidationError`, and `UnsupportedChainError`
 by class identity. Their class identities and codes are preserved; see the
-SDK-1293 section for the changed `SimulationRevertedError.details` shape.
+authorization migration section for the changed `SimulationRevertedError.details` shape.
 Two failures that v4 reported as the bypassable `ExternalServiceError` now
 throw the non-bypassable `InvalidSimulationResponseError`: a malformed
 `eth_simulateV1` block envelope and a call count that does not match the
@@ -55,10 +50,10 @@ Optional asset `symbol` and `decimals` metadata is no longer supplied by the
 retired backend; the log-derived output omits it. Standalone-bundle retention
 still rejects net inbound value above 100 raw units per restricted address/token.
 
-## Authorization migration landed in SDK-1293
+## Authorization migration
 
-SDK-1293 removed the legacy `{type: "approval"}` and `{type: "signature"}`
-authorization variants and cut the runtime over to the SDK-1292 input types.
+v5 removed the legacy `{type: "approval"}` and `{type: "signature"}`
+authorization variants and cut the runtime over to the new input types.
 Callers now pass `SimulateParams` with `mode` defaulting to `"final"`. `blockNumber` is
 typed as `bigint | Exclude<BlockTag, "pending">` — `"pending"` has no stable hash and is
 rejected at runtime. Instead of the two
@@ -84,7 +79,7 @@ inflation — under-funded bundles revert like on-chain), and `simulationTxs` /
 the result. `SimulationRevertedError.details` carries a URL-free
 `{ code, shortMessage }` for node-level reverts or per-transaction results.
 
-## Optional caller limits (SDK-1295)
+## Optional caller limits
 
 `simulate()` now returns any requested slippage checks in
 `VerifiedSimulationResult.verification`. Preview requirements can be converted
@@ -130,10 +125,9 @@ Root `AGENTS.md` §7's EVM simulation v5 retirement exception
 (`ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` and
 `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`) permits
 `evm-simulation` 5.0.0 to remove `TenderlyRpcConfig`,
-`ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior
-(SDK-1291), the two legacy authorization variants of
+`ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior, the two legacy authorization variants of
 `SimulateParams.authorizations`, and to narrow `SimulateParams.blockNumber`
-to exclude `"pending"` (SDK-1293) without the prior
+to exclude `"pending"` without the prior
 successor-introduction, `@deprecated`, and published
 deprecation-minor/coexistence steps. No other removal inherits this exception.
 See root `AGENTS.md` §7 and its `module-api-architecture` review persona.
