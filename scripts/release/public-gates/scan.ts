@@ -16,7 +16,7 @@ import {
   loadBundledTar,
   type TarEntry,
   type TarStreamEntry,
-} from "../../ci/verify-tarball-collisions.ts";
+} from "../../publish/verify-tarball-collisions.ts";
 
 /** Default location of the scan policy, relative to the repository root. */
 export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
