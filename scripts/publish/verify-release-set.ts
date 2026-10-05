@@ -15,6 +15,7 @@ import {
 } from "./read-tarball-identity.ts";
 import {
   type EntryLister,
+  listTarballEntries,
   loadBundledTar,
   type TarEntry,
   verifyTarballEntries,
@@ -91,6 +92,12 @@ export function verifyReleaseMatch(
     byName.set(tarball.name, tarball);
   }
   for (const { name, version } of expected) {
+    // release.yml publishes under the `latest` dist-tag, so prereleases must not reach it.
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      throw new Error(
+        `${name}@${version} is not a stable x.y.z version. Publish prereleases from the development repository instead.`,
+      );
+    }
     const got = byName.get(name)?.version;
     if (got !== version) {
       throw new Error(
@@ -163,24 +170,22 @@ export async function verifyReleaseSet(options: {
   const received: ReleaseTarball[] = [];
   for (const file of verifyChecksums(options.dir)) {
     const path = join(options.dir, file);
-    const entries: TarEntry[] = [];
     const manifestChunks: Buffer[] = [];
-    try {
-      await options.tar.list({
-        file: path,
-        strict: true,
-        onReadEntry: (entry) => {
-          entries.push({ path: entry.path, type: entry.type });
-          if (entry.path === "package/package.json") {
-            entry.on("data", (chunk) => manifestChunks.push(chunk));
-          } else {
-            entry.resume();
-          }
-        },
-      });
-    } catch (cause) {
-      throw new Error(`Unable to read tarball "${file}".`, { cause });
-    }
+    // Same listing policy as the collision check, plus capturing package.json.
+    const entries = await listTarballEntries(path, {
+      list: (opts) =>
+        options.tar.list({
+          ...opts,
+          onReadEntry: (entry) => {
+            opts.onReadEntry(entry);
+            if (entry.path === "package/package.json") {
+              entry.on("data", (chunk) => manifestChunks.push(chunk));
+            } else {
+              entry.resume();
+            }
+          },
+        }),
+    });
     verifyTarballStructure(file, entries);
     verifyTarballEntries(entries);
     const { name, version } = await readTarballIdentity(path, options.pacote);

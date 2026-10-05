@@ -12,6 +12,7 @@ import {
   parseReleaseSpec,
   sanitizeLogLine,
 } from "../publish/helpers.ts";
+import { releaseTag } from "../publish/pack.ts";
 import { loadBundledPacote } from "../publish/read-tarball-identity.ts";
 import {
   listTarballEntries,
@@ -1464,7 +1465,7 @@ function addGitTagCheck(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): void {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   let taggedCommit: string;
   try {
     taggedCommit = execGit(
@@ -1832,7 +1833,7 @@ async function checkGithubRelease(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): Promise<void> {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   const headers: HeadersInit =
     token == null ? {} : { Authorization: `Bearer ${token}` };

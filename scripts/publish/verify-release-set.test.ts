@@ -115,6 +115,11 @@ describe("verifyReleaseMatch", () => {
   });
 });
 
+test("rejects a prerelease, which would publish under latest", () => {
+  const pre = { file: "a.tgz", name: "@x/a", version: "1.0.0-next.0" };
+  expect(() => verifyReleaseMatch([pre], [pre])).toThrow("not a stable");
+});
+
 describe("verifyChecksums", () => {
   test("rejects a missing SHA256SUMS", () => {
     const dir = tarballs({ "a.tgz": { "package/package.json": manifest() } });
@@ -166,6 +171,16 @@ describe("verifyReleaseSet", () => {
     await expect(run(dir)).resolves.toEqual([
       { file: join(dir, "a.tgz"), name: "@x/a", version: "1.0.0" },
     ]);
+  });
+
+  test("rejects a checksummed file that is not a tarball", async () => {
+    const dir = tarballs({ "a.tgz": { "package/package.json": manifest() } });
+    writeFileSync(
+      join(dir, "a.tgz"),
+      readFileSync(join(dir, "a.tgz")).subarray(0, 20),
+    );
+    execFileSync("sh", ["-c", "sha256sum ./*.tgz > SHA256SUMS"], { cwd: dir });
+    await expect(run(dir)).rejects.toThrow("Unable to list tarball");
   });
 
   test("rejects a disallowed publishConfig", async () => {

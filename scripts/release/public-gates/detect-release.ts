@@ -21,39 +21,40 @@ export function listReleasedPackages(options: {
   sha: string;
 }): PackageIdentity[] {
   const { repo, sha } = options;
-  const [before = new Map(), after = new Map()] = [`${sha}^`, sha].map(
-    (revision) => {
-      const versions = new Map<string, PackageIdentity>();
-      // Only manifests that exist are read, so any git failure is a real error.
-      const paths = execFileSync(
-        "git",
-        [
-          "-C",
-          repo,
-          "ls-tree",
-          "-r",
-          "-z",
-          "--name-only",
-          revision,
-          "--",
-          "packages",
-        ],
-        { encoding: "utf8" },
-      )
-        .split("\0")
-        .filter((path) => /^packages\/[^/]+\/package\.json$/.test(path));
-      for (const path of paths) {
-        const manifest: unknown = JSON.parse(
-          execFileSync("git", ["-C", repo, "show", `${revision}:${path}`], {
-            encoding: "utf8",
-          }),
-        );
-        const identity = publicIdentity(manifest);
-        if (identity) versions.set(path, identity);
-      }
-      return versions;
-    },
-  );
+  const [
+    before = new Map<string, PackageIdentity>(),
+    after = new Map<string, PackageIdentity>(),
+  ] = [`${sha}^`, sha].map((revision) => {
+    const versions = new Map<string, PackageIdentity>();
+    // Only manifests that exist are read, so any git failure is a real error.
+    const paths = execFileSync(
+      "git",
+      [
+        "-C",
+        repo,
+        "ls-tree",
+        "-r",
+        "-z",
+        "--name-only",
+        revision,
+        "--",
+        "packages",
+      ],
+      { encoding: "utf8" },
+    )
+      .split("\0")
+      .filter((path) => /^packages\/[^/]+\/package\.json$/.test(path));
+    for (const path of paths) {
+      const manifest: unknown = JSON.parse(
+        execFileSync("git", ["-C", repo, "show", `${revision}:${path}`], {
+          encoding: "utf8",
+        }),
+      );
+      const identity = publicIdentity(manifest);
+      if (identity) versions.set(path, identity);
+    }
+    return versions;
+  });
   return [...after]
     .filter(([path, pkg]) => before.get(path)?.version !== pkg.version)
     .map(([, pkg]) => pkg)
