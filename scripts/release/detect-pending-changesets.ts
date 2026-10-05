@@ -10,7 +10,8 @@ import {
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
+import { isPathInside } from "../paths.ts";
+import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
 
 const DEFAULT_CHANGESET_DIR = ".changeset";
 const PRE_STATE_FILE = "pre.json";
