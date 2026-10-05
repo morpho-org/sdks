@@ -321,6 +321,43 @@ export function generatePublicSnapshot(options: {
     }
   }
 
+  for (const file of files) {
+    const references: string[] = [];
+    if (/\.[cm]?[jt]sx?$/.test(file.path)) {
+      for (const [, specifier = ""] of file.content
+        .toString()
+        .matchAll(
+          /^\s*(?:(?:import|export)\b[^"'\n]*?|\}\s*)(?:from\s*)?["'](\.\.?\/[^"']+)["']/gm,
+        )) {
+        references.push(posix.join(posix.dirname(file.path), specifier));
+      }
+    }
+    if (packageNames.has(file.path) || file.path === "package.json") {
+      const { scripts = {} } = JSON.parse(file.content.toString());
+      for (const command of Object.values<string>(scripts)) {
+        for (const [, script = ""] of command.matchAll(
+          /\bnode\s+(?:--\S+\s+)*(\S+\.[cm]?[jt]s)\b/g,
+        )) {
+          references.push(posix.join(posix.dirname(file.path), script));
+        }
+      }
+    }
+    for (const reference of references) {
+      const candidates = [
+        reference,
+        reference.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx"),
+        `${reference}.ts`,
+        `${reference}/index.ts`,
+      ];
+      const isBuildOutput = /^packages\/[^/]+\/lib\//.test(reference);
+      if (!isBuildOutput && !candidates.some((c) => paths.has(c))) {
+        throw new Error(
+          `"${file.path}" references "${reference}", which isn't in the public tree. Allowlist it or move it out of private paths.`,
+        );
+      }
+    }
+  }
+
   const indexDir = mkdtempSync(join(tmpdir(), "public-snapshot-"));
   let treeHash: string;
   try {
