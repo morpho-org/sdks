@@ -1254,28 +1254,31 @@ export class MorphoMidnight {
   }
 
   /**
-   * Prepares a bundle that repays debt, withdraws collateral, or performs both.
+   * Prepares a direct `MidnightBundlesV2` repayment, collateral withdrawal, or both, for `accountAddress`.
    *
-   * @param params - Account, market snapshot, repay and withdrawal amounts, collateral index, and deadline.
-   * @param params.accountAddress - Position owner whose debt or collateral is updated.
+   * @param params - Account, market snapshot, repaid units, asset cap, withdrawals, and deadline.
+   * @param params.accountAddress - Position owner and transaction sender.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.repayAssets - Loan assets repaid; may be zero for withdrawal-only flows.
-   * @param params.withdrawCollateralAssets - Collateral assets withdrawn; may be zero for repay-only flows.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+   * @param params.repayUnits - Debt units repaid; `maxUint256` for the whole debt at execution, `0n` to only withdraw.
+   * @param params.maxRepayAssets - Loan assets pulled (and approved); the unused part is refunded.
+   * @param params.collateralWithdrawals - Optional withdrawals; `assets: maxUint256` withdraws the full balance.
+   * @param params.collateralReceiver - Optional collateral recipient; defaults to `accountAddress`.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NegativeInputError} when an amount, index, or deadline is negative.
-   * @throws {NonPositiveInputError} when both repay and withdrawal amounts are zero.
-   * @throws {UnknownCollateralIndexError} when a positive withdrawal selects an unconfigured collateral.
+   * @throws {NegativeInputError} when `repayUnits` or `maxRepayAssets` is negative.
+   * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, or `deadline` is not positive.
+   * @throws {UnknownCollateralIndexError} when a withdrawal selects an unconfigured collateral.
    * @example
    * ```ts
+   * // Close the position: repay all debt, withdraw all collateral.
    * const output = midnight.repayWithdrawCollateral({
    *   accountAddress: borrower,
    *   marketData,
-   *   repayAssets: 1_000_000n,
-   *   withdrawCollateralAssets: 2_000_000n,
+   *   repayUnits: maxUint256,
+   *   maxRepayAssets: 1_010_000n,
+   *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
    *   deadline: maxUint256,
    * });
    * ```
@@ -1284,76 +1287,35 @@ export class MorphoMidnight {
     params: RepayWithdrawCollateralParams,
   ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateMarketData(params.marketData, this.chainId);
-    assertNonNegativeAmount("repayAssets", params.repayAssets);
-    assertNonNegativeAmount(
-      "withdrawCollateralAssets",
-      params.withdrawCollateralAssets,
-    );
-    assertNonNegativeAmount("deadline", params.deadline);
-    const market = params.marketData;
-    const collateralWithdrawals =
-      params.withdrawCollateralAssets > 0n
-        ? [
-            {
-              collateralIndex: params.collateralIndex ?? 0n,
-              assets: params.withdrawCollateralAssets,
-            },
-          ]
-        : [];
-    for (const [index, withdrawal] of collateralWithdrawals.entries()) {
-      assertNonNegativeAmount(
-        `collateralWithdrawals[${index}].collateralIndex`,
-        withdrawal.collateralIndex,
-      );
-      // Validate the configured collateral before exposing requirement reads.
-      market.getCollateralByIndex(withdrawal.collateralIndex);
-    }
-    if (
-      params.repayAssets === 0n &&
-      collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
-    ) {
-      throw new NonPositiveInputError("repay or withdraw amount", 0n);
-    }
-
-    const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
+    const market = params.marketData.params;
+    const tx = midnightRepayWithdrawCollateral({
+      chainId: this.chainId,
+      market,
+      repayUnits: params.repayUnits,
+      maxRepayAssets: params.maxRepayAssets,
+      collateralWithdrawals: params.collateralWithdrawals ?? [],
+      collateralReceiver: params.collateralReceiver ?? params.accountAddress,
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+    });
 
     return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [];
-        if (params.repayAssets > 0n) {
-          requirements.push(
-            ...(await getMidnightApprovalRequirements({
+      getRequirements: async () => [
+        ...(params.maxRepayAssets > 0n
+          ? await getMidnightApprovalRequirements({
               viemClient: this.client.viemClient,
               chainId: this.chainId,
-              token: market.params.loanToken,
+              token: market.loanToken,
               owner: params.accountAddress,
-              spender: midnightBundles,
-              amount: params.repayAssets,
-            })),
-          );
-        }
-        const authorization = await getMidnightAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          owner: params.accountAddress,
-          authorized: midnightBundles,
-        });
-        if (authorization) requirements.push(authorization);
-
-        return requirements;
-      },
-      buildTx: () =>
-        midnightRepayWithdrawCollateral({
-          chainId: this.chainId,
-          market: market.params,
-          repayAssets: params.repayAssets,
-          withdrawCollateralAssets: params.withdrawCollateralAssets,
-          onBehalf: params.accountAddress,
-          collateralIndex: params.collateralIndex,
-          deadline: params.deadline,
-          metadata: this.client.options.metadata,
-        }),
+              spender: tx.to,
+              amount: params.maxRepayAssets,
+            })
+          : []),
+        ...(await this.getBundlesV2AuthorizationRequirements(
+          params.accountAddress,
+        )),
+      ],
+      buildTx: () => tx,
     };
   }
 

@@ -96,6 +96,9 @@ export const midnightTakeRepayWithdrawCollateral = (
   if (params.target.type === "assets" && params.target.assets <= 0n) {
     throw new NonPositiveInputError("target.assets", params.target.assets);
   }
+  if (params.target.type === "units" && params.target.units <= 0n) {
+    throw new NonPositiveInputError("target.units", params.target.units);
+  }
   // Reject markets from another chain deployment before checking offers against them.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
   for (const [

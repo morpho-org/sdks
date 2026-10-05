@@ -237,9 +237,14 @@ export interface RedeemParams {
 
 /** Parameters for the Midnight repay-and-withdraw-collateral flow. */
 export interface RepayWithdrawCollateralParams extends MarketActionParams {
-  readonly repayAssets: bigint;
-  readonly withdrawCollateralAssets: bigint;
-  readonly collateralIndex?: bigint;
+  /** Debt units repaid. `maxUint256` repays the whole debt at execution; `0n` only withdraws. */
+  readonly repayUnits: bigint;
+  /** Loan assets pulled and approved; the unused part is refunded. Must cover the repaid debt. */
+  readonly maxRepayAssets: bigint;
+  /** `assets: maxUint256` withdraws the whole balance of that collateral. Defaults to none. */
+  readonly collateralWithdrawals?: readonly MidnightCollateralTransfer[];
+  /** Defaults to `accountAddress`. */
+  readonly collateralReceiver?: Address;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }

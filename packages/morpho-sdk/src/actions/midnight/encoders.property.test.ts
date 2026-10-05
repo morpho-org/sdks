@@ -2,7 +2,6 @@ import {
   MAX_OFFER_CAP,
   MarketParams,
   midnightAbi,
-  midnightBundlesAbi,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
 import {
@@ -68,9 +67,10 @@ describe("Midnight calldata encoders", () => {
         midnightRepayWithdrawCollateral({
           chainId: midnightChainId,
           market,
-          repayAssets: 1n,
-          withdrawCollateralAssets: 0n,
-          onBehalf: midnightAddresses.taker,
+          repayUnits: 1n,
+          maxRepayAssets: 1n,
+          collateralWithdrawals: [],
+          collateralReceiver: midnightAddresses.taker,
           deadline: 1n,
         }),
     ],
@@ -172,25 +172,26 @@ describe("Midnight calldata encoders", () => {
         expect(redemption.args[1]).toBe(units);
 
         const repayment = decodeFunctionData({
-          abi: midnightBundlesAbi,
+          abi: midnightBundlesV2Abi,
           data: midnightRepayWithdrawCollateral({
             chainId: midnightChainId,
             market: midnightMarket,
-            repayAssets: assets,
-            withdrawCollateralAssets: units,
-            onBehalf: midnightAddresses.taker,
-            deadline: optionalAmount,
+            repayUnits: units,
+            maxRepayAssets: assets,
+            collateralWithdrawals: [{ collateralIndex: 0n, assets: units }],
+            collateralReceiver: midnightAddresses.taker,
+            deadline: assets,
           }).data,
         });
         if (
           repayment.functionName !==
-          "midnightBundlesV1RepayAndWithdrawCollateral"
+          "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral"
         ) {
           throw new TypeError("unexpected repay function");
         }
-        expect(repayment.args[1]).toBe(assets);
-        expect(repayment.args[4][0]?.assets).toBe(units);
-        expect(repayment.args[8]).toBe(optionalAmount);
+        expect(repayment.args.slice(1, 3)).toEqual([units, assets]);
+        expect(repayment.args[6][0]?.assets).toBe(units);
+        expect(repayment.args[11]).toBe(assets);
 
         const collateralSupply = decodeFunctionData({
           abi: midnightAbi,

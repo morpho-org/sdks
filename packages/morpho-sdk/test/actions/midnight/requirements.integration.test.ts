@@ -474,13 +474,31 @@ describe("Midnight requirements on fork", () => {
     });
     expect(debtBeforeRepay).toBeGreaterThan(0n);
 
+    // Prepared for the current debt, then the debt grows before execution.
     const repay = midnightEntity.repayWithdrawCollateral({
       marketData,
       accountAddress: client.account.address,
-      repayAssets: loanAssets / 2n,
-      withdrawCollateralAssets: 0n,
+      repayUnits: maxUint256,
+      maxRepayAssets: 4n * loanAssets,
+      collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
       deadline: maxUint256,
     });
+    await client.sendTransaction(
+      midnightEntity
+        .takeBorrow({
+          marketData,
+          accountAddress: client.account.address,
+          target: {
+            type: "units",
+            units: loanAssets / 2n,
+            minSellerAssets: 0n,
+          },
+          takeableOffers: [takeableOffer],
+          deadline: maxUint256,
+        })
+        .buildTx(),
+    );
+    await client.deal({ erc20: usdc, amount: 4n * loanAssets });
     const repayRequirements = await repay.getRequirements();
     expect(
       repayRequirements.map((requirement) => requirement.action.type),
@@ -492,14 +510,19 @@ describe("Midnight requirements on fork", () => {
       await client.sendTransaction(requirement);
     }
     await client.sendTransaction(repay.buildTx());
-    await expect(
-      client.readContract({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "debt",
-        args: [marketId, client.account.address],
-      }),
-    ).resolves.toBeLessThan(debtBeforeRepay);
+    for (const [functionName, args] of [
+      ["debt", [marketId, client.account.address]],
+      ["collateral", [marketId, client.account.address, 0n]],
+    ] as const) {
+      await expect(
+        client.readContract({
+          address: midnight,
+          abi: midnightAbi,
+          functionName,
+          args,
+        }),
+      ).resolves.toBe(0n);
+    }
   });
 
   test("executes take-repay-withdraw-collateral with direct repayment fallback", async ({

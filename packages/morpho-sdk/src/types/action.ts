@@ -529,15 +529,15 @@ export interface MidnightTakeRepayWithdrawCollateralAction
     }
   > {}
 
-/** Metadata for a Midnight bundle that repays credit and/or withdraws collateral. */
+/** Metadata for a direct MidnightBundlesV2 repayment and/or collateral withdrawal. */
 export interface MidnightRepayWithdrawCollateralAction
   extends BaseAction<
     "midnightRepayWithdrawCollateral",
     {
       readonly market: Hex;
-      readonly repayAssets: bigint;
-      readonly collateralWithdrawals: number;
-      readonly onBehalf: Address;
+      readonly repayUnits: bigint;
+      readonly maxRepayAssets: bigint;
+      readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
       readonly collateralReceiver: Address;
       readonly deadline: bigint;
     }

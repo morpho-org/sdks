@@ -60,7 +60,7 @@ export const midnightBundlesV2Buy = (
     validateNonNegative("target.assets", target.assets);
     validateNonNegative("target.minUnits", target.minUnits);
   } else {
-    validatePositive("target.units", target.units);
+    validateNonNegative("target.units", target.units);
     validateNonNegative("target.maxBuyerAssets", target.maxBuyerAssets);
   }
   validateNonNegative("maxContinuousFee", params.maxContinuousFee);
