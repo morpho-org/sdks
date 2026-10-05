@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+
+import { execFileSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { parseArgs } from "node:util";
+
+export interface ReleasedPackage {
+  readonly name: string;
+  readonly version: string;
+}
+
+function readVersions(
+  repo: string,
+  revision: string,
+): Map<string, ReleasedPackage> {
+  const versions = new Map<string, ReleasedPackage>();
+  const paths = execFileSync(
+    "git",
+    ["-C", repo, "ls-tree", "-z", "--name-only", `${revision}:packages`],
+    { encoding: "utf8" },
+  )
+    .split("\0")
+    .filter(Boolean)
+    .map((dir) => `packages/${dir}/package.json`);
+  for (const path of paths) {
+    let raw: string;
+    try {
+      raw = execFileSync("git", ["-C", repo, "show", `${revision}:${path}`], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    } catch {
+      continue;
+    }
+    const manifest: unknown = JSON.parse(raw);
+    if (
+      typeof manifest !== "object" ||
+      manifest === null ||
+      ("private" in manifest && manifest.private === true) ||
+      !("name" in manifest) ||
+      typeof manifest.name !== "string" ||
+      !("version" in manifest) ||
+      typeof manifest.version !== "string"
+    ) {
+      continue;
+    }
+    versions.set(path, { name: manifest.name, version: manifest.version });
+  }
+  return versions;
+}
+
+/**
+ * Lists the public packages whose version a commit changes. A commit is a release
+ * commit when this is non-empty; anything else never goes public.
+ *
+ * @param options.repo - Repository path.
+ * @param options.sha - Commit to check against its first parent.
+ * @returns Released packages, sorted by name.
+ */
+export function listReleasedPackages(options: {
+  repo: string;
+  sha: string;
+}): ReleasedPackage[] {
+  const { repo, sha } = options;
+  const before = readVersions(repo, `${sha}^`);
+  return [...readVersions(repo, sha)]
+    .filter(([path, pkg]) => before.get(path)?.version !== pkg.version)
+    .map(([, pkg]) => pkg)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+if (import.meta.main) {
+  const { values } = parseArgs({
+    options: {
+      sha: { type: "string" },
+      repo: { type: "string", default: "." },
+    },
+  });
+  if (!values.sha) {
+    throw new Error("Usage: detect-release.ts --sha <SHA> [--repo <path>]");
+  }
+  const released = listReleasedPackages({ repo: values.repo, sha: values.sha });
+  for (const { name, version } of released) console.log(`${name}@${version}`);
+  if (released.length === 0) console.log("Not a release commit.");
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `released=${released.length > 0}\npackages=${JSON.stringify(released)}\n`,
+    );
+  }
+}
