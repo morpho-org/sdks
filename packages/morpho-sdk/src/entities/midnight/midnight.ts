@@ -596,7 +596,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, a withdrawal amount or `deadline` is not positive.
    * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
-   * @throws {MidnightCollateralIndexOutOfBoundsError} when a withdrawal names an unknown collateral.
+   * @throws {UnknownCollateralIndexError} when a withdrawal targets a collateral index not configured on the market.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.

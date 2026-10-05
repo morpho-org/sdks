@@ -66,7 +66,7 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
- * @throws {MidnightCollateralIndexOutOfBoundsError} when a withdrawal names an unknown collateral.
+ * @throws {UnknownCollateralIndexError} when a withdrawal targets a collateral index not configured on the market.
  * @throws {NonPositiveInputError} when the target amount, a withdrawal amount or `deadline` is not positive.
  * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
  * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
@@ -111,6 +111,7 @@ export const midnightTakeRepayWithdrawCollateral = (
         assets,
       );
     }
+    // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   }
   const marketId = validateTakeableOffers({

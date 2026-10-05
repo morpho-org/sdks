@@ -42,7 +42,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow` | MidnightBundlesV2 |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral` | MidnightBundlesV2 |
 | **Midnight** | `repayWithdrawCollateral` | Midnight Bundles |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 | | `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
