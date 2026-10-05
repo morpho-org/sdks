@@ -402,7 +402,13 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(blockResult()));
     const evidence = await executePlan(params);
     expect(
-      evidence.stateReads.map((s) => decodeStateRead(s.read, s.returnData)),
+      evidence.stateReads.map((s) =>
+        decodeStateRead(s.read, s.returnData, {
+          chainId: 1,
+          mode: "final",
+          blockNumber: STATE_BLOCK,
+        }),
+      ),
     ).toEqual([100n, 90n]);
   });
 
