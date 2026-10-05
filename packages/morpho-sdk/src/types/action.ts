@@ -17,6 +17,41 @@ export type {
 } from "@morpho-org/midnight-sdk";
 
 /**
+ * Amount target of a `MidnightBundlesV2` buy (lend or repay): an exact amount of loan assets paid
+ * with a minimum of units bought, or an exact amount of units bought with a maximum of loan assets paid.
+ */
+export type MidnightBuyTarget =
+  | {
+      readonly type: "assets";
+      /** Loan assets paid, referral fee included. */
+      readonly assets: bigint;
+      readonly minUnits: bigint;
+    }
+  | {
+      readonly type: "units";
+      readonly units: bigint;
+      /** Loan assets pulled from the sender, referral fee included; the unused remainder is returned. */
+      readonly maxBuyerAssets: bigint;
+    };
+
+/**
+ * Amount target of a `MidnightBundlesV2` sell (borrow or withdraw): an exact amount of loan assets
+ * received with a maximum of units sold, or an exact amount of units sold with a minimum of loan assets received.
+ */
+export type MidnightSellTarget =
+  | {
+      readonly type: "assets";
+      /** Loan assets received before the referral fee. */
+      readonly assets: bigint;
+      readonly maxUnits: bigint;
+    }
+  | {
+      readonly type: "units";
+      readonly units: bigint;
+      readonly minSellerAssets: bigint;
+    };
+
+/**
  * Serves as the common discriminated action-metadata base shared by both
  * {@link TransactionAction} (actions that carry encoded calldata) and
  * {@link SignatureRequirementAction} (signature requirements whose metadata is
@@ -420,10 +455,9 @@ export interface MidnightTakeLendAction
     "midnightTakeLend",
     {
       readonly market: Hex;
-      readonly assets: bigint;
-      readonly minUnits: bigint;
-      readonly taker: Address;
+      readonly target: MidnightBuyTarget;
       readonly takeableOffers: number;
+      readonly maxContinuousFee: bigint;
       readonly deadline: bigint;
     }
   > {}
@@ -434,11 +468,8 @@ export interface MidnightTakeBorrowAction
     "midnightTakeBorrow",
     {
       readonly market: Hex;
-      readonly loanAssets: bigint;
-      readonly maxUnits: bigint;
-      readonly taker: Address;
+      readonly target: MidnightSellTarget;
       readonly receiver: Address;
-      readonly collateralSupplies: number;
       readonly takeableOffers: number;
       readonly deadline: bigint;
     }
@@ -450,12 +481,9 @@ export interface MidnightSupplyCollateralTakeBorrowAction
     "midnightSupplyCollateralTakeBorrow",
     {
       readonly market: Hex;
-      readonly collateralAssets: bigint;
-      readonly loanAssets: bigint;
-      readonly maxUnits: bigint;
-      readonly taker: Address;
+      readonly target: MidnightSellTarget;
       readonly receiver: Address;
-      readonly collateralSupplies: number;
+      readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly takeableOffers: number;
       readonly deadline: bigint;
     }

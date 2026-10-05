@@ -1,4 +1,5 @@
 export * from "./authorization.js";
+export type { MidnightReferralFeeParams } from "./bundlesV2Take.js";
 export * from "./cancelAndMake.js";
 export * from "./cancelOffer.js";
 export * from "./redeem.js";

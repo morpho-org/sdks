@@ -58,6 +58,46 @@ The wrapper returns `CancelAndMakeOutput`, whose transaction action is
 `market`, `collateralAssets`, and `collateralIndex` inputs; `reservedCollateralAssets` is removed.
 An empty `supplies` list throws `EmptyMidnightCollateralSuppliesError`.
 
+## Taker methods
+
+`takeLend`, `takeBorrow` and `supplyCollateralTakeBorrow` now call MidnightBundlesV2. Each takes a
+`target` that picks the amount the trade is sized by, and acts for the sender: there is no `taker`
+input, and `accountAddress` must send the transaction.
+
+| v6 input | v7 input |
+| --- | --- |
+| `takeLend` `assets`, `minUnits` | `target: { type: "assets", assets, minUnits }` or `{ type: "units", units, maxBuyerAssets }` |
+| `takeBorrow` `loanAssets`, `maxUnits` | `target: { type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }` |
+| `supplyCollateralTakeBorrow` `collateralAssets`, `collateralIndex` | `collateralSupplies: [{ collateralIndex, assets }]` (non-empty) |
+| — | `takeLend` `maxContinuousFee` (required; `maxUint256` for no cap) |
+| — | optional `referralFeePct`, `referralFeeRecipient` |
+| — | `takeBorrow` and `supplyCollateralTakeBorrow` optional `receiver` (defaults to `accountAddress`) |
+
+```ts
+// v6
+midnight.takeLend({ accountAddress, marketData, assets, minUnits, takeableOffers, deadline });
+
+// v7
+midnight.takeLend({
+  accountAddress,
+  marketData,
+  target: { type: "assets", assets, minUnits },
+  takeableOffers,
+  maxContinuousFee: maxUint256,
+  deadline,
+});
+```
+
+- Requirements approve the loan token (`takeLend`: `assets` or `maxBuyerAssets`) or each collateral
+  token (summed per token) to MidnightBundlesV2, and authorize MidnightBundlesV2 on Midnight.
+- `takeBorrow` and `supplyCollateralTakeBorrow` withdraw the sender's existing credit before
+  taking offers, so a lender who borrows nets the credit first.
+- Action metadata exposes `target` instead of `assets`/`minUnits` or `loanAssets`/`maxUnits`, and
+  drops `taker`. `MidnightSupplyCollateralTakeBorrowAction.collateralSupplies` is the supply list
+  instead of a count.
+- New types: `MidnightBuyTarget`, `MidnightSellTarget`, `MidnightReferralFeeParams`.
+  `MidnightCollateralSupply` is removed; use `MidnightCollateralTransfer`.
+
 ## Ratifiers
 
 Offers must use PriceRatifierV1 or RateRatifierV1. Pass a `Tree<"priceV1">`, a `Tree<"rateV1">`,
@@ -131,4 +171,4 @@ The Ecrecover and Setter protocol utilities in `@morpho-org/midnight-sdk` are un
 ## Deployment
 
 No chain registers `midnightBundlesV2` yet. Register a deployment with `registerCustomAddresses`
-before calling the maker methods.
+before calling the maker or taker methods.

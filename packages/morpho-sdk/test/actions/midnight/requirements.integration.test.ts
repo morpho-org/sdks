@@ -31,10 +31,11 @@ import {
   isRequirementApproval,
   morphoViemExtension,
 } from "../../../src/index.js";
+import { deployMidnightBundlesV2 } from "../../fixtures/midnightBundlesV2.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
-  forkBlockNumber: 48_287_000n,
+  forkBlockNumber: 49_600_000n,
   hardfork: "Karst",
   stepsTracing: false,
 });
@@ -304,6 +305,7 @@ describe("Midnight requirements on fork", () => {
   }) => {
     const amount = parseUnits("1", 6);
     await installTestOracle(client);
+    await deployMidnightBundlesV2(client);
     await client.deal({ erc20: usdc, amount });
     const takeableOffer = await prepareTakeableOffer({
       client,
@@ -316,9 +318,9 @@ describe("Midnight requirements on fork", () => {
       .takeLend({
         marketData,
         accountAddress: client.account.address,
-        assets: amount,
-        minUnits: 0n,
+        target: { type: "assets", assets: amount, minUnits: 0n },
         takeableOffers: [takeableOffer],
+        maxContinuousFee: maxUint256,
         deadline: maxUint256,
       });
     const requirements = await output.getRequirements();
@@ -351,6 +353,7 @@ describe("Midnight requirements on fork", () => {
     const collateralAssets = parseEther("1");
     const loanAssets = parseUnits("1", 6);
     await installTestOracle(client);
+    await deployMidnightBundlesV2(client);
     await client.deal({ erc20: wNative, amount: collateralAssets });
     const midnightEntity = client
       .extend(morphoViemExtension())
@@ -389,8 +392,7 @@ describe("Midnight requirements on fork", () => {
     const borrow = midnightEntity.takeBorrow({
       marketData,
       accountAddress: client.account.address,
-      loanAssets,
-      maxUnits: 2n * loanAssets,
+      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });
@@ -421,6 +423,7 @@ describe("Midnight requirements on fork", () => {
     const collateralAssets = parseEther("1");
     const loanAssets = parseUnits("1", 6);
     await installTestOracle(client);
+    await deployMidnightBundlesV2(client);
     await client.deal({ erc20: wNative, amount: collateralAssets });
     const takeableOffer = await prepareTakeableOffer({
       client,
@@ -433,9 +436,8 @@ describe("Midnight requirements on fork", () => {
     const borrow = midnightEntity.supplyCollateralTakeBorrow({
       marketData,
       accountAddress: client.account.address,
-      collateralAssets,
-      loanAssets,
-      maxUnits: 2n * loanAssets,
+      collateralSupplies: [{ collateralIndex: 0n, assets: collateralAssets }],
+      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });
@@ -476,7 +478,7 @@ describe("Midnight requirements on fork", () => {
     const repayRequirements = await repay.getRequirements();
     expect(
       repayRequirements.map((requirement) => requirement.action.type),
-    ).toEqual(["erc20Approval"]);
+    ).toEqual(["erc20Approval", "midnightAuthorization"]);
     for (const requirement of repayRequirements) {
       if (!("to" in requirement)) {
         throw new Error("expected an onchain call requirement");

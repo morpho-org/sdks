@@ -10,13 +10,16 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
+import type { MidnightReferralFeeParams } from "../../actions/midnight/bundlesV2Take.js";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
+  MidnightBuyTarget,
   MidnightCancelAndMakeAction,
   MidnightCollateralTransfer,
   MidnightGroupCancellation,
+  MidnightSellTarget,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -165,18 +168,26 @@ export interface MarketActionParams {
 }
 
 /** Parameters for the Midnight take-lend taker flow. */
-export interface TakeLendParams extends MarketActionParams {
-  readonly assets: bigint;
-  readonly minUnits: bigint;
+export interface TakeLendParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets paid with a unit floor, or units bought with a loan-asset cap. */
+  readonly target: MidnightBuyTarget;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
+  readonly maxContinuousFee: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight take-borrow taker flow. */
-export interface TakeBorrowParams extends MarketActionParams {
-  readonly loanAssets: bigint;
-  readonly maxUnits: bigint;
+export interface TakeBorrowParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets received with a unit cap, or units sold with a loan-asset floor. */
+  readonly target: MidnightSellTarget;
+  /** Recipient of the borrowed loan assets. Defaults to `accountAddress`. */
+  readonly receiver?: Address;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
@@ -184,8 +195,8 @@ export interface TakeBorrowParams extends MarketActionParams {
 
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
 export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
-  readonly collateralAssets: bigint;
-  readonly collateralIndex?: bigint;
+  /** Collateral supplied before borrowing; must not be empty. */
+  readonly collateralSupplies: readonly MidnightCollateralTransfer[];
 }
 
 /** Parameters for the Midnight supply-collateral flow. */

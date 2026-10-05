@@ -204,9 +204,9 @@ const takeFlowCases: readonly {
       midnight().takeLend({
         marketData: marketData(),
         accountAddress: midnightAddresses.taker,
-        assets: 1_000n,
-        minUnits: 900n,
+        target: { type: "assets", assets: 1_000n, minUnits: 900n },
         takeableOffers,
+        maxContinuousFee: maxUint256,
         deadline: maxUint256,
       }),
   },
@@ -217,8 +217,7 @@ const takeFlowCases: readonly {
       midnight().takeBorrow({
         marketData: marketData(),
         accountAddress: midnightAddresses.taker,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
+        target: { type: "assets", assets: 1_000n, maxUnits: 1_100n },
         takeableOffers,
         deadline: maxUint256,
       }),
@@ -230,9 +229,8 @@ const takeFlowCases: readonly {
       midnight().supplyCollateralTakeBorrow({
         marketData: marketData(),
         accountAddress: midnightAddresses.taker,
-        collateralAssets: 2_000n,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
+        collateralSupplies: [{ collateralIndex: 0n, assets: 2_000n }],
+        target: { type: "assets", assets: 1_000n, maxUnits: 1_100n },
         takeableOffers,
         deadline: maxUint256,
       }),
@@ -324,28 +322,29 @@ describe("MorphoMidnight", () => {
   });
 
   describe("takeLend", () => {
-    test("default", () => {
-      const output = midnight().takeLend({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        assets: 1_000n,
-        minUnits: 900n,
-        takeableOffers: [midnightApiTake()],
-        deadline: maxUint256,
-      });
-      const tx = output.buildTx();
+    const params = {
+      marketData: marketData(),
+      accountAddress: midnightAddresses.taker,
+      target: { type: "assets", assets: 1_000n, minUnits: 900n },
+      takeableOffers: [midnightApiTake()],
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    } as const;
 
+    test("default", () => {
+      const tx = midnight().takeLend(params).buildTx();
+
+      expect(tx.to).toBe(midnightBundlesV2);
       expect(tx.action.args).toEqual({
         market: midnightMarketId,
-        assets: 1_000n,
-        minUnits: 900n,
-        taker: midnightAddresses.taker,
+        target: { type: "assets", assets: 1_000n, minUnits: 900n },
         takeableOffers: 1,
+        maxContinuousFee: maxUint256,
         deadline: maxUint256,
       });
     });
 
-    test("behavior: requirements include loan approval and bundle authorization", async () => {
+    test("behavior: requirements approve the pulled assets to MidnightBundlesV2 and authorize it", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({
         handle,
@@ -354,19 +353,27 @@ describe("MorphoMidnight", () => {
       });
       mockMidnightAuthorization(handle, false);
 
-      const output = midnightWithHandle(handle).takeLend({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        assets: 1_000n,
-        minUnits: 900n,
-        takeableOffers: [midnightApiTake()],
-        deadline: maxUint256,
-      });
-      const requirements = await output.getRequirements();
+      const requirements = await midnightWithHandle(handle)
+        .takeLend({
+          ...params,
+          target: { type: "units", units: 1_100n, maxBuyerAssets: 1_050n },
+        })
+        .getRequirements();
 
-      expect(
-        requirements.map((requirement) => requirement.action.type),
-      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 1_050n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.taker,
+          },
+        },
+      ]);
     });
 
     test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
@@ -378,157 +385,119 @@ describe("MorphoMidnight", () => {
       });
       mockMidnightAuthorization(handle, true);
 
-      const output = midnightWithHandle(handle).takeLend({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        assets: 1_000n,
-        minUnits: 900n,
-        takeableOffers: [midnightApiTake()],
-        deadline: maxUint256,
-      });
-
-      await expect(output.getRequirements()).resolves.toEqual([]);
+      await expect(
+        midnightWithHandle(handle).takeLend(params).getRequirements(),
+      ).resolves.toEqual([]);
     });
 
     test("error: amount validation", () => {
       expect(() =>
         midnight().takeLend({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          assets: 0n,
-          minUnits: 900n,
-          takeableOffers: [midnightApiTake()],
-          deadline: maxUint256,
+          ...params,
+          target: { type: "assets", assets: 0n, minUnits: 900n },
         }),
       ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().takeLend({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          assets: 1_000n,
-          minUnits: -1n,
-          takeableOffers: [midnightApiTake()],
-          deadline: maxUint256,
+          ...params,
+          target: { type: "assets", assets: 1_000n, minUnits: -1n },
         }),
       ).toThrow(NegativeInputError);
-      expect(() =>
-        midnight().takeLend({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          assets: 1_000n,
-          minUnits: 900n,
-          takeableOffers: [midnightApiTake()],
-          deadline: -1n,
-        }),
-      ).toThrow(NegativeInputError);
+      expect(() => midnight().takeLend({ ...params, deadline: 0n })).toThrow(
+        NonPositiveInputError,
+      );
     });
 
     test("error: MidnightMarketAddressMismatchError", () => {
       const market = marketData();
       const foreignMarket = new Market({
         ...market,
-        params: {
-          ...market.params,
-          midnight: midnightAddresses.taker,
-        },
+        params: { ...market.params, midnight: midnightAddresses.taker },
       });
 
       expect(() =>
-        midnight().takeLend({
-          marketData: foreignMarket,
-          accountAddress: midnightAddresses.taker,
-          assets: 1_000n,
-          minUnits: 900n,
-          takeableOffers: [midnightApiTake()],
-          deadline: maxUint256,
-        }),
+        midnight().takeLend({ ...params, marketData: foreignMarket }),
       ).toThrow(MidnightMarketAddressMismatchError);
     });
   });
 
   describe("takeBorrow", () => {
+    const params = {
+      marketData: marketData(),
+      accountAddress: midnightAddresses.taker,
+      target: { type: "assets", assets: 1_000n, maxUnits: 1_100n },
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
       mockMidnightAuthorization(handle, false);
 
-      const output = midnightWithHandle(handle).takeBorrow({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
-      });
+      const output = midnightWithHandle(handle).takeBorrow(params);
       const requirements = await output.getRequirements();
       const tx = output.buildTx();
 
-      expect(tx.action.args.loanAssets).toBe(1_000n);
-      expect(
-        requirements.map((requirement) => requirement.action.type),
-      ).toEqual(["midnightAuthorization"]);
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.args).toMatchObject({
+        target: params.target,
+        receiver: midnightAddresses.taker,
+      });
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.taker,
+          },
+        },
+      ]);
+    });
+
+    test("behavior: forwards an explicit receiver", () => {
+      const tx = midnight()
+        .takeBorrow({ ...params, receiver: midnightAddresses.maker })
+        .buildTx();
+
+      expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
     });
 
     test("behavior: returns no requirements when authorization is satisfied", async () => {
       const handle = createMockClient(midnightTestChain);
       mockMidnightAuthorization(handle, true);
 
-      const output = midnightWithHandle(handle).takeBorrow({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
-      });
-
-      await expect(output.getRequirements()).resolves.toEqual([]);
+      await expect(
+        midnightWithHandle(handle).takeBorrow(params).getRequirements(),
+      ).resolves.toEqual([]);
     });
 
     test("error: amount validation", () => {
       expect(() =>
         midnight().takeBorrow({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          loanAssets: 0n,
-          maxUnits: 900n,
-          takeableOffers: [midnightApiTake({ buy: true })],
-          deadline: maxUint256,
+          ...params,
+          target: { type: "assets", assets: 0n, maxUnits: 1_100n },
         }),
       ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().takeBorrow({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          loanAssets: 1_000n,
-          maxUnits: 0n,
-          takeableOffers: [midnightApiTake({ buy: true })],
-          deadline: maxUint256,
-        }),
-      ).toThrow(NonPositiveInputError);
-      expect(() =>
-        midnight().takeBorrow({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          loanAssets: 1_000n,
-          maxUnits: -1n,
-          takeableOffers: [midnightApiTake({ buy: true })],
-          deadline: maxUint256,
-        }),
-      ).toThrow(NonPositiveInputError);
-      expect(() =>
-        midnight().takeBorrow({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          loanAssets: 1_000n,
-          maxUnits: 900n,
-          takeableOffers: [midnightApiTake({ buy: true })],
-          deadline: -1n,
+          ...params,
+          target: { type: "units", units: 1_100n, minSellerAssets: -1n },
         }),
       ).toThrow(NegativeInputError);
     });
   });
 
   describe("supplyCollateralTakeBorrow", () => {
+    const params = {
+      marketData: marketData(),
+      accountAddress: midnightAddresses.taker,
+      collateralSupplies: [{ collateralIndex: 0n, assets: 2_000n }],
+      target: { type: "assets", assets: 1_000n, maxUnits: 1_100n },
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({
@@ -539,24 +508,30 @@ describe("MorphoMidnight", () => {
       mockMidnightAuthorization(handle, false);
 
       const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        collateralAssets: 2_000n,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
+        ...params,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 2_000n },
+          { collateralIndex: 0n, assets: 500n },
+        ],
       });
       const requirements = await output.getRequirements();
       const tx = output.buildTx();
 
-      expect(tx.action.args).toMatchObject({
-        collateralAssets: 2_000n,
-        loanAssets: 1_000n,
-      });
-      expect(
-        requirements.map((requirement) => requirement.action.type),
-      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 2_500n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.taker,
+          },
+        },
+      ]);
     });
 
     test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
@@ -568,48 +543,32 @@ describe("MorphoMidnight", () => {
       });
       mockMidnightAuthorization(handle, true);
 
-      const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        collateralAssets: 2_000n,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
-      });
-
-      await expect(output.getRequirements()).resolves.toEqual([]);
+      await expect(
+        midnightWithHandle(handle)
+          .supplyCollateralTakeBorrow(params)
+          .getRequirements(),
+      ).resolves.toEqual([]);
     });
 
-    test("error: amount validation", () => {
-      const params = {
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        collateralAssets: 2_000n,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
-      } as const;
-
+    test("error: EmptyMidnightCollateralSuppliesError", () => {
       expect(() =>
         midnight().supplyCollateralTakeBorrow({
           ...params,
-          collateralAssets: 0n,
+          collateralSupplies: [],
+        }),
+      ).toThrow(EmptyMidnightCollateralSuppliesError);
+    });
+
+    test("error: amount validation", () => {
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({
+          ...params,
+          collateralSupplies: [{ collateralIndex: 0n, assets: 0n }],
         }),
       ).toThrow(NonPositiveInputError);
       expect(() =>
-        midnight().supplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
+        midnight().supplyCollateralTakeBorrow({ ...params, deadline: 0n }),
       ).toThrow(NonPositiveInputError);
-      expect(() =>
-        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
-      ).toThrow(NonPositiveInputError);
-      expect(() =>
-        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-      ).toThrow(NonPositiveInputError);
-      expect(() =>
-        midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
-      ).toThrow(NegativeInputError);
     });
   });
 

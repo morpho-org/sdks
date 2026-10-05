@@ -9,6 +9,7 @@ import {
   fetchAccrualPosition,
   fetchMarket,
   type Market,
+  type MarketInput,
   MarketParams,
   MarketUtils,
   type MidnightFetchParams,
@@ -43,7 +44,6 @@ import {
 import { validateChainId } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
-import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -53,6 +53,7 @@ import {
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
+  type MidnightCollateralTransfer,
   type MidnightGroupCancellation,
   MidnightOfferCallbackDataMismatchError,
   MidnightOfferCallbackMismatchError,
@@ -108,9 +109,9 @@ import type {
  * const output = midnight.takeLend({
  *   accountAddress: lender,
  *   marketData,
- *   assets: 1_000_000n,
- *   minUnits: 900_000n,
+ *   target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
  *   takeableOffers: quote.data.takeableOffers,
+ *   maxContinuousFee: maxUint256,
  *   deadline: maxUint256,
  * });
  * const requirements = await output.getRequirements();
@@ -147,6 +148,19 @@ const assertPositiveAmount = (label: string, amount: bigint) => {
 const validateMarketData = (market: Market, chainId: number) => {
   // Reject snapshots from another chain deployment before exposing requirements.
   validateMidnightMarket({ market, chainId });
+};
+
+/** Sums collateral supplies per token, so a token supplied at several indices gets one approval. */
+const sumCollateralByToken = (
+  market: MarketInput,
+  supplies: readonly MidnightCollateralTransfer[],
+): Map<Address, bigint> => {
+  const amounts = new Map<Address, bigint>();
+  for (const { collateralIndex, assets } of supplies) {
+    const { token } = MarketUtils.getCollateralByIndex(market, collateralIndex);
+    amounts.set(token, (amounts.get(token) ?? 0n) + assets);
+  }
+  return amounts;
 };
 
 /**
@@ -340,31 +354,36 @@ export class MorphoMidnight {
   }
 
   /**
-   * Prepares a lend-side take using caller-provided market data and API offers.
+   * Prepares a `MidnightBundlesV2` buy that lends into borrow-side offers for `accountAddress`.
    *
-   * @param params - Lender, market snapshot, target assets, units, offers, and deadline.
-   * @param params.accountAddress - Lender executing the take.
+   * @param params - Lender, market snapshot, buy target, offers, fee cap, deadline, and optional referral fee.
+   * @param params.accountAddress - Lender; must send the transaction, since V2 acts for `msg.sender`.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.assets - Loan assets spent by the lender.
-   * @param params.minUnits - Minimum credit units accepted.
+   * @param params.target - `{ type: "assets", assets, minUnits }` or `{ type: "units", units, maxBuyerAssets }`.
    * @param params.takeableOffers - Borrow-side offers returned by the Midnight API.
+   * @param params.maxContinuousFee - Largest market continuous fee accepted; pass `maxUint256` for no cap.
    * @param params.deadline - Bundle execution deadline timestamp.
-   * @returns Lazy approval/authorization requirements and a synchronous transaction builder.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee paid out of the pulled assets.
+   * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
+   * @returns Lazy loan-token approval and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when `assets` is non-positive.
-   * @throws {NegativeInputError} when `minUnits` or `deadline` is negative.
+   * @throws {NonPositiveInputError} when the target amount or `deadline` is not positive.
+   * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @example
    * ```ts
    * const output = midnight.takeLend({
    *   accountAddress: lender,
    *   marketData,
-   *   assets: 1_000_000n,
-   *   minUnits: 900_000n,
+   *   target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
    *   takeableOffers: quote.data.takeableOffers,
+   *   maxContinuousFee: maxUint256,
    *   deadline: maxUint256,
    * });
    * ```
@@ -373,81 +392,73 @@ export class MorphoMidnight {
     params: TakeLendParams,
   ): MidnightActionOutput<MidnightTakeLendAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateMarketData(params.marketData, this.chainId);
-    assertPositiveAmount("assets", params.assets);
-    assertNonNegativeAmount("minUnits", params.minUnits);
-    assertNonNegativeAmount("deadline", params.deadline);
-    // Reject inconsistent quotes before exposing requirement reads.
-    validateTakeableOffers({
-      market: params.marketData.params,
+    const market = params.marketData.params;
+    const tx = midnightTakeLend({
+      chainId: this.chainId,
+      market,
+      target: params.target,
       takeableOffers: params.takeableOffers,
-      expectedBuy: false,
+      maxContinuousFee: params.maxContinuousFee,
+      deadline: params.deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+      metadata: this.client.options.metadata,
     });
-
-    const market = params.marketData;
-    const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
+    const pulledAssets =
+      params.target.type === "assets"
+        ? params.target.assets
+        : params.target.maxBuyerAssets;
 
     return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
-          ...(await getMidnightApprovalRequirements({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            token: market.params.loanToken,
-            owner: params.accountAddress,
-            spender: midnightBundles,
-            amount: params.assets,
-          })),
-        ];
-        const authorization = await getMidnightAuthorizationRequirement({
+      getRequirements: async () => [
+        ...(await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
+          token: market.loanToken,
           owner: params.accountAddress,
-          authorized: midnightBundles,
-        });
-        if (authorization) requirements.push(authorization);
-
-        return requirements;
-      },
-      buildTx: () =>
-        midnightTakeLend({
-          chainId: this.chainId,
-          market: market.params,
-          assets: params.assets,
-          minUnits: params.minUnits,
-          taker: params.accountAddress,
-          takeableOffers: params.takeableOffers,
-          deadline: params.deadline,
-          metadata: this.client.options.metadata,
-        }),
+          spender: tx.to,
+          amount: pulledAssets,
+        })),
+        ...(await this.getBundlesV2AuthorizationRequirements(
+          params.accountAddress,
+        )),
+      ],
+      buildTx: () => tx,
     };
   }
 
   /**
-   * Prepares a borrow-side take using caller-provided market data and API offers.
+   * Prepares a `MidnightBundlesV2` sell that borrows from lend-side offers for `accountAddress`.
    *
-   * @param params - Borrower, market snapshot, target assets, unit cap, offers, and deadline.
-   * @param params.accountAddress - Borrower executing the take.
+   * The bundle first withdraws as much of the sender's existing credit as the target and market
+   * liquidity allow, then fills the rest from offers.
+   *
+   * @param params - Borrower, market snapshot, sell target, offers, deadline, receiver, and optional referral fee.
+   * @param params.accountAddress - Borrower; must send the transaction, since V2 acts for `msg.sender`.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.loanAssets - Loan assets received by the borrower.
-   * @param params.maxUnits - Maximum debt units accepted.
+   * @param params.target - `{ type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }`.
+   * @param params.receiver - Optional loan-asset recipient; defaults to `accountAddress`.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
    * @param params.deadline - Bundle execution deadline timestamp.
-   * @returns Lazy authorization requirements and a synchronous transaction builder.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
+   * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when `loanAssets` or `maxUnits` is non-positive.
-   * @throws {NegativeInputError} when `deadline` is negative.
+   * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
+   * @throws {NegativeInputError} when `minSellerAssets` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @example
    * ```ts
    * const output = midnight.takeBorrow({
    *   accountAddress: borrower,
    *   marketData,
-   *   loanAssets: 1_000_000n,
-   *   maxUnits: 1_100_000n,
+   *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
    *   takeableOffers: quote.data.takeableOffers,
    *   deadline: maxUint256,
    * });
@@ -457,76 +468,61 @@ export class MorphoMidnight {
     params: TakeBorrowParams,
   ): MidnightActionOutput<MidnightTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateMarketData(params.marketData, this.chainId);
-    assertPositiveAmount("loanAssets", params.loanAssets);
-    assertPositiveAmount("maxUnits", params.maxUnits);
-    assertNonNegativeAmount("deadline", params.deadline);
-    // Reject inconsistent quotes before exposing requirement reads.
-    validateTakeableOffers({
+    const tx = midnightTakeBorrow({
+      chainId: this.chainId,
       market: params.marketData.params,
+      target: params.target,
+      receiver: params.receiver ?? params.accountAddress,
       takeableOffers: params.takeableOffers,
-      expectedBuy: true,
+      deadline: params.deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+      metadata: this.client.options.metadata,
     });
 
-    const market = params.marketData;
-    const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
-
     return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [];
-        const authorization = await getMidnightAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          owner: params.accountAddress,
-          authorized: midnightBundles,
-        });
-        if (authorization) requirements.push(authorization);
-
-        return requirements;
-      },
-      buildTx: () =>
-        midnightTakeBorrow({
-          chainId: this.chainId,
-          market: market.params,
-          loanAssets: params.loanAssets,
-          maxUnits: params.maxUnits,
-          taker: params.accountAddress,
-          takeableOffers: params.takeableOffers,
-          deadline: params.deadline,
-          metadata: this.client.options.metadata,
-        }),
+      getRequirements: () =>
+        this.getBundlesV2AuthorizationRequirements(params.accountAddress),
+      buildTx: () => tx,
     };
   }
 
   /**
-   * Prepares one bundle that supplies collateral and takes borrow-side offers.
+   * Prepares one `MidnightBundlesV2` sell that supplies collateral and borrows from lend-side
+   * offers for `accountAddress`.
    *
-   * @param params - Borrower, market snapshot, collateral and loan amounts, unit cap, offers, and deadline.
-   * @param params.accountAddress - Borrower executing the bundle.
+   * Like `takeBorrow`, the sender's existing credit is withdrawn before offers are taken.
+   *
+   * @param params - Borrower, market snapshot, collateral supplies, sell target, offers, deadline, receiver, and optional referral fee.
+   * @param params.accountAddress - Borrower; must send the transaction, since V2 acts for `msg.sender`.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.collateralAssets - Collateral assets supplied before borrowing.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
-   * @param params.loanAssets - Loan assets received by the borrower.
-   * @param params.maxUnits - Maximum debt units accepted.
+   * @param params.collateralSupplies - Collateral index and assets per supply; must not be empty.
+   * @param params.target - `{ type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }`.
+   * @param params.receiver - Optional loan-asset recipient; defaults to `accountAddress`.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
    * @param params.deadline - Bundle execution deadline timestamp.
-   * @returns Lazy collateral approval/authorization requirements and a synchronous transaction builder.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
+   * @returns Lazy collateral approvals and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when collateral, loan assets, or `maxUnits` is non-positive.
-   * @throws {NegativeInputError} when `deadline` is negative.
-   * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
+   * @throws {EmptyMidnightCollateralSuppliesError} when no collateral supply is provided.
+   * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
+   * @throws {NonPositiveInputError} when a supply amount, the target amount, `maxUnits` or `deadline` is not positive.
+   * @throws {NegativeInputError} when `minSellerAssets` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @example
    * ```ts
    * const output = midnight.supplyCollateralTakeBorrow({
    *   accountAddress: borrower,
    *   marketData,
-   *   collateralAssets: 2_000_000n,
-   *   loanAssets: 1_000_000n,
-   *   maxUnits: 1_100_000n,
+   *   collateralSupplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
+   *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
    *   takeableOffers: quote.data.takeableOffers,
    *   deadline: maxUint256,
    * });
@@ -536,58 +532,31 @@ export class MorphoMidnight {
     params: SupplyCollateralTakeBorrowParams,
   ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateMarketData(params.marketData, this.chainId);
-    assertPositiveAmount("collateralAssets", params.collateralAssets);
-    assertPositiveAmount("loanAssets", params.loanAssets);
-    assertPositiveAmount("maxUnits", params.maxUnits);
-    assertNonNegativeAmount("deadline", params.deadline);
-    // Reject inconsistent quotes before exposing requirement reads.
-    validateTakeableOffers({
-      market: params.marketData.params,
+    const market = params.marketData.params;
+    const tx = midnightSupplyCollateralTakeBorrow({
+      chainId: this.chainId,
+      market,
+      collateralSupplies: params.collateralSupplies,
+      target: params.target,
+      receiver: params.receiver ?? params.accountAddress,
       takeableOffers: params.takeableOffers,
-      expectedBuy: true,
+      deadline: params.deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+      metadata: this.client.options.metadata,
     });
-
-    const market = params.marketData;
-    const collateralIndex = params.collateralIndex ?? 0n;
-    const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
-    const collateral = market.getCollateralByIndex(collateralIndex);
+    const collateralAmounts = sumCollateralByToken(
+      market,
+      tx.action.args.collateralSupplies,
+    );
 
     return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
-          ...(await getMidnightApprovalRequirements({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            token: collateral.token,
-            owner: params.accountAddress,
-            spender: midnightBundles,
-            amount: params.collateralAssets,
-          })),
-        ];
-        const authorization = await getMidnightAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          owner: params.accountAddress,
-          authorized: midnightBundles,
-        });
-        if (authorization) requirements.push(authorization);
-
-        return requirements;
-      },
-      buildTx: () =>
-        midnightSupplyCollateralTakeBorrow({
-          chainId: this.chainId,
-          market: market.params,
-          collateralAssets: params.collateralAssets,
-          loanAssets: params.loanAssets,
-          maxUnits: params.maxUnits,
-          taker: params.accountAddress,
-          collateralIndex,
-          takeableOffers: params.takeableOffers,
-          deadline: params.deadline,
-          metadata: this.client.options.metadata,
-        }),
+      getRequirements: () =>
+        this.getBundlesV2CollateralRequirements(
+          collateralAmounts,
+          params.accountAddress,
+        ),
+      buildTx: () => tx,
     };
   }
 
@@ -1013,49 +982,20 @@ export class MorphoMidnight {
             : { market, supplies: params.collateral?.supplies ?? [] },
       },
     });
-    const midnightBundlesV2 = getChainAddress(
-      this.chainId,
-      "midnightBundlesV2",
-    );
-    const collateralAmounts = new Map<Address, bigint>();
-    if (market != null) {
-      for (const { collateralIndex, assets } of tx.action.args
-        .collateralSupplies) {
-        const { token } = MarketUtils.getCollateralByIndex(
-          market,
-          collateralIndex,
-        );
-        collateralAmounts.set(
-          token,
-          (collateralAmounts.get(token) ?? 0n) + assets,
-        );
-      }
-    }
+    const collateralAmounts =
+      market == null
+        ? new Map<Address, bigint>()
+        : sumCollateralByToken(market, tx.action.args.collateralSupplies);
 
     return {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: async () => {
-        const approvals = await Promise.all(
-          [...collateralAmounts].map(([token, amount]) =>
-            getMidnightApprovalRequirements({
-              viemClient: this.client.viemClient,
-              chainId: this.chainId,
-              token,
-              owner: data.accountAddress,
-              spender: midnightBundlesV2,
-              amount,
-            }),
-          ),
-        );
-        return [
-          ...approvals.flat(),
-          ...(await this.getBundlesV2AuthorizationRequirements(
-            data.accountAddress,
-          )),
-        ];
-      },
+      getRequirements: () =>
+        this.getBundlesV2CollateralRequirements(
+          collateralAmounts,
+          data.accountAddress,
+        ),
       buildTx: () => tx,
     };
   }
@@ -1386,6 +1326,29 @@ export class MorphoMidnight {
         this.getBundlesV2AuthorizationRequirements(params.accountAddress),
       buildTx: () => tx,
     };
+  }
+
+  private async getBundlesV2CollateralRequirements(
+    collateralAmounts: ReadonlyMap<Address, bigint>,
+    owner: Address,
+  ): Promise<readonly ActionRequirement[]> {
+    const spender = getChainAddress(this.chainId, "midnightBundlesV2");
+    const approvals = await Promise.all(
+      [...collateralAmounts].map(([token, amount]) =>
+        getMidnightApprovalRequirements({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          token,
+          owner,
+          spender,
+          amount,
+        }),
+      ),
+    );
+    return [
+      ...approvals.flat(),
+      ...(await this.getBundlesV2AuthorizationRequirements(owner)),
+    ];
   }
 
   private async getBundlesV2AuthorizationRequirements(

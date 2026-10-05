@@ -24,13 +24,6 @@ export type MidnightTokenPermit =
       readonly data: Hex;
     };
 
-/** Protocol-shaped collateral supply used by Midnight bundle calls. */
-export interface MidnightCollateralSupply {
-  readonly collateralIndex: bigint;
-  readonly assets: bigint;
-  readonly permit: MidnightTokenPermit;
-}
-
 /**
  * ABI-ready Midnight takeable offer returned by quote/takeable-offer APIs.
  *

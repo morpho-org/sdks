@@ -1,60 +1,67 @@
-import { type MarketInput, midnightBundlesAbi } from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  encodeFunctionData,
-  maxUint256,
-  zeroAddress,
-} from "viem";
+import type { MarketInput } from "@morpho-org/midnight-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
-import {
-  type Metadata,
-  type MidnightTakeBorrowAction,
-  NegativeInputError,
-  NonPositiveInputError,
-  type Transaction,
+import type {
+  Metadata,
+  MidnightSellTarget,
+  MidnightTakeBorrowAction,
+  Transaction,
 } from "../../types/index.js";
+import {
+  type MidnightReferralFeeParams,
+  midnightBundlesV2Sell,
+} from "./bundlesV2Take.js";
 import type { MidnightTakeableOffer } from "./types.js";
 
 /** Parameters for encoding a Midnight borrow take from already selected offers. */
-export interface MidnightTakeBorrowParams {
+export interface MidnightTakeBorrowParams extends MidnightReferralFeeParams {
   readonly chainId: number;
   readonly market: MarketInput;
-  readonly loanAssets: bigint;
-  readonly maxUnits: bigint;
-  readonly taker: Address;
+  /** Loan assets received with a unit cap, or units sold with a loan-asset floor. */
+  readonly target: MidnightSellTarget;
+  /** Recipient of the borrowed loan assets. */
+  readonly receiver: Address;
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
-  readonly takeableOffers: readonly MidnightTakeableOffer[];
   readonly metadata?: Metadata;
 }
 
 /**
- * Encodes a Midnight bundle that borrows loan assets by taking lend-side offers.
+ * Encodes a `MidnightBundlesV2` sell that borrows from lend-side offers for `msg.sender`.
  *
- * Prefer `client.morpho.midnight(chainId).takeBorrow(...)` in app flows so
- * authorization requirements are resolved first. Use this low-level builder
- * only after the Midnight API has returned takeable offers and the caller has
- * already handled prerequisites.
+ * `MidnightBundlesV2` first withdraws as much of the sender's existing credit as the target and
+ * market liquidity allow, and fills only the rest from offers: a sender with credit nets it before
+ * taking debt.
  *
- * @param params.chainId - Chain id used to resolve `MidnightBundles`.
+ * Prefer `client.morpho.midnight(chainId).takeBorrow(...)` in app flows so the
+ * `MidnightBundlesV2` authorization is resolved before building the bundle.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.market - Midnight market traded by every takeable offer.
- * @param params.loanAssets - Loan assets the borrower receives.
- * @param params.maxUnits - Maximum debt units accepted from the bundle quote.
- * @param params.taker - Borrower address executing the bundle.
- * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.target - `{ type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }`.
+ * @param params.receiver - Recipient of the borrowed loan assets.
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+ * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
- * @returns A deep-frozen `Transaction<MidnightTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when `loanAssets` or `maxUnits` is non-positive.
- * @throws {NegativeInputError} when `deadline` is negative.
+ * @returns A deep-frozen `Transaction<MidnightTakeBorrowAction>` targeting `MidnightBundlesV2`.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
- * @throws {ChainIdMismatchError} when the market targets another chain.
- * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
+ * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
+ * @throws {NegativeInputError} when `minSellerAssets` is negative.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -63,9 +70,8 @@ export interface MidnightTakeBorrowParams {
  * const tx = midnightTakeBorrow({
  *   chainId: 8453,
  *   market: marketData.params,
- *   loanAssets: 1_000_000n,
- *   maxUnits: 1_100_000n,
- *   taker: borrower,
+ *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
+ *   receiver: borrower,
  *   takeableOffers: quote.data.takeableOffers,
  *   deadline: maxUint256,
  * });
@@ -74,16 +80,7 @@ export interface MidnightTakeBorrowParams {
 export const midnightTakeBorrow = (
   params: MidnightTakeBorrowParams,
 ): Readonly<Transaction<MidnightTakeBorrowAction>> => {
-  if (params.loanAssets <= 0n) {
-    throw new NonPositiveInputError("loanAssets", params.loanAssets);
-  }
-  if (params.maxUnits <= 0n) {
-    throw new NonPositiveInputError("maxUnits", params.maxUnits);
-  }
-  if (params.deadline < 0n) {
-    throw new NegativeInputError("deadline", params.deadline);
-  }
-  // Reject markets from another chain deployment before encoding the bundle.
+  // Reject markets from another chain deployment before checking offers against them.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = validateTakeableOffers({
     market: params.market,
@@ -91,30 +88,12 @@ export const midnightTakeBorrow = (
     expectedBuy: true,
   });
 
-  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-
-  let tx = {
-    to: midnightBundles,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: midnightBundlesAbi,
-      functionName: "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
-      args: [
-        params.loanAssets,
-        params.maxUnits,
-        params.taker,
-        false,
-        params.taker,
-        [],
-        params.takeableOffers,
-        0n,
-        zeroAddress,
-        maxUint256,
-        params.deadline,
-      ],
-    }),
-  };
-
+  let tx = midnightBundlesV2Sell({
+    ...params,
+    reduceOnly: false,
+    offerFills: params.takeableOffers,
+    collateralSupplies: [],
+  });
   if (params.metadata) {
     tx = addTransactionMetadata(tx, params.metadata);
   }
@@ -125,11 +104,8 @@ export const midnightTakeBorrow = (
       type: "midnightTakeBorrow",
       args: {
         market: marketId,
-        loanAssets: params.loanAssets,
-        maxUnits: params.maxUnits,
-        taker: params.taker,
-        receiver: params.taker,
-        collateralSupplies: 0,
+        target: { ...params.target },
+        receiver: params.receiver,
         takeableOffers: params.takeableOffers.length,
         deadline: params.deadline,
       },

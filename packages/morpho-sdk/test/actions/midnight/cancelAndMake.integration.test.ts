@@ -8,7 +8,6 @@ import {
   MarketParams,
   MarketUtils,
   midnightAbi,
-  midnightBundlesV2Abi,
   Offer,
   OfferUtils,
   priceRatifierV1Abi,
@@ -16,11 +15,7 @@ import {
   rateRatifierV1Abi,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import {
-  ChainId,
-  getChainAddress,
-  registerCustomAddresses,
-} from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -45,7 +40,7 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import { EmptyBlueParkingMarketError } from "../../../src/types/index.js";
-import { midnightBundlesV2Bytecode } from "../../fixtures/midnightBundlesV2.js";
+import { deployMidnightBundlesV2 } from "../../fixtures/midnightBundlesV2.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
@@ -59,9 +54,7 @@ const priceRatifierV1 = getChainAddress(ChainId.BaseMainnet, "priceRatifierV1");
 const rateRatifierV1 = getChainAddress(ChainId.BaseMainnet, "rateRatifierV1");
 const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
 const wNative = getChainAddress(ChainId.BaseMainnet, "wNative");
-/** Fresh deployer so every fork test deploys MidnightBundlesV2 at the same address. */
 const oracle = "0x0000000000000000000000000000000000080000" as Address;
-const deployer = "0x00000000000000000000000000000000000b2d00" as Address;
 const groupA = `0x${"aa".repeat(32)}` as Hex;
 const groupB = `0x${"bb".repeat(32)}` as Hex;
 const market = new MarketParams({
@@ -89,28 +82,6 @@ const validation = {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }),
-};
-
-const deployMidnightBundlesV2 = async (
-  client: AnvilTestClient<typeof base>,
-) => {
-  await client.setBalance({ address: deployer, value: parseEther("1") });
-  const hash = await client.deployContract({
-    account: deployer,
-    abi: midnightBundlesV2Abi,
-    bytecode: midnightBundlesV2Bytecode,
-    args: [
-      midnight,
-      getChainAddress(ChainId.BaseMainnet, "blue"),
-      getChainAddress(ChainId.BaseMainnet, "midnightBlueBuyCallbackFactory"),
-      getChainAddress(ChainId.BaseMainnet, "midnightMempool"),
-    ],
-  });
-  const { contractAddress } = await client.waitForTransactionReceipt({ hash });
-  if (!contractAddress) throw new Error("MidnightBundlesV2 deployment failed");
-  registerCustomAddresses({
-    addresses: { [base.id]: { midnightBundlesV2: contractAddress } },
-  });
 };
 
 const blue = getChainAddress(ChainId.BaseMainnet, "blue");

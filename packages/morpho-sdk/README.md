@@ -42,7 +42,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow` | MidnightBundlesV2 |
+| **Midnight** | `repayWithdrawCollateral` | Midnight Bundles |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 | | `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
 
@@ -238,9 +239,9 @@ const marketData = await midnight.getMarketData(marketId);
 const output = midnight.takeLend({
   accountAddress: lender,
   marketData,
-  assets: 1_000_000n,
-  minUnits: 900_000n,
+  target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
   takeableOffers: quote.data.takeableOffers,
+  maxContinuousFee: maxUint256,
   deadline,
 });
 

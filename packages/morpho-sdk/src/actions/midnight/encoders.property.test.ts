@@ -90,10 +90,9 @@ describe("Midnight calldata encoders", () => {
         midnightSupplyCollateralTakeBorrow({
           chainId: midnightChainId,
           market,
-          collateralAssets: 1n,
-          loanAssets: 1n,
-          maxUnits: 1n,
-          taker: midnightAddresses.taker,
+          target: { type: "assets", assets: 1n, maxUnits: 1n },
+          receiver: midnightAddresses.taker,
+          collateralSupplies: [{ collateralIndex: 0n, assets: 1n }],
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: 1n,
         }),
@@ -104,9 +103,8 @@ describe("Midnight calldata encoders", () => {
         midnightTakeBorrow({
           chainId: midnightChainId,
           market,
-          loanAssets: 1n,
-          maxUnits: 1n,
-          taker: midnightAddresses.taker,
+          target: { type: "assets", assets: 1n, maxUnits: 1n },
+          receiver: midnightAddresses.taker,
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: 1n,
         }),
@@ -117,10 +115,9 @@ describe("Midnight calldata encoders", () => {
         midnightTakeLend({
           chainId: midnightChainId,
           market,
-          assets: 1n,
-          minUnits: 1n,
-          taker: midnightAddresses.taker,
+          target: { type: "assets", assets: 1n, minUnits: 1n },
           takeableOffers: [midnightApiTake({ buy: false })],
+          maxContinuousFee: 0n,
           deadline: 1n,
         }),
     ],
@@ -205,60 +202,65 @@ describe("Midnight calldata encoders", () => {
           }).data,
         });
         expect(collateralSupply.args[2]).toBe(assets);
+      }),
+      { seed: 42 },
+    );
+  });
 
-        const takeableBorrowOffers = [midnightApiTake({ buy: true })];
-        const collateralBorrow = decodeFunctionData({
-          abi: midnightBundlesAbi,
-          data: midnightSupplyCollateralTakeBorrow({
-            chainId: midnightChainId,
-            market: midnightMarket,
-            collateralAssets: assets,
-            loanAssets: assets,
-            maxUnits: units,
-            taker: midnightAddresses.taker,
-            takeableOffers: takeableBorrowOffers,
-            deadline: optionalAmount,
-          }).data,
-        });
-        if (
-          collateralBorrow.functionName !==
-          "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget"
-        ) {
-          throw new TypeError("unexpected collateral-borrow function");
-        }
-        expect(collateralBorrow.args[0]).toBe(assets);
-        expect(collateralBorrow.args[1]).toBe(units);
-        expect(collateralBorrow.args[5][0]?.assets).toBe(assets);
-
-        const borrow = decodeFunctionData({
-          abi: midnightBundlesAbi,
-          data: midnightTakeBorrow({
-            chainId: midnightChainId,
-            market: midnightMarket,
-            loanAssets: assets,
-            maxUnits: units,
-            taker: midnightAddresses.taker,
-            takeableOffers: takeableBorrowOffers,
-            deadline: optionalAmount,
-          }).data,
-        });
-        expect(borrow.args[0]).toBe(assets);
-        expect(borrow.args[1]).toBe(units);
-
+  test("property: preserves taker targets through ABI encoding", () => {
+    const target = fc.record({
+      byUnits: fc.boolean(),
+      amount: positiveUint128,
+      bound: positiveUint128,
+      deadline: fc.bigInt({ min: 1n, max: maxUint256 }),
+    });
+    fc.assert(
+      fc.property(target, ({ byUnits, amount, bound, deadline }) => {
         const lend = decodeFunctionData({
-          abi: midnightBundlesAbi,
+          abi: midnightBundlesV2Abi,
           data: midnightTakeLend({
             chainId: midnightChainId,
             market: midnightMarket,
-            assets,
-            minUnits: optionalAmount,
-            taker: midnightAddresses.taker,
+            target: byUnits
+              ? { type: "units", units: amount, maxBuyerAssets: bound }
+              : { type: "assets", assets: amount, minUnits: bound },
             takeableOffers: [midnightApiTake({ buy: false })],
-            deadline: optionalAmount,
+            maxContinuousFee: bound,
+            deadline,
           }).data,
         });
-        expect(lend.args[0]).toBe(assets);
-        expect(lend.args[1]).toBe(optionalAmount);
+        expect(lend.functionName).toBe(
+          byUnits
+            ? "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral"
+            : "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+        );
+        expect(lend.args.slice(1, 5)).toEqual([amount, bound, false, false]);
+        expect(lend.args.slice(10, 12)).toEqual([bound, deadline]);
+
+        const borrow = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: midnightSupplyCollateralTakeBorrow({
+            chainId: midnightChainId,
+            market: midnightMarket,
+            target: byUnits
+              ? { type: "units", units: amount, minSellerAssets: bound }
+              : { type: "assets", assets: amount, maxUnits: bound },
+            receiver: midnightAddresses.taker,
+            collateralSupplies: [{ collateralIndex: 0n, assets: amount }],
+            takeableOffers: [midnightApiTake({ buy: true })],
+            deadline,
+          }).data,
+        });
+        expect(borrow.functionName).toBe(
+          byUnits
+            ? "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget"
+            : "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
+        );
+        expect(borrow.args.slice(1, 4)).toEqual([amount, bound, false]);
+        expect(borrow.args[5]).toEqual([
+          { collateralIndex: 0n, assets: amount },
+        ]);
+        expect(borrow.args[9]).toBe(deadline);
       }),
       { seed: 42 },
     );
