@@ -7,43 +7,39 @@ import { createAnvilTestClient } from "./client.js";
 
 const hash: Hex = `0x${"11".repeat(32)}`;
 
-// Mines the transaction while a slow eth_getBlockByNumber is in flight: the
-// window viem's replacement check would otherwise make the receipt wait miss.
-const startSlowMiningNode = async () => {
-  let blockNumber = 100n;
+// Mines the transaction while a slow eth_getTransactionReceipt is in flight,
+// then never mines another block, like Anvil's automine on a fork.
+const startSlowReceiptNode = async () => {
   let mined = false;
   setTimeout(() => {
     mined = true;
-    blockNumber = 101n;
   }, 120);
 
+  const receipt = () => ({
+    transactionHash: hash,
+    blockHash: zeroHash,
+    blockNumber: "0x65",
+    transactionIndex: "0x0",
+    from: zeroAddress,
+    to: zeroAddress,
+    cumulativeGasUsed: "0x1",
+    gasUsed: "0x1",
+    effectiveGasPrice: "0x1",
+    logs: [],
+    logsBloom: `0x${"00".repeat(256)}`,
+    status: "0x1",
+    type: "0x0",
+    contractAddress: null,
+  });
+
   const result = async (method: string) => {
-    switch (method) {
-      case "eth_blockNumber":
-        return numberToHex(blockNumber);
-      case "eth_getTransactionReceipt":
-        return mined
-          ? {
-              transactionHash: hash,
-              blockHash: zeroHash,
-              blockNumber: numberToHex(blockNumber),
-              transactionIndex: "0x0",
-              from: zeroAddress,
-              to: zeroAddress,
-              cumulativeGasUsed: "0x1",
-              gasUsed: "0x1",
-              effectiveGasPrice: "0x1",
-              logs: [],
-              logsBloom: `0x${"00".repeat(256)}`,
-              status: "0x1",
-              type: "0x0",
-              contractAddress: null,
-            }
-          : null;
-      default:
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        return null;
-    }
+    if (method === "eth_blockNumber") return numberToHex(mined ? 101 : 100);
+
+    const minedAtRequest = mined;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (method === "eth_getTransactionReceipt")
+      return minedAtRequest ? receipt() : null;
+    return null;
   };
 
   const server = createServer((req, res) => {
@@ -74,8 +70,8 @@ describe("createAnvilTestClient", () => {
     expect(client.pollingInterval).toBe(50);
   });
 
-  test("resolves a receipt mined while a slow RPC call is in flight", async () => {
-    const node = await startSlowMiningNode();
+  test("resolves a receipt mined while its fetch is in flight", async () => {
+    const node = await startSlowReceiptNode();
     try {
       const client = createAnvilTestClient(http(node.url), mainnet);
 

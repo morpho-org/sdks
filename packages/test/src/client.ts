@@ -19,9 +19,11 @@ import {
   type SendTransactionRequest,
   type TestActions,
   type TestRpcSchema,
+  TransactionReceiptNotFoundError,
   type UnionPartialBy,
   type WaitForTransactionReceiptParameters,
   type WaitForTransactionReceiptReturnType,
+  WaitForTransactionReceiptTimeoutError,
   type WalletActions,
   type WalletRpcSchema,
   type WriteContractParameters,
@@ -29,9 +31,9 @@ import {
   walletActions,
 } from "viem";
 import {
+  getTransactionReceipt as viem_getTransactionReceipt,
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
-  waitForTransactionReceipt as viem_waitForTransactionReceipt,
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
@@ -147,15 +149,32 @@ export const createAnvilTestClient = <chain extends Chain>(
     .extend((client) => {
       let automine: boolean;
 
-      // Anvil never replaces transactions, and viem's replacement check skips
-      // blocks mined while it runs, which can hang the wait at 50 ms polling.
-      const waitForTransactionReceipt = (
-        args: WaitForTransactionReceiptParameters<chain>,
-      ) =>
-        viem_waitForTransactionReceipt(client, {
-          checkReplacement: false,
-          ...args,
-        });
+      // viem waits for a new block before re-fetching a missing receipt, and
+      // dedupes that fetch into one already in flight. When Anvil mines during
+      // that request, automine produces no later block and the wait hangs, so
+      // poll the receipt directly instead.
+      const waitForTransactionReceipt = async ({
+        hash,
+        timeout = 180_000,
+      }: WaitForTransactionReceiptParameters<chain>) => {
+        const deadline = Date.now() + timeout;
+
+        while (true) {
+          try {
+            return await viem_getTransactionReceipt(client, { hash });
+          } catch (error) {
+            if (!(error instanceof TransactionReceiptNotFoundError))
+              throw error;
+          }
+
+          if (Date.now() > deadline)
+            throw new WaitForTransactionReceiptTimeoutError({ hash });
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, client.pollingInterval),
+          );
+        }
+      };
 
       return {
         waitForTransactionReceipt,
