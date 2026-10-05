@@ -32,7 +32,13 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
   it also covers `supplyCollateralMakeBorrow`; an explicit empty supply list is rejected.
 - The route-specific surface is removed with them: `MakeOffersOutput`, the `mempoolSubmitOffers` and
   `setterRatifierRatifyRoot` builders and requirement, the `MidnightOfferRootSignature*` and
-  `MidnightActionSignatures` types, and the offer-root signature errors.
+  `MidnightActionSignatures` types, the offer-root signature errors, and
+  `UnknownMidnightRatifierError`.
+- The pure `midnightCancelAndMake` builder does not restrict `ratifier`: MidnightBundlesV2 has no
+  allowlist and only requires the root setter to return `SET_IS_ROOT_RATIFIED_SUCCESS`. This
+  supersedes the “Root activation targets `PriceRatifierV1` or `RateRatifierV1` only” clause in
+  ADR-2026-10-02-midnight-bundles-v2-sdk-actions for the builder. Maker entity methods still use
+  the chain's registered V1 ratifier for the tree type.
 - Maker entity methods activate the root with `v = r = s = 0` and zero signature height, nonce and
   deadline for every maker. The ratifier then checks only that the maker has authorized
   `MidnightBundlesV2` on Midnight, which these methods already require, so no off-chain signature

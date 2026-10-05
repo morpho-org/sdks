@@ -1685,19 +1685,6 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight offer tree uses a ratifier other than the chain's PriceRatifierV1 or RateRatifierV1. */
-export class UnknownMidnightRatifierError extends Error {
-  constructor(params: {
-    ratifier: Address;
-    priceRatifierV1: Address;
-    rateRatifierV1: Address;
-  }) {
-    super(
-      `Midnight offer tree uses ratifier "${params.ratifier}", expected PriceRatifierV1 "${params.priceRatifierV1}" or RateRatifierV1 "${params.rateRatifierV1}". Rebuild the tree with a supported ratifier.`,
-    );
-  }
-}
-
 /** Thrown when a Midnight offer's ratifier does not match its tree's ratifier route. */
 export class MidnightOfferRatifierMismatchError extends Error {
   constructor(params: {

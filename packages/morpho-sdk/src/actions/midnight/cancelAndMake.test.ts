@@ -35,7 +35,6 @@ import {
   MidnightReplacementGroupCancelledError,
   NegativeInputError,
   NonPositiveInputError,
-  UnknownMidnightRatifierError,
 } from "../../types/index.js";
 import { midnightCancelAndMake } from "./cancelAndMake.js";
 
@@ -204,13 +203,16 @@ describe("midnightCancelAndMake", () => {
     ).toThrow(EmptyMidnightCollateralSuppliesError);
   });
 
-  test("error: UnknownMidnightRatifierError", () => {
-    expect(() =>
-      midnightCancelAndMake({
-        ...params,
-        ratifier: getChainAddress(midnightChainId, "setterRatifier"),
-      }),
-    ).toThrow(UnknownMidnightRatifierError);
+  test("behavior: accepts an unregistered ratifier address", () => {
+    const ratifier = getAddress("0x000000000000000000000000000000000000dEaD");
+    const tx = midnightCancelAndMake({ ...params, ratifier });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args[5]).toBe(ratifier);
+    expect(tx.action.args.ratifier).toBe(ratifier);
   });
 
   test("error: InvalidTreeError on empty root, payload, or groups", () => {

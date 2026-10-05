@@ -66,7 +66,8 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   the contract does not read them.
 - **Group cancellations** are `{ group, maxConsumed }` lists: reject negative or above-`uint128`
   ceilings and duplicate groups. Replacement offers must use groups not in the cancellation list.
-- **Root activation** targets `PriceRatifierV1` or `RateRatifierV1` only. Maker entity methods
+- **Root activation**: the pure `midnightCancelAndMake` builder accepts any ratifier address; maker
+  entity methods pick the chain's `priceRatifierV1` or `rateRatifierV1` from the tree type. They
   encode all-zero root-signature fields for every maker and rely on the `MidnightBundlesV2`
   authorization; only the pure `midnightCancelAndMake` builder accepts an explicit delegated
   signature.
