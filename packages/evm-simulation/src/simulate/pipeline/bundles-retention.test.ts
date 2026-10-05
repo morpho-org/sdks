@@ -44,6 +44,7 @@ const MIDNIGHT_BUNDLES: Address = "0x3333333333333333333333333333333333333333";
 const NO_BUNDLES_CHAIN_ID = 1_000_001;
 const SDK_ERROR_CHAIN_ID = 1_000_002;
 const ONLY_MIDNIGHT_CHAIN_ID = 1_000_003;
+const BUNDLES_AND_MIDNIGHT_CHAIN_ID = 1_000_004;
 
 // Neither bundles nor midnightBundlesV2 cataloged — retention check fully skipped.
 chainAddressOverrides.set(NO_BUNDLES_CHAIN_ID, () => ({
@@ -55,6 +56,11 @@ chainAddressOverrides.set(NO_BUNDLES_CHAIN_ID, () => ({
 chainAddressOverrides.set(ONLY_MIDNIGHT_CHAIN_ID, () => ({
   ...addressesRegistry[1],
   bundles: undefined,
+  midnightBundlesV2: MIDNIGHT_BUNDLES,
+}));
+// Both bundles and midnightBundlesV2 present — both are guarded.
+chainAddressOverrides.set(BUNDLES_AND_MIDNIGHT_CHAIN_ID, () => ({
+  ...addressesRegistry[1],
   midnightBundlesV2: MIDNIGHT_BUNDLES,
 }));
 chainAddressOverrides.set(SDK_ERROR_CHAIN_ID, () => {
@@ -396,6 +402,26 @@ describe("assertNoBundlesRetention", () => {
     expect(() =>
       assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
+  });
+
+  it("behavior: throws when MidnightBundlesV2 retains tokens above dust threshold", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: MIDNIGHT_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlesRetention({
+        chainId: BUNDLES_AND_MIDNIGHT_CHAIN_ID,
+        transfers,
+        assetChanges: [],
+      }),
+    ).toThrow(BlacklistViolationError);
   });
 
   it("behavior: guards MidnightBundlesV2 even when the chain has no bundles config", () => {

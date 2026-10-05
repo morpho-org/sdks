@@ -121,6 +121,8 @@ v7 no longer routes anything through the V1 `midnightBundles` contract:
   `midnightBundlesV2` as the authorized operator. Revoke an existing V1 grant with Midnight's
   `setIsAuthorized(midnightBundles, false, account)` directly.
 - `UnsupportedErc20ApprovalSpenderError` no longer takes a `midnightBundles` constructor field.
+- `PermitKind` and `MidnightTokenPermit` are removed with no replacement: V2 takes no inline token
+  permits.
 
 ## repayWithdrawCollateral
 

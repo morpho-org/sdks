@@ -176,6 +176,8 @@ import {
 import { base } from "viem/chains";
 
 const chainId = base.id;
+// Throws `UnknownAddressError` until the chain's `midnightBundlesV2` is pinned in morpho-ts or
+// registered with `registerCustomAddresses`.
 const midnightBundlesV2 = getChainAddress(chainId, "midnightBundlesV2");
 
 export async function takeAskQuoteAtomically(params: {
