@@ -1,6 +1,7 @@
+import { registerCustomAddresses } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import type { Chain } from "viem";
-import { erc20Abi } from "viem";
+import { erc20Abi, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -12,6 +13,13 @@ import {
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { getMidnightApprovalRequirements } from "./getMidnightApprovalRequirements.js";
+
+const midnightBundlesV2 = getAddress(
+  "0x00000000000000000000000000000000000b2002",
+);
+registerCustomAddresses({
+  addresses: { [midnightChainId]: { midnightBundlesV2 } },
+});
 
 const midnightTestChain = {
   id: midnightChainId,
@@ -89,6 +97,7 @@ describe("getMidnightApprovalRequirements", () => {
   test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
     { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
+    { name: "MidnightBundlesV2", spender: midnightBundlesV2 },
   ])(
     "returns an approval for $name when allowance is insufficient",
     async ({ spender }) => {

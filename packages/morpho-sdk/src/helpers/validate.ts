@@ -167,8 +167,7 @@ export const validateMidnightMarketChainId = (
  * the provided user address.
  *
  * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
- * backs the permit, Permit2, Blue authorization, and Midnight offer-root
- * signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
+ * backs the permit, Permit2, and Blue authorization signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
  * signer: the signing flow is
  * the only path where an account/address mismatch is a real security concern
  * (rather than just an integrator footgun).
