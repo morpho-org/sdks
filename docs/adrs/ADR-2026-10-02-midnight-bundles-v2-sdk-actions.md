@@ -1,11 +1,11 @@
 # ADR-2026-10-02: Route Midnight actions through MidnightBundlesV2
 
-| Field      | Value                                                                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                          |
-| **Date**   | 2026-10-02                                                                                                        |
-| **Author** | @jinmel                                                                                                           |
-| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor, `evm-simulation` patch |
+| Field      | Value                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status** | accepted                                                                                                                                 |
+| **Date**   | 2026-10-02                                                                                                                               |
+| **Author** | @jinmel                                                                                                                                  |
+| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0, `blue-sdk` 8.0.0, `evm-simulation` next major |
 
 _Status is the only field that changes after acceptance._
 
@@ -26,17 +26,20 @@ repays directly depending on `reduceOnly`, `repayEnabled` and `offerFills`. V2 a
 `taker` argument and inline token permits: every entrypoint acts for `msg.sender`, pulls tokens with
 plain ERC-20 allowances, and requires the caller to have authorized the bundle on Midnight.
 
-Shipping V2 as a second route next to V1 would leave integrators choosing between two contracts for
-the same intent, and exposing the five entrypoints raw would push the argument combinations that
-encode each intent onto every integrator.
+V2 is a complete replacement for V1, not a second route next to it. Keeping both routes would leave
+integrators choosing between two contracts for the same intent, and exposing the five entrypoints
+raw would push the argument combinations that encode each intent onto every integrator.
 
 ## Decision
 
 `MidnightBundlesV2` is the only bundle route of the `morpho-sdk` 7.0.0 Midnight surface. It replaces
 `MidnightBundlesV1` in every migrated flow; the 7.0.0 major carries no V1 route, route flag or
-fallback. The change ships as the `morpho-sdk` 7.0.0 major with no deprecation window: the migrated
-flows change in place, with no deprecated V1 variant and no coexistence minor before them. Products
-that need V1 stay on the 6.x major, which remains published.
+fallback, and the V1 contract symbols leave the packages that export them. The change ships as the
+`morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0 and `blue-sdk` 8.0.0 majors with no
+deprecation window: the migrated flows change in place and the V1 symbols are removed, with no
+deprecated V1 variant and no coexistence minor before them. Products that need V1 stay on the
+previous majors (`morpho-sdk` 6.x, `midnight-sdk` 1.x, `morpho-ts` 3.x, `blue-sdk` 7.x), which
+remain published.
 
 ### One action per intent
 
@@ -134,17 +137,24 @@ encoding follow from that:
 
 ### Public surface and semver
 
-- `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
-  `midnightBundlesV2` address and deployment-block keys per chain (minor). `evm-simulation` adds
-  `midnightBundlesV2` to the restricted addresses of its bundle-retention guard, next to
-  `midnightBundles` (patch). `morpho-sdk` re-exports `midnightBundlesV2Abi` from `/midnight/abis`
-  and `/abis`, next to `midnightBundlesAbi`, and the V2 struct types under their raw names from
-  `/midnight/types` and under `Midnight`-qualified aliases from `/types`. `CollateralTransfer`
-  (`MidnightCollateralTransfer`) is the one type for collateral supplies and withdrawals in action
-  inputs; the V1 `MidnightCollateralSupply`, which carried the inline permit, is removed.
-- The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
-  and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
-  `morpho-ts`. Their removal is a later decision.
+- `midnight-sdk` 2.0.0 adds `midnightBundlesV2Abi` and the V2 struct types. `morpho-ts` 4.0.0 adds
+  the `midnightBundlesV2` address and deployment-block keys per chain. `morpho-sdk` re-exports
+  `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, and the V2 struct types under their raw
+  names from `/midnight/types` and under `Midnight`-qualified aliases from `/types`.
+  `CollateralTransfer` (`MidnightCollateralTransfer`) is the one type for collateral supplies and
+  withdrawals in action inputs; the V1 `MidnightCollateralSupply`, which carried the inline permit,
+  is removed.
+- The V1 contract symbols are removed, not deprecated: `midnightBundlesAbi` from `midnight-sdk` and
+  its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys from
+  `morpho-ts`. `blue-sdk` re-exports the `morpho-ts` address and deployment registries and their
+  types, so the removal makes it a major too. They go with the route because no action in these
+  majors targets V1; keeping them exported would leave the second route reachable through the
+  low-level surface.
+- `evm-simulation`'s bundle-retention guard, which fails a simulation that leaves funds in a bundle
+  contract, restricts the chain's `midnightBundlesV2` address in place of `midnightBundles`.
+  Dropping V1 coverage is deliberate: V2 replaces V1 completely, and V1 consumers stay on the
+  previous majors, including the previous `evm-simulation` major. The change ships in the first
+  `evm-simulation` major that depends on `morpho-ts` 4.0.0.
 - `morpho-sdk` 7.0.0 keeps the established method names of the migrated flows (`takeLend`,
   `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
@@ -171,22 +181,25 @@ encoding follow from that:
   `makeLend` and `makeBorrow`. It is retyped in place because its V2 successor serves the same
   intent under the same name, and the prior non-atomic flow can leave collateral supplied with no
   live offer when publication fails.
-- The route replacement of the migrated flows invokes a narrow lifecycle exception, added to
-  `AGENTS.md` §7 with this record and accepted by the maintainer (@jinmel). It does not waive the
-  major changeset, migration guide or maintained-dependent audit.
+- The route replacement of the migrated flows and the removal of the V1 contract symbols invoke a
+  narrow lifecycle exception, added to `AGENTS.md` §7 with this record and accepted by the
+  maintainer (@jinmel). It does not waive the major changesets, migration guides, or the
+  maintained-dependent audit and peer-range bumps.
 
 This decision does not cover native-token wrapping, the callback model behind `supplyBlueMakeLend`
-beyond the derived-callback check, Blue market safety policy for parked assets, or quote and offer
-selection.
+beyond the derived-callback check, Blue market safety policy for parked assets, quote and offer
+selection, or any `evm-simulation` change beyond the bundle-retention guard.
 
 ## Invariants
 
-- A simulation that ends with value held by `midnightBundlesV2` fails the `evm-simulation`
-  bundle-retention guard → a retention unit test on the V2 address.
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
 - No `morpho-sdk` 7.0.0 action encodes a `midnightBundlesV1*` selector → a unit test over every
   Midnight action builder's encoded calldata.
+- No package in these majors exports `midnightBundlesAbi` or a `midnightBundles` address or
+  deployment-block key → a grep over the published barrels and the address registry tests.
+- The `evm-simulation` bundle-retention guard fails a simulation that leaves funds above dust in the
+  chain's `midnightBundlesV2` contract → a retention unit test.
 - Each action fixes the intent arguments in the table above → encoder tests decode calldata and
   assert `reduceOnly`, `repayEnabled`, `newRoot`, `assetsToPark` and list emptiness per action.
 - Requirements for assets the bundle call pulls name `MidnightBundlesV2` as approval spender,
@@ -208,7 +221,11 @@ selection.
 ## Rejected alternatives
 
 - **Keep V1 as a selectable route in 7.0.0.** Rejected because two routes for the same intent is
-  the ambiguity the major removes; 6.x remains available to V1 consumers.
+  the ambiguity the major removes; the previous majors remain available to V1 consumers.
+- **Keep the V1 contract symbols exported and deprecated.** Rejected because they would serve only
+  integrators encoding V1 calls by hand, which these majors no longer support, and would keep
+  `midnight-sdk`, `morpho-ts` and `blue-sdk` on minors only by deferring the same break to a later
+  major.
 - **One action per entrypoint exposing every argument.** Rejected because the intent is encoded in
   argument combinations (`reduceOnly`, `repayEnabled`, empty lists, zero root) that integrators
   would have to reproduce, and an invalid combination would execute a different product action.

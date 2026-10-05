@@ -1,5 +1,5 @@
 /**
- * Integration fixtures for parseTransfers, modeled after realistic Morpho
+ * Transfer fixtures for parseTransfers, modeled after realistic Morpho
  * transaction flows (vault deposit, WETH wrap/unwrap,
  * supply-collateral+borrow). When changing `parseTransfers`, these must stay
  * green.
