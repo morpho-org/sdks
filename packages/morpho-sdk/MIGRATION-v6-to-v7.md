@@ -103,6 +103,37 @@ midnight.takeLend({
   (default `accountAddress`). It takes a `MidnightBuyTarget` and needs the same approval and
   authorization as `takeLend`.
 
+## repayWithdrawCollateral
+
+`repayWithdrawCollateral` now calls MidnightBundlesV2 for the sender (no `onBehalf`). It repays
+debt directly, without taking offers, and can withdraw several collaterals in the same call.
+
+| v6 input | v7 input |
+| --- | --- |
+| `repayAssets` | `repayUnits` (`maxUint256` repays the full debt at execution time; `0n` for withdraw-only) and `maxRepayAssets` (finite loan-token cap) |
+| `withdrawCollateralAssets`, `collateralIndex` | `collateralWithdrawals: [{ collateralIndex, assets }]` (`assets: maxUint256` withdraws the whole balance) |
+| — | optional `collateralReceiver` (defaults to `accountAddress`) |
+
+```ts
+// v6
+midnight.repayWithdrawCollateral({ accountAddress, marketData, repayAssets, withdrawCollateralAssets, deadline });
+
+// v7: close the position
+midnight.repayWithdrawCollateral({
+  accountAddress,
+  marketData,
+  repayUnits: maxUint256,
+  maxRepayAssets,
+  collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+  deadline,
+});
+```
+
+- Requirements approve `maxRepayAssets` of the loan token to MidnightBundlesV2 (skipped when it is
+  `0n`) and authorize MidnightBundlesV2 on Midnight. Unused assets are refunded.
+- `MidnightRepayWithdrawCollateralAction.args` exposes `repayUnits`, `maxRepayAssets` and the
+  `collateralWithdrawals` list, and drops `repayAssets` and `onBehalf`.
+
 ## Ratifiers
 
 Offers must use PriceRatifierV1 or RateRatifierV1. Pass a `Tree<"priceV1">`, a `Tree<"rateV1">`,
