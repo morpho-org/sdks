@@ -3229,6 +3229,103 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toEqual([10n]);
   });
 
+  test("behavior: keeps what uncapped vaults move when another vault is cap-bound", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 95n,
+      idle: 500n,
+      canPullFromMarket: false,
+      allocatorTargetCap: 11n,
+    });
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: SECOND_VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetParams.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [new Market({ ...data.getMarket(targetParams.id) })],
+    );
+    const secondTargetIds = secondTargetAdapter.ids(targetParams);
+    const [, , secondTargetAdapterMarketCapId] = secondTargetIds;
+    const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
+    for (const id of secondTargetIds)
+      secondAllocations[id] = {
+        id,
+        absoluteCap: 10_000n,
+        relativeCap: MathLib.WAD,
+        allocation: 0n,
+      };
+    const firstVault = data.getVault(VAULT);
+    const sharedData = new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: firstVault,
+        [SECOND_VAULT]: new AccrualVaultV2(
+          {
+            ...firstVault,
+            address: SECOND_VAULT,
+            _totalAssets: 5n,
+            totalSupply: 5n,
+            liquidityAllocations: firstVault.liquidityAllocations?.map(
+              (allocation) => ({ ...allocation }),
+            ),
+          },
+          undefined,
+          [secondTargetAdapter],
+          5n,
+          {},
+        ),
+      },
+      allocations: {
+        [VAULT]: data.allocations[VAULT],
+        [SECOND_VAULT]: secondAllocations,
+      },
+      publicAllocatorConfigs: {
+        [VAULT]: data.publicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          vault: SECOND_VAULT,
+          canPullFromIdle: true,
+          penalty: 0n,
+        },
+      },
+      activeAdapters: {
+        [VAULT]: data.activeAdapters[VAULT],
+        [SECOND_VAULT]: new Set([SECOND_TARGET_ADAPTER]),
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          [secondTargetAdapterMarketCapId]: {
+            vault: SECOND_VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            adapterMarketCapId: secondTargetAdapterMarketCapId,
+            absoluteCap: 10_000n,
+            canPullFromMarket: false,
+          },
+        },
+      },
+    });
+    const operation = { type: "borrow", amount: 5n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      sharedData
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ vault, assets }) => [vault, assets]);
+
+    expect(legs(0n)).toStrictEqual([
+      [VAULT, 11n],
+      [SECOND_VAULT, 1n],
+    ]);
+    expect(legs()).toStrictEqual([[VAULT, 2n]]);
+  });
+
   test("error: InsufficientSharedLiquidityError when the full allocator cap is short", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
