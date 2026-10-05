@@ -50,7 +50,7 @@ Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
-This is the unreleased v5 integration stack. See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover and remaining release gates.
+Upgrading from v4? See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover.
 
 ### API surface
 
