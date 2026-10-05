@@ -164,10 +164,15 @@ export type OperationLimit = SlippageLimits & {
     | {
         readonly type: VaultOperationType;
         readonly vault: Address;
+        readonly marketId?: never;
+      }
+    | {
+        readonly type: "vaultV1InKindRedeem" | "vaultV2InKindRedeem";
+        readonly vault: Address;
         /**
-         * In-kind redemptions only: Blue market whose supply position the
-         * redemption credits to `account`. With it, `sharesMinted` measures
-         * that position's supply shares; add one entry per market.
+         * Blue market whose supply position the redemption credits to
+         * `account`. With it, `sharesMinted` measures that position's supply
+         * shares; requires a `sharesMinted` quote. Add one entry per market.
          */
         readonly marketId?: MarketId;
       }

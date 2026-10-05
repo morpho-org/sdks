@@ -651,6 +651,12 @@ const createChecks = (): FieldChecks => {
               `${path}.quote.${field}: cannot be measured for "${type}"`,
             );
         }
+        if (
+          (type === "vaultV1InKindRedeem" || type === "vaultV2InKindRedeem") &&
+          "marketId" in out &&
+          normalizedQuote.sharesMinted === undefined
+        )
+          errors.push(`${path}.marketId: requires quote.sharesMinted`);
         Reflect.set(out, "quote", normalizedQuote);
       }
       return errors.length === errorsBefore ? out : undefined;

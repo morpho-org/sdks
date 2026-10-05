@@ -124,7 +124,7 @@ only the receiver's wallet balance of the vault asset (the idle portion). To
 check the credited Blue supply position, set `marketId` on the entry and quote
 `sharesMinted`: it measures `account`'s supply shares in that market. Add one
 entry per credited market. Without `marketId`, in-kind entries reject
-`sharesMinted`.
+`sharesMinted`; with it, a `sharesMinted` quote is required.
 
 Only slippage is checked; there are no separate refund or penalty checks.
 `sharesMinted` and `sharesBurned` quotes for `blueSupplyCollateral` and

@@ -524,6 +524,46 @@ describe("parseRequest", () => {
       fieldError:
         'limits.operations[0].quote.sharesMinted: cannot be measured for "vaultV2InKindRedeem"',
     },
+    {
+      name: "in-kind marketId without a sharesMinted quote",
+      operation: {
+        type: "vaultV2InKindRedeem",
+        vault: SPENDER,
+        marketId: `0x${"11".repeat(32)}`,
+        quote: { sharesBurned: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError: "limits.operations[0].marketId: requires quote.sharesMinted",
+    },
+    {
+      name: "blueSupply without marketId",
+      operation: {
+        type: "blueSupply",
+        quote: { sharesMinted: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError: "limits.operations[0].marketId: must be 32-byte hex",
+    },
+    {
+      name: "blueRefinance without sourceMarketId",
+      operation: {
+        type: "blueRefinance",
+        targetMarketId: `0x${"11".repeat(32)}`,
+        quote: { sharesMinted: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError: "limits.operations[0].sourceMarketId: must be 32-byte hex",
+    },
+    {
+      name: "blueRefinance without targetMarketId",
+      operation: {
+        type: "blueRefinance",
+        sourceMarketId: `0x${"11".repeat(32)}`,
+        quote: { sharesMinted: 1n },
+        slippageTolerance: 0n,
+      },
+      fieldError: "limits.operations[0].targetMarketId: must be 32-byte hex",
+    },
   ])("error: rejects $name", ({ operation, fieldError }) => {
     const error = (() => {
       try {
