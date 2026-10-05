@@ -69,6 +69,12 @@ describe("scanFiles", () => {
     ["url-credentials", "https://user:hunter2@rpc.example.com"],
     ["url-credentials", "wss://user:hunter2@rpc.example.com"],
     ["url-credentials", "https://user:1234@rpc.example.com"],
+    ["url-credentials", "redis://:s3cretPass@cache:6379"],
+    ["url-credentials", "postgres://admin:483920@10.0.0.5:5432/db"],
+    ["url-credentials", "https://u:1234@1inch.example"],
+    ["wallet-key", `privateKeyToAccount("0x${"ab".repeat(32)}")`],
+    ["wallet-key", `hdKeyToAccount(\`${"ab".repeat(32)}\`)`],
+    ["mnemonic", `mnemonicToAccount("${Array(12).fill("abandon").join(" ")}")`],
     ["wallet-key", `DEPLOYER_PRIVATE_KEY=0x${"ab".repeat(32)}`],
     ["wallet-key", `deployerPrivateKey: "0x${"ab".repeat(32)}"`],
     ["wallet-key", `SECRET_KEY=${"ab".repeat(32)}`],
@@ -204,6 +210,10 @@ describe("parsePolicy", () => {
     [
       "an unknown rule",
       { blockedTerms: [], exceptions: [{ ...valid, rule: "nope" }] },
+    ],
+    [
+      "a prototype key as rule",
+      { blockedTerms: [], exceptions: [{ ...valid, rule: "constructor" }] },
     ],
     ["a duplicate", { blockedTerms: [], exceptions: [valid, valid] }],
   ])("rejects %s", (_, policy) => {
