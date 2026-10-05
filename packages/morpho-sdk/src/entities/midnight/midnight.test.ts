@@ -1244,6 +1244,43 @@ describe("MorphoMidnight", () => {
       ]);
     });
 
+    test("behavior: accepts a plain-object collateral market", async () => {
+      const plainMarket = { ...market };
+      expect(plainMarket).not.toBeInstanceOf(MarketParams);
+      const supplies = [{ collateralIndex: 0n, assets: 2_000n }];
+
+      const marketHandle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle: marketHandle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(marketHandle, true);
+      const marketOutput = await prepare(marketHandle, {
+        collateral: { market, supplies },
+      });
+
+      const plainMarketHandle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle: plainMarketHandle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(plainMarketHandle, true);
+      const plainMarketOutput = await prepare(plainMarketHandle, {
+        collateral: { market: plainMarket, supplies },
+      });
+
+      expect(plainMarketOutput.buildTx()).toEqual(marketOutput.buildTx());
+      const [marketRequirements, plainMarketRequirements] = await Promise.all([
+        marketOutput.getRequirements(),
+        plainMarketOutput.getRequirements(),
+      ]);
+      expect(plainMarketRequirements.map(({ action }) => action)).toEqual(
+        marketRequirements.map(({ action }) => action),
+      );
+    });
+
     test("behavior: sums repeated supplies into one approval", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({
