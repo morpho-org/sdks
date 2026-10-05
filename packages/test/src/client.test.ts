@@ -130,6 +130,28 @@ describe("createAnvilTestClient", () => {
     }
   });
 
+  test("uses viem's wait when other options are passed", async () => {
+    let receiptRequests = 0;
+    const node = await startNode(async (method) => {
+      if (method === "eth_blockNumber") return { result: numberToHex(101) };
+      if (method === "eth_getTransactionReceipt")
+        return { result: receiptRequests++ > 0 ? receipt : null };
+      return { result: null };
+    });
+    try {
+      await expect(
+        node.client.waitForTransactionReceipt({
+          hash,
+          timeout: 3_000,
+          checkReplacement: false,
+        }),
+      ).resolves.toMatchObject({ transactionHash: hash });
+      expect(node.methods).toContain("eth_blockNumber");
+    } finally {
+      node.close();
+    }
+  });
+
   test("rethrows RPC errors without polling again", async () => {
     const node = await startNode(async () => ({
       error: { code: InternalRpcError.code, message: "boom" },
