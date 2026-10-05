@@ -15,7 +15,12 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
-import { InvalidNumberError } from "./error.js";
+import {
+  InvalidNumberError,
+  NonTupleReturnValueError,
+  UnknownAbiFunctionError,
+  UnnamedAbiOutputsError,
+} from "./error.js";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>
@@ -182,6 +187,8 @@ function zipParams<
  * @param outputs - Tuple output returned by viem.
  * @param parameters - ABI item lookup parameters matching the read that produced `outputs`.
  * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
+ * @throws {UnknownAbiFunctionError} When `parameters.name` matches no function item in the ABI.
+ * @throws {UnnamedAbiOutputsError} When the function's ABI outputs are not all named.
  */
 export function restructure<
   const abi extends Abi,
@@ -193,9 +200,7 @@ export function restructure<
   switch (x?.type) {
     case "function": {
       if (x.outputs.some((output) => output.name === undefined)) {
-        throw new Error(
-          `Attempted to restructure return values lacking names in ABI ${parameters.args!} ${x.outputs}`,
-        );
+        throw new UnnamedAbiOutputsError(x.name);
       }
       return zipParams(
         x.outputs as ExtractAbiFunctionForArgs<
@@ -208,9 +213,7 @@ export function restructure<
       );
     }
     default:
-      throw new Error(
-        `Attempted to restructure return values for non-function type ${x}`,
-      );
+      throw new UnknownAbiFunctionError(String(parameters.name));
   }
 }
 
@@ -228,6 +231,8 @@ function isTuple<T>(x: T): x is T extends readonly unknown[] ? T : never {
  * @param client - Viem client used for the read.
  * @param parameters - Read contract parameters for a view or pure function with named tuple outputs.
  * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
+ * @throws {NonTupleReturnValueError} When the read returns a single value instead of a tuple.
+ * @throws {UnnamedAbiOutputsError} When the function's ABI outputs are not all named.
  * @example
  * ```ts
  * import { readContractRestructured } from "@morpho-org/blue-sdk-viem";
@@ -252,9 +257,7 @@ export async function readContractRestructured<
   const outputs = await readContract(client, parameters);
 
   if (!isTuple(outputs)) {
-    throw new Error(
-      `Attempted to restructure non-tuple return values ${parameters.functionName} -> ${outputs}`,
-    );
+    throw new NonTupleReturnValueError(parameters.functionName);
   }
 
   return restructure(outputs, {

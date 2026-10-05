@@ -8,6 +8,9 @@ import {
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError,
   MarketParamsIdMismatchError,
+  NonTupleReturnValueError,
+  UnknownAbiFunctionError,
+  UnnamedAbiOutputsError,
   UnsupportedPermitDomainExtensionsError,
 } from "./error.js";
 
@@ -25,6 +28,24 @@ describe("MarketParamsIdMismatchError", () => {
     expect(error.receivedMarketId).toBe(receivedMarketId);
     expect(error.name).toBe("MarketParamsIdMismatchError");
   });
+});
+
+describe("restructure errors", () => {
+  test.each([
+    ["UnknownAbiFunctionError", UnknownAbiFunctionError],
+    ["UnnamedAbiOutputsError", UnnamedAbiOutputsError],
+    ["NonTupleReturnValueError", NonTupleReturnValueError],
+  ] as const)(
+    "%s preserves the function name and sets its name",
+    (name, ErrorClass) => {
+      const error = new ErrorClass("market");
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error.functionName).toBe("market");
+      expect(error.name).toBe(name);
+      expect(error.message).toContain('"market"');
+    },
+  );
 });
 
 describe("isUnknownOfFactoryError", () => {
