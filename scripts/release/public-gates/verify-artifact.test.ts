@@ -94,6 +94,24 @@ describe("verifyArtifact", () => {
       (dir: string) => write(dir, { "tarballs/b-1.0.0.tgz": "tgz" }),
     ],
     [
+      "a checksum for a tarball that isn't there",
+      (dir: string) => {
+        rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
+        write(dir, { "tarballs/b-1.0.0.tgz": "tgz" });
+        execFileSync("sh", ["-c", "sha256sum ./b-1.0.0.tgz >> SHA256SUMS"], {
+          cwd: join(dir, "tarballs"),
+        });
+      },
+    ],
+    [
+      "a malformed checksum line",
+      (dir: string) => write(dir, { "tarballs/SHA256SUMS": "nope\n" }),
+    ],
+    [
+      "a non-tarball file next to the tarballs",
+      (dir: string) => write(dir, { "tarballs/postinstall.sh": "x" }),
+    ],
+    [
       "missing checksums",
       (dir: string) => rmSync(join(dir, "tarballs/SHA256SUMS")),
     ],

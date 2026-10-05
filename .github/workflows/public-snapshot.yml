@@ -97,9 +97,6 @@ jobs:
       - name: Install, build, lint, test and pack a clean copy
         run: scripts/release/public-gates/clean-copy.sh "$RUNNER_TEMP/public/tree" "$RUNNER_TEMP/tarballs"
 
-      - name: Scan tarballs
-        run: node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/tarballs"
-
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: public-tarballs-${{ github.sha }}
@@ -109,6 +106,8 @@ jobs:
 
   # Checks the uploaded artifacts as the sync job will download them: the tree
   # from the job that ran no dependency code, and the tarballs from the gates.
+  # The tarballs are scanned here, by a fresh checkout that installs nothing,
+  # since dependency code in the gates job could change them after a scan there.
   verify:
     name: Verify artifacts
     needs: gates
@@ -137,3 +136,4 @@ jobs:
         run: |
           tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
           node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public"
+          node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/public/tarballs"
