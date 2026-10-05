@@ -766,7 +766,9 @@ export class MorphoMidnight {
    * to `abi.encode(blueMarket)`. The contract does not check supply share-price slippage, so
    * `blueMarket` must be protected against supply-share-price inflation; this method rejects
    * Blue markets with no supply shares. Calls the Midnight mempool validation API while
-   * preparing the tree.
+   * preparing the tree. Reads `BLUE_BUY_CALLBACK_FACTORY()` and `BLUE()` from `MidnightBundlesV2`,
+   * simulates `createBlueBuyCallback(accountAddress, callbackSalt)` from the maker to derive the
+   * callback, and reads `market(id)` on that Blue for its supply shares.
    *
    * @param params - Maker, lend-side offers, Blue market, parked assets, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
