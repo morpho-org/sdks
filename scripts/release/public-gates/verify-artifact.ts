@@ -1,19 +1,89 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+} from "node:fs";
+import { join, posix, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 import type { PublicTreeManifest } from "../public-snapshot/generate.ts";
-import { readTree } from "./scan.ts";
+
+type FileMode = PublicTreeManifest["files"][number]["mode"];
+const MODES: readonly string[] = ["100644", "100755", "120000"];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
- * Checks a gate artifact before sync: `tree/` must hold exactly the files in
- * `public-tree.json` with the same modes and SHA-256, and every tarball must match
- * `tarballs/SHA256SUMS`. Throws on the first difference.
+ * Narrows `public-tree.json` read from an artifact. Paths must be relative,
+ * normalized and free of `..`, so checks never read outside `tree/`.
  *
- * @param dir - Artifact directory, as written by the public-snapshot workflow.
+ * @param value - Parsed JSON.
+ * @returns The manifest.
+ */
+export function parseManifest(value: unknown): PublicTreeManifest {
+  if (
+    !isRecord(value) ||
+    typeof value.sourceCommit !== "string" ||
+    typeof value.treeHash !== "string" ||
+    !Array.isArray(value.files)
+  ) {
+    throw new Error(
+      'public-tree.json needs "sourceCommit", "treeHash" and "files".',
+    );
+  }
+  for (const file of value.files) {
+    if (
+      !isRecord(file) ||
+      typeof file.path !== "string" ||
+      typeof file.sha256 !== "string" ||
+      typeof file.mode !== "string" ||
+      !MODES.includes(file.mode) ||
+      file.path === "" ||
+      file.path.startsWith("/") ||
+      posix.normalize(file.path) !== file.path ||
+      file.path.split("/").includes("..")
+    ) {
+      throw new Error(`Invalid manifest entry ${JSON.stringify(file)}.`);
+    }
+  }
+  return value as unknown as PublicTreeManifest;
+}
+
+/** Every non-directory entry under `dir`, with the git mode it has on disk. */
+function listEntries(dir: string): Map<string, FileMode | "other"> {
+  const entries = new Map<string, FileMode | "other">();
+  const walk = (current: string) => {
+    for (const name of readdirSync(current)) {
+      const full = join(current, name);
+      const stat = lstatSync(full);
+      if (stat.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      const path = relative(dir, full).split(sep).join("/");
+      if (stat.isSymbolicLink()) entries.set(path, "120000");
+      else if (stat.isFile())
+        entries.set(path, stat.mode & 0o111 ? "100755" : "100644");
+      else entries.set(path, "other");
+    }
+  };
+  walk(dir);
+  return entries;
+}
+
+/**
+ * Checks a gate artifact before sync: `tree/` must hold exactly the entries in
+ * `public-tree.json`, with the same type, executable bit and SHA-256, and every
+ * tarball must match `tarballs/SHA256SUMS`. Throws on the first difference.
+ *
+ * @param dir - Artifact directory, as assembled by the public-snapshot workflow.
  * @returns The verified manifest.
  */
 export function verifyArtifact(dir: string): PublicTreeManifest {
@@ -22,32 +92,33 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
   for (const path of [manifestPath, sumsPath]) {
     if (!existsSync(path)) throw new Error(`Artifact is missing "${path}".`);
   }
-  const manifest: PublicTreeManifest = JSON.parse(
-    readFileSync(manifestPath, "utf8"),
+  const manifest = parseManifest(
+    JSON.parse(readFileSync(manifestPath, "utf8")),
   );
   const treeDir = join(dir, "tree");
   const sha256 = (content: Buffer | string) =>
     createHash("sha256").update(content).digest("hex");
 
-  const expected = new Map(manifest.files.map((file) => [file.path, file]));
-  const regular = new Set(readTree(treeDir).map(({ path }) => path));
+  const entries = listEntries(treeDir);
   for (const file of manifest.files) {
-    const full = join(treeDir, file.path);
-    if (file.mode === "120000") {
-      if (sha256(readlinkSync(full)) !== file.sha256) {
-        throw new Error(`Symlink "${file.path}" differs from the manifest.`);
-      }
-      continue;
-    }
-    if (!regular.has(file.path)) {
+    const mode = entries.get(file.path);
+    if (mode === undefined) {
       throw new Error(`"${file.path}" is in the manifest but not in the tree.`);
     }
-    if (sha256(readFileSync(full)) !== file.sha256) {
+    if (mode !== file.mode) {
+      throw new Error(
+        `"${file.path}" has mode ${mode}, but the manifest says ${file.mode}.`,
+      );
+    }
+    const full = join(treeDir, file.path);
+    const content = mode === "120000" ? readlinkSync(full) : readFileSync(full);
+    if (sha256(content) !== file.sha256) {
       throw new Error(`"${file.path}" differs from the manifest.`);
     }
   }
-  for (const path of regular) {
-    if (expected.get(path)?.mode === "120000" || !expected.has(path)) {
+  const expected = new Set(manifest.files.map(({ path }) => path));
+  for (const path of entries.keys()) {
+    if (!expected.has(path)) {
       throw new Error(`"${path}" is in the tree but not in the manifest.`);
     }
   }

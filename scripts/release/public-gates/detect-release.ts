@@ -14,24 +14,30 @@ function readVersions(
   revision: string,
 ): Map<string, ReleasedPackage> {
   const versions = new Map<string, ReleasedPackage>();
+  // Only manifests that exist are read, so any git failure is a real error.
   const paths = execFileSync(
     "git",
-    ["-C", repo, "ls-tree", "-z", "--name-only", `${revision}:packages`],
+    [
+      "-C",
+      repo,
+      "ls-tree",
+      "-r",
+      "-z",
+      "--name-only",
+      revision,
+      "--",
+      "packages",
+    ],
     { encoding: "utf8" },
   )
     .split("\0")
-    .filter(Boolean)
-    .map((dir) => `packages/${dir}/package.json`);
+    .filter((path) => /^packages\/[^/]+\/package\.json$/.test(path));
   for (const path of paths) {
-    let raw: string;
-    try {
-      raw = execFileSync("git", ["-C", repo, "show", `${revision}:${path}`], {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-    } catch {
-      continue;
-    }
+    const raw = execFileSync(
+      "git",
+      ["-C", repo, "show", `${revision}:${path}`],
+      { encoding: "utf8" },
+    );
     const manifest: unknown = JSON.parse(raw);
     if (
       typeof manifest !== "object" ||

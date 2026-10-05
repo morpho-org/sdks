@@ -36,10 +36,43 @@ jobs:
       - id: detect
         run: node scripts/release/public-gates/detect-release.ts --sha "$GITHUB_SHA"
 
-  gates:
-    name: Public gates
+  # Generates and scans the tree without installing anything, so no dependency
+  # code runs before the tree and its manifest are uploaded.
+  snapshot:
+    name: Generate and scan the public tree
     needs: detect
-    if: needs.detect.outputs.released == 'true' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (needs.detect.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Generate public tree
+        run: node scripts/release/public-snapshot/generate.ts --sha "$GITHUB_SHA" --out "$RUNNER_TEMP/public"
+
+      - name: Scan public tree
+        run: node scripts/release/public-gates/scan.ts --tree "$RUNNER_TEMP/public/tree"
+
+      # One tar keeps dotfiles, symlinks and modes, which artifact zips drop.
+      - name: Archive public tree
+        run: tar -cf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public" public-tree.json tree
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-tree-${{ github.sha }}
+          path: ${{ runner.temp }}/public-tree.tar
+          if-no-files-found: error
+          retention-days: 30
+
+  gates:
+    name: Install, build, lint, test and pack a clean copy
+    needs: snapshot
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,24 +86,54 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Generate public tree
-        run: node scripts/release/public-snapshot/generate.ts --sha "$GITHUB_SHA" --out "$RUNNER_TEMP/public"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-tree-${{ github.sha }}
+          path: ${{ runner.temp }}
 
-      - name: Scan public tree
-        run: node scripts/release/public-gates/scan.ts --tree "$RUNNER_TEMP/public/tree"
+      - name: Extract public tree
+        run: mkdir "$RUNNER_TEMP/public" && tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
 
       - name: Install, build, lint, test and pack a clean copy
-        run: scripts/release/public-gates/clean-copy.sh "$RUNNER_TEMP/public/tree" "$RUNNER_TEMP/public/tarballs"
+        run: scripts/release/public-gates/clean-copy.sh "$RUNNER_TEMP/public/tree" "$RUNNER_TEMP/tarballs"
 
       - name: Scan tarballs
-        run: node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/public/tarballs"
-
-      - name: Verify artifact
-        run: node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public"
+        run: node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/tarballs"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: public-snapshot-${{ github.sha }}
-          path: ${{ runner.temp }}/public
+          name: public-tarballs-${{ github.sha }}
+          path: ${{ runner.temp }}/tarballs
           if-no-files-found: error
           retention-days: 30
+
+  # Checks the uploaded artifacts as the sync job will download them: the tree
+  # from the job that ran no dependency code, and the tarballs from the gates.
+  verify:
+    name: Verify artifacts
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-tree-${{ github.sha }}
+          path: ${{ runner.temp }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-tarballs-${{ github.sha }}
+          path: ${{ runner.temp }}/public/tarballs
+
+      - name: Verify artifact
+        run: |
+          tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
+          node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public"
