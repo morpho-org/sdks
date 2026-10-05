@@ -14,11 +14,11 @@ import { parseArgs } from "node:util";
 import type { PublicTreeManifest } from "../public-snapshot/generate.ts";
 
 type FileMode = PublicTreeManifest["files"][number]["mode"];
-const MODES: readonly string[] = ["100644", "100755", "120000"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const MODES = [
+  "100644",
+  "100755",
+  "120000",
+] as const satisfies readonly FileMode[];
 
 /**
  * Narrows `public-tree.json` read from an artifact. Paths must be relative,
@@ -29,22 +29,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function parseManifest(value: unknown): PublicTreeManifest {
   if (
-    !isRecord(value) ||
+    typeof value !== "object" ||
+    value === null ||
+    !("sourceCommit" in value) ||
     typeof value.sourceCommit !== "string" ||
+    !("treeHash" in value) ||
     typeof value.treeHash !== "string" ||
+    !("files" in value) ||
     !Array.isArray(value.files)
   ) {
     throw new Error(
       'public-tree.json needs "sourceCommit", "treeHash" and "files".',
     );
   }
-  for (const file of value.files) {
+  const files = value.files.map((file: unknown) => {
+    const mode =
+      typeof file === "object" && file !== null && "mode" in file
+        ? MODES.find((known) => known === file.mode)
+        : undefined;
     if (
-      !isRecord(file) ||
+      typeof file !== "object" ||
+      file === null ||
+      mode === undefined ||
+      !("path" in file) ||
       typeof file.path !== "string" ||
+      !("sha256" in file) ||
       typeof file.sha256 !== "string" ||
-      typeof file.mode !== "string" ||
-      !MODES.includes(file.mode) ||
       file.path === "" ||
       file.path.startsWith("/") ||
       posix.normalize(file.path) !== file.path ||
@@ -52,30 +62,9 @@ export function parseManifest(value: unknown): PublicTreeManifest {
     ) {
       throw new Error(`Invalid manifest entry ${JSON.stringify(file)}.`);
     }
-  }
-  return value as unknown as PublicTreeManifest;
-}
-
-/** Every non-directory entry under `dir`, with the git mode it has on disk. */
-function listEntries(dir: string): Map<string, FileMode | "other"> {
-  const entries = new Map<string, FileMode | "other">();
-  const walk = (current: string) => {
-    for (const name of readdirSync(current)) {
-      const full = join(current, name);
-      const stat = lstatSync(full);
-      if (stat.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      const path = relative(dir, full).split(sep).join("/");
-      if (stat.isSymbolicLink()) entries.set(path, "120000");
-      else if (stat.isFile())
-        entries.set(path, stat.mode & 0o111 ? "100755" : "100644");
-      else entries.set(path, "other");
-    }
-  };
-  walk(dir);
-  return entries;
+    return { path: file.path, mode, sha256: file.sha256 };
+  });
+  return { sourceCommit: value.sourceCommit, treeHash: value.treeHash, files };
 }
 
 /**
@@ -99,7 +88,24 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
   const sha256 = (content: Buffer | string) =>
     createHash("sha256").update(content).digest("hex");
 
-  const entries = listEntries(treeDir);
+  // Every non-directory entry, with the git mode it has on disk.
+  const entries = new Map<string, FileMode | "other">();
+  const walk = (current: string) => {
+    for (const name of readdirSync(current)) {
+      const full = join(current, name);
+      const stat = lstatSync(full);
+      if (stat.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      const path = relative(treeDir, full).split(sep).join("/");
+      if (stat.isSymbolicLink()) entries.set(path, "120000");
+      else if (stat.isFile())
+        entries.set(path, stat.mode & 0o111 ? "100755" : "100644");
+      else entries.set(path, "other");
+    }
+  };
+  walk(treeDir);
   for (const file of manifest.files) {
     const mode = entries.get(file.path);
     if (mode === undefined) {
@@ -123,18 +129,27 @@ export function verifyArtifact(dir: string): PublicTreeManifest {
     }
   }
 
-  const sums = new Map(
-    readFileSync(sumsPath, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        const [hash = "", name = ""] = line.split(/\s+\*?/);
-        return [name.replace(/^\.\//, ""), hash];
-      }),
-  );
-  const tarballs = readdirSync(join(dir, "tarballs")).filter((name) =>
-    name.endsWith(".tgz"),
-  );
+  const sums = new Map<string, string>();
+  for (const line of readFileSync(sumsPath, "utf8").split("\n")) {
+    if (line === "") continue;
+    const match = /^([0-9a-f]{64}) [ *](?:\.\/)?([^/]+\.tgz)$/.exec(line);
+    if (!match?.[1] || !match[2] || sums.has(match[2])) {
+      throw new Error(`Invalid SHA256SUMS line ${JSON.stringify(line)}.`);
+    }
+    sums.set(match[2], match[1]);
+  }
+  // The gates job ran dependency code, so nothing but tarballs may ride along.
+  const tarballs: string[] = [];
+  for (const name of readdirSync(join(dir, "tarballs"))) {
+    if (name === "SHA256SUMS") continue;
+    if (
+      !name.endsWith(".tgz") ||
+      !lstatSync(join(dir, "tarballs", name)).isFile()
+    ) {
+      throw new Error(`Unexpected "${name}" in tarballs/.`);
+    }
+    tarballs.push(name);
+  }
   if (tarballs.length === 0) throw new Error("Artifact has no tarballs.");
   for (const name of tarballs) {
     const content = readFileSync(join(dir, "tarballs", name));
