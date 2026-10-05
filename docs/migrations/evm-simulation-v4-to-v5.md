@@ -121,17 +121,12 @@ transfer reporting, and `verification.operations` for checked quotes.
 
 ## Release exception and audit
 
-Root `AGENTS.md` §7's EVM simulation v5 retirement exception
-(`ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` and
-`ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`) permits
-`evm-simulation` 5.0.0 to remove `TenderlyRpcConfig`,
+`evm-simulation` 5.0.0 removes `TenderlyRpcConfig`,
 `ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior,
-the two legacy authorization variants of
-`SimulateParams.authorizations`, and to narrow `SimulateParams.blockNumber`
-to exclude `"pending"` without the prior
-successor-introduction, `@deprecated`, and published
-deprecation-minor/coexistence steps. No other removal inherits this exception.
-See root `AGENTS.md` §7 and its `module-api-architecture` review persona.
+the two legacy authorization variants of `SimulateParams.authorizations`, and
+narrows `SimulateParams.blockNumber` to exclude `"pending"` without a prior
+deprecation release. This is a one-time exception to the SDK's usual
+deprecate-then-remove policy; no other removal inherits it.
 
 The major changeset and this migration guide remain required. At the SDK 6.0.0
 baseline (`2e2595d59e9db8e3d7533b54d6fbffcf8107c274`), no workspace package has a
