@@ -326,8 +326,8 @@ graph LR
         MN1 --> MNT[fixed-rate taker actions]
         MN1 --> MNM[maker offer submission]
         MN1 --> MNP[position actions]
-        MNT --> MNB[MidnightBundles]
-        MNM --> MNB2[MidnightBundlesV2]
+        MNT --> MNB2[MidnightBundlesV2]
+        MNM --> MNB2
         MNP --> MNC[Midnight / MidnightBundles]
     end
 

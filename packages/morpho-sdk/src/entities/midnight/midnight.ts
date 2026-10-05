@@ -9,7 +9,6 @@ import {
   fetchAccrualPosition,
   fetchMarket,
   type Market,
-  type MarketInput,
   MarketParams,
   MarketUtils,
   type MidnightFetchParams,
@@ -54,7 +53,6 @@ import {
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
-  type MidnightCollateralTransfer,
   type MidnightGroupCancellation,
   MidnightOfferCallbackDataMismatchError,
   MidnightOfferCallbackMismatchError,
@@ -152,19 +150,6 @@ const assertPositiveAmount = (label: string, amount: bigint) => {
 const validateMarketData = (market: Market, chainId: number) => {
   // Reject snapshots from another chain deployment before exposing requirements.
   validateMidnightMarket({ market, chainId });
-};
-
-/** Sums collateral supplies per token, so a token supplied at several indices gets one approval. */
-const sumCollateralByToken = (
-  market: MarketInput,
-  supplies: readonly MidnightCollateralTransfer[],
-): Map<Address, bigint> => {
-  const amounts = new Map<Address, bigint>();
-  for (const { collateralIndex, assets } of supplies) {
-    const { token } = MarketUtils.getCollateralByIndex(market, collateralIndex);
-    amounts.set(token, (amounts.get(token) ?? 0n) + assets);
-  }
-  return amounts;
 };
 
 /**
@@ -549,17 +534,40 @@ export class MorphoMidnight {
       referralFeeRecipient: params.referralFeeRecipient,
       metadata: this.client.options.metadata,
     });
-    const collateralAmounts = sumCollateralByToken(
-      market,
-      tx.action.args.collateralSupplies,
-    );
+    // Sum per token so a token supplied at several indices gets one approval.
+    const collateralAmounts = new Map<Address, bigint>();
+    for (const { collateralIndex, assets } of tx.action.args
+      .collateralSupplies) {
+      const { token } = MarketUtils.getCollateralByIndex(
+        market,
+        collateralIndex,
+      );
+      collateralAmounts.set(
+        token,
+        (collateralAmounts.get(token) ?? 0n) + assets,
+      );
+    }
 
     return {
-      getRequirements: () =>
-        this.getBundlesV2CollateralRequirements(
-          collateralAmounts,
+      getRequirements: async () => [
+        ...(
+          await Promise.all(
+            [...collateralAmounts].map(([token, amount]) =>
+              getMidnightApprovalRequirements({
+                viemClient: this.client.viemClient,
+                chainId: this.chainId,
+                token,
+                owner: params.accountAddress,
+                spender: tx.to,
+                amount,
+              }),
+            ),
+          )
+        ).flat(),
+        ...(await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
-        ),
+        )),
+      ],
       buildTx: () => tx,
     };
   }
@@ -1072,20 +1080,45 @@ export class MorphoMidnight {
             : { market, supplies: params.collateral?.supplies ?? [] },
       },
     });
-    const collateralAmounts =
-      market == null
-        ? new Map<Address, bigint>()
-        : sumCollateralByToken(market, tx.action.args.collateralSupplies);
+    // Sum per token so a token supplied at several indices gets one approval.
+    const collateralAmounts = new Map<Address, bigint>();
+    if (market != null) {
+      for (const { collateralIndex, assets } of tx.action.args
+        .collateralSupplies) {
+        const { token } = MarketUtils.getCollateralByIndex(
+          market,
+          collateralIndex,
+        );
+        collateralAmounts.set(
+          token,
+          (collateralAmounts.get(token) ?? 0n) + assets,
+        );
+      }
+    }
 
     return {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: () =>
-        this.getBundlesV2CollateralRequirements(
-          collateralAmounts,
+      getRequirements: async () => [
+        ...(
+          await Promise.all(
+            [...collateralAmounts].map(([token, amount]) =>
+              getMidnightApprovalRequirements({
+                viemClient: this.client.viemClient,
+                chainId: this.chainId,
+                token,
+                owner: data.accountAddress,
+                spender: tx.to,
+                amount,
+              }),
+            ),
+          )
+        ).flat(),
+        ...(await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
-        ),
+        )),
+      ],
       buildTx: () => tx,
     };
   }
@@ -1416,29 +1449,6 @@ export class MorphoMidnight {
         this.getBundlesV2AuthorizationRequirements(params.accountAddress),
       buildTx: () => tx,
     };
-  }
-
-  private async getBundlesV2CollateralRequirements(
-    collateralAmounts: ReadonlyMap<Address, bigint>,
-    owner: Address,
-  ): Promise<readonly ActionRequirement[]> {
-    const spender = getChainAddress(this.chainId, "midnightBundlesV2");
-    const approvals = await Promise.all(
-      [...collateralAmounts].map(([token, amount]) =>
-        getMidnightApprovalRequirements({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          token,
-          owner,
-          spender,
-          amount,
-        }),
-      ),
-    );
-    return [
-      ...approvals.flat(),
-      ...(await this.getBundlesV2AuthorizationRequirements(owner)),
-    ];
   }
 
   private async getBundlesV2AuthorizationRequirements(

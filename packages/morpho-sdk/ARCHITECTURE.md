@@ -116,7 +116,8 @@ at the SDK level. The differences are at the protocol layer:
 
 - **Fixed-rate markets**: Midnight represents lending and borrowing through signed or
   contract-ratified offers with prices fixed until market maturity.
-- **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
+- **Taker routing**: Takes call the `MidnightBundlesV2` buy/sell entrypoints with an assets or
+  units `target`; `repayWithdrawCollateral` still calls `MidnightBundles`;
   collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
   `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
 - **Maker routing**: `cancelAndMakeLend`, `cancelAndMakeBorrow`, and
