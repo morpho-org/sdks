@@ -183,8 +183,18 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
  * `cancelAndMakeBorrow(...)`, which do so and resolve approvals and authorization.
  *
- * @param params - Offer root, payload, cancellations, optional collateral, and deadline.
+ * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
+ * @param params.cancellations - Offer groups to cancel and their consumption ceilings.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @param params.ratifier - Ratifier that activates `root`; omit all publication fields to only cancel.
+ * @param params.root - Offer tree root to activate.
+ * @param params.groups - Distinct offer groups contained in `root`.
+ * @param params.payload - Encoded offer payload for `root`, published to the Midnight log.
+ * @param params.rootSignature - Optional delegated root-activation signature; omitted, all fields are zero.
+ * @param params.collateral - Optional collateral to supply on `collateral.market` for `msg.sender`.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @throws {EmptyMidnightGroupCancellationsError} when nothing is published and no groups are cancelled.
  * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.

@@ -33,9 +33,10 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
 - The route-specific surface is removed with them: `MakeOffersOutput` (exported as
   `MidnightMakeOffersOutput`), the `MidnightMakeOffersParams`, `MidnightMakeLendParams` and
   `MidnightSupplyCollateralMakeBorrowParams` input types, the `mempoolSubmitOffers` and
-  `setterRatifierRatifyRoot` builders and requirement with their `MempoolSubmitOffersAction` and
-  `SetterRatifierRatifyRootAction` types, the `MidnightOfferRootSignature*` and
-  `MidnightActionSignatures` types, `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
+  `setterRatifierRatifyRoot` builders with their `MempoolSubmitOffersAction` and
+  `SetterRatifierRatifyRootAction` types, `getSetterRatifierRatifyRootRequirement`, the
+  `MidnightOfferRootSignature*`, `MidnightOfferRootRequirement` and `MidnightActionSignatures`
+  types, `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
   `selectRequirementSignatures` (`SelectedRequirementSignatures`), the
   `"midnightOfferRootSignature"` member of `RequirementSignatureKind`, the offer-root signature
   errors, and `UnknownMidnightRatifierError`.
