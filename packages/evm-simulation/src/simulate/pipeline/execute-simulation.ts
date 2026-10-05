@@ -1,104 +1,45 @@
-import type { Address, BlockTag } from "viem";
-import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
-import type {
-  RawSimulationResult,
-  SimulationConfig,
-  SimulationTransaction,
-} from "../../types.js";
-import { simulateTenderlyRpc, simulateV1 } from "../backends/index.js";
+import type { SimulationConfig } from "../../types.js";
+import { executePlan } from "../backends/index.js";
+import type { SimulationExecution } from "../backends/parse-response.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { resolveChain } from "./resolve-chain.js";
 
-/** Total budget for a single `simulate()` call across both backends. */
+/** Total execution budget for a single `simulate()` call. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
-/** Fraction of `timeoutMs` given to Tenderly before falling back to `eth_simulateV1`. */
-const TENDERLY_BUDGET_RATIO = 0.6;
-
 /**
- * Minimum budget (ms) handed to the `eth_simulateV1` fallback when Tenderly fails.
+ * Execute the plan once through `eth_simulateV1` within the full timeout budget.
+ * The single `AbortSignal.timeout` is shared by the boundary's chain check,
+ * block resolution, and simulation request.
+ * @internal
+ * @param params - Configuration and the planned execution (which carries the
+ *   block pin on `plan.request.blockNumber`).
+ * @returns The executed transactions and the pinned block.
+ * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
+ * @throws {ExternalServiceError} When the RPC fails or times out.
+ * @throws {SimulationRevertedError} When execution reverts.
+ * @throws {InvalidSimulationResponseError} When the node response cannot be
+ *   trusted.
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
+ * @example
+ * ```ts
+ * import { executeSimulation } from "./execute-simulation.js";
  *
- * Without a floor, if Tenderly exhausts its slice and dies at the deadline, the
- * fallback would get ~0 ms and abort immediately — turning a degraded-Tenderly
- * scenario into a total outage even when the fallback backend is healthy. A
- * modest floor keeps the fallback viable at the cost of the overall
- * `timeoutMs` being treated as a soft ceiling.
- */
-const FALLBACK_MIN_BUDGET_MS = 1500;
-
-/**
- * Stage 4 of the simulate() pipeline.
- *
- * Dispatches the transaction bundle to the available backend with a shared timeout
- * budget:
- * - If a Tenderly RPC URL is configured for the chain, it gets
- *   `TENDERLY_BUDGET_RATIO` (60%) of the timeout. On `ExternalServiceError`,
- *   falls back to `eth_simulateV1` with `max(remaining, FALLBACK_MIN_BUDGET_MS)`
- *   so the fallback still has a viable window when Tenderly eats its full slice.
- *   `SimulationRevertedError` (contract revert) propagates immediately without
- *   retry — a revert is a property of the bundle, not the backend.
- * - If only `eth_simulateV1` is configured, it gets the full timeout.
+ * await executeSimulation({ config, plan });
+ * ```
  */
 export async function executeSimulation(params: {
-  config: SimulationConfig;
-  chainId: number;
-  transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
-  wNative?: Address | null;
-}): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber, wNative } = params;
-  const chain = resolveChain(config, chainId);
-  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const deadline = Date.now() + timeoutMs;
+  readonly config: SimulationConfig;
+  readonly plan: ExecutionPlan;
+}): Promise<SimulationExecution> {
+  const { config, plan } = params;
+  const chain = resolveChain(config, plan.request.chainId);
 
-  if (chain.tenderlyRpc) {
-    const tenderlyTimeout = Math.floor(timeoutMs * TENDERLY_BUDGET_RATIO);
-
-    try {
-      // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
-      return await simulateTenderlyRpc({
-        config: chain.tenderlyRpc,
-        transactions,
-        blockNumber,
-        signal: AbortSignal.timeout(tenderlyTimeout),
-      });
-    } catch (error) {
-      if (!(error instanceof ExternalServiceError)) throw error;
-
-      config.logger?.warn("Tenderly simulation failed, attempting fallback", {
-        chainId,
-        error: error.message,
-        cause: error.cause,
-      });
-
-      if (!chain.simulateV1Url) throw error;
-
-      const fallbackBudget = Math.max(
-        deadline - Date.now(),
-        FALLBACK_MIN_BUDGET_MS,
-      );
-
-      return await simulateV1({
-        rpcUrl: chain.simulateV1Url,
-        chainId,
-        transactions,
-        blockNumber,
-        wNative,
-        signal: AbortSignal.timeout(fallbackBudget),
-      });
-    }
-  }
-
-  /* v8 ignore next: resolveChain rejects this state before executeSimulation reaches the fallback path. */
-  if (!chain.simulateV1Url) {
-    throw new UnsupportedChainError(chainId);
-  }
-
-  return await simulateV1({
+  // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
+  return executePlan({
     rpcUrl: chain.simulateV1Url,
-    chainId,
-    transactions,
-    blockNumber,
-    wNative,
-    signal: AbortSignal.timeout(timeoutMs),
+    plan,
+    signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
 }

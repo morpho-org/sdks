@@ -39,6 +39,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   validateDeadline,
   validateNativeVaultAsset,
@@ -199,8 +200,9 @@ export interface VaultV1Actions {
    *   defaults to two hours from handle creation.
    * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
    *   which returns a deep-frozen `Transaction<VaultV1WithdrawAction>`. Requirements are empty
-   *   when the allowance equals the cap; an oversized allowance is always reset with an exact
-   *   onchain approval, and an insufficient one is raised by an approval or, with signature
+   *   when the allowance is between the cap and the cap divided by `1 - slippageTolerance`; a
+   *   larger allowance is always reset with an exact onchain approval, and an insufficient one is
+   *   raised by an approval or, with signature
    *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
    *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
    * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
@@ -435,8 +437,9 @@ export interface VaultV1Actions {
    * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
    *   to two hours from handle creation.
-   * @returns Lazy exact source-share requirements and a synchronous transaction builder.
-   *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
+   * @returns Lazy source-share requirements and a synchronous transaction builder. Shares mode
+   *   needs an exact allowance; assets mode accepts one between the cap and the cap divided by
+   *   `1 - slippageTolerance`, and resets a larger one. `getRequirements()` re-reads the live share allowance on every call, so a requirement
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
    * @throws {UnknownBlueMarketAllocationError} when a source withdraw-queue market has no allocation snapshot.
@@ -681,6 +684,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
       assets: amount,
       slippageTolerance,
     });
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
+      requiredShareAllowance,
+      slippageTolerance,
+    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
@@ -696,6 +703,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
+          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
         });
@@ -1061,6 +1069,13 @@ export class MorphoVaultV1 implements VaultV1Actions {
         assets: assets ?? 0n,
         slippageTolerance,
       });
+    // In shares mode the calldata pins the burn, so only an exact allowance is accepted there.
+    const maxShareAllowance =
+      shares ??
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance,
+        slippageTolerance,
+      });
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     const { userAddress } = params;
     const sourceAsset = params.sourceVault.asset;
@@ -1094,6 +1109,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
+          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
         });

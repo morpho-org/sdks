@@ -175,8 +175,10 @@ _is_ the only cap on that burn: `withdraw()` derives the exact allowance cap onc
 creation from the caller-supplied `vaultData`, deadline, and slippage tolerance, and
 `getRequirements()` re-reads the live allowance against that fixed cap, returning an approval for
 exactly that amount — or, when `supportSignature` is enabled and the current allowance is below
-the cap, an ERC-2612 shares permit folded into the call. A larger leftover approval is always
-reset with an onchain approval rather than reused: VaultBundlesV1 skips a permit whose nonce was
+the cap, an ERC-2612 shares permit folded into the call. An allowance up to the cap divided by
+`1 - slippageTolerance` is kept, so a Safe approval for a cap prepared from an older snapshot
+still satisfies a re-prepared withdrawal. A larger leftover approval is always reset with an
+onchain approval rather than reused: VaultBundlesV1 skips a permit whose nonce was
 already consumed and proceeds under the live allowance, so execute every requirement returned by
 the latest `getRequirements()` — including the oversized-allowance reset — before submitting; only
 then does the cap hold on every withdrawal.
@@ -222,7 +224,7 @@ the fixed call. Blue writes therefore have no PublicAllocator V1 plan or share-p
 | Operation                             | Route                      | Why                                                                                                        |
 | ------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Deposit (V1 & V2)                     | VaultBundlesV1 | `maxSharePrice` enforcement, exclusive ERC-20/native funding, referral fee, and deadline. |
-| Withdraw (V1 & V2)                    | VaultBundlesV1 | No inflation-attack surface; exact vault-share allowance caps the burn against share-price loss. |
+| Withdraw (V1 & V2)                    | VaultBundlesV1 | No inflation-attack surface; bounded vault-share allowance caps the burn against share-price loss. |
 | Redeem (V1 & V2)                      | VaultBundlesV1             | Exact shares with share approval or permit                                                                      |
 | Force Withdraw (V2)                   | VaultExitBundlesV1         | Contract-computed deallocations + `minSharePriceE27` bound. Needs a vault-share allowance or permit.       |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |

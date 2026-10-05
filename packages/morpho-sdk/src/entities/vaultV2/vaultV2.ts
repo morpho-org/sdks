@@ -40,6 +40,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   validateDeadline,
   validateNativeVaultAsset,
@@ -220,8 +221,9 @@ export interface VaultV2Actions {
    *   defaults to two hours from handle creation.
    * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
    *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
-   *   when the allowance equals the cap; an oversized allowance is always reset with an exact
-   *   onchain approval, and an insufficient one is raised by an approval or, with signature
+   *   when the allowance is between the cap and the cap divided by `1 - slippageTolerance`; a
+   *   larger allowance is always reset with an exact onchain approval, and an insufficient one is
+   *   raised by an approval or, with signature
    *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
    *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
    * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
@@ -776,6 +778,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       assets: amount,
       slippageTolerance,
     });
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
+      requiredShareAllowance,
+      slippageTolerance,
+    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
@@ -791,6 +797,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
+          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
         });
