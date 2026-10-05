@@ -337,6 +337,57 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"packages/a/package.json" has no package name');
   });
 
+  test("error: a public script importing a private file fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "scripts/lint/check.ts":
+          'import { isMain } from "../ci/workflow.ts";\n',
+        "scripts/ci/workflow.ts": "export const isMain = true;\n",
+      },
+      [...INCLUDE, "scripts/lint/check.ts"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"scripts/lint/check.ts" references "scripts/ci/workflow.ts"');
+  });
+
+  test("error: a public package script running a private file fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { build: "node ../../scripts/release/version.ts && tsc" },
+        }),
+        "scripts/release/version.ts": "export {};\n",
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('references "scripts/release/version.ts"');
+  });
+
+  test("behavior: resolves .js specifiers and multi-line imports, ignores string fixtures", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/src/index.ts":
+          'export * from "./b.js";\nimport {\n  c,\n} from "./c.ts";\nconst fixture = \'export * from "./missing.js";\';\n',
+        "packages/a/src/c.ts": "export const c = 1;\n",
+        "packages/a/src/b.ts": "export const b = 1;\n",
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).not.toThrow();
+  });
+
   test("error: refuses a non-empty output directory", () => {
     const { repo, sha } = commitRepo(BASE_FILES, INCLUDE);
     const outDir = tempDir();
