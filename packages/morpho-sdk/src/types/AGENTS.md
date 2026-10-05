@@ -7,7 +7,7 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `BaseAction<TType, TArgs>` — discriminated union base, keyed on `type`.
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
 - `Requirement` / `RequirementSignature` — prerequisite signing flow for ERC-2612, Permit2
-  SignatureTransfer, Morpho authorization, and Midnight offer roots.
+  SignatureTransfer, and Morpho authorization.
 - `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
 - `BundlesFundingArgs` — exclusive `{ amount } | { nativeAmount }` funding used by fixed BlueBundlesV1 and VaultBundlesV1 calls.
