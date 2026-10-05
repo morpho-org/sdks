@@ -54,6 +54,10 @@ interface PublicTreeFile {
   readonly sha256: string;
 }
 
+type PackageManifest = { readonly name: string } & Partial<
+  Record<(typeof DEPENDENCY_FIELDS)[number], Readonly<Record<string, string>>>
+>;
+
 /** Content of `public-tree.json`. */
 export interface PublicTreeManifest {
   readonly sourceCommit: string;
@@ -81,47 +85,63 @@ function git(repo: string, args: string[]): Buffer {
   });
 }
 
-function readBlobs(repo: string, shas: readonly string[]): Map<string, Buffer> {
-  const blobs = new Map<string, Buffer>();
-  if (shas.length === 0) return blobs;
-  const output = execFileSync("git", ["-C", repo, "cat-file", "--batch"], {
-    input: `${shas.join("\n")}\n`,
-    maxBuffer: 1 << 30,
-  });
-  let offset = 0;
-  while (offset < output.length) {
-    const headerEnd = output.indexOf(0x0a, offset);
-    const [sha, type, size] = output
-      .subarray(offset, headerEnd)
-      .toString()
-      .split(" ");
-    if (type !== "blob" || sha == null || size == null) {
-      throw new Error(
-        `Expected a blob, got "${output.subarray(offset, headerEnd)}".`,
-      );
-    }
-    const start = headerEnd + 1;
-    blobs.set(sha, output.subarray(start, start + Number(size)));
-    offset = start + Number(size) + 1;
-  }
-  return blobs;
-}
-
 /**
- * Selects the public files of a commit: allowlisted paths minus hard-denied ones, plus
- * `public/` files mapped to their target path.
+ * Generates the public tree of a commit, read from git objects only.
  *
- * @param entries - Every entry of the commit's tree.
- * @param include - Allowlist globs.
- * @returns The public entries, keyed by output path and sorted.
- * @throws If an allowlist entry selects nothing, a `public/` file collides with an
- *   allowlisted path, or an entry is a submodule.
+ * Selects allowlisted paths minus hard-denied ones, plus `public/` files mapped to
+ * their path without the prefix. Writes them under `<outDir>/tree` (regular files
+ * normalised to 644/755, in-tree symlinks kept as 120000), and
+ * `<outDir>/public-tree.json` with every file's mode and SHA-256 plus the git tree hash.
+ *
+ * @param options.repo - Path of the internal repository.
+ * @param options.sha - Release commit to snapshot.
+ * @param options.outDir - Output directory; must not exist or be empty.
+ * @returns The manifest written to `public-tree.json`.
+ * @throws If `sha` or the allowlist can't be read, the allowlist is malformed, an
+ *   allowlist entry selects nothing, a `public/` file maps to a hard-denied or
+ *   already-selected path, a path has control characters, an entry is a submodule,
+ *   a symlink leaves the tree, a package manifest has no name, a public package has a
+ *   `workspace:` dependency on a private one, or `outDir` is not empty.
  */
-function selectPublicEntries(
-  entries: readonly TreeEntry[],
-  include: readonly string[],
-): TreeEntry[] {
-  const selected = new Map<string, TreeEntry>();
+export function generatePublicSnapshot(options: {
+  repo: string;
+  sha: string;
+  outDir: string;
+}): PublicTreeManifest {
+  const { repo, outDir } = options;
+  const sha = git(repo, ["rev-parse", "--verify", `${options.sha}^{commit}`])
+    .toString()
+    .trim();
+  const allowlist: unknown = JSON.parse(
+    git(repo, ["show", `${sha}:${ALLOWLIST_PATH}`]).toString(),
+  );
+  if (
+    typeof allowlist !== "object" ||
+    allowlist === null ||
+    !("include" in allowlist) ||
+    !Array.isArray(allowlist.include) ||
+    allowlist.include.length === 0 ||
+    !allowlist.include.every(
+      (pattern: unknown) => typeof pattern === "string" && pattern !== "",
+    )
+  ) {
+    throw new Error(
+      `"${ALLOWLIST_PATH}" at ${sha} must have a non-empty "include" array of globs.`,
+    );
+  }
+  const include: readonly string[] = allowlist.include;
+
+  const entries = git(repo, ["ls-tree", "-r", "-z", "--full-tree", sha])
+    .toString()
+    .split("\0")
+    .filter(Boolean)
+    .map((line): TreeEntry => {
+      const tab = line.indexOf("\t");
+      const [mode = "", , objectSha = ""] = line.slice(0, tab).split(" ");
+      return { mode, sha: objectSha, path: line.slice(tab + 1) };
+    });
+
+  const chosen = new Map<string, TreeEntry>();
   for (const pattern of include) {
     const matches = entries.filter(
       (entry) =>
@@ -134,74 +154,80 @@ function selectPublicEntries(
         `Allowlist entry "${pattern}" matches no public file. Remove it, or check that it doesn't name a hard-denied path.`,
       );
     }
-    for (const entry of matches) selected.set(entry.path, entry);
+    for (const entry of matches) chosen.set(entry.path, entry);
   }
   for (const entry of entries) {
-    if (!entry.path.startsWith(PUBLIC_PREFIX) || isDenied(entry.path)) continue;
+    if (!entry.path.startsWith(PUBLIC_PREFIX)) continue;
     const target = entry.path.slice(PUBLIC_PREFIX.length);
-    if (selected.has(target)) {
+    // Public workflows live under `public/.github/`; only their file names are checked.
+    const deniedTarget = target.startsWith(".github/")
+      ? isDenied(posix.basename(target))
+      : isDenied(target);
+    if (deniedTarget) {
+      throw new Error(
+        `"${entry.path}" maps to "${target}", which is hard-denied. Remove it from public/.`,
+      );
+    }
+    if (chosen.has(target)) {
       throw new Error(
         `"${entry.path}" maps to "${target}", which the allowlist already selects. Keep only one.`,
       );
     }
-    selected.set(target, { ...entry, path: target });
+    chosen.set(target, { ...entry, path: target });
   }
-  for (const entry of selected.values()) {
+  for (const entry of chosen.values()) {
     if (entry.mode === "160000") {
       throw new Error(
         `"${entry.path}" is a submodule. Submodules can't be public.`,
       );
     }
+    if (
+      [...entry.path].some((char) => {
+        const code = char.charCodeAt(0);
+        return code < 0x20 || code === 0x7f;
+      })
+    ) {
+      throw new Error(
+        `"${JSON.stringify(entry.path)}" has a control character. Rename it before release.`,
+      );
+    }
   }
-  return [...selected.values()].sort((a, b) =>
+  const selected = [...chosen.values()].sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
-}
 
-/**
- * Generates the public tree of a commit, read from git objects only.
- *
- * Writes the files under `<outDir>/tree` with modes normalised to 644/755, and
- * `<outDir>/public-tree.json` with every file's mode and SHA-256 plus the git tree hash.
- *
- * @param options.repo - Path of the internal repository.
- * @param options.sha - Release commit to snapshot.
- * @param options.outDir - Output directory; must not exist or be empty.
- * @returns The manifest written to `public-tree.json`.
- * @throws If the allowlist, a symlink or a workspace dependency breaks a public-tree rule.
- */
-export function generatePublicSnapshot(options: {
-  repo: string;
-  sha: string;
-  outDir: string;
-}): PublicTreeManifest {
-  const { repo, outDir } = options;
-  const sha = git(repo, ["rev-parse", "--verify", `${options.sha}^{commit}`])
-    .toString()
-    .trim();
-  const { include } = JSON.parse(
-    git(repo, ["show", `${sha}:${ALLOWLIST_PATH}`]).toString(),
-  ) as { include: string[] };
-
-  const entries = git(repo, ["ls-tree", "-r", "-z", "--full-tree", sha])
-    .toString()
-    .split("\0")
-    .filter(Boolean)
-    .map((line): TreeEntry => {
-      const [meta = "", path = ""] = line.split("\t");
-      const [mode = "", , objectSha = ""] = meta.split(" ");
-      return { mode, sha: objectSha, path };
-    });
-  const selected = selectPublicEntries(entries, include);
-  const blobs = readBlobs(repo, [
-    ...new Set(
-      selected.filter((e) => e.mode !== "160000").map((entry) => entry.sha),
-    ),
-  ]);
+  const blobs = new Map<string, Buffer>();
+  const shas = [...new Set(selected.map((entry) => entry.sha))];
+  const batch =
+    shas.length === 0
+      ? Buffer.alloc(0)
+      : execFileSync("git", ["-C", repo, "cat-file", "--batch"], {
+          input: `${shas.join("\n")}\n`,
+          maxBuffer: 1 << 30,
+        });
+  let offset = 0;
+  while (offset < batch.length) {
+    const headerEnd = batch.indexOf(0x0a, offset);
+    const [blobSha, type, size] = batch
+      .subarray(offset, headerEnd)
+      .toString()
+      .split(" ");
+    if (type !== "blob" || blobSha == null || size == null) {
+      throw new Error(
+        `Expected a blob, got "${batch.subarray(offset, headerEnd)}".`,
+      );
+    }
+    const start = headerEnd + 1;
+    blobs.set(blobSha, batch.subarray(start, start + Number(size)));
+    offset = start + Number(size) + 1;
+  }
   const paths = new Set(selected.map((entry) => entry.path));
 
   const files = selected.map((entry): PublicTreeFile & { content: Buffer } => {
-    const content = blobs.get(entry.sha) ?? Buffer.alloc(0);
+    const content = blobs.get(entry.sha);
+    if (content == null) {
+      throw new Error(`git cat-file returned no blob for "${entry.path}".`);
+    }
     if (entry.mode === "120000") {
       const target = posix.normalize(
         posix.join(posix.dirname(entry.path), content.toString()),
@@ -225,18 +251,27 @@ export function generatePublicSnapshot(options: {
     };
   });
 
-  const packageNames = new Map<string, string>();
+  const packageNames = new Map<string, PackageManifest>();
   for (const file of files) {
     if (!/^packages\/[^/]+\/package\.json$/.test(file.path)) continue;
-    packageNames.set(file.path, JSON.parse(file.content.toString()).name);
+    const parsed: unknown = JSON.parse(file.content.toString());
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("name" in parsed) ||
+      typeof parsed.name !== "string"
+    ) {
+      throw new Error(`"${file.path}" has no package name.`);
+    }
+    packageNames.set(file.path, parsed as PackageManifest);
   }
-  const publicNames = new Set(packageNames.values());
-  for (const file of files) {
-    if (!packageNames.has(file.path)) continue;
-    const manifest = JSON.parse(file.content.toString());
+  const publicNames = new Set(
+    [...packageNames.values()].map(({ name }) => name),
+  );
+  for (const manifest of packageNames.values()) {
     for (const field of DEPENDENCY_FIELDS) {
       for (const [name, range] of Object.entries(manifest[field] ?? {})) {
-        if (String(range).startsWith("workspace:") && !publicNames.has(name)) {
+        if (range.startsWith("workspace:") && !publicNames.has(name)) {
           throw new Error(
             `"${manifest.name}" depends on "${name}", which isn't in the public tree.`,
           );
