@@ -1235,6 +1235,7 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
         blueMarket,
         assetsToPark: 1_000n,
+        callbackSalt: zeroHash,
         ...overrides,
       });
 
@@ -1247,6 +1248,7 @@ describe("MorphoMidnight", () => {
           validation: offerValidation,
           blueMarket,
           assetsToPark: 1_000n,
+          callbackSalt: zeroHash,
         }),
       ).rejects.toThrow(ChainIdMismatchError);
     });
@@ -1308,21 +1310,6 @@ describe("MorphoMidnight", () => {
           functionName: "createBlueBuyCallback",
         }).map(({ args }) => args),
       ).toEqual([[midnightAddresses.maker, callbackSalt]]);
-    });
-
-    test("behavior: defaults the callback salt to the zero hash", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockBlueReads(handle);
-      const tx = (await prepare(handle)).buildTx();
-
-      expect(tx.action.args.blueSupply?.callbackSalt).toBe(zeroHash);
-      expect(
-        expectReadCall(handle, {
-          address: blueBuyCallbackFactory,
-          abi: blueBuyCallbackFactoryAbi,
-          functionName: "createBlueBuyCallback",
-        }).map(({ args }) => args),
-      ).toEqual([[midnightAddresses.maker, zeroHash]]);
     });
 
     test("error: NonPositiveInputError", async () => {

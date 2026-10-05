@@ -24,7 +24,6 @@ import {
   encodeAbiParameters,
   type Hex,
   isAddressEqual,
-  zeroHash,
 } from "viem";
 import { readContract, simulateContract } from "viem/actions";
 import {
@@ -778,7 +777,7 @@ export class MorphoMidnight {
    * @param params.validation - Optional Midnight mempool API request controls.
    * @param params.blueMarket - Morpho Blue market the parked assets are supplied to.
    * @param params.assetsToPark - Loan assets supplied to `blueMarket` for the maker's callback.
-   * @param params.callbackSalt - Salt selecting the maker's callback; defaults to the zero hash.
+   * @param params.callbackSalt - Salt selecting the maker's callback; the same salt reuses the same callback.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
@@ -809,6 +808,7 @@ export class MorphoMidnight {
    *   deadline: maxUint256,
    *   blueMarket,
    *   assetsToPark: 1_000_000n,
+   *   callbackSalt,
    * });
    * ```
    */
@@ -817,7 +817,7 @@ export class MorphoMidnight {
   ): Promise<CancelAndMakeOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("assetsToPark", params.assetsToPark);
-    const callbackSalt = params.callbackSalt ?? zeroHash;
+    const { callbackSalt } = params;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
     const bundlesV2 = getChainAddress(this.chainId, "midnightBundlesV2");

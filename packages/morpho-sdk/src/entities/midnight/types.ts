@@ -84,8 +84,8 @@ export interface SupplyBlueMakeLendParams extends CancelAndMakeParams {
   readonly blueMarket: BlueMarketParams;
   /** Loan assets pulled from the maker and supplied to `blueMarket` for the maker's callback. */
   readonly assetsToPark: bigint;
-  /** Salt selecting the maker's `BlueBuyCallback`. Defaults to the zero hash. */
-  readonly callbackSalt?: Hex;
+  /** Salt selecting the maker's `BlueBuyCallback`; the same salt reuses the same callback. */
+  readonly callbackSalt: Hex;
 }
 
 /** Parameters for the Midnight cancel-and-make-borrow maker flow. */
