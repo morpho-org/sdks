@@ -14,12 +14,14 @@ import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
 import { assertEndpointChain, executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
+import { resolveHealthMarkets } from "./backends/resolve-health-markets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { CheckContext } from "./context.js";
 import { parseTransfers } from "./parsing/index.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
 import { resolveChain } from "./pipeline/resolve-chain.js";
 import { planExecution } from "./plan/plan-execution.js";
+import { planHealthReads, verifyPositionHealth } from "./position-health.js";
 import { prepareAuthorizations } from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
@@ -31,8 +33,9 @@ const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
- * resolve quoted assets → plan quoted observations → execution →
- * slippage comparisons → bundle-retention assertion → result assembly.
+ * resolve quoted assets and checked markets → plan quoted observations and
+ * post-bundle health reads → execution → slippage and position-health
+ * comparisons → bundle-retention assertion → result assembly.
  *
  * One `AbortSignal` (the request timeout) covers every RPC step.
  *
@@ -49,7 +52,10 @@ export async function runSimulation(params: {
   const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const client = createSimulationClient(chain.simulateV1Url, signal);
 
-  const limits = { operations: request.limits?.operations ?? [] };
+  const limits = {
+    operations: request.limits?.operations ?? [],
+    positions: request.limits?.positions ?? [],
+  };
   const preview = request.mode === "preview";
   const owner = request.transactions[0]!.from;
   const addresses = _try(
@@ -58,6 +64,7 @@ export async function runSimulation(params: {
   );
   const requiresMorpho =
     limits.operations.length > 0 ||
+    limits.positions.length > 0 ||
     (preview && request.authorizations.length > 0);
   if (requiresMorpho && addresses?.blue == null)
     throw new UnsupportedChainError(request.chainId);
@@ -88,6 +95,23 @@ export async function runSimulation(params: {
     blockNumber: pinnedBlock.number,
   });
   const observations = planStateReads({ operations: resolved, owner, morpho });
+  const requestContext = {
+    chainId: request.chainId,
+    mode: request.mode,
+    blockNumber: pinnedBlock.number,
+  };
+  const healthMarkets = await resolveHealthMarkets({
+    client,
+    morpho,
+    positions: limits.positions,
+    context: requestContext,
+  });
+  const healthReads = planHealthReads({
+    morpho,
+    markets: healthMarkets,
+    positions: limits.positions,
+    owner,
+  });
 
   const preparations = preview
     ? prepareAuthorizations({
@@ -102,6 +126,7 @@ export async function runSimulation(params: {
     owner,
     preparations,
     reads: observations.reads,
+    afterReads: healthReads,
   });
 
   // Execute against the block resolved once above; the boundary rechecks its hash.
@@ -119,19 +144,18 @@ export async function runSimulation(params: {
       `Execution returned ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s)`,
     );
 
+  const slippageReadIds = new Set(observations.reads.map((read) => read.id));
   const decodePhase = (phase: "before" | "after") =>
     new Map(
       execution.stateReads
-        .filter((read) => read.phase === phase)
+        .filter(
+          (read) => read.phase === phase && slippageReadIds.has(read.read.id),
+        )
         .map(
           (read) =>
             [
               read.read.id,
-              decodeStateRead(read.read, read.returnData, {
-                chainId: request.chainId,
-                mode: request.mode,
-                blockNumber: pinnedBlock.number,
-              }),
+              decodeStateRead(read.read, read.returnData, requestContext),
             ] as const,
         ),
     );
@@ -177,6 +201,18 @@ export async function runSimulation(params: {
     requestTransactions: request.transactions,
   });
 
+  const positions = verifyPositionHealth({
+    markets: healthMarkets,
+    positions: limits.positions,
+    owner,
+    returnData: new Map(
+      execution.stateReads
+        .filter((read) => read.phase === "after")
+        .map((read) => [read.read.id, read.returnData] as const),
+    ),
+    context: requestContext,
+  });
+
   assertNoBundlesRetention({
     chainId: request.chainId,
     transfers,
@@ -188,6 +224,7 @@ export async function runSimulation(params: {
     ctx,
     request,
     operations: checked,
+    positions,
     authorizations,
     userCalls,
     transfers,

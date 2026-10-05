@@ -115,6 +115,31 @@ describe("parseRequest", () => {
       ).toEqual([operation]);
     },
   );
+  test("behavior: position health limits are normalized", () => {
+    const positions = [
+      { marketId: _MARKET_ID },
+      { marketId: _MARKET_ID, account: SPENDER, maxLtv: 10n ** 18n },
+    ];
+    expect(
+      parse({ chainId: 1, transactions: [tx()], limits: { positions } }).limits,
+    ).toEqual({ positions });
+  });
+  test.each([
+    [{ marketId: _MARKET_ID, maxLtv: 10n ** 18n + 1n }],
+    [{ marketId: _MARKET_ID, maxLtv: -1n }],
+    [{ marketId: "0x01" }],
+    [{ marketId: _MARKET_ID, account: "0x01" }],
+    [{ marketId: _MARKET_ID, unexpected: 1n }],
+    ["not-an-object"],
+    "not-an-array",
+  ])(
+    "error: SimulationValidationError for malformed positions %#",
+    (positions) => {
+      expect(() =>
+        parse({ chainId: 1, transactions: [tx()], limits: { positions } }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
   test("behavior: separate asset overrides are preserved", () => {
     const request = parse({
       chainId: 1,

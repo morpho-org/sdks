@@ -20,6 +20,7 @@ import { SimulationValidationError } from "../../errors.js";
 import type {
   OperationLimit,
   OperationType,
+  PositionHealthLimit,
   SimulationLimits,
   SlippageQuote,
 } from "../../limits.js";
@@ -143,7 +144,8 @@ const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
 const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
-const LIMITS_KEYS = ["operations"] as const;
+const LIMITS_KEYS = ["operations", "positions"] as const;
+const POSITION_KEYS = ["marketId", "account", "maxLtv"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   erc20Approval: ["type", "token", "owner", "spender", "amount"],
   erc2612Permit: ["type", "typedData"],
@@ -932,6 +934,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   // limits
   const limits = input.limits;
   const operations: OperationLimit[] = [];
+  const positions: PositionHealthLimit[] = [];
   let normalizedLimits: SimulationLimits | undefined;
   if (limits !== undefined) {
     if (!isRecord(limits)) {
@@ -952,8 +955,46 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
           }
         }
       }
+      const rawPositions = readField(limits, "positions");
+      if (rawPositions !== undefined) {
+        if (!Array.isArray(rawPositions)) {
+          fieldErrors.push("limits.positions: must be an array");
+        } else {
+          for (const [i, position] of rawPositions.entries()) {
+            const path = `limits.positions[${i}]`;
+            if (!isRecord(position)) {
+              fieldErrors.push(`${path}: must be an object`);
+              continue;
+            }
+            check.keys(position, { allow: POSITION_KEYS, path });
+            const marketId = check.marketId(
+              readField(position, "marketId"),
+              `${path}.marketId`,
+            );
+            const rawAccount = readField(position, "account");
+            const account =
+              rawAccount === undefined
+                ? undefined
+                : check.address(rawAccount, `${path}.account`);
+            const rawMaxLtv = readField(position, "maxLtv");
+            const maxLtv =
+              rawMaxLtv === undefined
+                ? undefined
+                : check.uint256(rawMaxLtv, `${path}.maxLtv`);
+            if (maxLtv !== undefined && maxLtv > MathLib.WAD)
+              fieldErrors.push(`${path}.maxLtv: must not exceed 100% (1e18)`);
+            if (marketId !== undefined)
+              positions.push({
+                marketId,
+                ...(account !== undefined ? { account } : {}),
+                ...(maxLtv !== undefined ? { maxLtv } : {}),
+              });
+          }
+        }
+      }
       normalizedLimits = {
         ...(Array.isArray(rawOperations) ? { operations } : {}),
+        ...(Array.isArray(rawPositions) ? { positions } : {}),
       };
     }
   }

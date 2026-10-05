@@ -30,6 +30,35 @@ export interface ResolvedSlippageOperation {
 }
 
 /**
+ * Whether a metadata read failed in transport rather than reverting.
+ * @internal
+ */
+export function isTransportFailure(cause: unknown): boolean {
+  const reverted =
+    cause instanceof BaseError &&
+    cause.walk(
+      (error) =>
+        error instanceof ContractFunctionRevertedError ||
+        error instanceof ExecutionRevertedError,
+    ) !== null;
+  // Revert-shaped chains (code 3, or -32000 "execution reverted") can nest an
+  // RpcRequestError, so a revert must win over the transport match.
+  return (
+    !reverted &&
+    ((cause instanceof BaseError &&
+      cause.walk(
+        (error) =>
+          error instanceof HttpRequestError ||
+          error instanceof TimeoutError ||
+          error instanceof RpcRequestError ||
+          error instanceof RpcError ||
+          (error instanceof Error && error.name === "AbortError"),
+      ) !== null) ||
+      (cause instanceof Error && cause.name === "AbortError"))
+  );
+}
+
+/**
  * Resolve underlying tokens only when an asset quote lacks an explicit token.
  * Share-only quotes need no RPC reads; vault versions and factories are not discovered.
  * @param params - Caller operations, Morpho address, client, request context, and pinned state block.
@@ -91,29 +120,7 @@ export async function resolveAssets(params: {
             pair = [asset, asset];
           }
         } catch (cause) {
-          const reverted =
-            cause instanceof BaseError &&
-            cause.walk(
-              (error) =>
-                error instanceof ContractFunctionRevertedError ||
-                error instanceof ExecutionRevertedError,
-            ) !== null;
-          // Revert-shaped chains (code 3, or -32000 "execution reverted")
-          // can nest an RpcRequestError, so a revert must win over the
-          // transport match.
-          if (
-            !reverted &&
-            ((cause instanceof BaseError &&
-              cause.walk(
-                (error) =>
-                  error instanceof HttpRequestError ||
-                  error instanceof TimeoutError ||
-                  error instanceof RpcRequestError ||
-                  error instanceof RpcError ||
-                  (error instanceof Error && error.name === "AbortError"),
-              ) !== null) ||
-              (cause instanceof Error && cause.name === "AbortError"))
-          ) {
+          if (isTransportFailure(cause)) {
             throw new ExternalServiceError(
               "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
               { cause },

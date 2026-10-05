@@ -1,6 +1,7 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type {
   AuthorizationPreparation,
+  CheckedPositionHealth,
   SimulatedOperation,
   SimulationVerification,
   VerifiedSimulationResult,
@@ -23,6 +24,7 @@ export function assembleResult(params: {
   readonly ctx: CheckContext;
   readonly request: ParsedRequest;
   readonly operations: readonly SimulatedOperation[];
+  readonly positions: readonly CheckedPositionHealth[];
   readonly authorizations: readonly AuthorizationPreparation[];
   readonly userCalls: readonly SimulationCall[];
   readonly transfers: readonly Transfer[];
@@ -32,6 +34,7 @@ export function assembleResult(params: {
     ctx,
     request,
     operations,
+    positions,
     authorizations,
     userCalls,
     transfers,
@@ -45,6 +48,7 @@ export function assembleResult(params: {
     blockTimestamp: ctx.block.blockTimestamp,
     limits: ctx.limits,
     operations,
+    positions,
     authorizations,
   };
 

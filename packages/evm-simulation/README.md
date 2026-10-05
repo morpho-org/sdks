@@ -60,8 +60,8 @@ All symbols below are re-exported from the package root.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`.
 - `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
-- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits` and `SlippageQuote`.
-- Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
+- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, `PositionHealthLimit`, and the shared `SlippageLimits` and `SlippageQuote`.
+- Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `CheckedPositionHealth`, `AuthorizationPreparation`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`; union of the per-stage `SimulationValidationContext`, `SimulationTransportContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
@@ -78,7 +78,7 @@ a quote to infer constraints.
 Unknown input keys are rejected as `SimulationValidationError` rather than
 silently ignored.
 
-Non-empty `limits.operations` and preview authorizations require a Morpho Blue
+Non-empty `limits.operations`, `limits.positions` and preview authorizations require a Morpho Blue
 address registered in blue-sdk's `getChainAddresses`; otherwise
 `UnsupportedChainError` is thrown.
 
@@ -140,6 +140,35 @@ slippage reads. Quotes with an asset amount resolve `asset()` or market paramete
 when an explicit `assetPaid` or `assetReceived` was not supplied; share-only quotes need no metadata
 reads. No vault factories, full entities, allocations, risk metrics, allowances,
 or nonces are fetched for slippage.
+
+### Position health
+
+`limits.positions` checks Blue positions after the whole bundle, so the bundle
+cannot leave them open to immediate liquidation:
+
+```ts
+const result = await simulate(config, {
+  chainId: 1,
+  transactions,
+  limits: {
+    positions: [{
+      marketId,
+      account: user, // Position owner; defaults to transaction sender.
+      maxLtv: 80_0000000000000000n, // Optional WAD bound below the LLTV (80%).
+    }],
+  },
+});
+// result.verification.positions[0] = { marketId, account, lltv, ltv, maxLtv }
+```
+
+Each position must be healthy at the market LLTV, using Morpho's own rounding,
+and its LTV (rounded up) must not exceed `maxLtv` when set. A position without
+debt passes with `ltv: 0n`. The market params are read at the pinned block.
+After the user transactions, the simulation calls `accrueInterest`, then reads
+`market`, the oracle `price` and `position`. A failed check throws
+`ConsumerLimitViolationError`, with `expected` set to the LLTV or `maxLtv` and
+`observed` set to the LTV. An uncreated market throws `MissingVerificationEvidenceError`.
+Entries need no slippage quote. Without `limits.positions`, nothing extra is read.
 
 For example, a Vault V2 deposit quoting assets paid and shares minted makes four
 in-bundle view calls — the sender's asset balance and the `account`'s share balance, each before

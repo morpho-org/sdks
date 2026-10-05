@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import type { OperationLimit } from "../limits.js";
+import type { OperationLimit, PositionHealthLimit } from "../limits.js";
 import type { SimulationMode } from "../params.js";
 import type { ExecutionBlock } from "./backends/parse-response.js";
 
@@ -9,5 +9,8 @@ export interface CheckContext {
   readonly mode: SimulationMode;
   readonly block: ExecutionBlock;
   readonly owner: Address;
-  readonly limits: { readonly operations: readonly OperationLimit[] };
+  readonly limits: {
+    readonly operations: readonly OperationLimit[];
+    readonly positions: readonly PositionHealthLimit[];
+  };
 }

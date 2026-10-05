@@ -48,6 +48,7 @@ export type {
   BlueRefinanceSubject,
   OperationLimit,
   OperationType,
+  PositionHealthLimit,
   SimulationLimits,
   SimulationOperationSubject,
   SlippageLimits,

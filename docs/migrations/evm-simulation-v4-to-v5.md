@@ -124,6 +124,16 @@ for Blue shares, and existing transfer traces for native assets. Omitted limits
 produce no slippage reads. Use the existing `transfers` and `assetChanges` for
 transfer reporting, and `verification.operations` for checked quotes.
 
+## Optional position health checks (SDK-1347)
+
+To make sure a bundle cannot leave a Blue position liquidatable, list the
+position in `limits.positions` as `{ marketId, account?, maxLtv? }`. After the
+bundle, with interest accrued, the position must be healthy at the market LLTV
+and its LTV must not exceed `maxLtv` when set. Otherwise `simulate()` throws
+`ConsumerLimitViolationError`. Read the observed `ltv` and `lltv` from
+`verification.positions`. No position is checked unless listed. See
+[`ADR-2026-10-05-evm-simulation-position-health-limits`](../adrs/ADR-2026-10-05-evm-simulation-position-health-limits.md).
+
 ## Release exception and audit
 
 Root `AGENTS.md` §7's EVM simulation v5 retirement exception

@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { type Address, type Hex, numberToHex } from "viem";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -128,6 +129,25 @@ describe.sequential("runSimulation", () => {
               vault: TARGET,
               quote: { assetsPaid: 1n },
               slippageTolerance: 0n,
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: an unregistered chain requires Morpho addresses for position limits", async () => {
+    const { fetch } = stubFetch(CHAIN_ID, []);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+        limits: {
+          positions: [
+            {
+              marketId:
+                "0x00000000000000000000000000000000000000000000000000000000000000aa" as MarketId,
             },
           ],
         },

@@ -17,7 +17,7 @@ const ctx: CheckContext = {
   chainId: 1,
   mode: "final",
   owner,
-  limits: { operations: [] },
+  limits: { operations: [], positions: [] },
   block: {
     chainId: 1,
     stateBlockNumber: 1n,

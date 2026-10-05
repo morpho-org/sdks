@@ -1,7 +1,7 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 
-/** Minimal view call replayed before and after the user bundle. @internal */
+/** Minimal call replayed before and after the user bundle, or after it only for position health. @internal */
 export type StateRead = {
   readonly id: string;
   readonly to: Address;
@@ -18,6 +18,11 @@ export type StateRead = {
       readonly marketId: MarketId;
       readonly owner: Address;
     }
+  | {
+      readonly kind: "morpho.accrueInterest" | "morpho.market";
+      readonly marketId: MarketId;
+    }
+  | { readonly kind: "oracle.price"; readonly marketId: MarketId }
 );
 
 /** Phase at which a slippage observation is read. @internal */

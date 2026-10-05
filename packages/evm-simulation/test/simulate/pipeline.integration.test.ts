@@ -5,7 +5,12 @@ import {
   MarketParams,
 } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-import { blueBundlesV1Abi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
+import {
+  blueAbi,
+  blueBundlesV1Abi,
+  blueOracleAbi,
+  vaultV2Abi,
+} from "@morpho-org/morpho-sdk/abis";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -410,6 +415,105 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     expect(result.verification.operations[0]?.checkedLimits).toEqual({
       quote: { assetsReceived: borrowAssets, assetsPaid: collateralAssets },
       slippageTolerance: 0n,
+    });
+    expect(result.verification.positions).toEqual([]);
+
+    const transactions = [
+      {
+        from: client.account.address,
+        to: addresses.bundles!.blueBundlesV1!,
+        data,
+        value: 0n,
+      },
+    ];
+    const healthy = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      limits: { positions: [{ marketId: CbbtcUsdcBlue.id }] },
+      transactions,
+    });
+    const [position] = healthy.verification.positions;
+    expect(position).toMatchObject({
+      marketId: CbbtcUsdcBlue.id,
+      account: client.account.address,
+      lltv: p.lltv,
+    });
+    expect(position!.ltv).toBeGreaterThan(80_0000000000000000n);
+    expect(position!.ltv).toBeLessThanOrEqual(p.lltv);
+
+    await expect(
+      simulate(configFor(client), {
+        chainId: mainnet.id,
+        limits: {
+          positions: [
+            { marketId: CbbtcUsdcBlue.id, maxLtv: 80_0000000000000000n },
+          ],
+        },
+        transactions,
+      }),
+    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+  }, 120_000);
+
+  test("error: a position left liquidatable after the bundle fails the health check", async ({
+    client,
+  }) => {
+    const addresses = getChainAddresses(mainnet.id)!;
+    const collateralAssets = parseUnits("0.05", 8);
+    await client.deal({ erc20: CBBTC, amount: collateralAssets });
+    await client.writeContract({
+      address: CBBTC,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [addresses.blue, maxUint256],
+    });
+    await client.writeContract({
+      address: addresses.blue,
+      abi: blueAbi,
+      functionName: "supplyCollateral",
+      args: [CbbtcUsdcBlue, collateralAssets, client.account.address, "0x"],
+    });
+    await client.writeContract({
+      address: addresses.blue,
+      abi: blueAbi,
+      functionName: "borrow",
+      args: [
+        CbbtcUsdcBlue,
+        parseUnits("3000", 6),
+        0n,
+        client.account.address,
+        client.account.address,
+      ],
+    });
+    const price = await client.readContract({
+      address: CbbtcUsdcBlue.oracle,
+      abi: blueOracleAbi,
+      functionName: "price",
+    });
+    // Oracle returning half the price: PUSH32 price, MSTORE at 0, RETURN 32 bytes.
+    await client.setCode({
+      address: CbbtcUsdcBlue.oracle,
+      bytecode: `0x7f${(price / 2n).toString(16).padStart(64, "0")}60005260206000f3`,
+    });
+
+    const error = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      limits: { positions: [{ marketId: CbbtcUsdcBlue.id }] },
+      transactions: [
+        {
+          from: client.account.address,
+          to: USDC,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [addresses.blue, 0n],
+          }),
+          value: 0n,
+        },
+      ],
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((error as ConsumerLimitViolationError).context).toMatchObject({
+      account: client.account.address,
+      expected: CbbtcUsdcBlue.lltv,
     });
   }, 120_000);
 });

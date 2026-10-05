@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
@@ -21,6 +22,18 @@ export type SimulatedOperation = {
   /** Resolved selector from the limit; defaults to the transaction sender. */
   readonly receiver: Address;
 } & SimulationOperationSubject;
+
+/** One position from the caller's `limits.positions`, read after the bundle. */
+export interface CheckedPositionHealth {
+  readonly marketId: MarketId;
+  /** Resolved selector from the limit; defaults to the transaction sender. */
+  readonly account: Address;
+  /** WAD-scaled market liquidation LTV. */
+  readonly lltv: bigint;
+  /** WAD-scaled LTV after the bundle, rounded up; `0n` without debt. */
+  readonly ltv: bigint;
+  readonly maxLtv?: bigint;
+}
 
 /** How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {
@@ -51,6 +64,7 @@ export interface SimulationVerification {
   /** Caller-supplied quotes and tolerances only; omitted limits remain unchecked. */
   readonly limits: Required<SimulationLimits>;
   readonly operations: readonly SimulatedOperation[];
+  readonly positions: readonly CheckedPositionHealth[];
   /** Preview only; always empty in final. */
   readonly authorizations: readonly AuthorizationPreparation[];
 }

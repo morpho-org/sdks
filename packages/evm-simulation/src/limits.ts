@@ -169,7 +169,21 @@ export type OperationLimit = SlippageLimits & {
       }
   );
 
+/**
+ * Blue position checked after the whole bundle, with interest accrued to the
+ * simulated block. It must be healthy at the market's LLTV and, when
+ * `maxLtv` is set, have an LTV of at most `maxLtv`. A position without debt passes.
+ */
+export interface PositionHealthLimit {
+  readonly marketId: MarketId;
+  /** Position owner; defaults to the transaction sender. */
+  readonly account?: Address;
+  /** WAD-scaled maximum loan-to-value, from 0 to 1e18 inclusive; 8e17 means 80%. */
+  readonly maxLtv?: bigint;
+}
+
 /** Optional caller-selected checks. No action discovery or default bounds. */
 export interface SimulationLimits {
   readonly operations?: readonly OperationLimit[];
+  readonly positions?: readonly PositionHealthLimit[];
 }

@@ -48,6 +48,7 @@ export interface ExecutionPlan {
  * @param owner - The bundle owner; sender of preparation calls.
  * @param preparations - Ordered authorization preparations to simulate.
  * @param reads - The full state-read list, replayed at `before` and `after`.
+ * @param afterReads - Calls run only after the user transactions, after `reads`.
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
  *   structurally equal plans.
  * @internal
@@ -62,8 +63,9 @@ export function planExecution(params: {
     })[];
   }[];
   readonly reads: readonly StateRead[];
+  readonly afterReads?: readonly StateRead[];
 }): ExecutionPlan {
-  const { request, owner, preparations, reads } = params;
+  const { request, owner, preparations, reads, afterReads = [] } = params;
 
   const calls: PlannedCall[] = [];
 
@@ -105,7 +107,7 @@ export function planExecution(params: {
     });
   });
 
-  for (const read of reads) {
+  for (const read of [...reads, ...afterReads]) {
     calls.push({
       type: "stateRead",
       phase: "after",
