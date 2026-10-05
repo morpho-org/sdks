@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { basename, join, matchesGlob, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -15,9 +15,10 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
 /** Text that must never reach the public repository or npm. */
 const RULES = {
-  // Linear team keys of the morpho-labs workspace.
+  // Linear team keys of the morpho-labs workspace. Lookarounds instead of `\b`,
+  // so a key next to `_` (`test_SDK-1`, `sdk-1_notes.md`) still matches.
   "linear-key":
-    /\b(?:APPS|API|CRTR|INTEG|MAR|MKT|PLA|PRO|ROU|SDK|SEC|VAU|VRM)-\d+\b/gi,
+    /(?<![A-Za-z0-9])(?:APPS|API|CRTR|INTEG|MAR|MKT|PLA|PRO|ROU|SDK|SEC|VAU|VRM)-\d+(?!\d)/gi,
   "linear-url": /\blinear\.app\b/gi,
   "slack-url": /\b(?:[a-z0-9-]+\.)?slack\.com\b/gi,
   "notion-url": /\bnotion\.(?:so|site)\b/gi,
@@ -35,12 +36,13 @@ const RULES = {
   // hex values (market ids, hashes) are everywhere. No leading boundary, so
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   // A type annotation starts with a letter or backtick and is short, so it can't
-  // run across a key value. `??` and `||` catch hard-coded env fallbacks.
+  // run across a key value. `??` and `||` catch hard-coded env fallbacks, also
+  // after `env["KEY"]` or `getEnv("KEY")`; `\"` catches code embedded in JSON.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|pk(?![a-z]))\w*["'`]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
-    /(?:(?:mnemonic|seed[_-]?phrase)\w*["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
+    /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|\?\?|\|\|)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
@@ -71,18 +73,26 @@ export interface ScanPolicy {
   readonly exceptions: readonly ScanException[];
 }
 
-/** One match of a rule: file, 1-based line, rule and matched text. */
+/**
+ * One match of a rule: file, line (1-based; 0 when the match is in the file path),
+ * rule and matched text. `tarball` marks a match in a packed tarball.
+ */
 export interface Finding {
   readonly path: string;
   readonly line: number;
   readonly rule: RuleId;
   readonly match: string;
+  readonly tarball?: true;
 }
 
-/** A file to scan: tree path, or `<tarball>.tgz:package/...` for a tarball entry. */
+/**
+ * A file to scan: a tree path, or `<tarball>.tgz:package/...` with `tarball` set
+ * for a tarball entry.
+ */
 export interface ScannedFile {
   readonly path: string;
   readonly content: Buffer;
+  readonly tarball?: true;
 }
 
 /**
@@ -150,6 +160,7 @@ const PUBLIC_TEST_SECRETS = new Set([
  * a published test value (Anvil defaults) is skipped, and so is any key with 48
  * leading zero hex digits (a value that fits in 64 bits). File paths are scanned
  * too (the part after `.tgz:` for tarball entries); their findings have line 0.
+ * Tarball findings carry `tarball: true`.
  *
  * @param files - Files to scan.
  * @param blockedTerms - Extra case-insensitive terms to block.
@@ -171,18 +182,20 @@ export function scanFiles(
   }
 
   const findings: Finding[] = [];
-  for (const { path, content } of files) {
+  for (const { path, content, tarball } of files) {
     const text = content.includes(0)
       ? Buffer.from(content.filter((byte) => byte !== 0))
       : content;
     // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
     const source = text.toString("utf8");
     const fileFindings: Finding[] = [];
-    const entry = path.indexOf(".tgz:");
-    const name = entry === -1 ? path : path.slice(entry + ".tgz:".length);
+    const name = tarball
+      ? path.slice(path.indexOf(".tgz:") + ".tgz:".length)
+      : path;
+    const marker = tarball ? { tarball } : {};
     for (const [rule, pattern] of rules) {
       for (const [match] of name.matchAll(pattern)) {
-        fileFindings.push({ path, line: 0, rule, match });
+        fileFindings.push({ path, line: 0, rule, match, ...marker });
       }
     }
     const lineStarts = [0];
@@ -201,7 +214,7 @@ export function scanFiles(
           continue;
         }
         const line = lineStarts.findLastIndex((start) => start <= index) + 1;
-        fileFindings.push({ path, line, rule, match });
+        fileFindings.push({ path, line, rule, match, ...marker });
       }
     }
     fileFindings.sort(
@@ -215,7 +228,7 @@ export function scanFiles(
 /**
  * Splits findings into blocking ones and allowed ones, and reports exceptions that
  * matched nothing so stale entries get removed. Tarball findings
- * (`<tarball>.tgz:package/...`) always block, whatever the exception glob: an
+ * (`tarball: true`) always block, whatever the exception glob: an
  * excepted file must not ship to npm.
  *
  * @param findings - Output of {@link scanFiles}.
@@ -228,7 +241,7 @@ export function applyExceptions(
 ): { blocking: Finding[]; unused: ScanException[] } {
   const used = new Set<ScanException>();
   const blocking = findings.filter((finding) => {
-    if (finding.path.includes(".tgz:")) return true;
+    if (finding.tarball) return true;
     const exception = exceptions.find(
       ({ path, rule, match }) =>
         rule === finding.rule &&
@@ -245,8 +258,9 @@ export function applyExceptions(
 }
 
 /**
- * Lists regular files under a directory, as POSIX paths relative to it. Symlinks
- * are skipped: the generator already checked their targets are in the tree.
+ * Lists files under a directory, as POSIX paths relative to it. A symlink is
+ * listed with its target string as content, so its name and target get scanned;
+ * the generator already checked the target stays in the tree.
  *
  * @param dir - Directory to walk.
  * @returns The files.
@@ -258,10 +272,12 @@ export function readTree(dir: string): ScannedFile[] {
       const full = join(current, name);
       const stat = lstatSync(full);
       if (stat.isDirectory()) walk(full);
-      else if (stat.isFile()) {
+      else if (stat.isFile() || stat.isSymbolicLink()) {
         files.push({
           path: relative(dir, full).split(sep).join("/"),
-          content: readFileSync(full),
+          content: stat.isFile()
+            ? readFileSync(full)
+            : Buffer.from(readlinkSync(full)),
         });
       }
     }
@@ -308,6 +324,7 @@ export async function readTarballs(
           files.push({
             path: `${basename(tarball)}:${entry.path}`,
             content: Buffer.concat(chunks),
+            tarball: true,
           }),
         );
       },
@@ -370,19 +387,26 @@ if (import.meta.main) {
       policy: { type: "string", default: POLICY_PATH },
     },
   });
-  if (!values.tree && !values.tarballs) {
+  if (values.tree === "" || values.tarballs === "") {
+    throw new Error(
+      "--tree and --tarballs need a directory, not an empty string.",
+    );
+  }
+  if (values.tree === undefined && values.tarballs === undefined) {
     throw new Error(
       "Usage: scan.ts [--tree <dir>] [--tarballs <dir>] [--policy <file>]",
     );
   }
   const policy = parsePolicy(JSON.parse(readFileSync(values.policy, "utf8")));
-  const treeFiles = values.tree ? readTree(values.tree) : undefined;
-  const tarballs = values.tarballs
-    ? readdirSync(values.tarballs)
-        .filter((name) => name.endsWith(".tgz"))
-        .sort()
-        .map((name) => join(values.tarballs as string, name))
-    : undefined;
+  const treeFiles =
+    values.tree === undefined ? undefined : readTree(values.tree);
+  const tarballs =
+    values.tarballs === undefined
+      ? undefined
+      : readdirSync(values.tarballs)
+          .filter((name) => name.endsWith(".tgz"))
+          .sort()
+          .map((name) => join(values.tarballs as string, name));
   const files = [
     ...(treeFiles ?? []),
     ...(tarballs ? await readTarballs(tarballs) : []),
