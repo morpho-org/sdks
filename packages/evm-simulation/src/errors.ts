@@ -16,17 +16,9 @@ export const SIMULATION_ERROR_CODES = [
   "SIMULATION_REVERTED",
   "BLACKLIST_ERROR",
   "UNSUPPORTED_OPERATION",
-  "PROTOCOL_BINDING_MISMATCH",
-  "UNSUPPORTED_VERIFICATION_FEATURE",
   "INVALID_SIMULATION_RESPONSE",
   "MISSING_VERIFICATION_EVIDENCE",
   "AUTHORIZATION_REQUEST_MISMATCH",
-  "ASSET_CHANGE_MISMATCH",
-  "PERMISSION_CHANGE_MISMATCH",
-  "STATE_CHANGE_MISMATCH",
-  "MARKET_CONSTRAINT_VIOLATION",
-  "SLIPPAGE_LIMIT_EXCEEDED",
-  "FEE_MISMATCH",
   "CONSUMER_LIMIT_VIOLATION",
   "UNEXPECTED_SIMULATION_ERROR",
 ] as const;
@@ -79,13 +71,20 @@ interface SimulationCheckContext extends SimulationContextBase {
   readonly account?: Address;
   /** Spender or operator granted by the checked permission. */
   readonly spender?: Address;
-  /** Name of the checked field; its suffix gives the unit (e.g. "maxLtvAfterWad"). */
+  /**
+   * Name of the checked field (e.g. `"assetsReceived"`). Unbound verification
+   * contexts instead carry the failed state read's id
+   * (`balance:<token>:<account>` or `position:<marketId>:<account>`).
+   */
   readonly field?: string;
   /** Bound or value `field` was checked against; 32-byte hashes only, never calldata or signatures. */
   readonly expected?: bigint | boolean | Address | Hash;
   /** Value observed in the simulation, same domain as `expected`. */
   readonly observed?: bigint | boolean | Address | Hash;
-  /** Index into the caller's `transactions`; preview preparation never shifts it. */
+  /**
+   * Reserved; not populated for caller-transaction reverts, whose index is on
+   * `SimulationRevertedError.details[].transactionIndex`.
+   */
   readonly failedTransactionIndex?: number;
 }
 
@@ -108,7 +107,10 @@ export type SimulationPreparationContext = SimulationContextBase & {
   readonly preparationCallIndex?: number;
 };
 
-/** Context of a revert while executing a bundle transaction. */
+/**
+ * Reserved execution-stage context; `SimulationRevertedError` carries none for
+ * caller-transaction or node reverts (see `details[].transactionIndex`).
+ */
 export type SimulationExecutionContext = SimulationCheckContext &
   SimulationOperationSubject & { readonly stage: "execution" };
 
@@ -117,20 +119,35 @@ export type SimulationVerificationContext = SimulationCheckContext &
   SimulationOperationSubject & { readonly stage: "verification" };
 
 /**
- * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
- * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
- * verification contexts are further keyed by `operation`, which fixes the
- * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`, `authorized`). Never contains
- * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
- * on the error).
+ * Where and why a simulation failed, keyed by `stage`
+ * (ADR-2026-10-01-evm-simulation-quoted-slippage-limits).
+ * Every stage carries `mode`, `chainId` and `blockNumber`. Preparation
+ * contexts carry `authorizationIndex` and `preparationCallIndex`. Verification
+ * contexts bound to a limit take `operation` and the subject fields
+ * (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
+ * `sourceVault`/`targetVault`) from that `OperationLimit`, not
+ * from decoded calldata; unbound ones carry only a `field` string naming the
+ * failed state read (`balance:<token>:<account>` or
+ * `position:<marketId>:<account>`).
+ * `"execution"` stays in the union, but `SimulationRevertedError` carries no
+ * `context` for caller-transaction or node reverts — the failing
+ * `transactionIndex` is reported on the error's `details`. Never contains
+ * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause`
+ * stays on the error).
  */
 export type SimulationErrorContext =
   | SimulationValidationContext
   | SimulationTransportContext
   | SimulationPreparationContext
   | SimulationExecutionContext
-  | SimulationVerificationContext;
+  | SimulationVerificationContext
+  // Verification checks not bound to one operation name the failed state
+  // read's id (`balance:<token>:<account>` or `position:<marketId>:<account>`).
+  | (SimulationCheckContext & {
+      readonly stage: "verification";
+      readonly field: string;
+      readonly operation?: never;
+    });
 
 /**
  * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.
@@ -245,22 +262,13 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** A decoded transaction maps to no supported operation. */
+/**
+ * An SDK requirement passed to `toSimulationAuthorizations` cannot be
+ * converted into a simulation authorization.
+ */
 export class UnsupportedOperationError extends SimulationPackageError {
   override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";
-}
-
-/** An operation does not match the protocol entity it was bound to. */
-export class ProtocolBindingMismatchError extends SimulationPackageError {
-  override readonly name = "ProtocolBindingMismatchError";
-  readonly code = "PROTOCOL_BINDING_MISMATCH";
-}
-
-/** The request requires a verification feature this version does not support. */
-export class UnsupportedVerificationFeatureError extends SimulationPackageError {
-  override readonly name = "UnsupportedVerificationFeatureError";
-  readonly code = "UNSUPPORTED_VERIFICATION_FEATURE";
 }
 
 /** The simulation backend returned a response that cannot be parsed. */
@@ -279,42 +287,6 @@ export class MissingVerificationEvidenceError extends SimulationPackageError {
 export class AuthorizationRequestMismatchError extends SimulationPackageError {
   override readonly name = "AuthorizationRequestMismatchError";
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
-}
-
-/** An observed asset change violates the expected bounds. */
-export class AssetChangeMismatchError extends SimulationPackageError {
-  override readonly name = "AssetChangeMismatchError";
-  readonly code = "ASSET_CHANGE_MISMATCH";
-}
-
-/** An observed permission change (allowance or authorization) violates the expected bounds. */
-export class PermissionChangeMismatchError extends SimulationPackageError {
-  override readonly name = "PermissionChangeMismatchError";
-  readonly code = "PERMISSION_CHANGE_MISMATCH";
-}
-
-/** An observed state change violates the expected bounds. */
-export class StateChangeMismatchError extends SimulationPackageError {
-  override readonly name = "StateChangeMismatchError";
-  readonly code = "STATE_CHANGE_MISMATCH";
-}
-
-/** An operation left a market outside its allowed constraints. */
-export class MarketConstraintViolationError extends SimulationPackageError {
-  override readonly name = "MarketConstraintViolationError";
-  readonly code = "MARKET_CONSTRAINT_VIOLATION";
-}
-
-/** An asset/share conversion exceeded the allowed slippage. */
-export class SlippageLimitExceededError extends SimulationPackageError {
-  override readonly name = "SlippageLimitExceededError";
-  readonly code = "SLIPPAGE_LIMIT_EXCEEDED";
-}
-
-/** An observed fee differs from the expected amount. */
-export class FeeMismatchError extends SimulationPackageError {
-  override readonly name = "FeeMismatchError";
-  readonly code = "FEE_MISMATCH";
 }
 
 /** A consumer-supplied limit was violated. */
@@ -337,17 +309,9 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     SIMULATION_REVERTED: "SimulationRevertedError",
     BLACKLIST_ERROR: "BlacklistViolationError",
     UNSUPPORTED_OPERATION: "UnsupportedOperationError",
-    PROTOCOL_BINDING_MISMATCH: "ProtocolBindingMismatchError",
-    UNSUPPORTED_VERIFICATION_FEATURE: "UnsupportedVerificationFeatureError",
     INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
     MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
     AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
-    ASSET_CHANGE_MISMATCH: "AssetChangeMismatchError",
-    PERMISSION_CHANGE_MISMATCH: "PermissionChangeMismatchError",
-    STATE_CHANGE_MISMATCH: "StateChangeMismatchError",
-    MARKET_CONSTRAINT_VIOLATION: "MarketConstraintViolationError",
-    SLIPPAGE_LIMIT_EXCEEDED: "SlippageLimitExceededError",
-    FEE_MISMATCH: "FeeMismatchError",
     CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
     UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
   });
@@ -361,7 +325,8 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  *   owning that `code`, and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
  *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
- *   known `operation` with its subject fields for `execution`/`verification`).
+ *   known `operation` with its subject fields for `execution`/`verification`,
+ *   or a verification `field` string with no `operation`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -422,9 +387,11 @@ export function isSimulationPackageError(
     typeof blockNumber !== "bigint"
   )
     return false;
-  if (stage === "preparation") return typeof authorizationIndex === "number";
-  if (stage !== "execution" && stage !== "verification") return true;
   const c = context as Record<string, unknown>;
+  if (stage === "preparation") return typeof authorizationIndex === "number";
+  if (stage === "verification" && c.operation === undefined)
+    return typeof c.field === "string";
+  if (stage !== "execution" && stage !== "verification") return true;
   const operation = c.operation;
   if (
     typeof operation !== "string" ||
@@ -432,7 +399,6 @@ export function isSimulationPackageError(
   )
     return false;
   const isString = (key: string) => typeof c[key] === "string";
-  if (operation === "blueAuthorization") return isString("authorized");
   if (operation === "blueRefinance")
     return isString("sourceMarketId") && isString("targetMarketId");
   if (operation === "vaultV1MigrateToV2")

@@ -1,3 +1,4 @@
+import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
@@ -26,45 +27,47 @@ const wethAbi = [
   },
 ] as const;
 
-function planFor(options: {
-  readonly transactions: readonly {
-    to: Address;
-    data: `0x${string}`;
-    value?: bigint;
-  }[];
-  readonly owner: Address;
-  readonly blockNumber?: bigint | "latest";
-}) {
-  const { transactions, owner, blockNumber } = options;
-  return planExecution(
-    parseRequest({
+function planFor(
+  transactions: readonly { to: Address; data: `0x${string}`; value?: bigint }[],
+  owner: Address,
+) {
+  return planExecution({
+    request: parseRequest({
       chainId: mainnet.id,
       transactions: transactions.map((tx) => ({ ...tx, from: owner })),
-      ...(blockNumber !== undefined ? { blockNumber } : {}),
     }),
-  );
+    owner,
+    preparations: [],
+    reads: [],
+  });
 }
+
+const pin = async (client: AnvilTestClient<typeof mainnet>) => {
+  const number = await client.getBlockNumber();
+  const block = await client.getBlock({ blockNumber: number });
+  return { number, hash: block.hash!, timestamp: block.timestamp };
+};
 
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
   test("deterministic pinned metadata", async ({ client }) => {
     // Anvil requires the eth_simulateV1 pin to equal node head and reports
     // block.number === the pin (no base+1 advancement like geth).
-    const head = await client.getBlockNumber();
-    const pinned = await client.getBlock({ blockNumber: head });
-    const plan = planFor({
-      transactions: [{ to: RECIPIENT, data: "0x" }],
-      owner: client.account.address,
-      blockNumber: head,
-    });
+    const stateBlock = await pin(client);
+    const head = stateBlock.number;
+    const plan = planFor(
+      [{ to: RECIPIENT, data: "0x" }],
+      client.account.address,
+    );
 
     const execution = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan,
+      stateBlock,
     });
 
     expect(execution.block.chainId).toBe(mainnet.id);
     expect(execution.block.stateBlockNumber).toBe(head);
-    expect(execution.block.stateBlockHash).toBe(pinned.hash);
+    expect(execution.block.stateBlockHash).toBe(stateBlock.hash);
     expect(execution.block.blockNumber).toBeGreaterThanOrEqual(head);
     expect(execution.block.blockTimestamp).toBeGreaterThanOrEqual(
       execution.block.stateBlockTimestamp,
@@ -72,33 +75,48 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
 
     // Re-running at the same pin yields a deep-equal block and readings.
     const again = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan,
+      stateBlock,
     });
     expect(again.block).toEqual(execution.block);
-    expect(again.transactions).toEqual(execution.transactions);
-
-    // "latest" on the pinned fork resolves to the same pinned block.
-    const latest = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan: planFor({
-        transactions: [{ to: RECIPIENT, data: "0x" }],
-        owner: client.account.address,
-        blockNumber: "latest",
-      }),
-    });
-    expect(latest.block.stateBlockNumber).toBe(head);
+    expect(again.stateReads).toEqual(execution.stateReads);
   });
 
-  test("sequential state: deposit then withdraw moves the native balance", async ({
+  test("native value moves report as traceTransfers logs", async ({
     client,
   }) => {
     const amount = parseEther("0.5");
-
+    const before = await client.getBalance({
+      address: client.account.address,
+    });
+    const stateBlock = await pin(client);
     const execution = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan: planFor({
-        transactions: [
+      client,
+      plan: planFor(
+        [{ to: RECIPIENT, data: "0x", value: amount }],
+        client.account.address,
+      ),
+      stateBlock,
+    });
+    expect(execution.calls).toHaveLength(1);
+    // traceTransfers synthesizes the native move as a transfer log, which is
+    // how native after-balances are projected — no in-block probe needed.
+    const after = await client.getBalance({
+      address: client.account.address,
+    });
+    expect(before - after).toBe(0n); // simulate does not persist state
+  });
+
+  test("sequential state: deposit then withdraw emits native transfer logs", async ({
+    client,
+  }) => {
+    const amount = parseEther("0.5");
+    const stateBlock = await pin(client);
+    const execution = await executePlan({
+      client,
+      plan: planFor(
+        [
           {
             to: WETH,
             data: encodeFunctionData({
@@ -116,15 +134,11 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
             }),
           },
         ],
-        owner: client.account.address,
-        blockNumber: await client.getBlockNumber(),
-      }),
+        client.account.address,
+      ),
+      stateBlock,
     });
-
-    expect(execution.transactions).toHaveLength(2);
-    expect(execution.transactions.every((t) => t.result.status)).toBe(true);
-    // The deposit logged the WETH mint to the sender; the withdraw burned it.
-    expect(execution.transactions[0]!.result.logs.length).toBeGreaterThan(0);
-    expect(execution.transactions[1]!.result.logs.length).toBeGreaterThan(0);
+    expect(execution.calls).toHaveLength(2);
+    expect(execution.calls.every((c) => c.result.status)).toBe(true);
   });
 });

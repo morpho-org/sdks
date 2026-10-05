@@ -1,7 +1,10 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
-import type { SimulationLimits, SimulationOperationSubject } from "./limits.js";
+import type {
+  SimulationLimits,
+  SimulationOperationSubject,
+  SlippageLimits,
+} from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
   SimulationCall,
@@ -9,124 +12,47 @@ import type {
   SimulationTransaction,
 } from "./types.js";
 
-/** One operation decoded from the caller's transactions. */
+/** One operation described by the caller's `limits.operations`. */
 export type SimulatedOperation = {
-  /** Index into `simulationTxs`. */
-  readonly transactionIndex: number;
+  /** Quote and percentage tolerance checked against the named subject over the whole bundle. */
+  readonly checkedLimits: SlippageLimits;
+  /** Resolved selector from the limit; defaults to the transaction sender. */
+  readonly account: Address;
+  /** Resolved selector from the limit; defaults to the transaction sender. */
+  readonly receiver: Address;
 } & SimulationOperationSubject;
 
-/** Approval calls simulated before the user transactions for one pending authorization. */
+/** How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
   readonly authorization: SimulationAuthorization;
+  /** Approval calls simulated before the user transactions. */
   readonly calls: readonly {
     readonly transaction: SimulationTransaction;
     readonly result: SimulationCall;
   }[];
 }
 
-/** Signed change (after − before) of one ERC-20 allowance over the bundle. */
-export interface TokenAllowance {
-  readonly token: Address;
-  readonly owner: Address;
-  readonly spender: Address;
-  readonly amount: bigint;
-}
-
-/** One Morpho `isAuthorized` flag before and after the bundle. */
-export interface MorphoAuthorizationChange {
-  readonly authorizer: Address;
-  readonly authorized: Address;
-  readonly before: boolean;
-  readonly after: boolean;
-}
-
-/** One sequential signature nonce before and after the bundle. */
-export interface SequentialNonceChange {
-  readonly type: "erc2612" | "blueAuthorization";
-  /** Token for erc2612, Morpho for blueAuthorization. */
-  readonly verifyingContract: Address;
-  readonly owner: Address;
-  readonly before: bigint;
-  readonly after: bigint;
-}
-
-/** One Permit2 `nonceBitmap(owner, nonce >> 8n)` word before and after the bundle. */
-export interface Permit2NonceChange {
-  readonly type: "permit2";
-  readonly verifyingContract: Address;
-  readonly owner: Address;
-  /** Signed unordered nonce; the word read is `nonce >> 8n` and the bit checked is `nonce & 0xffn`. */
-  readonly nonce: bigint;
-  readonly before: bigint;
-  readonly after: bigint;
-}
-
-/** One signature nonce before and after the bundle. */
-export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
-
-/**
- * Everything the bundle changed, including preparation calls and
- * interest accrual. Numeric entries are signed differences (after − before);
- * authorizations and nonces carry both values. Token balance changes are not
- * repeated here: `SimulationResult.assetChanges` is their single source.
- */
-export interface SimulationStateChange {
-  readonly allowances: readonly TokenAllowance[];
-  readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
-  readonly nonces: readonly SignatureNonceChange[];
-  readonly positions: readonly {
-    readonly marketId: MarketId;
-    readonly user: Address;
-    readonly supplyAssets: bigint;
-    readonly supplyShares: bigint;
-    readonly borrowAssets: bigint;
-    readonly borrowShares: bigint;
-    readonly collateral: bigint;
-  }[];
-  readonly markets: readonly {
-    readonly marketId: MarketId;
-    readonly totalSupplyAssets: bigint;
-    readonly totalSupplyShares: bigint;
-    readonly totalBorrowAssets: bigint;
-    readonly totalBorrowShares: bigint;
-    readonly liquidityAssets: bigint;
-  }[];
-  readonly vaults: readonly {
-    readonly vault: Address;
-    readonly totalAssets: bigint;
-    readonly totalShares: bigint;
-    readonly userShares: bigint;
-    readonly idleAssets: bigint;
-  }[];
-}
-
-/** A fee charged during the simulation. */
-export interface Fee {
-  readonly type:
-    | "referral"
-    | "performance"
-    | "management"
-    | "exitPenalty"
-    | "reallocationPenalty";
-  readonly token: Address;
-  readonly recipient: Address;
-  readonly amount: bigint;
-}
-
-/** Verification report attached to a verified simulation result. */
+/** Optional slippage checks; execution success does not imply economic verification. */
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
+  /**
+   * Block `eth_simulateV1` executed in: the pinned state block or its
+   * successor, depending on the node. Not a pin to pass back as
+   * `SimulateParams.blockNumber`.
+   */
   readonly blockNumber: bigint;
+  /**
+   * Timestamp (seconds) of the block `eth_simulateV1` executed in: the
+   * pinned state block or its successor, depending on the node.
+   */
   readonly blockTimestamp: bigint;
-  /** Limits actually enforced: caller values with SDK defaults filled in. */
+  /** Caller-supplied quotes and tolerances only; omitted limits remain unchecked. */
   readonly limits: Required<SimulationLimits>;
   readonly operations: readonly SimulatedOperation[];
   /** Preview only; always empty in final. */
   readonly authorizations: readonly AuthorizationPreparation[];
-  readonly diff: SimulationStateChange;
-  readonly fees: readonly Fee[];
 }
 
 /** `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */

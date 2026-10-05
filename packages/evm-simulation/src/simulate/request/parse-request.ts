@@ -1,4 +1,4 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -18,19 +18,17 @@ import type {
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type {
-  MarketMinAssets,
   OperationLimit,
   OperationType,
   SimulationLimits,
-  VaultDeallocation,
+  SlippageQuote,
 } from "../../limits.js";
 import {
   SIMULATION_MODES,
   type SimulateParams,
   type SimulationMode,
 } from "../../params.js";
-
-import { resolveEffectiveLimits } from "./effective-limits.js";
+import { operationMeasurementPlan } from "../measurement-plan.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
  * @internal
@@ -145,14 +143,7 @@ const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
 const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
-const LIMITS_KEYS = [
-  "maxSlippageWad",
-  "minLltvBufferWad",
-  "maxSignatureLifetimeSeconds",
-  "operations",
-] as const;
-const DEALLOCATION_KEYS = ["adapter", "marketId", "assets"] as const;
-const MIN_SUPPLY_KEYS = ["marketId", "minAssets"] as const;
+const LIMITS_KEYS = ["operations"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   erc20Approval: ["type", "token", "owner", "spender", "amount"],
   erc2612Permit: ["type", "typedData"],
@@ -599,20 +590,14 @@ const createChecks = (): FieldChecks => {
         return undefined;
       }
       const spec = OPERATION_SPECS[type as OperationType];
-      const requiredAddresses = new Set(
-        REQUIRED_ADDRESSES[type as OperationType],
-      );
+      const requiredAddresses = new Set(spec.requiredAddresses);
       check.keys(operation, {
         allow: [
           "type",
-          "transactionIndex",
           ...spec.markets,
           ...spec.addresses,
-          ...spec.uints,
-          ...spec.bools,
-          ...spec.marketIdArrays,
-          ...(spec.deallocations ? ["expectedDeallocations"] : []),
-          ...(spec.minSupplyByMarket ? ["minSupplyAssetsByMarket"] : []),
+          "quote",
+          "slippageTolerance",
         ],
         path,
       });
@@ -631,112 +616,42 @@ const createChecks = (): FieldChecks => {
         const value = check.address(raw, `${path}.${field}`);
         if (value !== undefined) Reflect.set(out, field, value);
       }
-      for (const field of spec.uints) {
-        const raw = readField(operation, field);
-        if (raw === undefined) continue;
-        const value = check.uint256(raw, `${path}.${field}`);
-        if (value !== undefined) Reflect.set(out, field, value);
+      const tolerance = check.uint256(
+        readField(operation, "slippageTolerance"),
+        `${path}.slippageTolerance`,
+      );
+      if (tolerance !== undefined) {
+        if (tolerance > MathLib.WAD)
+          errors.push(`${path}.slippageTolerance: must not exceed 100% (1e18)`);
+        Reflect.set(out, "slippageTolerance", tolerance);
       }
-      for (const field of spec.bools) {
-        const raw = readField(operation, field);
-        if (raw === undefined) continue;
-        const value = check.bool(raw, `${path}.${field}`);
-        if (value !== undefined) Reflect.set(out, field, value);
-      }
-      const transactionIndex = readField(operation, "transactionIndex");
-      if (transactionIndex !== undefined) {
-        const value = check.nonNegInt(
-          transactionIndex,
-          `${path}.transactionIndex`,
+      const quote = readField(operation, "quote");
+      if (!isRecord(quote)) {
+        errors.push(
+          `${path}.quote: must be an object containing at least one quoted amount`,
         );
-        if (value !== undefined) Reflect.set(out, "transactionIndex", value);
-      }
-      for (const field of spec.marketIdArrays) {
-        const raw = readField(operation, field);
-        if (raw === undefined) continue;
-        if (!Array.isArray(raw)) {
-          errors.push(`${path}.${field}: must be an array of market ids`);
-          continue;
+      } else {
+        check.keys(quote, { allow: QUOTE_FIELDS, path: `${path}.quote` });
+        const normalizedQuote: Record<string, bigint> = {};
+        for (const field of QUOTE_FIELDS) {
+          const raw = readField(quote, field);
+          if (raw === undefined) continue;
+          const value = check.uint256(raw, `${path}.quote.${field}`);
+          if (value !== undefined) normalizedQuote[field] = value;
         }
-        const ids: MarketId[] = [];
-        for (const [j, entry] of raw.entries()) {
-          const id = check.marketId(entry, `${path}.${field}[${j}]`);
-          if (id !== undefined) ids.push(id);
+        if (Object.keys(normalizedQuote).length === 0)
+          errors.push(`${path}.quote: supply at least one quoted amount`);
+        const measurement = operationMeasurementPlan(out);
+        for (const field of ["sharesMinted", "sharesBurned"] as const) {
+          if (
+            normalizedQuote[field] !== undefined &&
+            measurement[field] === undefined
+          )
+            errors.push(
+              `${path}.quote.${field}: cannot be measured for "${type}"`,
+            );
         }
-        Reflect.set(out, field, ids);
-      }
-      if (spec.deallocations) {
-        const raw = readField(operation, "expectedDeallocations");
-        if (raw !== undefined) {
-          if (!Array.isArray(raw)) {
-            errors.push(`${path}.expectedDeallocations: must be an array`);
-          } else {
-            const deallocations: VaultDeallocation[] = [];
-            for (const [j, entry] of raw.entries()) {
-              const entryPath = `${path}.expectedDeallocations[${j}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: DEALLOCATION_KEYS,
-                path: entryPath,
-              });
-              const adapter = check.address(
-                readField(entry, "adapter"),
-                `${entryPath}.adapter`,
-              );
-              const rawMarketId = readField(entry, "marketId");
-              const marketId =
-                rawMarketId === undefined
-                  ? undefined
-                  : check.marketId(rawMarketId, `${entryPath}.marketId`);
-              const assets = check.uint256(
-                readField(entry, "assets"),
-                `${entryPath}.assets`,
-              );
-              if (adapter !== undefined && assets !== undefined)
-                deallocations.push({
-                  adapter,
-                  ...(marketId !== undefined ? { marketId } : {}),
-                  assets,
-                });
-            }
-            Reflect.set(out, "expectedDeallocations", deallocations);
-          }
-        }
-      }
-      if (spec.minSupplyByMarket) {
-        const raw = readField(operation, "minSupplyAssetsByMarket");
-        if (raw !== undefined) {
-          if (!Array.isArray(raw)) {
-            errors.push(`${path}.minSupplyAssetsByMarket: must be an array`);
-          } else {
-            const minimums: MarketMinAssets[] = [];
-            for (const [j, entry] of raw.entries()) {
-              const entryPath = `${path}.minSupplyAssetsByMarket[${j}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: MIN_SUPPLY_KEYS,
-                path: entryPath,
-              });
-              const marketId = check.marketId(
-                readField(entry, "marketId"),
-                `${entryPath}.marketId`,
-              );
-              const minAssets = check.uint256(
-                readField(entry, "minAssets"),
-                `${entryPath}.minAssets`,
-              );
-              if (marketId !== undefined && minAssets !== undefined)
-                minimums.push({ marketId, minAssets });
-            }
-            Reflect.set(out, "minSupplyAssetsByMarket", minimums);
-          }
-        }
+        Reflect.set(out, "quote", normalizedQuote);
       }
       return errors.length === errorsBefore ? out : undefined;
     },
@@ -798,237 +713,76 @@ const createChecks = (): FieldChecks => {
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
 
-type VariantOf<T extends OperationType> = Extract<OperationLimit, { type: T }>;
-/** Field names of a limit variant (validated tables are checked against this). */
-type FieldsOf<T extends OperationType> = readonly (Exclude<
-  keyof VariantOf<T>,
-  "type" | "transactionIndex"
-> &
-  string)[];
+/** Union of every field name carried by any {@link OperationLimit} variant. */
+type LimitKey<L = OperationLimit> = L extends unknown ? keyof L : never;
 
-interface OperationSpec<T extends OperationType> {
-  /** Required 32-byte market ids. */
-  readonly markets: FieldsOf<T>;
-  /** Optional checksummed addresses. */
-  readonly addresses: FieldsOf<T>;
-  /** Optional uint256 fields. */
-  readonly uints: FieldsOf<T>;
-  /** Optional booleans. */
-  readonly bools: FieldsOf<T>;
-  /** Optional arrays of market ids. */
-  readonly marketIdArrays: FieldsOf<T>;
-  /** `expectedDeallocations` (VaultDeallocation[]). */
-  readonly deallocations: boolean;
-  /** `minSupplyAssetsByMarket` (MarketMinAssets[]). */
-  readonly minSupplyByMarket: boolean;
-}
-
-const SPEC = <T extends OperationType>(
-  partial: Partial<OperationSpec<T>>,
-): OperationSpec<T> => ({
+const QUOTE_FIELDS = [
+  "assetsReceived",
+  "sharesMinted",
+  "assetsPaid",
+  "sharesBurned",
+] as const satisfies readonly (keyof SlippageQuote)[];
+const MARKET_SUBJECT = {
+  markets: ["marketId"],
+  addresses: ["account", "receiver", "assetPaid", "assetReceived"],
+  requiredAddresses: [],
+} as const satisfies {
+  readonly markets: readonly LimitKey[];
+  readonly addresses: readonly LimitKey[];
+  readonly requiredAddresses: readonly LimitKey[];
+};
+const VAULT_SUBJECT = {
   markets: [],
-  addresses: [],
-  uints: [],
-  bools: [],
-  marketIdArrays: [],
-  deallocations: false,
-  minSupplyByMarket: false,
-  ...partial,
-});
-
-const OPERATION_SPECS = {
-  blueSupply: SPEC<"blueSupply">({
-    markets: ["marketId"],
-    addresses: ["expectedOnBehalf"],
-    uints: ["expectedAssets", "minSupplySharesMinted"],
-  }),
-  blueWithdraw: SPEC<"blueWithdraw">({
-    markets: ["marketId"],
-    addresses: ["expectedReceiver"],
-    uints: [
-      "minAssetsReceived",
-      "maxSupplySharesBurned",
-      "maxUtilizationAfterWad",
-      "maxReallocationPenaltyAssets",
-    ],
-    bools: ["expectedFullClose"],
-  }),
-  blueSupplyCollateral: SPEC<"blueSupplyCollateral">({
-    markets: ["marketId"],
-    addresses: ["expectedOnBehalf"],
-    uints: ["expectedAssets", "maxLtvAfterWad"],
-  }),
-  blueBorrow: SPEC<"blueBorrow">({
-    markets: ["marketId"],
-    addresses: ["expectedReceiver"],
-    uints: [
-      "expectedAssets",
-      "maxBorrowSharesMinted",
-      "maxLtvAfterWad",
-      "minHealthFactorAfterWad",
-      "maxUtilizationAfterWad",
-      "maxAfterBorrowApyWad",
-      "maxReallocationPenaltyAssets",
-    ],
-  }),
-  blueSupplyCollateralBorrow: SPEC<"blueSupplyCollateralBorrow">({
-    markets: ["marketId"],
-    addresses: ["expectedOnBehalf", "expectedReceiver"],
-    uints: [
-      "expectedCollateralAssets",
-      "expectedBorrowAssets",
-      "maxBorrowSharesMinted",
-      "maxLtvAfterWad",
-      "minHealthFactorAfterWad",
-      "maxUtilizationAfterWad",
-      "maxAfterBorrowApyWad",
-      "maxReallocationPenaltyAssets",
-    ],
-  }),
-  blueRepay: SPEC<"blueRepay">({
-    markets: ["marketId"],
-    addresses: ["expectedOnBehalf"],
-    uints: [
-      "maxAssetsPaid",
-      "minBorrowSharesBurned",
-      "maxResidualBorrowShares",
-      "minRefundAssets",
-    ],
-    bools: ["expectedFullClose"],
-  }),
-  blueWithdrawCollateral: SPEC<"blueWithdrawCollateral">({
-    markets: ["marketId"],
-    addresses: ["expectedReceiver"],
-    uints: ["expectedAssets", "maxLtvAfterWad", "minHealthFactorAfterWad"],
-  }),
-  blueRepayWithdrawCollateral: SPEC<"blueRepayWithdrawCollateral">({
-    markets: ["marketId"],
-    addresses: ["expectedOnBehalf", "expectedReceiver"],
-    uints: [
-      "expectedWithdrawAssets",
-      "maxAssetsPaid",
-      "minBorrowSharesBurned",
-      "maxResidualBorrowShares",
-      "minRefundAssets",
-      "maxLtvAfterWad",
-      "minHealthFactorAfterWad",
-    ],
-    bools: ["expectedFullClose"],
-  }),
-  blueRefinance: SPEC<"blueRefinance">({
+  addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
+  requiredAddresses: ["vault"],
+} as const satisfies {
+  readonly markets: readonly LimitKey[];
+  readonly addresses: readonly LimitKey[];
+  readonly requiredAddresses: readonly LimitKey[];
+};
+const OPERATION_SPECS: Record<
+  OperationType,
+  {
+    readonly markets: readonly LimitKey[];
+    readonly addresses: readonly LimitKey[];
+    readonly requiredAddresses: readonly LimitKey[];
+  }
+> = {
+  blueSupply: MARKET_SUBJECT,
+  blueWithdraw: MARKET_SUBJECT,
+  blueSupplyCollateral: MARKET_SUBJECT,
+  blueBorrow: MARKET_SUBJECT,
+  blueSupplyCollateralBorrow: MARKET_SUBJECT,
+  blueRepay: MARKET_SUBJECT,
+  blueWithdrawCollateral: MARKET_SUBJECT,
+  blueRepayWithdrawCollateral: MARKET_SUBJECT,
+  blueRefinance: {
+    ...MARKET_SUBJECT,
     markets: ["sourceMarketId", "targetMarketId"],
-    uints: [
-      "maxTargetBorrowAssets",
-      "maxTargetBorrowSharesMinted",
-      "maxSourceResidualBorrowShares",
-      "maxTargetLtvAfterWad",
-      "minTargetHealthFactorAfterWad",
-      "maxLoanDustAssets",
-      "maxReallocationPenaltyAssets",
+  },
+  vaultV1Deposit: VAULT_SUBJECT,
+  vaultV2Deposit: VAULT_SUBJECT,
+  vaultV1Withdraw: VAULT_SUBJECT,
+  vaultV2Withdraw: VAULT_SUBJECT,
+  vaultV1Redeem: VAULT_SUBJECT,
+  vaultV2Redeem: VAULT_SUBJECT,
+  vaultV2ForceWithdraw: VAULT_SUBJECT,
+  vaultV2ForceRedeem: VAULT_SUBJECT,
+  vaultV1InKindRedeem: VAULT_SUBJECT,
+  vaultV2InKindRedeem: VAULT_SUBJECT,
+  vaultV1MigrateToV2: {
+    markets: [],
+    addresses: [
+      "sourceVault",
+      "targetVault",
+      "account",
+      "receiver",
+      "assetPaid",
+      "assetReceived",
     ],
-  }),
-  blueAuthorization: SPEC<"blueAuthorization">({
-    addresses: ["authorized"],
-    bools: ["expectedIsAuthorized"],
-  }),
-  vaultV1Deposit: SPEC<"vaultV1Deposit">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedAssets", "minSharesMinted"],
-  }),
-  vaultV2Deposit: SPEC<"vaultV2Deposit">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedAssets", "minSharesMinted"],
-  }),
-  vaultV1Withdraw: SPEC<"vaultV1Withdraw">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedAssets", "maxSharesBurned"],
-  }),
-  vaultV2Withdraw: SPEC<"vaultV2Withdraw">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedAssets", "maxSharesBurned"],
-  }),
-  vaultV1Redeem: SPEC<"vaultV1Redeem">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedShares", "minAssetsReceived"],
-  }),
-  vaultV2Redeem: SPEC<"vaultV2Redeem">({
-    addresses: ["vault", "expectedReceiver"],
-    uints: ["expectedShares", "minAssetsReceived"],
-  }),
-  vaultV2ForceWithdraw: SPEC<"vaultV2ForceWithdraw">({
-    addresses: ["vault", "expectedAdapter"],
-    uints: [
-      "expectedExitAssets",
-      "maxSharesBurned",
-      "minAssetsReceived",
-      "maxPenaltyAssets",
-    ],
-  }),
-  vaultV2ForceRedeem: SPEC<"vaultV2ForceRedeem">({
-    addresses: ["vault", "expectedRecipient", "expectedOnBehalf"],
-    uints: [
-      "expectedShares",
-      "minAssetsReceived",
-      "maxPenaltyShares",
-      "maxPenaltyAssets",
-    ],
-    deallocations: true,
-  }),
-  vaultV1InKindRedeem: SPEC<"vaultV1InKindRedeem">({
-    addresses: ["vault"],
-    uints: [
-      "expectedAssets",
-      "maxSharesBurned",
-      "minIdleAssetsReceived",
-      "maxPenaltyAssets",
-      "maxResidualShareAllowance",
-    ],
-    marketIdArrays: ["expectedMarketIds"],
-    minSupplyByMarket: true,
-  }),
-  vaultV2InKindRedeem: SPEC<"vaultV2InKindRedeem">({
-    addresses: ["vault"],
-    uints: [
-      "expectedAssets",
-      "maxSharesBurned",
-      "minIdleAssetsReceived",
-      "maxPenaltyAssets",
-      "maxResidualShareAllowance",
-    ],
-    marketIdArrays: ["expectedMarketIds"],
-    minSupplyByMarket: true,
-  }),
-  vaultV1MigrateToV2: SPEC<"vaultV1MigrateToV2">({
-    addresses: ["sourceVault", "targetVault", "expectedReceiver"],
-    uints: ["expectedAssets", "expectedShares", "minTargetSharesMinted"],
-  }),
-} satisfies { [T in OperationType]: OperationSpec<T> };
-
-// Required address/market fields are also declared above: a missing or invalid
-// value reports the same way — the spec names the field, not optionality.
-const REQUIRED_ADDRESSES = {
-  blueSupply: [],
-  blueWithdraw: [],
-  blueSupplyCollateral: [],
-  blueBorrow: [],
-  blueSupplyCollateralBorrow: [],
-  blueRepay: [],
-  blueWithdrawCollateral: [],
-  blueRepayWithdrawCollateral: [],
-  blueRefinance: [],
-  blueAuthorization: ["authorized"],
-  vaultV1Deposit: ["vault"],
-  vaultV2Deposit: ["vault"],
-  vaultV1Withdraw: ["vault"],
-  vaultV2Withdraw: ["vault"],
-  vaultV1Redeem: ["vault"],
-  vaultV2Redeem: ["vault"],
-  vaultV2ForceWithdraw: ["vault"],
-  vaultV2ForceRedeem: ["vault"],
-  vaultV1InKindRedeem: ["vault"],
-  vaultV2InKindRedeem: ["vault"],
-  vaultV1MigrateToV2: ["sourceVault", "targetVault"],
-} satisfies { [T in OperationType]: FieldsOf<T> };
+    requiredAddresses: ["sourceVault", "targetVault"],
+  },
+};
 
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
@@ -1184,18 +938,6 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       fieldErrors.push("limits: must be an object");
     } else {
       check.keys(limits, { allow: LIMITS_KEYS, path: "limits" });
-      const parsed: Record<string, bigint> = {};
-      for (const field of [
-        "maxSlippageWad",
-        "minLltvBufferWad",
-        "maxSignatureLifetimeSeconds",
-      ] as const) {
-        const raw = readField(limits, field);
-        if (raw !== undefined) {
-          const value = check.uint256(raw, `limits.${field}`);
-          if (value !== undefined) parsed[field] = value;
-        }
-      }
       const rawOperations = readField(limits, "operations");
       if (rawOperations !== undefined) {
         if (!Array.isArray(rawOperations)) {
@@ -1211,15 +953,6 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         }
       }
       normalizedLimits = {
-        ...(parsed.maxSlippageWad !== undefined
-          ? { maxSlippageWad: parsed.maxSlippageWad }
-          : {}),
-        ...(parsed.minLltvBufferWad !== undefined
-          ? { minLltvBufferWad: parsed.minLltvBufferWad }
-          : {}),
-        ...(parsed.maxSignatureLifetimeSeconds !== undefined
-          ? { maxSignatureLifetimeSeconds: parsed.maxSignatureLifetimeSeconds }
-          : {}),
         ...(Array.isArray(rawOperations) ? { operations } : {}),
       };
     }
@@ -1282,41 +1015,6 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       fieldErrors.push(
         `authorizations[${i}].typedData.domain.chainId: must equal the request chainId ${chainId} (got ${domainChainId})`,
       );
-    }
-  }
-
-  if (Array.isArray(rawTransactions)) {
-    for (const [i, operation] of operations.entries()) {
-      if (
-        operation.transactionIndex !== undefined &&
-        operation.transactionIndex >= rawTransactions.length
-      ) {
-        fieldErrors.push(
-          `limits.operations[${i}].transactionIndex: ${operation.transactionIndex} is out of range for ${rawTransactions.length} transaction(s)`,
-        );
-      }
-      if (
-        operation.type === "vaultV1MigrateToV2" &&
-        operation.expectedAssets !== undefined &&
-        operation.expectedShares !== undefined
-      ) {
-        fieldErrors.push(
-          `limits.operations[${i}]: set expectedAssets or expectedShares, not both`,
-        );
-      }
-    }
-  }
-
-  try {
-    // Validate tightening rules on the normalized limits only; invalid
-    // fields were already reported and never reach this check.
-    if (normalizedLimits !== undefined)
-      resolveEffectiveLimits(normalizedLimits);
-  } catch (error) {
-    if (error instanceof SimulationValidationError) {
-      fieldErrors.push(...(error.fieldErrors ?? []));
-    } else {
-      throw error;
     }
   }
 

@@ -11,19 +11,22 @@ import {
 
 describe("OPERATION_TYPES", () => {
   test("behavior: operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
+    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<
+      | BlueMarketOperationType
+      | VaultOperationType
+      | "blueRefinance"
+      | "vaultV1MigrateToV2"
+    >();
     expectTypeOf<
       | BlueMarketOperationType
       | VaultOperationType
       | "blueRefinance"
-      | "blueAuthorization"
       | "vaultV1MigrateToV2"
     >().toEqualTypeOf<OperationType>();
     expect(
       [
         ...BLUE_MARKET_OPERATION_TYPES,
         "blueRefinance",
-        "blueAuthorization",
         ...VAULT_OPERATION_TYPES,
         "vaultV1MigrateToV2",
       ].sort(),
@@ -38,7 +41,6 @@ describe("OPERATION_TYPES", () => {
       "blueWithdrawCollateral",
       "blueRepayWithdrawCollateral",
       "blueRefinance",
-      "blueAuthorization",
       "vaultV1Deposit",
       "vaultV2Deposit",
       "vaultV1Withdraw",
