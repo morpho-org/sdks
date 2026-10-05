@@ -1039,11 +1039,11 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       };
       const defaultPlan = data.computeVaultV2BlueReallocations(
         targetParams.id,
-        { operation },
+        { operation, allocatorCapHeadroom: 0n },
       ).reallocations[0]!;
       const zeroBufferPlan = data.computeVaultV2BlueReallocations(
         targetParams.id,
-        { operation, capAccrualBuffer: 0n },
+        { operation, capAccrualBuffer: 0n, allocatorCapHeadroom: 0n },
       ).reallocations[0]!;
 
       expect(defaultPlan.assets).toBe(expectedBufferedAssets);
@@ -3138,6 +3138,127 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(result.reallocations[0]?.assets).toBe(23n);
     expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
   });
+
+  test("behavior: keeps the 90% target sizing at the allocator cap headroom limit", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 3_500n,
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "borrow", amount: 20n } },
+    );
+
+    expect(reallocations.map(({ assets }) => assets)).toEqual([34n]);
+  });
+
+  test("behavior: reduces a cap-bound operation plan to its absolute shortfall", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 30n,
+    });
+    const operation = { type: "borrow", amount: 20n } as const;
+
+    expect(
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, { operation })
+        .reallocations.map(({ assets }) => assets),
+    ).toEqual([20n]);
+    expect(
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom: 0n,
+        })
+        .reallocations.map(({ assets }) => assets),
+    ).toEqual([30n]);
+  });
+
+  test("behavior: reduces a cap-bound withdraw plan to its absolute shortfall", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 30n,
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "withdraw", amount: 20n } },
+    );
+
+    expect(reallocations.map(({ assets }) => assets)).toEqual([20n]);
+  });
+
+  test("behavior: uses the full allocator cap only when the shortfall needs it", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 20n,
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "borrow", amount: 20n } },
+    );
+
+    expect(reallocations.map(({ assets }) => assets)).toEqual([20n]);
+  });
+
+  test("behavior: skips a cap-bound plan when the operation has no shortfall", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 95n,
+      allocatorTargetCap: 10n,
+    });
+    const operation = { type: "borrow", amount: 5n } as const;
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, { operation })
+        .reallocations,
+    ).toEqual([]);
+    expect(
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom: 0n,
+        })
+        .reallocations.map(({ assets }) => assets),
+    ).toEqual([10n]);
+  });
+
+  test("error: InsufficientSharedLiquidityError when the full allocator cap is short", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 19n,
+    });
+
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: { type: "borrow", amount: 20n },
+      }),
+    ).toThrow(InsufficientSharedLiquidityError);
+  });
+
+  test.each([
+    [-1n, NegativeInputError],
+    [MathLib.WAD + 1n, InputExceedsMaxError],
+  ] as const)(
+    "error: validates allocatorCapHeadroom %s",
+    (allocatorCapHeadroom, error) => {
+      const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 0n });
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id, {
+          allocatorCapHeadroom,
+          operation: { type: "borrow", amount: 1n },
+        }),
+      ).toThrow(error);
+    },
+  );
 
   test("behavior: overshoots a shared-cap lower bound", () => {
     const penalty = MathLib.WAD;

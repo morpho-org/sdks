@@ -29,6 +29,18 @@ export interface VaultV2BluePublicAllocatorOptions {
   readonly capAccrualBuffer?: BigIntish;
 
   /**
+   * Share of each target-market BluePublicAllocator cap, scaled by WAD, that
+   * operation planning keeps free. When a reallocation toward the utilization
+   * target would come within this headroom of the cap, the plan is reduced to
+   * the operation's absolute shortfall. If the shortfall cannot be covered while
+   * keeping the headroom, the plan uses the full cap for the shortfall only.
+   * Must not exceed WAD (100%). Set to `0n` to disable.
+   *
+   * @default DEFAULT_ALLOCATOR_CAP_HEADROOM (1%)
+   */
+  readonly allocatorCapHeadroom?: bigint;
+
+  /**
    * Vault V2 addresses to consider. Arrays, readonly arrays, sets, and other
    * iterables are accepted. Defaults to every vault in the reallocation data.
    */

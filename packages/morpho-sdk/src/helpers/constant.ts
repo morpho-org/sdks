@@ -23,6 +23,15 @@ export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
  */
 export const DEFAULT_CAP_ACCRUAL_BUFFER = Time.s.from.h(2n);
 
+/**
+ * Default headroom, as a WAD-scaled share of a BluePublicAllocator target-market
+ * cap (1%), kept below that cap when an operation's reallocation would
+ * otherwise fill it. It absorbs other allocations to the same market between
+ * the quote and inclusion. Override with
+ * `VaultV2BluePublicAllocatorOptions.allocatorCapHeadroom`.
+ */
+export const DEFAULT_ALLOCATOR_CAP_HEADROOM = MathLib.WAD / 100n;
+
 /** Maximum absolute share price cap (100 RAY). Prevents absurd maxSharePrice values in repay. */
 export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 
