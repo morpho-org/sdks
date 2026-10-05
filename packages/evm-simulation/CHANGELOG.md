@@ -1,5 +1,56 @@
 # @morpho-org/evm-simulation
 
+## 5.0.0
+
+### Major Changes
+
+- [#1172](https://github.com/morpho-org/sdks/pull/1172) [`c39880f`](https://github.com/morpho-org/sdks/commit/c39880f3d2048eabacbc7e09c7ef42a164d7ba5a) Thanks [@jinmel](https://github.com/jinmel)! - Cut `simulate()` over to the v5 public types and a pinned `eth_simulateV1` boundary.
+
+  BREAKING CHANGES:
+
+  - `SimulateParams` is now an options object with `mode`; `authorizations` are accepted only in `"preview"` and `"pending"` block tags are rejected at runtime. `SimulationAuthorization` is now the union of the five typed variants (`erc20Approval`, `erc2612Permit`, `permit2SignatureTransfer`, `blueAuthorization`, `blueAuthorizationSignature`); the legacy `{type: "approval"}` and `{type: "signature"}` variants are removed.
+  - `SimulationTransaction` fields and `SimulateParams` inputs are `readonly`; `simulationTxs` echoes exactly the caller's normalized transactions (`txIdx` in `transfers` and `calls` indexes user transactions).
+  - `parseRequest` rejects unknown keys on `SimulateParams`, transactions, authorizations and limits with `SimulationValidationError` (`<path>.<key>: unknown field`); v4 ignored extra properties.
+  - `value` transfers are funded by the sender's real native balance (no balance inflation); `validation: false` keeps gas uncharged so gas stays separated from economic effects.
+  - `blockNumber` no longer accepts `"pending"`.
+  - `InvalidSimulationResponseError` (non-bypassable) replaces `ExternalServiceError` for a malformed `eth_simulateV1` block envelope and a call-count mismatch. New checks that v4 did not perform (it returned success) also throw it: an endpoint whose `eth_chainId` disagrees with the configured chain, a simulated block that is neither the pinned state block nor its immediate successor (with matching `parentHash`), a block timestamp earlier than the pinned block's, a per-call result that fails normalization (non-quantity `gasUsed`, a present but non-array `logs`, or a log whose `topics`/`address`/`data` are malformed), and a pinned state block whose hash changed, or that the node no longer serves, mid-simulation.
+  - Node-level code `3`/"insufficient funds" `eth_simulateV1` failures are `SimulationRevertedError`: `details` is a URL-free `{ code, shortMessage }` record for a node-level revert (the viem error rides on `cause`), or the frozen `{ transactionIndex, result }[]` of the user transactions when one of them reverted.
+
+- [#1204](https://github.com/morpho-org/sdks/pull/1204) [`9c97230`](https://github.com/morpho-org/sdks/commit/9c9723081adc91831027204cebc58fdea647db08) Thanks [@jinmel](https://github.com/jinmel)! - Retire the Tenderly RPC backend. `eth_simulateV1` is now the sole simulation backend: there is no provider fallback and `timeoutMs` (default 5000) is the abort budget for the `eth_simulateV1` call.
+
+  **Breaking:** `ChainSimulationConfig` now requires `simulateV1Url` for every configured chain and no longer accepts `tenderlyRpc`; the `TenderlyRpcConfig` type is removed. Migrate by replacing `tenderlyRpc: { rpcUrl }` entries with `simulateV1Url` pointing at a JSON-RPC node that supports `eth_simulateV1`. The unused `zod` runtime dependency is dropped.
+
+- [#1240](https://github.com/morpho-org/sdks/pull/1240) [`347c115`](https://github.com/morpho-org/sdks/commit/347c115f3c2c5cac825a827e2aed58373c2b443a) Thanks [@jinmel](https://github.com/jinmel)! - Add optional caller-supplied slippage checks to the v5 simulation pipeline. Each action/subject entry supplies a quote (assets received/paid or shares minted/burned) and a WAD-scaled percentage tolerance. No calldata is decoded and no quotes or tolerances are inferred or defaulted. Results identify the quote and tolerance checked over the whole bundle. Remove separate penalty and refund checks.
+
+  Replace the single asset override with separate `assetPaid` and `assetReceived` fields so each leg of a two-asset operation can use its own token.
+
+  Keep SDK requirements conversion and preview preparation, without authorization-policy or permission/nonce read-back checks. Preparation and user transaction reverts propagate. Preview success applies to simulated permissions, not future signatures.
+
+  Replace the earlier unreleased per-action limits and default-policy constants with SlippageLimits. Remove transaction indices from bundle-wide limit observations. See the v4-to-v5 migration guide for the input and result changes.
+
+  Remove the unreleased broad state snapshots/diffs and their public types. Plan only reads required by quotes: ERC-20 balances and Blue position shares, with native amounts taken from transfer traces. Remove vault/market reporting, factory discovery, full entity fetching, and the interest-accrual model. Omitted limits produce no slippage reads. Existing transfer reporting and retention checks remain unchanged.
+
+- [#1168](https://github.com/morpho-org/sdks/pull/1168) [`02bf56d`](https://github.com/morpho-org/sdks/commit/02bf56d60e6fea5eb7bc304935e1a2eefb56a111) Thanks [@jinmel](https://github.com/jinmel)! - Add typed error classes for simulation verification (`UnsupportedOperationError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`), each extending `SimulationPackageError` directly and accepting an optional frozen `SimulationErrorContext`, as do the existing errors.
+
+  Export the simulation error contract: `SIMULATION_ERROR_CODES` / `SimulationErrorCode`, `SimulationErrorContext` (readonly union of the per-stage `SimulationValidationContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext` and `SimulationTransportContext`, every stage carrying `mode`, `chainId` and `blockNumber`; verification contexts bound to a limit keyed by `operation`, which fixes the subject fields — `marketId`, `sourceMarketId`/`targetMarketId`, `vault`, `sourceVault`/`targetVault`; unbound verification contexts carry only a `field` string, and caller-transaction or node reverts carry no context), `SimulationStage`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` with its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (the operation-keyed subject union shared with simulation error contexts), `SimulationExecutionReason`, `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`; plain objects must carry the class `name` owning their `code`), `RetainedAsset`, `SIMULATION_MODES` / `SimulationMode` and `OPERATION_TYPES` / `OperationType`.
+
+  `SimulationRevertedError.reasonCode: SimulationExecutionReason` is the machine-readable cause of an execution failure (defaults to `"UNKNOWN_REVERT"`); `reason` stays a human-readable message that consumers must not parse.
+
+  `SimulationRevertedError` carries a structured `details` payload.
+
+  **Breaking:** `BlacklistViolationError.assetChanges` entries are `{ address: Address; token: Address; netRetained: bigint }` (previously optional string addresses and a decimal-string amount). `SimulationPackageError.code` is typed as `SimulationErrorCode` and the base class declares `readonly context?: SimulationErrorContext`. Built-in errors now declare a literal `name` class field paired with their `code`, so a subclass of a built-in error (e.g. `class MyError extends SimulationValidationError`) reports the built-in `name` rather than its own (previously `this.constructor.name`). Direct subclasses of `SimulationPackageError` still get `new.target.name`. Only literal name/code pairs are recognized by `isSimulationPackageError` on plain objects. `SimulateParams` is now the v5 input (`chainId`, `transactions`, `mode?: SimulationMode`, `authorizations?: SimulationAuthorization[]`, `blockNumber?`, `limits?: SimulationLimits`); the pre-v5 shape is no longer exported. `SimulationAuthorization`, `SimulationLimits`, `OperationLimit`, `VerifiedSimulationResult`, `SimulationVerification` and their member types are exported from the package root.
+
+  Migrate by passing the v5 `SimulateParams` shape to `simulate()` (see `docs/migrations/evm-simulation-v4-to-v5.md`); use `netRetained.toString()` where a decimal string is still needed and drop `undefined` checks on `assetChanges[].address` / `.token`.
+
+### Minor Changes
+
+- [#1174](https://github.com/morpho-org/sdks/pull/1174) [`8e2b8fb`](https://github.com/morpho-org/sdks/commit/8e2b8fb66ebe8f0d41f826012147613edb3fc42d) Thanks [@jinmel](https://github.com/jinmel)! - Add `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements })`, a pure adapter that maps morpho-sdk `ActionRequirement[]` (from `ActionOutput.getRequirements()`) onto ordered `SimulationAuthorization[]` descriptors — no validation lives in the adapter; `simulate()`'s request parser validates each authorization's shape and semantics. ERC-20 approval and Blue authorization call requirements map `action.args` (the approval token is the requirement's `to`); `permit`, `permit2SignatureTransfer`, and `authorization` signature requirements pass their EIP-712 payload through unchanged. A signature requirement without `typedData` or an unknown requirement type throws a typed error (`AuthorizationRequestMismatchError` / `UnsupportedOperationError`).
+
+### Patch Changes
+
+- Updated dependencies [[`a6911ee`](https://github.com/morpho-org/sdks/commit/a6911ee1cd598d5f3c9bbf694f78c4e441c0ccb6)]:
+  - @morpho-org/morpho-sdk@6.5.0
+
 ## 4.2.1
 
 ### Patch Changes
