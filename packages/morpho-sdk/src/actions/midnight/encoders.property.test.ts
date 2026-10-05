@@ -68,8 +68,7 @@ describe("Midnight calldata encoders", () => {
         midnightRepayWithdrawCollateral({
           chainId: midnightChainId,
           market,
-          repayUnits: 1n,
-          maxRepayAssets: 1n,
+          repay: { type: "assets", assets: 1n },
           collateralWithdrawals: [],
           collateralReceiver: midnightAddresses.taker,
           deadline: 1n,
@@ -177,8 +176,7 @@ describe("Midnight calldata encoders", () => {
           data: midnightRepayWithdrawCollateral({
             chainId: midnightChainId,
             market: midnightMarket,
-            repayUnits: units,
-            maxRepayAssets: assets,
+            repay: { type: "assets", assets },
             collateralWithdrawals: [{ collateralIndex: 0n, assets: units }],
             collateralReceiver: midnightAddresses.taker,
             deadline: assets,
@@ -186,11 +184,11 @@ describe("Midnight calldata encoders", () => {
         });
         if (
           repayment.functionName !==
-          "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral"
+          "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral"
         ) {
           throw new TypeError("unexpected repay function");
         }
-        expect(repayment.args.slice(1, 3)).toEqual([units, assets]);
+        expect(repayment.args.slice(1, 3)).toEqual([assets, assets]);
         expect(repayment.args[6][0]?.assets).toBe(units);
         expect(repayment.args[11]).toBe(assets);
 

@@ -20,6 +20,15 @@ export type {
  * Amount target of a `MidnightBundlesV2` buy (lend or repay): an exact amount of loan assets paid
  * with a minimum of units bought, or an exact amount of units bought with a maximum of loan assets paid.
  */
+/**
+ * Direct repayment for `repayWithdrawCollateral`: `assets` repays exactly that many loan assets
+ * (`0n` only withdraws); `full` repays the whole debt at execution, pulling at most the finite
+ * `maxBuyerAssets` and refunding the rest.
+ */
+export type MidnightRepay =
+  | { readonly type: "assets"; readonly assets: bigint }
+  | { readonly type: "full"; readonly maxBuyerAssets: bigint };
+
 export type MidnightBuyTarget =
   | {
       readonly type: "assets";
@@ -548,8 +557,7 @@ export interface MidnightRepayWithdrawCollateralAction
     "midnightRepayWithdrawCollateral",
     {
       readonly market: Hex;
-      readonly repayUnits: bigint;
-      readonly maxRepayAssets: bigint;
+      readonly repay: MidnightRepay;
       readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
       readonly collateralReceiver: Address;
       readonly deadline: bigint;

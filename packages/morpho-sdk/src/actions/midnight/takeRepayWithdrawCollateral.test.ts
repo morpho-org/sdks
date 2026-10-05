@@ -130,6 +130,15 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
     ).toThrow(NonPositiveInputError);
   });
 
+  test("error: zero units target", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        target: { type: "units", units: 0n, maxBuyerAssets: 1n },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
   test("error: zero withdrawal amount", () => {
     expect(() =>
       midnightTakeRepayWithdrawCollateral({

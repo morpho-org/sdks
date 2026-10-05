@@ -498,6 +498,7 @@ export class MorphoMidnight {
    * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
    * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
@@ -507,6 +508,7 @@ export class MorphoMidnight {
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @example
    * ```ts
    * const output = midnight.takeWithdraw({
@@ -1324,16 +1326,17 @@ export class MorphoMidnight {
    * @param params - Account, market snapshot, repaid units, asset cap, withdrawals, and deadline.
    * @param params.accountAddress - Position owner and transaction sender.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.repayUnits - Debt units repaid; `maxUint256` for the whole debt at execution, `0n` to only withdraw.
-   * @param params.maxRepayAssets - Loan assets pulled (and approved); the unused part is refunded.
+   * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`; the pulled amount is approved and any unused part refunded.
    * @param params.collateralWithdrawals - Optional withdrawals; `assets: maxUint256` withdraws the full balance.
    * @param params.collateralReceiver - Optional collateral recipient; defaults to `accountAddress`.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NegativeInputError} when `repayUnits` or `maxRepayAssets` is negative.
-   * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, or `deadline` is not positive.
+   * @throws {NegativeInputError} when `repay.assets` is negative.
+   * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, `repay.maxBuyerAssets` is zero, or `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when `repay.maxBuyerAssets` is `maxUint256` or `deadline` exceeds uint256.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {UnknownCollateralIndexError} when a withdrawal selects an unconfigured collateral.
    * @example
    * ```ts
@@ -1341,8 +1344,7 @@ export class MorphoMidnight {
    * const output = midnight.repayWithdrawCollateral({
    *   accountAddress: borrower,
    *   marketData,
-   *   repayUnits: maxUint256,
-   *   maxRepayAssets: 1_010_000n,
+   *   repay: { type: "full", maxBuyerAssets: 1_010_000n },
    *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
    *   deadline: maxUint256,
    * });
@@ -1356,24 +1358,28 @@ export class MorphoMidnight {
     const tx = midnightRepayWithdrawCollateral({
       chainId: this.chainId,
       market,
-      repayUnits: params.repayUnits,
-      maxRepayAssets: params.maxRepayAssets,
+      repay: params.repay,
       collateralWithdrawals: params.collateralWithdrawals ?? [],
       collateralReceiver: params.collateralReceiver ?? params.accountAddress,
       deadline: params.deadline,
       metadata: this.client.options.metadata,
     });
 
+    const pulledAssets =
+      params.repay.type === "assets"
+        ? params.repay.assets
+        : params.repay.maxBuyerAssets;
+
     return {
       getRequirements: async () => [
-        ...(params.maxRepayAssets > 0n
+        ...(pulledAssets > 0n
           ? await getMidnightApprovalRequirements({
               viemClient: this.client.viemClient,
               chainId: this.chainId,
               token: market.loanToken,
               owner: params.accountAddress,
               spender: tx.to,
-              amount: params.maxRepayAssets,
+              amount: pulledAssets,
             })
           : []),
         ...(await this.getBundlesV2AuthorizationRequirements(
