@@ -10,6 +10,7 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
+  isSimulationPackageError,
   MissingVerificationEvidenceError,
 } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
@@ -177,6 +178,8 @@ describe("planStateReads", () => {
   });
 });
 
+const decodeCtx = { chainId: 1, mode: "final", blockNumber: 1n } as const;
+
 describe("decodeStateRead", () => {
   test("default: balance", () => {
     const read = planStateReads({
@@ -192,6 +195,7 @@ describe("decodeStateRead", () => {
           functionName: "balanceOf",
           result: 123n,
         }),
+        decodeCtx,
       ),
     ).toBe(123n);
   });
@@ -201,10 +205,25 @@ describe("decodeStateRead", () => {
       owner,
       morpho: zeroAddress,
     }).reads[0]!;
-    expect(() => decodeStateRead(read, "0x")).toThrow(
-      MissingVerificationEvidenceError,
-    );
-    expect(() => decodeStateRead(read, "0x")).toThrow(read.id);
+    const error = (() => {
+      try {
+        decodeStateRead(read, "0x", decodeCtx);
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect((error as Error).message).toContain(read.id);
+    expect(isSimulationPackageError(error)).toBe(true);
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 1n,
+        field: read.id,
+      },
+    });
   });
   test("error: undecodable non-empty return data is an invalid response", () => {
     const read = planStateReads({
@@ -212,7 +231,7 @@ describe("decodeStateRead", () => {
       owner,
       morpho: zeroAddress,
     }).reads[0]!;
-    expect(() => decodeStateRead(read, "0x1234")).toThrow(
+    expect(() => decodeStateRead(read, "0x1234", decodeCtx)).toThrow(
       InvalidSimulationResponseError,
     );
   });
@@ -239,6 +258,7 @@ describe("decodeStateRead", () => {
           functionName: "position",
           result: [10n, 20n, 30n],
         }),
+        decodeCtx,
       ),
     ).toEqual({ supplyShares: 10n, borrowShares: 20n });
   });

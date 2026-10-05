@@ -125,7 +125,11 @@ export async function runSimulation(params: {
           (read) =>
             [
               read.read.id,
-              decodeStateRead(read.read, read.returnData),
+              decodeStateRead(read.read, read.returnData, {
+                chainId: request.chainId,
+                mode: request.mode,
+                blockNumber: pinnedBlock.number,
+              }),
             ] as const,
         ),
     );

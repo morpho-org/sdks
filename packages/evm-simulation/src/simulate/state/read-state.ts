@@ -14,6 +14,7 @@ import {
   MissingVerificationEvidenceError,
 } from "../../errors.js";
 import type { OperationLimit, SlippageQuote } from "../../limits.js";
+import type { SimulationMode } from "../../params.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
 import type { StateRead } from "./contract.js";
@@ -174,15 +175,26 @@ export function planStateReads(params: {
  * Decode one requested balance or position without reconstructing protocol entities.
  * @param read - Planned view call.
  * @param data - Return data from its simulated execution.
+ * @param context - Request chain, mode and pinned block, attached to thrown errors.
  * @returns Raw balance or supply/borrow share counts.
  * @throws {MissingVerificationEvidenceError} When the selected subject returned no data.
  * @throws {InvalidSimulationResponseError} When non-empty return data cannot be decoded.
  * @internal
  */
-export function decodeStateRead(read: StateRead, data: Hex): StateValue {
+// biome-ignore lint/complexity/useMaxParams: the call mirrors the failure context it attaches
+export function decodeStateRead(
+  read: StateRead,
+  data: Hex,
+  context: {
+    readonly chainId: number;
+    readonly mode: SimulationMode;
+    readonly blockNumber: bigint;
+  },
+): StateValue {
   if (data === "0x") {
     throw new MissingVerificationEvidenceError(
       `Cannot observe slippage read "${read.id}": the selected subject returned no data (likely not a contract).`,
+      { context: { stage: "verification", ...context, field: read.id } },
     );
   }
   try {
