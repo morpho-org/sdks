@@ -2,9 +2,13 @@
 
 import { execFileSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { basename, join, matchesGlob, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
+
+import {
+  type EntryLister,
+  loadBundledTar,
+} from "../../ci/verify-tarball-collisions.ts";
 
 export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
@@ -26,6 +30,15 @@ const RULES = {
   "aws-key": /\bAKIA[0-9A-Z]{16}\b/g,
   "slack-token": /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g,
   "anthropic-key": /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
+  // Wallet keys and mnemonics only next to a key-like name, since bare 32-byte
+  // hex values (market ids, hashes) are everywhere.
+  "wallet-key":
+    /\b(?:private[_-]?key|secret[_-]?key|pk)["'`]?\s*[:=]\s*["'`]?(?:0x)?[0-9a-f]{64}\b/gi,
+  mnemonic:
+    /\b(?:mnemonic|seed[_-]?phrase)["'`]?\s*[:=]\s*["'`]?[a-z]+(?:\s+[a-z]+){11,23}\b/gi,
+  // A digits-only "password" is a port (`http://localhost:8545@<block>`), and
+  // `${VAR}` is filled in at run time.
+  "url-credentials": /\bhttps?:\/\/[^\s/:@"'`]+:(?!\d+@|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
     /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/g,
 } as const satisfies Record<string, RegExp>;
@@ -206,42 +219,6 @@ export function readTree(dir: string, prefix = ""): ScannedFile[] {
   return files;
 }
 
-/** One entry as npm's bundled node-tar reads it. */
-interface TarReadEntry {
-  readonly path: string;
-  readonly type: string;
-  on(event: "data", listener: (chunk: Buffer) => void): unknown;
-  on(event: "end", listener: () => void): unknown;
-  resume(): unknown;
-}
-
-/** The part of node-tar used to read archives. */
-export interface TarReader {
-  list(options: {
-    file: string;
-    strict: boolean;
-    onReadEntry: (entry: TarReadEntry) => void;
-  }): Promise<unknown>;
-}
-
-function loadBundledTar(): TarReader {
-  const npmRoot = execFileSync("npm", ["root", "-g"], {
-    encoding: "utf8",
-  }).trim();
-  const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
-    "tar",
-  );
-  if (
-    typeof tar !== "object" ||
-    tar === null ||
-    !("list" in tar) ||
-    typeof tar.list !== "function"
-  ) {
-    throw new Error(`Bundled tar at "${npmRoot}" does not expose list().`);
-  }
-  return tar as TarReader;
-}
-
 /**
  * Reads every file in npm tarballs with npm's bundled node-tar, the parser npm
  * publish uses. Paths look like `<tarball>.tgz:package/...`.
@@ -249,15 +226,19 @@ function loadBundledTar(): TarReader {
  * @param tarballs - Paths to `.tgz` files.
  * @param reader - node-tar; defaults to the copy bundled with npm.
  * @returns The files.
- * @throws If a tarball holds anything other than regular files and directories.
+ * @throws If a tarball holds anything other than regular files and directories,
+ * or yields no `package/package.json` (a reader that never reported its entries).
  */
 export async function readTarballs(
   tarballs: readonly string[],
-  reader: TarReader = loadBundledTar(),
+  reader: EntryLister = loadBundledTar(
+    execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(),
+  ),
 ): Promise<ScannedFile[]> {
   const files: ScannedFile[] = [];
   for (const tarball of tarballs) {
     const irregular: string[] = [];
+    let hasManifest = false;
     await reader.list({
       file: tarball,
       strict: true,
@@ -269,6 +250,7 @@ export async function readTarballs(
           entry.resume();
           return;
         }
+        if (entry.path === "package/package.json") hasManifest = true;
         const chunks: Buffer[] = [];
         entry.on("data", (chunk) => chunks.push(chunk));
         entry.on("end", () =>
@@ -283,6 +265,9 @@ export async function readTarballs(
       throw new Error(
         `"${tarball}" has entries that are not regular files: ${irregular.join(", ")}.`,
       );
+    }
+    if (!hasManifest) {
+      throw new Error(`"${tarball}" has no package/package.json.`);
     }
   }
   return files;
@@ -309,7 +294,9 @@ export function evaluate(result: {
   for (const { path, line, rule, match } of result.blocking) {
     errors.push(`${path}:${line}: ${rule}: ${JSON.stringify(match)}`);
   }
-  // Stale exceptions only fail the tree scan: tarballs hold a subset of the tree.
+  // Exceptions match tree paths, so a tarball-only run can't use them all; stale
+  // exceptions are reported on tree scans only. Tarball findings
+  // (`<name>.tgz:package/...`) have no exceptions: an excepted file must not ship.
   if (result.treeFiles !== undefined) {
     for (const { path, rule, match } of result.unused) {
       errors.push(
