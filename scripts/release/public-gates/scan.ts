@@ -37,9 +37,10 @@ const RULES = {
   // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
   // A type annotation starts with a letter or backtick and is short, so it can't
   // run across a key value. `??` and `||` catch hard-coded env fallbacks, also
-  // after `env["KEY"]` or `getEnv("KEY")`; `\"` catches code embedded in JSON.
+  // after `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`);
+  // `\"` catches code embedded in JSON.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*[a-z_$][\w.$]*(?:\[["'`]\w+["'`]\])?\s*)*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|\?\?|\|\|)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
@@ -379,6 +380,31 @@ export function evaluate(result: {
   };
 }
 
+/**
+ * Checks the `--tree` and `--tarballs` flags, so an unset shell variable can't
+ * silently turn off a scan.
+ *
+ * @param flags - Parsed flag values.
+ * @returns The directories to scan.
+ * @throws If a flag is an empty string, or both are missing.
+ */
+export function parseTargets(flags: {
+  readonly tree?: string;
+  readonly tarballs?: string;
+}): { tree?: string; tarballs?: string } {
+  if (flags.tree === "" || flags.tarballs === "") {
+    throw new Error(
+      "--tree and --tarballs need a directory, not an empty string.",
+    );
+  }
+  if (flags.tree === undefined && flags.tarballs === undefined) {
+    throw new Error(
+      "Usage: scan.ts [--tree <dir>] [--tarballs <dir>] [--policy <file>]",
+    );
+  }
+  return { tree: flags.tree, tarballs: flags.tarballs };
+}
+
 if (import.meta.main) {
   const { values } = parseArgs({
     options: {
@@ -387,26 +413,16 @@ if (import.meta.main) {
       policy: { type: "string", default: POLICY_PATH },
     },
   });
-  if (values.tree === "" || values.tarballs === "") {
-    throw new Error(
-      "--tree and --tarballs need a directory, not an empty string.",
-    );
-  }
-  if (values.tree === undefined && values.tarballs === undefined) {
-    throw new Error(
-      "Usage: scan.ts [--tree <dir>] [--tarballs <dir>] [--policy <file>]",
-    );
-  }
+  const { tree, tarballs: tarballDir } = parseTargets(values);
   const policy = parsePolicy(JSON.parse(readFileSync(values.policy, "utf8")));
-  const treeFiles =
-    values.tree === undefined ? undefined : readTree(values.tree);
+  const treeFiles = tree === undefined ? undefined : readTree(tree);
   const tarballs =
-    values.tarballs === undefined
+    tarballDir === undefined
       ? undefined
-      : readdirSync(values.tarballs)
+      : readdirSync(tarballDir)
           .filter((name) => name.endsWith(".tgz"))
           .sort()
-          .map((name) => join(values.tarballs as string, name));
+          .map((name) => join(tarballDir, name));
   const files = [
     ...(treeFiles ?? []),
     ...(tarballs ? await readTarballs(tarballs) : []),
