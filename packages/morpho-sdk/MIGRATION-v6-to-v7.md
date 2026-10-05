@@ -112,7 +112,8 @@ midnight.takeLend({
 v7 no longer routes anything through the V1 `midnightBundles` contract:
 
 - `midnightBundlesAbi` is no longer re-exported from `@morpho-org/morpho-sdk` or
-  `@morpho-org/morpho-sdk/midnight`. Import it from `@morpho-org/midnight-sdk` if you still need it.
+  `@morpho-org/morpho-sdk/midnight`, and `midnight-sdk` 2.0.0 removes it too. Integrations that
+  still call V1 stay on `morpho-sdk` 6.x with `midnight-sdk` 1.x and `morpho-ts` 3.x.
 - `RequirementSpenderKey` drops `"midnightBundles"`. `encodeErc20Approval` and
   `getMidnightApprovalRequirements` reject a `midnightBundles` spender, and `encodeErc20Permit` no
   longer signs permits for it (V2 takes no inline permits).

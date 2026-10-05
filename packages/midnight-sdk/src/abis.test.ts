@@ -2,37 +2,10 @@ import { describe, expect, test } from "vitest";
 
 import {
   blueBuyCallbackFactoryAbi,
-  midnightBundlesAbi,
   midnightBundlesV2Abi,
   priceRatifierV1Abi,
   rateRatifierV1Abi,
 } from "./abis.js";
-
-describe("midnightBundlesAbi", () => {
-  test("behavior: exposes the deployed V1 interface", () => {
-    const names = midnightBundlesAbi.map((entry) => entry.name);
-
-    expect(names).toEqual([
-      "ContinuousFeeAboveMax",
-      "DeadlinePassed",
-      "InconsistentMarket",
-      "InconsistentSide",
-      "NotReduceOnly",
-      "OutOfOffers",
-      "PctExceeded",
-      "SellerAssetsTooLow",
-      "Unauthorized",
-      "UnitsTooHigh",
-      "UnitsTooLow",
-      "MIDNIGHT",
-      "midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral",
-      "midnightBundlesV1BuyWithUnitsTargetAndWithdrawCollateral",
-      "midnightBundlesV1RepayAndWithdrawCollateral",
-      "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
-      "midnightBundlesV1SupplyCollateralAndSellWithUnitsTarget",
-    ]);
-  });
-});
 
 describe("midnightBundlesV2Abi", () => {
   test("behavior: exposes the reviewed V2 entrypoints", () => {

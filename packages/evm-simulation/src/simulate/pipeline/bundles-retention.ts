@@ -38,7 +38,7 @@ interface AssertNoBundlesRetentionParams {
 /**
  * Assert that no value is retained by standalone `bundles` periphery contracts
  * (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) or by
- * `MidnightBundlesV1` (`midnightBundles`).
+ * `MidnightBundlesV2` (`midnightBundlesV2`).
  *
  * Uses net flow (inbound minus outbound) per (restricted address, token) pair.
  * These contracts legitimately receive tokens as an intermediary (user →
@@ -63,7 +63,7 @@ interface AssertNoBundlesRetentionParams {
  *
  * @internal Internal pipeline stage, composed by `simulate`; not part of the
  *   package's public API (only re-exported from the internal pipeline barrel).
- * @param params.chainId - Chain whose blue-sdk `bundles` and `midnightBundles`
+ * @param params.chainId - Chain whose blue-sdk `bundles` and `midnightBundlesV2`
  *   registry entries define the restricted address set. Chains cataloging
  *   neither are skipped (a `logger.warn` records the skip).
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
@@ -75,7 +75,7 @@ interface AssertNoBundlesRetentionParams {
  * @returns Nothing. Returns silently when no restricted contract retains value
  *   above `DUST_THRESHOLD`; otherwise throws.
  * @throws {BlacklistViolationError} when net inbound flow to a restricted
- *   `bundles` or `midnightBundles` contract exceeds `DUST_THRESHOLD` for any
+ *   `bundles` or `midnightBundlesV2` contract exceeds `DUST_THRESHOLD` for any
  *   token.
  */
 export function assertNoBundlesRetention(
@@ -83,7 +83,7 @@ export function assertNoBundlesRetention(
 ): void {
   const { chainId, transfers, assetChanges, logger } = params;
 
-  // Standalone bundles contracts and `MidnightBundlesV1` are transient
+  // Standalone bundles contracts and `MidnightBundlesV2` are transient
   // intermediaries that route user value and must never retain it.
   let addresses: ReturnType<typeof getChainAddresses>;
   try {
@@ -105,9 +105,8 @@ export function assertNoBundlesRetention(
     for (const addr of Object.values(addresses.bundles).filter(isDefined))
       restrictedAddresses.add(getAddress(addr));
   }
-  // TODO: restrict `midnightBundlesV2` too, once it has a deployment-block key.
-  if (addresses.midnightBundles) {
-    restrictedAddresses.add(getAddress(addresses.midnightBundles));
+  if (addresses.midnightBundlesV2) {
+    restrictedAddresses.add(getAddress(addresses.midnightBundlesV2));
   }
   if (restrictedAddresses.size === 0) {
     // blue-sdk knows the chain but cataloged no restricted intermediary for it.

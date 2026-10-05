@@ -21,17 +21,17 @@ export interface GetMidnightAuthorizationRequirementParams {
  * Resolves the Midnight authorization transaction for a Midnight bundle operator.
  *
  * Call before actions that rely on `Midnight.isAuthorized(owner, authorized)`,
- * such as MidnightBundles takes or MidnightBundlesV2 cancel-and-make. Entity flows call
+ * such as MidnightBundlesV2 takes and cancel-and-make. Entity flows call
  * this from `getRequirements()` and omit the transaction when authorization is
  * already set.
  *
  * @param params.viemClient - Viem client used to read `Midnight.isAuthorized`.
  * @param params.chainId - Chain id expected by the viem client.
  * @param params.owner - Account granting authorization.
- * @param params.authorized - MidnightBundles or MidnightBundlesV2.
+ * @param params.authorized - MidnightBundlesV2.
  * @returns Authorization transaction, or `null` when already authorized.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
- * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not MidnightBundles or MidnightBundlesV2.
+ * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not MidnightBundlesV2.
  * @example
  * ```ts
  * import { getMidnightAuthorizationRequirement } from "@morpho-org/morpho-sdk";

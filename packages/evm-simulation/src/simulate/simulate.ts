@@ -82,7 +82,7 @@ import { parseRequest } from "./request/index.js";
  *   before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
- *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
+ *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV2).
  *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
  *   timeout budget, returns a malformed JSON-RPC envelope, or returns a state

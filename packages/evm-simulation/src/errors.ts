@@ -193,7 +193,7 @@ export interface RetainedAsset {
 
 /**
  * Thrown when net value above the dust threshold is retained by a restricted bundles contract
- * (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1 or MidnightBundlesV1) after simulation;
+ * (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1 or MidnightBundlesV2) after simulation;
  * pass-through flows and net outflows are allowed. Never bypassable.
  */
 export class BlacklistViolationError extends SimulationPackageError {

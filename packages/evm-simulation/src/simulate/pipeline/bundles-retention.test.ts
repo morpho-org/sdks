@@ -38,25 +38,24 @@ const bundles = getChainAddresses(1).bundles!;
 const BUNDLES_TARGET = getAddress(bundles.vaultBundlesV1!) as Address;
 const BLUE_BUNDLES = getAddress(bundles.blueBundlesV1!) as Address;
 const VAULT_EXIT_BUNDLES = getAddress(bundles.vaultExitBundlesV1) as Address;
-const MIDNIGHT_BUNDLES = getAddress(
-  getChainAddresses(1).midnightBundles!,
-) as Address;
+const MIDNIGHT_BUNDLES: Address = "0x3333333333333333333333333333333333333333";
 
 // Synthetic chainIds owned by exactly one case each — see chainAddressOverrides.
 const NO_BUNDLES_CHAIN_ID = 1_000_001;
 const SDK_ERROR_CHAIN_ID = 1_000_002;
 const ONLY_MIDNIGHT_CHAIN_ID = 1_000_003;
 
-// Neither bundles nor midnightBundles cataloged — retention check fully skipped.
+// Neither bundles nor midnightBundlesV2 cataloged — retention check fully skipped.
 chainAddressOverrides.set(NO_BUNDLES_CHAIN_ID, () => ({
   ...addressesRegistry[1],
   bundles: undefined,
-  midnightBundles: undefined,
+  midnightBundlesV2: undefined,
 }));
-// Only midnightBundles present — the check still guards `MidnightBundlesV1`.
+// Only midnightBundlesV2 present — the check still guards `MidnightBundlesV2`.
 chainAddressOverrides.set(ONLY_MIDNIGHT_CHAIN_ID, () => ({
   ...addressesRegistry[1],
   bundles: undefined,
+  midnightBundlesV2: MIDNIGHT_BUNDLES,
 }));
 chainAddressOverrides.set(SDK_ERROR_CHAIN_ID, () => {
   throw new Error("unexpected SDK bug");
@@ -399,23 +398,7 @@ describe("assertNoBundlesRetention", () => {
     ).not.toThrow();
   });
 
-  it("behavior: throws when MidnightBundlesV1 retains tokens above dust threshold", () => {
-    const transfers = parseTransfers([
-      makeCall([
-        makeTransferLog({
-          token: USDC,
-          from: USER,
-          to: MIDNIGHT_BUNDLES,
-          amount: 1000000n,
-        }),
-      ]),
-    ]);
-    expect(() =>
-      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
-    ).toThrow(BlacklistViolationError);
-  });
-
-  it("behavior: guards MidnightBundlesV1 even when the chain has no bundles config", () => {
+  it("behavior: guards MidnightBundlesV2 even when the chain has no bundles config", () => {
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({

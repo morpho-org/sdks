@@ -9,7 +9,7 @@
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep RPC I/O under `src/simulate/backends/` and outputs normalized to the internal `SimulationExecution` type. Colocated transport-boundary tests cover request validation and transport failures; only the response's block envelope is structurally checked; per-call values that fail normalization are rejected as `InvalidSimulationResponseError` and the remaining per-call fields are trusted; pinned Anvil forks prove sequential state, real native funding, and standalone-bundle retention.
 - Preview `authorizations` and consumer `limits` parse and normalize, but fail typed with `UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call — until authorization preparation (PR5) and limit enforcement (PR6) land.
-- Enforce retention by net `(restricted address, token)` balance across the blue-sdk `bundles` registry plus `midnightBundles` with `DUST_THRESHOLD = 100n`; skip only chains that catalog neither.
+- Enforce retention by net `(restricted address, token)` balance across the blue-sdk `bundles` registry plus `midnightBundlesV2` with `DUST_THRESHOLD = 100n`; skip only chains that catalog neither.
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
 - Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.

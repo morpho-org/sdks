@@ -27,7 +27,7 @@ export interface GetMidnightApprovalRequirementsParams {
  *
  * Entity flows call this from `getRequirements()`. Direct low-level consumers
  * should call it before encoding a Midnight action that lets `Midnight` or
- * `MidnightBundles` pull ERC20 tokens from the user.
+ * `MidnightBundlesV2` pull ERC20 tokens from the user.
  *
  * @param params.viemClient - Viem client used to read ERC20 allowance.
  * @param params.chainId - Chain id expected by the viem client.
@@ -38,7 +38,7 @@ export interface GetMidnightApprovalRequirementsParams {
  * @returns Approval transactions required for `spender` to pull `amount`.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
  * @throws {NegativeInputError} when `amount < 0n`.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight, MidnightBundles, or MidnightBundlesV2 deployment.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight or MidnightBundlesV2 deployment.
  * @example
  * ```ts
  * import {

@@ -80,8 +80,6 @@ export interface ChainAddresses {
   wstEth?: `0x${string}`;
   /** Midnight core contract for fixed-maturity credit/debt markets, offers, collateral, and liquidations. */
   midnight?: `0x${string}`;
-  /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
-  midnightBundles?: `0x${string}`;
   /** MidnightBundlesV2 periphery contract for maker cancel-and-make and taker flows acting on `msg.sender`. */
   midnightBundlesV2?: `0x${string}`;
   /** BlueBuyCallback factory for parking Midnight buy-offer funds in Morpho Blue markets. */
@@ -187,7 +185,6 @@ const _addressesRegistry = {
     "2BTC-f": "0xB7ECB2AA52AA64a717180E030241bC75Cd946726",
 
     midnight: "0x471686c42792F93528B000beF54bC10E3aa2045f",
-    midnightBundles: "0x7c00dBB2b6b6b9B28745332e550dC8782Fcf77EC",
     midnightBlueBuyCallbackFactory:
       "0x172d1FdC5f79bFe1ED46448f18541E591E5c93a7",
     midnightMempool: "0xde2d62449301a09A51EbF9326EA60d2e8BF4A8F7",
@@ -229,7 +226,6 @@ const _addressesRegistry = {
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
 
     midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
-    midnightBundles: "0x091183d729BE9f808c212b475E387A12E67850A7",
     midnightBlueBuyCallbackFactory:
       "0x7337f119Eca028bD39E0e543cEf71631D2333425",
     midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
@@ -897,7 +893,6 @@ const _addressesRegistry = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
     midnight: "0x208786922BE56fDE2D1Fa60e6b9eC5D723e8d7b0",
-    midnightBundles: "0x3609525024c88f794CBE09e4832810E2bd737beC",
     midnightBlueBuyCallbackFactory:
       "0x9bD11e1EC7bf3520896F8e3e63d4B70f8d6d177E",
     midnightMempool: "0x26bded5Fb01373CE875dEa14E52799D04C839C1A",
@@ -954,7 +949,6 @@ const _addressesRegistry = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x0B0cFa151c06d2342799267754b0a2c320C43D5B",
     midnight: "0x6120765Ba5336150BbdDdD0Cd9108B5bFD369632",
-    midnightBundles: "0x71aa985ff80AbcE3b8b443845633674Ca9f7575C",
     midnightBlueBuyCallbackFactory:
       "0x53cbCd884CABA07762c72F43283D3fa72de42D4f",
     midnightMempool: "0xcEF685D4796FA80F71a97e803D2c0b6719F1b4E2",
@@ -992,7 +986,6 @@ const _deployments = {
     preLiquidationFactory: 21414664n,
 
     midnight: 25_798_183n,
-    midnightBundles: 25_798_264n,
     midnightBlueBuyCallbackFactory: 25_798_272n,
     midnightMempool: 25_798_183n,
     ecrecoverRatifier: 25_798_183n,
@@ -1018,7 +1011,6 @@ const _deployments = {
     preLiquidationFactory: 23779056n,
 
     midnight: 48286884n,
-    midnightBundles: 48286997n,
     midnightBlueBuyCallbackFactory: 49_544_552n,
     midnightMempool: 48286884n,
     ecrecoverRatifier: 48286884n,
@@ -1526,7 +1518,6 @@ const _deployments = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 1208882n,
     midnight: 20_320_779n,
-    midnightBundles: 20_321_988n,
     midnightBlueBuyCallbackFactory: 20_322_111n,
     midnightMempool: 20_320_779n,
     ecrecoverRatifier: 20_320_779n,
@@ -1575,7 +1566,6 @@ const _deployments = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 287n,
     midnight: 65_366_296n,
-    midnightBundles: 65_387_381n,
     midnightBlueBuyCallbackFactory: 65_391_242n,
     midnightMempool: 65_366_296n,
     ecrecoverRatifier: 65_366_296n,
@@ -2123,7 +2113,6 @@ const refreshDeploymentViews = () => {
  *       blue: "0x0000000000000000000000000000000000000001",
  *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000002",
  *       midnight: "0x0000000000000000000000000000000000000005",
- *       midnightBundles: "0x0000000000000000000000000000000000000006",
  *       midnightMempool: "0x0000000000000000000000000000000000000007",
  *       ecrecoverRatifier: "0x0000000000000000000000000000000000000008",
  *       ecrecoverAuthorizer: "0x0000000000000000000000000000000000000009",

@@ -26,7 +26,8 @@
   },
   "sideEffects": false,
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v1-to-v2.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -38,7 +39,7 @@
     "test": "vitest --root ../.. --project midnight-sdk --project midnight-sdk-fork"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.8.0 || ^3.0.0",
+    "@morpho-org/morpho-ts": "^2.8.0 || ^3.0.0 || ^4.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

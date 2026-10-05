@@ -153,7 +153,7 @@ book `bids` are maker buy offers.
 The quote's `averageWorstPrice` is an **aggregate** guard over the requested target: a favorable
 offer can compensate for a worse one, and the worse offer does not satisfy the guard on its own.
 That guard only holds if every returned offer settles together, so execute a quote through
-`MidnightBundlesV1` in a single transaction. The bundle skips offers that became stale since the
+`MidnightBundlesV2` in a single transaction. The bundle skips offers that became stale since the
 quote, reverts unless the exact target is reached, and enforces one aggregate consideration bound
 (`maxBuyerAssets` for asks, `minSellerAssets` for bids). Never split a quote into independent
 `Midnight.take` transactions: a stale first leg reverts but still consumes its nonce, so the
@@ -164,7 +164,7 @@ and resolve approvals for you; the recipe below shows the same route with this p
 ```ts
 import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { MidnightApi } from "@morpho-org/midnight-sdk/api";
-import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
+import { midnightBundlesV2Abi, type MarketParams } from "@morpho-org/midnight-sdk";
 import {
   maxUint256,
   parseUnits,
@@ -176,11 +176,12 @@ import {
 import { base } from "viem/chains";
 
 const chainId = base.id;
-const midnightBundles = getChainAddress(chainId, "midnightBundles");
+const midnightBundlesV2 = getChainAddress(chainId, "midnightBundlesV2");
 
 export async function takeAskQuoteAtomically(params: {
   readonly walletClient: WalletClient;
   readonly taker: Address;
+  readonly market: MarketParams;
   readonly marketId: Hash;
   readonly deadline: bigint;
 }) {
@@ -197,24 +198,22 @@ export async function takeAskQuoteAtomically(params: {
   // not what the caller asked for.
   const maxBuyerAssets = MathLib.wMulUp(targetUnits, quote.data.averageWorstPrice);
 
-  // Two confirmed prerequisites before this call: the taker has approved `midnightBundles`
-  // to spend `maxBuyerAssets` of the loan token (or passes an ERC-2612/Permit2 payload as
-  // `loanTokenPermit`), and has authorized the bundle on Midnight via
-  // `Midnight.setIsAuthorized(midnightBundles, true, taker)` so it can act on the taker's
-  // behalf (`@morpho-org/morpho-sdk`'s `getMidnightAuthorizationRequirement` resolves this
-  // for you).
+  // Two confirmed prerequisites before this call: the taker has approved `midnightBundlesV2`
+  // to spend `maxBuyerAssets` of the loan token, and has authorized the bundle on Midnight via
+  // `Midnight.setIsAuthorized(midnightBundlesV2, true, taker)`. V2 acts for `msg.sender`, so the
+  // taker sends the transaction (`@morpho-org/morpho-sdk`'s entity `getRequirements()` resolves both).
   return params.walletClient.writeContract({
     account: params.taker,
     chain: base,
-    address: midnightBundles,
-    abi: midnightBundlesAbi,
-    functionName: "midnightBundlesV1BuyWithUnitsTargetAndWithdrawCollateral",
+    address: midnightBundlesV2,
+    abi: midnightBundlesV2Abi,
+    functionName: "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
     args: [
+      params.market,
       targetUnits,
       maxBuyerAssets,
-      params.taker,
       false, // reduceOnly
-      { kind: 0, data: "0x" }, // loanTokenPermit: none
+      false, // repayEnabled
       quote.data.takeableOffers, // { offer, units, ratifierData }[] straight from the quote
       [], // collateralWithdrawals
       zeroAddress, // collateralReceiver
@@ -222,12 +221,13 @@ export async function takeAskQuoteAtomically(params: {
       zeroAddress, // referralFeeRecipient
       maxUint256, // maxContinuousFee: bound this to the fee the caller accepts
       params.deadline,
+      zeroAddress, // wrappedNative
     ],
   });
 }
 ```
 
-Bids mirror this with `midnightBundlesV1SupplyCollateralAndSellWithUnitsTarget` and a
+Bids mirror this with `midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget` and a
 `minSellerAssets` floor derived from the same `averageWorstPrice`. Prefer the `*WithAssetsTarget*`
 variants when the caller fixes the asset amount instead of the unit amount.
 

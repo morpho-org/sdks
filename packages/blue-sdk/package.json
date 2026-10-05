@@ -18,7 +18,8 @@
   "main": "src/index.ts",
   "files": [
     "lib",
-    "MIGRATION-v6-to-v7.md"
+    "MIGRATION-v6-to-v7.md",
+    "MIGRATION-v7-to-v8.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -31,7 +32,7 @@
     "@noble/hashes": "^2.4.0"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^3.2.0"
+    "@morpho-org/morpho-ts": "^4.0.0"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",

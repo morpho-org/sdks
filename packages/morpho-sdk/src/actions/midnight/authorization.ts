@@ -19,7 +19,7 @@ export interface MidnightSetIsAuthorizedParams {
 }
 
 /**
- * Encodes `Midnight.setIsAuthorized`. Grants target MidnightBundles or MidnightBundlesV2;
+ * Encodes `Midnight.setIsAuthorized`. Grants target MidnightBundlesV2;
  * revocations accept any operator.
  *
  * Prefer requirement helpers or entity `getRequirements()` in app flows; they
