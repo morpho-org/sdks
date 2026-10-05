@@ -79,7 +79,8 @@ describe("scanFiles", () => {
       scanFiles([
         file(
           "a.md",
-          "ERC-4626, EIP-2612, MYSDK-12, SDK-v2, morpho-org/sdks, notion of slack, http://localhost:8545@19000000, https://x:${TOKEN}@github.com, market 0x" +
+          "ERC-4626, EIP-2612, MYSDK-12, SDK-v2, morpho-org/sdks, notion of slack, http://localhost:8545@19000000, https://x:$" +
+            "{TOKEN}@github.com, market 0x" +
             "ab".repeat(32),
         ),
       ]),
