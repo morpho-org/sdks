@@ -395,6 +395,23 @@ describe("Midnight requirements on fork", () => {
       buy: true,
       units: 4n * amount,
     });
+    // With collateral, the oversized sell below could open healthy debt, so only reduceOnly reverts it.
+    const collateralAssets = parseEther("1");
+    await client.deal({ erc20: wNative, amount: collateralAssets });
+    const supply = midnightEntity.supplyCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      collateralAssets,
+      reservedCollateralAssets: 0n,
+    });
+    for (const requirement of await supply.getRequirements()) {
+      if (!("to" in requirement)) {
+        throw new Error("expected an onchain call requirement");
+      }
+      await client.sendTransaction(requirement);
+    }
+    await client.sendTransaction(supply.buildTx());
+
     const withdraw = (units: bigint) =>
       midnightEntity.takeWithdraw({
         marketData,

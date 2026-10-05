@@ -498,6 +498,7 @@ export class MorphoMidnight {
    * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
    * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
@@ -507,6 +508,7 @@ export class MorphoMidnight {
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @example
    * ```ts
    * const output = midnight.takeWithdraw({
