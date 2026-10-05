@@ -136,6 +136,7 @@ export const createAnvilTestClient = <chain extends Chain>(
     account: testAccount(),
     transport: traced(transport),
     cacheTime: Number.POSITIVE_INFINITY,
+    pollingInterval: 50,
   })
     .extend(dealActions)
     .extend(traceActions)
