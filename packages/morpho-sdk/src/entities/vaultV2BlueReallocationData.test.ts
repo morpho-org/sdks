@@ -3201,6 +3201,30 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toEqual([29n]);
   });
 
+  test("behavior: falls back to the full-cap target plan when the full-cap shortfall plan falls short", () => {
+    const fixture = {
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 30n,
+    };
+    const { data } = makeFixture(fixture);
+    const { data: shortData } = makeFixture({ ...fixture, sourceSupply: 10n });
+    const clone = data.clone.bind(data);
+    // Starve the headroom plan and the full-cap shortfall plan.
+    vi.spyOn(data, "clone")
+      .mockImplementationOnce(() => shortData.clone())
+      .mockImplementationOnce(() => shortData.clone())
+      .mockImplementation(clone);
+
+    expect(
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation: { type: "borrow", amount: 20n },
+        })
+        .reallocations.map(({ assets }) => assets),
+    ).toEqual([30n]);
+  });
+
   test("behavior: reduces a cap-bound withdraw plan to its absolute shortfall", () => {
     const { data } = makeFixture({
       targetSupply: 100n,

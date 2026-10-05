@@ -1133,16 +1133,21 @@ export class VaultV2BlueReallocationData
       )
         selected = target;
     }
-    if (
-      selected.reallocatedAssets < absoluteShortfall &&
-      allocatorCapHeadroom > 0n
-    )
-      selected = plan(absoluteShortfall, 0n);
+    let available = selected.reallocatedAssets;
+    // Without headroom, `target` already is the full-cap plan toward the target.
+    const fullCapBudgets =
+      allocatorCapHeadroom > 0n ? [absoluteShortfall, requiredAssets] : [];
+    for (const maxAssets of fullCapBudgets) {
+      if (selected.reallocatedAssets >= absoluteShortfall) break;
+      selected = plan(maxAssets, 0n);
+      if (selected.reallocatedAssets > available)
+        available = selected.reallocatedAssets;
+    }
     if (selected.reallocatedAssets < absoluteShortfall) {
       throw new InsufficientSharedLiquidityError({
         marketId,
         shortfall: absoluteShortfall,
-        available: selected.reallocatedAssets,
+        available,
       });
     }
 
