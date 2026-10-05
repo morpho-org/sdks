@@ -71,7 +71,7 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   entity methods pick the chain's `priceRatifierV1` or `rateRatifierV1` from the tree type. They
   encode all-zero root-signature fields for every maker and rely on the `MidnightBundlesV2`
   authorization; only the pure `midnightCancelAndMake` builder accepts an explicit delegated
-  signature.
+  signature (see [`ADR-2026-10-02-remove-midnight-mempool-maker-route`](../../../../docs/adrs/ADR-2026-10-02-remove-midnight-mempool-maker-route.md)).
 - **Native funding** is out of scope: encode `value = 0` and `wrappedNative = zeroAddress`.
 
 ## Shared liquidity / reallocations (canonical statement)

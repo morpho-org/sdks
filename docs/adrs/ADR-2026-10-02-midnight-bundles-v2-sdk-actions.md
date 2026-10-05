@@ -1,11 +1,11 @@
 # ADR-2026-10-02: Route Midnight actions through MidnightBundlesV2
 
-| Field      | Value                                                                                                                                    |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                                                 |
-| **Date**   | 2026-10-02                                                                                                                               |
-| **Author** | @jinmel                                                                                                                                  |
-| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0, `blue-sdk` 8.0.0, `evm-simulation` next major |
+| Field      | Value                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status** | accepted; maker-route retention, EOA root signatures, the builder ratifier restriction and the V1 ratifier authorization targets superseded by ADR-2026-10-02-remove-midnight-mempool-maker-route |
+| **Date**   | 2026-10-02                                                                                                                                                                                        |
+| **Author** | @jinmel                                                                                                                                                                                           |
+| **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0, `blue-sdk` 8.0.0, `evm-simulation` next major                                                          |
 
 _Status is the only field that changes after acceptance._
 

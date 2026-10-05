@@ -206,8 +206,19 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * @param params.publication.groups - Distinct offer groups contained in the root.
  * @param params.publication.payload - Encoded offer payload published to the Midnight log.
  * @param params.publication.rootSignature - Optional delegated root-activation signature; omitted, all fields are zero.
+ * @param params.publication.rootSignature.height - Tree height committed by the signature.
+ * @param params.publication.rootSignature.nonce - Ratifier signature nonce.
+ * @param params.publication.rootSignature.deadline - Signature deadline timestamp, independent of the bundle `deadline`.
+ * @param params.publication.rootSignature.v - Signature recovery id.
+ * @param params.publication.rootSignature.r - Signature `r` component.
+ * @param params.publication.rootSignature.s - Signature `s` component.
  * @param params.publication.blueSupply - Optional loan assets to supply on Blue for the maker's `BlueBuyCallback`.
+ * @param params.publication.blueSupply.market - Blue market receiving the loan assets.
+ * @param params.publication.blueSupply.assets - Loan assets pulled from `msg.sender` and supplied on Blue; must be positive.
+ * @param params.publication.blueSupply.callbackSalt - Salt selecting the maker's `BlueBuyCallback`.
  * @param params.publication.collateral - Optional collateral to supply on `collateral.market` for `msg.sender`.
+ * @param params.publication.collateral.market - Midnight market receiving the collateral; every offer must target it.
+ * @param params.publication.collateral.supplies - Collateral index and assets per supply; must not be empty.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
