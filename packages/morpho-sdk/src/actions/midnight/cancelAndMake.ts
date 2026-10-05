@@ -74,9 +74,9 @@ export interface MidnightOfferPublication {
 
 /**
  * Parameters for encoding a Midnight Bundles V2 maker bundle: an offer publication or repost, or,
- * without publication fields, a cancellation of offer groups only.
+ * without a publication, a cancellation of offer groups only.
  */
-export type MidnightCancelAndMakeParams = {
+export interface MidnightCancelAndMakeParams {
   /** Chain id used to resolve `MidnightBundlesV2`. */
   readonly chainId: number;
   /** Offer groups to cancel, each with its largest accepted consumption. Empty for a new publication. */
@@ -85,10 +85,9 @@ export type MidnightCancelAndMakeParams = {
   readonly deadline: bigint;
   /** Optional analytics metadata appended to calldata. */
   readonly metadata?: Metadata;
-} & (
-  | MidnightOfferPublication
-  | { readonly [K in keyof MidnightOfferPublication]?: never }
-);
+  /** Offers to publish after the cancellations. Omit to cancel offer groups only. */
+  readonly publication?: MidnightOfferPublication;
+}
 
 /** Blue market argument for `MidnightBundlesV2` calls that park no loan assets. */
 const emptyBlueMarket = {
@@ -133,44 +132,45 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
     }
     cancelledGroups.add(key);
   }
-  if (params.root == null) {
+  const publication = params.publication;
+  if (publication == null) {
     if (params.cancellations.length === 0) {
       throw new EmptyMidnightGroupCancellationsError();
     }
     return;
   }
-  if (params.root === zeroHash) {
+  if (publication.root === zeroHash) {
     throw new InvalidTreeError("Offer root cannot be zero.");
   }
-  if (params.payload === "0x") {
+  if (publication.payload === "0x") {
     throw new InvalidTreeError("Offer payload cannot be empty.");
   }
-  if (params.groups.length === 0) {
+  if (publication.groups.length === 0) {
     throw new InvalidTreeError("Offer groups cannot be empty.");
   }
-  for (const group of params.groups) {
+  for (const group of publication.groups) {
     if (cancelledGroups.has(group.toLowerCase())) {
       throw new MidnightReplacementGroupCancelledError({ group });
     }
   }
-  if (params.blueSupply != null && params.blueSupply.assets <= 0n) {
+  if (publication.blueSupply != null && publication.blueSupply.assets <= 0n) {
     throw new NonPositiveInputError(
       "blueSupply.assets",
-      params.blueSupply.assets,
+      publication.blueSupply.assets,
     );
   }
-  if (params.collateral == null) return;
-  if (params.collateral.supplies.length === 0) {
+  if (publication.collateral == null) return;
+  if (publication.collateral.supplies.length === 0) {
     throw new EmptyMidnightCollateralSuppliesError();
   }
   validateMidnightMarket({
-    market: params.collateral.market,
+    market: publication.collateral.market,
     chainId: params.chainId,
   });
   for (const [
     index,
     { collateralIndex, assets },
-  ] of params.collateral.supplies.entries()) {
+  ] of publication.collateral.supplies.entries()) {
     if (assets <= 0n) {
       throw new NonPositiveInputError(
         `collateral.supplies[${index}].assets`,
@@ -178,7 +178,10 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
       );
     }
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
-    MarketUtils.getCollateralByIndex(params.collateral.market, collateralIndex);
+    MarketUtils.getCollateralByIndex(
+      publication.collateral.market,
+      collateralIndex,
+    );
   }
 };
 
@@ -186,25 +189,25 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake` for `msg.sender`: cancel previous
  * groups under consumption guards, optionally park loan assets on Morpho Blue for the maker's
  * `BlueBuyCallback` or supply collateral, activate `root`, and publish `payload`.
- * Without `ratifier`, `root`, `groups` and `payload`, it only cancels groups (`cancelOffers` uses this).
+ * Without `publication`, it only cancels groups (`cancelOffers` uses this).
  * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  *
  * The contract does not check that `payload` matches `root`; callers must derive both from the
  * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
- * `cancelAndMakeBorrow(...)` or `supplyBlueMakeLend(...)`, which do so and resolve approvals and
- * authorization.
+ * `cancelAndMakeBorrow(...)`, which do so and resolve approvals and authorization.
  *
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.cancellations - Offer groups to cancel and their consumption ceilings.
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.metadata - Optional analytics metadata appended to calldata.
- * @param params.ratifier - Ratifier that activates `root`; omit all publication fields to only cancel.
- * @param params.root - Offer tree root to activate.
- * @param params.groups - Distinct offer groups contained in `root`.
- * @param params.payload - Encoded offer payload for `root`, published to the Midnight log.
- * @param params.rootSignature - Optional delegated root-activation signature; omitted, all fields are zero.
- * @param params.blueSupply - Optional loan assets to supply on Blue for the maker's `BlueBuyCallback`.
- * @param params.collateral - Optional collateral to supply on `collateral.market` for `msg.sender`.
+ * @param params.publication - Offers to publish after the cancellations; omit for cancellation only.
+ * @param params.publication.ratifier - Ratifier that activates the offer root.
+ * @param params.publication.root - Offer tree root to activate.
+ * @param params.publication.groups - Distinct offer groups contained in the root.
+ * @param params.publication.payload - Encoded offer payload published to the Midnight log.
+ * @param params.publication.rootSignature - Optional delegated root-activation signature; omitted, all fields are zero.
+ * @param params.publication.blueSupply - Optional loan assets to supply on Blue for the maker's `BlueBuyCallback`.
+ * @param params.publication.collateral - Optional collateral to supply on `collateral.market` for `msg.sender`.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -233,12 +236,14 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * declare const previousGroup: Hex;
  * const tx = midnightCancelAndMake({
  *   chainId: 8453,
- *   ratifier: rateRatifierV1,
- *   root,
- *   groups: [group],
- *   payload,
  *   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
  *   deadline: maxUint256,
+ *   publication: {
+ *     ratifier: rateRatifierV1,
+ *     root,
+ *     groups: [group],
+ *     payload,
+ *   },
  * });
  * ```
  */
@@ -250,24 +255,25 @@ export const midnightCancelAndMake = (
     group,
     maxConsumed,
   }));
-  const supplies = (params.collateral?.supplies ?? []).map(
+  const publication = params.publication;
+  const supplies = (publication?.collateral?.supplies ?? []).map(
     ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
   );
   const blueSupply =
-    params.blueSupply == null
+    publication?.blueSupply == null
       ? undefined
       : {
           market: {
-            loanToken: params.blueSupply.market.loanToken,
-            collateralToken: params.blueSupply.market.collateralToken,
-            oracle: params.blueSupply.market.oracle,
-            irm: params.blueSupply.market.irm,
-            lltv: params.blueSupply.market.lltv,
+            loanToken: publication.blueSupply.market.loanToken,
+            collateralToken: publication.blueSupply.market.collateralToken,
+            oracle: publication.blueSupply.market.oracle,
+            irm: publication.blueSupply.market.irm,
+            lltv: publication.blueSupply.market.lltv,
           },
-          assets: params.blueSupply.assets,
-          callbackSalt: params.blueSupply.callbackSalt,
+          assets: publication.blueSupply.assets,
+          callbackSalt: publication.blueSupply.callbackSalt,
         };
-  const signature = params.rootSignature ?? {
+  const signature = publication?.rootSignature ?? {
     height: 0n,
     nonce: 0n,
     deadline: 0n,
@@ -286,12 +292,12 @@ export const midnightCancelAndMake = (
         blueSupply?.market ?? emptyBlueMarket, // blueMarket
         blueSupply?.assets ?? 0n, // assetsToPark
         blueSupply?.callbackSalt ?? zeroHash, // callbackSalt
-        params.collateral == null
+        publication?.collateral == null
           ? emptyMidnightMarket
-          : MarketUtils.toStruct(params.collateral.market), // market
+          : MarketUtils.toStruct(publication.collateral.market), // market
         supplies, // collateralSupplies
-        params.ratifier ?? zeroAddress, // ratifier
-        params.root ?? zeroHash, // newRoot
+        publication?.ratifier ?? zeroAddress, // ratifier
+        publication?.root ?? zeroHash, // newRoot
         signature.height, // signatureHeight
         signature.nonce, // signatureNonce
         signature.deadline, // signatureDeadline
@@ -299,7 +305,7 @@ export const midnightCancelAndMake = (
         signature.r, // r
         signature.s, // s
         cancellations, // groupsToCancel
-        params.payload ?? "0x", // payload
+        publication?.payload ?? "0x", // payload
         params.deadline, // deadline
         zeroAddress, // wrappedNative
       ],
@@ -314,9 +320,9 @@ export const midnightCancelAndMake = (
     action: {
       type: "midnightCancelAndMake",
       args: {
-        ratifier: params.ratifier ?? zeroAddress,
-        root: params.root ?? zeroHash,
-        groups: [...(params.groups ?? [])],
+        ratifier: publication?.ratifier ?? zeroAddress,
+        root: publication?.root ?? zeroHash,
+        groups: [...(publication?.groups ?? [])],
         cancellations,
         collateralSupplies: supplies,
         ...(blueSupply && { blueSupply }),

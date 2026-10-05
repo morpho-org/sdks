@@ -119,9 +119,11 @@ at the SDK level. The differences are at the protocol layer:
 - **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
   collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
   `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
-- **Maker routing**: `cancelAndMakeLend` and `cancelAndMakeBorrow` validate a PriceRatifierV1 or
-  RateRatifierV1 offer tree, then encode one `midnightBundlesV2CancelAndMake` call that cancels
-  replaced groups, optionally supplies collateral, activates the root and publishes the payload.
+- **Maker routing**: `cancelAndMakeLend`, `cancelAndMakeBorrow`, and
+  `supplyCollateralMakeBorrow` validate a PriceRatifierV1 or RateRatifierV1 offer tree, then encode
+  one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, optionally supplies
+  collateral, activates the root and publishes the payload. `supplyCollateralMakeBorrow` delegates
+  to `cancelAndMakeBorrow` and requires collateral.
   `supplyBlueMakeLend` uses the same call to park loan assets in a Morpho Blue market for the
   maker's `BlueBuyCallback`, which funds the lend offers when they are taken. The entity derives the
   callback from the factory, requires every offer to use it with `abi.encode(blueMarket)`, and

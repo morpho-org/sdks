@@ -54,12 +54,14 @@ const market = new MarketParams(midnightMarket);
 
 const params = {
   chainId: midnightChainId,
-  ratifier: rateRatifierV1,
-  root,
-  groups: [groupA],
-  payload: "0x1234" as Hex,
   cancellations: [{ group: groupB, maxConsumed: 5n }],
   deadline: maxUint256,
+  publication: {
+    ratifier: rateRatifierV1,
+    root,
+    groups: [groupA],
+    payload: "0x1234" as Hex,
+  },
 };
 
 describe("midnightCancelAndMake", () => {
@@ -116,8 +118,11 @@ describe("midnightCancelAndMake", () => {
       abi: midnightBundlesV2Abi,
       data: midnightCancelAndMake({
         ...params,
-        ratifier: priceRatifierV1,
-        rootSignature,
+        publication: {
+          ...params.publication,
+          ratifier: priceRatifierV1,
+          rootSignature,
+        },
       }).data,
     });
 
@@ -138,9 +143,12 @@ describe("midnightCancelAndMake", () => {
       abi: midnightBundlesV2Abi,
       data: midnightCancelAndMake({
         ...params,
-        collateral: {
-          market,
-          supplies: [{ collateralIndex: 0n, assets: 10n }],
+        publication: {
+          ...params.publication,
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 0n, assets: 10n }],
+          },
         },
       }).data,
     });
@@ -155,9 +163,12 @@ describe("midnightCancelAndMake", () => {
     const supplies = [{ collateralIndex: 0n, assets: 10n }];
     const tx = midnightCancelAndMake({
       ...params,
-      groups,
       cancellations,
-      collateral: { market, supplies },
+      publication: {
+        ...params.publication,
+        groups,
+        collateral: { market, supplies },
+      },
       metadata: { origin: "a1b2c3d4" },
     });
 
@@ -171,12 +182,15 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        collateral: {
-          market: new MarketParams({
-            ...midnightMarket,
-            midnight: zeroAddress,
-          }),
-          supplies: [{ collateralIndex: 0n, assets: 10n }],
+        publication: {
+          ...params.publication,
+          collateral: {
+            market: new MarketParams({
+              ...midnightMarket,
+              midnight: zeroAddress,
+            }),
+            supplies: [{ collateralIndex: 0n, assets: 10n }],
+          },
         },
       }),
     ).toThrow(MidnightMarketAddressMismatchError);
@@ -186,9 +200,12 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        collateral: {
-          market,
-          supplies: [{ collateralIndex: 1n, assets: 10n }],
+        publication: {
+          ...params.publication,
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 1n, assets: 10n }],
+          },
         },
       }),
     ).toThrow(UnknownCollateralIndexError);
@@ -198,14 +215,20 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        collateral: { market, supplies: [] },
+        publication: {
+          ...params.publication,
+          collateral: { market, supplies: [] },
+        },
       }),
     ).toThrow(EmptyMidnightCollateralSuppliesError);
   });
 
   test("behavior: accepts an unregistered ratifier address", () => {
     const ratifier = getAddress("0x000000000000000000000000000000000000dEaD");
-    const tx = midnightCancelAndMake({ ...params, ratifier });
+    const tx = midnightCancelAndMake({
+      ...params,
+      publication: { ...params.publication, ratifier },
+    });
     const decoded = decodeFunctionData({
       abi: midnightBundlesV2Abi,
       data: tx.data,
@@ -216,15 +239,24 @@ describe("midnightCancelAndMake", () => {
   });
 
   test("error: InvalidTreeError on empty root, payload, or groups", () => {
-    expect(() => midnightCancelAndMake({ ...params, root: zeroHash })).toThrow(
-      InvalidTreeError,
-    );
-    expect(() => midnightCancelAndMake({ ...params, payload: "0x" })).toThrow(
-      InvalidTreeError,
-    );
-    expect(() => midnightCancelAndMake({ ...params, groups: [] })).toThrow(
-      InvalidTreeError,
-    );
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        publication: { ...params.publication, root: zeroHash },
+      }),
+    ).toThrow(InvalidTreeError);
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        publication: { ...params.publication, payload: "0x" },
+      }),
+    ).toThrow(InvalidTreeError);
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        publication: { ...params.publication, groups: [] },
+      }),
+    ).toThrow(InvalidTreeError);
   });
 
   test("error: MidnightReplacementGroupCancelledError", () => {
@@ -269,12 +301,15 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        collateral: {
-          market: new MarketParams({
-            ...midnightMarket,
-            chainId: midnightMarket.chainId + 1n,
-          }),
-          supplies: [{ collateralIndex: 0n, assets: 1n }],
+        publication: {
+          ...params.publication,
+          collateral: {
+            market: new MarketParams({
+              ...midnightMarket,
+              chainId: midnightMarket.chainId + 1n,
+            }),
+            supplies: [{ collateralIndex: 0n, assets: 1n }],
+          },
         },
       }),
     ).toThrow(ChainIdMismatchError);
@@ -284,7 +319,13 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        collateral: { market, supplies: [{ collateralIndex: 0n, assets: 0n }] },
+        publication: {
+          ...params.publication,
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 0n, assets: 0n }],
+          },
+        },
       }),
     ).toThrow(NonPositiveInputError);
   });
@@ -301,7 +342,10 @@ describe("midnightCancelAndMake", () => {
       assets: 1_000n,
       callbackSalt: `0x${"ee".repeat(32)}` as Hex,
     };
-    const tx = midnightCancelAndMake({ ...params, blueSupply });
+    const tx = midnightCancelAndMake({
+      ...params,
+      publication: { ...params.publication, blueSupply },
+    });
     const decoded = decodeFunctionData({
       abi: midnightBundlesV2Abi,
       data: tx.data,
@@ -319,16 +363,19 @@ describe("midnightCancelAndMake", () => {
     expect(() =>
       midnightCancelAndMake({
         ...params,
-        blueSupply: {
-          market: {
-            loanToken: midnightMarket.loanToken,
-            collateralToken: zeroAddress,
-            oracle: zeroAddress,
-            irm: zeroAddress,
-            lltv: 0n,
+        publication: {
+          ...params.publication,
+          blueSupply: {
+            market: {
+              loanToken: midnightMarket.loanToken,
+              collateralToken: zeroAddress,
+              oracle: zeroAddress,
+              irm: zeroAddress,
+              lltv: 0n,
+            },
+            assets: 0n,
+            callbackSalt: zeroHash,
           },
-          assets: 0n,
-          callbackSalt: zeroHash,
         },
       }),
     ).toThrow(NonPositiveInputError);

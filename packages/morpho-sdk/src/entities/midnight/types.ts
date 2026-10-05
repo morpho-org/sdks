@@ -88,13 +88,23 @@ export interface SupplyBlueMakeLendParams extends CancelAndMakeParams {
   readonly callbackSalt: Hex;
 }
 
+/** Collateral supplied before a borrow-offer publication; every offer must target `market`. */
+export interface MakeBorrowCollateral {
+  readonly market: MarketInput;
+  readonly supplies: readonly MidnightCollateralTransfer[];
+}
+
 /** Parameters for the Midnight cancel-and-make-borrow maker flow. */
 export interface CancelAndMakeBorrowParams extends CancelAndMakeParams {
   /** Optional collateral supplied before activation; every offer must target `collateral.market`. */
-  readonly collateral?: {
-    readonly market: MarketInput;
-    readonly supplies: readonly MidnightCollateralTransfer[];
-  };
+  readonly collateral?: MakeBorrowCollateral;
+}
+
+/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
+export interface SupplyCollateralMakeBorrowParams
+  extends CancelAndMakeBorrowParams {
+  /** Required collateral supplied before activation; every offer must target `collateral.market`. */
+  readonly collateral: MakeBorrowCollateral;
 }
 
 /**

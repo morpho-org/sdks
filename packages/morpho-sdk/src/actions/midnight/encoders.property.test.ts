@@ -292,18 +292,20 @@ describe("Midnight calldata encoders", () => {
             abi: midnightBundlesV2Abi,
             data: midnightCancelAndMake({
               chainId: midnightChainId,
-              ratifier: getChainAddress(midnightChainId, "rateRatifierV1"),
-              root,
-              groups: [group],
-              payload: "0x1234",
               cancellations: [{ group: cancelled, maxConsumed }],
               deadline,
-              ...(withCollateral && {
-                collateral: {
-                  market: midnightMarket,
-                  supplies: [{ collateralIndex: 0n, assets }],
-                },
-              }),
+              publication: {
+                ratifier: getChainAddress(midnightChainId, "rateRatifierV1"),
+                root,
+                groups: [group],
+                payload: "0x1234",
+                ...(withCollateral && {
+                  collateral: {
+                    market: midnightMarket,
+                    supplies: [{ collateralIndex: 0n, assets }],
+                  },
+                }),
+              },
             }).data,
           });
           expect(decoded.args[4]).toEqual(

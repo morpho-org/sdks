@@ -389,7 +389,7 @@ describe("Midnight cancel-and-make on fork", () => {
     const output = await client
       .extend(morphoViemExtension())
       .morpho.midnight(base.id)
-      .cancelAndMakeBorrow({
+      .supplyCollateralMakeBorrow({
         accountAddress: client.account.address,
         offers: rateTree(client, { buy: false, group: groupA }),
         collateral: {

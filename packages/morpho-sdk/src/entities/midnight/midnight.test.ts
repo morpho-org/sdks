@@ -86,6 +86,7 @@ import type {
   CancelAndMakeLendParams,
   MidnightMakerTreeInput,
   SupplyBlueMakeLendParams,
+  SupplyCollateralMakeBorrowParams,
 } from "./types.js";
 
 const client = {
@@ -1579,6 +1580,98 @@ describe("MorphoMidnight", () => {
           offers: rateTree(makerOffer({ buy: true })),
         }),
       ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+  });
+
+  describe("supplyCollateralMakeBorrow", () => {
+    const market = new MarketParams({
+      ...midnightMarket,
+      maturity: apiValidMaturity,
+    });
+    const otherMarket = new MarketParams({
+      ...market,
+      loanToken: getAddress("0x0000000000000000000000000000000000007101"),
+    });
+    const params: SupplyCollateralMakeBorrowParams = {
+      accountAddress: midnightAddresses.maker,
+      offers: rateTree(makerOffer({ buy: false })),
+      collateral: {
+        market,
+        supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+      },
+      deadline: maxUint256,
+      validation: offerValidation,
+    };
+    const createHandle = () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+      return handle;
+    };
+    const prepare = (
+      handle: MidnightMockHandle,
+      overrides: Partial<SupplyCollateralMakeBorrowParams> = {},
+    ) =>
+      midnightWithHandle(handle).supplyCollateralMakeBorrow({
+        ...params,
+        ...overrides,
+      });
+
+    test("behavior: matches cancelAndMakeBorrow with collateral requirements", async () => {
+      const supplyOutput = await prepare(createHandle());
+      const borrowOutput = await midnightWithHandle(
+        createHandle(),
+      ).cancelAndMakeBorrow(params);
+
+      expect(supplyOutput.buildTx()).toEqual(borrowOutput.buildTx());
+      expect(supplyOutput.root).toBe(borrowOutput.root);
+      expect(supplyOutput.groups).toEqual(borrowOutput.groups);
+
+      const supplyRequirements = await supplyOutput.getRequirements();
+      expect(supplyRequirements).toEqual(await borrowOutput.getRequirements());
+      expect(supplyRequirements.map(({ action }) => action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 2_000n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.maker,
+          },
+        },
+      ]);
+    });
+
+    test("error: EmptyMidnightCollateralSuppliesError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: { market, supplies: [] },
+        }),
+      ).rejects.toThrow(EmptyMidnightCollateralSuppliesError);
+    });
+
+    test("error: ChainIdMismatchError", async () => {
+      await expect(
+        new MorphoMidnight(
+          client,
+          midnightChainId + 1,
+        ).supplyCollateralMakeBorrow(params),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
+
+    test("error: MarketIdMismatchError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          offers: rateTree(makerOffer({ buy: false, market: otherMarket })),
+        }),
+      ).rejects.toThrow(MarketIdMismatchError);
     });
   });
 

@@ -84,6 +84,7 @@ import type {
   RedeemParams,
   RepayWithdrawCollateralParams,
   SupplyBlueMakeLendParams,
+  SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
   TakeBorrowParams,
@@ -128,6 +129,7 @@ export type MidnightActions = Pick<
   | "cancelAndMakeLend"
   | "cancelAndMakeBorrow"
   | "supplyBlueMakeLend"
+  | "supplyCollateralMakeBorrow"
   | "redeem"
   | "repayWithdrawCollateral"
   | "cancelOffer"
@@ -721,13 +723,15 @@ export class MorphoMidnight {
     });
     const tx = midnightCancelAndMake({
       chainId: this.chainId,
-      ratifier: data.ratifier,
-      root: data.tree.root,
-      groups: data.groups,
-      payload: data.payload,
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
       metadata: this.client.options.metadata,
+      publication: {
+        ratifier: data.ratifier,
+        root: data.tree.root,
+        groups: data.groups,
+        payload: data.payload,
+      },
     });
     const midnight = getChainAddress(this.chainId, "midnight");
 
@@ -886,14 +890,16 @@ export class MorphoMidnight {
     });
     const tx = midnightCancelAndMake({
       chainId: this.chainId,
-      ratifier: data.ratifier,
-      root: data.tree.root,
-      groups: data.groups,
-      payload: data.payload,
-      blueSupply: {
-        market: params.blueMarket,
-        assets: params.assetsToPark,
-        callbackSalt,
+      publication: {
+        ratifier: data.ratifier,
+        root: data.tree.root,
+        groups: data.groups,
+        payload: data.payload,
+        blueSupply: {
+          market: params.blueMarket,
+          assets: params.assetsToPark,
+          callbackSalt,
+        },
       },
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
@@ -993,17 +999,19 @@ export class MorphoMidnight {
     }
     const tx = midnightCancelAndMake({
       chainId: this.chainId,
-      ratifier: data.ratifier,
-      root: data.tree.root,
-      groups: data.groups,
-      payload: data.payload,
-      collateral:
-        market == null
-          ? undefined
-          : { market, supplies: params.collateral?.supplies ?? [] },
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
       metadata: this.client.options.metadata,
+      publication: {
+        ratifier: data.ratifier,
+        root: data.tree.root,
+        groups: data.groups,
+        payload: data.payload,
+        collateral:
+          market == null
+            ? undefined
+            : { market, supplies: params.collateral?.supplies ?? [] },
+      },
     });
     const midnightBundlesV2 = getChainAddress(
       this.chainId,
@@ -1050,6 +1058,60 @@ export class MorphoMidnight {
       },
       buildTx: () => tx,
     };
+  }
+
+  /**
+   * Prepares an atomic borrow-offer publication or repost through `MidnightBundlesV2`,
+   * requiring collateral before activation.
+   *
+   * One transaction cancels `cancellations` under their consumption ceilings, pulls and supplies
+   * required `collateral`, activates the PriceRatifierV1 or RateRatifierV1 root, and publishes its
+   * payload. Pass no cancellations for a new publication. Calls the Midnight mempool validation
+   * API while preparing the tree.
+   *
+   * @param params - Maker, borrow-side offers, required collateral, cancellations, and deadline.
+   * @param params.accountAddress - Maker expected on every offer; must send the transaction.
+   * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
+   * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.validation - Optional Midnight mempool API request controls.
+   * @param params.collateral - Required market and collateral supplies; every offer must target that market.
+   * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client or collateral market targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
+   * @throws {MidnightMarketAddressMismatchError} when the collateral market targets another Midnight deployment.
+   * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
+   * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
+   * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
+   * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
+   * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
+   * @throws {MarketIdMismatchError} when an offer targets another market than `collateral.market`.
+   * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
+   * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
+   * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
+   * @example
+   * ```ts
+   * const output = await midnight.supplyCollateralMakeBorrow({
+   *   accountAddress: maker,
+   *   offers: { type: "rateV1", entries: [{ offer, rate }] },
+   *   collateral: {
+   *     market: marketData.params,
+   *     supplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
+   *   },
+   *   deadline: maxUint256,
+   * });
+   * ```
+   */
+  async supplyCollateralMakeBorrow(
+    params: SupplyCollateralMakeBorrowParams,
+  ): Promise<CancelAndMakeOutput> {
+    return this.cancelAndMakeBorrow(params);
   }
 
   /**
