@@ -10,7 +10,9 @@ import {
   midnightAbi,
   midnightBundlesV2Abi,
   Offer,
+  OfferUtils,
   priceRatifierV1Abi,
+  RateRatifierV1,
   rateRatifierV1Abi,
   Tree,
 } from "@morpho-org/midnight-sdk";
@@ -124,6 +126,7 @@ const blueMarket = {
   lltv: 860000000000000000n,
 };
 const callbackSalt = `0x${"cc".repeat(32)}` as Hex;
+const taker = "0x0000000000000000000000000000000000007a4e" as Address;
 
 /** Creates `blueMarket` on the fork, optionally seeded with `seedAssets` of supply. */
 const createBlueMarket = async (
@@ -158,6 +161,7 @@ const rateTree = (
     readonly group: Hex;
     readonly callback?: Address;
     readonly callbackData?: Hex;
+    readonly rate?: bigint;
   },
 ) =>
   Tree.create({
@@ -180,7 +184,7 @@ const rateTree = (
           callback: params.callback ?? zeroAddress,
           callbackData: params.callbackData ?? "0x",
         }),
-        rate: 1_000_000_000n,
+        rate: params.rate ?? 1_000_000_000n,
       },
     ],
   });
@@ -510,6 +514,108 @@ describe("Midnight cancel-and-make on fork", () => {
       args: [BlueMarketUtils.getMarketId(blueMarket), callback],
     });
     expect(repostSupplyShares).toBeGreaterThan(supplyShares);
+  });
+
+  test("funds a taker's fill from the maker's callback", async ({ client }) => {
+    await deployMidnightBundlesV2(client);
+    await createBlueMarket(client, parseUnits("1", 6));
+    await client.setCode({
+      address: oracle,
+      bytecode: concatHex([
+        "0x7f",
+        padHex(toHex(10n ** 36n), { size: 32 }),
+        "0x60005260206000f3",
+      ]),
+    });
+    const assetsToPark = parseUnits("2", 6);
+    await client.deal({
+      erc20: usdc,
+      account: client.account.address,
+      amount: assetsToPark,
+    });
+    const { result: callback } = await client.simulateContract({
+      address: blueBuyCallbackFactory,
+      abi: blueBuyCallbackFactoryAbi,
+      functionName: "createBlueBuyCallback",
+      args: [client.account.address, callbackSalt],
+    });
+    const offers = rateTree(client, {
+      buy: true,
+      group: groupA,
+      callback,
+      callbackData: encodeAbiParameters([marketParamsAbi], [blueMarket]),
+      rate: 0n,
+    });
+    const output = await client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id)
+      .supplyBlueMakeLend({
+        accountAddress: client.account.address,
+        offers,
+        blueMarket,
+        assetsToPark,
+        callbackSalt,
+        deadline: maxUint256,
+        validation,
+      });
+    await fulfilRequirements(client, output);
+    await client.sendTransaction(output.buildTx());
+
+    const collateralAssets = parseEther("1");
+    await client.setBalance({ address: taker, value: parseEther("1") });
+    await client.deal({
+      erc20: wNative,
+      account: taker,
+      amount: collateralAssets,
+    });
+    await client.approve({
+      account: taker,
+      address: wNative,
+      args: [midnight, collateralAssets],
+    });
+    await client.writeContract({
+      account: taker,
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "supplyCollateral",
+      args: [MarketUtils.toStruct(market), 0n, collateralAssets, taker],
+    });
+    const [item] = RateRatifierV1.ratify({ tree: offers.toDescriptor() });
+    if (!item) throw new Error("expected a ratified offer");
+    const callbackSupplyBefore = await client.readContract({
+      address: blue,
+      abi: blueAbi,
+      functionName: "position",
+      args: [BlueMarketUtils.getMarketId(blueMarket), callback],
+    });
+    await client.writeContract({
+      account: taker,
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "take",
+      args: [
+        OfferUtils.toStruct({ offer: item.offer }),
+        item.ratifierData,
+        parseUnits("1", 6) / 2n,
+        taker,
+        taker,
+        zeroAddress,
+        "0x",
+      ],
+    });
+
+    const borrowed = await client.balanceOf({ erc20: usdc, owner: taker });
+    expect(borrowed).toBeGreaterThan(0n);
+    await expect(
+      client.balanceOf({ erc20: usdc, owner: client.account.address }),
+    ).resolves.toBe(0n);
+    const [callbackSupplyAfter] = await client.readContract({
+      address: blue,
+      abi: blueAbi,
+      functionName: "position",
+      args: [BlueMarketUtils.getMarketId(blueMarket), callback],
+    });
+    expect(callbackSupplyAfter).toBeLessThan(callbackSupplyBefore[0]);
   });
 
   test("error: rejects parking in a Blue market with no supply", async ({
