@@ -85,9 +85,9 @@ export interface CancelAndMakeBorrowParams extends CancelAndMakeParams {
 /**
  * Lazy Midnight entity result with async requirements and sync transaction building.
  *
- * Call `getRequirements()` first to collect approvals, authorizations, or
- * signatures. Once those are handled, pass any requirement signatures to
- * `buildTx`; the transaction builder itself performs no fetching or signing.
+ * Call `getRequirements()` first and send the approval and authorization
+ * transactions it returns. `buildTx()` takes no signatures and performs no
+ * fetching or signing.
  *
  * @example
  * ```ts
