@@ -69,6 +69,39 @@ export class UnsupportedPermitDomainExtensionsError extends Error {
   }
 }
 
+/** Thrown by `restructure` when the ABI has no function item matching the requested name. */
+export class AbiFunctionNotFoundError extends Error {
+  /** @param functionName - Function name looked up in the ABI. */
+  constructor(public readonly functionName: string) {
+    super(
+      `ABI has no function named "${functionName}". Pass the ABI and function name of the read whose outputs are being restructured.`,
+    );
+    this.name = "AbiFunctionNotFoundError";
+  }
+}
+
+/** Thrown by `restructure` when an ABI function has unnamed outputs, so its tuple cannot be mapped to object keys. */
+export class UnnamedAbiOutputsError extends Error {
+  /** @param functionName - ABI function whose outputs lack names. */
+  constructor(public readonly functionName: string) {
+    super(
+      `ABI function "${functionName}" has unnamed outputs. Name every output in the ABI, or read the tuple positionally instead of restructuring it.`,
+    );
+    this.name = "UnnamedAbiOutputsError";
+  }
+}
+
+/** Thrown by `readContractRestructured` when the contract read returns a single value instead of a tuple. */
+export class NonTupleReturnValueError extends Error {
+  /** @param functionName - Contract function that returned a non-tuple value. */
+  constructor(public readonly functionName: string) {
+    super(
+      `Contract function "${functionName}" returned a non-tuple value. Use viem's readContract for single-output functions; readContractRestructured only applies to tuple outputs.`,
+    );
+    this.name = "NonTupleReturnValueError";
+  }
+}
+
 /**
  * Checks if an error is a contract revert with the "UnknownOfFactory" error name.
  *

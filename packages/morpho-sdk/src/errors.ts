@@ -19,12 +19,15 @@ export {
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
 export {
+  AbiFunctionNotFoundError,
   getUnsupportedVaultV2Adapter as getBlueUnsupportedVaultV2Adapter,
   InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
   MarketParamsIdMismatchError as BlueMarketParamsIdMismatchError,
+  NonTupleReturnValueError,
+  UnnamedAbiOutputsError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {

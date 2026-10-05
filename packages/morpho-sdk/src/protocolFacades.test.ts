@@ -13,6 +13,7 @@ import {
 } from "@morpho-org/morpho-sdk/blue/constants";
 import { Market as RawBlueMarket } from "@morpho-org/morpho-sdk/blue/entities";
 import {
+  AbiFunctionNotFoundError as RawBlueAbiFunctionNotFoundError,
   DivisionByZeroError as RawBlueDivisionByZeroError,
   InvalidAddressError as RawBlueInvalidAddressError,
   InvalidBitLengthError as RawBlueInvalidBitLengthError,
@@ -21,6 +22,7 @@ import {
   InvalidPermitDomainChainIdError as RawBlueInvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
   MarketParamsIdMismatchError as RawBlueMarketParamsIdMismatchError,
+  NonTupleReturnValueError as RawBlueNonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownDataError as RawBlueUnknownDataError,
   UnknownFactory as RawBlueUnknownFactory,
@@ -29,6 +31,7 @@ import {
   UnknownTokenError as RawBlueUnknownTokenError,
   UnknownTokenPriceError as RawBlueUnknownTokenPriceError,
   UnknownVaultConfigError as RawBlueUnknownVaultConfigError,
+  UnnamedAbiOutputsError as RawBlueUnnamedAbiOutputsError,
   UnsupportedMarketIrmError as RawBlueUnsupportedMarketIrmError,
   UnsupportedPermitDomainExtensionsError as RawBlueUnsupportedPermitDomainExtensionsError,
   UnsupportedVaultV2AdapterError as RawBlueUnsupportedVaultV2AdapterError,
@@ -64,6 +67,7 @@ import {
 } from "@morpho-org/morpho-sdk/constants";
 import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
+  AbiFunctionNotFoundError,
   BlueMarketParamsIdMismatchError,
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
@@ -82,6 +86,7 @@ import {
   MidnightRateRatifierV1BoundOverflowError,
   MidnightRatifierV1TakerNotAllowedError,
   NegativeValueError,
+  NonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError,
   UnknownBlueDataError,
   UnknownBlueFactory,
@@ -90,6 +95,7 @@ import {
   UnknownBlueTokenError,
   UnknownBlueTokenPriceError,
   UnknownBlueVaultConfigError,
+  UnnamedAbiOutputsError,
   UnsupportedBlueMarketIrmError,
   UnsupportedBlueVaultV2AdapterError,
   UnsupportedPermitDomainExtensionsError,
@@ -198,6 +204,9 @@ describe("protocol facades", () => {
       RawBlueInvalidPermitDomainVerifyingContractError,
     ],
     [BlueMarketParamsIdMismatchError, RawBlueMarketParamsIdMismatchError],
+    [AbiFunctionNotFoundError, RawBlueAbiFunctionNotFoundError],
+    [NonTupleReturnValueError, RawBlueNonTupleReturnValueError],
+    [UnnamedAbiOutputsError, RawBlueUnnamedAbiOutputsError],
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],

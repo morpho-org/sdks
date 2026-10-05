@@ -2,7 +2,12 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { InvalidNumberError } from "./error.js";
+import {
+  AbiFunctionNotFoundError,
+  InvalidNumberError,
+  NonTupleReturnValueError,
+  UnnamedAbiOutputsError,
+} from "./error.js";
 import {
   readContractRestructured,
   restructure,
@@ -143,11 +148,7 @@ describe("restructure", () => {
     });
   });
 
-  test("throws when the function does not exist in the abi", () => {
-    // `restructure` throws a plain Error with a "non-function type"
-    // message because `getAbiItem` returns undefined. Pin the message so
-    // a regression that swaps the throw shape (e.g. silently returning
-    // `{}`) is caught.
+  test("error: AbiFunctionNotFoundError when the function does not exist in the abi", () => {
     expect(() =>
       restructure([] as never, {
         abi: namedAbi,
@@ -155,19 +156,19 @@ describe("restructure", () => {
         name: "doesNotExist",
         args: [],
       }),
-    ).toThrow(/non-function type/);
+    ).toThrow(AbiFunctionNotFoundError);
   });
 
-  test("throws when ABI outputs lack names", () => {
+  test("error: UnnamedAbiOutputsError when ABI outputs lack names", () => {
     const unnamedAbi = parseAbi([
       "function foo() view returns (uint256, uint256)",
     ]);
     expect(() =>
       restructure([1n, 2n], { abi: unnamedAbi, name: "foo", args: [] }),
-    ).toThrow(/lacking names/);
+    ).toThrow(UnnamedAbiOutputsError);
   });
 
-  test("readContractRestructured throws when viem returns a scalar", async () => {
+  test("error: readContractRestructured throws NonTupleReturnValueError when viem returns a scalar", async () => {
     const handle = createMockClient(mainnet);
     const token = "0x1111111111111111111111111111111111111111";
     mockRead(handle, {
@@ -183,6 +184,6 @@ describe("restructure", () => {
         abi: erc20Abi,
         functionName: "decimals",
       }),
-    ).rejects.toThrow(/non-tuple/);
+    ).rejects.toBeInstanceOf(NonTupleReturnValueError);
   });
 });
