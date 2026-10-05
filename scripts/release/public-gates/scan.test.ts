@@ -87,6 +87,16 @@ describe("scanFiles", () => {
     ["wallet-key", `PRIVATE_KEY_MAINNET=0x${"ab".repeat(32)}`],
     ["wallet-key", `privateKeyHex = "0x${"ab".repeat(32)}"`],
     ["mnemonic", `MNEMONIC_PHRASE="${Array(12).fill("legal").join(" ")}"`],
+    [
+      "wallet-key",
+      `process.env.DEPLOYER_PRIVATE_KEY ?? "0x${"ab".repeat(32)}"`,
+    ],
+    ["wallet-key", `process.env.PRIVATE_KEY || "0x${"ab".repeat(32)}"`],
+    ["wallet-key", `PRIVATE_KEY=0x1${"a".repeat(15)}${"0".repeat(48)}`],
+    [
+      "mnemonic",
+      `MNEMONIC="test test test test test test test test test test test junk legal legal legal"`,
+    ],
     ["rpc-key", `https://eth-mainnet.g.ALCHEMY.COM/v2/${"K".repeat(32)}`],
     ["rpc-key", `https://mainnet.infura.io/v3/${"A".repeat(32)}`],
     ["wallet-key", `hdKeyToAccount(\`${"ab".repeat(32)}\`)`],
@@ -199,6 +209,29 @@ describe("applyExceptions", () => {
     const stale = { ...allowed, match: "SDK-9" };
     expect(applyExceptions(findings, [stale]).unused).toEqual([stale]);
   });
+});
+
+const ANVIL_KEY =
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const REAL_KEY = `0x${"ab".repeat(32)}`;
+test.each([
+  `{ "pk": "${REAL_KEY}", "pk2": "${ANVIL_KEY}" }`,
+  `{ pk: "${REAL_KEY}", pk2: "0x${"0".repeat(63)}1" }`,
+  `PRIVATE_KEY: ${REAL_KEY} # anvil = ${ANVIL_KEY}`,
+])("flag a real key next to a test key in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([
+    expect.objectContaining({
+      rule: "wallet-key",
+      match: expect.stringContaining(REAL_KEY.slice(2)),
+    }),
+  ]);
+});
+
+test.each([
+  `const upkeepId = "0x${"ab".repeat(32)}";`,
+  `pkgHash = "0x${"ab".repeat(32)}"`,
+])("don't flag a name that only contains pk in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
 
 test("still flag a real mnemonic on the line after the test one", () => {
