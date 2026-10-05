@@ -32,8 +32,11 @@ export interface VaultV2BluePublicAllocatorOptions {
    * Share of each target-market BluePublicAllocator cap, scaled by WAD, that
    * operation planning keeps free. When a reallocation toward the utilization
    * target would come within this headroom of the cap, the plan is reduced to
-   * the operation's absolute shortfall. If the shortfall cannot be covered while
-   * keeping the headroom, the plan uses the full cap for the shortfall only.
+   * the larger of the operation's absolute shortfall and what vaults below
+   * their cap were already moving. A plan of only the shortfall leaves the
+   * market fully utilized, so a competing borrow or withdraw landing first can
+   * still make it revert. If the shortfall cannot be covered while keeping the
+   * headroom, the plan uses the full cap for the shortfall only.
    * Must not exceed WAD (100%). Set to `0n` to disable.
    *
    * @default DEFAULT_ALLOCATOR_CAP_HEADROOM (1%)

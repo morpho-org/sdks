@@ -3519,6 +3519,27 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     clone.mockRestore();
   });
 
+  test("behavior: uses the full cap when the headroom clips the fallback leg", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      sourceSupply: 1_000n,
+      sourceBorrow: 940n,
+      allocatorTargetCap: 40n,
+    });
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          maxWithdrawalUtilization: 950_000_000_000_000_000n,
+          allocatorCapHeadroom,
+          operation: { type: "borrow", amount: 40n },
+        })
+        .reallocations.map(({ assets }) => assets);
+
+    expect(legs()).toStrictEqual([10n, 30n]);
+    expect(legs()).toStrictEqual(legs(0n));
+  });
+
   test("behavior: plans a loan-asset withdraw", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 

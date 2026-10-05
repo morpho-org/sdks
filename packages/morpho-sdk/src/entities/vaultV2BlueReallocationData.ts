@@ -901,7 +901,9 @@ export class VaultV2BlueReallocationData
    * operation's absolute shortfall and what vaults below their cap moved. The
    * kept headroom absorbs other allocations up to that share of the cap landing
    * before inclusion. The plan uses the full cap only when the shortfall needs
-   * it, and can then still revert if another allocation lands first. For market-source reallocations
+   * it, and can then still revert if another allocation lands first. A plan of
+   * only the shortfall leaves the market fully utilized, so a competing borrow
+   * or withdraw landing first can also make it revert. For market-source reallocations
    * the source position's interest is also reserved on cap ids shared with the
    * target, and reserves persist across every leg of a plan. Targets with no remaining supply
    * or allocator capacity are skipped before projecting source interest. The
@@ -1115,14 +1117,22 @@ export class VaultV2BlueReallocationData
     // A leg that fills an allocator cap reverts once any other allocation to
     // that market lands first. A cap-bound plan therefore moves only the
     // operation's shortfall, or what vaults below their cap already moved.
-    let selected = plan(requiredAssets, allocatorCapHeadroom);
-    if (allocatorCapHeadroom > 0n && selected.capBound)
+    const target = plan(requiredAssets, allocatorCapHeadroom);
+    let selected = target;
+    if (allocatorCapHeadroom > 0n && target.capBound) {
       selected = plan(
-        absoluteShortfall > selected.unboundAssets
+        absoluteShortfall > target.unboundAssets
           ? absoluteShortfall
-          : selected.unboundAssets,
+          : target.unboundAssets,
         allocatorCapHeadroom,
       );
+      // Shared-cap fitting is not monotonic in the budget.
+      if (
+        selected.reallocatedAssets < absoluteShortfall &&
+        target.reallocatedAssets >= absoluteShortfall
+      )
+        selected = target;
+    }
     if (
       selected.reallocatedAssets < absoluteShortfall &&
       allocatorCapHeadroom > 0n
