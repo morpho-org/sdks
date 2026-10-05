@@ -53,6 +53,9 @@
     "packages/morpho-sdk/ARCHITECTURE.md",
     "packages/morpho-sdk/examples/**",
     "packages/wdk-protocol-lending-morpho-evm/bare.js",
-    "packages/wdk-protocol-lending-morpho-evm/scripts/**"
+    "packages/wdk-protocol-lending-morpho-evm/scripts/**",
+    "scripts/publish/**",
+    "scripts/workflow.test.ts",
+    "scripts/workflow.ts"
   ]
 }

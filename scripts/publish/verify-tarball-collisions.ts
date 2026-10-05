@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import { isMain, reportCliError, writeStdout } from "./workflow.ts";
+import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 
 /** A tarball entry path and node-tar entry type. */
 export interface TarEntry {
@@ -257,7 +257,7 @@ export async function main(
 ): Promise<void> {
   if (tarballPath === undefined || tarballPath === "") {
     throw new Error(
-      "Usage: node scripts/ci/verify-tarball-collisions.ts <tarball.tgz>",
+      "Usage: node scripts/publish/verify-tarball-collisions.ts <tarball.tgz>",
     );
   }
 

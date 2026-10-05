@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 
-import { isMain, reportCliError, writeStdout } from "./workflow.ts";
+import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 
 /** The package identity read from a publishable tarball. */
 export interface TarballIdentity {
@@ -131,7 +131,7 @@ export async function main(
 ): Promise<void> {
   if (tarballPath === undefined || tarballPath === "") {
     throw new Error(
-      "Usage: node scripts/ci/read-tarball-identity.ts <tarball.tgz>",
+      "Usage: node scripts/publish/read-tarball-identity.ts <tarball.tgz>",
     );
   }
 

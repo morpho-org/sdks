@@ -17,7 +17,7 @@ import {
   MIDNIGHT_VERSION_SOURCE_PATH,
 } from "../generate-midnight-package-version.ts";
 import { isPathInside } from "../paths.ts";
-import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
+import { getErrorMessage, sanitizeLogLine } from "../publish/helpers.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";

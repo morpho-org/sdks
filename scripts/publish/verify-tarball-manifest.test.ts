@@ -226,7 +226,7 @@ describe("main", () => {
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
+      "Usage: node scripts/publish/verify-tarball-manifest.ts <manifest-path>",
     );
   });
 
