@@ -3244,6 +3244,127 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toEqual([30n]);
   });
 
+  test("behavior: reports the target plan's liquidity when every pass falls short", () => {
+    const fixture = {
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 30n,
+    };
+    const { data } = makeFixture(fixture);
+    const { data: shortData } = makeFixture({ ...fixture, sourceSupply: 10n });
+    const clone = data.clone.bind(data);
+    // Only the target plan sees the full source.
+    vi.spyOn(data, "clone")
+      .mockImplementationOnce(clone)
+      .mockImplementation(() => shortData.clone());
+
+    const thrown = (() => {
+      try {
+        data.computeVaultV2BlueReallocations(targetParams.id, {
+          operation: { type: "borrow", amount: 40n },
+        });
+      } catch (error) {
+        return error;
+      }
+    })();
+
+    expect(thrown).toBeInstanceOf(InsufficientSharedLiquidityError);
+    expect(thrown).toMatchObject({
+      params: { shortfall: 40n, available: 29n },
+    });
+  });
+
+  test("behavior: keeps a sibling target adapter's leg when another adapter of the vault is cap-bound", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 100n,
+      allocatorTargetCap: 10n,
+    });
+    const targetMarket = data.getMarket(targetParams.id);
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetMarket.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [new Market({ ...targetMarket })],
+    );
+    const [secondAdapterCapId, , secondAdapterMarketCapId] =
+      secondTargetAdapter.ids(targetParams);
+    const vault = data.getVault(VAULT);
+    const twoTargetData = new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: new AccrualVaultV2(
+          {
+            ...vault,
+            liquidityAllocations: vault.liquidityAllocations?.map(
+              (allocation) => ({ ...allocation }),
+            ),
+          },
+          undefined,
+          [...vault.accrualAdapters, secondTargetAdapter],
+          vault.assetBalance,
+          {},
+        ),
+      },
+      allocations: {
+        [VAULT]: {
+          ...data.allocations[VAULT],
+          [secondAdapterCapId]: {
+            id: secondAdapterCapId,
+            absoluteCap: 4n,
+            relativeCap: MathLib.WAD,
+            allocation: 0n,
+          },
+          [secondAdapterMarketCapId]: {
+            id: secondAdapterMarketCapId,
+            absoluteCap: 10_000n,
+            relativeCap: MathLib.WAD,
+            allocation: 0n,
+          },
+        },
+      },
+      publicAllocatorConfigs: data.publicAllocatorConfigs,
+      activeAdapters: {
+        [VAULT]: new Set([
+          ...(data.activeAdapters[VAULT] ?? []),
+          SECOND_TARGET_ADAPTER,
+        ]),
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: {
+          ...data.marketPublicAllocatorConfigs[VAULT],
+          [secondAdapterMarketCapId]: {
+            vault: VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            adapterMarketCapId: secondAdapterMarketCapId,
+            absoluteCap: 10_000n,
+            canPullFromMarket: false,
+          },
+        },
+      },
+    });
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      twoTargetData
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          allocatorCapHeadroom,
+          operation: { type: "borrow", amount: 1n },
+        })
+        .reallocations.map(({ to, assets }) => [to.adapter, assets]);
+
+    expect(legs(0n)).toEqual([
+      [TARGET_ADAPTER, 10n],
+      [SECOND_TARGET_ADAPTER, 3n],
+    ]);
+    // The second adapter's 4 stays in the budget although the first is cap-bound.
+    expect(legs()).toEqual([[TARGET_ADAPTER, 4n]]);
+  });
+
   test("behavior: reduces a cap-bound withdraw plan to its absolute shortfall", () => {
     const { data } = makeFixture({
       targetSupply: 100n,

@@ -133,6 +133,10 @@ interface SimulationContext {
 }
 
 /** Creates isolated transaction-scoped state for one simulation. @internal */
+// BluePublicAllocator caps are per vault and target adapter.
+const getAllocatorCapTargetKey = ({ vault, to }: VaultV2BlueReallocation) =>
+  `${vault.toLowerCase()}:${to.adapter.toLowerCase()}`;
+
 const createSimulationContext = (): SimulationContext => ({
   donatedPenaltyAssets: {},
   firstTotalAssets: {},
@@ -1098,17 +1102,18 @@ export class VaultV2BlueReallocationData
 
       // The fallback pass only runs when the plan moves exactly the absolute
       // shortfall, which a reduced plan would move anyway.
-      const capBoundVaults = friendly.allocatorCapBoundVaults;
+      const capBoundTargets = friendly.allocatorCapBoundTargets;
       let reallocatedAssets = 0n;
       let unboundAssets = 0n;
-      for (const { vault, assets } of reallocations) {
-        reallocatedAssets += assets;
-        if (!capBoundVaults.has(vault.toLowerCase())) unboundAssets += assets;
+      for (const reallocation of reallocations) {
+        reallocatedAssets += reallocation.assets;
+        if (!capBoundTargets.has(getAllocatorCapTargetKey(reallocation)))
+          unboundAssets += reallocation.assets;
       }
       return {
         reallocations,
         data,
-        capBound: capBoundVaults.size > 0,
+        capBound: capBoundTargets.size > 0,
         reallocatedAssets,
         unboundAssets,
       };
@@ -1133,7 +1138,10 @@ export class VaultV2BlueReallocationData
       )
         selected = target;
     }
-    let available = selected.reallocatedAssets;
+    let available = MathLib.max(
+      target.reallocatedAssets,
+      selected.reallocatedAssets,
+    );
     // Without headroom, `target` already is the full-cap plan toward the target.
     const fullCapBudgets =
       allocatorCapHeadroom > 0n ? [absoluteShortfall, requiredAssets] : [];
@@ -1176,15 +1184,15 @@ export class VaultV2BlueReallocationData
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2BlueReallocationData;
     readonly context: SimulationContext;
-    /** Lowercased vaults with an accepted leg reaching its allocator max-in net of the kept headroom. */
-    readonly allocatorCapBoundVaults: ReadonlySet<string>;
+    /** Vault/target-adapter keys of accepted legs reaching their allocator max-in net of the kept headroom. */
+    readonly allocatorCapBoundTargets: ReadonlySet<string>;
   } {
     if (options.enabled === false)
       return {
         reallocations: [],
         data: this,
         context,
-        allocatorCapBoundVaults: new Set(),
+        allocatorCapBoundTargets: new Set(),
       };
 
     this.getMarket(marketId);
@@ -1211,7 +1219,7 @@ export class VaultV2BlueReallocationData
     const adapterIdsCache = new Map<string, AdapterIds>();
     const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
     let remainingAssets = maxAssets;
-    const allocatorCapBoundVaults = new Set<string>();
+    const allocatorCapBoundTargets = new Set<string>();
 
     // Onchain, market interest is booked once at transaction start, on pre-plan
     // positions at pre-plan rates, and stays on touched positions' cap ids.
@@ -1684,7 +1692,7 @@ export class VaultV2BlueReallocationData
           reallocations,
           data,
           context: simulationContext,
-          allocatorCapBoundVaults,
+          allocatorCapBoundTargets,
         };
 
       const {
@@ -1694,7 +1702,9 @@ export class VaultV2BlueReallocationData
         allocatorHeadroom: acceptedAllocatorHeadroom,
       } = largest;
       if (acceptedReallocation.assets >= acceptedAllocatorHeadroom)
-        allocatorCapBoundVaults.add(acceptedReallocation.vault.toLowerCase());
+        allocatorCapBoundTargets.add(
+          getAllocatorCapTargetKey(acceptedReallocation),
+        );
       const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
       let touchedVaultPairs = reserves.touchedPairs.get(touchedVaultKey);
       if (touchedVaultPairs == null) {
@@ -1726,7 +1736,7 @@ export class VaultV2BlueReallocationData
       reallocations,
       data,
       context: simulationContext,
-      allocatorCapBoundVaults,
+      allocatorCapBoundTargets,
     };
   }
 

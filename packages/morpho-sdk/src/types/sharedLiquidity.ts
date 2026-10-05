@@ -38,6 +38,8 @@ export interface VaultV2BluePublicAllocatorOptions {
    * still make it revert. If the shortfall cannot be covered while keeping the
    * headroom, the plan uses the full cap, first for the shortfall only and
    * then toward the utilization target if that is still short.
+   * Discovery plans, `getPublicReallocationLiquidity` and
+   * `getAvailableLiquidityToUtilization` ignore it and use the full cap.
    * Must not exceed WAD (100%). Set to `0n` to disable.
    *
    * @default DEFAULT_ALLOCATOR_CAP_HEADROOM (1%)
