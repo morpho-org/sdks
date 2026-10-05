@@ -107,6 +107,7 @@ address.
 
 - `getMidnightAuthorizationRequirement` no longer accepts the Ecrecover or Setter ratifier as a
   target; MidnightBundlesV2 authorizes the V1 ratifier itself.
+- `RequirementSignatureKind` no longer includes `"midnightOfferRootSignature"`.
 
 There is no replacement for `UnknownMidnightRatifierError`: the pure `midnightCancelAndMake`
 builder accepts any ratifier address, and entity methods derive the registered ratifier from the

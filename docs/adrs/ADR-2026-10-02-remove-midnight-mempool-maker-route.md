@@ -33,9 +33,12 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
 - The route-specific surface is removed with them: `MakeOffersOutput` (exported as
   `MidnightMakeOffersOutput`), the `MidnightMakeOffersParams`, `MidnightMakeLendParams` and
   `MidnightSupplyCollateralMakeBorrowParams` input types, the `mempoolSubmitOffers` and
-  `setterRatifierRatifyRoot` builders and requirement, the `MidnightOfferRootSignature*` and
-  `MidnightActionSignatures` types, the offer-root signature errors, and
-  `UnknownMidnightRatifierError`.
+  `setterRatifierRatifyRoot` builders and requirement with their `MempoolSubmitOffersAction` and
+  `SetterRatifierRatifyRootAction` types, the `MidnightOfferRootSignature*` and
+  `MidnightActionSignatures` types, `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
+  `selectRequirementSignatures` (`SelectedRequirementSignatures`), the
+  `"midnightOfferRootSignature"` member of `RequirementSignatureKind`, the offer-root signature
+  errors, and `UnknownMidnightRatifierError`.
 - The maker types kept in 7.0.0 are retyped in place: `MorphoMidnight.getOffersData` and the maker
   `offers` input accept only a PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
   instead of any `TreeInput`; `MidnightOfferValidationParams` drops `ratification`;
@@ -51,8 +54,10 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
   `MidnightBundlesV2` on Midnight, which these methods already require, so no off-chain signature
   step exists. The pure `midnightCancelAndMake` builder still accepts an explicit delegated root
   signature.
-- `PriceRatifierV1` and `RateRatifierV1` are not Midnight authorization targets; makers authorize
-  `MidnightBundlesV2`.
+- `getMidnightAuthorizationRequirement` and `midnightSetIsAuthorized` no longer accept the
+  EcrecoverRatifier or SetterRatifier as `authorized` targets, and do not accept `PriceRatifierV1`
+  or `RateRatifierV1` either; makers authorize `MidnightBundlesV2`, which authorizes the V1 ratifier
+  itself.
 
 The major changeset, the migration guide and continued availability of the 6.x major still apply.
 No removal outside this list inherits this exception.
