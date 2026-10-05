@@ -38,6 +38,10 @@ const file = (path: string, content: string) => ({
   path,
   content: Buffer.from(content),
 });
+const entry = (path: string, content: string) => ({
+  ...file(path, content),
+  tarball: true as const,
+});
 
 describe("scanFiles", () => {
   test.each([
@@ -57,6 +61,7 @@ describe("scanFiles", () => {
     ["anthropic-key", `sk-ant-api03-${"x".repeat(24)}`],
     ["rpc-key", `https://eth-mainnet.g.alchemy.com/v2/${"k".repeat(32)}`],
     ["linear-key", "branch feature/sdk-1322-public-gates"],
+    ["linear-key", "test_SDK-1322 here"],
     ["linear-url", "https://Linear.app/morpho-labs/issue/X"],
     ["slack-url", "Morpho.Slack.com/archives/C1"],
     ["notion-url", "https://www.Notion.so/page"],
@@ -199,7 +204,7 @@ describe("applyExceptions", () => {
   test("never allows a tarball finding, even under a matching glob", () => {
     const wide = { ...allowed, path: "**/CHANGELOG.md" } as const;
     const { blocking } = applyExceptions(
-      scanFiles([file("a-1.0.0.tgz:package/CHANGELOG.md", "SDK-1")]),
+      scanFiles([entry("a-1.0.0.tgz:package/CHANGELOG.md", "SDK-1")]),
       [wide],
     );
     expect(blocking.map(({ path }) => path)).toEqual([
@@ -246,18 +251,45 @@ test("still flag a real mnemonic on the line after the test one", () => {
 });
 
 test.each([
-  "docs/SDK-1234-plan/notes.md",
-  "a-1.0.0.tgz:package/sdk-1322-notes.md",
-])("flag a Linear key in the path %s", (path) => {
-  expect(scanFiles([file(path, "x")])).toEqual([
-    expect.objectContaining({ path, line: 0, rule: "linear-key" }),
+  file("docs/SDK-1234-plan/notes.md", "x"),
+  file("x/sdk-1322_notes.md", "x"),
+  file("SDK-999.tgz:a/b.md", "x"),
+  entry("a-1.0.0.tgz:package/sdk-1322-notes.md", "x"),
+])("flag a Linear key in the path $path", (scanned) => {
+  expect(scanFiles([scanned])).toEqual([
+    expect.objectContaining({
+      path: scanned.path,
+      line: 0,
+      rule: "linear-key",
+    }),
   ]);
 });
 
 test("don't scan the tarball name itself", () => {
-  expect(scanFiles([file("morpho-sdk-1.0.0.tgz:package/a.md", "x")])).toEqual(
+  expect(scanFiles([entry("morpho-sdk-1.0.0.tgz:package/a.md", "x")])).toEqual(
     [],
   );
+});
+
+test.each([
+  `process.env["PRIVATE_KEY"] ?? "${REAL_KEY}"`,
+  `getEnv("PRIVATE_KEY") ?? "${REAL_KEY}"`,
+  `{"code":"const PRIVATE_KEY = \\"${REAL_KEY}\\";"}`,
+])("flag a wallet key in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([
+    expect.objectContaining({ rule: "wallet-key" }),
+  ]);
+});
+
+const REAL_MNEMONIC = Array(12).fill("legal").join(" ");
+test.each([
+  `process.env.MNEMONIC ?? "${REAL_MNEMONIC}"`,
+  `env["MNEMONIC"] || "${REAL_MNEMONIC}"`,
+  `{"code":"const MNEMONIC = \\"${REAL_MNEMONIC}\\";"}`,
+])("flag a mnemonic in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([
+    expect.objectContaining({ rule: "mnemonic" }),
+  ]);
 });
 
 test("report a file's findings in line order", () => {
@@ -312,11 +344,18 @@ describe("parsePolicy", () => {
 });
 
 describe("readTree and readTarballs", () => {
-  test("read regular files with POSIX paths and skip symlinks", () => {
+  test("read files with POSIX paths, symlinks as their target", () => {
     const dir = tempDir();
-    write(dir, { "a/b.md": "SDK-1" });
-    symlinkSync("a/b.md", join(dir, "link.md"));
-    expect(readTree(dir).map(({ path }) => path)).toEqual(["a/b.md"]);
+    write(dir, { "a/b.md": "x" });
+    symlinkSync("a/b.md", join(dir, "SDK-1234-notes.md"));
+    const files = readTree(dir);
+    expect(files.map(({ path }) => path)).toEqual([
+      "SDK-1234-notes.md",
+      "a/b.md",
+    ]);
+    expect(scanFiles(files)).toEqual([
+      expect.objectContaining({ path: "SDK-1234-notes.md", line: 0 }),
+    ]);
   });
 
   test("scan tarball contents under the tarball name", async () => {
@@ -333,6 +372,7 @@ describe("readTree and readTarballs", () => {
         line: 1,
         rule: "linear-key",
         match: "SDK-7",
+        tarball: true,
       },
     ]);
   });
@@ -345,6 +385,21 @@ describe("readTree and readTarballs", () => {
     execFileSync("tar", ["-czf", tarball, "-C", dir, "package"]);
     await expect(readTarballs([tarball])).rejects.toThrow(
       "package/leak (SymbolicLink)",
+    );
+  });
+
+  test("reject a later tarball without package/package.json", async () => {
+    const dir = tempDir();
+    write(dir, {
+      "a/package/package.json": "{}",
+      "b/package/index.js": "",
+    });
+    const valid = join(dir, "a-1.0.0.tgz");
+    const missing = join(dir, "b-1.0.0.tgz");
+    execFileSync("tar", ["-czf", valid, "-C", join(dir, "a"), "package"]);
+    execFileSync("tar", ["-czf", missing, "-C", join(dir, "b"), "package"]);
+    await expect(readTarballs([valid, missing])).rejects.toThrow(
+      `"${missing}" has no package/package.json`,
     );
   });
 
