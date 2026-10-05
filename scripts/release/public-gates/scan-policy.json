@@ -1,0 +1,23 @@
+{
+  "blockedTerms": [],
+  "exceptions": [
+    {
+      "path": "packages/blue-sdk-viem/CHANGELOG.md",
+      "rule": "linear-key",
+      "match": "SDK-1100",
+      "reason": "Already published to npm; SDK-1322 leaves published changelog entries unchanged."
+    },
+    {
+      "path": "packages/midnight-sdk/CHANGELOG.md",
+      "rule": "linear-key",
+      "match": "SDK-1009",
+      "reason": "Already published to npm; SDK-1322 leaves published changelog entries unchanged."
+    },
+    {
+      "path": "packages/morpho-sdk/CHANGELOG.md",
+      "rule": "linear-key",
+      "match": "VAU-1206",
+      "reason": "Already published to npm; SDK-1322 leaves published changelog entries unchanged."
+    }
+  ]
+}
