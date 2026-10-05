@@ -32,7 +32,6 @@ export type PlannedCall = {
 /** The ordered call plan for one simulation. @internal */
 export interface ExecutionPlan {
   readonly request: ParsedRequest;
-  readonly owner: Address;
   readonly calls: readonly PlannedCall[];
 }
 
@@ -120,5 +119,5 @@ export function planExecution(params: {
     });
   }
 
-  return deepFreeze({ request, owner, calls });
+  return deepFreeze({ request, calls });
 }
