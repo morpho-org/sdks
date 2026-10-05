@@ -131,6 +131,23 @@ export type DepositParameters<
   "abi" | "functionName"
 >;
 
+/**
+ * Creates a viem test client for a local Anvil node, polling every 50 ms.
+ *
+ * `waitForTransactionReceipt` called with only `hash` and `timeout` polls
+ * `eth_getTransactionReceipt` until the receipt exists or `timeout` (default
+ * 180 s) expires; any other option falls back to viem's implementation. Under
+ * automine, `sendTransaction`, `sendRawTransaction` and `writeContract` wait
+ * for the receipt before returning the hash.
+ *
+ * @param transport - HTTP transport to the Anvil node.
+ * @param chain - The chain the node forks.
+ * @returns The extended test client.
+ *
+ * @example
+ * const client = createAnvilTestClient(http(anvil.rpcUrl), mainnet);
+ * const hash = await client.sendTransaction({ to, value }); // mined
+ */
 export const createAnvilTestClient = <chain extends Chain>(
   transport: HttpTransport,
   chain: chain,
