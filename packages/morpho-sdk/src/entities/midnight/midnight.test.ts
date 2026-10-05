@@ -24,6 +24,7 @@ import {
 } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
+  expectReadCall,
   type MockClientHandle,
   mockRead,
 } from "@morpho-org/test/mock";
@@ -1300,6 +1301,13 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         callbackSalt,
       });
+      expect(
+        expectReadCall(handle, {
+          address: blueBuyCallbackFactory,
+          abi: blueBuyCallbackFactoryAbi,
+          functionName: "createBlueBuyCallback",
+        }).map(({ args }) => args),
+      ).toEqual([[midnightAddresses.maker, callbackSalt]]);
     });
 
     test("behavior: defaults the callback salt to the zero hash", async () => {
@@ -1308,6 +1316,13 @@ describe("MorphoMidnight", () => {
       const tx = (await prepare(handle)).buildTx();
 
       expect(tx.action.args.blueSupply?.callbackSalt).toBe(zeroHash);
+      expect(
+        expectReadCall(handle, {
+          address: blueBuyCallbackFactory,
+          abi: blueBuyCallbackFactoryAbi,
+          functionName: "createBlueBuyCallback",
+        }).map(({ args }) => args),
+      ).toEqual([[midnightAddresses.maker, zeroHash]]);
     });
 
     test("error: NonPositiveInputError", async () => {
