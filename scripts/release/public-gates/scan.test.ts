@@ -235,6 +235,13 @@ test.each([
   ]);
 });
 
+test("flag a real hex operand before a test key in a chain", () => {
+  const content = `PK ?? d${"1".repeat(63)} ?? "${ANVIL_KEY}"`;
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ rule: "wallet-key" }),
+  ]);
+});
+
 test.each([
   `const upkeepId = "0x${"ab".repeat(32)}";`,
   `pkgHash = "0x${"ab".repeat(32)}"`,
@@ -279,6 +286,8 @@ test.each([
   `PRIV_KEY=${REAL_KEY}`,
   `process.env.PRIVATE_KEY ?? process.env.FALLBACK ?? "${REAL_KEY}"`,
   `env["PK"] || env["BACKUP"] || "${REAL_KEY}"`,
+  `env.PK ?? getEnv("B") ?? "${REAL_KEY}"`,
+  `env.PK ?? env?.B ?? "${REAL_KEY}"`,
   `{"code":"const PRIVATE_KEY = \\"${REAL_KEY}\\";"}`,
 ])("flag a wallet key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
