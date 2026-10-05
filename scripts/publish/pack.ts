@@ -14,12 +14,16 @@ import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 
-/** A package that is published to npm. */
-export interface PublicPackage {
-  /** Directory relative to the repository root, such as `packages/blue-sdk`. */
-  readonly dir: string;
+/** The npm name and version of a package. */
+export interface PackageIdentity {
   readonly name: string;
   readonly version: string;
+}
+
+/** A package that is published to npm. */
+export interface PublicPackage extends PackageIdentity {
+  /** Directory relative to the repository root, such as `packages/blue-sdk`. */
+  readonly dir: string;
 }
 
 /**
@@ -30,9 +34,7 @@ export interface PublicPackage {
  * @returns The name and version.
  * @throws If a non-private manifest lacks a string name or version.
  */
-export function publicIdentity(
-  manifest: unknown,
-): { name: string; version: string } | undefined {
+export function publicIdentity(manifest: unknown): PackageIdentity | undefined {
   if (typeof manifest !== "object" || manifest === null) {
     throw new Error("package.json must be an object.");
   }
@@ -74,7 +76,7 @@ export function listPublicPackages(root: string): PublicPackage[] {
  * @param pkg - The package.
  * @returns `<name>-v<version>`.
  */
-export function releaseTag(pkg: Pick<PublicPackage, "name" | "version">) {
+export function releaseTag(pkg: PackageIdentity) {
   return `${pkg.name}-v${pkg.version}`;
 }
 

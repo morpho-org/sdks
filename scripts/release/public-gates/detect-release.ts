@@ -4,10 +4,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-import type { publicIdentity } from "../../publish/pack.ts";
-
-/** A public package whose name or version differs from base: its manifest name and version. */
-export type ReleasedPackage = NonNullable<ReturnType<typeof publicIdentity>>;
+import { type PackageIdentity, publicIdentity } from "../../publish/pack.ts";
 
 /**
  * Lists the public packages that are new, renamed or bumped between `base` and `sha`:
@@ -28,15 +25,15 @@ export function listReleasedPackages(options: {
   repo: string;
   sha: string;
   base?: string;
-}): ReleasedPackage[] {
+}): PackageIdentity[] {
   const { repo, sha } = options;
   const base =
     options.base && !/^0+$/.test(options.base) ? options.base : `${sha}^`;
   const [
-    before = new Map<string, ReleasedPackage>(),
-    after = new Map<string, ReleasedPackage>(),
+    before = new Map<string, PackageIdentity>(),
+    after = new Map<string, PackageIdentity>(),
   ] = [base, sha].map((revision) => {
-    const versions = new Map<string, ReleasedPackage>();
+    const versions = new Map<string, PackageIdentity>();
     // Only manifests that exist are read, so any git failure is a real error.
     const paths = execFileSync(
       "git",
@@ -61,23 +58,10 @@ export function listReleasedPackages(options: {
           encoding: "utf8",
         }),
       );
-      if (typeof manifest !== "object" || manifest === null) {
-        throw new Error(`"${path}" at ${revision} is not an object.`);
-      }
-      if ("private" in manifest && manifest.private === true) continue;
-      if (
-        !("name" in manifest) ||
-        typeof manifest.name !== "string" ||
-        !("version" in manifest) ||
-        typeof manifest.version !== "string"
-      ) {
-        // Same rule as listPublicPackages: a public manifest must be complete,
-        // or a release could go undetected and skip the gates.
-        throw new Error(
-          `"${path}" at ${revision} needs a "name" and a "version".`,
-        );
-      }
-      versions.set(path, { name: manifest.name, version: manifest.version });
+      // Throws on an incomplete public manifest, like listPublicPackages, or a
+      // release could go undetected and skip the gates.
+      const identity = publicIdentity(manifest);
+      if (identity) versions.set(path, identity);
     }
     return versions;
   });
@@ -99,7 +83,7 @@ export function listReleasedPackages(options: {
  * @param released - Released packages.
  * @returns `released=<bool>` and `packages=<json>` lines.
  */
-export function formatGithubOutput(released: readonly ReleasedPackage[]) {
+export function formatGithubOutput(released: readonly PackageIdentity[]) {
   return `released=${released.length > 0}\npackages=${JSON.stringify(released)}\n`;
 }
 
