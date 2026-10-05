@@ -22,7 +22,7 @@ export interface TarEntry {
 }
 
 /** An entry as node-tar streams it while listing. */
-export interface TarStreamEntry extends TarEntry {
+interface TarStreamEntry extends TarEntry {
   on(event: "data", listener: (chunk: Buffer) => void): unknown;
   on(event: "end", listener: () => void): unknown;
   resume(): unknown;
