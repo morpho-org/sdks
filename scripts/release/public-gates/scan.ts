@@ -37,7 +37,7 @@ const RULES = {
   // A type annotation starts with a letter or backtick and is short, so it can't
   // run across a key value. `??` and `||` catch hard-coded env fallbacks.
   "wallet-key":
-    /(?:(?:private[_-]?key|secret[_-]?key|(?<![a-z])pk(?![a-z]))\w*["'`]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:private[_-]?key|secret[_-]?key|pk(?![a-z]))\w*["'`]?\s*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)\w*["'`]?\s*[:=]|mnemonicToAccount\()\s*["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
@@ -136,8 +136,9 @@ export function parsePolicy(policy: unknown): ScanPolicy {
   return policy as ScanPolicy;
 }
 
-// Published test values: the Hardhat/Anvil default mnemonic, its first account
-// key, and trivial keys such as 0x…01. Fixtures and the published test package use them.
+// Published test values: the Hardhat/Anvil default mnemonic and its first account
+// key. Fixtures and the published test package use them. Keys with 48 leading zero
+// hex digits (values that fit in 64 bits, like 0x…01) are skipped as trivial too.
 const PUBLIC_TEST_SECRETS = new Set([
   "test test test test test test test test test test test junk",
   "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -146,7 +147,9 @@ const PUBLIC_TEST_SECRETS = new Set([
 /**
  * Finds every rule match in files. NUL bytes are dropped first, so UTF-16 text and
  * text inside binaries are still scanned. A key or mnemonic whose value is exactly
- * a published test value (Anvil defaults, keys like 0x…01) is skipped.
+ * a published test value (Anvil defaults) is skipped, and so is any key with 48
+ * leading zero hex digits (a value that fits in 64 bits). File paths are scanned
+ * too (the part after `.tgz:` for tarball entries); their findings have line 0.
  *
  * @param files - Files to scan.
  * @param blockedTerms - Extra case-insensitive terms to block.
@@ -175,6 +178,13 @@ export function scanFiles(
     // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
     const source = text.toString("utf8");
     const fileFindings: Finding[] = [];
+    const entry = path.indexOf(".tgz:");
+    const name = entry === -1 ? path : path.slice(entry + ".tgz:".length);
+    for (const [rule, pattern] of rules) {
+      for (const [match] of name.matchAll(pattern)) {
+        fileFindings.push({ path, line: 0, rule, match });
+      }
+    }
     const lineStarts = [0];
     for (let index = source.indexOf("\n"); index !== -1; ) {
       lineStarts.push(index + 1);
@@ -239,10 +249,9 @@ export function applyExceptions(
  * are skipped: the generator already checked their targets are in the tree.
  *
  * @param dir - Directory to walk.
- * @param prefix - Prefix for the reported paths.
  * @returns The files.
  */
-export function readTree(dir: string, prefix = ""): ScannedFile[] {
+export function readTree(dir: string): ScannedFile[] {
   const files: ScannedFile[] = [];
   const walk = (current: string) => {
     for (const name of readdirSync(current).sort()) {
@@ -251,7 +260,7 @@ export function readTree(dir: string, prefix = ""): ScannedFile[] {
       if (stat.isDirectory()) walk(full);
       else if (stat.isFile()) {
         files.push({
-          path: prefix + relative(dir, full).split(sep).join("/"),
+          path: relative(dir, full).split(sep).join("/"),
           content: readFileSync(full),
         });
       }

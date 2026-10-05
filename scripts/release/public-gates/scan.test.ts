@@ -93,6 +93,8 @@ describe("scanFiles", () => {
     ],
     ["wallet-key", `process.env.PRIVATE_KEY || "0x${"ab".repeat(32)}"`],
     ["wallet-key", `PRIVATE_KEY=0x1${"a".repeat(15)}${"0".repeat(48)}`],
+    ["wallet-key", `const deployerPk = "0x${"ab".repeat(32)}";`],
+    ["wallet-key", `ownerPK=0x${"ab".repeat(32)}`],
     [
       "mnemonic",
       `MNEMONIC="test test test test test test test test test test test junk legal legal legal"`,
@@ -230,6 +232,7 @@ test.each([
 test.each([
   `const upkeepId = "0x${"ab".repeat(32)}";`,
   `pkgHash = "0x${"ab".repeat(32)}"`,
+  `PKG_HASH = "0x${"ab".repeat(32)}"`,
 ])("don't flag a name that only contains pk in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
@@ -240,6 +243,21 @@ test("still flag a real mnemonic on the line after the test one", () => {
   expect(scanFiles([file("a.env", content)])).toEqual([
     expect.objectContaining({ line: 2, rule: "mnemonic" }),
   ]);
+});
+
+test.each([
+  "docs/SDK-1234-plan/notes.md",
+  "a-1.0.0.tgz:package/sdk-1322-notes.md",
+])("flag a Linear key in the path %s", (path) => {
+  expect(scanFiles([file(path, "x")])).toEqual([
+    expect.objectContaining({ path, line: 0, rule: "linear-key" }),
+  ]);
+});
+
+test("don't scan the tarball name itself", () => {
+  expect(scanFiles([file("morpho-sdk-1.0.0.tgz:package/a.md", "x")])).toEqual(
+    [],
+  );
 });
 
 test("report a file's findings in line order", () => {
