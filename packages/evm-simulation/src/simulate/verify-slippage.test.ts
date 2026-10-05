@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { type Address, ethAddress, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -209,7 +210,7 @@ describe("verifySlippage", () => {
     const borrow: OperationLimit = {
       type: "blueBorrow",
       marketId:
-        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
       quote: { sharesMinted: 1000n },
       slippageTolerance: 10_000000000000000n,
     };
@@ -258,7 +259,7 @@ describe("verifySlippage", () => {
     const repay: OperationLimit = {
       type: "blueRepay",
       marketId:
-        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
       quote: { sharesBurned: 1000n },
       slippageTolerance: 10_000000000000000n,
     };
