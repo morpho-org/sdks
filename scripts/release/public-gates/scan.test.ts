@@ -76,6 +76,17 @@ describe("scanFiles", () => {
     ["wallet-key", `const DEPLOYER_PRIVATE_KEY =\n  "0x${"ab".repeat(32)}";`],
     ["wallet-key", `privateKeyToAccount(\n  "0x${"ab".repeat(32)}",\n);`],
     ["wallet-key", `const privateKey: Hex = "0x${"ab".repeat(32)}";`],
+    [
+      "wallet-key",
+      `const privateKey: \`0x\${string}\` = "0x${"ab".repeat(32)}";`,
+    ],
+    [
+      "wallet-key",
+      `const privateKey: Hex | undefined = "0x${"ab".repeat(32)}";`,
+    ],
+    ["wallet-key", `PRIVATE_KEY_MAINNET=0x${"ab".repeat(32)}`],
+    ["wallet-key", `privateKeyHex = "0x${"ab".repeat(32)}"`],
+    ["mnemonic", `MNEMONIC_PHRASE="${Array(12).fill("legal").join(" ")}"`],
     ["rpc-key", `https://eth-mainnet.g.ALCHEMY.COM/v2/${"K".repeat(32)}`],
     ["rpc-key", `https://mainnet.infura.io/v3/${"A".repeat(32)}`],
     ["wallet-key", `hdKeyToAccount(\`${"ab".repeat(32)}\`)`],
@@ -188,6 +199,21 @@ describe("applyExceptions", () => {
     const stale = { ...allowed, match: "SDK-9" };
     expect(applyExceptions(findings, [stale]).unused).toEqual([stale]);
   });
+});
+
+test("still flag a real mnemonic on the line after the test one", () => {
+  const real = Array(12).fill("legal").join(" ");
+  const content = `TEST_MNEMONIC=test test test test test test test test test test test junk\nMNEMONIC=${real}\n`;
+  expect(scanFiles([file("a.env", content)])).toEqual([
+    expect.objectContaining({ line: 2, rule: "mnemonic" }),
+  ]);
+});
+
+test("report a file's findings in line order", () => {
+  const content = "SDK-1\nhttps://linear.app/x\n\nSDK-2\n";
+  expect(scanFiles([file("a.md", content)]).map((f) => f.line)).toEqual([
+    1, 2, 4,
+  ]);
 });
 
 test.each([
