@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, posix, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
+import { verifyChecksums } from "../../publish/verify-release-set.ts";
 import {
   generatePublicSnapshot,
   type PublicTreeManifest,
@@ -158,45 +159,16 @@ export function verifyArtifact(
     }
   }
 
-  const sums = new Map<string, string>();
-  for (const line of readFileSync(sumsPath, "utf8").split("\n")) {
-    if (line === "") continue;
-    const match = /^([0-9a-f]{64}) [ *](?:\.\/)?([^/]+\.tgz)$/.exec(line);
-    if (!match?.[1] || !match[2] || sums.has(match[2])) {
-      throw new Error(`Invalid SHA256SUMS line ${JSON.stringify(line)}.`);
-    }
-    sums.set(match[2], match[1]);
-  }
-  // The gates job ran dependency code, so nothing but tarballs may ride along.
-  const tarballs: string[] = [];
-  for (const name of readdirSync(join(dir, "tarballs"))) {
-    if (name === "SHA256SUMS") continue;
-    if (
-      !name.endsWith(".tgz") ||
-      !lstatSync(join(dir, "tarballs", name)).isFile()
-    ) {
-      throw new Error(`Unexpected "${name}" in tarballs/.`);
-    }
-    tarballs.push(name);
-  }
-  if (tarballs.length === 0) throw new Error("Artifact has no tarballs.");
+  // Same checks as the public release runs before publishing.
+  const tarballs = verifyChecksums(join(dir, "tarballs"));
   // The gates job chose what to pack, so the set must come from the verified tree.
   const expectedTarballs = listPublicPackages(treeDir)
     .map(({ tarball }) => tarball)
     .sort();
-  if (tarballs.sort().join("\n") !== expectedTarballs.join("\n")) {
+  if (tarballs.join("\n") !== expectedTarballs.join("\n")) {
     throw new Error(
       `Tarballs [${tarballs.join(", ")}] don't match the public packages [${expectedTarballs.join(", ")}].`,
     );
-  }
-  for (const name of tarballs) {
-    const content = readFileSync(join(dir, "tarballs", name));
-    if (sums.get(name) !== createHash("sha256").update(content).digest("hex")) {
-      throw new Error(`Tarball "${name}" doesn't match SHA256SUMS.`);
-    }
-  }
-  if (sums.size !== tarballs.length) {
-    throw new Error("SHA256SUMS lists tarballs that aren't in the artifact.");
   }
   return manifest;
 }

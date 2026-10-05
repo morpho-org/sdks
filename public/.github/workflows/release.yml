@@ -21,9 +21,10 @@ on:
 permissions:
   contents: read
 
+# Queue every push: a replaced run would skip the versions it alone declares.
 concurrency:
   group: release
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   pack:
