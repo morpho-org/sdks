@@ -44,9 +44,8 @@ export interface SimulationVerification {
    */
   readonly blockNumber: bigint;
   /**
-   * Block `eth_simulateV1` executed in: the pinned state block or its
-   * successor, depending on the node. Not a pin to pass back as
-   * `SimulateParams.blockNumber`.
+   * Timestamp (seconds) of the block `eth_simulateV1` executed in: the
+   * pinned state block or its successor, depending on the node.
    */
   readonly blockTimestamp: bigint;
   /** Caller-supplied quotes and tolerances only; omitted limits remain unchecked. */

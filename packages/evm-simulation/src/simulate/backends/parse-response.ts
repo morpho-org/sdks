@@ -212,6 +212,32 @@ export function parseSimulationResponse(params: {
     return { planned, result, call };
   });
 
+  // A preparation call that reverted did not produce its promised state —
+  // it is reported before user-transaction reverts it caused.
+  const failedPreparation = calls.find(
+    (
+      entry,
+    ): entry is (typeof calls)[number] & {
+      planned: Extract<PlannedCall, { type: "preparation" }>;
+    } => entry.planned.type === "preparation" && !entry.result.status,
+  );
+  if (failedPreparation) {
+    const message = failedPreparation.call.error?.message;
+    throw new SimulationRevertedError(
+      `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
+      undefined,
+      "UNKNOWN_REVERT",
+      {
+        stage: "preparation",
+        chainId: plan.request.chainId,
+        mode: plan.request.mode,
+        blockNumber: params.stateBlockNumber,
+        authorizationIndex: failedPreparation.planned.authorizationIndex,
+        preparationCallIndex: failedPreparation.planned.callIndex,
+      },
+    );
+  }
+
   // A user-transaction revert belongs to the bundle, not the boundary.
   const failedUserCall = calls.find(
     ({ planned, result }) => planned.type === "transaction" && !result.status,
@@ -237,31 +263,6 @@ export function parseSimulationResponse(params: {
           })),
       ),
       "UNKNOWN_REVERT",
-    );
-  }
-
-  // A preparation call that reverted did not produce its promised state.
-  const failedPreparation = calls.find(
-    (
-      entry,
-    ): entry is (typeof calls)[number] & {
-      planned: Extract<PlannedCall, { type: "preparation" }>;
-    } => entry.planned.type === "preparation" && !entry.result.status,
-  );
-  if (failedPreparation) {
-    const message = failedPreparation.call.error?.message;
-    throw new SimulationRevertedError(
-      `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
-      undefined,
-      "UNKNOWN_REVERT",
-      {
-        stage: "preparation",
-        chainId: plan.request.chainId,
-        mode: plan.request.mode,
-        blockNumber: params.stateBlockNumber,
-        authorizationIndex: failedPreparation.planned.authorizationIndex,
-        preparationCallIndex: failedPreparation.planned.callIndex,
-      },
     );
   }
 

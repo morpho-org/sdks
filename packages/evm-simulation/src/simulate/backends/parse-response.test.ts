@@ -8,6 +8,7 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
+  isSimulationPackageError,
   MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
@@ -156,12 +157,69 @@ describe("parseSimulationResponse", () => {
     });
   });
 
+  test("error: preparation revert wins over the user revert it caused", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    const error = (() => {
+      try {
+        parse(
+          plan,
+          buildBlocks(plan, {
+            [prepIndex]: { status: "failure" },
+            [txIndex]: { status: "failure" },
+          }),
+        );
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      reasonCode: "UNKNOWN_REVERT",
+      context: {
+        stage: "preparation",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 24_000_000n,
+        authorizationIndex: 0,
+        preparationCallIndex: 0,
+      },
+    });
+  });
+
   test("error: MissingVerificationEvidenceError on failed state read", () => {
     const plan = makePlan();
     const readIndex = plan.calls.findIndex((c) => c.type === "stateRead");
-    expect(() =>
-      parse(plan, buildBlocks(plan, { [readIndex]: { status: "failure" } })),
-    ).toThrow(MissingVerificationEvidenceError);
+    const read = plan.calls[readIndex];
+    if (read?.type !== "stateRead") throw new Error("no state read planned");
+    const readId = read.read.id;
+    const error = (() => {
+      try {
+        parse(plan, buildBlocks(plan, { [readIndex]: { status: "failure" } }));
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(isSimulationPackageError(error)).toBe(true);
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 24_000_000n,
+        field: readId,
+      },
+    });
+    expect(
+      (error as { context?: { operation?: unknown } }).context?.operation,
+    ).toBeUndefined();
   });
 
   test("error: InvalidSimulationResponseError on call-count mismatch", () => {
