@@ -235,11 +235,28 @@ test.each([
   ]);
 });
 
+const HEX = `d${"1".repeat(63)}`;
 test("flag a real hex operand before a test key in a chain", () => {
-  const content = `PK ?? d${"1".repeat(63)} ?? "${ANVIL_KEY}"`;
+  const content = `PK ?? ${HEX} ?? "${ANVIL_KEY}"`;
   expect(scanFiles([file("a.ts", content)])).toEqual([
     expect.objectContaining({ rule: "wallet-key" }),
   ]);
+});
+
+// A chain operand never holds a 64-hex value, so no match (skipped or not) can
+// run across one.
+test.each([
+  `getEnv("${HEX}")`,
+  `env["${HEX}"]`,
+  `env.${HEX}`,
+  `env.${"1".repeat(64)}`,
+])("never span a hex value inside the chain operand %s", (operand) => {
+  const content = `PK ?? ${operand} ?? "${REAL_KEY}"`;
+  expect(
+    scanFiles([file("a.ts", content)]).filter(({ match }) =>
+      match.includes(HEX.slice(1)),
+    ),
+  ).toEqual([]);
 });
 
 test.each([
@@ -288,6 +305,7 @@ test.each([
   `env["PK"] || env["BACKUP"] || "${REAL_KEY}"`,
   `env.PK ?? getEnv("B") ?? "${REAL_KEY}"`,
   `env.PK ?? env?.B ?? "${REAL_KEY}"`,
+  `env.PK ?? env?.["B"] ?? "${REAL_KEY}"`,
   `{"code":"const PRIVATE_KEY = \\"${REAL_KEY}\\";"}`,
 ])("flag a wallet key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
