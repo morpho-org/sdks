@@ -4,11 +4,10 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
+import type { publicIdentity } from "../../publish/pack.ts";
+
 /** A public package whose name or version differs from base: its manifest name and version. */
-export interface ReleasedPackage {
-  readonly name: string;
-  readonly version: string;
-}
+export type ReleasedPackage = NonNullable<ReturnType<typeof publicIdentity>>;
 
 /**
  * Lists the public packages that are new, renamed or bumped between `base` and `sha`:

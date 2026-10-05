@@ -4,7 +4,6 @@
 # Usage: clean-copy.sh <tree-dir> <tarball-out-dir>
 set -euo pipefail
 
-here="$(dirname "$(realpath "$0")")"
 tree="$(realpath "$1")"
 out="$(realpath -m "$2")"
 work="$(mktemp -d)"
@@ -27,10 +26,4 @@ pnpm lint
 # Fork projects need RPC secrets, which the public CI doesn't have either.
 pnpm exec vitest run --project '!*-fork'
 
-packages="$(mktemp)"
-node "$here/public-packages.ts" --tree . > "$packages"
-while IFS= read -r -d '' dir; do
-  ( cd "$dir" && pnpm pack --pack-destination "$out" )
-done < "$packages"
-
-( cd "$out" && sha256sum ./*.tgz > SHA256SUMS )
+node scripts/publish/pack.ts --out "$out"

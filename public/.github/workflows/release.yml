@@ -6,8 +6,14 @@ name: Release
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
-#   tag      package tags and GitHub Releases from the merge commit
-
+#   tag      package tags and GitHub Releases for every current package version
+#
+# Repository settings this workflow relies on (a workflow file can't enforce them,
+# since a pull request could edit it):
+#   - The `npm` environment allows deployments from `main` only and has required
+#     reviewers. Each npm trusted publisher names this repository, this file and
+#     the `npm` environment.
+#   - A `main` ruleset blocks direct and force pushes and requires `CI` to pass.
 on:
   push:
     branches: [main]
@@ -46,21 +52,7 @@ jobs:
       - run: pnpm build:ci
 
       - name: Pack publishable tarballs
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="${RUNNER_TEMP}/tarballs"
-          mkdir -p "$out"
-          # No package defines a prepack or prepare hook, so `pnpm pack` ships the
-          # lib/ built above and replaces workspace: ranges with real versions.
-          while IFS= read -r -d '' manifest; do
-            dir="$(dirname "$manifest")"
-            if [ "$(cd "$dir" && node -p "require('./package.json').private === true")" = "true" ]; then
-              continue
-            fi
-            ( cd "$dir" && pnpm pack --pack-destination "$out" )
-          done < <(find packages -mindepth 2 -maxdepth 2 -name package.json -print0)
-          ( cd "$out" && sha256sum ./*.tgz | tee SHA256SUMS )
+        run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -110,91 +102,28 @@ jobs:
           name: release-tarballs
           path: ${{ runner.temp }}/tarballs
 
-      - name: Verify tarball digests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${RUNNER_TEMP}/tarballs"
-          sha256sum --check --strict SHA256SUMS
+      # Checksums, layout, collisions, the identity npm reads and publishConfig,
+      # against the packages declared at this commit. A tampered pack job can't
+      # make this job publish anything else.
+      - name: Verify tarballs
+        run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
 
       - name: Publish packages
         shell: bash
         run: |
           set -euo pipefail
-
-          # Packages and versions declared at this commit. The pack job can't make
-          # this job publish anything else.
-          declare -A expected
-          while IFS=$'\t' read -r pkg_name pkg_version; do
-            expected["$pkg_name"]="$pkg_version"
-          done < <(node -e '
-            const { readdirSync, readFileSync, existsSync } = require("node:fs");
-            for (const dir of readdirSync("packages")) {
-              const manifest = `packages/${dir}/package.json`;
-              if (!existsSync(manifest)) continue;
-              const pkg = JSON.parse(readFileSync(manifest, "utf8"));
-              if (pkg.private === true) continue;
-              process.stdout.write(`${pkg.name}\t${pkg.version}\n`);
-            }
-          ')
-
-          declare -A received_version
-          declare -A received_tarball
-          shopt -s nullglob
-          for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            entries="$(tar -tzf "$tgz" --quoting-style=escape)"
-            if [ "$(printf '%s\n' "$entries" | grep -cE '(^|/)\.\.?(/|$)|//' || true)" != "0" ] ||
-              [ "$(printf '%s\n' "$entries" | grep -cvE '^package(/|$)' || true)" != "0" ] ||
-              [ "$(printf '%s\n' "$entries" | grep -cxE 'package/package\.json' || true)" != "1" ] ||
-              [ "$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)" != "0" ]; then
-              echo "::error::Tarball ${tgz##*/} has unexpected entries; refusing to publish."
-              exit 1
-            fi
-            node scripts/publish/verify-tarball-collisions.ts "$tgz"
-            # Identity as npm publish reads it (bundled pacote).
-            IFS=$'\t' read -r name version <<<"$(node scripts/publish/read-tarball-identity.ts "$tgz")"
-            tmpd="$(mktemp -d)"
-            tar -xzf "$tgz" -C "$tmpd" package/package.json
-            manifest_identity="$(node scripts/publish/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
-            rm -rf "$tmpd"
-            if [ "$manifest_identity" != "${name}@${version}" ]; then
-              echo "::error::Tarball ${tgz##*/}: package.json says '${manifest_identity}' but npm would publish '${name}@${version}'."
-              exit 1
-            fi
-            if [ -n "${received_version[$name]:-}" ]; then
-              echo "::error::Duplicate tarball for ${name}."
-              exit 1
-            fi
-            received_version["$name"]="$version"
-            received_tarball["$name"]="$tgz"
-          done
-
-          for name in "${!expected[@]}"; do
-            if [ "${received_version[$name]:-}" != "${expected[$name]}" ]; then
-              echo "::error::Missing or mismatched tarball for ${name}@${expected[$name]} (got '${received_version[$name]:-<none>}')."
-              exit 1
-            fi
-          done
-          for name in "${!received_version[@]}"; do
-            if [ -z "${expected[$name]:-}" ]; then
-              echo "::error::Unexpected tarball ${name}@${received_version[$name]}."
-              exit 1
-            fi
-          done
-
-          for name in "${!received_version[@]}"; do
-            version="${received_version[$name]}"
+          while IFS=$'\t' read -r name version tgz; do
             if npm view "${name}@${version}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
               echo "Already on npm: ${name}@${version}"
               continue
             fi
-            npm publish "${received_tarball[$name]}" \
+            npm publish "$tgz" \
               --provenance \
               --access public \
               --tag latest \
               --ignore-scripts \
               --registry https://registry.npmjs.org
-          done
+          done < "$RUNNER_TEMP/release-set.tsv"
 
   tag:
     name: Tags & GitHub Releases
@@ -207,7 +136,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
           persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -226,12 +154,9 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
 
-          tags=()
-          while IFS= read -r -d '' manifest; do
-            tag="$(node scripts/publish/compute-pending-tag.ts "$manifest")"
-            [ -n "$tag" ] && tags+=("$tag")
-          done < <(git diff --name-only -z --diff-filter=ACMRT HEAD^ HEAD -- 'packages/*/package.json')
-
+          # Every current package version is on npm once publish succeeds, so any
+          # missing tag or release is created, whichever run or commit skipped it.
+          mapfile -t tags < <(node scripts/publish/pack.ts --tags)
           releases_dir="${RUNNER_TEMP}/github-releases"
           mkdir -p "$releases_dir"
           for tag in "${tags[@]}"; do
@@ -239,11 +164,9 @@ jobs:
               git tag "$tag" -m "$tag"
               git push --no-verify origin "refs/tags/${tag}"
             fi
-            body_file="${releases_dir}/${tag//\//__}.md"
-            node scripts/publish/github-release-body.ts "$tag" "$body_file"
-            if gh release view "$tag" >/dev/null 2>&1; then
-              gh release edit "$tag" --title "$tag" --notes-file "$body_file"
-            else
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              body_file="${releases_dir}/${tag//\//__}.md"
+              node scripts/publish/github-release-body.ts "$tag" "$body_file"
               gh release create "$tag" --title "$tag" --notes-file "$body_file" --verify-tag
             fi
           done
