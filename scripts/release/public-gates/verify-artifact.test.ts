@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -8,20 +9,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 
-import { listReleasedPackages } from "./detect-release.ts";
 import { verifyArtifact } from "./verify-artifact.ts";
 
+// Tests run concurrently, so directories are removed once the file is done.
 const dirs: string[] = [];
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "public-gates-test-"));
   dirs.push(dir);
   return dir;
 }
-afterEach(() => {
-  for (const dir of dirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+afterAll(() => {
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
 function write(root: string, files: Record<string, string>) {
@@ -31,62 +31,22 @@ function write(root: string, files: Record<string, string>) {
   }
 }
 
-describe("listReleasedPackages", () => {
-  function repoWith(versions: Record<string, object>[]) {
-    const repo = tempDir();
-    execFileSync("git", ["init", "-q", repo]);
-    for (const commit of versions) {
-      for (const [dir, manifest] of Object.entries(commit)) {
-        write(repo, {
-          [`packages/${dir}/package.json`]: JSON.stringify(manifest),
-        });
-      }
-      execFileSync("git", ["-C", repo, "add", "-A"]);
-      execFileSync("git", [
-        "-C",
-        repo,
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-qm",
-        "c",
-      ]);
-    }
-    return repo;
-  }
-
-  test("lists public packages whose version changed", () => {
-    const repo = repoWith([
-      {
-        a: { name: "@x/a", version: "1.0.0" },
-        b: { name: "@x/b", version: "1.0.0" },
-        p: { name: "@x/p", version: "1.0.0", private: true },
-      },
-      {
-        a: { name: "@x/a", version: "1.1.0" },
-        b: { name: "@x/b", version: "1.0.0", description: "edit" },
-        p: { name: "@x/p", version: "2.0.0", private: true },
-        c: { name: "@x/c", version: "0.1.0" },
-      },
-    ]);
-    expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([
-      { name: "@x/a", version: "1.1.0" },
-      { name: "@x/c", version: "0.1.0" },
-    ]);
-  });
-
-  test("returns nothing for a commit that changes no version", () => {
-    const repo = repoWith([
-      { a: { name: "@x/a", version: "1.0.0" } },
-      { a: { name: "@x/a", version: "1.0.0", description: "edit" } },
-    ]);
-    expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([]);
-  });
-});
+function commitAll(repo: string) {
+  execFileSync("git", ["-C", repo, "add", "-A"]);
+  execFileSync("git", [
+    "-C",
+    repo,
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@t",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-qm",
+    "c",
+  ]);
+}
 
 describe("verifyArtifact", () => {
   function artifact() {
@@ -99,20 +59,7 @@ describe("verifyArtifact", () => {
       "README.md": "hello\n",
     });
     symlinkSync("README.md", join(repo, "link.md"));
-    execFileSync("git", ["-C", repo, "add", "-A"]);
-    execFileSync("git", [
-      "-C",
-      repo,
-      "-c",
-      "user.name=t",
-      "-c",
-      "user.email=t@t",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "c",
-    ]);
+    commitAll(repo);
     const out = join(tempDir(), "artifact");
     execFileSync("node", [
       join(import.meta.dirname, "../public-snapshot/generate.ts"),
@@ -149,6 +96,43 @@ describe("verifyArtifact", () => {
     [
       "missing checksums",
       (dir: string) => rmSync(join(dir, "tarballs/SHA256SUMS")),
+    ],
+    [
+      "a retargeted symlink",
+      (dir: string) => {
+        rmSync(join(dir, "tree/link.md"));
+        symlinkSync("../../.env", join(dir, "tree/link.md"));
+      },
+    ],
+    [
+      "a symlink replaced by a file",
+      (dir: string) => {
+        rmSync(join(dir, "tree/link.md"));
+        write(dir, { "tree/link.md": "README.md" });
+      },
+    ],
+    [
+      "an extra symlink",
+      (dir: string) => symlinkSync("README.md", join(dir, "tree/leak")),
+    ],
+    [
+      "a changed executable bit",
+      (dir: string) => chmodSync(join(dir, "tree/README.md"), 0o755),
+    ],
+    [
+      "a manifest path outside the tree",
+      (dir: string) =>
+        write(dir, {
+          "public-tree.json": JSON.stringify({
+            sourceCommit: "x",
+            treeHash: "y",
+            files: [{ path: "../x", mode: "100644", sha256: "z" }],
+          }),
+        }),
+    ],
+    [
+      "a manifest without files",
+      (dir: string) => write(dir, { "public-tree.json": "{}" }),
     ],
   ])("rejects %s", (_, tamper) => {
     const dir = artifact();
