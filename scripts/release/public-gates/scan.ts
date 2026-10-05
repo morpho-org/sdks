@@ -15,7 +15,7 @@ import { parseArgs } from "node:util";
 export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
 /** Text that must never reach the public repository or npm. */
-export const RULES = {
+const RULES = {
   // Linear team keys of the morpho-labs workspace.
   "linear-key":
     /\b(?:APPS|API|CRTR|INTEG|MAR|MKT|PLA|PRO|ROU|SDK|SEC|VAU|VRM)-\d+\b/g,
@@ -36,7 +36,7 @@ export const RULES = {
     /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/g,
 } as const satisfies Record<string, RegExp>;
 
-export type RuleId = keyof typeof RULES | "blocked-term";
+type RuleId = keyof typeof RULES | "blocked-term";
 
 /** One allowed occurrence: the same rule matching the same text in matching files. */
 export interface ScanException {
