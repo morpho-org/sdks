@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^"
   },
   "peerDependencies": {
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
+    "fast-check": "catalog:",
     "typescript": "catalog:",
     "viem": "^2.55.10",
     "vitest": "catalog:"
