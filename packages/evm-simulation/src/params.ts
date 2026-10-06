@@ -31,7 +31,10 @@ export interface SimulateParams {
    * pinned; `pending` has no stable hash and is rejected at runtime. */
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   /** State block supplied by the caller, so `simulate()` skips the block
-   * lookup and sends only `eth_simulateV1`. Cannot be combined with `blockNumber`. */
+   * lookup and sends only `eth_simulateV1`. Cannot be combined with `blockNumber`.
+   * Not checked against the endpoint: `hash` is compared only when the node
+   * reports the next block (its `parentHash`), and `timestamp` only bounds the
+   * simulated block's timestamp. */
   readonly block?: StateBlock;
   /** Caller-selected quotes and percentage tolerances. Omitted limits are unchecked. */
   readonly limits?: SimulationLimits;

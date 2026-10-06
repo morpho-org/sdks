@@ -1002,6 +1002,39 @@ describe("parseRequest", () => {
         transactions: [tx()],
       },
     ],
+    [
+      "unknown block key",
+      {
+        block: {
+          number: 1n,
+          hash: `0x${"ab".repeat(32)}`,
+          timestamp: 1n,
+          extra: 1,
+        },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "negative block number",
+      {
+        block: { number: -1n, hash: `0x${"ab".repeat(32)}`, timestamp: 1n },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "missing block timestamp",
+      {
+        block: { number: 1n, hash: `0x${"ab".repeat(32)}` },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "non-bigint block timestamp",
+      {
+        block: { number: 1n, hash: `0x${"ab".repeat(32)}`, timestamp: 1 },
+        transactions: [tx()],
+      },
+    ],
     ["non-hex data", { transactions: [tx({ data: "0xzz" })] }],
     ["non-object transaction", { transactions: [42] }],
     [

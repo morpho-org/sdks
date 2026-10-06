@@ -30,16 +30,16 @@ by class identity. Their class identities and codes are preserved; see the
 Two failures that v4 reported as the bypassable `ExternalServiceError` now
 throw the non-bypassable `InvalidSimulationResponseError`: a malformed
 `eth_simulateV1` block envelope and a call count that does not match the
-request. Five checks are new — v4 did not perform them and returned a
-successful result — and also throw `InvalidSimulationResponseError`: an
-endpoint whose `eth_chainId` differs from the configured chain, a simulated
-block that is neither the pinned state block nor its immediate successor (or a
-successor whose `parentHash` does not match), a block timestamp earlier than
-the pinned block's, a per-call result that fails normalization (for example a
-non-quantity `gasUsed` or a log without a `topics` array), and a pinned state
-block whose hash changed, or that the node no longer serves, during the
-simulation. Callers that bypass `ExternalServiceError` to proceed unsimulated
-must handle all seven as hard failures. `ExternalServiceError` remains for
+request. Three checks are new — v4 did not perform them and returned a
+successful result — and also throw `InvalidSimulationResponseError`: a
+simulated block that is neither the pinned state block nor its immediate
+successor (or a successor whose `parentHash` does not match), a block timestamp
+earlier than the pinned block's, and a per-call result that fails normalization
+(for example a non-quantity `gasUsed` or a log without a `topics` array).
+Callers that bypass `ExternalServiceError` to proceed unsimulated must handle
+all five as hard failures. From a later 5.x minor, the endpoint's
+`eth_chainId` and a mid-flight reorg of the pinned block are no longer checked:
+`SimulationConfig.chains` must map each chain to a matching URL. `ExternalServiceError` remains for
 transport failures, timeouts and malformed JSON-RPC envelopes.
 Failures and timeouts reject the call; they do not produce a successful result.
 

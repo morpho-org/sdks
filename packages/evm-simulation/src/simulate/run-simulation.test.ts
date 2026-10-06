@@ -172,7 +172,7 @@ describe.sequential("runSimulation", () => {
       "./backends/index.js",
     );
     mockExecutePlan.mockImplementationOnce(actual.executePlan);
-    const { methods } = stubFetch([
+    const { fetch, methods } = stubFetch([
       { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
     ]);
     const result = await simulate(config, {
@@ -186,6 +186,10 @@ describe.sequential("runSimulation", () => {
     });
     expect(result.calls).toHaveLength(1);
     expect(methods).toEqual(["eth_simulateV1"]);
+    const request = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as {
+      params: unknown[];
+    };
+    expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
   });
 
   test("error: block lookup transport failures do not expose the RPC URL", async () => {

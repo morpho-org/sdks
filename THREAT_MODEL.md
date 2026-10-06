@@ -117,9 +117,9 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 
 The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below catch non-compliant, misconfigured or reorging endpoints — a dishonest endpoint can pass them all with a consistent forged response.
 
-- The state block is pinned once and re-fetched after the response is parsed; a hash change, or a pinned block the node no longer serves, mid-flight fails with `InvalidSimulationResponseError` (transport stage).
+- The state block is pinned once: looked up from `blockNumber` (default `latest`) or supplied by the caller as `block`. It is not re-fetched after the simulation, so a reorg that replaces the pinned block mid-flight is not detected; this residual is accepted. A supplied `block` is not checked against the endpoint beyond the `parentHash` and timestamp checks below, so a wrong supplied hash passes on a same-height response.
 - The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way. A same-height response (Anvil re-hashes the pinned block) is tied to the pinned state only by number and timestamp: its `parentHash` is the pinned block's own parent either way, so it cannot distinguish execution on block N's state from execution on N-1's; this residual is accepted.
-- A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
+- A call-count mismatch is a non-bypassable `InvalidSimulationResponseError`.
 - Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`, and a per-call value that fails normalization (a non-quantity `gasUsed`, a present but non-array `logs`, or a log whose `topics`, `address` or `data` are malformed) is rejected the same way; other per-call fields are trusted: a malformed value from a non-compliant node may be read as a revert (any `status` other than `"0x1"`) or pass through unchecked. An absent or `null` per-call `logs` is treated as no transfers, so a node that drops `logs` hides retained tokens.
 - Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
@@ -128,8 +128,8 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
 - A truncated result (fewer calls than planned) is a non-bypassable `InvalidSimulationResponseError`.
 - A malicious token, not the endpoint, emits a fake `Transfer`. Reading balances from the node adds nothing: a token that lies in its events can also lie in `balanceOf`.
-- The endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id; an honest endpoint on the wrong chain is rejected by the chain-identity check above.
-- Results carry no block provenance: the pinned state block is resolved and checked internally but not returned on `SimulationResult`; callers that need a reproducible pin must pass an explicit `blockNumber`.
+- The endpoint serves another chain. The endpoint's `eth_chainId` is not checked, so an endpoint on the wrong chain is caught only by a correct `SimulationConfig.chains`; contracts deployed at the same address on several chains can then simulate cleanly against the wrong chain's state. This residual is accepted.
+- Results carry no block provenance: the pinned state block is resolved and checked internally but not returned on `SimulationResult`; callers that need a reproducible pin must pass an explicit `blockNumber` or `block`.
 
 #### Chain identity and transaction submission (`wdk-protocol-lending-morpho-evm`, `liquidity-sdk-viem`)
 
