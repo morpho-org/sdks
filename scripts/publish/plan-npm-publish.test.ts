@@ -91,6 +91,17 @@ describe("fetchRegistryState", () => {
     });
   });
 
+  test("accepts a package whose every version was unpublished", async () => {
+    const result = await fetchRegistryState(pkg.name, async () =>
+      Response.json({
+        versions: {},
+        time: { created: "x", modified: "x", "7.1.0": "x" },
+        "dist-tags": {},
+      }),
+    );
+    expect(result).toStrictEqual({ versions: [], everPublished: ["7.1.0"] });
+  });
+
   test("treats 404 as a new package", async () => {
     await expect(
       fetchRegistryState(
@@ -114,6 +125,8 @@ describe("fetchRegistryState", () => {
     [{ time: {}, "dist-tags": {} }, 'no "versions" object'],
     [{ versions: {}, time: {} }, 'no "dist-tags" object'],
     [{ versions: {}, time: {}, "dist-tags": "x" }, 'no "dist-tags" object'],
+    [{ versions: {}, time: {}, "dist-tags": [] }, 'no "dist-tags" object'],
+    [{ versions: [], time: {}, "dist-tags": {} }, 'no "versions" object'],
     [
       { versions: {}, time: {}, "dist-tags": { latest: 7 } },
       "non-string latest",
