@@ -79,14 +79,8 @@ export interface MakeBorrowCollateral {
   readonly supplies: readonly MidnightCollateralTransfer[];
 }
 
-/** Parameters for a Midnight borrow maker flow. */
-export interface MakeBorrowParams extends MakeOffersParams {
-  /** Optional collateral supplied before activation; every offer must target `collateral.market`. */
-  readonly collateral?: MakeBorrowCollateral;
-}
-
 /** Parameters for the Midnight collateral-supplying borrow maker flow. */
-export interface SupplyCollateralMakeBorrowParams extends MakeBorrowParams {
+export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   /** Required collateral supplied before activation; every offer must target `collateral.market`. */
   readonly collateral: MakeBorrowCollateral;
 }

@@ -32,10 +32,10 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
 - `makeLend`, `makeBorrow` and `supplyCollateralMakeBorrow` are retyped in place onto
   `MidnightBundlesV2` and keep their names. The parent record's `cancelAndMakeLend` and
   `cancelAndMakeBorrow` ship under these names, so no `cancelAndMake*` entity method is added.
-  Each accepts optional cancellations; `makeBorrow` also accepts optional collateral, and an
-  explicit empty supply list is rejected. `supplyCollateralMakeBorrow` calls `makeBorrow` with
-  required `collateral: { market, supplies }`, which replaces `market`, `collateralAssets` and
-  `collateralIndex`, and `reservedCollateralAssets` is removed.
+  Each accepts optional cancellations; `makeBorrow` uses `MakeOffersParams` and takes no
+  collateral. `supplyCollateralMakeBorrow` requires `collateral: { market, supplies }`, builds
+  `midnightCancelAndMake` directly, and rejects an empty supply list. Its collateral input replaces
+  `market`, `collateralAssets` and `collateralIndex`, and `reservedCollateralAssets` is removed.
 - The route-specific surface is removed with them: `mempoolSubmitOffers`
   (`MempoolSubmitOffersParams`, `MempoolSubmitOffersAction`),
   `setterRatifierRatifyRoot` (`SetterRatifierRatifyRootParams`,
@@ -48,8 +48,9 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
   errors, and `UnknownMidnightRatifierError`.
 - The maker types kept in 7.0.0 are retyped in place: `MakeOffersParams`, `MakeLendParams`, and
   `MakeOffersOutput` keep their v6 export names (`MidnightMakeOffersParams`,
-  `MidnightMakeLendParams`, and `MidnightMakeOffersOutput`); `MakeBorrowParams` is added with
-  optional collateral; `MorphoMidnight.getOffersData` and the maker `offers` input accept only a
+  `MidnightMakeLendParams`, and `MidnightMakeOffersOutput`); `makeBorrow` continues to use
+  `MakeOffersParams`, while `SupplyCollateralMakeBorrowParams` extends it with required
+  `MakeBorrowCollateral`; `MorphoMidnight.getOffersData` and the maker `offers` input accept only a
   PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
   instead of any `TreeInput`; `MidnightOfferValidationParams` drops `ratification`;
   `MidnightOffersData.ratifierType` becomes `"priceV1" | "rateV1"` and its `setterPayload` is

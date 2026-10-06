@@ -125,7 +125,6 @@ export type {
   GetOffersDataParams as MidnightGetOffersDataParams,
   GetPositionDataParams as MidnightGetPositionDataParams,
   MakeBorrowCollateral as MidnightMakeBorrowCollateral,
-  MakeBorrowParams as MidnightMakeBorrowParams,
   MakeLendParams as MidnightMakeLendParams,
   MakeOffersOutput as MidnightMakeOffersOutput,
   MakeOffersParams as MidnightMakeOffersParams,

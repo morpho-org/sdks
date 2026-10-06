@@ -121,9 +121,9 @@ at the SDK level. The differences are at the protocol layer:
   `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
 - **Maker routing**: `makeLend`, `makeBorrow`, and
   `supplyCollateralMakeBorrow` validate a PriceRatifierV1 or RateRatifierV1 offer tree, then encode
-  one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, optionally supplies
-  collateral, activates the root and publishes the payload. `supplyCollateralMakeBorrow` delegates
-  to `makeBorrow` and requires collateral.
+  one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, activates the root and
+  publishes the payload. Each method builds `midnightCancelAndMake` directly. `makeBorrow` takes no
+  collateral; `supplyCollateralMakeBorrow` requires and supplies it.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 
