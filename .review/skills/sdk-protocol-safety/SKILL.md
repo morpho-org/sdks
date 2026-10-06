@@ -36,8 +36,10 @@ an address or a typed-data shape.
 
 - `functionName` and `args` match the pinned ABI: argument count, order,
   struct shape and width (a `uint128` where the ABI says `uint256` truncates),
-  and `payable` versus nonpayable. A `value` on a nonpayable call, or none on a
-  payable one, should fail in the encoder, not onchain.
+  and `payable` versus nonpayable. A nonzero `value` on a nonpayable call
+  should fail in the encoder, not onchain. On a payable bundle entrypoint,
+  `value` equals the native funding amount: zero for ERC-20 funding, per
+  `packages/morpho-sdk/src/actions/AGENTS.md`.
 - The `abi` and `address` of a call come from the same registry and chain.
   Building them dynamically without a `chainId` gate is a finding.
 - One source per ABI, selector, typed-data shape, address and protocol list

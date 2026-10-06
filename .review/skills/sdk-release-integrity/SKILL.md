@@ -127,8 +127,13 @@ artifact-validation steps.
 - Persona changes keep the inventory in sync: the engine roster, `AGENTS.md`
   §10 tables, `applies:` frontmatter and `> Applied by personas:` callouts,
   and for a conditional persona its trigger flag in the engine's Step 4. A
-  persona's `name:` equals its filename, frontmatter has no `<` or `>`, and
-  the engine is never symlinked into `.claude/commands/`.
+  persona's `name:` equals its filename and frontmatter has no `<` or `>`.
+- Commands: each caller in `.agents/commands/` has its `.claude/commands/`
+  symlink, and a removed caller loses it. The engine itself is never
+  symlinked there.
+- A `../references/X.md` an agent cites exists, and each reference is cited.
+- Deterministic logic (line math, scope filters, ledger merges) lives in a
+  `scripts/` helper, not only in `SKILL.md` prose.
 - Persona frontmatter keeps its contract: `kind: baseline` declares no
   `trigger:`, `kind: conditional` declares one that Step 4 defines, and every
   persona has `applies:`, `out-of-scope:`, `focus:` and severity calibration.
@@ -152,8 +157,10 @@ artifact-validation steps.
   drift.
 - **Medium:** a new secret without an inventory row; a new dev dependency; a
   provenance or SBOM step removed from a dev-only path; a dangling reference
-  pointer; a new CI script written as `.mjs` or `.js`; a `.review/`
-  rule out of step with its source.
+  pointer or a missing or uncited reference; the engine symlinked into
+  `.claude/commands/`; deterministic logic only in `SKILL.md` prose; a new CI
+  script written as `.mjs` or `.js`; a `.review/` rule out of step with its
+  source.
 - **Low:** wording that changes no enforced rule.
 
 ## Report
