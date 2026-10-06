@@ -38,8 +38,20 @@ jobs:
           - name: midnight-sdk
             projects: midnight-sdk midnight-sdk-fork
             uses_foundry: true
+          # morpho-sdk-fork bounds the Test queue slot, so it runs on its own
+          # runners in two shards, apart from the morpho-sdk unit tests.
           - name: morpho-sdk
-            projects: morpho-sdk morpho-sdk-fork
+            projects: morpho-sdk
+            uses_foundry: false
+          - name: morpho-sdk-fork-1
+            package: morpho-sdk
+            projects: morpho-sdk-fork
+            shard: 1/2
+            uses_foundry: true
+          - name: morpho-sdk-fork-2
+            package: morpho-sdk
+            projects: morpho-sdk-fork
+            shard: 2/2
             uses_foundry: true
           - name: evm-simulation
             projects: evm-simulation evm-simulation-fork
@@ -82,6 +94,7 @@ jobs:
           restore-keys: |
             foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
             foundry-${{ github.job }}-${{ matrix.name }}-
+            foundry-${{ github.job }}-${{ matrix.package || matrix.name }}-
 
       - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         if: matrix.uses_foundry
@@ -99,7 +112,8 @@ jobs:
           ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
           IS_LOGGING_DISABLED: true
           VITEST_PROJECTS: ${{ matrix.projects }}
-          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release}' || format('packages/{0}/src', matrix.name) }}
+          VITEST_SHARD: ${{ matrix.shard }}
+          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release}' || format('packages/{0}/src', matrix.package || matrix.name) }}
         run: |
           project_args=()
           for project in $VITEST_PROJECTS; do
@@ -108,6 +122,7 @@ jobs:
           pnpm exec vitest run --coverage \
             --coverage.include="$COVERAGE_ROOT/**/*.{js,mjs,ts,tsx}" \
             "${project_args[@]}" \
+            ${VITEST_SHARD:+--shard="$VITEST_SHARD"} \
             --reporter=default --reporter=github-actions
 
       - name: Save Foundry cache
