@@ -82,8 +82,8 @@ import {
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
 import type {
-  CancelAndMakeBorrowParams,
-  CancelAndMakeLendParams,
+  MakeLendParams,
+  MakeOffersParams,
   MidnightMakerTreeInput,
   SupplyBlueMakeLendParams,
   SupplyCollateralMakeBorrowParams,
@@ -991,12 +991,12 @@ describe("MorphoMidnight", () => {
     });
   });
 
-  describe("cancelAndMakeLend", () => {
+  describe("makeLend", () => {
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<CancelAndMakeLendParams> = {},
+      overrides: Partial<MakeLendParams> = {},
     ) =>
-      midnightWithHandle(handle).cancelAndMakeLend({
+      midnightWithHandle(handle).makeLend({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(makerOffer({ buy: true })),
         deadline: maxUint256,
@@ -1008,7 +1008,7 @@ describe("MorphoMidnight", () => {
 
     test("error: ChainIdMismatchError", async () => {
       await expect(
-        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeLend({
+        new MorphoMidnight(client, midnightChainId + 1).makeLend({
           accountAddress: midnightAddresses.maker,
           offers: rateTree(makerOffer({ buy: true })),
           deadline: maxUint256,
@@ -1334,16 +1334,12 @@ describe("MorphoMidnight", () => {
     });
   });
 
-  describe("cancelAndMakeBorrow", () => {
-    const market = new MarketParams({
-      ...midnightMarket,
-      maturity: apiValidMaturity,
-    });
+  describe("makeBorrow", () => {
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<CancelAndMakeBorrowParams> = {},
+      overrides: Partial<MakeOffersParams> = {},
     ) =>
-      midnightWithHandle(handle).cancelAndMakeBorrow({
+      midnightWithHandle(handle).makeBorrow({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(makerOffer({ buy: false })),
         deadline: maxUint256,
@@ -1353,7 +1349,7 @@ describe("MorphoMidnight", () => {
 
     test("error: ChainIdMismatchError", async () => {
       await expect(
-        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeBorrow({
+        new MorphoMidnight(client, midnightChainId + 1).makeBorrow({
           accountAddress: midnightAddresses.maker,
           offers: rateTree(makerOffer({ buy: false })),
           deadline: maxUint256,
@@ -1364,13 +1360,30 @@ describe("MorphoMidnight", () => {
 
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, true);
+      mockMidnightAuthorization(handle, false);
       const output = await prepare(handle, {
         cancellations: [{ group: previousGroup, maxConsumed: 0n }],
       });
       const tx = output.buildTx();
+      const requirements = await output.getRequirements();
+      const decoded = decodeFunctionData({
+        abi: midnightBundlesV2Abi,
+        data: tx.data,
+      });
 
-      await expect(output.getRequirements()).resolves.toEqual([]);
+      expect(
+        requirements.some(({ action }) => action.type === "erc20Approval"),
+      ).toBe(false);
+      expect(requirements.map(({ action }) => action)).toEqual([
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.maker,
+          },
+        },
+      ]);
       expect(tx.to).toBe(midnightBundlesV2);
       expect(tx.action.args).toMatchObject({
         ratifier: rateRatifierV1,
@@ -1379,7 +1392,41 @@ describe("MorphoMidnight", () => {
         collateralSupplies: [],
         cancellations: [{ group: previousGroup, maxConsumed: 0n }],
       });
+      expect(decoded.args[4]).toEqual([]);
     });
+
+    test("error: MidnightOfferSideMismatchError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          offers: rateTree(makerOffer({ buy: true })),
+        }),
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+  });
+
+  describe("supplyCollateralMakeBorrow", () => {
+    const market = new MarketParams({
+      ...midnightMarket,
+      maturity: apiValidMaturity,
+    });
+    const params: SupplyCollateralMakeBorrowParams = {
+      accountAddress: midnightAddresses.maker,
+      offers: rateTree(makerOffer({ buy: false })),
+      collateral: {
+        market,
+        supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+      },
+      deadline: maxUint256,
+      validation: offerValidation,
+    };
+    const prepare = (
+      handle: MidnightMockHandle,
+      overrides: Partial<SupplyCollateralMakeBorrowParams> = {},
+    ) =>
+      midnightWithHandle(handle).supplyCollateralMakeBorrow({
+        ...params,
+        ...overrides,
+      });
 
     test("behavior: collateral supplies require approval to MidnightBundlesV2", async () => {
       const handle = createMockClient(midnightTestChain);
@@ -1389,12 +1436,7 @@ describe("MorphoMidnight", () => {
         result: 0n,
       });
       mockMidnightAuthorization(handle, true);
-      const output = await prepare(handle, {
-        collateral: {
-          market,
-          supplies: [{ collateralIndex: 0n, assets: 2_000n }],
-        },
-      });
+      const output = await prepare(handle);
       const requirements = await output.getRequirements();
       const decoded = decodeFunctionData({
         abi: midnightBundlesV2Abi,
@@ -1540,111 +1582,6 @@ describe("MorphoMidnight", () => {
       ]);
     });
 
-    test("error: MarketIdMismatchError", async () => {
-      await expect(
-        prepare(createMockClient(midnightTestChain), {
-          collateral: {
-            market: midnightOtherMarket,
-            supplies: [{ collateralIndex: 0n, assets: 2_000n }],
-          },
-        }),
-      ).rejects.toThrow(MarketIdMismatchError);
-    });
-
-    test("error: UnknownCollateralIndexError", async () => {
-      await expect(
-        prepare(createMockClient(midnightTestChain), {
-          collateral: {
-            market,
-            supplies: [{ collateralIndex: 1n, assets: 2_000n }],
-          },
-        }),
-      ).rejects.toThrow(UnknownCollateralIndexError);
-    });
-
-    test("error: EmptyMidnightCollateralSuppliesError", async () => {
-      await expect(
-        prepare(createMockClient(midnightTestChain), {
-          collateral: { market, supplies: [] },
-        }),
-      ).rejects.toThrow(EmptyMidnightCollateralSuppliesError);
-    });
-
-    test("error: MidnightOfferSideMismatchError", async () => {
-      await expect(
-        prepare(createMockClient(midnightTestChain), {
-          offers: rateTree(makerOffer({ buy: true })),
-        }),
-      ).rejects.toThrow(MidnightOfferSideMismatchError);
-    });
-  });
-
-  describe("supplyCollateralMakeBorrow", () => {
-    const market = new MarketParams({
-      ...midnightMarket,
-      maturity: apiValidMaturity,
-    });
-    const otherMarket = new MarketParams({
-      ...market,
-      loanToken: getAddress("0x0000000000000000000000000000000000007101"),
-    });
-    const params: SupplyCollateralMakeBorrowParams = {
-      accountAddress: midnightAddresses.maker,
-      offers: rateTree(makerOffer({ buy: false })),
-      collateral: {
-        market,
-        supplies: [{ collateralIndex: 0n, assets: 2_000n }],
-      },
-      deadline: maxUint256,
-      validation: offerValidation,
-    };
-    const createHandle = () => {
-      const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.collateralToken,
-        result: 0n,
-      });
-      mockMidnightAuthorization(handle, false);
-      return handle;
-    };
-    const prepare = (
-      handle: MidnightMockHandle,
-      overrides: Partial<SupplyCollateralMakeBorrowParams> = {},
-    ) =>
-      midnightWithHandle(handle).supplyCollateralMakeBorrow({
-        ...params,
-        ...overrides,
-      });
-
-    test("behavior: matches cancelAndMakeBorrow with collateral requirements", async () => {
-      const supplyOutput = await prepare(createHandle());
-      const borrowOutput = await midnightWithHandle(
-        createHandle(),
-      ).cancelAndMakeBorrow(params);
-
-      expect(supplyOutput.buildTx()).toEqual(borrowOutput.buildTx());
-      expect(supplyOutput.root).toBe(borrowOutput.root);
-      expect(supplyOutput.groups).toEqual(borrowOutput.groups);
-
-      const supplyRequirements = await supplyOutput.getRequirements();
-      expect(supplyRequirements).toEqual(await borrowOutput.getRequirements());
-      expect(supplyRequirements.map(({ action }) => action)).toEqual([
-        {
-          type: "erc20Approval",
-          args: { spender: midnightBundlesV2, amount: 2_000n },
-        },
-        {
-          type: "midnightAuthorization",
-          args: {
-            authorized: midnightBundlesV2,
-            isAuthorized: true,
-            onBehalf: midnightAddresses.maker,
-          },
-        },
-      ]);
-    });
-
     test("error: EmptyMidnightCollateralSuppliesError", async () => {
       await expect(
         prepare(createMockClient(midnightTestChain), {
@@ -1665,9 +1602,23 @@ describe("MorphoMidnight", () => {
     test("error: MarketIdMismatchError", async () => {
       await expect(
         prepare(createMockClient(midnightTestChain), {
-          offers: rateTree(makerOffer({ buy: false, market: otherMarket })),
+          collateral: {
+            market: midnightOtherMarket,
+            supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+          },
         }),
       ).rejects.toThrow(MarketIdMismatchError);
+    });
+
+    test("error: UnknownCollateralIndexError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 1n, assets: 2_000n }],
+          },
+        }),
+      ).rejects.toThrow(UnknownCollateralIndexError);
     });
   });
 

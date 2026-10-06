@@ -73,11 +73,11 @@ import {
   NonPositiveInputError,
 } from "../../types/index.js";
 import type {
-  CancelAndMakeBorrowParams,
-  CancelAndMakeLendParams,
-  CancelAndMakeOutput,
   GetOffersDataParams,
   GetPositionDataParams,
+  MakeLendParams,
+  MakeOffersOutput,
+  MakeOffersParams,
   MidnightActionOutput,
   OffersData,
   RedeemParams,
@@ -125,8 +125,8 @@ export type MidnightActions = Pick<
   | "takeBorrow"
   | "supplyCollateralTakeBorrow"
   | "supplyCollateral"
-  | "cancelAndMakeLend"
-  | "cancelAndMakeBorrow"
+  | "makeLend"
+  | "makeBorrow"
   | "supplyBlueMakeLend"
   | "supplyCollateralMakeBorrow"
   | "redeem"
@@ -665,7 +665,7 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
-   * const output = await midnight.cancelAndMakeLend({
+   * const output = await midnight.makeLend({
    *   accountAddress: maker,
    *   offers: { type: "rateV1", entries: [{ offer, rate }] },
    *   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
@@ -675,9 +675,7 @@ export class MorphoMidnight {
    * });
    * ```
    */
-  async cancelAndMakeLend(
-    params: CancelAndMakeLendParams,
-  ): Promise<CancelAndMakeOutput> {
+  async makeLend(params: MakeLendParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
@@ -796,7 +794,7 @@ export class MorphoMidnight {
    */
   async supplyBlueMakeLend(
     params: SupplyBlueMakeLendParams,
-  ): Promise<CancelAndMakeOutput> {
+  ): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("assetsToPark", params.assetsToPark);
     const { callbackSalt } = params;
@@ -907,27 +905,21 @@ export class MorphoMidnight {
   }
 
   /**
-   * Prepares an atomic borrow-offer publication or repost through `MidnightBundlesV2`,
-   * optionally supplying collateral first.
+   * Prepares an atomic borrow-offer publication or repost through `MidnightBundlesV2`.
    *
-   * One transaction cancels `cancellations` under their consumption ceilings, pulls and supplies
-   * `collateral`, activates the PriceRatifierV1 or RateRatifierV1 root, and publishes its payload.
-   * Pass no cancellations for a new publication. Calls the Midnight mempool validation API while
-   * preparing the tree.
+   * One transaction cancels `cancellations` under their consumption ceilings, activates the
+   * PriceRatifierV1 or RateRatifierV1 root, and publishes its payload. Pass no cancellations for
+   * a new publication. Calls the Midnight mempool validation API while preparing the tree.
    *
-   * @param params - Maker, borrow-side offers, optional collateral, cancellations, and deadline.
+   * @param params - Maker, borrow-side offers, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
    * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Optional Midnight mempool API request controls.
-   * @param params.collateral - Optional market and collateral supplies; every offer must target that market.
-   * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
-   * @throws {ChainIdMismatchError} when the client or collateral market targets another chain.
+   * @returns Prepared group metadata, lazy authorization requirements, and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client chain differs from this entity's chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
-   * @throws {MidnightMarketAddressMismatchError} when the collateral market targets another Midnight deployment.
-   * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
-   * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {NonPositiveInputError} when `deadline` is not positive.
    * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
@@ -937,45 +929,21 @@ export class MorphoMidnight {
    * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
-   * @throws {MarketIdMismatchError} when an offer targets another market than `collateral.market`.
-   * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
-   * const output = await midnight.cancelAndMakeBorrow({
+   * const output = await midnight.makeBorrow({
    *   accountAddress: maker,
    *   offers: { type: "rateV1", entries: [{ offer, rate }] },
-   *   collateral: {
-   *     market: marketData.params,
-   *     supplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
-   *   },
    *   deadline: maxUint256,
    * });
    * ```
    */
-  async cancelAndMakeBorrow(
-    params: CancelAndMakeBorrowParams,
-  ): Promise<CancelAndMakeOutput> {
+  async makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    const market =
-      params.collateral == null
-        ? undefined
-        : params.collateral.market instanceof MarketParams
-          ? params.collateral.market
-          : MarketParams.from(params.collateral.market);
-
     const data = await this.getOffersData(params);
     validateOfferSides(data.tree.offers, false);
-    if (market != null) {
-      const marketId = MarketUtils.toId(market);
-      for (const offer of data.tree.offers) {
-        const offerMarketId = MarketUtils.toId(offer.market);
-        if (offerMarketId.toLowerCase() !== marketId.toLowerCase()) {
-          throw new MarketIdMismatchError(offerMarketId, marketId);
-        }
-      }
-    }
     const tx = midnightCancelAndMake({
       chainId: this.chainId,
       cancellations: params.cancellations ?? [],
@@ -986,50 +954,15 @@ export class MorphoMidnight {
         root: data.tree.root,
         groups: data.groups,
         payload: data.payload,
-        collateral:
-          market == null
-            ? undefined
-            : { market, supplies: params.collateral?.supplies ?? [] },
       },
     });
-    // Sum per token so a token supplied at several indices gets one approval.
-    const collateralAmounts = new Map<Address, bigint>();
-    if (market != null) {
-      for (const { collateralIndex, assets } of tx.action.args
-        .collateralSupplies) {
-        const { token } = MarketUtils.getCollateralByIndex(
-          market,
-          collateralIndex,
-        );
-        collateralAmounts.set(
-          token,
-          (collateralAmounts.get(token) ?? 0n) + assets,
-        );
-      }
-    }
 
     return {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: async () => {
-        const approvals = await Promise.all(
-          [...collateralAmounts].map(([token, amount]) =>
-            getMidnightApprovalRequirements({
-              viemClient: this.client.viemClient,
-              chainId: this.chainId,
-              token,
-              owner: data.accountAddress,
-              spender: tx.to,
-              amount,
-            }),
-          ),
-        );
-        const authorization = await this.getBundlesV2AuthorizationRequirements(
-          data.accountAddress,
-        );
-        return [...approvals.flat(), ...authorization];
-      },
+      getRequirements: async () =>
+        this.getBundlesV2AuthorizationRequirements(data.accountAddress),
       buildTx: () => tx,
     };
   }
@@ -1084,8 +1017,82 @@ export class MorphoMidnight {
    */
   async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): Promise<CancelAndMakeOutput> {
-    return this.cancelAndMakeBorrow(params);
+  ): Promise<MakeOffersOutput> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const market =
+      params.collateral.market instanceof MarketParams
+        ? params.collateral.market
+        : MarketParams.from(params.collateral.market);
+
+    const data = await this.getOffersData(params);
+    validateOfferSides(data.tree.offers, false);
+    const marketId = MarketUtils.toId(market);
+    for (const offer of data.tree.offers) {
+      const offerMarketId = MarketUtils.toId(offer.market);
+      if (offerMarketId.toLowerCase() !== marketId.toLowerCase()) {
+        throw new MarketIdMismatchError(offerMarketId, marketId);
+      }
+    }
+
+    const tx = midnightCancelAndMake({
+      chainId: this.chainId,
+      cancellations: params.cancellations ?? [],
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+      publication: {
+        ratifier: data.ratifier,
+        root: data.tree.root,
+        groups: data.groups,
+        payload: data.payload,
+        collateral: {
+          market,
+          supplies: params.collateral.supplies,
+        },
+      },
+    });
+    const midnightBundlesV2 = getChainAddress(
+      this.chainId,
+      "midnightBundlesV2",
+    );
+    const collateralAmounts = new Map<Address, bigint>();
+    for (const { collateralIndex, assets } of tx.action.args
+      .collateralSupplies) {
+      const { token } = MarketUtils.getCollateralByIndex(
+        market,
+        collateralIndex,
+      );
+      collateralAmounts.set(
+        token,
+        (collateralAmounts.get(token) ?? 0n) + assets,
+      );
+    }
+
+    return {
+      groups: data.groups,
+      root: data.tree.root,
+      ratifierType: data.ratifierType,
+      getRequirements: async () => {
+        const approvals = await Promise.all(
+          [...collateralAmounts].map(([token, amount]) =>
+            getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: data.accountAddress,
+              spender: midnightBundlesV2,
+              amount,
+            }),
+          ),
+        );
+        return [
+          ...approvals.flat(),
+          ...(await this.getBundlesV2AuthorizationRequirements(
+            data.accountAddress,
+          )),
+        ];
+      },
+      buildTx: () => tx,
+    };
   }
 
   /**

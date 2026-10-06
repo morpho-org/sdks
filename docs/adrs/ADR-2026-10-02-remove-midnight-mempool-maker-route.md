@@ -13,11 +13,13 @@ _Status is the only field that changes after acceptance._
 
 [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](./ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md)
 moves the Midnight maker intents to `MidnightBundlesV2` but keeps the mempool maker route alive:
-`makeLend` and `makeBorrow` stay as `@deprecated` methods for one minor, `supplyCollateralMakeBorrow`
-is retyped in place, and EOA makers activate their offer root with a signature passed to `buildTx`.
+`makeLend` and `makeBorrow` stay as `@deprecated` mempool methods for one minor while the atomic
+methods are named `cancelAndMakeLend` and `cancelAndMakeBorrow`; `supplyCollateralMakeBorrow` is
+retyped in place, and EOA makers activate their offer root with a signature passed to `buildTx`.
 
 Keeping the mempool route means a second publication path, with its Ecrecover and SetterRatifier
-signing, for the same intent that `cancelAndMakeLend` and `cancelAndMakeBorrow` serve atomically.
+signing, for the same intent that the parent record's `cancelAndMakeLend` and `cancelAndMakeBorrow`
+methods serve atomically. The maintainer chose to ship those methods under the v6 names instead.
 `morpho-sdk` 7.0.0 is already a major for the V2 route; a deprecation minor would only delay the
 same break and keep an untested route shipping for another release.
 
@@ -27,23 +29,29 @@ same break and keep an untested route shipping for another release.
 `@deprecated` and one-minor coexistence steps of the AGENTS.md §7 flow. This supersedes the parts of
 ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that record still holds.
 
-- `makeLend` and `makeBorrow` are removed; `cancelAndMakeLend` and `cancelAndMakeBorrow` replace
-  them. `cancelAndMakeBorrow` takes optional collateral supplies, and an explicit empty supply list
-  is rejected. `supplyCollateralMakeBorrow` is kept and retyped in place: it calls
-  `cancelAndMakeBorrow` with a required `collateral: { market, supplies }`, which replaces `market`,
-  `collateralAssets` and `collateralIndex`, and `reservedCollateralAssets` is removed.
-- The route-specific surface is removed with them: `MakeOffersOutput` (exported as
-  `MidnightMakeOffersOutput`), the `MidnightMakeOffersParams` and `MidnightMakeLendParams` input
-  types, the `mempoolSubmitOffers` and `setterRatifierRatifyRoot` builders with their
-  `MempoolSubmitOffersAction` and `SetterRatifierRatifyRootAction` types,
-  `getSetterRatifierRatifyRootRequirement`, the
+- `makeLend`, `makeBorrow` and `supplyCollateralMakeBorrow` are retyped in place onto
+  `MidnightBundlesV2` and keep their names. The parent record's `cancelAndMakeLend` and
+  `cancelAndMakeBorrow` ship under these names, so no `cancelAndMake*` entity method is added.
+  Each accepts optional cancellations; `makeBorrow` uses `MakeOffersParams` and takes no
+  collateral. `supplyCollateralMakeBorrow` requires `collateral: { market, supplies }`, builds
+  `midnightCancelAndMake` directly, and rejects an empty supply list. Its collateral input replaces
+  `market`, `collateralAssets` and `collateralIndex`, and `reservedCollateralAssets` is removed.
+- The route-specific surface is removed with them: `mempoolSubmitOffers`
+  (`MempoolSubmitOffersParams`, `MempoolSubmitOffersAction`),
+  `setterRatifierRatifyRoot` (`SetterRatifierRatifyRootParams`,
+  `SetterRatifierRatifyRootAction`), `getSetterRatifierRatifyRootRequirement`
+  (`GetSetterRatifierRatifyRootRequirementParams`), the
   `MidnightOfferRootSignature*`, `MidnightOfferRootRequirement` and `MidnightActionSignatures`
   types, `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
   `selectRequirementSignatures` (`SelectedRequirementSignatures`), the
   `"midnightOfferRootSignature"` member of `RequirementSignatureKind`, the offer-root signature
   errors, and `UnknownMidnightRatifierError`.
-- The maker types kept in 7.0.0 are retyped in place: `MorphoMidnight.getOffersData` and the maker
-  `offers` input accept only a PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
+- The maker types kept in 7.0.0 are retyped in place: `MakeOffersParams`, `MakeLendParams`, and
+  `MakeOffersOutput` keep their v6 export names (`MidnightMakeOffersParams`,
+  `MidnightMakeLendParams`, and `MidnightMakeOffersOutput`); `makeBorrow` continues to use
+  `MakeOffersParams`, while `SupplyCollateralMakeBorrowParams` extends it with required
+  `MidnightMakeBorrowCollateral`; `MorphoMidnight.getOffersData` and the maker `offers` input accept
+  only a PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
   instead of any `TreeInput`; `MidnightOfferValidationParams` drops `ratification`;
   `MidnightOffersData.ratifierType` becomes `"priceV1" | "rateV1"` and its `setterPayload` is
   replaced by `payload`; `MidnightSupplyCollateralMakeBorrowParams` requires
@@ -68,9 +76,9 @@ No removal outside this list inherits this exception.
 
 ## Invariants
 
-- No `makeLend`, `makeBorrow` or `mempoolSubmitOffers` export remains in `morpho-sdk` 7.x;
-  `supplyCollateralMakeBorrow` returns `CancelAndMakeOutput`. Check: the public export snapshot and
-  a grep of the package entrypoints.
+- No `cancelAndMakeLend`, `cancelAndMakeBorrow` or `mempoolSubmitOffers` export remains in
+  `morpho-sdk` 7.x; all three maker methods return `MakeOffersOutput`. Check: the public export
+  snapshot and a grep of the package entrypoints.
 - Maker entity methods return no signature requirement and encode all-zero root-signature fields.
   Check: entity unit tests decode the calldata and assert the zero fields.
 - Revisit if a ratifier used by maker flows requires a root signature even when the bundle is

@@ -9,19 +9,19 @@ still need it.
 
 | v6 | v7 |
 | --- | --- |
-| `makeLend` | `cancelAndMakeLend` |
-| `makeBorrow` | `cancelAndMakeBorrow` |
+| `makeLend` | `makeLend` (retyped) |
+| `makeBorrow` | `makeBorrow` (retyped) |
 | `supplyCollateralMakeBorrow` | `supplyCollateralMakeBorrow` (retyped) |
 
-One MidnightBundlesV2 call now cancels the groups you are replacing, optionally supplies borrow
-collateral, authorizes the ratifier, activates the new root, and publishes the payload. If any
-cancelled group was filled beyond its `maxConsumed` before the transaction lands, the whole call
-reverts and nothing is published.
+Each MidnightBundlesV2 call cancels the groups you are replacing, authorizes the ratifier, activates
+the new root, and publishes the payload. `supplyCollateralMakeBorrow` also supplies borrow
+collateral in that call; `makeBorrow` does not. If any cancelled group was filled beyond its
+`maxConsumed` before the transaction lands, the whole call reverts and nothing is published.
 
-If `collateral` is provided to `cancelAndMakeBorrow`, its `supplies` list must contain at least one
-entry. An explicit empty list throws `EmptyMidnightCollateralSuppliesError`; omit `collateral` when
-no collateral is supplied. `supplyCollateralMakeBorrow` remains as a thin wrapper around
-`cancelAndMakeBorrow` and requires `collateral`.
+`makeBorrow` accepts `MidnightMakeOffersParams`, the same parameter type as in v6, and does not
+accept collateral. Use `supplyCollateralMakeBorrow` to supply collateral; it requires a non-empty
+`supplies` list and throws `EmptyMidnightCollateralSuppliesError` for an empty list. Both methods
+build the `midnightCancelAndMake` action directly.
 
 ```ts
 // v6
@@ -29,7 +29,7 @@ const output = await midnight.makeLend({ accountAddress, offers, loanToken, loan
 const tx = output.buildTx(await signRequirements(await output.getRequirements()));
 
 // v7: repost over previousGroup; pass `cancellations: []` for a fresh publication
-const output = await midnight.cancelAndMakeLend({
+const output = await midnight.makeLend({
   accountAddress,
   offers,
   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
@@ -53,7 +53,7 @@ await midnight.supplyCollateralMakeBorrow({
 });
 ```
 
-The wrapper returns `CancelAndMakeOutput`, whose transaction action is
+The method returns `MidnightMakeOffersOutput`, whose transaction action is
 `midnightCancelAndMake`. Its required `collateral: { market, supplies }` replaces the v6
 `market`, `collateralAssets`, and `collateralIndex` inputs; `reservedCollateralAssets` is removed.
 An empty `supplies` list throws `EmptyMidnightCollateralSuppliesError`.
@@ -112,7 +112,8 @@ address.
   offer; there is no `onBehalf`.
 - `getRequirements()` returns only onchain transactions: the MidnightBundlesV2 Midnight
   authorization, the lend-side loan-token approval to Midnight for later fills, and borrow-side
-  collateral approvals to MidnightBundlesV2. It no longer returns a root signature or a
+  collateral approvals to MidnightBundlesV2 for `supplyCollateralMakeBorrow`. `makeBorrow`
+  requires only MidnightBundlesV2 authorization. It no longer returns a root signature or a
   SetterRatifier root transaction, so `buildTx()` takes no signatures.
 - Replacement offers need fresh groups. A group cannot be both published and cancelled
   (`MidnightReplacementGroupCancelledError`).
@@ -121,20 +122,19 @@ address.
 
 | v6 | v7 |
 | --- | --- |
-| `MidnightMakeOffersParams` | `MidnightCancelAndMakeOffersParams` |
-| `MidnightMakeLendParams` | `MidnightCancelAndMakeLendParams` |
-| — | `MidnightCancelAndMakeBorrowParams` (optional `collateral`) |
+| `MidnightMakeOffersParams` | `MidnightMakeOffersParams` (retyped) |
+| `MidnightMakeLendParams` | `MidnightMakeLendParams` (retyped) |
 | `MidnightSupplyCollateralMakeBorrowParams` | `MidnightSupplyCollateralMakeBorrowParams` (required `collateral`) |
-| `MidnightMakeOffersOutput` | `MidnightCancelAndMakeOutput` |
+| `MidnightMakeOffersOutput` | `MidnightMakeOffersOutput` (retyped) |
 | — | `MidnightMakeBorrowCollateral` |
-| — | `MidnightOfferPublication` and `MidnightCancelAndMakeParams` |
+| — | `MidnightOfferPublication`, `MidnightCancelAndMakeParams`, and `MidnightRootActivationSignature` |
 
-- `MidnightCancelAndMakeBorrowParams` keeps `collateral` optional and uses
-  `MidnightMakeBorrowCollateral` for its `market` and `supplies`. The wrapper's
-  `MidnightSupplyCollateralMakeBorrowParams` makes that same `collateral` required. These nested
-  supplies replace the v6 `market`, `collateralAssets`, and `collateralIndex` inputs;
-  `reservedCollateralAssets` is removed. The collateral approval now covers only supplied amounts
-  and goes to MidnightBundlesV2 instead of Midnight.
+- `MidnightMakeOffersParams` is used by `makeBorrow`, as in v6, and does not include collateral.
+  `MidnightSupplyCollateralMakeBorrowParams` extends it with required
+  `collateral: MidnightMakeBorrowCollateral`. Its nested supplies replace the v6 `market`,
+  `collateralAssets`, and `collateralIndex` inputs; `reservedCollateralAssets` is removed. The
+  collateral approval now covers only supplied amounts and goes to MidnightBundlesV2 instead of
+  Midnight.
 - `MidnightCancelAndMakeParams` takes ratifier, root, groups, payload, root signature, and optional
   collateral together under `publication?: MidnightOfferPublication`. Omit `publication` for
   cancel-only calls; this preserves `cancelOffers` behavior.
@@ -146,12 +146,12 @@ address.
 
 ## Removed exports
 
-- Actions and requirements: `mempoolSubmitOffers`, `setterRatifierRatifyRoot`,
-  `getSetterRatifierRatifyRootRequirement`.
+- Actions and requirements: `mempoolSubmitOffers` (`MempoolSubmitOffersParams`),
+  `setterRatifierRatifyRoot` (`SetterRatifierRatifyRootParams`),
+  `getSetterRatifierRatifyRootRequirement` (`GetSetterRatifierRatifyRootRequirementParams`).
 - Types: `MempoolSubmitOffersAction`, `SetterRatifierRatifyRootAction`,
   `MidnightOfferRootSignatureAction`, `MidnightOfferRootSignatureArgs`,
-  `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`,
-  `MidnightMakeLendParams`, `MidnightMakeOffersParams`, `MidnightMakeOffersOutput`.
+  `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`.
 - Helpers and errors: `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
   `selectRequirementSignatures`, `MissingMidnightOfferRootSignatureError`,
   `MidnightOfferRootMismatchError`, `MidnightOfferRootOwnerMismatchError`,
