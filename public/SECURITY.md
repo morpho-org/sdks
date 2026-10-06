@@ -178,7 +178,7 @@ curl -s "$(npm view "@morpho-org/morpho-sdk@$VERSION" dist.attestations.url)" \
   | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
+For a version published by this pipeline, the output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`. Versions published before this repository became release-only were built from the same repository by `.github/workflows/push.yml`, on `refs/heads/main`, or `refs/heads/next` for prereleases. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from any other repository or workflow, as suspect and report it.
 
 ## Dependency policy
 
