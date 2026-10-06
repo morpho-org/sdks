@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "vitest";
 
-import { type GitHub, GitHubApiError } from "./github.ts";
+import { type GitHub, GitHubApiError, SYNC_BRANCH } from "./github.ts";
 import {
   BUILD_BRANCH,
   batchFileChanges,
@@ -14,7 +14,6 @@ import {
   gitIsAncestor,
   parseSourceCommit,
   planFileChanges,
-  SYNC_BRANCH,
   syncPublic,
 } from "./sync.ts";
 

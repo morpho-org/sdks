@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { findStaleSyncPr, formatAlert } from "./alert.ts";
-import type { GitHub } from "./github.ts";
+import { findStaleSyncPr, formatAlert, resolveStaleAlert } from "./alert.ts";
+import { type GitHub, GitHubApiError } from "./github.ts";
 
 function github(pulls: unknown[], committedAt: string): GitHub {
   return {
@@ -57,6 +57,83 @@ describe("findStaleSyncPr", () => {
     await expect(
       findStaleSyncPr({ github: github([], ""), now, maxAgeMinutes: 60 }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("resolveStaleAlert", () => {
+  test("returns a stale alert past the threshold", async () => {
+    await expect(
+      resolveStaleAlert({
+        github: () => github([pr], "2026-10-06T10:59:00Z"),
+        now,
+        maxAgeMinutes: "60",
+      }),
+    ).resolves.toEqual({
+      alert: {
+        type: "stale",
+        pr: { number: 7, url: pr.html_url, ageMinutes: 61 },
+      },
+    });
+  });
+
+  test("returns no alert for a recent PR", async () => {
+    await expect(
+      resolveStaleAlert({
+        github: () => github([pr], "2026-10-06T11:30:00Z"),
+        now,
+        maxAgeMinutes: "60",
+      }),
+    ).resolves.toEqual({});
+  });
+
+  test("pages a watch-failed alert on an API error, keeping it as cause", async () => {
+    const error = new GitHubApiError("GET pulls returned 502.", 502);
+    const failing: GitHub = {
+      async rest() {
+        throw error;
+      },
+      async graphql() {
+        throw new Error("unused");
+      },
+    };
+    await expect(
+      resolveStaleAlert({ github: () => failing, now, maxAgeMinutes: "60" }),
+    ).resolves.toEqual({
+      alert: { type: "watch-failed", reason: "GET pulls returned 502." },
+      cause: error,
+    });
+  });
+
+  test.each([["1h"], ["0"], [undefined]])(
+    "pages a watch-failed alert on threshold %j",
+    async (maxAgeMinutes) => {
+      const result = await resolveStaleAlert({
+        github: () => github([pr], "2026-10-06T10:59:00Z"),
+        now,
+        maxAgeMinutes,
+      });
+      expect(result.alert).toEqual({
+        type: "watch-failed",
+        reason: expect.stringContaining(
+          "MAX_AGE_MINUTES must be a positive integer",
+        ),
+      });
+      expect(result.cause).toBeInstanceOf(Error);
+    },
+  );
+
+  test("pages when the client can't be built", async () => {
+    const result = await resolveStaleAlert({
+      github: () => {
+        throw new Error("GH_TOKEN is not set.");
+      },
+      now,
+      maxAgeMinutes: "60",
+    });
+    expect(result.alert).toEqual({
+      type: "watch-failed",
+      reason: "GH_TOKEN is not set.",
+    });
   });
 });
 

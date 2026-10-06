@@ -27,12 +27,15 @@ import type {
 import { listReleasedPackages } from "../public-gates/detect-release.ts";
 import { verifyArtifact } from "../public-gates/verify-artifact.ts";
 import type { PublicTreeManifest } from "../public-snapshot/generate.ts";
-import { createGitHub, type GitHub, GitHubApiError } from "./github.ts";
+import {
+  createGitHub,
+  type GitHub,
+  GitHubApiError,
+  OPEN_SYNC_PRS_PATH,
+  PUBLIC_REPO,
+  SYNC_BRANCH,
+} from "./github.ts";
 
-/** Public repository the sync writes to. */
-export const PUBLIC_REPO = "morpho-org/sdks";
-/** Head branch of the sync PR. */
-export const SYNC_BRANCH = "sync/main";
 /** Scratch branch the commits are built on, so the PR never shows a partial tree. */
 export const BUILD_BRANCH = "sync/build";
 /**
@@ -328,9 +331,7 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     options.maxBatchBytes,
   );
 
-  const open = (await github.rest(
-    `${repoPath}/pulls?state=open&base=main&head=${PUBLIC_REPO.split("/")[0]}:${SYNC_BRANCH}`,
-  )) as PullRequest[];
+  const open = (await github.rest(OPEN_SYNC_PRS_PATH)) as PullRequest[];
   if (open.length > 1) {
     throw new Error(
       `${open.length} sync PRs are open on ${PUBLIC_REPO}. Close all but one.`,

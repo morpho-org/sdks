@@ -7,13 +7,18 @@
  *
  * Reads `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert channel),
  * `PUBLIC_SYNC_ALERT_OWNER` (mention of the on-call owner) and `RUN_URL`; `failed` also
- * reads `RELEASE_SHA`, and `stale` reads `GH_TOKEN` and `MAX_AGE_MINUTES`. An alert
+ * reads `RELEASE_SHA`, and `stale` reads `GH_TOKEN` and `MAX_AGE_MINUTES` (a watch that
+ * can't check the sync PR pages a `watch-failed` alert). An alert
  * always fails the step, so it shows even while the webhook isn't configured.
  */
 
 import { isMain, readRequiredEnv, reportCliError } from "../../workflow.ts";
-import { createGitHub, type GitHub } from "./github.ts";
-import { PUBLIC_REPO, SYNC_BRANCH } from "./sync.ts";
+import {
+  createGitHub,
+  type GitHub,
+  OPEN_SYNC_PRS_PATH,
+  PUBLIC_REPO,
+} from "./github.ts";
 
 /** Open sync PR whose head commit is older than the threshold. */
 export interface StaleSyncPr {
@@ -37,9 +42,11 @@ export async function findStaleSyncPr(options: {
   readonly maxAgeMinutes: number;
 }): Promise<StaleSyncPr | undefined> {
   const { github } = options;
-  const pulls = (await github.rest(
-    `repos/${PUBLIC_REPO}/pulls?state=open&base=main&head=${PUBLIC_REPO.split("/")[0]}:${SYNC_BRANCH}`,
-  )) as { number: number; html_url: string; head: { sha: string } }[];
+  const pulls = (await github.rest(OPEN_SYNC_PRS_PATH)) as {
+    number: number;
+    html_url: string;
+    head: { sha: string };
+  }[];
   const pr = pulls[0];
   if (pr === undefined) return undefined;
   const commit = (await github.rest(
@@ -84,6 +91,44 @@ export function formatAlert(
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
 
+/**
+ * Decides the alert of the `stale` watch. Any failure, from a bad threshold to an
+ * API error, becomes a `watch-failed` alert, so a broken watch still pages.
+ *
+ * @param options.github - Builds the client; called inside the guard, so a missing token pages too.
+ * @param options.now - Current time.
+ * @param options.maxAgeMinutes - Raw threshold, a positive integer.
+ * @returns The alert to send, if any, and the error behind a `watch-failed` alert.
+ */
+export async function resolveStaleAlert(options: {
+  readonly github: () => GitHub;
+  readonly now: Date;
+  readonly maxAgeMinutes: string | undefined;
+}): Promise<{ readonly alert?: Alert; readonly cause?: unknown }> {
+  try {
+    const maxAgeMinutes = Number(options.maxAgeMinutes);
+    if (!Number.isInteger(maxAgeMinutes) || maxAgeMinutes <= 0) {
+      throw new Error(
+        `MAX_AGE_MINUTES must be a positive integer, got ${JSON.stringify(options.maxAgeMinutes)}.`,
+      );
+    }
+    const pr = await findStaleSyncPr({
+      github: options.github(),
+      now: options.now,
+      maxAgeMinutes,
+    });
+    return pr === undefined ? {} : { alert: { type: "stale", pr } };
+  } catch (error) {
+    return {
+      alert: {
+        type: "watch-failed",
+        reason: error instanceof Error ? error.message : String(error),
+      },
+      cause: error,
+    };
+  }
+}
+
 async function run() {
   const mode = process.argv[2];
   const env = process.env;
@@ -92,25 +137,11 @@ async function run() {
   if (mode === "failed") {
     alert = { type: "failed", releaseSha: readRequiredEnv(env, "RELEASE_SHA") };
   } else if (mode === "stale") {
-    const maxAgeMinutes = Number(readRequiredEnv(env, "MAX_AGE_MINUTES"));
-    if (!Number.isInteger(maxAgeMinutes) || maxAgeMinutes <= 0) {
-      throw new Error("MAX_AGE_MINUTES must be a positive integer.");
-    }
-    try {
-      const pr = await findStaleSyncPr({
-        github: createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
-        now: new Date(),
-        maxAgeMinutes,
-      });
-      if (pr !== undefined) alert = { type: "stale", pr };
-    } catch (error) {
-      // Page on a broken watch too, then fail with the original error as cause.
-      cause = error;
-      alert = {
-        type: "watch-failed",
-        reason: error instanceof Error ? error.message : String(error),
-      };
-    }
+    ({ alert, cause } = await resolveStaleAlert({
+      github: () => createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
+      now: new Date(),
+      maxAgeMinutes: env.MAX_AGE_MINUTES,
+    }));
   } else {
     throw new Error("Usage: alert.ts failed|stale");
   }
@@ -125,13 +156,24 @@ async function run() {
   });
   const webhook = env.PUBLIC_SYNC_ALERT_WEBHOOK_URL;
   if (webhook) {
-    const response = await fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!response.ok) {
-      throw new Error(`Alert webhook answered ${response.status}. ${text}`);
+    let status: number | undefined;
+    try {
+      const response = await fetch(webhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      status = response.ok ? undefined : response.status;
+    } catch (error) {
+      throw new Error(`Alert webhook call failed, nobody was paged. ${text}`, {
+        cause: cause ?? error,
+      });
+    }
+    if (status !== undefined) {
+      throw new Error(
+        `Alert webhook answered ${status}, nobody was paged. ${text}`,
+        cause === undefined ? undefined : { cause },
+      );
     }
   }
   throw new Error(

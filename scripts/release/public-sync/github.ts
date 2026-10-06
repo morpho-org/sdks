@@ -1,3 +1,10 @@
+/** Public repository the sync writes to. */
+export const PUBLIC_REPO = "morpho-org/sdks";
+/** Head branch of the sync PR. */
+export const SYNC_BRANCH = "sync/main";
+/** REST path listing the open sync PRs on the public repository. */
+export const OPEN_SYNC_PRS_PATH = `repos/${PUBLIC_REPO}/pulls?state=open&base=main&head=${PUBLIC_REPO.split("/")[0]}:${SYNC_BRANCH}`;
+
 /** Failed GitHub API call. Carries the status so callers can treat a 404 as "missing". */
 export class GitHubApiError extends Error {
   readonly status: number;

@@ -20,8 +20,9 @@ then mints the App token.
   open sync PR (`git merge-base --is-ancestor` on full history). There is no override; a root
   commit on `main` with no trailer is the only exception (see setup step 6). An open sync PR
   whose head has no trailer fails the sync.
-- **Idempotency.** Nothing is written when public `main`, or the open sync PR on top of the
-  current `main`, already has the tree hash. If that PR's checks are already green
+- **Idempotency.** No commit or branch update is made when public `main`, or the open sync PR
+  on top of the current `main`, already has the tree hash. The sync only re-arms squash
+  auto-merge with the release message when it isn't armed that way. If that PR's checks are already green
   (`mergeStateStatus` `CLEAN`), auto-merge can't be armed, so the sync squash-merges it
   directly (`mergePullRequest`) with the release message.
 - **Commits.** Built on scratch branch `sync/build` with `createCommitOnBranch`, which GitHub
@@ -32,7 +33,9 @@ then mints the App token.
   same PR. More than one open sync PR fails the sync.
 
 `alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
-`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes).
+`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes). The
+watch also pages a `watch-failed` alert when it can't check the sync PR (bad threshold, missing
+token, API error).
 
 ## Setup (org admin)
 
