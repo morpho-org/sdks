@@ -113,8 +113,8 @@ jobs:
           IS_LOGGING_DISABLED: true
           VITEST_PROJECTS: ${{ matrix.projects }}
           VITEST_SHARD: ${{ matrix.shard }}
-          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release}' || format('packages/{0}/src', matrix.package || matrix.name) }}
-          COVERAGE_EXTRA: ${{ matrix.name == 'scripts' && 'scripts/{paths,generate-midnight-package-version}.ts' || '' }}
+          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release,publish}' || format('packages/{0}/src', matrix.package || matrix.name) }}
+          COVERAGE_EXTRA: ${{ matrix.name == 'scripts' && 'scripts/{paths,generate-midnight-package-version,workflow}.ts' || '' }}
         run: |
           project_args=()
           for project in $VITEST_PROJECTS; do
