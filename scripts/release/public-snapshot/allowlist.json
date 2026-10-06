@@ -8,7 +8,6 @@
     ".vscode/**",
     "LICENSE",
     "README.md",
-    "SECURITY.md",
     "assets/banner.png",
     "audits/**",
     "biome.ci.json",

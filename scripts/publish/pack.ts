@@ -77,38 +77,34 @@ export function releaseTag(pkg: TarballIdentity) {
 
 /**
  * Finds the commit that set a package to its current version, so a tag created
- * by a later run still points at the commit npm provenance records.
+ * by a later run still points at the commit npm provenance records. Only
+ * first-parent history counts: a version set on a side branch is released by
+ * the commit that merged it into the mainline.
  *
  * @param root - Repository root, with full history.
  * @param pkg - The package, at its current version.
  * @returns The commit SHA.
- * @throws If no commit in the history sets that version.
+ * @throws If no mainline commit sets that version, or git fails or a historical
+ *   manifest is malformed.
  */
 export function releaseCommit(root: string, pkg: PublicPackage): string {
   const path = `${pkg.dir}/package.json`;
-  const versionAt = (revision: string) => {
-    try {
-      const manifest: unknown = JSON.parse(
-        execFileSync("git", ["-C", root, "show", `${revision}:${path}`], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }),
-      );
-      return publicIdentity(manifest)?.version;
-    } catch {
-      return undefined;
-    }
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], { encoding: "utf8" });
+  const versionAt = (commit: string) => {
+    // The package didn't exist at that commit: no version, not an error.
+    if (!git("ls-tree", "--name-only", commit, "--", path).trim()) return;
+    const manifest: unknown = JSON.parse(git("show", `${commit}:${path}`));
+    return publicIdentity(manifest)?.version;
   };
-  const commits = execFileSync(
-    "git",
-    ["-C", root, "log", "--format=%H", "--", path],
-    { encoding: "utf8" },
-  )
+  const history = git("log", "--first-parent", "--format=%H %P", "--", path)
     .split("\n")
-    .filter(Boolean);
-  for (const commit of commits) {
-    if (versionAt(commit) !== pkg.version) continue;
-    if (versionAt(`${commit}^`) !== pkg.version) return commit;
+    .filter(Boolean)
+    .map((line) => line.split(" "));
+  for (const [commit, parent] of history) {
+    if (!commit || versionAt(commit) !== pkg.version) continue;
+    // A root commit has no parent, so it sets whatever version it holds.
+    if (!parent || versionAt(parent) !== pkg.version) return commit;
   }
   throw new Error(`No commit sets ${pkg.name} to ${pkg.version}.`);
 }
