@@ -1067,6 +1067,7 @@ test.each([
 test.each([
   `MNEMONIC: legal winner thank year wave sausage worth useful legal winner thank yellow`,
   `  - seed_phrase: legal winner thank year wave sausage worth useful legal winner thank yellow`,
+  `MNEMONIC: legal winner thank year wave sausage worth useful legal winner thank yellow # dev`,
 ])("flag an unquoted mnemonic as a YAML value: %s", (line) => {
   expect(scanFiles([file("config.yml", line)])).toContainEqual(
     expect.objectContaining({ rule: "mnemonic" }),
