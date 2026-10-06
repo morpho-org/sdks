@@ -18,9 +18,12 @@ then mints the App token.
 
 - **Ordering.** The release must descend from the `Source-Commit` of public `main` and of an
   open sync PR (`git merge-base --is-ancestor` on full history). There is no override; a root
-  commit on `main` with no trailer is the only exception (see setup step 6).
+  commit on `main` with no trailer is the only exception (see setup step 6). An open sync PR
+  whose head has no trailer fails the sync.
 - **Idempotency.** Nothing is written when public `main`, or the open sync PR on top of the
-  current `main`, already has the tree hash.
+  current `main`, already has the tree hash. If that PR's checks are already green
+  (`mergeStateStatus` `CLEAN`), auto-merge can't be armed, so the sync squash-merges it
+  directly (`mergePullRequest`) with the release message.
 - **Commits.** Built on scratch branch `sync/build` with `createCommitOnBranch`, which GitHub
   signs, in batches of at most 25 MB of contents. Every commit must show `verified`, and the
   last one must have the expected tree, before `sync/main` moves. Only `100644` files can be

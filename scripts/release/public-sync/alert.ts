@@ -60,7 +60,8 @@ export async function findStaleSyncPr(options: {
 /** What an alert reports. */
 export type Alert =
   | { readonly type: "failed"; readonly releaseSha: string }
-  | { readonly type: "stale"; readonly pr: StaleSyncPr };
+  | { readonly type: "stale"; readonly pr: StaleSyncPr }
+  | { readonly type: "watch-failed"; readonly reason: string };
 
 /**
  * Formats the alert text posted to the alert channel.
@@ -77,7 +78,9 @@ export function formatAlert(
   const text =
     alert.type === "failed"
       ? `Public sync failed for internal release ${alert.releaseSha}: the public PR wasn't opened or updated. Check the run, fix, and rerun the failed jobs.`
-      : `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`;
+      : alert.type === "stale"
+        ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
+        : `Public sync watch failed, so a stuck sync PR may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
 
@@ -85,6 +88,7 @@ async function run() {
   const mode = process.argv[2];
   const env = process.env;
   let alert: Alert | undefined;
+  let cause: unknown;
   if (mode === "failed") {
     alert = { type: "failed", releaseSha: readRequiredEnv(env, "RELEASE_SHA") };
   } else if (mode === "stale") {
@@ -92,12 +96,21 @@ async function run() {
     if (!Number.isInteger(maxAgeMinutes) || maxAgeMinutes <= 0) {
       throw new Error("MAX_AGE_MINUTES must be a positive integer.");
     }
-    const pr = await findStaleSyncPr({
-      github: createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
-      now: new Date(),
-      maxAgeMinutes,
-    });
-    if (pr !== undefined) alert = { type: "stale", pr };
+    try {
+      const pr = await findStaleSyncPr({
+        github: createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
+        now: new Date(),
+        maxAgeMinutes,
+      });
+      if (pr !== undefined) alert = { type: "stale", pr };
+    } catch (error) {
+      // Page on a broken watch too, then fail with the original error as cause.
+      cause = error;
+      alert = {
+        type: "watch-failed",
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
   } else {
     throw new Error("Usage: alert.ts failed|stale");
   }
@@ -125,6 +138,7 @@ async function run() {
     webhook
       ? text
       : `${text} (PUBLIC_SYNC_ALERT_WEBHOOK_URL isn't set: nobody was paged.)`,
+    cause === undefined ? undefined : { cause },
   );
 }
 

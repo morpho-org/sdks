@@ -61,6 +61,17 @@ describe("findStaleSyncPr", () => {
 });
 
 describe("formatAlert", () => {
+  test("reports a failed watch with its reason", () => {
+    expect(
+      formatAlert(
+        { type: "watch-failed", reason: "GET pulls returned 502." },
+        { owner: "@o", runUrl: "https://run" },
+      ),
+    ).toBe(
+      "@o Public sync watch failed, so a stuck sync PR may go unnoticed: GET pulls returned 502. Run: https://run",
+    );
+  });
+
   test("mentions the owner and links the run", () => {
     expect(
       formatAlert(

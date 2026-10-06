@@ -1,4 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, test } from "vitest";
 
 import { type GitHub, GitHubApiError } from "./github.ts";
@@ -6,6 +11,7 @@ import {
   BUILD_BRANCH,
   batchFileChanges,
   buildReleaseMessage,
+  gitIsAncestor,
   parseSourceCommit,
   planFileChanges,
   SYNC_BRANCH,
@@ -636,6 +642,19 @@ describe("syncPublic", () => {
     expect(github.calls.every((c) => c.startsWith("GET"))).toBe(true);
   });
 
+  test("an open sync PR without a Source-Commit fails closed", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    const head = github.refs.get(SYNC_BRANCH) ?? "";
+    const commit = github.commits.get(head);
+    if (commit === undefined) throw new Error("no sync head");
+    github.commits.set(head, { ...commit, message: "manual push" });
+    await expect(syncPublic({ github, ...release(R2, v2) })).rejects.toThrow(
+      "has no Source-Commit trailer",
+    );
+    expect(github.refs.get(SYNC_BRANCH)).toBe(head);
+  });
+
   test("only a root commit may lack a Source-Commit", async () => {
     const github = new FakeGitHub({});
     const root = github.refs.get("main") ?? "";
@@ -690,5 +709,45 @@ describe("syncPublic", () => {
         },
       }),
     ).rejects.toThrow("mode 100755");
+  });
+});
+
+describe("gitIsAncestor", () => {
+  const repo = mkdtempSync(join(tmpdir(), "is-ancestor-"));
+  const git = (...args: string[]) =>
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repo,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { encoding: "utf8" },
+    ).trim();
+  git("init", "-q");
+  git("commit", "-q", "--allow-empty", "-m", "a");
+  const first = git("rev-parse", "HEAD");
+  git("commit", "-q", "--allow-empty", "-m", "b");
+  const second = git("rev-parse", "HEAD");
+
+  test("tells an ancestor from a non-ancestor", () => {
+    expect(gitIsAncestor({ ancestor: first, descendant: second, repo })).toBe(
+      true,
+    );
+    expect(gitIsAncestor({ ancestor: second, descendant: first, repo })).toBe(
+      false,
+    );
+  });
+
+  test("throws on an unknown commit", () => {
+    expect(() =>
+      gitIsAncestor({ ancestor: "f".repeat(40), descendant: second, repo }),
+    ).toThrow("Is the checkout full-history?");
   });
 });

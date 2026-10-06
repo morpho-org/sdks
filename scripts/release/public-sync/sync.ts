@@ -3,7 +3,9 @@
  * sync.ts — opens or updates the sync PR on public morpho-org/sdks from a verified public
  * tree artifact. Run by the `sync` job of `.github/workflows/public-snapshot.yml`:
  *
- *   node scripts/release/public-sync/sync.ts --dir <artifact> --sha <RELEASE_SHA>
+ *   node scripts/release/public-sync/sync.ts --dir <artifact> --sha <RELEASE_SHA> [--base <push before SHA>]
+ *
+ * `--base` picks the same release range as `detect-release.ts` (default `RELEASE_SHA^`).
  *
  * Reads the installation token from `GH_TOKEN` and writes `outcome` and `pr` to
  * `GITHUB_OUTPUT` when set. Imports Node built-ins and repository scripts only: the job
@@ -18,6 +20,10 @@ import { parseArgs } from "node:util";
 
 import type { TarballIdentity } from "../../publish/read-tarball-identity.ts";
 import { isMain, readRequiredEnv, reportCliError } from "../../workflow.ts";
+import type {
+  VersionFileAddition,
+  VersionFileChanges,
+} from "../create-version-commit.ts";
 import { listReleasedPackages } from "../public-gates/detect-release.ts";
 import { verifyArtifact } from "../public-gates/verify-artifact.ts";
 import type { PublicTreeManifest } from "../public-snapshot/generate.ts";
@@ -94,18 +100,6 @@ export function parseSourceCommit(message: string): string | undefined {
   return [...found][0];
 }
 
-/** One file to write, as `createCommitOnBranch` takes it. */
-export interface FileAddition {
-  readonly path: string;
-  readonly contents: string;
-}
-
-/** Additions and deletions of one `createCommitOnBranch` call. */
-export interface FileChanges {
-  readonly additions: readonly FileAddition[];
-  readonly deletions: readonly { readonly path: string }[];
-}
-
 /**
  * Diffs the public tree against the current public `main` tree by git blob hash.
  *
@@ -116,9 +110,9 @@ export interface FileChanges {
 export function planFileChanges(
   files: readonly { readonly path: string; readonly content: Buffer }[],
   remote: ReadonlyMap<string, string>,
-): FileChanges {
+): VersionFileChanges {
   const local = new Set<string>();
-  const additions: FileAddition[] = [];
+  const additions: VersionFileAddition[] = [];
   for (const { path, content } of files) {
     local.add(path);
     const blob = createHash("sha1")
@@ -146,10 +140,10 @@ export function planFileChanges(
  * @throws If a single file is larger than `maxBytes`.
  */
 export function batchFileChanges(
-  changes: FileChanges,
+  changes: VersionFileChanges,
   maxBytes: number = MAX_BATCH_BYTES,
-): FileChanges[] {
-  const batches: { additions: FileAddition[]; size: number }[] = [
+): VersionFileChanges[] {
+  const batches: { additions: VersionFileAddition[]; size: number }[] = [
     { additions: [], size: 0 },
   ];
   for (const addition of changes.additions) {
@@ -248,7 +242,9 @@ async function readCommit(github: GitHub, sha: string) {
  * sync PR already carries the tree. Otherwise rebuilds `sync/main` on top of `main` with
  * GitHub-signed `createCommitOnBranch` commits, checks every one is verified and that the
  * final tree hash matches, opens or retitles the single sync PR, and enables squash
- * auto-merge with the release message.
+ * auto-merge with the release message. When the open sync PR already carries the tree and
+ * its checks are green (`mergeStateStatus` `CLEAN`), auto-merge can't be armed, so it is
+ * merged directly (`mergePullRequest`, squash, same message).
  *
  * @param options - See {@link SyncOptions}.
  * @returns What changed.
@@ -344,10 +340,12 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   if (pr !== undefined) {
     const head = await readCommit(github, pr.head.sha);
     const prSource = parseSourceCommit(head.message);
-    if (
-      prSource !== undefined &&
-      !isAncestor(prSource, manifest.sourceCommit)
-    ) {
+    if (prSource === undefined) {
+      throw new Error(
+        `Open sync PR #${pr.number} has no Source-Commit trailer on its head, so the release order can't be checked. Close it by hand before syncing.`,
+      );
+    }
+    if (!isAncestor(prSource, manifest.sourceCommit)) {
       throw new Error(
         `Release ${manifest.sourceCommit} doesn't descend from ${prSource}, the release of open sync PR #${pr.number}. Only a newer release can supersede it.`,
       );
@@ -517,6 +515,47 @@ const DISABLE_AUTO_MERGE = `mutation($input: DisablePullRequestAutoMergeInput!) 
   disablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`;
 
+/**
+ * Asks git whether `ancestor` is an ancestor of (or equal to) `descendant`, with hooks off.
+ *
+ * @param commits.ancestor - Commit expected to be older.
+ * @param commits.descendant - Commit expected to be newer.
+ * @param commits.repo - Repository to ask (full history), `.` by default.
+ * @returns Whether `ancestor` is reachable from `descendant`.
+ * @throws When git fails for another reason, such as an unknown commit.
+ */
+export function gitIsAncestor(commits: {
+  readonly ancestor: string;
+  readonly descendant: string;
+  readonly repo?: string;
+}): boolean {
+  const { ancestor, descendant, repo = "." } = commits;
+  try {
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repo,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "merge-base",
+        "--is-ancestor",
+        ancestor,
+        descendant,
+      ],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+    return true;
+  } catch (error) {
+    // Exit 1 means "not an ancestor"; anything else (e.g. unknown commit) is fatal.
+    if ((error as { status?: number }).status === 1) return false;
+    throw new Error(
+      `git merge-base --is-ancestor ${ancestor} ${descendant} failed. Is the checkout full-history?`,
+      { cause: error },
+    );
+  }
+}
+
 async function run() {
   const { values } = parseArgs({
     options: {
@@ -544,30 +583,8 @@ async function run() {
     manifest,
     packages,
     readFile: (path) => readFileSync(join(dir, "tree", path)),
-    isAncestor(ancestor, descendant) {
-      try {
-        execFileSync(
-          "git",
-          [
-            "-c",
-            "core.hooksPath=/dev/null",
-            "merge-base",
-            "--is-ancestor",
-            ancestor,
-            descendant,
-          ],
-          { stdio: ["ignore", "ignore", "pipe"] },
-        );
-        return true;
-      } catch (error) {
-        // Exit 1 means "not an ancestor"; anything else (e.g. unknown commit) is fatal.
-        if ((error as { status?: number }).status === 1) return false;
-        throw new Error(
-          `git merge-base --is-ancestor ${ancestor} ${descendant} failed. Is the checkout full-history?`,
-          { cause: error },
-        );
-      }
-    },
+    isAncestor: (ancestor, descendant) =>
+      gitIsAncestor({ ancestor, descendant }),
     log: (line) => console.log(line),
   });
   const output = process.env.GITHUB_OUTPUT;
