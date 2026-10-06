@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { afterAll, describe, expect, test } from "vitest";
 
 import {
@@ -876,6 +877,39 @@ describe("readTree and readTarballs", () => {
     );
   });
 
+  test("reject an entry node-tar skips for its unknown type flag", async () => {
+    const dir = tempDir();
+    write(dir, {
+      "package/package.json": "{}",
+      "package/lib/leak.js": "// see SDK-7\n",
+    });
+    const plain = join(dir, "pkg.tar");
+    execFileSync("tar", [
+      "--format=ustar",
+      "-cf",
+      plain,
+      "-C",
+      dir,
+      "package/package.json",
+      "package/lib/leak.js",
+    ]);
+    const tar = readFileSync(plain);
+    // Each header is 512 bytes; the second entry's header follows the first's
+    // header and its one data block.
+    const header = tar.subarray(1024, 1536);
+    expect(header.toString("utf8", 0, 19)).toBe("package/lib/leak.js");
+    header[156] = "Q".charCodeAt(0);
+    header.fill(" ", 148, 156);
+    const sum = header.reduce((total, byte) => total + byte, 0);
+    header.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148, "latin1");
+    const tarball = join(dir, "pkg-1.0.0.tgz");
+    writeFileSync(tarball, gzipSync(tar));
+    expect(gunzipSync(readFileSync(tarball))[1024 + 156]).toBe(0x51);
+    await expect(readTarballs([tarball])).rejects.toThrow(
+      "package/lib/leak.js (Unsupported, skipped by node-tar)",
+    );
+  });
+
   test("reject tarballs without package/package.json", async () => {
     const dir = tempDir();
     write(dir, { "package/index.js": "" });
@@ -1030,6 +1064,28 @@ test("fail closed on a YAML key list longer than 4096 characters", () => {
       match: expect.stringContaining("longer than 4096"),
     }),
   ]);
+});
+
+test("mark only the overflow candidate with overflow: true", () => {
+  const opener = "accounts: ";
+  const source = `${opener}[\n${`  "${ANVIL_KEY}",\n`.repeat(60)}]`;
+  const candidates = valueSecrets(source, { opener, start: opener.length });
+  expect(candidates.filter(({ overflow }) => overflow)).toEqual([
+    expect.objectContaining({ secret: undefined, at: opener.length }),
+  ]);
+  expect(candidates.some(({ secret, overflow }) => secret && overflow)).toBe(
+    false,
+  );
+});
+
+test.each([
+  ["letters", "a".repeat(200_000)],
+  ["dotted labels", "a.".repeat(100_000)],
+  ["scheme characters", "a+".repeat(100_000)],
+])("scan a long run of %s in linear time", (_, content) => {
+  const started = performance.now();
+  expect(scanFiles([file("a.txt", content)])).toEqual([]);
+  expect(performance.now() - started).toBeLessThan(2000);
 });
 
 test("report a repeated key once per file", () => {

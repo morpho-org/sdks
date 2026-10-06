@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import {
+  createReadStream,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+} from "node:fs";
+import { createRequire } from "node:module";
 import { basename, join, matchesGlob, relative, sep } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
 
-import {
-  type EntryLister,
-  loadBundledTar,
+import type {
+  TarEntry,
+  TarStreamEntry,
 } from "../../ci/verify-tarball-collisions.ts";
 
 /** Default location of the scan policy, relative to the repository root. */
@@ -21,7 +29,7 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 // counts too, and so do `keys`/`secrets` when assigned or holding a list or
 // object (not prose like `secrets: inherit`).
 const KEY_NAME =
-  "(?:(?<![a-z0-9_$])(?:key|secret)(?:s(?=\\s*(?:(?::[^=;\\n]{0,40})?=(?!=)|:\\s*[[{])))?(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
+  "(?:(?<![a-z0-9_$])(?:key|secret)(?:s(?=\\s*(?:(?::[^=;\\n]{0,40})?=(?!=)|:\\s*[[{])))?(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]{1,64}[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
 // `hdKeyToAccount`, ethers' `new Wallet(…)`/`new SigningKey(…)`, Foundry cheatcodes
 // (`vm.startBroadcast(0x…)`) and noble's `secp256k1` (the key is `sign`'s second
@@ -48,7 +56,7 @@ const RULES = {
   // Session links, including Devin Desktop's `app.devin.ai/desktop/session/<id>`.
   "devin-session": /\b(?:app\.)?devin\.ai\/(?:[\w-]+\/)*sessions?\b/gi,
   "internal-repo": /\bmorpho-org\/sdks-internal\b/gi,
-  "internal-host": /\b(?:[a-z0-9-]+\.)*internal\.morpho\.[a-z]+\b/gi,
+  "internal-host": /\b(?:[a-z0-9-]{1,63}\.){0,10}internal\.morpho\.[a-z]+\b/gi,
   "private-key": /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
   // BIP32 extended private keys: one controls every account of its HD wallet.
   "extended-private-key": /\b[xyzt]prv[1-9A-HJ-NP-Za-km-z]{100,112}\b/g,
@@ -113,7 +121,7 @@ const RULES = {
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
   "url-credentials":
-    /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]*:(?!\d+@\d+(?![\w.])|\$\{)[^\s/@"'`]+@/gi,
+    /\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s/:@"'`]*:(?!\d+@\d+(?![\w.])|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
     /\b(?:alchemy(?:api)?\.(?:com|io)\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/(?:ws\/)?v3\/[0-9a-f]{32})\b/gi,
 } as const satisfies Record<string, RegExp>;
@@ -411,11 +419,7 @@ export function scanFiles(
           if (
             valueSecrets(source, { opener, start, kind }).some(
               // The overflow marker has no secret but must still fail the scan.
-              ({ secret, match }) =>
-                secret !== undefined ||
-                match.endsWith(
-                  `(value longer than ${VALUE_WINDOW} characters)`,
-                ),
+              ({ secret, overflow }) => secret !== undefined || overflow,
             )
           ) {
             assigned.push([rule, opener, index]);
@@ -673,8 +677,8 @@ function valueEnd(
  * start of a line (no space before `=`, no dotted name) runs to the end of the
  * line, unless the value opens a bracket, starts with a quote (then it runs until
  * the quote closes, across lines) or the next line continues it. A value still
- * open after 4096 characters is reported as a candidate with no secret, so the
- * gate fails closed. Outside dotenv values, whitespace-preceded `//` and `#`
+ * open after 4096 characters is reported as a candidate with no secret and
+ * `overflow: true`, so the gate fails closed. Outside dotenv values, whitespace-preceded `//` and `#`
  * comments and `/* *\/` comments are skipped, so a closing bracket, `,` or `;` in
  * a comment can't end the value early. YAML lists may hold blank and `#` comment
  * lines.
@@ -695,7 +699,12 @@ export function valueSecrets(
     ? /["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})["'`]/gi
     : /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})n?(?![\w$])/gi;
   const inSpan = [...source.slice(start, end).matchAll(hex)].map(
-    ({ 0: match, index, groups }) => ({ match, at: start + index, groups }),
+    ({ 0: match, index, groups }) => ({
+      match,
+      at: start + index,
+      groups,
+      overflow: false,
+    }),
   );
   const yaml =
     /^[ \t]*(?:#[^\n]*)?\r?\n((?:[ \t]*(?:#[^\n]*)?\r?\n|[ \t]*-[ \t]+[^\n]*(?:\n|$))+)/.exec(
@@ -713,25 +722,30 @@ export function valueSecrets(
     match,
     at: listStart + index,
     groups,
+    overflow: false,
   }));
   const truncated =
     limit < source.length &&
     (end >= limit ||
       (yaml != null && yaml.index + yaml[0].length >= limit - start));
-  const overflow = truncated
+  const marker = truncated
     ? [
         {
           match: `(value longer than ${VALUE_WINDOW} characters)`,
           at: start,
           groups: undefined,
+          overflow: true,
         },
       ]
     : [];
-  return [...inSpan, ...items, ...overflow].map(({ match, at, groups }) => ({
-    secret: groups?.secret,
-    at,
-    match: `${opener}…${match}`,
-  }));
+  return [...inSpan, ...items, ...marker].map(
+    ({ match, at, groups, overflow }) => ({
+      secret: groups?.secret,
+      at,
+      match: `${opener}…${match}`,
+      overflow,
+    }),
+  );
 }
 
 /**
@@ -796,18 +810,69 @@ export function readTree(dir: string): ScannedFile[] {
 }
 
 /**
+ * Starts a node-tar parser that reports each entry it reads and each it skips.
+ * node-tar skips an entry with an unknown type flag without reporting it to
+ * `onReadEntry`, while GNU tar extracts it as a regular file.
+ */
+export type TarballParser = (opts: {
+  strict: boolean;
+  onReadEntry: (entry: TarStreamEntry) => void;
+  onIgnoredEntry: (entry: TarEntry) => void;
+}) => NodeJS.WritableStream;
+
+interface TarParserModule {
+  Parser: new (opts: {
+    strict: boolean;
+    onReadEntry: (entry: TarStreamEntry) => void;
+  }) => NodeJS.WritableStream & {
+    on(
+      event: "ignoredEntry",
+      listener: (entry: TarEntry) => void,
+    ): NodeJS.WritableStream;
+  };
+}
+
+function isTarParserModule(value: unknown): value is TarParserModule {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "Parser" in value &&
+    typeof value.Parser === "function"
+  );
+}
+
+/**
+ * Loads the streaming parser of the node-tar bundled with npm at `npmRoot`.
+ *
+ * @param npmRoot - The global npm module root, as returned by `npm root -g`.
+ * @returns A parser factory.
+ * @throws If the bundled module has no `Parser`.
+ */
+export function loadBundledTarParser(npmRoot: string): TarballParser {
+  const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
+    "tar",
+  );
+  if (!isTarParserModule(tar)) {
+    throw new Error(`Bundled tar at "${npmRoot}" does not expose Parser.`);
+  }
+  return ({ onIgnoredEntry, ...opts }) =>
+    new tar.Parser(opts).on("ignoredEntry", onIgnoredEntry);
+}
+
+/**
  * Reads every file in npm tarballs with npm's bundled node-tar, the parser npm
  * publish uses. Paths look like `<tarball>.tgz:package/...`.
  *
  * @param tarballs - Paths to `.tgz` files.
- * @param reader - node-tar; defaults to the copy bundled with npm.
+ * @param parser - node-tar's parser; defaults to the copy bundled with npm.
  * @returns The files.
  * @throws If a tarball holds anything other than regular files and directories,
- * or yields no `package/package.json` (a reader that never reported its entries).
+ * an entry node-tar skips (such as an unknown type flag), or no
+ * `package/package.json` (a parser that never reported its entries).
  */
 export async function readTarballs(
   tarballs: readonly string[],
-  reader: EntryLister = loadBundledTar(
+  parser: TarballParser = loadBundledTarParser(
     execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(),
   ),
 ): Promise<ScannedFile[]> {
@@ -815,9 +880,13 @@ export async function readTarballs(
   for (const tarball of tarballs) {
     const irregular: string[] = [];
     let hasManifest = false;
-    await reader.list({
-      file: tarball,
+    const stream = parser({
       strict: true,
+      onIgnoredEntry: (entry) => {
+        irregular.push(
+          `${redactPath(entry.path)} (${entry.type}, skipped by node-tar)`,
+        );
+      },
       onReadEntry: (entry) => {
         if (entry.type !== "File" && entry.type !== "OldFile") {
           if (entry.type !== "Directory") {
@@ -838,6 +907,7 @@ export async function readTarballs(
         );
       },
     });
+    await pipeline(createReadStream(tarball), stream);
     if (irregular.length > 0) {
       throw new Error(
         `"${tarball}" has entries that are not regular files: ${irregular.join(", ")}.`,
