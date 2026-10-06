@@ -241,5 +241,5 @@ This file summarizes rules that live elsewhere. When one of these changes, updat
 - [`AGENTS.md`](./AGENTS.md) §1 (Action-layer purity), §2 (forbidden patterns), §5 (security invariants), §7 (releases and audits) and §10 (CI and release security);
 - [`THREAT_MODEL.md`](./THREAT_MODEL.md);
 - the release workflows under [`.github/workflows/`](./.github/workflows/);
-- [`public/SECURITY.md`](./public/SECURITY.md), the copy published to `morpho-org/sdks`, which describes its `release.yml` flow instead of this repository's. Copy every change to the Security invariants table into it in the same PR;
+- [`public/SECURITY.md`](./public/SECURITY.md), the copy published to `morpho-org/sdks`, which describes its `release.yml` flow instead of this repository's. Copy every change to this file into it in the same PR, except the "Release integrity and verification" section, which the public copy rewrites for its own flow, and the links to `THREAT_MODEL.md`, `AGENTS.md` and ADRs, which the public copy leaves out on purpose;
 - the package list and supported majors.
