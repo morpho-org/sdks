@@ -6,32 +6,39 @@ name: Release
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
-#   tag      package tags and GitHub Releases for every current package version
+#   release  package tags and GitHub Releases for every current package version
 #
 # Repository settings this workflow relies on (a workflow file can't enforce them,
 # since a pull request could edit it):
-#   - The `npm` environment allows deployments from `main` only and has required
-#     reviewers. Each npm trusted publisher names this repository, this file and
+#   - The `npm` environment allows deployments from `main` only and stores no
+#     secrets. Each npm trusted publisher names this repository, this file and
 #     the `npm` environment.
-#   - A `main` ruleset blocks direct and force pushes and requires `CI` to pass.
+#   - `main` rulesets: only the sync App may update it (signed commits, no force
+#     push or deletion), and every change needs a pull request with `ci` passing.
+#   - No workflow in this repository saves or restores an Actions cache, so code
+#     run by `pack` can't poison anything a privileged job reads.
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
-# Queue every push: a replaced run would skip the versions it alone declares.
+# Queue every push and never cancel a running release: a replaced run would skip
+# the versions it alone declares. `queue` is newer than actionlint's schema.
 concurrency:
   group: release
+  cancel-in-progress: false
   queue: max
 
 jobs:
   pack:
     name: Build & pack
+    # A fork of this repository must not try to release.
+    if: github.repository == 'morpho-org/sdks'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
-      contents: read
+      contents: read # checkout
     env:
       CI: true
       HUSKY: 0
@@ -47,6 +54,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - run: pnpm install --frozen-lockfile
 
@@ -63,16 +71,17 @@ jobs:
           retention-days: 1
 
   # Holds the npm OIDC token. It installs nothing and runs only Node, the npm
-  # bundled with it and scripts from this commit, on tarballs whose digests and
-  # identities it checks first.
+  # bundled with it and dependency-free scripts from this commit, on tarballs
+  # whose digests and identities it checks first.
   publish:
     name: Publish to npm
     needs: pack
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: npm
     permissions:
-      contents: read
-      id-token: write
+      contents: read # checkout
+      id-token: write # npm trusted publishing and provenance
     env:
       CI: true
 
@@ -82,9 +91,12 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      # An exact Node release fixes the bundled npm (11.19.1), which supports
+      # trusted publishing. Bump it with .nvmrc's major.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .nvmrc
+          node-version: 26.10.0
+          package-manager-cache: false
 
       - name: Require npm with trusted publishing
         run: node scripts/publish/require-trusted-publishing-npm.ts
@@ -100,29 +112,32 @@ jobs:
       - name: Verify tarballs
         run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
 
+      # Skips versions already on npm and fails on any that npm would refuse or
+      # that would move `latest` back, before anything is uploaded.
+      - name: Plan publish
+        run: node scripts/publish/plan-npm-publish.ts "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
+
       - name: Publish packages
         shell: bash
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r -u 3 name version tgz; do
-            if npm view "${name}@${version}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
-              echo "Already on npm: ${name}@${version}"
-              continue
-            fi
+            echo "Publishing ${name}@${version}"
             npm publish "$tgz" \
               --provenance \
               --access public \
               --tag latest \
               --ignore-scripts \
               --registry https://registry.npmjs.org
-          done 3< "$RUNNER_TEMP/release-set.tsv"
+          done 3< "$RUNNER_TEMP/to-publish.tsv"
 
-  tag:
+  release:
     name: Tags & GitHub Releases
     needs: publish
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
+      contents: write # push package tags and create GitHub Releases
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -135,7 +150,30 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
+      # Repository scripts run here, before the token is in reach.
+      - name: Prepare tags and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Not process substitution: a failing command must fail the step.
+          node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
+          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
+            echo "::error::No package tags found."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/github-releases"
+          while IFS=$'\t' read -r tag _commit; do
+            node scripts/publish/github-release-body.ts "$tag" "$RUNNER_TEMP/github-releases/${tag//\//__}.md"
+          done < "$RUNNER_TEMP/tags.txt"
+
+      # Every current package version is on npm once publish succeeds, so any
+      # missing tag or release is created, whichever run or commit skipped it, on
+      # the mainline commit that first set that version. npm provenance records
+      # the commit of the run that published it, which differs from the tag only
+      # when an earlier run failed before publishing.
+      # Only git and gh run while the token is set.
       - name: Push package tags and create GitHub Releases
         shell: bash
         env:
@@ -147,28 +185,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
-
-          # Every current package version is on npm once publish succeeds, so any
-          # missing tag or release is created, whichever run skipped it, on the
-          # mainline commit that first set that version. npm provenance records
-          # the commit of the run that published it, which differs from the tag
-          # only when an earlier run failed before publishing.
-          # Not process substitution: a failing command must fail the step.
-          node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
-          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
-            echo "::error::No package tags found."
-            exit 1
-          fi
-          releases_dir="${RUNNER_TEMP}/github-releases"
-          mkdir -p "$releases_dir"
           while IFS=$'\t' read -r -u 3 tag commit; do
             if ! git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
               git tag "$tag" "$commit" -m "$tag"
               git push --no-verify origin "refs/tags/${tag}"
             fi
             if ! gh release view "$tag" >/dev/null 2>&1; then
-              body_file="${releases_dir}/${tag//\//__}.md"
-              node scripts/publish/github-release-body.ts "$tag" "$body_file"
-              gh release create "$tag" --title "$tag" --notes-file "$body_file" --verify-tag
+              gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/github-releases/${tag//\//__}.md" --verify-tag
             fi
           done 3< "$RUNNER_TEMP/tags.txt"

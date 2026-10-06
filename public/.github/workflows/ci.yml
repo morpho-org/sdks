@@ -8,18 +8,20 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Install, build, lint, test and pack
+  # The `ci` ruleset check matches this job name.
+  ci:
+    name: ci
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read # checkout
     env:
       CI: true
       HUSKY: 0
@@ -34,6 +36,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - run: pnpm install --frozen-lockfile
 
