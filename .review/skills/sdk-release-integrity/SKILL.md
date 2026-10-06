@@ -1,6 +1,6 @@
 ---
 name: sdk-release-integrity
-description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci or scripts/release, package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
+description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci or scripts/release (and the helpers they import, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
 ---
 
 # CI, release and automation integrity
@@ -59,7 +59,8 @@ version, or `.changeset/`.
 ## 3. Workflow trust
 
 **Applies when** the diff changes `.github/workflows/`, `.github/actions/`,
-`scripts/ci/` or `scripts/release/`.
+`scripts/ci/`, `scripts/release/`, or the helpers `scripts/release/` imports
+(`scripts/paths.ts`, `scripts/generate-midnight-package-version.ts`).
 
 - **Injection (critical).** Attacker-controllable context
   (`github.event.*`, `github.head_ref`, comment bodies, branch names) is bound

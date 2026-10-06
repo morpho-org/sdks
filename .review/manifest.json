@@ -90,7 +90,9 @@
           ".github/workflows/**",
           ".github/actions/**",
           "scripts/ci/**",
-          "scripts/release/**"
+          "scripts/release/**",
+          "scripts/paths.ts",
+          "scripts/generate-midnight-package-version.ts"
         ],
         "lenses": ["security"],
         "minimumRisk": "high",
