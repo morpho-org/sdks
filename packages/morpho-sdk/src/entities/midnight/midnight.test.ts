@@ -69,8 +69,8 @@ import {
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
 import type {
-  CancelAndMakeBorrowParams,
-  CancelAndMakeLendParams,
+  MakeBorrowParams,
+  MakeLendParams,
   MidnightMakerTreeInput,
   SupplyCollateralMakeBorrowParams,
 } from "./types.js";
@@ -1018,12 +1018,12 @@ describe("MorphoMidnight", () => {
     });
   });
 
-  describe("cancelAndMakeLend", () => {
+  describe("makeLend", () => {
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<CancelAndMakeLendParams> = {},
+      overrides: Partial<MakeLendParams> = {},
     ) =>
-      midnightWithHandle(handle).cancelAndMakeLend({
+      midnightWithHandle(handle).makeLend({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(makerOffer({ buy: true })),
         deadline: maxUint256,
@@ -1035,7 +1035,7 @@ describe("MorphoMidnight", () => {
 
     test("error: ChainIdMismatchError", async () => {
       await expect(
-        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeLend({
+        new MorphoMidnight(client, midnightChainId + 1).makeLend({
           accountAddress: midnightAddresses.maker,
           offers: rateTree(makerOffer({ buy: true })),
           deadline: maxUint256,
@@ -1162,16 +1162,16 @@ describe("MorphoMidnight", () => {
     });
   });
 
-  describe("cancelAndMakeBorrow", () => {
+  describe("makeBorrow", () => {
     const market = new MarketParams({
       ...midnightMarket,
       maturity: apiValidMaturity,
     });
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<CancelAndMakeBorrowParams> = {},
+      overrides: Partial<MakeBorrowParams> = {},
     ) =>
-      midnightWithHandle(handle).cancelAndMakeBorrow({
+      midnightWithHandle(handle).makeBorrow({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(makerOffer({ buy: false })),
         deadline: maxUint256,
@@ -1181,7 +1181,7 @@ describe("MorphoMidnight", () => {
 
     test("error: ChainIdMismatchError", async () => {
       await expect(
-        new MorphoMidnight(client, midnightChainId + 1).cancelAndMakeBorrow({
+        new MorphoMidnight(client, midnightChainId + 1).makeBorrow({
           accountAddress: midnightAddresses.maker,
           offers: rateTree(makerOffer({ buy: false })),
           deadline: maxUint256,
@@ -1445,11 +1445,11 @@ describe("MorphoMidnight", () => {
         ...overrides,
       });
 
-    test("behavior: matches cancelAndMakeBorrow with collateral requirements", async () => {
+    test("behavior: matches makeBorrow with collateral requirements", async () => {
       const supplyOutput = await prepare(createHandle());
-      const borrowOutput = await midnightWithHandle(
-        createHandle(),
-      ).cancelAndMakeBorrow(params);
+      const borrowOutput = await midnightWithHandle(createHandle()).makeBorrow(
+        params,
+      );
 
       expect(supplyOutput.buildTx()).toEqual(borrowOutput.buildTx());
       expect(supplyOutput.root).toBe(borrowOutput.root);

@@ -58,11 +58,11 @@ import {
   NonPositiveInputError,
 } from "../../types/index.js";
 import type {
-  CancelAndMakeBorrowParams,
-  CancelAndMakeLendParams,
-  CancelAndMakeOutput,
   GetOffersDataParams,
   GetPositionDataParams,
+  MakeBorrowParams,
+  MakeLendParams,
+  MakeOffersOutput,
   MidnightActionOutput,
   OffersData,
   RedeemParams,
@@ -109,8 +109,8 @@ export type MidnightActions = Pick<
   | "takeBorrow"
   | "supplyCollateralTakeBorrow"
   | "supplyCollateral"
-  | "cancelAndMakeLend"
-  | "cancelAndMakeBorrow"
+  | "makeLend"
+  | "makeBorrow"
   | "supplyCollateralMakeBorrow"
   | "redeem"
   | "repayWithdrawCollateral"
@@ -670,7 +670,7 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
-   * const output = await midnight.cancelAndMakeLend({
+   * const output = await midnight.makeLend({
    *   accountAddress: maker,
    *   offers: { type: "rateV1", entries: [{ offer, rate }] },
    *   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
@@ -680,9 +680,7 @@ export class MorphoMidnight {
    * });
    * ```
    */
-  async cancelAndMakeLend(
-    params: CancelAndMakeLendParams,
-  ): Promise<CancelAndMakeOutput> {
+  async makeLend(params: MakeLendParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
@@ -775,7 +773,7 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
-   * const output = await midnight.cancelAndMakeBorrow({
+   * const output = await midnight.makeBorrow({
    *   accountAddress: maker,
    *   offers: { type: "rateV1", entries: [{ offer, rate }] },
    *   collateral: {
@@ -786,9 +784,7 @@ export class MorphoMidnight {
    * });
    * ```
    */
-  async cancelAndMakeBorrow(
-    params: CancelAndMakeBorrowParams,
-  ): Promise<CancelAndMakeOutput> {
+  async makeBorrow(params: MakeBorrowParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const market =
       params.collateral == null
@@ -921,8 +917,8 @@ export class MorphoMidnight {
    */
   async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): Promise<CancelAndMakeOutput> {
-    return this.cancelAndMakeBorrow(params);
+  ): Promise<MakeOffersOutput> {
+    return this.makeBorrow(params);
   }
 
   /**

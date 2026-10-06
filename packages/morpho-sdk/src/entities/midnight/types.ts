@@ -52,8 +52,8 @@ export interface OffersData {
   readonly payload: Hex;
 }
 
-/** Parameters shared by Midnight cancel-and-make maker flows. */
-export interface CancelAndMakeParams {
+/** Parameters shared by Midnight maker flows. */
+export interface MakeOffersParams {
   /** Maker expected on every offer. Must send the transaction: V2 acts on `msg.sender`. */
   readonly accountAddress: Address;
   readonly offers: MidnightMakerTreeInput;
@@ -64,8 +64,8 @@ export interface CancelAndMakeParams {
   readonly validation?: OfferValidationParams;
 }
 
-/** Parameters for the Midnight cancel-and-make-lend maker flow. */
-export interface CancelAndMakeLendParams extends CancelAndMakeParams {
+/** Parameters for a Midnight lend maker flow. */
+export interface MakeLendParams extends MakeOffersParams {
   readonly loanToken: Address;
   /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
   readonly loanAssets: bigint;
@@ -79,15 +79,14 @@ export interface MakeBorrowCollateral {
   readonly supplies: readonly MidnightCollateralTransfer[];
 }
 
-/** Parameters for the Midnight cancel-and-make-borrow maker flow. */
-export interface CancelAndMakeBorrowParams extends CancelAndMakeParams {
+/** Parameters for a Midnight borrow maker flow. */
+export interface MakeBorrowParams extends MakeOffersParams {
   /** Optional collateral supplied before activation; every offer must target `collateral.market`. */
   readonly collateral?: MakeBorrowCollateral;
 }
 
-/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
-export interface SupplyCollateralMakeBorrowParams
-  extends CancelAndMakeBorrowParams {
+/** Parameters for the Midnight collateral-supplying borrow maker flow. */
+export interface SupplyCollateralMakeBorrowParams extends MakeBorrowParams {
   /** Required collateral supplied before activation; every offer must target `collateral.market`. */
   readonly collateral: MakeBorrowCollateral;
 }
@@ -121,14 +120,14 @@ export type MidnightActionOutput<
 > = ActionOutput<TAction, TSignatures, undefined>;
 
 /**
- * Output returned by cancel-and-make maker flows after offer-tree preparation.
+ * Output returned by Midnight maker flows after offer-tree preparation.
  *
  * Use `groups` and `root` for review UI, send the approval and authorization
  * requirements from `getRequirements()`, then send `buildTx()` from the maker.
  *
  * @example
  * ```ts
- * const output = await midnight.cancelAndMakeBorrow(params);
+ * const output = await midnight.makeBorrow(params);
  * console.log(output.root, output.groups);
  * for (const requirement of await output.getRequirements()) {
  *   await walletClient.sendTransaction(requirement);
@@ -136,7 +135,7 @@ export type MidnightActionOutput<
  * await walletClient.sendTransaction(output.buildTx());
  * ```
  */
-export interface CancelAndMakeOutput
+export interface MakeOffersOutput
   extends MidnightActionOutput<MidnightCancelAndMakeAction> {
   readonly groups: readonly Hex[];
   readonly root: Hex;

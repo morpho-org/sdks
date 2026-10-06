@@ -9,8 +9,8 @@ still need it.
 
 | v6 | v7 |
 | --- | --- |
-| `makeLend` | `cancelAndMakeLend` |
-| `makeBorrow` | `cancelAndMakeBorrow` |
+| `makeLend` | `makeLend` (retyped) |
+| `makeBorrow` | `makeBorrow` (retyped) |
 | `supplyCollateralMakeBorrow` | `supplyCollateralMakeBorrow` (retyped) |
 
 One MidnightBundlesV2 call now cancels the groups you are replacing, optionally supplies borrow
@@ -18,10 +18,10 @@ collateral, authorizes the ratifier, activates the new root, and publishes the p
 cancelled group was filled beyond its `maxConsumed` before the transaction lands, the whole call
 reverts and nothing is published.
 
-If `collateral` is provided to `cancelAndMakeBorrow`, its `supplies` list must contain at least one
-entry. An explicit empty list throws `EmptyMidnightCollateralSuppliesError`; omit `collateral` when
-no collateral is supplied. `supplyCollateralMakeBorrow` remains as a thin wrapper around
-`cancelAndMakeBorrow` and requires `collateral`.
+If `collateral` is provided to `makeBorrow`, its `supplies` list must contain at least one entry.
+An explicit empty list throws `EmptyMidnightCollateralSuppliesError`; omit `collateral` when no
+collateral is supplied. `supplyCollateralMakeBorrow` remains as a thin wrapper around `makeBorrow`
+and requires `collateral`.
 
 ```ts
 // v6
@@ -29,7 +29,7 @@ const output = await midnight.makeLend({ accountAddress, offers, loanToken, loan
 const tx = output.buildTx(await signRequirements(await output.getRequirements()));
 
 // v7: repost over previousGroup; pass `cancellations: []` for a fresh publication
-const output = await midnight.cancelAndMakeLend({
+const output = await midnight.makeLend({
   accountAddress,
   offers,
   cancellations: [{ group: previousGroup, maxConsumed: 0n }],
@@ -53,7 +53,7 @@ await midnight.supplyCollateralMakeBorrow({
 });
 ```
 
-The wrapper returns `CancelAndMakeOutput`, whose transaction action is
+The wrapper returns `MidnightMakeOffersOutput`, whose transaction action is
 `midnightCancelAndMake`. Its required `collateral: { market, supplies }` replaces the v6
 `market`, `collateralAssets`, and `collateralIndex` inputs; `reservedCollateralAssets` is removed.
 An empty `supplies` list throws `EmptyMidnightCollateralSuppliesError`.
@@ -81,15 +81,15 @@ address.
 
 | v6 | v7 |
 | --- | --- |
-| `MidnightMakeOffersParams` | `MidnightCancelAndMakeOffersParams` |
-| `MidnightMakeLendParams` | `MidnightCancelAndMakeLendParams` |
-| — | `MidnightCancelAndMakeBorrowParams` (optional `collateral`) |
+| `MidnightMakeOffersParams` | `MidnightMakeOffersParams` (retyped) |
+| `MidnightMakeLendParams` | `MidnightMakeLendParams` (retyped) |
+| — | `MidnightMakeBorrowParams` (optional `collateral`) |
 | `MidnightSupplyCollateralMakeBorrowParams` | `MidnightSupplyCollateralMakeBorrowParams` (required `collateral`) |
-| `MidnightMakeOffersOutput` | `MidnightCancelAndMakeOutput` |
+| `MidnightMakeOffersOutput` | `MidnightMakeOffersOutput` (retyped) |
 | — | `MidnightMakeBorrowCollateral` |
 | — | `MidnightOfferPublication` and `MidnightCancelAndMakeParams` |
 
-- `MidnightCancelAndMakeBorrowParams` keeps `collateral` optional and uses
+- `MidnightMakeBorrowParams` keeps `collateral` optional and uses
   `MidnightMakeBorrowCollateral` for its `market` and `supplies`. The wrapper's
   `MidnightSupplyCollateralMakeBorrowParams` makes that same `collateral` required. These nested
   supplies replace the v6 `market`, `collateralAssets`, and `collateralIndex` inputs;
@@ -110,8 +110,7 @@ address.
   `getSetterRatifierRatifyRootRequirement`.
 - Types: `MempoolSubmitOffersAction`, `SetterRatifierRatifyRootAction`,
   `MidnightOfferRootSignatureAction`, `MidnightOfferRootSignatureArgs`,
-  `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`,
-  `MidnightMakeLendParams`, `MidnightMakeOffersParams`, `MidnightMakeOffersOutput`.
+  `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`.
 - Helpers and errors: `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
   `selectRequirementSignatures`, `MissingMidnightOfferRootSignatureError`,
   `MidnightOfferRootMismatchError`, `MidnightOfferRootOwnerMismatchError`,

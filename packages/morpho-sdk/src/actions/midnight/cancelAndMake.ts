@@ -183,8 +183,8 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  *
  * The contract does not check that `payload` matches `root`; callers must derive both from the
- * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
- * `cancelAndMakeBorrow(...)`, which do so and resolve approvals and authorization.
+ * same tree. Prefer `client.morpho.midnight(chainId).makeLend(...)` or
+ * `makeBorrow(...)`, which do so and resolve approvals and authorization.
  *
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.cancellations - Offer groups to cancel and their consumption ceilings.
