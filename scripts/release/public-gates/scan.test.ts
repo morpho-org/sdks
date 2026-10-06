@@ -416,6 +416,12 @@ test.each([
   `const wallets = ["${REAL_KEY}"].map(privateKeyToAccount);`,
   `const users = ["${REAL_KEY}"].map((k) => privateKeyToAccount(k));`,
   `const raw = ["${REAL_KEY}"];\nconst wallets = raw.map(privateKeyToAccount);`,
+  `const deployer = "${REAL_KEY}";\nconst CFG = { deployer };\nprivateKeyToAccount(CFG.deployer);`,
+  `const CFG = {};\nCFG.deployer = "${REAL_KEY}";\nprivateKeyToAccount(CFG.deployer);`,
+  `const CFG = { "deployer": "${REAL_KEY}" };\nprivateKeyToAccount(CFG.deployer);`,
+  `const SIGNERS = { a: "${REAL_KEY}" };\nObject.values(SIGNERS).map(privateKeyToAccount);`,
+  `const LIST = "${REAL_KEY}";\nLIST.split(",").map(privateKeyToAccount);`,
+  `const DEPLOYERS = { 1: ["${REAL_KEY}"] };\nDEPLOYERS[chain].map(privateKeyToAccount);`,
 ])("flag a key reaching a sink or reassignment in %s", (content) => {
   expect(scanFiles([file("a.ts", content)])).toEqual([
     expect.objectContaining({ rule: "wallet-key-list" }),
@@ -657,6 +663,17 @@ test.each([
   expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
 
+test("fail closed on a mapped list longer than 4096 characters", () => {
+  const content = `const w = [${" ".repeat(5000)}"${REAL_KEY}"].map(privateKeyToAccount);`;
+  expect(scanFiles([file("a.ts", content)])).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        match: expect.stringContaining("list longer than 4096 characters"),
+      }),
+    ]),
+  );
+});
+
 describe("parsePolicy", () => {
   const valid = {
     path: "a.md",
@@ -674,6 +691,7 @@ describe("parsePolicy", () => {
   test.each([
     ["no blockedTerms", { exceptions: [] }],
     ["an empty blocked term", { blockedTerms: [" "], exceptions: [] }],
+    ["a padded blocked term", { blockedTerms: ["Acme "], exceptions: [] }],
     ["no exceptions", { blockedTerms: [] }],
     [
       "an exception without a reason",
@@ -816,6 +834,23 @@ describe("evaluate", () => {
     const { errors } = evaluate({ ...base, blocking, tarballs: 1 });
     expect(errors.join("\n")).not.toContain(token);
   });
+
+  test.each([
+    { what: "a token", name: `ghp_${"aB3".repeat(12)}`, leak: "ghp_aB3" },
+    {
+      what: "a list opener",
+      name: `pk=0x${"ab".repeat(32)}`,
+      leak: "ab".repeat(8),
+    },
+  ])(
+    "redacts $what in a file name for every finding on the file",
+    ({ name, leak }) => {
+      const blocking = scanFiles([file(`${name}.ts`, "SDK-1")]);
+      expect(blocking.length).toBeGreaterThan(1);
+      const { errors } = evaluate({ ...base, blocking, tarballs: 1 });
+      expect(errors.join("\n")).not.toContain(leak);
+    },
+  );
 
   test("fails on an unused exception when the tree is scanned", () => {
     expect(evaluate({ ...base, unused: [stale], treeFiles: 3 }).exitCode).toBe(

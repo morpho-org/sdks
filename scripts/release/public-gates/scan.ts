@@ -195,13 +195,14 @@ export function parsePolicy(
     !("blockedTerms" in policy) ||
     !Array.isArray(policy.blockedTerms) ||
     !policy.blockedTerms.every(
-      (term: unknown) => typeof term === "string" && term.trim() !== "",
+      (term: unknown) =>
+        typeof term === "string" && term !== "" && term === term.trim(),
     ) ||
     !("exceptions" in policy) ||
     !Array.isArray(policy.exceptions)
   ) {
     throw new Error(
-      `"${policyPath}" needs a "blockedTerms" array of non-empty strings and an "exceptions" array.`,
+      `"${policyPath}" needs a "blockedTerms" array of non-empty strings with no surrounding spaces and an "exceptions" array.`,
     );
   }
   const seen = new Set<string>();
@@ -303,6 +304,8 @@ export function scanFiles(
     // mapped through a sink (`[A, "0x…"].map(privateKeyToAccount)`,
     // `keys.map((k) => privateKeyToAccount(k))`) counts as passed to it.
     const assigned: [RuleId, string, number][] = [];
+    // Mapped lists whose start is out of reach: reported, as the scan fails closed.
+    const overlong: [RuleId, string, number][] = [];
     for (const [rule, sink] of [
       ["wallet-key-list", KEY_SINK],
       ["mnemonic-list", MNEMONIC_SINK],
@@ -342,26 +345,60 @@ export function scanFiles(
       for (const { 0: call, index } of source.matchAll(mapped)) {
         let end = index;
         while (end > 0 && /\s/.test(source[end - 1] ?? "")) end--;
-        if (source[end - 1] !== "]") {
-          names.push(
-            ...references(
-              /(?<![\w$.])[a-z_$][\w$]*(?:\s*\??\.\s*[a-z_$][\w$]*)*$/i.exec(
-                source.slice(Math.max(0, end - 200), end),
-              )?.[0] ?? "",
-            ),
-          );
+        // Walk back over the whole receiver: names, `.`, calls and indexes, as
+        // `Object.values(SIGNERS)`, `LIST.split(",")` or `DEPLOYERS[chain]`. A `[`
+        // with no name, `)` or `]` before it opens a list literal.
+        const floor = Math.max(0, end - 4096);
+        let start = end;
+        let list: number | undefined;
+        let overflow = false;
+        for (;;) {
+          const close = source[start - 1];
+          if (close === ")" || close === "]") {
+            const opens = close === ")" ? "(" : "[";
+            let open = start - 1;
+            for (let depth = 0; open >= floor; open--) {
+              if (source[open] === close) depth++;
+              else if (source[open] === opens && --depth === 0) break;
+            }
+            if (open < floor) {
+              overflow = true;
+              break;
+            }
+            let before = open;
+            while (before > 0 && /\s/.test(source[before - 1] ?? "")) before--;
+            start = open;
+            if (/[\w$)\]]/.test(source[before - 1] ?? "")) {
+              start = before;
+              continue;
+            }
+            if (close === "]") list = open;
+            break;
+          }
+          if (start > floor && /[\w$.?]/.test(close ?? "")) {
+            start--;
+            continue;
+          }
+          break;
+        }
+        if (overflow) {
+          overlong.push([rule, call, index]);
           continue;
         }
-        // Walk back to the list's matching `[`.
-        let open = end - 1;
-        for (let depth = 0; open >= Math.max(0, end - 4096); open--) {
-          if (source[open] === "]") depth++;
-          else if (source[open] === "[" && --depth === 0) break;
+        if (list === start) {
+          names.push(...references(source.slice(start + 1, end - 1)));
+          // `valueSecrets` starts at `index + opener.length`: the list's `[`.
+          assigned.push([rule, call, start - call.length]);
+          continue;
         }
-        if (open < Math.max(0, end - 4096)) continue;
-        names.push(...references(source.slice(open + 1, end - 1)));
-        // `valueSecrets` starts at `index + opener.length`: the list's `[`.
-        assigned.push([rule, call, open - call.length]);
+        const receiver = source.slice(start, end);
+        names.push(
+          ...references(receiver),
+          // Roots too: `LIST` in `LIST.split(",")`.
+          ...[...receiver.matchAll(/(?<![\w$.])[a-z_$][\w$]*/gi)].map(
+            ([root]) => ({ name: root, member: false }),
+          ),
+        );
       }
       for (let hop = 0; hop < 4 && names.length > 0; hop++) {
         const next: typeof names = [];
@@ -380,9 +417,26 @@ export function scanFiles(
             assigned.push([rule, opener, index]);
             next.push(...references(span(opener, index + opener.length)));
           }
+          // A shorthand property (`{ deployer }`) holds the plain name's value.
+          if (
+            member &&
+            new RegExp(String.raw`[{,]\s*${escaped}\s*[,}]`).test(source)
+          ) {
+            next.push({ name: ident, member: false });
+          }
         }
         names = next;
       }
+    }
+    for (const [rule, call, at] of overlong) {
+      const line = lineStarts.findLastIndex((start) => start <= at) + 1;
+      fileFindings.push({
+        path,
+        line,
+        rule,
+        match: `${call}…(list longer than 4096 characters)`,
+        ...marker,
+      });
     }
     for (const [rule, pattern] of rules) {
       const matches = [
@@ -715,10 +769,17 @@ export function evaluate(result: {
     const shown = secret
       ? `${JSON.stringify(match.slice(0, 4))}… (${match.length} characters, redacted)`
       : JSON.stringify(match);
-    // A secret in a file name would otherwise be printed in the path.
-    const where = secret
-      ? path.replaceAll(match, `${match.slice(0, 4)}…`)
-      : path;
+    // A credential in a file name would otherwise be printed with every finding
+    // on the file, and a `*-list` finding's match is only its opener.
+    let where = path;
+    for (const id of SECRET_RULES) {
+      if (id === "blocked-term") continue;
+      where = where.replaceAll(RULES[id], (found) => `${found.slice(0, 4)}…`);
+    }
+    where = where.replaceAll(
+      /(?:0x)?[0-9a-f]{32,}|[a-z]+(?:[ \t_-]+[a-z]+){11,}/gi,
+      (found) => `${found.slice(0, 4)}…`,
+    );
     errors.push(`${where}:${line}: ${rule}: ${shown}`);
   }
   // Exceptions apply to tree findings only, so stale exceptions are reported on
