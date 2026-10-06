@@ -22,6 +22,9 @@ const KEY_NAME =
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
 // `hdKeyToAccount`, and ethers' `new Wallet(…)`.
 const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*Wallet\(`;
+// A CLI flag with a space-separated value (`--private-key 0x…`), also across a
+// shell line continuation.
+const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]+|\\\n\s*)`;
 const MNEMONIC_NAME = "(?:mnemonic|seed[_-]?phrase)";
 const MNEMONIC_SINK = String.raw`mnemonicToAccount\(`;
 
@@ -51,7 +54,7 @@ const RULES = {
   // `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`); `\"`
   // catches code embedded in JSON.
   "wallet-key": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK}|${KEY_FLAG})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
     "gi",
   ),
   // The same names and sinks, plus Hardhat's `accounts`, as the start of a whole
@@ -72,7 +75,7 @@ const RULES = {
   ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic: new RegExp(
-    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK})\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}[ \t]+)\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
     "gi",
   ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:
@@ -285,8 +288,9 @@ export function scanFiles(
  * items of a YAML block list under the name. The value ends at a `,`, `;` or
  * closing bracket outside any nesting or string, or at a line break unless the
  * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
- * start of a line runs to the end of the line, since its value is unquoted. Line
- * and block comments are skipped, so a `[` in a comment can't end it early. YAML
+ * start of a line runs to the end of the line, since its value is unquoted.
+ * Whitespace-preceded `//` and `#` comments and `/* *\/` comments are skipped,
+ * so a closing bracket, `,` or `;` in a comment can't end the value early. YAML
  * lists may hold blank and `#` comment lines.
  *
  * @param source - Whole file text.
@@ -327,8 +331,7 @@ export function valueSecrets(
       continue;
     }
     if (
-      char === "/" &&
-      source[end + 1] === "/" &&
+      (char === "#" || (char === "/" && source[end + 1] === "/")) &&
       !/\S/.test(source[end - 1] ?? " ")
     ) {
       const next = source.indexOf("\n", end);

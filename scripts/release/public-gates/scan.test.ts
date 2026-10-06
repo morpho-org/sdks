@@ -305,6 +305,9 @@ test.each([
   `private_keys: # deployers\n  - ${REAL_KEY}\n`,
   `private_keys:\n  - ${ANVIL_KEY}\n\n  - ${REAL_KEY}\n`,
   `const accounts = ["${ANVIL_KEY}", "${REAL_KEY}"];`,
+  `PRIVATE_KEY: # anvil, then real\n  "${REAL_KEY}"`,
+  `accounts: /* deployer, keeper */ ["${REAL_KEY}"],`,
+  `const pk = env.PK\n  .trim() || "${REAL_KEY}";`,
 ])("flag a real key listed after a test key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
@@ -312,6 +315,21 @@ test.each([
       match: expect.stringContaining(REAL_KEY.slice(2)),
     }),
   ]);
+});
+
+test.each([
+  `forge script D.s.sol --private-key ${REAL_KEY} --broadcast`,
+  `cast wallet address --private-key "${REAL_KEY}"`,
+  `forge script D.s.sol \\\n  --private-key ${REAL_KEY}`,
+])("flag a key passed as a CLI flag in %s", (line) => {
+  expect(scanFiles([file("a.sh", line)])).toEqual([
+    expect.objectContaining({ rule: "wallet-key" }),
+  ]);
+});
+
+test("ignore the Anvil default key passed as a CLI flag", () => {
+  const line = `cast send --private-key ${ANVIL_KEY} 0x0`;
+  expect(scanFiles([file("a.sh", line)])).toEqual([]);
 });
 
 const HEX = `d${"1".repeat(63)}`;
@@ -418,6 +436,7 @@ test.each([
   `process.env.MNEMONIC ?? "${REAL_MNEMONIC}"`,
   `env["MNEMONIC"] || "${REAL_MNEMONIC}"`,
   `{"code":"const MNEMONIC = \\"${REAL_MNEMONIC}\\";"}`,
+  `anvil --mnemonic "${REAL_MNEMONIC}"`,
 ])("flag a mnemonic in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({ rule: "mnemonic" }),
