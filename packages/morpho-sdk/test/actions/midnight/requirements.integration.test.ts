@@ -443,7 +443,7 @@ describe("Midnight requirements on fork", () => {
       marketData,
       accountAddress: client.account.address,
       collateralSupplies: [{ collateralIndex: 0n, assets: collateralAssets }],
-      target: { type: "units", units: loanAssets, minSellerAssets: 0n },
+      target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });

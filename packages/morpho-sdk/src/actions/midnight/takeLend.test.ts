@@ -53,6 +53,8 @@ describe("midnightTakeLend", () => {
       takeableOffers: 1,
       maxContinuousFee: 7n,
       deadline: maxUint256,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
     });
     expect(decoded.functionName).toBe(
       "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
