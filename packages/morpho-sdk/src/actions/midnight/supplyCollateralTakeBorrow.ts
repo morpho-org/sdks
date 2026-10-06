@@ -179,6 +179,8 @@ export const midnightSupplyCollateralTakeBorrow = (
         ),
         takeableOffers: params.takeableOffers.length,
         deadline: params.deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
     },
   });

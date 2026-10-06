@@ -53,6 +53,8 @@ describe("midnightTakeBorrow", () => {
       receiver: midnightAddresses.taker,
       takeableOffers: 1,
       deadline: maxUint256,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
     });
     expect(decoded.functionName).toBe(
       "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
