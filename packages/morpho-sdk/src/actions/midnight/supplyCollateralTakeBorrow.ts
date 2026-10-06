@@ -10,7 +10,7 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import { midnightBundlesV2Sell } from "./bundlesV2Take.js";
+import { midnightTake } from "./take.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 
 /** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
@@ -96,7 +96,8 @@ export const midnightSupplyCollateralTakeBorrow = (
     expectedBuy: true,
   });
 
-  let tx = midnightBundlesV2Sell({
+  let tx = midnightTake({
+    side: "sell",
     ...params,
     reduceOnly: false,
     offerFills: params.takeableOffers,

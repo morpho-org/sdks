@@ -10,11 +10,11 @@ import type {
   MidnightTakeWithdrawAction,
   Transaction,
 } from "../../types/index.js";
-import {
-  type MidnightReferralFeeParams,
-  midnightBundlesV2Sell,
-} from "./bundlesV2Take.js";
-import type { MidnightTakeableOffer } from "./types.js";
+import { midnightTake } from "./take.js";
+import type {
+  MidnightReferralFeeParams,
+  MidnightTakeableOffer,
+} from "./types.js";
 
 /** Parameters for encoding a Midnight credit withdrawal that redeems first, then sells to offers. */
 export interface MidnightTakeWithdrawParams extends MidnightReferralFeeParams {
@@ -88,7 +88,8 @@ export const midnightTakeWithdraw = (
     expectedBuy: true,
   });
 
-  let tx = midnightBundlesV2Sell({
+  let tx = midnightTake({
+    side: "sell",
     ...params,
     reduceOnly: true,
     offerFills: params.takeableOffers,

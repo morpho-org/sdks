@@ -12,7 +12,7 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import { midnightBundlesV2Buy } from "./bundlesV2Take.js";
+import { midnightTake } from "./take.js";
 
 /** Parameters for encoding a direct Midnight repayment and/or collateral withdrawal. */
 export interface MidnightRepayWithdrawCollateralParams {
@@ -109,7 +109,8 @@ export const midnightRepayWithdrawCollateral = (
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   }
 
-  let tx = midnightBundlesV2Buy({
+  let tx = midnightTake({
+    side: "buy",
     chainId: params.chainId,
     market: params.market,
     target:
