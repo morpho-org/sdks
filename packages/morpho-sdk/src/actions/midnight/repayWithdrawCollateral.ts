@@ -1,7 +1,17 @@
-import { type MarketInput, MarketUtils } from "@morpho-org/midnight-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256 } from "viem";
+import {
+  type MarketInput,
+  MarketUtils,
+  midnightBundlesV2Abi,
+} from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import {
+  type Address,
+  encodeFunctionData,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   InputExceedsMaxError,
@@ -9,10 +19,10 @@ import {
   type MidnightCollateralTransfer,
   type MidnightRepay,
   type MidnightRepayWithdrawCollateralAction,
+  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import { midnightTake } from "./take.js";
 
 /** Parameters for encoding a direct Midnight repayment and/or collateral withdrawal. */
 export interface MidnightRepayWithdrawCollateralParams {
@@ -109,26 +119,45 @@ export const midnightRepayWithdrawCollateral = (
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   }
 
-  let tx = midnightTake({
-    side: "buy",
-    chainId: params.chainId,
-    market: params.market,
-    target:
+  if (repay.type === "assets" && repay.assets < 0n) {
+    throw new NegativeInputError("repay.assets", repay.assets);
+  }
+  validateDeadline(params.deadline);
+  const market = MarketUtils.toStruct(params.market);
+  const args = [
+    true, // reduceOnly
+    true, // repayEnabled
+    [], // offerFills
+    params.collateralWithdrawals.map(({ collateralIndex, assets }) => ({
+      collateralIndex,
+      assets,
+    })), // collateralWithdrawals
+    params.collateralReceiver, // collateralReceiver
+    0n, // referralFeePct
+    zeroAddress, // referralFeeRecipient
+    0n, // maxContinuousFee
+    params.deadline, // deadline
+    zeroAddress, // wrappedNative
+  ] as const;
+
+  let tx = {
+    to: getChainAddress(params.chainId, "midnightBundlesV2"),
+    value: 0n,
+    data:
       repay.type === "assets"
-        ? { type: "assets", assets: repay.assets, minUnits: repay.assets }
-        : {
-            type: "units",
-            units: maxUint256,
-            maxBuyerAssets: repay.maxBuyerAssets,
-          },
-    reduceOnly: true,
-    repayEnabled: true,
-    offerFills: [],
-    collateralWithdrawals: params.collateralWithdrawals,
-    collateralReceiver: params.collateralReceiver,
-    maxContinuousFee: 0n,
-    deadline: params.deadline,
-  });
+        ? encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+            args: [market, repay.assets, repay.assets, ...args],
+          })
+        : encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
+            args: [market, maxUint256, repay.maxBuyerAssets, ...args],
+          }),
+  };
 
   if (params.metadata) {
     tx = addTransactionMetadata(tx, params.metadata);

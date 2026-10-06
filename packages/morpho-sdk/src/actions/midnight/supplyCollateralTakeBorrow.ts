@@ -1,16 +1,21 @@
-import { MarketUtils } from "@morpho-org/midnight-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  validateDeadline,
+  validateReferralFee,
+} from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   EmptyMidnightCollateralSuppliesError,
   type MidnightCollateralTransfer,
   type MidnightSupplyCollateralTakeBorrowAction,
+  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import { midnightTake } from "./take.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 
 /** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
@@ -96,12 +101,60 @@ export const midnightSupplyCollateralTakeBorrow = (
     expectedBuy: true,
   });
 
-  let tx = midnightTake({
-    side: "sell",
-    ...params,
-    reduceOnly: false,
-    offerFills: params.takeableOffers,
-  });
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
+    }
+    if (target.maxUnits <= 0n) {
+      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
+    }
+  } else {
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.minSellerAssets < 0n) {
+      throw new NegativeInputError(
+        "target.minSellerAssets",
+        target.minSellerAssets,
+      );
+    }
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  const market = MarketUtils.toStruct(params.market);
+  const args = [
+    false, // reduceOnly
+    params.receiver, // receiver
+    params.collateralSupplies.map(({ collateralIndex, assets }) => ({
+      collateralIndex,
+      assets,
+    })), // collateralSupplies
+    params.takeableOffers, // offerFills
+    referralFeePct, // referralFeePct
+    referralFeeRecipient, // referralFeeRecipient
+    params.deadline, // deadline
+    zeroAddress, // wrappedNative
+  ] as const;
+
+  let tx = {
+    to: getChainAddress(params.chainId, "midnightBundlesV2"),
+    value: 0n,
+    data:
+      target.type === "assets"
+        ? encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
+            args: [market, target.assets, target.maxUnits, ...args],
+          })
+        : encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget",
+            args: [market, target.units, target.minSellerAssets, ...args],
+          }),
+  };
   if (params.metadata) {
     tx = addTransactionMetadata(tx, params.metadata);
   }
