@@ -13,6 +13,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import {
   main,
+  parseTarballManifest,
   verifyManifestIdentity,
   verifyPublishConfig,
   verifyTarballManifest,
@@ -187,6 +188,29 @@ describe("verifyManifestIdentity", () => {
         `Invalid version in manifest: expected a semver version, got ${JSON.stringify(version)}.`,
       );
     }
+  });
+});
+
+describe("parseTarballManifest", () => {
+  test("behavior: parses a JSON object", () => {
+    expect(
+      parseTarballManifest('{"name":"pkg","version":"1.0.0"}', "package.json"),
+    ).toEqual({ name: "pkg", version: "1.0.0" });
+  });
+
+  test.each(["null", "[]", "1", '"pkg"'])(
+    "error: rejects the non-object %s",
+    (text) => {
+      expect(() => parseTarballManifest(text, "pkg/package.json")).toThrow(
+        'Manifest at "pkg/package.json" is not a JSON object.',
+      );
+    },
+  );
+
+  test("error: propagates malformed JSON", () => {
+    expect(() => parseTarballManifest("{", "package.json")).toThrow(
+      SyntaxError,
+    );
   });
 });
 
