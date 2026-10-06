@@ -77,9 +77,10 @@ under a generated path.
 **Applies when** the diff adds or changes a fallback, retry or bypass.
 
 Check which failures may trigger it, what state it restores, and what the
-caller is told. In `evm-simulation`, only `ExternalServiceError` permits a
-backend fallback or bypass; `SimulationRevertedError` propagates as a bundle
-failure, and domain errors stay under `SimulationPackageError`.
+caller is told. `evm-simulation` has no fallback backend: only
+`ExternalServiceError` may be bypassed by callers, `SimulationRevertedError`
+propagates as a bundle failure, and domain errors stay under
+`SimulationPackageError`.
 
 ## 5. Secrets and untrusted input
 

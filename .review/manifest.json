@@ -49,6 +49,7 @@
           "packages/blue-sdk-viem/src/**",
           "packages/midnight-sdk/src/**",
           "packages/wdk-protocol-lending-morpho-evm/src/**",
+          "packages/evm-simulation/src/**",
           "packages/morpho-ts/src/**"
         ],
         "lenses": ["behavior", "security"],

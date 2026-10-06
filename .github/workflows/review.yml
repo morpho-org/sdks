@@ -20,6 +20,13 @@ permissions:
 
 jobs:
   lupin:
+    # Fork and Dependabot PRs receive no secrets (.github/workflows/AGENTS.md).
+    # lupin.yml also ignores them; this keeps the secrets out of the call.
+    if: >-
+      github.event_name != 'pull_request_target' || (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.login != 'dependabot[bot]'
+      )
     # The ceiling for lupin.yml's jobs; each job requests only its part.
     permissions:
       actions: write
