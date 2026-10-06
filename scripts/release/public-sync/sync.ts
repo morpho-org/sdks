@@ -16,7 +16,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import type { PackageIdentity } from "../../publish/pack.ts";
+import type { TarballIdentity } from "../../publish/read-tarball-identity.ts";
 import { isMain, readRequiredEnv, reportCliError } from "../../workflow.ts";
 import { listReleasedPackages } from "../public-gates/detect-release.ts";
 import { verifyArtifact } from "../public-gates/verify-artifact.ts";
@@ -54,7 +54,7 @@ export interface ReleaseMessage {
  * @throws If no package is released or a hash is not a full SHA-1.
  */
 export function buildReleaseMessage(release: {
-  readonly packages: readonly PackageIdentity[];
+  readonly packages: readonly TarballIdentity[];
   readonly sourceCommit: string;
   readonly treeHash: string;
 }): ReleaseMessage {
@@ -188,7 +188,7 @@ export interface SyncOptions {
   readonly manifest: PublicTreeManifest;
   /** Reads a file of the public tree by its public path. */
   readonly readFile: (path: string) => Buffer;
-  readonly packages: readonly PackageIdentity[];
+  readonly packages: readonly TarballIdentity[];
   /** Whether `ancestor` is an ancestor of (or equal to) `descendant` in internal history. */
   readonly isAncestor: (ancestor: string, descendant: string) => boolean;
   readonly log?: (message: string) => void;
