@@ -93,73 +93,45 @@ describe("releaseTag", () => {
 
 describe("releaseCommit", () => {
   test("returns the commit that set the current version, not a later one", () => {
-    const root = repoWith({});
-    const git = (...args: string[]) =>
-      execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
-    const commit = (version: string, extra: string) => {
-      mkdirSync(join(root, "packages/a"), { recursive: true });
-      writeFileSync(
-        join(root, "packages/a/package.json"),
-        JSON.stringify({ name: "a", version, description: extra }),
-      );
-      git("add", "-A");
-      git(
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-qm",
-        version,
-      );
-      return git("rev-parse", "HEAD");
-    };
-    git("init", "-q");
-    commit("1.0.0", "");
-    const release = commit("1.1.0", "");
+    const { root, commit } = historyRepo();
+    commit("1.0.0");
+    const release = commit("1.1.0");
     commit("1.1.0", "edited later");
-    const pkg = { dir: "packages/a", name: "a", version: "1.1.0" };
 
-    expect(releaseCommit(root, pkg)).toBe(release);
-    expect(() => releaseCommit(root, { ...pkg, version: "9.0.0" })).toThrow(
+    expect(releaseCommit(root, pkgAt("1.1.0"))).toBe(release);
+    expect(() => releaseCommit(root, pkgAt("9.0.0"))).toThrow(
       "No commit sets a to 9.0.0.",
     );
   });
 
   test("returns the root commit when it sets the version", () => {
-    const { commit } = historyRepo();
-    const root = commit("1.0.0");
-    expect(releaseCommit(dirs.at(-1) ?? "", pkgAt("1.0.0"))).toBe(root);
+    const { root, commit } = historyRepo();
+    const first = commit("1.0.0");
+    expect(releaseCommit(root, pkgAt("1.0.0"))).toBe(first);
   });
 
   test("returns the commit that added the package after the root commit", () => {
-    const { git, commit } = historyRepo();
+    const { root, git, commit } = historyRepo();
     git(...COMMITTER, "commit", "-q", "--allow-empty", "-m", "root");
     const added = commit("1.0.0");
-    expect(releaseCommit(dirs.at(-1) ?? "", pkgAt("1.0.0"))).toBe(added);
+    expect(releaseCommit(root, pkgAt("1.0.0"))).toBe(added);
   });
 
   test("returns the merge commit for a version set on a side branch", () => {
-    const { git, commit } = historyRepo();
+    const { root, git, commit } = historyRepo();
     commit("1.0.0");
     git("checkout", "-qb", "side");
     commit("1.1.0");
     git("checkout", "-q", "main");
     git(...COMMITTER, "commit", "-q", "--allow-empty", "-m", "unrelated");
     git(...COMMITTER, "merge", "-q", "--no-ff", "-m", "merge", "side");
-    expect(releaseCommit(dirs.at(-1) ?? "", pkgAt("1.1.0"))).toBe(
-      git("rev-parse", "HEAD"),
-    );
+    expect(releaseCommit(root, pkgAt("1.1.0"))).toBe(git("rev-parse", "HEAD"));
   });
 
   test("fails on a malformed manifest in history", () => {
-    const { commit } = historyRepo();
+    const { root, commit } = historyRepo();
     commit("not json");
-    expect(() => releaseCommit(dirs.at(-1) ?? "", pkgAt("1.0.0"))).toThrow(
-      SyntaxError,
-    );
+    expect(() => releaseCommit(root, pkgAt("1.0.0"))).toThrow(SyntaxError);
   });
 });
 
@@ -194,5 +166,5 @@ function historyRepo() {
     git(...COMMITTER, "commit", "-qm", version);
     return git("rev-parse", "HEAD");
   };
-  return { git, commit };
+  return { root, git, commit };
 }
