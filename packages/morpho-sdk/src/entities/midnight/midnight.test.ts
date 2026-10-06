@@ -536,6 +536,55 @@ describe("MorphoMidnight", () => {
       ]);
     });
 
+    test("behavior: requests one MidnightBundlesV2 approval per collateral token", async () => {
+      const secondCollateralToken = getAddress(
+        "0x0000000000000000000000000000000000007100",
+      );
+      const collateralMarket = new MarketParams({
+        ...midnightMarket,
+        collateralParams: [
+          ...midnightMarket.collateralParams,
+          {
+            ...midnightMarket.collateralParams[0]!,
+            token: secondCollateralToken,
+          },
+        ],
+      });
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockAllowance({ handle, token: secondCollateralToken, result: 0n });
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
+        ...params,
+        marketData: new Market({ ...marketData(), params: collateralMarket }),
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 2_000n },
+          { collateralIndex: 1n, assets: 3_000n },
+        ],
+        takeableOffers: [
+          midnightApiTake({ buy: true, market: collateralMarket }),
+        ],
+      });
+
+      expect(
+        (await output.getRequirements()).map(({ action }) => action),
+      ).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 2_000n },
+        },
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 3_000n },
+        },
+      ]);
+    });
+
     test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({
