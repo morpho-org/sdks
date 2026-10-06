@@ -93,6 +93,18 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         target: { type: "assets", assets: 1_000n, maxUnits: 0n },
       }),
     ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: 0n, maxUnits: 1_100n },
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        target: { type: "units", units: 0n, minSellerAssets: 0n },
+      }),
+    ).toThrow(NonPositiveInputError);
   });
 
   test("behavior: encodes units target, receiver and referral fee", () => {
