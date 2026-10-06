@@ -84,6 +84,16 @@ describe("listReleasedPackages", () => {
     expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([]);
   });
 
+  test("lists a package renamed at an unchanged version", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0" } },
+      { a: { name: "@x/b", version: "1.0.0" } },
+    ]);
+    expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([
+      { name: "@x/b", version: "1.0.0" },
+    ]);
+  });
+
   test("compares with an explicit base, so a bump before the head commit counts", () => {
     const repo = repoWith([
       { a: { name: "@x/a", version: "1.0.0" } },

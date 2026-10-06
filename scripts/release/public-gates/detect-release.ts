@@ -80,10 +80,16 @@ export function listReleasedPackages(options: {
     }
     return versions;
   });
-  return [...after]
-    .filter(([path, pkg]) => before.get(path)?.version !== pkg.version)
-    .map(([, pkg]) => pkg)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    [...after]
+      // A rename at an unchanged version is a new npm package too.
+      .filter(([path, pkg]) => {
+        const previous = before.get(path);
+        return previous?.name !== pkg.name || previous.version !== pkg.version;
+      })
+      .map(([, pkg]) => pkg)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 }
 
 /**
