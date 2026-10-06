@@ -280,7 +280,29 @@ describe("generatePublicSnapshot", () => {
     ).toThrow("has a control character");
   });
 
-  test("error: a --sha starting with a dash is read as a revision, not an option", () => {
+  test("behavior: a path starting with a double quote keeps its name in the tree hash", () => {
+    const path = 'packages/a/src/"ab"';
+    const { repo, sha } = commitRepo({ ...BASE_FILES, [path]: "x\n" }, INCLUDE);
+
+    const manifest = generatePublicSnapshot({ repo, sha, outDir: tempDir() });
+
+    const treePaths = execFileSync("git", [
+      "-C",
+      repo,
+      "ls-tree",
+      "-r",
+      "-z",
+      "--name-only",
+      manifest.treeHash,
+    ])
+      .toString()
+      .split("\0")
+      .filter(Boolean);
+    expect(treePaths).toEqual(manifest.files.map((file) => file.path));
+    expect(treePaths).toContain(path);
+  });
+
+  test("error: a --sha starting with a dash fails the run", () => {
     const { repo } = commitRepo(BASE_FILES, INCLUDE);
 
     expect(() =>
@@ -369,6 +391,8 @@ describe("generatePublicSnapshot", () => {
     "public/.agents/x.md",
     "public/.changeset/config.json",
     "public/.github/AGENTS.md",
+    "public/.Claude/settings.json",
+    "public/Scripts/CI/x.ts",
   ])("error: %s mapping to a hard-denied path fails the run", (path) => {
     const { repo, sha } = commitRepo({ ...BASE_FILES, [path]: "x\n" }, INCLUDE);
 
@@ -426,6 +450,8 @@ describe("isDenied", () => {
     "scripts/release/helpers.ts",
     "scripts/ci/workflow.ts",
     "docs/retros/TEMPLATE.md",
+    ".Agents/x.md",
+    "Scripts/Release/helpers.ts",
     "packages/a/src/CLAUDE.md",
     "AGENTS.md",
     "agents.md",

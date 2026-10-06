@@ -33,7 +33,7 @@ const DENIED_PREFIXES = [
   "docs/templates/",
 ] as const;
 
-/** Lowercase, so the check ignores case. */
+/** Lowercase, like {@link DENIED_PREFIXES}: denials ignore case. */
 const DENIED_NAMES = new Set(["agents.md", "claude.md"]);
 
 const DEPENDENCY_FIELDS = [
@@ -76,7 +76,8 @@ export function isDenied(path: string): boolean {
   const name = posix.basename(path).toLowerCase();
   if (DENIED_NAMES.has(name)) return true;
   if (name.startsWith(".env") && name !== ".env.example") return true;
-  return DENIED_PREFIXES.some((prefix) => path.startsWith(prefix));
+  const lowerPath = path.toLowerCase();
+  return DENIED_PREFIXES.some((prefix) => lowerPath.startsWith(prefix));
 }
 
 function git(repo: string, args: string[]): Buffer {
@@ -167,7 +168,7 @@ export function generatePublicSnapshot(options: {
     if (!entry.path.startsWith(PUBLIC_PREFIX)) continue;
     const target = entry.path.slice(PUBLIC_PREFIX.length);
     // Public workflows live under `public/.github/`; only their file names are checked.
-    const deniedTarget = target.startsWith(".github/")
+    const deniedTarget = target.toLowerCase().startsWith(".github/")
       ? isDenied(posix.basename(target))
       : isDenied(target);
     if (deniedTarget) {
@@ -329,11 +330,16 @@ export function generatePublicSnapshot(options: {
     const env = { ...process.env, GIT_INDEX_FILE: join(indexDir, "index") };
     const info = selected
       .map((entry, i) => `${files[i]?.mode} ${entry.sha}\t${entry.path}`)
-      .join("\n");
-    execFileSync("git", ["-C", repo, "update-index", "--add", "--index-info"], {
-      env,
-      input: `${info}\n`,
-    });
+      .join("\0");
+    // `-z` takes paths verbatim; newline records would C-unquote a leading `"`.
+    execFileSync(
+      "git",
+      ["-C", repo, "update-index", "-z", "--add", "--index-info"],
+      {
+        env,
+        input: `${info}\0`,
+      },
+    );
     treeHash = execFileSync("git", ["-C", repo, "write-tree"], { env })
       .toString()
       .trim();
