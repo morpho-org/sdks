@@ -1567,7 +1567,7 @@ export class EmptyMidnightGroupCancellationsError extends Error {
 export class EmptyMidnightCollateralSuppliesError extends Error {
   constructor() {
     super(
-      "Midnight collateral supplies cannot be empty. Pass at least one collateral supply or omit `collateral`.",
+      "Midnight collateral supplies cannot be empty. Pass at least one collateral supply, or use `makeBorrow` to publish without collateral.",
     );
   }
 }
