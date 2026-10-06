@@ -292,26 +292,47 @@ export function scanFiles(
       lineStarts.push(index + 1);
       index = source.indexOf("\n", index + 1);
     }
-    // A sink fed a constant by name: also check every value assigned to that
-    // name in the file, whatever the name, as `const deployer = "0x…"`.
+    // A sink fed a constant by name: also check every value assigned to a name
+    // in its first argument, whatever the name, as `const deployer = "0x…"`.
+    // Casts, member roots (`CFG.deployer`) and template parts (`\`0x${raw}\``)
+    // count, and a name assigned another bare name is followed up to 3 hops.
     const assigned: [RuleId, string, number][] = [];
     for (const [rule, sink] of [
       ["wallet-key-list", KEY_SINK],
       ["mnemonic-list", MNEMONIC_SINK],
     ] as const) {
       const calls = new RegExp(
-        String.raw`(?:${sink})\s*([a-z_$][\w$]*)\s*[,)]`,
+        String.raw`(?:${sink})\s*([^,)\n]{1,200})`,
         "gi",
       );
-      for (const [, ident] of source.matchAll(calls)) {
-        const escaped = (ident ?? "").replace(/\$/g, "\\$");
-        const declaration = new RegExp(
-          String.raw`(?<![\w$.])${escaped}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
-          "g",
-        );
-        for (const { 0: opener, index } of source.matchAll(declaration)) {
-          assigned.push([rule, opener, index]);
+      const seen = new Set<string>();
+      let names = [...source.matchAll(calls)]
+        .flatMap(([, argument]) => [
+          ...(argument ?? "").matchAll(/(?<![\w$.])[a-z_$][\w$]*/gi),
+        ])
+        .map(([ident]) => ident);
+      for (let hop = 0; hop < 4 && names.length > 0; hop++) {
+        const next: string[] = [];
+        for (const ident of names) {
+          if (seen.has(ident)) continue;
+          seen.add(ident);
+          const declaration = new RegExp(
+            String.raw`(?<![\w$.])${ident.replace(/\$/g, "\\$")}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
+            "g",
+          );
+          for (const { 0: opener, index } of source.matchAll(declaration)) {
+            assigned.push([rule, opener, index]);
+            const alias =
+              /^\s*([a-z_$][\w$]*)\s*(?:as\s+[\w$]+\s*)?[;\n,)]/i.exec(
+                source.slice(
+                  index + opener.length,
+                  index + opener.length + 200,
+                ),
+              )?.[1];
+            if (alias !== undefined) next.push(alias);
+          }
         }
+        names = next;
       }
     }
     for (const [rule, pattern] of rules) {

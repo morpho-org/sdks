@@ -402,6 +402,46 @@ test.each([
 });
 
 test.each([
+  `const deployer = "${REAL_KEY}";\nprivateKeyToAccount(deployer as Hex);`,
+  `const deployer = "${REAL_KEY}";\nprivateKeyToAccount(deployer!);`,
+  `const CFG = { deployer: "${REAL_KEY}" };\nprivateKeyToAccount(CFG.deployer);`,
+  `const raw = "${REAL_KEY.slice(2)}";\nprivateKeyToAccount(\`0x\${raw}\`);`,
+  `const a = "${REAL_KEY}";\nconst deployer = a;\nprivateKeyToAccount(deployer);`,
+  `let privateKey;\nprivateKey=process.env.CI\n  ? "${REAL_KEY}"\n  : undefined;`,
+])("flag a key reaching a sink or reassignment in %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ rule: "wallet-key-list" }),
+  ]);
+});
+
+test.each([
+  `const words = "${Array(12).fill("legal").join(" ")}";\nmnemonicToAccount(words as string);`,
+  `const words = "${Array(12).fill("legal").join(" ")}";\nmnemonicToAccount(words!);`,
+])("flag a mnemonic reaching a sink in %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ rule: "mnemonic-list" }),
+  ]);
+});
+
+test("flags a mnemonic passed after a `--mnemonics \\` continuation", () => {
+  expect(
+    scanFiles([
+      file(
+        "a.sh",
+        `forge script --mnemonics \\\n  "${Array(12).fill("legal").join(" ")}"`,
+      ),
+    ]),
+  ).toEqual([expect.objectContaining({ path: "a.sh" })]);
+});
+
+test.each([
+  `Market keys: 0x${"ab".repeat(32)}`,
+  `if (keys == "0x${"ab".repeat(32)}") return;`,
+])("keeps plural keys narrow in %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([]);
+});
+
+test.each([
   `forge script D.s.sol --private-key ${REAL_KEY} --broadcast`,
   `cast wallet address --private-key "${REAL_KEY}"`,
   `forge script D.s.sol \\\n  --private-key ${REAL_KEY}`,
