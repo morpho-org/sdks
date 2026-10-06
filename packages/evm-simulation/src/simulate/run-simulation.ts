@@ -12,7 +12,7 @@ import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
-import { assertEndpointChain, executePlan } from "./backends/index.js";
+import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { CheckContext } from "./context.js";
@@ -63,18 +63,13 @@ export async function runSimulation(params: {
     throw new UnsupportedChainError(request.chainId);
   const morpho = addresses?.blue ?? zeroAddress;
 
-  await assertEndpointChain({
-    client,
-    chainId: request.chainId,
-    mode: request.mode,
-    blockNumber:
-      typeof request.blockNumber === "bigint" ? request.blockNumber : undefined,
-  });
-  const pinnedBlock = await resolvePinnedBlock({
-    client,
-    blockNumber: request.blockNumber,
-    signal,
-  });
+  const pinnedBlock =
+    request.block ??
+    (await resolvePinnedBlock({
+      client,
+      blockNumber: request.blockNumber,
+      signal,
+    }));
 
   // With no calldata decoding, the caller's declared `limits.operations`
   // entries are the operations: subjects for state reads and per-operation
@@ -104,7 +99,7 @@ export async function runSimulation(params: {
     reads: observations.reads,
   });
 
-  // Execute against the block resolved once above; the boundary rechecks its hash.
+  // Execute against the block resolved once above.
   const execution = await executePlan({
     client,
     plan,

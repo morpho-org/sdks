@@ -1,10 +1,4 @@
-import {
-  type Address,
-  BlockNotFoundError,
-  getAddress,
-  numberToHex,
-  zeroAddress,
-} from "viem";
+import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -50,15 +44,6 @@ function makePlan(transactions = 1): ExecutionPlan {
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-function blockResult(overrides: object = {}) {
-  return {
-    number: numberToHex(STATE_BLOCK),
-    hash: `0x${"ab".repeat(32)}`,
-    timestamp: numberToHex(1_700_000_000n),
-    ...overrides,
-  };
-}
-
 interface CallResult {
   status?: string;
   gasUsed?: string;
@@ -80,12 +65,9 @@ function simulateResult(calls: CallResult[], overrides: object = {}): unknown {
   ];
 }
 
-/** Queue simulate → reorg-check block responses for a happy-path call. */
+/** Queue the simulate response for a happy-path call. */
 function respondHappy(calls: CallResult[]) {
-  fetchMock
-    .mockResolvedValueOnce(rpc(simulateResult(calls)))
-    // Post-simulation reorg check re-fetches the pinned state block.
-    .mockResolvedValueOnce(rpc(blockResult()));
+  fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
 }
 
 /** One successful call per planned call: read ok + user txs ok + read ok. */
@@ -160,24 +142,19 @@ describe.sequential("executePlan", () => {
           }
         ).params[0].blockStateCalls[0],
     ).toBe(false);
-    // The pinned block is resolved by the caller; this boundary simulates
-    // once and then re-fetches that same block for the reorg check.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // The state block is resolved by the caller; this boundary only simulates.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test("error: InvalidSimulationResponseError when the result is not one block", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc([]))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc([]));
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
   });
 
   test("error: InvalidSimulationResponseError on call count mismatch", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(okCalls(2))))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(okCalls(2))));
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
@@ -211,105 +188,48 @@ describe.sequential("executePlan", () => {
 
   // Anvil reports the pinned block itself; advancement is not required.
   test("behavior: accepts a simulated block equal to the state block", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        rpc(
-          simulateResult(okCalls(3), {
-            number: numberToHex(STATE_BLOCK),
-            timestamp: numberToHex(1_700_000_000n),
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(
+      rpc(
+        simulateResult(okCalls(3), {
+          number: numberToHex(STATE_BLOCK),
+          timestamp: numberToHex(1_700_000_000n),
+        }),
+      ),
+    );
     const evidence = await executePlan(params);
     expect(evidence.block.blockNumber).toBe(STATE_BLOCK);
   });
 
   test("error: InvalidSimulationResponseError for a block behind the state block", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        rpc(
-          simulateResult(okCalls(3), {
-            number: numberToHex(STATE_BLOCK - 1n),
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(
+      rpc(
+        simulateResult(okCalls(3), {
+          number: numberToHex(STATE_BLOCK - 1n),
+        }),
+      ),
+    );
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
   });
 
   test("error: InvalidSimulationResponseError for a timestamp behind the state block", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        rpc(
-          simulateResult(okCalls(3), {
-            timestamp: numberToHex(1_699_999_999n),
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(
+      rpc(
+        simulateResult(okCalls(3), {
+          timestamp: numberToHex(1_699_999_999n),
+        }),
+      ),
+    );
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
-  });
-
-  test("error: InvalidSimulationResponseError when the state block hash changes mid-flight", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
-      // Reorg check re-fetches the pinned block — its hash moved.
-      .mockResolvedValueOnce(
-        rpc(blockResult({ hash: `0x${"ef".repeat(32)}` })),
-      );
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test("error: InvalidSimulationResponseError when the pinned block disappears", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
-      .mockResolvedValueOnce(rpc(null));
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect((error as Error).cause).toBeInstanceOf(BlockNotFoundError);
-    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
-  });
-
-  test("error: response evidence beats a failing reorg-check eth_getBlock", async () => {
-    // A user-call revert is in hand before the reorg re-fetch: a rejecting
-    // re-fetch must not downgrade it to ExternalServiceError.
-    const calls = okCalls(3);
-    calls[1] = {
-      status: "0x0",
-      gasUsed: "0x0",
-      returnData: "0x",
-      error: { code: 3, message: "insufficient funds" },
-    };
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockRejectedValueOnce(new Error("gateway down"));
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(SimulationRevertedError);
-    expect(error).not.toBeInstanceOf(ExternalServiceError);
-  });
-
-  test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
-      .mockRejectedValueOnce(new Response("Bad Gateway", { status: 502 }));
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ExternalServiceError);
-    expect((error as Error).message).not.toContain("rpc.example");
-    expect((error as Error).cause).toBeDefined();
   });
 
   test("error: MissingVerificationEvidenceError when a state read fails", async () => {
     const calls = okCalls(3);
     calls[0] = { status: "0x0", gasUsed: "0x0", returnData: "0x" };
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       MissingVerificationEvidenceError,
     );
@@ -323,9 +243,7 @@ describe.sequential("executePlan", () => {
       returnData: "0x",
       error: { code: 3, message: "insufficient funds" },
     };
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
     const error = await executePlan(params).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SimulationRevertedError);
     if (error instanceof SimulationRevertedError) {
@@ -397,9 +315,7 @@ describe.sequential("executePlan", () => {
     const calls = okCalls(3);
     calls[0] = { ...calls[0], returnData: encodeUint256(100n) };
     calls[2] = { ...calls[2], returnData: encodeUint256(90n) };
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
     const evidence = await executePlan(params);
     expect(
       evidence.stateReads.map((s) =>
@@ -427,9 +343,7 @@ describe.sequential("executePlan", () => {
         }),
       ],
     };
-    fetchMock
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
+    fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
     const evidence = await executePlan(params);
     const userCall = evidence.calls[1]!;
     expect(userCall.planned.type).toBe("transaction");
