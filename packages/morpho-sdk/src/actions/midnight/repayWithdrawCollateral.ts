@@ -37,49 +37,9 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly metadata?: Metadata;
 }
 
-/**
- * Encodes a reduce-only `MidnightBundlesV2` buy with no offers, so the sender's debt is repaid
- * directly, then collateral is withdrawn to `collateralReceiver`. An `assets` repay uses the
- * assets-target entrypoint with `minUnits = assets` (a direct repay counts one unit per asset); a
- * `full` repay uses the units-target entrypoint with `targetUnits = maxUint256`.
- *
- * Prefer `client.morpho.midnight(chainId).repayWithdrawCollateral(...)` in app flows so the
- * loan-token approval and Midnight authorization requirements are resolved first.
- *
- * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
- * @param params.market - Midnight market whose position is updated.
- * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`.
- * @param params.collateralWithdrawals - Collateral withdrawals; `assets: maxUint256` withdraws the full balance.
- * @param params.collateralReceiver - Recipient of the withdrawn collateral.
- * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
- * @param params.metadata - Optional analytics metadata appended to calldata.
- * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundlesV2`.
- * @throws {NegativeInputError} when `repay.assets` is negative.
- * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, `repay.maxBuyerAssets` is zero, or `deadline` is not positive.
- * @throws {InputExceedsMaxError} when `repay.maxBuyerAssets` is `maxUint256` or `deadline` exceeds uint256.
- * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
- * @throws {ChainIdMismatchError} when the market targets another chain.
- * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
- * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
- * @example
- * ```ts
- * import { maxUint256 } from "viem";
- * import { midnightRepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
- *
- * // Close the position: repay all debt, then withdraw all collateral at index 0.
- * const tx = midnightRepayWithdrawCollateral({
- *   chainId: 8453,
- *   market: marketData.params,
- *   repay: { type: "full", maxBuyerAssets: 1_010_000n },
- *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
- *   collateralReceiver: user,
- *   deadline: maxUint256,
- * });
- * ```
- */
-export const midnightRepayWithdrawCollateral = (
+const validateParams = (
   params: MidnightRepayWithdrawCollateralParams,
-): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
+): void => {
   const { repay } = params;
   if (
     repay.type === "assets" &&
@@ -123,6 +83,53 @@ export const midnightRepayWithdrawCollateral = (
     throw new NegativeInputError("repay.assets", repay.assets);
   }
   validateDeadline(params.deadline);
+};
+
+/**
+ * Encodes a reduce-only `MidnightBundlesV2` buy with no offers, so the sender's debt is repaid
+ * directly, then collateral is withdrawn to `collateralReceiver`. An `assets` repay uses the
+ * assets-target entrypoint with `minUnits = assets` (a direct repay counts one unit per asset); a
+ * `full` repay uses the units-target entrypoint with `targetUnits = maxUint256`.
+ *
+ * Prefer `client.morpho.midnight(chainId).repayWithdrawCollateral(...)` in app flows so the
+ * loan-token approval and Midnight authorization requirements are resolved first.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
+ * @param params.market - Midnight market whose position is updated.
+ * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`.
+ * @param params.collateralWithdrawals - Collateral withdrawals; `assets: maxUint256` withdraws the full balance.
+ * @param params.collateralReceiver - Recipient of the withdrawn collateral.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundlesV2`.
+ * @throws {NegativeInputError} when `repay.assets` is negative.
+ * @throws {NonPositiveInputError} when nothing is repaid or withdrawn, a withdrawal amount is zero, `repay.maxBuyerAssets` is zero, or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `repay.maxBuyerAssets` is `maxUint256` or `deadline` exceeds uint256.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
+ * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
+ * @example
+ * ```ts
+ * import { maxUint256 } from "viem";
+ * import { midnightRepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
+ *
+ * // Close the position: repay all debt, then withdraw all collateral at index 0.
+ * const tx = midnightRepayWithdrawCollateral({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   repay: { type: "full", maxBuyerAssets: 1_010_000n },
+ *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+ *   collateralReceiver: user,
+ *   deadline: maxUint256,
+ * });
+ * ```
+ */
+export const midnightRepayWithdrawCollateral = (
+  params: MidnightRepayWithdrawCollateralParams,
+): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
+  validateParams(params);
+  const { repay } = params;
   const market = MarketUtils.toStruct(params.market);
   const args = [
     true, // reduceOnly

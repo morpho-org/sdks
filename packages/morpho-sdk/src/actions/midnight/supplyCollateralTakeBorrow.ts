@@ -25,6 +25,55 @@ export interface MidnightSupplyCollateralTakeBorrowParams
   readonly collateralSupplies: readonly MidnightCollateralTransfer[];
 }
 
+const validateParams = (params: MidnightSupplyCollateralTakeBorrowParams) => {
+  // Reject markets from another chain deployment before checking offers against them.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  if (params.collateralSupplies.length === 0) {
+    throw new EmptyMidnightCollateralSuppliesError();
+  }
+  for (const [
+    index,
+    { collateralIndex, assets },
+  ] of params.collateralSupplies.entries()) {
+    if (assets <= 0n) {
+      throw new NonPositiveInputError(
+        `collateralSupplies[${index}].assets`,
+        assets,
+      );
+    }
+    // Throws UnknownCollateralIndexError when the index is not configured on the market.
+    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+  }
+  const marketId = validateTakeableOffers({
+    market: params.market,
+    takeableOffers: params.takeableOffers,
+    expectedBuy: true,
+  });
+
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
+    }
+    if (target.maxUnits <= 0n) {
+      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
+    }
+  } else {
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.minSellerAssets < 0n) {
+      throw new NegativeInputError(
+        "target.minSellerAssets",
+        target.minSellerAssets,
+      );
+    }
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  return { marketId, referralFeePct, referralFeeRecipient };
+};
+
 /**
  * Encodes a `MidnightBundlesV2` sell that supplies collateral and borrows from lend-side offers
  * for `msg.sender` in one call.
@@ -77,51 +126,9 @@ export interface MidnightSupplyCollateralTakeBorrowParams
 export const midnightSupplyCollateralTakeBorrow = (
   params: MidnightSupplyCollateralTakeBorrowParams,
 ): Readonly<Transaction<MidnightSupplyCollateralTakeBorrowAction>> => {
-  // Reject markets from another chain deployment before checking offers against them.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  if (params.collateralSupplies.length === 0) {
-    throw new EmptyMidnightCollateralSuppliesError();
-  }
-  for (const [
-    index,
-    { collateralIndex, assets },
-  ] of params.collateralSupplies.entries()) {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError(
-        `collateralSupplies[${index}].assets`,
-        assets,
-      );
-    }
-    // Throws UnknownCollateralIndexError when the index is not configured on the market.
-    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-  }
-  const marketId = validateTakeableOffers({
-    market: params.market,
-    takeableOffers: params.takeableOffers,
-    expectedBuy: true,
-  });
-
+  const { marketId, referralFeePct, referralFeeRecipient } =
+    validateParams(params);
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.assets <= 0n) {
-      throw new NonPositiveInputError("target.assets", target.assets);
-    }
-    if (target.maxUnits <= 0n) {
-      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
-    }
-  } else {
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.minSellerAssets < 0n) {
-      throw new NegativeInputError(
-        "target.minSellerAssets",
-        target.minSellerAssets,
-      );
-    }
-  }
-  validateDeadline(params.deadline);
-  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   const market = MarketUtils.toStruct(params.market);
   const args = [
     false, // reduceOnly

@@ -39,6 +39,39 @@ export interface MidnightTakeWithdrawParams extends MidnightReferralFeeParams {
   readonly metadata?: Metadata;
 }
 
+const validateParams = (params: MidnightTakeWithdrawParams) => {
+  // Reject markets from another chain deployment before checking offers against them.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  const marketId = validateTakeableOffers({
+    market: params.market,
+    takeableOffers: params.takeableOffers,
+    expectedBuy: true,
+  });
+
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
+    }
+    if (target.maxUnits <= 0n) {
+      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
+    }
+  } else {
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.minSellerAssets < 0n) {
+      throw new NegativeInputError(
+        "target.minSellerAssets",
+        target.minSellerAssets,
+      );
+    }
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  return { marketId, referralFeePct, referralFeeRecipient };
+};
+
 /**
  * Encodes a reduce-only `MidnightBundlesV2` sell that withdraws `msg.sender`'s credit.
  *
@@ -89,35 +122,9 @@ export interface MidnightTakeWithdrawParams extends MidnightReferralFeeParams {
 export const midnightTakeWithdraw = (
   params: MidnightTakeWithdrawParams,
 ): Readonly<Transaction<MidnightTakeWithdrawAction>> => {
-  // Reject markets from another chain deployment before checking offers against them.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = validateTakeableOffers({
-    market: params.market,
-    takeableOffers: params.takeableOffers,
-    expectedBuy: true,
-  });
-
+  const { marketId, referralFeePct, referralFeeRecipient } =
+    validateParams(params);
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.assets <= 0n) {
-      throw new NonPositiveInputError("target.assets", target.assets);
-    }
-    if (target.maxUnits <= 0n) {
-      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
-    }
-  } else {
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.minSellerAssets < 0n) {
-      throw new NegativeInputError(
-        "target.minSellerAssets",
-        target.minSellerAssets,
-      );
-    }
-  }
-  validateDeadline(params.deadline);
-  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   const market = MarketUtils.toStruct(params.market);
   const args = [
     true, // reduceOnly
