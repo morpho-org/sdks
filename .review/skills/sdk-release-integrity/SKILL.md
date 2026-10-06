@@ -1,6 +1,6 @@
 ---
 name: sdk-release-integrity
-description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci or scripts/release (and the helpers they import, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
+description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci, scripts/release or scripts/publish (and the helpers they import, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
 ---
 
 # CI, release and automation integrity
@@ -59,8 +59,9 @@ version, or `.changeset/`.
 ## 3. Workflow trust
 
 **Applies when** the diff changes `.github/workflows/`, `.github/actions/`,
-`scripts/ci/`, `scripts/release/`, or the helpers `scripts/release/` imports
-(`scripts/paths.ts`, `scripts/generate-midnight-package-version.ts`).
+`scripts/ci/`, `scripts/release/`, `scripts/publish/`, `scripts/workflow.ts`, or
+the helpers `scripts/release/` imports (`scripts/paths.ts`,
+`scripts/generate-midnight-package-version.ts`).
 
 - **Injection (critical).** Attacker-controllable context
   (`github.event.*`, `github.head_ref`, comment bodies, branch names) is bound
@@ -72,7 +73,8 @@ version, or `.changeset/`.
   against the PR head use the default-branch copy of a script.
 - **Logic is tested code (high).** A `run:` block that parses data, filters
   or counts records, computes outputs or decides pass/fail belongs in a
-  TypeScript script under `scripts/ci/` with a colocated `*.test.ts`
+  TypeScript script under `scripts/ci/` (or `scripts/publish/` for npm publish
+  checks the public repository also runs) with a colocated `*.test.ts`
   (pattern: `scripts/ci/claude-review-gate.ts`). Linear setup steps and
   marshalling static inputs are exempt. A new or changed CI script needs its
   test; a new one written as `.mjs` or `.js` is medium.
@@ -101,10 +103,10 @@ artifact-validation steps.
   at least medium, high for runtime or peer packages. A `next`/`latest` tag
   change needs an `environment:` with required reviewers.
 - Artifact identity is read the way the consumer reads it: the pacote read in
-  `scripts/ci/read-tarball-identity.ts`, never `tar -x`, `tar -t | grep` or a
+  `scripts/publish/read-tarball-identity.ts`, never `tar -x`, `tar -t | grep` or a
   hand-written tar or path parser. Replacing or demoting the pacote read is
   critical; new parsing logic or a loosened rule in
-  `scripts/ci/verify-tarball-collisions.ts` is high.
+  `scripts/publish/verify-tarball-collisions.ts` is high.
 - Release commits stay GitHub-signed through `createCommitOnBranch`;
   replacing it with local `git commit` and push is critical. A write-scoped
   token is minted only after either same-job hardening (helper checksum and
