@@ -21,6 +21,7 @@ jobs:
 
     permissions:
       contents: read # checkout
+      actions: read # upload-sarif reads the workflow run on private repos
       security-events: write # upload SARIF results to code scanning
 
     env:
