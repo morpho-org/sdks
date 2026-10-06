@@ -41,17 +41,24 @@ const RULES = {
   // `\"` catches code embedded in JSON.
   "wallet-key":
     /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\]|\(["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\))?\s*)*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
-  // The same names, plus Hardhat's `accounts:`, when the key sits in a list or a
-  // wrapper: `["0x…"]`, `hexToBytes("0x…")`, `privateKeyToAccount(("0x…" as Hex))`.
+  // The same names, plus Hardhat's `accounts:`, as the start of a whole value:
+  // a list, a wrapper, a ternary or a fallback. Every quoted 64-hex value up to
+  // the end of that value is checked (see `valueSecrets`), so `[ANVIL_KEY, "0x…"]`
+  // and `cond ? "0x…" : env.PK` are caught whatever comes first.
   "wallet-key-list":
-    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\(|\baccounts\s*:)\s*(?:(?:[[(]|(?:hexToBytes|toBytes)\()\s*)+(?=\\?["'`](?:0x)?[0-9a-f]{64}\b)/gi,
-  // A hard-coded fallback after a cast or parenthesised env read, or a logical
-  // assignment: `(process.env.PK as Hex) ?? "0x…"`, `privateKey ??= "0x…"`.
+    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\(|\baccounts\s*:)/gi,
+  // A hard-coded fallback or ternary branch after an env read with no assignment
+  // in front, or a logical assignment: `(process.env.PK as Hex) ?? "0x…"`,
+  // `env.PK ?? ("0x…" as Hex)`, `privateKey ??= "0x…"`.
   "wallet-key-fallback":
-    /(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\|)=?\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\||\?(?![.?=]))=?\s*(?:(?:\(|(?:hexToBytes|toBytes)\()\s*)*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
     /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
+  // A seed phrase hard-coded behind an env read or in a ternary branch:
+  // `mnemonicToAccount(process.env.M ?? "…")`, `mnemonic: env.M ? env.M : ("…")`.
+  "mnemonic-fallback":
+    /(?:(?:mnemonic|seed[_-]?phrase)\w*|mnemonicToAccount\()[^;\n]{0,120}?(?:\?\?|\|\||\?(?![.?=])|:)=?\s*\(?\s*\\?["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
@@ -108,11 +115,15 @@ export interface ScannedFile {
  * Checks that a policy is well formed, so a typo can't silently allow a leak.
  *
  * @param policy - Parsed `scan-policy.json`.
+ * @param policyPath - Where the policy was read from, for error messages.
  * @returns The policy, typed.
  * @throws If the policy has the wrong shape, an exception is incomplete or names an
  *   unknown rule, or two exceptions are duplicates.
  */
-export function parsePolicy(policy: unknown): ScanPolicy {
+export function parsePolicy(
+  policy: unknown,
+  policyPath: string = POLICY_PATH,
+): ScanPolicy {
   if (
     typeof policy !== "object" ||
     policy === null ||
@@ -125,7 +136,7 @@ export function parsePolicy(policy: unknown): ScanPolicy {
     !Array.isArray(policy.exceptions)
   ) {
     throw new Error(
-      `"${POLICY_PATH}" needs a "blockedTerms" array of non-empty strings and an "exceptions" array.`,
+      `"${policyPath}" needs a "blockedTerms" array of non-empty strings and an "exceptions" array.`,
     );
   }
   const seen = new Set<string>();
@@ -141,7 +152,7 @@ export function parsePolicy(policy: unknown): ScanPolicy {
       )
     ) {
       throw new Error(
-        `Every exception in "${POLICY_PATH}" needs a non-empty "path", "rule", "match" and "reason": ${JSON.stringify(exception)}.`,
+        `Every exception in "${policyPath}" needs a non-empty "path", "rule", "match" and "reason": ${JSON.stringify(exception)}.`,
       );
     }
     const { path, rule, match } = exception as ScanException;
@@ -218,14 +229,10 @@ export function scanFiles(
     }
     for (const [rule, pattern] of rules) {
       for (const { 0: opener, index, groups } of source.matchAll(pattern)) {
-        // A list can hold a test key and a real key, so each element is checked.
+        // A value can hold a test key and a real key, so each one is checked.
         const candidates =
           rule === "wallet-key-list"
-            ? listSecrets(source, {
-                opener,
-                end: index + opener.length,
-                bracket: opener.includes("["),
-              })
+            ? valueSecrets(source, { opener, start: index + opener.length })
             : [{ secret: groups?.secret, at: index, match: opener }];
         for (const { secret, at, match } of candidates) {
           const value = secret?.toLowerCase().replace(/^0x/, "");
@@ -251,21 +258,71 @@ export function scanFiles(
   return findings;
 }
 
-/** Quoted 64-hex values from `start` up to the end of the list or wrapper. */
-function listSecrets(
+/**
+ * Quoted 64-hex values in the value that starts at `start`, plus the items of a YAML
+ * list under the name. The value ends at a `,`, `;` or closing bracket outside any
+ * nesting, or at a line break unless the next line continues it (`?`, `:`, `|`, `&`,
+ * `.`). Line and block comments are skipped, so a `[` in a comment can't end it early.
+ */
+function valueSecrets(
   source: string,
-  list: { opener: string; end: number; bracket: boolean },
+  value: { opener: string; start: number },
 ) {
-  const { opener, end: start, bracket } = list;
-  const end = source.indexOf(bracket ? "]" : ")", start);
-  const span = source.slice(start, end === -1 ? start + 4096 : end);
-  return [...span.matchAll(/\\?["'`](?<secret>(?:0x)?[0-9a-f]{64})\b/gi)].map(
-    ({ 0: match, index, groups }) => ({
-      secret: groups?.secret,
-      at: start + index,
-      match: `${opener}…${match}`,
-    }),
+  const { opener, start } = value;
+  const limit = Math.min(source.length, start + 4096);
+  let depth = 0;
+  let end = start;
+  let seen = false;
+  for (; end < limit; end++) {
+    const char = source[end];
+    if (
+      char === "/" &&
+      source[end + 1] === "/" &&
+      !/\S/.test(source[end - 1] ?? " ")
+    ) {
+      const next = source.indexOf("\n", end);
+      end = next === -1 ? limit : next - 1;
+      continue;
+    }
+    if (char === "/" && source[end + 1] === "*") {
+      const next = source.indexOf("*/", end + 2);
+      end = next === -1 ? limit : next + 1;
+      continue;
+    }
+    if (char === "(" || char === "[" || char === "{") depth++;
+    else if (char === ")" || char === "]" || char === "}") {
+      if (--depth < 0) break;
+    } else if (depth === 0 && (char === "," || char === ";")) break;
+    else if (depth === 0 && char === "\n" && seen) {
+      if (!/^\s*[?:|&.]/.test(source.slice(end + 1, end + 200))) break;
+    }
+    if (char !== undefined && /\S/.test(char)) seen = true;
+  }
+  const span = source.slice(start, end);
+  const quoted = [
+    ...span.matchAll(/\\?["'`](?<secret>(?:0x)?[0-9a-f]{64})\b/gi),
+  ].map(({ 0: match, index, groups }) => ({
+    match,
+    at: start + index,
+    groups,
+  }));
+  const yaml = /^[ \t]*\r?\n((?:[ \t]*-[ \t]+[^\n]*(?:\n|$))+)/.exec(
+    source.slice(start, limit),
   );
+  const list = yaml?.[1] ?? "";
+  const listStart = start + (yaml?.[0].length ?? 0) - list.length;
+  const items = [
+    ...list.matchAll(/-[ \t]+["']?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi),
+  ].map(({ 0: match, index, groups }) => ({
+    match,
+    at: listStart + index,
+    groups,
+  }));
+  return [...quoted, ...items].map(({ match, at, groups }) => ({
+    secret: groups?.secret,
+    at,
+    match: `${opener}…${match}`,
+  }));
 }
 
 /**
@@ -456,7 +513,10 @@ if (import.meta.main) {
     },
   });
   const { tree, tarballs: tarballDir } = parseTargets(values);
-  const policy = parsePolicy(JSON.parse(readFileSync(values.policy, "utf8")));
+  const policy = parsePolicy(
+    JSON.parse(readFileSync(values.policy, "utf8")),
+    values.policy,
+  );
   const treeFiles = tree === undefined ? undefined : readTree(tree);
   const tarballs =
     tarballDir === undefined

@@ -122,13 +122,30 @@ describe("scanFiles", () => {
     ["wallet-key-list", `accounts: ["0x${"ab".repeat(32)}"]`],
     [
       "wallet-key-fallback",
-      `privateKey: (process.env.PK as Hex) ?? "0x${"ab".repeat(32)}"`,
+      `toAccount((process.env.PK as Hex) ?? "0x${"ab".repeat(32)}")`,
     ],
     [
       "wallet-key-fallback",
-      `privateKeyToAccount(process.env.PK as Hex ?? "0x${"ab".repeat(32)}")`,
+      `useKey(process.env.PRIVATE_KEY as Hex ?? "0x${"ab".repeat(32)}")`,
     ],
     ["wallet-key-fallback", `privateKey ??= "0x${"ab".repeat(32)}"`],
+    [
+      "wallet-key-fallback",
+      `useKey(process.env.PRIVATE_KEY ?? ("0x${"ab".repeat(32)}" as Hex))`,
+    ],
+    ["wallet-key-fallback", `useKey(env.PK ? "0x${"ab".repeat(32)}" : env.PK)`],
+    [
+      "mnemonic-fallback",
+      `mnemonicToAccount(process.env.M ?? "${Array(12).fill("legal").join(" ")}")`,
+    ],
+    [
+      "mnemonic-fallback",
+      `mnemonic: process.env.MNEMONIC ?? ("${Array(12).fill("legal").join(" ")}")`,
+    ],
+    [
+      "mnemonic-fallback",
+      `mnemonic: env.M ? env.M : "${Array(12).fill("legal").join(" ")}"`,
+    ],
     ["wallet-key-fallback", `privateKey ||= "0x${"ab".repeat(32)}"`],
     ["mnemonic", `mnemonic ??= "${Array(12).fill("abandon").join(" ")}"`],
     ["mnemonic", `TEST_MNEMONIC="${Array(12).fill("abandon").join(" ")}"`],
@@ -257,6 +274,19 @@ test.each([
   `accounts: ["${ANVIL_KEY}", "${REAL_KEY}"]`,
   `accounts: [\n  "${ANVIL_KEY}",\n  "${REAL_KEY}",\n]`,
   `const privateKeys = ["${ANVIL_KEY}", "${REAL_KEY}"];`,
+  `const privateKeys = [ANVIL_KEY, "${REAL_KEY}"];`,
+  `accounts: [process.env.DEPLOYER_PK!, "${REAL_KEY}"],`,
+  `accounts: process.env.PK ? [process.env.PK] : ["${REAL_KEY}"],`,
+  `accounts: ["${ANVIL_KEY}", keys[0], "${REAL_KEY}"],`,
+  `accounts: ["${ANVIL_KEY}", process.env["K"], "${REAL_KEY}"],`,
+  `accounts: ["${ANVIL_KEY}", // [default]\n  "${REAL_KEY}"],`,
+  `const pk = useFork ? "${REAL_KEY}" : process.env.PK;`,
+  `const pk = useFork\n  ? "${REAL_KEY}"\n  : process.env.PK;`,
+  `const privateKey = process.env.PRIVATE_KEY ?? ("${REAL_KEY}" as Hex);`,
+  `const privateKey = process.env.PRIVATE_KEY ?? hexToBytes("${REAL_KEY}");`,
+  `privateKeyToAccount(process.env.PK ?? ("${REAL_KEY}" as Hex))`,
+  `PRIVATE_KEY:\n  - ${ANVIL_KEY}\n  - ${REAL_KEY}\n`,
+  `accounts:\n  - "${REAL_KEY}"\n`,
 ])("flag a real key listed after a test key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
@@ -288,6 +318,14 @@ test.each([
       match.includes(HEX.slice(1)),
     ),
   ).toEqual([]);
+});
+
+test.each([
+  `accounts: [ANVIL_KEY], marketId: "${REAL_KEY}",`,
+  `const privateKey = env.PK;\nconst marketId = "${REAL_KEY}";`,
+  `privateKey: env.PK }, { id: "${REAL_KEY}" }`,
+])("stop the value at its end in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
 
 test.each([
@@ -403,6 +441,10 @@ describe("parsePolicy", () => {
     ["a duplicate", { blockedTerms: [], exceptions: [valid, valid] }],
   ])("rejects %s", (_, policy) => {
     expect(() => parsePolicy(policy)).toThrow();
+  });
+
+  test("names the given policy file in errors", () => {
+    expect(() => parsePolicy({}, "custom.json")).toThrow('"custom.json"');
   });
 });
 
