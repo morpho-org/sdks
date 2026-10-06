@@ -110,6 +110,17 @@ describe("scanFiles", () => {
     ["rpc-key", `https://mainnet.infura.io/v3/${"A".repeat(32)}`],
     ["wallet-key", `hdKeyToAccount(\`${"ab".repeat(32)}\`)`],
     ["mnemonic", `mnemonicToAccount("${Array(12).fill("abandon").join(" ")}")`],
+    ["mnemonic", `Wallet.fromPhrase("${Array(12).fill("abandon").join(" ")}")`],
+    [
+      "mnemonic",
+      `ethers.Wallet.fromMnemonic("${Array(12).fill("abandon").join(" ")}")`,
+    ],
+    [
+      "mnemonic",
+      `mnemonicToSeedSync("${Array(12).fill("abandon").join(" ")}")`,
+    ],
+    ["mnemonic", `mnemonicToSeed("${Array(12).fill("abandon").join(" ")}")`],
+    ["mnemonic", `mnemonicToEntropy("${Array(12).fill("abandon").join(" ")}")`],
     ["wallet-key", `DEPLOYER_PRIVATE_KEY=0x${"ab".repeat(32)}`],
     ["wallet-key", `deployerPrivateKey: "0x${"ab".repeat(32)}"`],
     ["wallet-key", `SECRET_KEY=${"ab".repeat(32)}`],
@@ -308,6 +319,10 @@ test.each([
   `PRIVATE_KEY: # anvil, then real\n  "${REAL_KEY}"`,
   `accounts: /* deployer, keeper */ ["${REAL_KEY}"],`,
   `const pk = env.PK\n  .trim() || "${REAL_KEY}";`,
+  `{"accounts": ["${ANVIL_KEY}", "${REAL_KEY}"]}`,
+  `  privateKeys = [\n    ANVIL_KEY,\n    "${REAL_KEY}",\n  ];`,
+  `private_keys = [\n  "${ANVIL_KEY}",\n  "${REAL_KEY}",\n]`,
+  `PRIVATE_KEYS = [\n    "${ANVIL_KEY}",\n    "${REAL_KEY}",\n]`,
 ])("flag a real key listed after a test key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
@@ -645,4 +660,30 @@ describe("parseTargets", () => {
       tarballs: "packs",
     });
   });
+});
+
+test("skip the Anvil default mnemonic passed to a seed-phrase sink", () => {
+  expect(
+    scanFiles([
+      file(
+        "a.ts",
+        'Wallet.fromPhrase("test test test test test test test test test test test junk")',
+      ),
+    ]),
+  ).toEqual([]);
+});
+
+test("fail closed on a key-named value longer than 4096 characters", () => {
+  const list = `accounts: [\n${`  "${ANVIL_KEY}",\n`.repeat(60)}  "${REAL_KEY}",\n]`;
+  expect(scanFiles([file("a.ts", list)])).toEqual([
+    expect.objectContaining({
+      rule: "wallet-key-list",
+      match: expect.stringContaining("longer than 4096"),
+    }),
+  ]);
+});
+
+test("report a repeated key once per file", () => {
+  const line = `PRIVATE_KEY=${REAL_KEY}\n`;
+  expect(scanFiles([file("a.env", line + line)])).toHaveLength(1);
 });

@@ -26,7 +26,9 @@ const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*Walle
 // shell line continuation.
 const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]+|\\\n\s*)`;
 const MNEMONIC_NAME = "(?:mnemonic|seed[_-]?phrase)";
-const MNEMONIC_SINK = String.raw`mnemonicToAccount\(`;
+// viem's `mnemonicToAccount`, ethers' `Wallet.fromPhrase`/`fromMnemonic`, and
+// bip39's `mnemonicToSeed(Sync)`/`mnemonicToEntropy`.
+const MNEMONIC_SINK = String.raw`(?:mnemonicToAccount|fromPhrase|fromMnemonic|mnemonicToSeed(?:Sync)?|mnemonicToEntropy)\(`;
 
 /** Text that must never reach the public repository or npm. */
 const RULES = {
@@ -63,7 +65,7 @@ const RULES = {
   // `[ANVIL_KEY, "0x…"]`, `"0x<anvil>,0x…"` and `cond ? "0x…" : env.PK` are
   // caught whatever comes first.
   "wallet-key-list": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_SINK}|\baccounts\s*[:=])`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_SINK}|\baccounts\\?["'\`]?\s*[:=])`,
     "gi",
   ),
   // A hard-coded fallback or ternary branch after an env read with no assignment
@@ -202,7 +204,8 @@ const PUBLIC_TEST_SECRETS = new Set([
 ]);
 
 /**
- * Finds every rule match in files. NUL bytes are dropped first, so UTF-16 text and
+ * Finds rule matches in files. Each distinct key or mnemonic value is reported
+ * once per file, at its first occurrence. NUL bytes are dropped first, so UTF-16 text and
  * text inside binaries are still scanned. A key or mnemonic whose value is exactly
  * a published test value (Anvil defaults) is skipped, and so is any key with 48
  * leading zero hex digits (a value that fits in 64 bits). File paths are scanned
@@ -236,7 +239,7 @@ export function scanFiles(
     // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
     const source = text.toString("utf8");
     const fileFindings: Finding[] = [];
-    // Several wallet rules can match one key; report it once.
+    // Several wallet rules can match one key; report each value once per file.
     const reported = new Set<string>();
     const name = tarball
       ? path.slice(path.indexOf(".tgz:") + ".tgz:".length)
@@ -288,7 +291,9 @@ export function scanFiles(
  * items of a YAML block list under the name. The value ends at a `,`, `;` or
  * closing bracket outside any nesting or string, or at a line break unless the
  * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
- * start of a line runs to the end of the line, since its value is unquoted.
+ * start of a line runs to the end of the line, since its value is unquoted, unless
+ * the value opens a bracket. A value still open after 4096 characters is
+ * reported as a candidate with no secret, so the gate fails closed.
  * Whitespace-preceded `//` and `#` comments and `/* *\/` comments are skipped,
  * so a closing bracket, `,` or `;` in a comment can't end the value early. YAML
  * lists may hold blank and `#` comment lines.
@@ -308,7 +313,8 @@ export function valueSecrets(
     opener.endsWith("=") &&
     /^[ \t]*(?:export[ \t]+)?$/.test(
       source.slice(lineStart, start - opener.length),
-    );
+    ) &&
+    !/^[ \t]*[[({]/.test(source.slice(start, start + 200));
   let depth = 0;
   let end = start;
   let seen = false;
@@ -369,7 +375,20 @@ export function valueSecrets(
     at: listStart + index,
     groups,
   }));
-  return [...inSpan, ...items].map(({ match, at, groups }) => ({
+  const truncated =
+    limit < source.length &&
+    (end >= limit ||
+      (yaml != null && yaml.index + yaml[0].length >= limit - start));
+  const overflow = truncated
+    ? [
+        {
+          match: "(value longer than 4096 characters)",
+          at: start,
+          groups: undefined,
+        },
+      ]
+    : [];
+  return [...inSpan, ...items, ...overflow].map(({ match, at, groups }) => ({
     secret: groups?.secret,
     at,
     match: `${opener}…${match}`,
