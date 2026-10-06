@@ -1,16 +1,25 @@
-import type { MarketInput } from "@morpho-org/midnight-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import {
+  type MarketInput,
+  MarketUtils,
+  midnightBundlesV2Abi,
+} from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  validateDeadline,
+  validateReferralFee,
+} from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
-import type {
-  Metadata,
-  MidnightSellTarget,
-  MidnightTakeWithdrawAction,
-  Transaction,
+import {
+  type Metadata,
+  type MidnightSellTarget,
+  type MidnightTakeWithdrawAction,
+  NegativeInputError,
+  NonPositiveInputError,
+  type Transaction,
 } from "../../types/index.js";
-import { midnightTake } from "./take.js";
 import type {
   MidnightReferralFeeParams,
   MidnightTakeableOffer,
@@ -88,13 +97,57 @@ export const midnightTakeWithdraw = (
     expectedBuy: true,
   });
 
-  let tx = midnightTake({
-    side: "sell",
-    ...params,
-    reduceOnly: true,
-    offerFills: params.takeableOffers,
-    collateralSupplies: [],
-  });
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
+    }
+    if (target.maxUnits <= 0n) {
+      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
+    }
+  } else {
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.minSellerAssets < 0n) {
+      throw new NegativeInputError(
+        "target.minSellerAssets",
+        target.minSellerAssets,
+      );
+    }
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  const market = MarketUtils.toStruct(params.market);
+  const args = [
+    true, // reduceOnly
+    params.receiver, // receiver
+    [], // collateralSupplies
+    params.takeableOffers, // offerFills
+    referralFeePct, // referralFeePct
+    referralFeeRecipient, // referralFeeRecipient
+    params.deadline, // deadline
+    zeroAddress, // wrappedNative
+  ] as const;
+
+  let tx = {
+    to: getChainAddress(params.chainId, "midnightBundlesV2"),
+    value: 0n,
+    data:
+      target.type === "assets"
+        ? encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
+            args: [market, target.assets, target.maxUnits, ...args],
+          })
+        : encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget",
+            args: [market, target.units, target.minSellerAssets, ...args],
+          }),
+  };
   if (params.metadata) {
     tx = addTransactionMetadata(tx, params.metadata);
   }
