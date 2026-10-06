@@ -122,13 +122,11 @@ export type {
 } from "./blue/index.js";
 export { MorphoBlue } from "./blue/index.js";
 export type {
-  CancelAndMakeBorrowParams as MidnightCancelAndMakeBorrowParams,
-  CancelAndMakeLendParams as MidnightCancelAndMakeLendParams,
-  CancelAndMakeOutput as MidnightCancelAndMakeOutput,
-  CancelAndMakeParams as MidnightCancelAndMakeOffersParams,
   GetOffersDataParams as MidnightGetOffersDataParams,
   GetPositionDataParams as MidnightGetPositionDataParams,
-  MakeBorrowCollateral as MidnightMakeBorrowCollateral,
+  MakeLendParams as MidnightMakeLendParams,
+  MakeOffersOutput as MidnightMakeOffersOutput,
+  MakeOffersParams as MidnightMakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
   MidnightMakerTreeInput,
   OffersData as MidnightOffersData,

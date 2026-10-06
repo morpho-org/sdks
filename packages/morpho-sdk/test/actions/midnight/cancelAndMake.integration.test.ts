@@ -34,7 +34,7 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
-import type { MidnightCancelAndMakeOutput } from "../../../src/entities/index.js";
+import type { MidnightMakeOffersOutput } from "../../../src/entities/index.js";
 import {
   isRequirementSignature,
   morphoViemExtension,
@@ -212,7 +212,7 @@ const consumed = (client: AnvilTestClient<typeof base>, group: Hex) =>
 
 const fulfilRequirements = async (
   client: AnvilTestClient<typeof base>,
-  output: MidnightCancelAndMakeOutput,
+  output: MidnightMakeOffersOutput,
 ) => {
   for (const requirement of await output.getRequirements()) {
     if (isRequirementSignature(requirement)) {
@@ -223,7 +223,7 @@ const fulfilRequirements = async (
   await expect(output.getRequirements()).resolves.toEqual([]);
 };
 
-describe("Midnight cancel-and-make on fork", () => {
+describe("Midnight maker offers on fork", () => {
   test("publishes lend offers, then atomically reposts them", async ({
     client,
   }) => {
@@ -237,7 +237,7 @@ describe("Midnight cancel-and-make on fork", () => {
       .extend(morphoViemExtension())
       .morpho.midnight(base.id);
 
-    const first = await midnightEntity.cancelAndMakeLend({
+    const first = await midnightEntity.makeLend({
       accountAddress: client.account.address,
       offers: rateTree(client, { buy: true, group: groupA }),
       deadline: maxUint256,
@@ -250,7 +250,7 @@ describe("Midnight cancel-and-make on fork", () => {
 
     await expect(isRootRatified(client, first.root)).resolves.toBe(true);
 
-    const repost = await midnightEntity.cancelAndMakeLend({
+    const repost = await midnightEntity.makeLend({
       accountAddress: client.account.address,
       offers: rateTree(client, { buy: true, group: groupB }),
       cancellations: [{ group: groupA, maxConsumed: 0n }],
@@ -277,7 +277,7 @@ describe("Midnight cancel-and-make on fork", () => {
       .extend(morphoViemExtension())
       .morpho.midnight(base.id);
 
-    const output = await midnightEntity.cancelAndMakeLend({
+    const output = await midnightEntity.makeLend({
       accountAddress: client.account.address,
       offers: priceTree(client, { buy: true, group: groupA }),
       deadline: maxUint256,
@@ -306,7 +306,7 @@ describe("Midnight cancel-and-make on fork", () => {
       .extend(morphoViemExtension())
       .morpho.midnight(base.id);
 
-    const first = await midnightEntity.cancelAndMakeLend({
+    const first = await midnightEntity.makeLend({
       accountAddress: client.account.address,
       offers: rateTree(client, { buy: true, group: groupA }),
       deadline: maxUint256,
@@ -325,7 +325,7 @@ describe("Midnight cancel-and-make on fork", () => {
       args: [groupA, 1n, client.account.address],
     });
 
-    const repost = await midnightEntity.cancelAndMakeLend({
+    const repost = await midnightEntity.makeLend({
       accountAddress: client.account.address,
       offers: rateTree(client, { buy: true, group: groupB }),
       cancellations: [{ group: groupA, maxConsumed: 0n }],
