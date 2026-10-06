@@ -450,21 +450,34 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"packages/a/package.json" has no package name');
   });
 
-  test("error: a public script importing a private file fails the run", () => {
-    const { repo, sha } = commitRepo(
-      {
-        ...BASE_FILES,
-        "scripts/lint/check.ts":
-          'import { isMain } from "../ci/workflow.ts";\n',
-        "scripts/ci/workflow.ts": "export const isMain = true;\n",
-      },
-      [...INCLUDE, "scripts/lint/check.ts"],
-    );
+  test.each([
+    {
+      name: "named import",
+      source: 'import { isMain } from "../ci/workflow.ts";\n',
+    },
+    { name: "re-export", source: 'export * from "../ci/workflow.ts";\n' },
+    { name: "side-effect import", source: 'import "../ci/workflow.ts";\n' },
+    {
+      name: "multi-line import",
+      source: 'import {\n  isMain,\n} from "../ci/workflow.ts";\n',
+    },
+  ])(
+    "error: a public script with a $name of a private file fails the run",
+    ({ source }) => {
+      const { repo, sha } = commitRepo(
+        {
+          ...BASE_FILES,
+          "scripts/lint/check.ts": source,
+          "scripts/ci/workflow.ts": "export const isMain = true;\n",
+        },
+        [...INCLUDE, "scripts/lint/check.ts"],
+      );
 
-    expect(() =>
-      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
-    ).toThrow('"scripts/lint/check.ts" references "scripts/ci/workflow.ts"');
-  });
+      expect(() =>
+        generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+      ).toThrow('"scripts/lint/check.ts" references "scripts/ci/workflow.ts"');
+    },
+  );
 
   test("error: a public file dynamically importing a private file fails the run", () => {
     const { repo, sha } = commitRepo(
