@@ -146,6 +146,8 @@ class FakeGitHub implements GitHub {
     return {
       number: pull.number,
       node_id: `PR_${pull.number}`,
+      title: pull.title,
+      body: pull.body,
       head: { sha: this.refs.get(SYNC_BRANCH) },
       auto_merge: pull.auto_merge,
     };
@@ -552,6 +554,25 @@ describe("syncPublic", () => {
     expect(head?.parents).toEqual([moved]);
     expect(treeHash(head?.files ?? new Map())).toBe(r2.manifest.treeHash);
     expect(github.pulls[0]?.auto_merge?.commit_message).toContain(R2);
+  });
+
+  test("a rerun after a partial failure repairs the PR text and drops sync/build", async () => {
+    const github = new FakeGitHub({});
+    const r = release(R1, v1);
+    await syncPublic({ github, ...r });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    const { title, body } = pull;
+    pull.title = "Release of an older snapshot";
+    pull.body = "stale";
+    github.refs.set(BUILD_BRANCH, github.refs.get("main") ?? "");
+    expect(await syncPublic({ github, ...r })).toEqual({
+      type: "pr-current",
+      pr: 1,
+    });
+    expect(pull.title).toBe(title);
+    expect(pull.body).toBe(body);
+    expect(github.refs.has(BUILD_BRANCH)).toBe(false);
   });
 
   test("a final tree mismatch stops the sync before sync/main or the PR moves", async () => {

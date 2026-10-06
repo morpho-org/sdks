@@ -208,6 +208,8 @@ interface GitCommit {
 interface PullRequest {
   readonly number: number;
   readonly node_id: string;
+  readonly title: string;
+  readonly body: string | null;
   readonly head: { readonly sha: string };
   readonly auto_merge: {
     readonly merge_method: string;
@@ -331,6 +333,16 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     options.maxBatchBytes,
   );
 
+  const prBody = [
+    "Release snapshot of the internal repository. Merging it publishes every package below that isn't on npm yet.",
+    "",
+    ...options.packages.map((pkg) => `- \`${pkg.name}@${pkg.version}\``),
+    "",
+    message.body.replace("\n", "  \n"),
+    "",
+    "Opened by the public sync App, which merges it once CI passes. A newer release replaces it.",
+  ].join("\n");
+
   const open = (await github.rest(OPEN_SYNC_PRS_PATH)) as PullRequest[];
   if (open.length > 1) {
     throw new Error(
@@ -360,6 +372,19 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
         )) as { readonly behind_by: number }
       ).behind_by === 0;
     if (onMain) {
+      // A rerun after a partial failure: the PR may still describe the previous
+      // release and sync/build may still exist.
+      if (pr.title !== message.headline || pr.body !== prBody) {
+        await github.rest(`${repoPath}/pulls/${pr.number}`, {
+          method: "PATCH",
+          body: { title: message.headline, body: prBody },
+        });
+      }
+      if ((await readRef(github, BUILD_BRANCH)) !== undefined) {
+        await github.rest(`${repoPath}/git/refs/heads/${BUILD_BRANCH}`, {
+          method: "DELETE",
+        });
+      }
       const merge = pr.auto_merge;
       if (
         merge?.merge_method !== "squash" ||
@@ -456,15 +481,6 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     method: "DELETE",
   });
 
-  const prBody = [
-    "Release snapshot of the internal repository. Merging it publishes every package below that isn't on npm yet.",
-    "",
-    ...options.packages.map((pkg) => `- \`${pkg.name}@${pkg.version}\``),
-    "",
-    message.body.replace("\n", "  \n"),
-    "",
-    "Opened by the public sync App, which merges it once CI passes. A newer release replaces it.",
-  ].join("\n");
   let number: number;
   let nodeId: string;
   if (pr === undefined) {
