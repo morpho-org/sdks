@@ -17,16 +17,17 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 // names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match. Any
 // `<role>_KEY` / `<role>-key` counts. Matching ignores case, so camelCase
 // matches for the listed roles (`walletKey`, `signingKey`), but not for other
-// names such as `marketKey`, which hold 32-byte hashes. A bare `KEY` or
-// `SECRET` counts too, since it can hold a key passed to a sink by name.
+// names such as `marketKey`, which hold 32-byte hashes. A bare `KEY` or `SECRET`
+// counts too, and so do `keys`/`secrets` when assigned or holding a list or
+// object (not prose like `secrets: inherit`).
 const KEY_NAME =
-  "(?:(?<![a-z0-9_$])(?:key|secret)(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
+  "(?:(?<![a-z0-9_$])(?:key|secret)(?:s(?=\\s*(?:(?::[^=;\\n]{0,40})?=(?!=)|:\\s*[[{])))?(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
 // `hdKeyToAccount`, and ethers' `new Wallet(…)`/`new SigningKey(…)`.
 const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(`;
 // A CLI flag with a space-separated value (`--private-key 0x…`), also across a
 // shell line continuation.
-const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]+|\\\n\s*)`;
+const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+)`;
 const MNEMONIC_NAME =
   "(?:mnemonic|seed(?:[_-]?(?:phrase|words))?|(?:recovery|secret|wallet)[_-]?(?:phrase|words)|(?<![a-z])phrase)";
 // viem's `mnemonicToAccount`, ethers' `Wallet.fromPhrase`/`fromMnemonic`,
@@ -85,7 +86,7 @@ const RULES = {
   ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic: new RegExp(
-    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}\w*(?:[ \t]+|\\\n\s*))\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+))\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
     "gi",
   ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:
@@ -291,8 +292,38 @@ export function scanFiles(
       lineStarts.push(index + 1);
       index = source.indexOf("\n", index + 1);
     }
+    // A sink fed a constant by name: also check every value assigned to that
+    // name in the file, whatever the name, as `const deployer = "0x…"`.
+    const assigned: [RuleId, string, number][] = [];
+    for (const [rule, sink] of [
+      ["wallet-key-list", KEY_SINK],
+      ["mnemonic-list", MNEMONIC_SINK],
+    ] as const) {
+      const calls = new RegExp(
+        String.raw`(?:${sink})\s*([a-z_$][\w$]*)\s*[,)]`,
+        "gi",
+      );
+      for (const [, ident] of source.matchAll(calls)) {
+        const escaped = (ident ?? "").replace(/\$/g, "\\$");
+        const declaration = new RegExp(
+          String.raw`(?<![\w$.])${escaped}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
+          "g",
+        );
+        for (const { 0: opener, index } of source.matchAll(declaration)) {
+          assigned.push([rule, opener, index]);
+        }
+      }
+    }
     for (const [rule, pattern] of rules) {
-      for (const { 0: opener, index, groups } of source.matchAll(pattern)) {
+      const matches = [
+        ...[...source.matchAll(pattern)].map(
+          ({ 0: opener, index, groups }) => ({ opener, index, groups }),
+        ),
+        ...assigned
+          .filter(([assignedRule]) => assignedRule === rule)
+          .map(([, opener, index]) => ({ opener, index, groups: undefined })),
+      ];
+      for (const { opener, index, groups } of matches) {
         // A value can hold a test key and a real key, so each one is checked.
         const candidates =
           rule === "wallet-key-list" || rule === "mnemonic-list"
@@ -332,12 +363,14 @@ export function scanFiles(
  * items of a YAML block list under the name. The value ends at a `,`, `;` or
  * closing bracket outside any nesting or string, or at a line break unless the
  * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
- * start of a line runs to the end of the line, since its value is unquoted, unless
- * the value opens a bracket. A value still open after 4096 characters is
- * reported as a candidate with no secret, so the gate fails closed.
- * Whitespace-preceded `//` and `#` comments and `/* *\/` comments are skipped,
- * so a closing bracket, `,` or `;` in a comment can't end the value early. YAML
- * lists may hold blank and `#` comment lines.
+ * start of a line (no space before `=`, no dotted name) runs to the end of the
+ * line, unless the value opens a bracket, starts with a quote (then it runs until
+ * the quote closes, across lines) or the next line continues it. A value still
+ * open after 4096 characters is reported as a candidate with no secret, so the
+ * gate fails closed. Outside dotenv values, whitespace-preceded `//` and `#`
+ * comments and `/* *\/` comments are skipped, so a closing bracket, `,` or `;` in
+ * a comment can't end the value early. YAML lists may hold blank and `#` comment
+ * lines.
  *
  * @param source - Whole file text.
  * @param value - The matched opener, the offset just after it, and what to look for.
@@ -351,9 +384,11 @@ export function valueSecrets(
   const mnemonic = value.kind === "mnemonic";
   const limit = Math.min(source.length, start + 4096);
   const lineStart = source.lastIndexOf("\n", start - opener.length - 1) + 1;
+  // Strict dotenv shape: `NAME=` with no space before `=` and no dotted name, so
+  // a JS reassignment (`privateKey = …`, `this.pk = …`) isn't cut at the newline.
   const dotenv =
-    opener.endsWith("=") &&
-    /^[ \t]*(?:export[ \t]+)?[\w.-]*$/.test(
+    /\S=$/.test(opener) &&
+    /^[ \t]*(?:export[ \t]+)?[\w-]*$/.test(
       source.slice(lineStart, start - opener.length),
     ) &&
     !/^[ \t]*[[({]/.test(source.slice(start, start + 200));
@@ -364,8 +399,15 @@ export function valueSecrets(
   for (; end < limit; end++) {
     const char = source[end];
     if (char === "\n") {
-      // A dotenv value ends at the line end unless it opened a quote.
-      if (dotenv && quote === undefined) break;
+      // A dotenv value ends at the line end unless it opened a quote or the next
+      // line continues it.
+      if (
+        dotenv &&
+        quote === undefined &&
+        !/^\s*[?:|&.]/.test(source.slice(end + 1, end + 200))
+      ) {
+        break;
+      }
       if (!dotenv && (quote === '"' || quote === "'")) quote = undefined;
     }
     if (quote !== undefined) {

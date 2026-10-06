@@ -206,6 +206,22 @@ describe("scanFiles", () => {
       `forge script --mnemonics "${Array(12).fill("legal").join(" ")}"`,
     ],
     ["mnemonic", `vm.deriveKey("${Array(12).fill("legal").join(" ")}", 0)`],
+    ["mnemonic", `const seed_words = "${Array(12).fill("legal").join(" ")}";`],
+    ["mnemonic", `const walletWords = "${Array(12).fill("legal").join(" ")}";`],
+    ["mnemonic", `const phrase = "${Array(12).fill("legal").join(" ")}";`],
+    ["wallet-key-list", `const keys = ["0x${"ab".repeat(32)}"];`],
+    [
+      "wallet-key-list",
+      `const SECRETS = { deployer: "0x${"ab".repeat(32)}" };`,
+    ],
+    [
+      "wallet-key-list",
+      `const deployer: Hex = "0x${"ab".repeat(32)}";\nconst account = privateKeyToAccount(deployer);`,
+    ],
+    [
+      "mnemonic-list",
+      `const WORDS = "${Array(12).fill("legal").join(" ")}";\nmnemonicToAccount(WORDS);`,
+    ],
   ])("flags %s", (rule, text) => {
     expect(scanFiles([file("a.md", `ok\n${text}\n`)])).toEqual([
       expect.objectContaining({ path: "a.md", line: 2, rule }),
@@ -223,7 +239,8 @@ describe("scanFiles", () => {
             ", marketKey = 0x" +
             "ab".repeat(32) +
             ", task = 0x" +
-            "ab".repeat(32),
+            "ab".repeat(32) +
+            `, passphrase: "${Array(12).fill("legal").join(" ")}"`,
         ),
       ]),
     ).toEqual([]);
@@ -376,9 +393,19 @@ test.each([
 });
 
 test.each([
+  `let privateKey;\nprivateKey = process.env.CI\n  ? "${REAL_KEY}"\n  : undefined;`,
+  `this.privateKey = process.env.CI\n  ? "${REAL_KEY}"\n  : undefined;`,
+])("flag a ternary key after a reassignment in %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ rule: "wallet-key-list" }),
+  ]);
+});
+
+test.each([
   `forge script D.s.sol --private-key ${REAL_KEY} --broadcast`,
   `cast wallet address --private-key "${REAL_KEY}"`,
   `forge script D.s.sol \\\n  --private-key ${REAL_KEY}`,
+  `cast wallet --private-key \\\n  ${REAL_KEY}`,
 ])("flag a key passed as a CLI flag in %s", (line) => {
   expect(scanFiles([file("a.sh", line)])).toEqual([
     expect.objectContaining({ rule: "wallet-key" }),
