@@ -110,19 +110,34 @@ describe("verifyArtifact", () => {
   });
 
   test.each([
-    ["an edited file", (dir: string) => write(dir, { "tree/README.md": "x" })],
-    ["an extra file", (dir: string) => write(dir, { "tree/extra.md": "x" })],
-    ["a missing file", (dir: string) => rmSync(join(dir, "tree/README.md"))],
+    [
+      "an edited file",
+      '"README.md" differs from the manifest.',
+      (dir: string) => write(dir, { "tree/README.md": "x" }),
+    ],
+    [
+      "an extra file",
+      '"extra.md" is in the tree but not in the manifest.',
+      (dir: string) => write(dir, { "tree/extra.md": "x" }),
+    ],
+    [
+      "a missing file",
+      '"README.md" is in the manifest but not in the tree.',
+      (dir: string) => rmSync(join(dir, "tree/README.md")),
+    ],
     [
       "an edited tarball",
+      `Tarball "a-1.0.0.tgz" doesn't match SHA256SUMS.`,
       (dir: string) => write(dir, { "tarballs/a-1.0.0.tgz": "other" }),
     ],
     [
       "an unlisted tarball",
+      "Tarballs [a-1.0.0.tgz, b-1.0.0.tgz] don't match the public packages",
       (dir: string) => write(dir, { "tarballs/b-1.0.0.tgz": "tgz" }),
     ],
     [
       "a public package's tarball dropped, with checksums rewritten",
+      "Tarballs [internal-1.0.0.tgz] don't match the public packages",
       (dir: string) => {
         rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
         write(dir, { "tarballs/internal-1.0.0.tgz": "tgz" });
@@ -133,6 +148,7 @@ describe("verifyArtifact", () => {
     ],
     [
       "no tarballs",
+      "Artifact has no tarballs.",
       (dir: string) => {
         rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
         write(dir, { "tarballs/SHA256SUMS": "" });
@@ -140,18 +156,22 @@ describe("verifyArtifact", () => {
     ],
     [
       "a malformed checksum line",
+      'Invalid SHA256SUMS line "nope".',
       (dir: string) => write(dir, { "tarballs/SHA256SUMS": "nope\n" }),
     ],
     [
       "a non-tarball file next to the tarballs",
+      'Unexpected "postinstall.sh" in tarballs/.',
       (dir: string) => write(dir, { "tarballs/postinstall.sh": "x" }),
     ],
     [
       "missing checksums",
+      'tarballs/SHA256SUMS".',
       (dir: string) => rmSync(join(dir, "tarballs/SHA256SUMS")),
     ],
     [
       "a retargeted symlink",
+      '"link.md" differs from the manifest.',
       (dir: string) => {
         rmSync(join(dir, "tree/link.md"));
         symlinkSync("../../.env", join(dir, "tree/link.md"));
@@ -159,6 +179,7 @@ describe("verifyArtifact", () => {
     ],
     [
       "a symlink replaced by a file",
+      '"link.md" has mode 100644, but the manifest says 120000.',
       (dir: string) => {
         rmSync(join(dir, "tree/link.md"));
         write(dir, { "tree/link.md": "README.md" });
@@ -166,14 +187,17 @@ describe("verifyArtifact", () => {
     ],
     [
       "an extra symlink",
+      '"leak" is in the tree but not in the manifest.',
       (dir: string) => symlinkSync("README.md", join(dir, "tree/leak")),
     ],
     [
       "a changed executable bit",
+      '"README.md" has mode 100755, but the manifest says 100644.',
       (dir: string) => chmodSync(join(dir, "tree/README.md"), 0o755),
     ],
     [
       "a manifest path outside the tree",
+      "Invalid manifest entry",
       (dir: string) =>
         write(dir, {
           "public-tree.json": JSON.stringify({
@@ -185,12 +209,13 @@ describe("verifyArtifact", () => {
     ],
     [
       "a manifest without files",
+      'public-tree.json needs "sourceCommit", "treeHash" and "files".',
       (dir: string) => write(dir, { "public-tree.json": "{}" }),
     ],
-  ])("rejects %s", (_, tamper) => {
+  ])("rejects %s", (...[, expected, tamper]) => {
     const dir = artifact();
     tamper(dir);
-    expect(() => verifyArtifact(dir)).toThrow();
+    expect(() => verifyArtifact(dir)).toThrow(expected);
   });
 
   test("rejects a checksum for a tarball that isn't there", () => {
