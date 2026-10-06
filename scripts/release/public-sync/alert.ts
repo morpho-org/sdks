@@ -154,11 +154,35 @@ async function run() {
     owner: env.PUBLIC_SYNC_ALERT_OWNER || "(owner not configured)",
     runUrl: readRequiredEnv(env, "RUN_URL"),
   });
-  const webhook = env.PUBLIC_SYNC_ALERT_WEBHOOK_URL;
+  await sendAlert({
+    text,
+    cause,
+    webhook: env.PUBLIC_SYNC_ALERT_WEBHOOK_URL,
+    fetchImpl: fetch,
+  });
+}
+
+/**
+ * Posts an alert to the webhook, then always throws so the step fails and the alert
+ * shows in the run even when nobody could be paged.
+ *
+ * @param options.text - Alert text.
+ * @param options.cause - Error behind the alert, kept as `cause`.
+ * @param options.webhook - Incoming webhook URL; empty or unset skips the call.
+ * @param options.fetchImpl - `fetch` implementation.
+ * @throws Always: the alert text, or why the webhook call failed.
+ */
+export async function sendAlert(options: {
+  readonly text: string;
+  readonly cause?: unknown;
+  readonly webhook: string | undefined;
+  readonly fetchImpl: typeof fetch;
+}): Promise<never> {
+  const { text, cause, webhook } = options;
   if (webhook) {
     let response: Response;
     try {
-      response = await fetch(webhook, {
+      response = await options.fetchImpl(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),

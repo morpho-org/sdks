@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { findStaleSyncPr, formatAlert, resolveStaleAlert } from "./alert.ts";
+import {
+  findStaleSyncPr,
+  formatAlert,
+  resolveStaleAlert,
+  sendAlert,
+} from "./alert.ts";
 import { type GitHub, GitHubApiError } from "./github.ts";
 
 function github(pulls: unknown[], committedAt: string): GitHub {
@@ -164,5 +169,86 @@ describe("formatAlert", () => {
         { owner: "@o", runUrl: "r" },
       ),
     ).toContain("u has been open for 90 minutes");
+  });
+});
+
+describe("sendAlert", () => {
+  const webhook = "https://hooks.example/alert";
+  const answer = (status: number, body = "") =>
+    (async () => new Response(body, { status })) as typeof fetch;
+
+  test("posts the text, then still throws it", async () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      calls.push([url, init]);
+      return new Response("ok");
+    }) as typeof fetch;
+    await expect(
+      sendAlert({ text: "alert", webhook, fetchImpl }),
+    ).rejects.toThrow(/^alert$/);
+    expect(calls).toEqual([
+      [
+        webhook,
+        expect.objectContaining({ method: "POST", body: '{"text":"alert"}' }),
+      ],
+    ]);
+  });
+
+  test("reports a non-2xx answer with its status and cut body, keeping the cause", async () => {
+    const cause = new Error("watch");
+    const error = await sendAlert({
+      text: "alert",
+      cause,
+      webhook,
+      fetchImpl: answer(503, "x".repeat(600)),
+    }).catch((e: Error) => e);
+    expect(error.message).toBe(
+      `Alert webhook answered 503 "${"x".repeat(500)}", nobody was paged. alert`,
+    );
+    expect(error.cause).toBe(cause);
+  });
+
+  test("keeps the fetch error as cause when the call fails", async () => {
+    const network = new TypeError("fetch failed");
+    const fetchImpl = (async () => {
+      throw network;
+    }) as typeof fetch;
+    const error = await sendAlert({ text: "alert", webhook, fetchImpl }).catch(
+      (e: Error) => e,
+    );
+    expect(error.message).toBe(
+      "Alert webhook call failed, nobody was paged. alert",
+    );
+    expect(error.cause).toBe(network);
+  });
+
+  test("aggregates the fetch and watch errors", async () => {
+    const network = new TypeError("fetch failed");
+    const cause = new Error("watch");
+    const fetchImpl = (async () => {
+      throw network;
+    }) as typeof fetch;
+    const error = await sendAlert({
+      text: "alert",
+      cause,
+      webhook,
+      fetchImpl,
+    }).catch((e: Error) => e);
+    expect(error.cause).toBeInstanceOf(AggregateError);
+    expect((error.cause as AggregateError).errors).toEqual([network, cause]);
+  });
+
+  test("throws without calling anything when no webhook is set", async () => {
+    let called = false;
+    const fetchImpl = (async () => {
+      called = true;
+      return new Response("ok");
+    }) as typeof fetch;
+    await expect(
+      sendAlert({ text: "alert", webhook: "", fetchImpl }),
+    ).rejects.toThrow(
+      "alert (PUBLIC_SYNC_ALERT_WEBHOOK_URL isn't set: nobody was paged.)",
+    );
+    expect(called).toBe(false);
   });
 });
