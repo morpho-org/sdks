@@ -82,7 +82,8 @@ version, or `.changeset/`.
   `contents: read`, with job-level scopes where jobs differ. `id-token: write`
   only for OIDC or provenance publishing. `secrets: inherit` is forbidden.
 - **Secrets (high).** Secrets are `env:`-bound, never interpolated into
-  `run:`, and only passed to SHA-pinned actions. Widening a secret's reach is
+  `run:`, and only passed to SHA-pinned third-party actions (first-party
+  `actions/*` and `github/*` may use tags). Widening a secret's reach is
   high, critical on the write-token or publish path: loosening the
   `main`/`next` gate on `version-pr` and `publish`, moving a write or publish
   secret into the ungated `test` job, or exposing any secret to a fork
@@ -144,13 +145,14 @@ artifact-validation steps.
 - **High:** an unpinned third-party action; a missing or widened
   `permissions:` scope; `secrets: inherit`; `pull_request_target` running PR
   code; a write token minted without hardening or a split-job boundary; a
-  required check dropped from a release workflow's `needs:`; a new runtime or
+  required check dropped from a release workflow's `needs:`; untested
+  data-deriving logic in an inline `run:` block; a new runtime or
   peer dependency; a missing or wrong changeset for a published change;
   persona contract breaks, an undeclared Step 4 trigger flag, or inventory
   drift.
 - **Medium:** a new secret without an inventory row; a new dev dependency; a
   provenance or SBOM step removed from a dev-only path; a dangling reference
-  pointer; deterministic workflow logic left in inline shell; a `.review/`
+  pointer; a new CI script written as `.mjs` or `.js`; a `.review/`
   rule out of step with its source.
 - **Low:** wording that changes no enforced rule.
 
