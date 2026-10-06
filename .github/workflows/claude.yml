@@ -50,7 +50,12 @@ jobs:
           # Pin to the default branch: on pull_request_review* events the default ref is the PR merge ref.
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          persist-credentials: false
+          # Keep the job token (bounded to `contents: read` above) persisted in .git/config: this is a
+          # private repo, so the claude-code-action's internal `git fetch origin <pr-branch>` to swap the
+          # workspace to the PR head requires auth. `persist-credentials: false` (safe on the public mirror
+          # where anonymous fetch works) makes that fetch fail here with "could not read Username for
+          # https://github.com". The post-Claude steps already run under `env -i` from the trusted snapshot,
+          # so the persisted read-only token is not reachable by PR-head code through inherited env.
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
