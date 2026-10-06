@@ -1,0 +1,52 @@
+# Public sync
+
+`sync.ts` turns a verified release artifact into the single open PR on public
+[morpho-org/sdks](https://github.com/morpho-org/sdks) (branch `sync/main`), with squash
+auto-merge armed so it lands once public CI passes:
+
+```text
+Release <pkg@ver, ...>
+
+Source-Commit: <internal release commit>
+Public-Tree: <git tree hash of the public tree>
+```
+
+It runs in the `sync` job of `.github/workflows/public-snapshot.yml`, on release commits
+pushed to internal `main` only. That job installs nothing: it runs Node built-ins and
+repository scripts, re-verifies the artifact against git, refuses enabled git hooks, and only
+then mints the App token.
+
+- **Ordering.** The release must descend from the `Source-Commit` of public `main` and of an
+  open sync PR (`git merge-base --is-ancestor` on full history). There is no override; a root
+  commit without a trailer (empty repository) is the only exception.
+- **Idempotency.** Nothing is written when public `main`, or the open sync PR on top of the
+  current `main`, already has the tree hash.
+- **Commits.** Built on scratch branch `sync/build` with `createCommitOnBranch`, which GitHub
+  signs, in batches of at most 25 MB of contents. Every commit must show `verified`, and the
+  last one must have the expected tree, before `sync/main` moves. Only `100644` files can be
+  written; another mode fails the sync.
+- **Supersede.** A newer release disarms auto-merge, force-moves `sync/main` and retitles the
+  same PR. More than one open sync PR fails the sync.
+
+`alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
+`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes).
+
+## Setup (org admin)
+
+1. **Create the GitHub App** (org settings → Developer settings → GitHub Apps → New), owned by
+   morpho-org: name e.g. `morpho-sdks-public-sync`, webhook off, "Only on this account".
+   Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**
+   (Metadata: Read is implied). Nothing else, no organization or account permissions.
+2. **Install it on public `morpho-org/sdks` only** ("Only select repositories").
+3. **Generate a private key**, then in internal `morpho-org/sdks-internal` → Settings →
+   Environments create `public-sync`: deployment branches "Selected branches" = `main`, and
+   environment secrets `PUBLIC_SYNC_APP_ID` (the App ID) and `PUBLIC_SYNC_APP_PRIVATE_KEY`
+   (the `.pem` contents). Delete the downloaded key. Never add them as repository secrets.
+4. **Let the App bypass the public rulesets** on `main` only through a PR, and allow it to push
+   `sync/main` and `sync/build`; require public `ci.yml` before merging; enable auto-merge and
+   squash merges on the public repository.
+5. **Alerts** (TBD: channel and owner): create environment `public-sync-alerts` (branches:
+   `main`) with secret `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert
+   channel), and set repository variables `PUBLIC_SYNC_ALERT_OWNER` (mention, e.g.
+   `<!subteam^ID>`) and optionally `PUBLIC_SYNC_MAX_PR_AGE_MINUTES`. Until then, alerts only
+   fail their job.
