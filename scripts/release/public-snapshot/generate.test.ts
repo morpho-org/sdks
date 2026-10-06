@@ -466,6 +466,88 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"scripts/lint/check.ts" references "scripts/ci/workflow.ts"');
   });
 
+  test("error: a public file dynamically importing a private file fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "scripts/lint/check.ts":
+          'const { isMain } = await import("../ci/workflow.ts");\n',
+        "scripts/ci/workflow.ts": "export const isMain = true;\n",
+      },
+      [...INCLUDE, "scripts/lint/check.ts"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"scripts/lint/check.ts" references "scripts/ci/workflow.ts"');
+  });
+
+  test("error: a public file importing a private directory fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "scripts/lint/check.ts": 'import { isMain } from "../ci";\n',
+        "scripts/ci/index.ts": "export const isMain = true;\n",
+      },
+      [...INCLUDE, "scripts/lint/check.ts"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"scripts/lint/check.ts" references "scripts/ci"');
+  });
+
+  test.each([
+    { name: "array", scripts: ["node x.ts"] },
+    { name: "non-string command", scripts: { build: 1 } },
+  ])("error: $name package scripts fail the run", ({ scripts }) => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts,
+        }),
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"packages/a/package.json" has a malformed "scripts"');
+  });
+
+  test("behavior: a package script running its own build output passes", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { start: "node lib/esm/cli.js" },
+        }),
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).not.toThrow();
+  });
+
+  test("behavior: a value export of a relative-looking string is not a reference", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/src/index.ts": 'export const OUT_DIR = "./dist";\n',
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).not.toThrow();
+  });
+
   test("error: a public package script running a private file fails the run", () => {
     const { repo, sha } = commitRepo(
       {
@@ -489,7 +571,7 @@ describe("generatePublicSnapshot", () => {
       {
         ...BASE_FILES,
         "packages/a/src/index.ts":
-          'export * from "./b.js";\nimport {\n  c,\n} from "./c.ts";\nconst fixture = \'export * from "./missing.js";\';\n',
+          'export * from "./b.js";\nimport "./c.ts";\nimport {\n  c,\n} from "./c.ts";\nconst fixture = \'export * from "./missing.js";\';\n',
         "packages/a/src/c.ts": "export const c = 1;\n",
         "packages/a/src/b.ts": "export const b = 1;\n",
       },

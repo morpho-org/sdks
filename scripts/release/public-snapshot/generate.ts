@@ -106,7 +106,9 @@ function git(repo: string, args: string[]): Buffer {
  *   already-selected path, a path has control characters, an entry is a submodule,
  *   a selected file is also the parent directory of another one, a symlink leaves the
  *   tree, a package manifest has no name or a malformed dependency field, a public package has a
- *   `workspace:` dependency on a private one, or `outDir` is not empty.
+ *   `workspace:` dependency on a private one, a public source file's relative import or
+ *   a `node <path>` package script points outside the public tree (`packages/<name>/lib/`
+ *   build output excepted), a package has malformed `scripts`, or `outDir` is not empty.
  */
 export function generatePublicSnapshot(options: {
   repo: string;
@@ -324,17 +326,40 @@ export function generatePublicSnapshot(options: {
   for (const file of files) {
     const references: string[] = [];
     if (/\.[cm]?[jt]sx?$/.test(file.path)) {
-      for (const [, specifier = ""] of file.content
-        .toString()
-        .matchAll(
-          /^\s*(?:(?:import|export)\b[^"'\n]*?|\}\s*)(?:from\s*)?["'](\.\.?\/[^"']+)["']/gm,
-        )) {
+      const source = file.content.toString();
+      const specifiers = [
+        // Static `import … from`, `export … from`, side-effect `import`, and multi-line `} from`.
+        ...source.matchAll(
+          /^\s*(?:(?:import|export)\b[^"'\n;]*?\bfrom\s*|import\s*|\}\s*from\s*)["'](\.\.?\/[^"']+)["']/gm,
+        ),
+        ...source.matchAll(/\bimport\s*\(\s*["'](\.\.?\/[^"']+)["']/g),
+      ];
+      for (const [, specifier = ""] of specifiers) {
         references.push(posix.join(posix.dirname(file.path), specifier));
       }
     }
     if (packageNames.has(file.path) || file.path === "package.json") {
-      const { scripts = {} } = JSON.parse(file.content.toString());
-      for (const command of Object.values<string>(scripts)) {
+      const manifest: unknown = JSON.parse(file.content.toString());
+      const scripts: unknown =
+        typeof manifest === "object" && manifest !== null
+          ? Reflect.get(manifest, "scripts")
+          : undefined;
+      if (
+        scripts !== undefined &&
+        (typeof scripts !== "object" ||
+          scripts === null ||
+          Array.isArray(scripts))
+      ) {
+        throw new Error(
+          `"${file.path}" has a malformed "scripts". It must map script names to commands.`,
+        );
+      }
+      for (const command of Object.values(scripts ?? {})) {
+        if (typeof command !== "string") {
+          throw new Error(
+            `"${file.path}" has a malformed "scripts". It must map script names to commands.`,
+          );
+        }
         for (const [, script = ""] of command.matchAll(
           /\bnode\s+(?:--\S+\s+)*(\S+\.[cm]?[jt]s)\b/g,
         )) {
