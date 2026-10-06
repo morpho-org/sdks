@@ -34,7 +34,7 @@ Only the sync App can move `main`, and only with signed commits. Squash merges m
    gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-main-only-the-bot.json"
    ```
 
-Rules: restrict updates, block force pushes, restrict deletions, require signed commits.
+Rules: restrict updates, require signed commits. Force pushes and deletions are blocked in ruleset B, which nobody can bypass, so a leaked App key can't rewrite or delete `main`.
 
 ## 3. `main` ruleset B, "always checked"
 
@@ -44,7 +44,7 @@ Nobody, including the App and admins, gets to `main` without a pull request on a
 gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-main-always-checked.json"
 ```
 
-Rules: pull request required (0 approvals: the content was reviewed in `sdks-internal`, and the App merges), squash only, required status check `ci` from GitHub Actions (integration 15368), **require branches to be up to date** (`strict_required_status_checks_policy`). Bypass list is empty.
+Rules: block force pushes, restrict deletions, pull request required (0 approvals: the content was reviewed in `sdks-internal`, and the App merges), squash only, required status check `ci` from GitHub Actions (integration 15368), **require branches to be up to date** (`strict_required_status_checks_policy`). Bypass list is empty.
 
 The `ci` check is the `ci` job of `.github/workflows/ci.yml`. Don't rename that job without updating this ruleset.
 
@@ -87,7 +87,7 @@ To add reviewers (for example the SDK maintainers team, with `prevent_self_revie
 
 ## 6. Move each package's npm trusted publisher
 
-Today each package trusts `morpho-org/sdks` + `publish.yml` + environment `prod`. It must trust `morpho-org/sdks` + `release.yml` + environment `npm`. npm allows one trusted publisher per package, so this is revoke then create. Between the two, the package can't be published from CI, so do it during the freeze (section 10, step 1).
+Today each package trusts `morpho-org/sdks` + `push.yml` (which calls the reusable `publish.yml`) + environment `prod`; `npm trust list` shows the exact entry. It must trust `morpho-org/sdks` + `release.yml` + environment `npm`. npm allows one trusted publisher per package, so this is revoke then create. Between the two, the package can't be published from CI, so do it during the freeze (section 10, step 1).
 
 Requirements: npm CLI 11.15.0 or newer (`npm -v`), logged in (`npm login`) as an owner of each package, with 2FA enabled on the account. Granular tokens that bypass 2FA don't work for `npm trust`.
 
@@ -110,7 +110,7 @@ For each package:
 
 ```bash
 PKG=@morpho-org/blue-sdk
-npm trust list "$PKG"                    # note the id of the publish.yml/prod entry
+npm trust list "$PKG"                    # note the id of the single entry (push.yml/prod today)
 npm trust revoke "$PKG" --id=<id>
 npm trust github "$PKG" --repo morpho-org/sdks --file release.yml --env npm --allow-publish --yes
 npm trust list "$PKG"                    # exactly one entry: morpho-org/sdks, release.yml, npm

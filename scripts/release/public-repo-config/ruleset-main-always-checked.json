@@ -7,6 +7,8 @@
   },
   "bypass_actors": [],
   "rules": [
+    { "type": "non_fast_forward" },
+    { "type": "deletion" },
     {
       "type": "pull_request",
       "parameters": {
