@@ -341,6 +341,8 @@ describe("MorphoMidnight", () => {
         takeableOffers: 1,
         maxContinuousFee: maxUint256,
         deadline: maxUint256,
+        referralFeePct: 0n,
+        referralFeeRecipient: zeroAddress,
       });
     });
 

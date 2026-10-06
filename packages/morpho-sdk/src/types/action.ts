@@ -459,6 +459,8 @@ export interface MidnightTakeLendAction
       readonly takeableOffers: number;
       readonly maxContinuousFee: bigint;
       readonly deadline: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
     }
   > {}
 
@@ -472,6 +474,8 @@ export interface MidnightTakeBorrowAction
       readonly receiver: Address;
       readonly takeableOffers: number;
       readonly deadline: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
     }
   > {}
 
@@ -486,6 +490,8 @@ export interface MidnightSupplyCollateralTakeBorrowAction
       readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly takeableOffers: number;
       readonly deadline: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
     }
   > {}
 

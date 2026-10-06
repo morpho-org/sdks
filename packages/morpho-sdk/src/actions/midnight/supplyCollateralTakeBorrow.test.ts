@@ -3,7 +3,7 @@ import {
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import { registerCustomAddresses } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, getAddress, maxUint256 } from "viem";
+import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -16,7 +16,9 @@ import {
   ChainIdMismatchError,
   EmptyMidnightCollateralSuppliesError,
   EmptyMidnightTakeableOffersError,
+  NegativeInputError,
   NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 
@@ -53,6 +55,8 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
       collateralSupplies: [{ collateralIndex: 0n, assets: 2_000n }],
       takeableOffers: 1,
       deadline: maxUint256,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
     });
     expect(decoded.functionName).toBe(
       "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
@@ -89,6 +93,52 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         target: { type: "assets", assets: 1_000n, maxUnits: 0n },
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("behavior: encodes units target, receiver and referral fee", () => {
+    const referralFeeRecipient = getAddress(
+      "0x000000000000000000000000000000000000feee",
+    );
+    const tx = midnightSupplyCollateralTakeBorrow({
+      ...params,
+      target: { type: "units", units: 1_000n, minSellerAssets: 900n },
+      referralFeePct: 1n,
+      referralFeeRecipient,
+    });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.functionName).toBe(
+      "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget",
+    );
+    expect(decoded.args.slice(1, 5)).toEqual([
+      1_000n,
+      900n,
+      false,
+      midnightAddresses.taker,
+    ]);
+    expect(decoded.args.slice(7, 9)).toEqual([1n, referralFeeRecipient]);
+    expect(tx.action.args).toMatchObject({
+      referralFeePct: 1n,
+      referralFeeRecipient,
+    });
+  });
+
+  test("error: NegativeInputError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        target: { type: "units", units: 1_000n, minSellerAssets: -1n },
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: ReferralFeeRecipientMissingError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, referralFeePct: 1n }),
+    ).toThrow(ReferralFeeRecipientMissingError);
   });
 
   test("error: UnknownCollateralIndexError", () => {
