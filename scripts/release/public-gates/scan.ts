@@ -17,19 +17,21 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 // names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match. Any
 // `<role>_KEY` / `<role>-key` counts. Matching ignores case, so camelCase
 // matches for the listed roles (`walletKey`, `signingKey`), but not for other
-// names such as `marketKey`, which hold 32-byte hashes.
+// names such as `marketKey`, which hold 32-byte hashes. A bare `KEY` or
+// `SECRET` counts too, since it can hold a key passed to a sink by name.
 const KEY_NAME =
-  "(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
+  "(?:(?<![a-z0-9_$])(?:key|secret)(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
 // `hdKeyToAccount`, and ethers' `new Wallet(…)`/`new SigningKey(…)`.
 const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(`;
 // A CLI flag with a space-separated value (`--private-key 0x…`), also across a
 // shell line continuation.
 const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]+|\\\n\s*)`;
-const MNEMONIC_NAME = "(?:mnemonic|seed[_-]?phrase)";
-// viem's `mnemonicToAccount`, ethers' `Wallet.fromPhrase`/`fromMnemonic`, and
-// bip39's `mnemonicToSeed(Sync)`/`mnemonicToEntropy`.
-const MNEMONIC_SINK = String.raw`(?:mnemonicToAccount|fromPhrase|fromMnemonic|mnemonicToSeed(?:Sync)?|mnemonicToEntropy)\(`;
+const MNEMONIC_NAME =
+  "(?:mnemonic|seed(?:[_-]?(?:phrase|words))?|(?:recovery|secret|wallet)[_-]?(?:phrase|words)|(?<![a-z])phrase)";
+// viem's `mnemonicToAccount`, ethers' `Wallet.fromPhrase`/`fromMnemonic`,
+// bip39's `mnemonicToSeed(Sync)`/`mnemonicToEntropy`, and Foundry's `vm.deriveKey`.
+const MNEMONIC_SINK = String.raw`(?:mnemonicToAccount|fromPhrase|fromMnemonic|mnemonicToSeed(?:Sync)?|mnemonicToEntropy|deriveKey)\(`;
 
 /** Text that must never reach the public repository or npm. */
 const RULES = {
@@ -40,13 +42,17 @@ const RULES = {
   "linear-url": /\blinear\.app\b/gi,
   "slack-url": /\b(?:[a-z0-9-]+\.)?slack\.com\b/gi,
   "notion-url": /\bnotion\.(?:so|site)\b/gi,
-  "devin-session": /\b(?:app\.)?devin\.ai\/sessions\b/gi,
+  // Session links, including Devin Desktop's `app.devin.ai/desktop/session/<id>`.
+  "devin-session": /\b(?:app\.)?devin\.ai\/(?:[\w-]+\/)*sessions?\b/gi,
   "internal-repo": /\bmorpho-org\/sdks-internal\b/gi,
   "internal-host": /\b(?:[a-z0-9-]+\.)*internal\.morpho\.[a-z]+\b/gi,
   "private-key": /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
+  // BIP32 extended private keys: one controls every account of its HD wallet.
+  "extended-private-key": /\b[xyzt]prv[1-9A-HJ-NP-Za-km-z]{100,112}\b/g,
   "github-token":
     /\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b/g,
   "npm-token": /\bnpm_[A-Za-z0-9]{36}\b/g,
+  "linear-token": /\blin_(?:api|oauth)_[A-Za-z0-9]{32,}\b/g,
   "aws-key": /\bAKIA[0-9A-Z]{16}\b/g,
   "slack-token": /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g,
   "anthropic-key": /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
@@ -79,7 +85,7 @@ const RULES = {
   ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic: new RegExp(
-    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}[ \t]+)\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}\w*(?:[ \t]+|\\\n\s*))\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
     "gi",
   ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:
@@ -100,7 +106,7 @@ const RULES = {
   "url-credentials":
     /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]*:(?!\d+@\d+(?![\w.])|\$\{)[^\s/@"'`]+@/gi,
   "rpc-key":
-    /\b(?:alchemy\.com\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/v3\/[0-9a-f]{32})\b/gi,
+    /\b(?:alchemy(?:api)?\.(?:com|io)\/v2\/[A-Za-z0-9_-]{20,}|infura\.io\/(?:ws\/)?v3\/[0-9a-f]{32})\b/gi,
 } as const satisfies Record<string, RegExp>;
 
 type RuleId = keyof typeof RULES | "blocked-term";
@@ -109,8 +115,10 @@ type RuleId = keyof typeof RULES | "blocked-term";
 // end up in CI logs.
 const SECRET_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
   "private-key",
+  "extended-private-key",
   "github-token",
   "npm-token",
+  "linear-token",
   "aws-key",
   "slack-token",
   "anthropic-key",
@@ -355,21 +363,24 @@ export function valueSecrets(
   let quote: string | undefined;
   for (; end < limit; end++) {
     const char = source[end];
-    if (char === "\n" && (dotenv || quote === '"' || quote === "'")) {
-      if (dotenv) break;
-      quote = undefined;
+    if (char === "\n") {
+      // A dotenv value ends at the line end unless it opened a quote.
+      if (dotenv && quote === undefined) break;
+      if (!dotenv && (quote === '"' || quote === "'")) quote = undefined;
     }
     if (quote !== undefined) {
       if (char === "\\") end++;
       else if (char === quote) quote = undefined;
       continue;
     }
-    if (dotenv) continue;
+    // Only a quote at its start makes a dotenv value multi-line.
+    if (dotenv && /\S/.test(source.slice(start, end))) continue;
     if (char === '"' || char === "'" || char === "`") {
       quote = char;
       seen = true;
       continue;
     }
+    if (dotenv) continue;
     if (
       (char === "#" || (char === "/" && source[end + 1] === "/")) &&
       !/\S/.test(source[end - 1] ?? " ")

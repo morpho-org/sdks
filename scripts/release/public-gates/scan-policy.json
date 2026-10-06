@@ -18,6 +18,12 @@
       "rule": "linear-key",
       "match": "VAU-1206",
       "reason": "Already published to npm; SDK-1322 leaves published changelog entries unchanged."
+    },
+    {
+      "path": "packages/wdk-protocol-lending-morpho-evm/**/*.test.ts",
+      "rule": "mnemonic",
+      "match": "SEED =\n  \"cook voyage document eight skate token alien guide drink uncle term abuse",
+      "reason": "WDK test seed in test files only; already public on morpho-org/sdks. Not in the npm tarball (files: lib)."
     }
   ]
 }

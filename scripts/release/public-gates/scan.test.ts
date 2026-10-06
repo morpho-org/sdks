@@ -184,6 +184,28 @@ describe("scanFiles", () => {
     ["github-token", `github_pat_${"a".repeat(22)}`],
     ["rpc-key", `https://mainnet.infura.io/v3/${"a".repeat(32)}`],
     ["notion-url", "https://morpho.notion.site/page"],
+    ["devin-session", "https://app.devin.ai/desktop/session/abc"],
+    ["extended-private-key", `const MASTER = "xprv${"9".repeat(107)}";`],
+    ["extended-private-key", `HDKey.fromExtendedKey("tprv${"9".repeat(107)}")`],
+    ["linear-token", `const token = "lin_api_${"a".repeat(40)}";`],
+    ["rpc-key", `wss://mainnet.infura.io/ws/v3/${"a".repeat(32)}`],
+    ["rpc-key", `https://eth-mainnet.alchemyapi.io/v2/${"a".repeat(24)}`],
+    ["wallet-key", `const KEY = "0x${"ab".repeat(32)}";`],
+    ["wallet-key", `const SECRET = "0x${"ab".repeat(32)}";`],
+    ["mnemonic", `const SEED = "${Array(12).fill("legal").join(" ")}";`],
+    [
+      "mnemonic",
+      `const recoveryPhrase = "${Array(12).fill("legal").join(" ")}";`,
+    ],
+    [
+      "mnemonic",
+      `const secretPhrase = "${Array(12).fill("legal").join(" ")}";`,
+    ],
+    [
+      "mnemonic",
+      `forge script --mnemonics "${Array(12).fill("legal").join(" ")}"`,
+    ],
+    ["mnemonic", `vm.deriveKey("${Array(12).fill("legal").join(" ")}", 0)`],
   ])("flags %s", (rule, text) => {
     expect(scanFiles([file("a.md", `ok\n${text}\n`)])).toEqual([
       expect.objectContaining({ path: "a.md", line: 2, rule }),
@@ -341,6 +363,9 @@ test.each([
   `  privateKeys = [\n    ANVIL_KEY,\n    "${REAL_KEY}",\n  ];`,
   `private_keys = [\n  "${ANVIL_KEY}",\n  "${REAL_KEY}",\n]`,
   `PRIVATE_KEYS = [\n    "${ANVIL_KEY}",\n    "${REAL_KEY}",\n]`,
+  `PRIVATE_KEYS="${ANVIL_KEY}\n${REAL_KEY}"`,
+  `const PRIVATE_KEY = // anvil, then real\n  "${REAL_KEY}";`,
+  `const privateKeys = [ // keeper]\n  "${ANVIL_KEY}",\n  "${REAL_KEY}",\n];`,
 ])("flag a real key listed after a test key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
