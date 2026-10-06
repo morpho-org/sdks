@@ -361,7 +361,7 @@ export class MorphoMidnight {
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, `maxBuyerAssets` or `deadline` is not positive.
-   * @throws {NegativeInputError} when `minUnits` or `maxContinuousFee` is negative.
+   * @throws {NegativeInputError} when `minUnits`, `maxContinuousFee` or `referralFeePct` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -441,7 +441,7 @@ export class MorphoMidnight {
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
-   * @throws {NegativeInputError} when `minSellerAssets` is negative.
+   * @throws {NegativeInputError} when `minSellerAssets` or `referralFeePct` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -506,7 +506,7 @@ export class MorphoMidnight {
    * @throws {EmptyMidnightCollateralSuppliesError} when no collateral supply is provided.
    * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
    * @throws {NonPositiveInputError} when a supply amount, the target amount, `maxUnits` or `deadline` is not positive.
-   * @throws {NegativeInputError} when `minSellerAssets` is negative.
+   * @throws {NegativeInputError} when `minSellerAssets` or `referralFeePct` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
