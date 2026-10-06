@@ -1185,10 +1185,11 @@ describe("MorphoMidnight", () => {
       lltv: 860000000000000000n,
     };
     const callback = getAddress("0x000000000000000000000000000000000000cb01");
-    const blueBuyCallbackFactory = getAddress(
-      "0x000000000000000000000000000000000000cbf1",
+    const blueBuyCallbackFactory = getChainAddress(
+      midnightChainId,
+      "midnightBlueBuyCallbackFactory",
     );
-    const blue = getAddress("0x000000000000000000000000000000000000b1e0");
+    const blue = getChainAddress(midnightChainId, "blue");
     const callbackData = encodeAbiParameters([marketParamsAbi], [blueMarket]);
     const blueOffer = (overrides: Partial<IOffer> = {}) =>
       makerOffer({ buy: true, callback, callbackData, ...overrides });
@@ -1197,18 +1198,6 @@ describe("MorphoMidnight", () => {
       handle: MidnightMockHandle,
       totalSupplyShares = 1_000_000n,
     ) => {
-      mockRead(handle, {
-        address: midnightBundlesV2,
-        abi: midnightBundlesV2Abi,
-        functionName: "BLUE_BUY_CALLBACK_FACTORY",
-        result: blueBuyCallbackFactory,
-      });
-      mockRead(handle, {
-        address: midnightBundlesV2,
-        abi: midnightBundlesV2Abi,
-        functionName: "BLUE",
-        result: blue,
-      });
       handle.dispatch.set(
         `${blueBuyCallbackFactory.toLowerCase()}|${toFunctionSelector("createBlueBuyCallback(address,bytes32)")}`,
         encodeFunctionResult({

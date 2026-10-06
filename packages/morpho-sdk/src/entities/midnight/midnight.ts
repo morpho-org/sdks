@@ -12,7 +12,6 @@ import {
   MarketParams,
   MarketUtils,
   type MidnightFetchParams,
-  midnightBundlesV2Abi,
   Payload,
   PriceRatifierV1,
   RateRatifierV1,
@@ -767,9 +766,9 @@ export class MorphoMidnight {
    * to `abi.encode(blueMarket)`. The contract does not check supply share-price slippage, so
    * `blueMarket` must be protected against supply-share-price inflation; this method rejects
    * Blue markets with no supply shares. Calls the Midnight mempool validation API while
-   * preparing the tree. Reads `BLUE_BUY_CALLBACK_FACTORY()` and `BLUE()` from `MidnightBundlesV2`,
-   * simulates `createBlueBuyCallback(accountAddress, callbackSalt)` from the maker to derive the
-   * callback, and reads `market(id)` on that Blue for its supply shares.
+   * preparing the tree. Simulates `createBlueBuyCallback(accountAddress, callbackSalt)` on the
+   * chain's `midnightBlueBuyCallbackFactory` from the maker to derive the callback, and reads
+   * `market(id)` on the chain's `blue` for its supply shares.
    *
    * @param params - Maker, lend-side offers, Blue market, parked assets, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
@@ -782,7 +781,7 @@ export class MorphoMidnight {
    * @param params.callbackSalt - Salt selecting the maker's callback; the same salt reuses the same callback.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `blue` or V1 ratifier deployment.
    * @throws {NonPositiveInputError} when `assetsToPark` is non-positive.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {NonPositiveInputError} when `deadline` is not positive.
@@ -822,35 +821,24 @@ export class MorphoMidnight {
     const { callbackSalt } = params;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
-    const bundlesV2 = getChainAddress(this.chainId, "midnightBundlesV2");
     const blueReads = Promise.all([
-      readContract(this.client.viemClient, {
-        address: bundlesV2,
-        abi: midnightBundlesV2Abi,
-        functionName: "BLUE_BUY_CALLBACK_FACTORY",
+      simulateContract(this.client.viemClient, {
+        account: params.accountAddress,
+        address: getChainAddress(
+          this.chainId,
+          "midnightBlueBuyCallbackFactory",
+        ),
+        abi: blueBuyCallbackFactoryAbi,
+        functionName: "createBlueBuyCallback",
+        args: [params.accountAddress, callbackSalt],
       }),
       readContract(this.client.viemClient, {
-        address: bundlesV2,
-        abi: midnightBundlesV2Abi,
-        functionName: "BLUE",
+        address: getChainAddress(this.chainId, "blue"),
+        abi: blueAbi,
+        functionName: "market",
+        args: [blueMarketId],
       }),
-    ]).then(([factory, blue]) =>
-      Promise.all([
-        simulateContract(this.client.viemClient, {
-          account: params.accountAddress,
-          address: factory,
-          abi: blueBuyCallbackFactoryAbi,
-          functionName: "createBlueBuyCallback",
-          args: [params.accountAddress, callbackSalt],
-        }),
-        readContract(this.client.viemClient, {
-          address: blue,
-          abi: blueAbi,
-          functionName: "market",
-          args: [blueMarketId],
-        }),
-      ]),
-    );
+    ]);
     const [data, [{ result: callback }, [, totalSupplyShares]]] =
       await Promise.all([this.getOffersData(params), blueReads]);
     if (totalSupplyShares === 0n) {
