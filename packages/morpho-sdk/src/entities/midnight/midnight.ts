@@ -395,19 +395,20 @@ export class MorphoMidnight {
         : params.target.maxBuyerAssets;
 
     return {
-      getRequirements: async () => [
-        ...(await getMidnightApprovalRequirements({
+      getRequirements: async () => {
+        const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           token: market.loanToken,
           owner: params.accountAddress,
           spender: tx.to,
           amount: pulledAssets,
-        })),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+        });
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals, ...authorization];
+      },
       buildTx: () => tx,
     };
   }
@@ -545,25 +546,24 @@ export class MorphoMidnight {
     }
 
     return {
-      getRequirements: async () => [
-        ...(
-          await Promise.all(
-            [...collateralAmounts].map(([token, amount]) =>
-              getMidnightApprovalRequirements({
-                viemClient: this.client.viemClient,
-                chainId: this.chainId,
-                token,
-                owner: params.accountAddress,
-                spender: tx.to,
-                amount,
-              }),
-            ),
-          )
-        ).flat(),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+      getRequirements: async () => {
+        const approvals = await Promise.all(
+          [...collateralAmounts].map(([token, amount]) =>
+            getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: params.accountAddress,
+              spender: tx.to,
+              amount,
+            }),
+          ),
+        );
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals.flat(), ...authorization];
+      },
       buildTx: () => tx,
     };
   }
@@ -716,19 +716,20 @@ export class MorphoMidnight {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: async () => [
-        ...(await getMidnightApprovalRequirements({
+      getRequirements: async () => {
+        const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           token: params.loanToken,
           owner: data.accountAddress,
           spender: midnight,
           amount: params.loanAssets + (params.reservedLoanAssets ?? 0n),
-        })),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+        });
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals, ...authorization];
+      },
       buildTx: () => tx,
     };
   }
@@ -887,19 +888,20 @@ export class MorphoMidnight {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: async () => [
-        ...(await getMidnightApprovalRequirements({
+      getRequirements: async () => {
+        const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           token: params.blueMarket.loanToken,
           owner: data.accountAddress,
           spender: getChainAddress(this.chainId, "midnightBundlesV2"),
           amount: params.assetsToPark,
-        })),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+        });
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals, ...authorization];
+      },
       buildTx: () => tx,
     };
   }
@@ -1010,25 +1012,24 @@ export class MorphoMidnight {
       groups: data.groups,
       root: data.tree.root,
       ratifierType: data.ratifierType,
-      getRequirements: async () => [
-        ...(
-          await Promise.all(
-            [...collateralAmounts].map(([token, amount]) =>
-              getMidnightApprovalRequirements({
-                viemClient: this.client.viemClient,
-                chainId: this.chainId,
-                token,
-                owner: data.accountAddress,
-                spender: tx.to,
-                amount,
-              }),
-            ),
-          )
-        ).flat(),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+      getRequirements: async () => {
+        const approvals = await Promise.all(
+          [...collateralAmounts].map(([token, amount]) =>
+            getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: data.accountAddress,
+              spender: tx.to,
+              amount,
+            }),
+          ),
+        );
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals.flat(), ...authorization];
+      },
       buildTx: () => tx,
     };
   }
@@ -1150,7 +1151,9 @@ export class MorphoMidnight {
     }
 
     return {
-      getRequirements: async () => [],
+      getRequirements: async () => {
+        return [];
+      },
       buildTx: () =>
         midnightRedeem({
           chainId: this.chainId,
@@ -1290,7 +1293,9 @@ export class MorphoMidnight {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
-      getRequirements: async () => [],
+      getRequirements: async () => {
+        return [];
+      },
       buildTx: () =>
         midnightCancelOffer({
           chainId: this.chainId,
