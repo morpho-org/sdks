@@ -423,9 +423,45 @@ test.each([
 });
 
 test.each([
+  `const fallback = "${REAL_KEY}";\nconst deployer =\n  (process.env.D as Hex | undefined) ?? fallback;\nprivateKeyToAccount(deployer);`,
+  `const FALLBACK = "${REAL_KEY}";\nprivateKeyToAccount((process.env.S as Hex) ?? FALLBACK);`,
+  `const B = "${REAL_KEY}";\nprivateKeyToAccount(cond ? (process.env.A as Hex) : B);`,
+  `const b = "${REAL_KEY}";\nconst d = cond ? a : b;\nprivateKeyToAccount(d);`,
+  `const A = "${REAL_KEY}";\nconst wallets = [A, B].map(privateKeyToAccount);`,
+  `const wallets = ["${REAL_KEY}", other[0]].map(privateKeyToAccount);`,
+  `const wallets = ["${REAL_KEY}"].flatMap((k) => privateKeyToAccount(k));`,
+  `["${REAL_KEY}"].forEach((k) => privateKeyToAccount(k));`,
+  `["${REAL_KEY}"].map(async (k) => privateKeyToAccount(k));`,
+  `["${REAL_KEY}"].map((k) => {\n  return privateKeyToAccount(k);\n});`,
+])(
+  "follow a key through a wrapped, nested or listed expression in %s",
+  (content) => {
+    expect(scanFiles([file("a.ts", content)])).toEqual([
+      expect.objectContaining({ rule: "wallet-key-list" }),
+    ]);
+  },
+);
+
+test("checks only the member a sink reads, not the whole object", () => {
+  const content = `const config = { marketId: "0x${"cd".repeat(32)}", deployerKey: process.env.K };\nprivateKeyToAccount(config.deployerKey);`;
+  expect(scanFiles([file("a.ts", content)])).toEqual([]);
+});
+
+test("scans bracket-heavy input in linear time", () => {
+  const started = performance.now();
+  scanFiles([file("a.ts", "[".repeat(100_000))]);
+  expect(performance.now() - started).toBeLessThan(1000);
+});
+
+test.each([
   `vm.startBroadcast(${REAL_KEY});`,
   `secp256k1.sign(hash, "${REAL_KEY}");`,
   `secp256k1.getPublicKey("${REAL_KEY}");`,
+  `vm.broadcast(${REAL_KEY});`,
+  `vm.rememberKey(${REAL_KEY});`,
+  `vm.addr(${REAL_KEY});`,
+  `vm.sign(${REAL_KEY}, digest);`,
+  `secp256k1.getSharedSecret("${REAL_KEY}", pub);`,
 ])("flag a raw key passed to a Foundry or noble sink in %s", (content) => {
   expect(scanFiles([file("a.ts", content)])).toEqual([
     expect.objectContaining({ path: "a.ts" }),
@@ -771,6 +807,14 @@ describe("evaluate", () => {
       'a.ts:1: wallet-key: "pk ="… (72 characters, redacted)',
     ]);
     expect(errors.join("\n")).not.toContain("ab".repeat(8));
+  });
+
+  test("redacts a secret in a file name", () => {
+    const token = `ghp_${"aB3".repeat(12)}`;
+    const blocking = scanFiles([file(`${token}.txt`, "x")]);
+    expect(blocking).toEqual([expect.objectContaining({ line: 0 })]);
+    const { errors } = evaluate({ ...base, blocking, tarballs: 1 });
+    expect(errors.join("\n")).not.toContain(token);
   });
 
   test("fails on an unused exception when the tree is scanned", () => {

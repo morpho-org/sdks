@@ -296,55 +296,89 @@ export function scanFiles(
     }
     // A sink fed a constant by name: also check every value assigned to a name
     // in its first argument, whatever the name, as `const deployer = "0x…"`.
-    // Casts, member roots (`CFG.deployer`) and template parts (`\`0x${raw}\``)
-    // count. Every name on the right-hand side of such an assignment is followed
-    // too, up to 3 hops. A list mapped through a sink (`["0x…"].map(privateKeyToAccount)`,
+    // Casts and template parts (`\`0x${raw}\``) count. For a member
+    // (`CFG.deployer`), only that member's value is checked (`deployer: …`,
+    // `.deployer = …`), not the whole object. Every name in the whole
+    // right-hand side of such an assignment is followed too, up to 3 hops. A list
+    // mapped through a sink (`[A, "0x…"].map(privateKeyToAccount)`,
     // `keys.map((k) => privateKeyToAccount(k))`) counts as passed to it.
     const assigned: [RuleId, string, number][] = [];
     for (const [rule, sink] of [
       ["wallet-key-list", KEY_SINK],
       ["mnemonic-list", MNEMONIC_SINK],
     ] as const) {
-      const calls = new RegExp(
-        String.raw`(?:${sink})\s*([^,)\n]{1,200})`,
-        "gi",
-      );
+      const calls = new RegExp(sink, "gi");
       const mapped = new RegExp(
-        String.raw`(?:\[[^\]]{0,4000}\]|(?<![\w$.])([a-z_$][\w$]*))\s*(\.(?:map|flatMap|forEach)\(\s*(?:(?:async\s*)?(?:\([^)]{0,80}\)|[\w$]+)\s*=>\s*\{?\s*(?:return\s+)?)?(?:${sink.replaceAll("\\(", String.raw`(?:\(|\s*\))`)}))`,
+        String.raw`\.(?:map|flatMap|forEach)\(\s*(?:(?:async\s*)?(?:\([^)]{0,80}\)|[\w$]+)\s*=>\s*\{?\s*(?:return\s+)?)?(?:${sink.replaceAll("\\(", String.raw`(?:\(|\s*\))`)})`,
         "gi",
       );
-      // Names in an expression, skipping members (`.deployer`) and number parts (`0x`).
-      const identifiers = (expression: string) =>
-        [...expression.matchAll(/(?<![\w$.])[a-z_$][\w$]*/gi)].map(
-          ([ident]) => ident,
+      // Names in an expression: a plain name, or the last member of a chain
+      // (`CFG.deployer` gives member `deployer`). Number parts (`0x`) are skipped.
+      const references = (expression: string) =>
+        [
+          ...expression.matchAll(
+            /(?<![\w$.])([a-z_$][\w$]*)((?:\s*\??\.\s*[a-z_$][\w$]*)*)/gi,
+          ),
+        ].map(([, root = "", chain = ""]) => {
+          const member = /[\w$]+$/.exec(chain)?.[0];
+          return member === undefined
+            ? { name: root, member: false }
+            : { name: member, member: true };
+        });
+      // The whole value starting at `start`, as `valueSecrets` delimits it.
+      const span = (opener: string, start: number) =>
+        source.slice(
+          start,
+          valueEnd(source, {
+            opener,
+            start,
+            limit: Math.min(source.length, start + 4096),
+          }),
         );
       const seen = new Set<string>();
-      let names = [...source.matchAll(calls)].flatMap(([, argument]) =>
-        identifiers(argument ?? ""),
+      let names = [...source.matchAll(calls)].flatMap(({ 0: call, index }) =>
+        references(span(call, index + call.length)),
       );
-      for (const { 1: receiver, 2: call = "", index } of source.matchAll(
-        mapped,
-      )) {
-        if (receiver !== undefined) names.push(receiver);
+      for (const { 0: call, index } of source.matchAll(mapped)) {
+        let end = index;
+        while (end > 0 && /\s/.test(source[end - 1] ?? "")) end--;
+        if (source[end - 1] !== "]") {
+          names.push(
+            ...references(
+              /(?<![\w$.])[a-z_$][\w$]*(?:\s*\??\.\s*[a-z_$][\w$]*)*$/i.exec(
+                source.slice(Math.max(0, end - 200), end),
+              )?.[0] ?? "",
+            ),
+          );
+          continue;
+        }
+        // Walk back to the list's matching `[`.
+        let open = end - 1;
+        for (let depth = 0; open >= Math.max(0, end - 4096); open--) {
+          if (source[open] === "]") depth++;
+          else if (source[open] === "[" && --depth === 0) break;
+        }
+        if (open < Math.max(0, end - 4096)) continue;
+        names.push(...references(source.slice(open + 1, end - 1)));
         // `valueSecrets` starts at `index + opener.length`: the list's `[`.
-        else assigned.push([rule, call, index - call.length]);
+        assigned.push([rule, call, open - call.length]);
       }
       for (let hop = 0; hop < 4 && names.length > 0; hop++) {
-        const next: string[] = [];
-        for (const ident of names) {
-          if (seen.has(ident)) continue;
-          seen.add(ident);
+        const next: typeof names = [];
+        for (const { name: ident, member } of names) {
+          const key = `${member ? "." : ""}${ident}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const escaped = ident.replace(/\$/g, "\\$");
           const declaration = new RegExp(
-            String.raw`(?<![\w$.])${ident.replace(/\$/g, "\\$")}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
+            member
+              ? String.raw`(?:(?<![\w$.])["']?${escaped}["']?\s*:(?!:)|\.${escaped}\s*=(?![=>]))`
+              : String.raw`(?<![\w$.])${escaped}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
             "g",
           );
           for (const { 0: opener, index } of source.matchAll(declaration)) {
             assigned.push([rule, opener, index]);
-            const value = source.slice(
-              index + opener.length,
-              index + opener.length + 200,
-            );
-            next.push(...identifiers(value.slice(0, value.search(/[;\n]|$/))));
+            next.push(...references(span(opener, index + opener.length)));
           }
         }
         names = next;
@@ -394,31 +428,19 @@ export function scanFiles(
 }
 
 /**
- * Lists every 64-hex value (`kind: "key"`) or quoted 12–24-word phrase
- * (`kind: "mnemonic"`) in the named value that starts at `start`, plus the
- * items of a YAML block list under the name. The value ends at a `,`, `;` or
- * closing bracket outside any nesting or string, or at a line break unless the
- * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
- * start of a line (no space before `=`, no dotted name) runs to the end of the
- * line, unless the value opens a bracket, starts with a quote (then it runs until
- * the quote closes, across lines) or the next line continues it. A value still
- * open after 4096 characters is reported as a candidate with no secret, so the
- * gate fails closed. Outside dotenv values, whitespace-preceded `//` and `#`
- * comments and `/* *\/` comments are skipped, so a closing bracket, `,` or `;` in
- * a comment can't end the value early. YAML lists may hold blank and `#` comment
- * lines.
+ * Finds where the named value starting at `start` ends, with the rules
+ * described on {@link valueSecrets}.
  *
  * @param source - Whole file text.
- * @param value - The matched opener, the offset just after it, and what to look for.
- * @returns Each candidate secret, its offset, and the text to report.
+ * @param value - The matched opener, the offset just after it, and the offset
+ * the walk stops at.
+ * @returns The offset just after the value.
  */
-export function valueSecrets(
+function valueEnd(
   source: string,
-  value: { opener: string; start: number; kind?: "key" | "mnemonic" },
-) {
-  const { opener, start } = value;
-  const mnemonic = value.kind === "mnemonic";
-  const limit = Math.min(source.length, start + 4096);
+  value: { opener: string; start: number; limit: number },
+): number {
+  const { opener, start, limit } = value;
   const lineStart = source.lastIndexOf("\n", start - opener.length - 1) + 1;
   // Strict dotenv shape: `NAME=` with no space before `=` and no dotted name, so
   // a JS reassignment (`privateKey = …`, `this.pk = …`) isn't cut at the newline.
@@ -481,6 +503,36 @@ export function valueSecrets(
     }
     if (char !== undefined && /\S/.test(char)) seen = true;
   }
+  return end;
+}
+
+/**
+ * Lists every 64-hex value (`kind: "key"`) or quoted 12–24-word phrase
+ * (`kind: "mnemonic"`) in the named value that starts at `start`, plus the
+ * items of a YAML block list under the name. The value ends at a `,`, `;` or
+ * closing bracket outside any nesting or string, or at a line break unless the
+ * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
+ * start of a line (no space before `=`, no dotted name) runs to the end of the
+ * line, unless the value opens a bracket, starts with a quote (then it runs until
+ * the quote closes, across lines) or the next line continues it. A value still
+ * open after 4096 characters is reported as a candidate with no secret, so the
+ * gate fails closed. Outside dotenv values, whitespace-preceded `//` and `#`
+ * comments and `/* *\/` comments are skipped, so a closing bracket, `,` or `;` in
+ * a comment can't end the value early. YAML lists may hold blank and `#` comment
+ * lines.
+ *
+ * @param source - Whole file text.
+ * @param value - The matched opener, the offset just after it, and what to look for.
+ * @returns Each candidate secret, its offset, and the text to report.
+ */
+export function valueSecrets(
+  source: string,
+  value: { opener: string; start: number; kind?: "key" | "mnemonic" },
+) {
+  const { opener, start } = value;
+  const mnemonic = value.kind === "mnemonic";
+  const limit = Math.min(source.length, start + 4096);
+  const end = valueEnd(source, { opener, start, limit });
   const hex = mnemonic
     ? /["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})["'`]/gi
     : /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})n?(?![\w$])/gi;
@@ -659,10 +711,15 @@ export function evaluate(result: {
   if (result.treeFiles === 0) errors.push("The tree is empty.");
   if (result.tarballs === 0) errors.push("No .tgz files to scan.");
   for (const { path, line, rule, match } of result.blocking) {
-    const shown = SECRET_RULES.has(rule)
+    const secret = SECRET_RULES.has(rule);
+    const shown = secret
       ? `${JSON.stringify(match.slice(0, 4))}… (${match.length} characters, redacted)`
       : JSON.stringify(match);
-    errors.push(`${path}:${line}: ${rule}: ${shown}`);
+    // A secret in a file name would otherwise be printed in the path.
+    const where = secret
+      ? path.replaceAll(match, `${match.slice(0, 4)}…`)
+      : path;
+    errors.push(`${where}:${line}: ${rule}: ${shown}`);
   }
   // Exceptions apply to tree findings only, so stale exceptions are reported on
   // tree scans only.
