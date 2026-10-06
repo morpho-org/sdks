@@ -135,6 +135,35 @@ const SECRET_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
   "rpc-key",
 ]);
 
+// How far a value, or the receiver of a mapped list, is read before the scan fails
+// closed.
+const VALUE_WINDOW = 4096;
+
+// The rules that follow names passed to a sink, and their sinks.
+const SINKS = [
+  ["wallet-key-list", KEY_SINK],
+  ["mnemonic-list", MNEMONIC_SINK],
+] as const;
+
+/**
+ * Shortens every part of a path that looks like a credential to its first four
+ * characters, so a file named after a key or token doesn't print it in CI logs.
+ *
+ * @param path - File or tarball entry path.
+ * @returns The path, safe to print.
+ */
+export function redactPath(path: string): string {
+  let where = path;
+  for (const id of SECRET_RULES) {
+    if (id === "blocked-term") continue;
+    where = where.replaceAll(RULES[id], (found) => `${found.slice(0, 4)}…`);
+  }
+  return where.replaceAll(
+    /(?:0x)?[0-9a-f]{32,}|[a-z]+(?:[ \t_-]+[a-z]+){11,}/gi,
+    (found) => `${found.slice(0, 4)}…`,
+  );
+}
+
 /** One allowed occurrence: the same rule matching the same text in matching files. */
 export interface ScanException {
   /** Glob (`matchesGlob`) over POSIX paths relative to the public tree root. */
@@ -271,13 +300,47 @@ export function scanFiles(
     ]);
   }
 
+  // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
+  const scanned = [...files].map((file) => ({
+    ...file,
+    source: (file.content.includes(0)
+      ? Buffer.from(file.content.filter((byte) => byte !== 0))
+      : file.content
+    ).toString("utf8"),
+  }));
+  // Names in an expression: a plain name, or the last member of a chain
+  // (`CFG.deployer` gives member `deployer`). Number parts (`0x`) are skipped.
+  const references = (expression: string) =>
+    [
+      ...expression.matchAll(
+        /(?<![\w$.])([a-z_$][\w$]*)((?:\s*\??\.\s*[a-z_$][\w$]*)*)/gi,
+      ),
+    ].map(([, root = "", chain = ""]) => {
+      const member = /[\w$]+$/.exec(chain)?.[0];
+      return member === undefined
+        ? { name: root, member: false }
+        : { name: member, member: true };
+    });
+  // Names passed to a sink in any file, so a key exported by a shared module and
+  // used in another file is still checked (see the per-file loop).
+  const sinkNames = new Map(
+    SINKS.map(([rule, sink]) => [
+      rule,
+      scanned.flatMap(({ source }) =>
+        [...source.matchAll(new RegExp(sink, "gi"))].flatMap(
+          ({ 0: call, index }) => {
+            const start = index + call.length;
+            const limit = Math.min(source.length, start + VALUE_WINDOW);
+            const end = valueEnd(source, { opener: call, start, limit });
+            return references(source.slice(start, end));
+          },
+        ),
+      ),
+    ]),
+  );
+
   const findings: Finding[] = [];
-  for (const { path, content, tarball } of files) {
-    const text = content.includes(0)
-      ? Buffer.from(content.filter((byte) => byte !== 0))
-      : content;
-    // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
-    const source = text.toString("utf8");
+  for (const { path, source, tarball } of scanned) {
     const fileFindings: Finding[] = [];
     // Several wallet rules can match one key; report each value once per file.
     const reported = new Set<string>();
@@ -300,34 +363,18 @@ export function scanFiles(
     // Casts and template parts (`\`0x${raw}\``) count. For a member
     // (`CFG.deployer`), only that member's value is checked (`deployer: …`,
     // `.deployer = …`), not the whole object. Every name in the whole
-    // right-hand side of such an assignment is followed too, up to 3 hops. A list
+    // right-hand side of such an assignment is followed too, through any number of
+    // aliases. A list
     // mapped through a sink (`[A, "0x…"].map(privateKeyToAccount)`,
     // `keys.map((k) => privateKeyToAccount(k))`) counts as passed to it.
     const assigned: [RuleId, string, number][] = [];
     // Mapped lists whose start is out of reach: reported, as the scan fails closed.
     const overlong: [RuleId, string, number][] = [];
-    for (const [rule, sink] of [
-      ["wallet-key-list", KEY_SINK],
-      ["mnemonic-list", MNEMONIC_SINK],
-    ] as const) {
-      const calls = new RegExp(sink, "gi");
+    for (const [rule, sink] of SINKS) {
       const mapped = new RegExp(
         String.raw`\.(?:map|flatMap|forEach)\(\s*(?:(?:async\s*)?(?:\([^)]{0,80}\)|[\w$]+)\s*=>\s*\{?\s*(?:return\s+)?)?(?:${sink.replaceAll("\\(", String.raw`(?:\(|\s*\))`)})`,
         "gi",
       );
-      // Names in an expression: a plain name, or the last member of a chain
-      // (`CFG.deployer` gives member `deployer`). Number parts (`0x`) are skipped.
-      const references = (expression: string) =>
-        [
-          ...expression.matchAll(
-            /(?<![\w$.])([a-z_$][\w$]*)((?:\s*\??\.\s*[a-z_$][\w$]*)*)/gi,
-          ),
-        ].map(([, root = "", chain = ""]) => {
-          const member = /[\w$]+$/.exec(chain)?.[0];
-          return member === undefined
-            ? { name: root, member: false }
-            : { name: member, member: true };
-        });
       // The whole value starting at `start`, as `valueSecrets` delimits it.
       const span = (opener: string, start: number) =>
         source.slice(
@@ -335,22 +382,43 @@ export function scanFiles(
           valueEnd(source, {
             opener,
             start,
-            limit: Math.min(source.length, start + 4096),
+            limit: Math.min(source.length, start + VALUE_WINDOW),
           }),
         );
       const seen = new Set<string>();
-      let names = [...source.matchAll(calls)].flatMap(({ 0: call, index }) =>
-        references(span(call, index + call.length)),
+      let names = [...source.matchAll(new RegExp(sink, "gi"))].flatMap(
+        ({ 0: call, index }) => references(span(call, index + call.length)),
       );
+      // A name passed to a sink in another file: only this file's `export`ed
+      // declaration of it is checked, and only for a key or phrase it holds, as
+      // generic names (`hex`, `items`) would otherwise fail every long value.
+      const kind = rule === "mnemonic-list" ? "mnemonic" : "key";
+      for (const { name: ident } of new Set(sinkNames.get(rule))) {
+        const exported = new RegExp(
+          String.raw`\bexport\s+(?:const|let|var)\s+${ident.replace(/\$/g, "\\$")}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
+          "g",
+        );
+        for (const { 0: opener, index } of source.matchAll(exported)) {
+          const start = index + opener.length;
+          if (
+            valueSecrets(source, { opener, start, kind }).some(
+              ({ secret }) => secret !== undefined,
+            )
+          ) {
+            assigned.push([rule, opener, index]);
+          }
+        }
+      }
       for (const { 0: call, index } of source.matchAll(mapped)) {
         let end = index;
         while (end > 0 && /\s/.test(source[end - 1] ?? "")) end--;
         // Walk back over the whole receiver: names, `.`, calls and indexes, as
         // `Object.values(SIGNERS)`, `LIST.split(",")` or `DEPLOYERS[chain]`. A `[`
         // with no name, `)` or `]` before it opens a list literal.
-        const floor = Math.max(0, end - 4096);
+        const floor = Math.max(0, end - VALUE_WINDOW);
         let start = end;
         let list: number | undefined;
+        let literal: number | undefined;
         let overflow = false;
         for (;;) {
           const close = source[start - 1];
@@ -375,6 +443,23 @@ export function scanFiles(
             if (close === "]") list = open;
             break;
           }
+          // A string receiver (`"0x…,0x…".split(",")`) is a value to check.
+          if (close === '"' || close === "'" || close === "`") {
+            let open = start - 2;
+            while (
+              open >= floor &&
+              (source[open] !== close || source[open - 1] === "\\")
+            ) {
+              open--;
+            }
+            if (open < floor) {
+              overflow = true;
+              break;
+            }
+            start = open;
+            literal = open;
+            break;
+          }
           if (start > floor && /[\w$.?]/.test(close ?? "")) {
             start--;
             continue;
@@ -383,6 +468,11 @@ export function scanFiles(
         }
         if (overflow) {
           overlong.push([rule, call, index]);
+          continue;
+        }
+        if (literal === start) {
+          // `valueSecrets` starts at `index + opener.length`: the opening quote.
+          assigned.push([rule, call, start - call.length]);
           continue;
         }
         if (list === start) {
@@ -400,7 +490,8 @@ export function scanFiles(
           ),
         );
       }
-      for (let hop = 0; hop < 4 && names.length > 0; hop++) {
+      // Each name is looked up once, so this ends however long the alias chain.
+      while (names.length > 0) {
         const next: typeof names = [];
         for (const { name: ident, member } of names) {
           const key = `${member ? "." : ""}${ident}`;
@@ -434,7 +525,7 @@ export function scanFiles(
         path,
         line,
         rule,
-        match: `${call}…(list longer than 4096 characters)`,
+        match: `${call}…(list longer than ${VALUE_WINDOW} characters)`,
         ...marker,
       });
     }
@@ -585,7 +676,7 @@ export function valueSecrets(
 ) {
   const { opener, start } = value;
   const mnemonic = value.kind === "mnemonic";
-  const limit = Math.min(source.length, start + 4096);
+  const limit = Math.min(source.length, start + VALUE_WINDOW);
   const end = valueEnd(source, { opener, start, limit });
   const hex = mnemonic
     ? /["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})["'`]/gi
@@ -617,7 +708,7 @@ export function valueSecrets(
   const overflow = truncated
     ? [
         {
-          match: "(value longer than 4096 characters)",
+          match: `(value longer than ${VALUE_WINDOW} characters)`,
           at: start,
           groups: undefined,
         },
@@ -717,7 +808,7 @@ export async function readTarballs(
       onReadEntry: (entry) => {
         if (entry.type !== "File" && entry.type !== "OldFile") {
           if (entry.type !== "Directory") {
-            irregular.push(`${entry.path} (${entry.type})`);
+            irregular.push(`${redactPath(entry.path)} (${entry.type})`);
           }
           entry.resume();
           return;
@@ -771,16 +862,7 @@ export function evaluate(result: {
       : JSON.stringify(match);
     // A credential in a file name would otherwise be printed with every finding
     // on the file, and a `*-list` finding's match is only its opener.
-    let where = path;
-    for (const id of SECRET_RULES) {
-      if (id === "blocked-term") continue;
-      where = where.replaceAll(RULES[id], (found) => `${found.slice(0, 4)}…`);
-    }
-    where = where.replaceAll(
-      /(?:0x)?[0-9a-f]{32,}|[a-z]+(?:[ \t_-]+[a-z]+){11,}/gi,
-      (found) => `${found.slice(0, 4)}…`,
-    );
-    errors.push(`${where}:${line}: ${rule}: ${shown}`);
+    errors.push(`${redactPath(path)}:${line}: ${rule}: ${shown}`);
   }
   // Exceptions apply to tree findings only, so stale exceptions are reported on
   // tree scans only.

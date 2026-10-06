@@ -19,6 +19,7 @@ import {
   parseTargets,
   readTarballs,
   readTree,
+  redactPath,
   scanFiles,
   valueSecrets,
 } from "./scan.ts";
@@ -674,6 +675,47 @@ test("fail closed on a mapped list longer than 4096 characters", () => {
   );
 });
 
+test.each([
+  `const w = "0x${REAL_KEY.slice(2)},0x1".split(",").map(privateKeyToAccount);`,
+  `const w = \`${REAL_KEY}\`.split(",").map(privateKeyToAccount);`,
+  `const w = '${REAL_KEY}'.split(",").map(privateKeyToAccount);`,
+])("flag a key in a string receiver of a mapped sink: %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({
+      rule: "wallet-key-list",
+      match: expect.stringContaining(REAL_KEY.slice(2)),
+    }),
+  ]);
+});
+
+test("flag a key exported by one file and passed to a sink in another", () => {
+  const files = [
+    file("keys.ts", `export const DEPLOYER = "${REAL_KEY}";`),
+    file(
+      "use.ts",
+      'import { DEPLOYER } from "./keys";\nprivateKeyToAccount(DEPLOYER);',
+    ),
+  ];
+  expect(scanFiles(files)).toEqual([
+    expect.objectContaining({ path: "keys.ts", rule: "wallet-key-list" }),
+  ]);
+});
+
+test.each([4, 8])("follow an alias chain of %i hops", (hops) => {
+  const aliases = Array.from(
+    { length: hops },
+    (_, i) => `const v${i + 1} = v${i};`,
+  );
+  const content = [
+    `const v0 = "${REAL_KEY}";`,
+    ...aliases,
+    `privateKeyToAccount(v${hops});`,
+  ].join("\n");
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ line: 1, rule: "wallet-key-list" }),
+  ]);
+});
+
 describe("parsePolicy", () => {
   const valid = {
     path: "a.md",
@@ -758,6 +800,18 @@ describe("readTree and readTarballs", () => {
     await expect(readTarballs([tarball])).rejects.toThrow(
       "package/leak (SymbolicLink)",
     );
+  });
+
+  test("redact a token in the name of a rejected entry", async () => {
+    const dir = tempDir();
+    const token = `ghp_${"a".repeat(36)}`;
+    write(dir, { "package/package.json": "{}" });
+    symlinkSync("../../.env", join(dir, "package", token));
+    const tarball = join(dir, "pkg-1.0.0.tgz");
+    execFileSync("tar", ["-czf", tarball, "-C", dir, "package"]);
+    const error = await readTarballs([tarball]).catch((e: unknown) => e);
+    expect(String(error)).toContain("package/ghp_… (SymbolicLink)");
+    expect(String(error)).not.toContain(token);
   });
 
   test("reject a later tarball without package/package.json", async () => {
@@ -934,4 +988,12 @@ test("fail closed on a YAML key list longer than 4096 characters", () => {
 test("report a repeated key once per file", () => {
   const line = `PRIVATE_KEY=${REAL_KEY}\n`;
   expect(scanFiles([file("a.env", line + line)])).toHaveLength(1);
+});
+
+describe("redactPath", () => {
+  test("shortens a token and a key in a path, keeping the rest", () => {
+    expect(redactPath(`a/ghp_${"a".repeat(36)}/${"ab".repeat(32)}.ts`)).toBe(
+      "a/ghp_…/abab….ts",
+    );
+  });
 });
