@@ -2,13 +2,36 @@ import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { InputExceedsMaxError, NegativeInputError } from "../types/index.js";
 import {
+  DEFAULT_ALLOCATOR_CAP_HEADROOM,
   DEFAULT_CAP_ACCRUAL_BUFFER,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
 } from "./constant.js";
 import {
+  resolveAllocatorCapHeadroom,
   resolveCapAccrualBuffer,
   resolveMaxWithdrawalUtilization,
 } from "./utilization.js";
+
+describe("resolveAllocatorCapHeadroom", () => {
+  test("default", () => {
+    expect(resolveAllocatorCapHeadroom()).toBe(DEFAULT_ALLOCATOR_CAP_HEADROOM);
+  });
+  test("behavior: accepts zero and WAD", () => {
+    expect(resolveAllocatorCapHeadroom(0n)).toBe(0n);
+    expect(resolveAllocatorCapHeadroom(MathLib.WAD)).toBe(MathLib.WAD);
+  });
+  test.each([
+    [-1n, NegativeInputError],
+    [MathLib.WAD + 1n, InputExceedsMaxError],
+  ] as const)("error: rejects %s", (value, error) => {
+    expect(() => resolveAllocatorCapHeadroom(value)).toThrow(error);
+    try {
+      resolveAllocatorCapHeadroom(value);
+    } catch (thrown) {
+      expect(thrown).toMatchObject({ field: "allocatorCapHeadroom", value });
+    }
+  });
+});
 
 describe("resolveCapAccrualBuffer", () => {
   test("default", () => {

@@ -943,15 +943,17 @@ export interface BlueActions {
    * allocation through `timestamp + capAccrualBuffer` (two hours by default;
    * `0n` disables it). For market-source reallocations the source position's
    * interest is also reserved on cap ids shared with the target, and reserves
-   * persist across every leg of a plan.
+   * persist across every leg of a plan. Operation plans keep
+   * `allocatorCapHeadroom` (1% of the cap by default) free under each target
+   * BluePublicAllocator cap unless the operation shortfall needs it.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when the cap-accrual buffer, utilization, or penalty limit is negative.
-   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -2015,15 +2017,17 @@ export class MorphoBlue implements BlueActions {
    * allocation through `timestamp + capAccrualBuffer` (two hours by default;
    * `0n` disables it). For market-source reallocations the source position's
    * interest is also reserved on cap ids shared with the target, and reserves
-   * persist across every leg of a plan.
+   * persist across every leg of a plan. Operation plans keep
+   * `allocatorCapHeadroom` (1% of the cap by default) free under each target
+   * BluePublicAllocator cap unless the operation shortfall needs it.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when the cap-accrual buffer, utilization, or penalty limit is negative.
-   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
