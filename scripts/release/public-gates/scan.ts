@@ -23,8 +23,10 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 const KEY_NAME =
   "(?:(?<![a-z0-9_$])(?:key|secret)(?:s(?=\\s*(?:(?::[^=;\\n]{0,40})?=(?!=)|:\\s*[[{])))?(?![a-z0-9_$])|priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
-// `hdKeyToAccount`, and ethers' `new Wallet(…)`/`new SigningKey(…)`.
-const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(`;
+// `hdKeyToAccount`, ethers' `new Wallet(…)`/`new SigningKey(…)`, Foundry cheatcodes
+// (`vm.startBroadcast(0x…)`) and noble's `secp256k1` (the key is `sign`'s second
+// argument).
+const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(|\bvm\.(?:startBroadcast|broadcast|rememberKey|addr|sign)\(|\bsecp256k1\.(?:getPublicKey|getSharedSecret)\(|\bsecp256k1\.sign\([^,()\n]{0,200},`;
 // A CLI flag with a space-separated value (`--private-key 0x…`), also across a
 // shell line continuation.
 const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+)`;
@@ -295,7 +297,9 @@ export function scanFiles(
     // A sink fed a constant by name: also check every value assigned to a name
     // in its first argument, whatever the name, as `const deployer = "0x…"`.
     // Casts, member roots (`CFG.deployer`) and template parts (`\`0x${raw}\``)
-    // count, and a name assigned another bare name is followed up to 3 hops.
+    // count. Every name on the right-hand side of such an assignment is followed
+    // too, up to 3 hops. A list mapped through a sink (`["0x…"].map(privateKeyToAccount)`,
+    // `keys.map((k) => privateKeyToAccount(k))`) counts as passed to it.
     const assigned: [RuleId, string, number][] = [];
     for (const [rule, sink] of [
       ["wallet-key-list", KEY_SINK],
@@ -305,12 +309,26 @@ export function scanFiles(
         String.raw`(?:${sink})\s*([^,)\n]{1,200})`,
         "gi",
       );
+      const mapped = new RegExp(
+        String.raw`(?:\[[^\]]{0,4000}\]|(?<![\w$.])([a-z_$][\w$]*))\s*(\.(?:map|flatMap|forEach)\(\s*(?:(?:async\s*)?(?:\([^)]{0,80}\)|[\w$]+)\s*=>\s*\{?\s*(?:return\s+)?)?(?:${sink.replaceAll("\\(", String.raw`(?:\(|\s*\))`)}))`,
+        "gi",
+      );
+      // Names in an expression, skipping members (`.deployer`) and number parts (`0x`).
+      const identifiers = (expression: string) =>
+        [...expression.matchAll(/(?<![\w$.])[a-z_$][\w$]*/gi)].map(
+          ([ident]) => ident,
+        );
       const seen = new Set<string>();
-      let names = [...source.matchAll(calls)]
-        .flatMap(([, argument]) => [
-          ...(argument ?? "").matchAll(/(?<![\w$.])[a-z_$][\w$]*/gi),
-        ])
-        .map(([ident]) => ident);
+      let names = [...source.matchAll(calls)].flatMap(([, argument]) =>
+        identifiers(argument ?? ""),
+      );
+      for (const { 1: receiver, 2: call = "", index } of source.matchAll(
+        mapped,
+      )) {
+        if (receiver !== undefined) names.push(receiver);
+        // `valueSecrets` starts at `index + opener.length`: the list's `[`.
+        else assigned.push([rule, call, index - call.length]);
+      }
       for (let hop = 0; hop < 4 && names.length > 0; hop++) {
         const next: string[] = [];
         for (const ident of names) {
@@ -322,14 +340,11 @@ export function scanFiles(
           );
           for (const { 0: opener, index } of source.matchAll(declaration)) {
             assigned.push([rule, opener, index]);
-            const alias =
-              /^\s*([a-z_$][\w$]*)\s*(?:as\s+[\w$]+\s*)?[;\n,)]/i.exec(
-                source.slice(
-                  index + opener.length,
-                  index + opener.length + 200,
-                ),
-              )?.[1];
-            if (alias !== undefined) next.push(alias);
+            const value = source.slice(
+              index + opener.length,
+              index + opener.length + 200,
+            );
+            next.push(...identifiers(value.slice(0, value.search(/[;\n]|$/))));
           }
         }
         names = next;

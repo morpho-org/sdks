@@ -408,9 +408,27 @@ test.each([
   `const raw = "${REAL_KEY.slice(2)}";\nprivateKeyToAccount(\`0x\${raw}\`);`,
   `const a = "${REAL_KEY}";\nconst deployer = a;\nprivateKeyToAccount(deployer);`,
   `let privateKey;\nprivateKey=process.env.CI\n  ? "${REAL_KEY}"\n  : undefined;`,
+  `const a = "${REAL_KEY}";\nconst deployer = a as Hex;\nprivateKeyToAccount(deployer);`,
+  `const c = "${REAL_KEY}";\nconst b = c;\nconst a = b;\nconst deployer = a;\nprivateKeyToAccount(deployer);`,
+  `const raw = "${REAL_KEY}";\nconst pk = raw as \`0x\${string}\`;\nprivateKeyToAccount(pk);`,
+  `const raw = "${REAL_KEY.slice(2)}";\nconst pk = \`0x\${raw}\` as Hex;\nprivateKeyToAccount(pk);`,
+  `const raw = "${REAL_KEY}";\nconst pk = raw!;\nprivateKeyToAccount(pk);`,
+  `const wallets = ["${REAL_KEY}"].map(privateKeyToAccount);`,
+  `const users = ["${REAL_KEY}"].map((k) => privateKeyToAccount(k));`,
+  `const raw = ["${REAL_KEY}"];\nconst wallets = raw.map(privateKeyToAccount);`,
 ])("flag a key reaching a sink or reassignment in %s", (content) => {
   expect(scanFiles([file("a.ts", content)])).toEqual([
     expect.objectContaining({ rule: "wallet-key-list" }),
+  ]);
+});
+
+test.each([
+  `vm.startBroadcast(${REAL_KEY});`,
+  `secp256k1.sign(hash, "${REAL_KEY}");`,
+  `secp256k1.getPublicKey("${REAL_KEY}");`,
+])("flag a raw key passed to a Foundry or noble sink in %s", (content) => {
+  expect(scanFiles([file("a.ts", content)])).toEqual([
+    expect.objectContaining({ path: "a.ts" }),
   ]);
 });
 
