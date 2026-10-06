@@ -208,6 +208,38 @@ describe("main", () => {
     ).rejects.toThrow("Invalid release-set row");
   });
 
+  test.each([
+    ["a registry error", new Response("", { status: 503 })],
+    [
+      "a version older than latest",
+      Response.json({
+        "dist-tags": { latest: "2.0.0" },
+        versions: { "2.0.0": {} },
+        time: { "2.0.0": "x" },
+      }),
+    ],
+  ])("prints nothing when a later row fails on %s", async (_, response) => {
+    const out: string[] = [];
+    await expect(
+      main(
+        [
+          tsv(
+            "@morpho-org/morpho-ts\t1.0.0\ta.tgz\n@morpho-org/blue-sdk\t1.0.0\tb.tgz\n",
+          ),
+        ],
+        {
+          fetchFn: async (url) =>
+            url.endsWith("%2Fblue-sdk")
+              ? response
+              : new Response("", { status: 404 }),
+          stdout: (text) => out.push(text),
+          stderr: () => {},
+        },
+      ),
+    ).rejects.toThrow();
+    expect(out).toEqual([]);
+  });
+
   test("prints only new versions and reports skipped ones on stderr", async () => {
     const out: string[] = [];
     const err: string[] = [];
