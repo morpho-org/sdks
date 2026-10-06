@@ -106,8 +106,9 @@ address.
 
 ## Removed exports
 
-- Actions and requirements: `mempoolSubmitOffers`, `setterRatifierRatifyRoot`,
-  `getSetterRatifierRatifyRootRequirement`.
+- Actions and requirements: `mempoolSubmitOffers` (`MempoolSubmitOffersParams`),
+  `setterRatifierRatifyRoot` (`SetterRatifierRatifyRootParams`),
+  `getSetterRatifierRatifyRootRequirement` (`GetSetterRatifierRatifyRootRequirementParams`).
 - Types: `MempoolSubmitOffersAction`, `SetterRatifierRatifyRootAction`,
   `MidnightOfferRootSignatureAction`, `MidnightOfferRootSignatureArgs`,
   `MidnightOfferRootSignature`, `MidnightOfferRootRequirement`, `MidnightActionSignatures`.

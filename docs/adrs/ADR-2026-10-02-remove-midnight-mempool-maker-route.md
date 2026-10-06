@@ -36,10 +36,11 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
   explicit empty supply list is rejected. `supplyCollateralMakeBorrow` calls `makeBorrow` with
   required `collateral: { market, supplies }`, which replaces `market`, `collateralAssets` and
   `collateralIndex`, and `reservedCollateralAssets` is removed.
-- The route-specific surface is removed with them: the `mempoolSubmitOffers` and
-  `setterRatifierRatifyRoot` builders with their
-  `MempoolSubmitOffersAction` and `SetterRatifierRatifyRootAction` types,
-  `getSetterRatifierRatifyRootRequirement`, the
+- The route-specific surface is removed with them: `mempoolSubmitOffers`
+  (`MempoolSubmitOffersParams`, `MempoolSubmitOffersAction`),
+  `setterRatifierRatifyRoot` (`SetterRatifierRatifyRootParams`,
+  `SetterRatifierRatifyRootAction`), `getSetterRatifierRatifyRootRequirement`
+  (`GetSetterRatifierRatifyRootRequirementParams`), the
   `MidnightOfferRootSignature*`, `MidnightOfferRootRequirement` and `MidnightActionSignatures`
   types, `isMidnightOfferRootSignature`, the `midnightOfferRoot` slot of
   `selectRequirementSignatures` (`SelectedRequirementSignatures`), the
