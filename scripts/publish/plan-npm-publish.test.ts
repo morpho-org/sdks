@@ -1,8 +1,13 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, test } from "vitest";
 
 import {
   compareVersions,
   fetchRegistryState,
+  main,
   type RegistryState,
   shouldPublish,
 } from "./plan-npm-publish.ts";
@@ -123,3 +128,60 @@ describe("fetchRegistryState", () => {
     ).rejects.toThrow(message);
   });
 });
+
+describe("main", () => {
+  const tsv = (content: string) => {
+    const file = join(mkdtempSync(join(tmpdir(), "plan-")), "release-set.tsv");
+    writeFileSync(file, content);
+    return file;
+  };
+  const registry = async (url: string) =>
+    url.endsWith("%2Fblue-sdk")
+      ? Response.json({
+          "dist-tags": { latest: "7.3.0" },
+          versions: { "7.3.0": {} },
+          time: { "7.3.0": "x" },
+        })
+      : new Response("", { status: 404 });
+
+  test.each([[[]], [["a.tsv", "b.tsv"]]])(
+    "rejects %j positionals",
+    async (argv) => {
+      await expect(main(argv)).rejects.toThrow("Usage:");
+    },
+  );
+
+  test("rejects a malformed row", async () => {
+    await expect(
+      main([tsv("@morpho-org/blue-sdk\t7.3.0\n")], { fetchFn: registry }),
+    ).rejects.toThrow("Invalid release-set row");
+  });
+
+  test("prints only new versions and reports skipped ones on stderr", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    await main(
+      [
+        tsv(
+          "@morpho-org/blue-sdk\t7.3.0\ta.tgz\n@morpho-org/morpho-ts\t1.0.0\tb.tgz\n",
+        ),
+      ],
+      {
+        fetchFn: registry,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+      },
+    );
+    expect(out.join("")).toBe("@morpho-org/morpho-ts\t1.0.0\tb.tgz\n");
+    expect(err.join("")).toBe("Already on npm: @morpho-org/blue-sdk@7.3.0\n");
+  });
+});
+
+test.each([null, "x"])(
+  "fetchRegistryState rejects a %j packument",
+  async (body) => {
+    await expect(
+      fetchRegistryState(pkg.name, async () => Response.json(body)),
+    ).rejects.toThrow();
+  },
+);

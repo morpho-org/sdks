@@ -148,11 +148,24 @@ export async function fetchRegistryState(
  * `plan-npm-publish.ts <release-set.tsv>` reads the `<name>\t<version>\t<file>` rows that
  * verify-release-set.ts printed and prints the rows to publish, in the same format.
  *
+ * Skipped rows are reported on stderr.
+ *
  * @param argv - Command-line arguments.
+ * @param io - Registry fetch and output writers, injectable for tests.
  */
-async function main(
+export async function main(
   argv: readonly string[] = process.argv.slice(2),
+  io: {
+    fetchFn?: RegistryFetch;
+    stdout?: (text: string) => void;
+    stderr?: (text: string) => void;
+  } = {},
 ): Promise<void> {
+  const {
+    fetchFn,
+    stdout = writeStdout,
+    stderr = (text) => process.stderr.write(text),
+  } = io;
   const { positionals } = parseArgs({
     args: [...argv],
     allowPositionals: true,
@@ -170,13 +183,15 @@ async function main(
     if (!name || !version || !tgz || rest.length > 0) {
       throw new Error(`Invalid release-set row ${JSON.stringify(line)}.`);
     }
-    if (shouldPublish({ name, version }, await fetchRegistryState(name))) {
+    if (
+      shouldPublish({ name, version }, await fetchRegistryState(name, fetchFn))
+    ) {
       rows.push(`${line}\n`);
     } else {
-      process.stderr.write(`Already on npm: ${name}@${version}\n`);
+      stderr(`Already on npm: ${name}@${version}\n`);
     }
   }
-  writeStdout(rows.join(""));
+  stdout(rows.join(""));
 }
 
 if (isMain(import.meta.url)) {

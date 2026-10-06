@@ -6,7 +6,9 @@ name: Release
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
-#   release  package tags and GitHub Releases for every current package version
+#   prepare-release  read-only: compute package tags and release notes as data
+#   release  package tags and GitHub Releases for every current package version;
+#            runs no repository code
 #
 # Repository settings this workflow relies on (a workflow file can't enforce them,
 # since a pull request could edit it):
@@ -68,7 +70,6 @@ jobs:
           name: release-tarballs
           path: ${{ runner.temp }}/tarballs
           if-no-files-found: error
-          retention-days: 1
 
   # Holds the npm OIDC token. It installs nothing and runs only Node, the npm
   # bundled with it and dependency-free scripts from this commit, on tarballs
@@ -131,13 +132,13 @@ jobs:
               --registry https://registry.npmjs.org
           done 3< "$RUNNER_TEMP/to-publish.tsv"
 
-  release:
-    name: Tags & GitHub Releases
+  prepare-release:
+    name: Prepare tags & release notes
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
-      contents: write # push package tags and create GitHub Releases
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -152,30 +153,60 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
-      # Repository scripts run here, before the token is in reach.
+      # Repository scripts run in this read-only job, so nothing they leave on the
+      # runner (PATH, git config, env files) reaches the job that holds the token.
       - name: Prepare tags and release notes
         shell: bash
         run: |
           set -euo pipefail
+          out="$RUNNER_TEMP/release-plan"
+          mkdir -p "$out/notes"
           # Not process substitution: a failing command must fail the step.
-          node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
-          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
+          node scripts/publish/pack.ts --tags > "$out/tags.txt"
+          if [ ! -s "$out/tags.txt" ]; then
             echo "::error::No package tags found."
             exit 1
           fi
-          mkdir -p "$RUNNER_TEMP/github-releases"
-          while IFS=$'\t' read -r tag _commit; do
-            node scripts/publish/github-release-body.ts "$tag" "$RUNNER_TEMP/github-releases/${tag//\//__}.md"
-          done < "$RUNNER_TEMP/tags.txt"
+          while IFS=$'\t' read -r -u 3 tag _commit; do
+            node scripts/publish/github-release-body.ts "$tag" "$out/notes/${tag//\//__}.md"
+          done 3< "$out/tags.txt"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/release-plan
+          if-no-files-found: error
+
+  release:
+    name: Tags & GitHub Releases
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # push package tags and create GitHub Releases
+
+    # No repository code runs in this job: a fresh checkout, the data artifact
+    # from prepare-release, and git and gh by absolute path.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/release-plan
 
       # Every current package version is on npm once publish succeeds, so any
       # missing tag or release is created, whichever run or commit skipped it, on
       # the mainline commit that first set that version. npm provenance records
       # the commit of the run that published it, which differs from the tag only
       # when an earlier run failed before publishing.
-      # Only git and gh run while the token is set. Earlier steps can write
-      # $GITHUB_ENV and $GITHUB_PATH, so PATH and the variables that load code
-      # into bash or git are reset here and both run by absolute path.
+      # Each row is checked before use: a package tag, a commit on this run's
+      # history, and a notes file. PATH and the variables that load code into bash
+      # or git are reset, and the token is set only in this step.
       - name: Push package tags and create GitHub Releases
         shell: bash
         env:
@@ -188,9 +219,22 @@ jobs:
           GIT_CONFIG_GLOBAL: /dev/null
           GIT_CONFIG_NOSYSTEM: "1"
           GIT_CONFIG_COUNT: "0"
+          GIT_CONFIG_PARAMETERS: ""
           GIT_EXEC_PATH: ""
+          GH_CONFIG_DIR: ${{ runner.temp }}/gh-config
+          GH_HOST: github.com
         run: |
           set -euo pipefail
+          plan="$RUNNER_TEMP/release-plan"
+          while IFS=$'\t' read -r -u 3 tag commit; do
+            if ! [[ "$tag" =~ ^@morpho-org/[a-z0-9-]+-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
+              || ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]] \
+              || [ ! -f "$plan/notes/${tag//\//__}.md" ] \
+              || ! /usr/bin/git merge-base --is-ancestor "$commit" "$GITHUB_SHA"; then
+              echo "::error::Invalid release-plan row: ${tag}"
+              exit 1
+            fi
+          done 3< "$plan/tags.txt"
           /usr/bin/git config core.hooksPath /dev/null
           /usr/bin/git config user.name "github-actions[bot]"
           /usr/bin/git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -202,6 +246,6 @@ jobs:
               /usr/bin/git push --no-verify origin "refs/tags/${tag}"
             fi
             if ! /usr/bin/gh release view "$tag" >/dev/null 2>&1; then
-              /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/github-releases/${tag//\//__}.md" --verify-tag
+              /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$plan/notes/${tag//\//__}.md" --verify-tag
             fi
-          done 3< "$RUNNER_TEMP/tags.txt"
+          done 3< "$plan/tags.txt"
