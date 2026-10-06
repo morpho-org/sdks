@@ -1004,6 +1004,8 @@ export class MorphoMidnight {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Optional Midnight mempool API request controls.
    * @param params.collateral - Required market and collateral supplies; every offer must target that market.
+   * @param params.collateral.market - Midnight market receiving the collateral; every offer must target it.
+   * @param params.collateral.supplies - Collateral index and assets per supply; must not be empty.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client or collateral market targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
