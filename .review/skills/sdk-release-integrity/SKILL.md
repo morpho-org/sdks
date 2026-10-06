@@ -1,6 +1,6 @@
 ---
 name: sdk-release-integrity
-description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci, scripts/release or scripts/publish (and the helpers they import, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
+description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions (including public/.github), scripts/ci, scripts/release or scripts/publish (and the helpers they import: scripts/workflow.ts, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
 ---
 
 # CI, release and automation integrity

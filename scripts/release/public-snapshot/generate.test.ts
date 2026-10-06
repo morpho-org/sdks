@@ -780,6 +780,9 @@ describe("isDenied", () => {
     ".env.example",
     "public/.github/workflows/ci.yml",
     "scripts/lint/x.ts",
+    "scripts/publish/helpers.ts",
+    "scripts/publish/read-tarball-identity.ts",
+    "scripts/workflow.ts",
   ])("behavior: allows %s", (path) => {
     expect(isDenied(path)).toBe(false);
   });
