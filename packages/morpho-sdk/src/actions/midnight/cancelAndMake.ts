@@ -1,6 +1,6 @@
 import {
   InvalidTreeError,
-  type MarketParams,
+  type MarketInput,
   MarketUtils,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
@@ -48,6 +48,12 @@ export interface MidnightRootActivationSignature {
   readonly s: Hex;
 }
 
+/** Collateral supplied for the maker before root activation; every offer must target `market`. */
+export interface MidnightMakeBorrowCollateral {
+  readonly market: MarketInput;
+  readonly supplies: readonly MidnightCollateralTransfer[];
+}
+
 /** Offer root activated and published by a Midnight Bundles V2 maker bundle. */
 export interface MidnightOfferPublication {
   /**
@@ -66,10 +72,7 @@ export interface MidnightOfferPublication {
   /** Optional loan assets parked on Morpho Blue for the maker; share-price slippage is not checked. */
   readonly blueSupply?: MidnightBlueSupply;
   /** Optional collateral supplied to `market` for the maker before activation. */
-  readonly collateral?: {
-    readonly market: MarketParams;
-    readonly supplies: readonly MidnightCollateralTransfer[];
-  };
+  readonly collateral?: MidnightMakeBorrowCollateral;
 }
 
 /**
@@ -193,8 +196,9 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  *
  * The contract does not check that `payload` matches `root`; callers must derive both from the
- * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
- * `cancelAndMakeBorrow(...)`, which do so and resolve approvals and authorization.
+ * same tree. Prefer `client.morpho.midnight(chainId).makeLend(...)`,
+ * `makeBorrow(...)`, or `supplyCollateralMakeBorrow(...)`, which derive the tree data and
+ * resolve the requirements for each flow.
  *
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.cancellations - Offer groups to cancel and their consumption ceilings.
