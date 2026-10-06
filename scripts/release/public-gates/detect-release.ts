@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
+/** A public package whose name or version differs from base: its manifest name and version. */
 export interface ReleasedPackage {
   readonly name: string;
   readonly version: string;

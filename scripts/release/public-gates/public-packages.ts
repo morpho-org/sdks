@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
+/** A non-private package of the public tree that clean-copy.sh packs. */
 export interface PublicPackage {
   /** Package directory, relative to the tree root. */
   readonly dir: string;
