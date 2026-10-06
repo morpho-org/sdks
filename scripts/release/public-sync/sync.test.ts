@@ -589,6 +589,16 @@ describe("syncPublic", () => {
     expect(github.calls).not.toContain("PATCH repos/morpho-org/sdks/pulls/1");
   });
 
+  test("a public repo without main fails before anything is written", async () => {
+    const github = new FakeGitHub({ "README.md": "placeholder" });
+    github.refs.delete("main");
+    await expect(syncPublic({ github, ...release(R1, v1) })).rejects.toThrow(
+      "has no main branch",
+    );
+    expect(github.calls.every((c) => c.startsWith("GET"))).toBe(true);
+    expect(github.pulls).toHaveLength(0);
+  });
+
   test("a truncated public main tree fails before anything is written", async () => {
     const github = new FakeGitHub({ "README.md": "placeholder" });
     github.truncateTrees = true;
