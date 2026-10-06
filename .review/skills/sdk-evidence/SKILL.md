@@ -1,27 +1,116 @@
 ---
 name: sdk-evidence
-description: Assess tests and documentation for changed public behavior, failure branches, protocol invariants, generated schemas, fork boundaries, examples, Markdown references or repository rules.
+description: Tests and documentation in morpho-org/sdks-internal. Use when a change adds or modifies exports, onchain code paths, entity flows, tests, Vitest config, JSDoc, examples, README, AGENTS.md, ADRs or other Markdown, or renames files that docs point at. Checks that tests would catch a realistic regression at the right boundary (pure, mocked transport, or pinned Anvil fork), that JSDoc and docs match the code, and that links resolve. Not for whether the code itself is correct (the other sdk-* skills).
 ---
 
 # Tests and documentation
 
-Read root `AGENTS.md` §2 rule6, §5–6 and §9, affected package/test instructions, docs/jsdoc-style.md and actual Vitest routing. For each changed contract, identify a plausible wrong implementation and whether tests would reject it and documentation would help an integrator use it correctly.
+This skill applies the `test-coverage` and `documentation` personas in
+`.agents/pr-review-engine/agents/` and root `AGENTS.md` §5 and §6. They are
+authoritative; when wording differs, they win and this file is out of date.
 
-## Proof of behavior
+Tests and docs are the evidence a change works and the instructions the next
+integrator or agent follows. Missing evidence is not a defect in the code;
+report it as missing evidence, with what it leaves unproven.
 
-- Apply public-surface unit coverage and entity-fetcher integration commitments. Check new branches/errors, zero/maximum and relevant negative bigint/empty inputs, signature changes and generated/schema assertions. Public-contract tests can cover an internal helper without a separate helper test.
-- Require discriminating assertions for relevant routing, inflation, LLTV, chain, authorization and accounting invariants. Test existence or a happy-path snapshot alone does not establish those outcomes.
-- Encoder property tests and inline transaction snapshots follow root adoption guidance; changed snapshots must reflect intended output. Assert errors by class identity. Deterministic factories, isolated state and established morpho-test/test helpers support reliable evidence.
-- Source unit tests are colocated *.test.ts; test-support unit tests stay beside their modules. Integration/fork tests use the package's singular test/ and *.integration.test.ts. Vitest projects must select them without silently omitting coverage or moving RPC work into unit runs. Keep support out of published runtime paths.
-- Pure functions need no client/fork. createMockClient from @morpho-org/test/mock may test encoders, deserialization, validation, augmentation and shaped-response fetchers without real-state dependence. It intercepts transport; direct spies on client/action methods may miss viem/actions calls.
-- Contract round-trips, oracles, accrual, live-IRM position health, multicall/deployless aggregation and contract reverts require pinned Anvil evidence via @morpho-org/test. Inspect fetcher integration and package backend-parity obligations alongside allowed unit mocks.
+Apply each section only when its condition holds.
 
-## Usable and accurate contracts
+## 1. Changed behavior has a test that would fail
 
-- Apply canonical JSDoc to new/modified exported classes/functions/types/constants. Verify descriptions, parameters, return shapes, typed throws and realistic examples against implementation and docs/jsdoc-style.md. The canonical guide exempts @internal symbols, non-barrel exports, test fixtures/helpers and generated API outputs.
-- Examples need the guide's resolvable imports, setup and realistic calls/outputs. Domain type names, consistent overlapping protocol signatures, obvious discriminants and actionable errors support human and agent integrators.
-- Reconcile affected README, AGENTS, MISSION, CONTRIBUTING, SECURITY and other active docs with changed behavior. CLAUDE symlinks are the same source. Update affected package/chain/command/criterion inventories and inspect renamed/removed symbol references and touched links/anchors.
-- Historical TIBs preserve implementation-time names/examples. A new decision supersedes them; an operational clarification uses a dated addendum. Only a TIB introduced with the current implementation evolves alongside it before landing.
-- For changed rules, follow owning AGENTS guidance to active review criteria and back. Configuration integrity uses `sdk-release-integrity`.
+**Applies when** the diff changes exported behavior or an onchain code path.
 
-Finish with meaningful proof and correct applicable documentation or precise gaps. Distinguish inspected assertions/examples from executed tests/compilation. Missing execution capability is not itself a code defect; report a missing test or documentation obligation with the contract it leaves unprotected or misleading. Cosmetic prose and unrelated optional expansion are not findings.
+- New exports have a colocated unit test, and new branches, error paths and
+  edge cases (`0n`, `MAX_UINT256`, negative `bigint`, empty arrays) have
+  cases. Modified exports have their tests updated; tests that still
+  describe the old behavior are a false pass.
+- Internal symbols don't need their own tests when the public surface that
+  covers them is tested.
+- An assertion must tell the intended behavior from a realistic regression.
+  The §5 security invariants (deposit routing, inflation-attack guard, LLTV
+  buffer, `chainId` validation, authorization, accounting) each have a test
+  that fails if the invariant is removed.
+- Errors are asserted by class (`rejects.toBeInstanceOf`), not message text.
+  Inline snapshots of transaction shapes are re-recorded only for an intended,
+  reviewed change.
+- Snapshot or schema tests follow changes to generated GraphQL types or ABIs.
+- A new or changed entity flow that consumes a `RequirementSignature` has a
+  cross-handle test: prepare and sign on handle A, then check that
+  `buildTx(signatures)` on a fresh handle B equals A's. It must fail if
+  `buildTx` starts reading state written during signing
+  (`docs/adrs/ADR-2026-09-23-stateless-entity-flows.md`).
+
+## 2. The right test boundary
+
+**Applies when** the diff adds or changes tests or Vitest projects.
+
+- **Pure code** needs neither a client nor Anvil.
+- **Mocked transport** (`createMockClient` from `@morpho-org/test/mock`) is
+  right for unit tests of code that calls `viem/actions` without depending on
+  real chain state: encoders, decoding, validation, wiring, shaped responses.
+  `vi.mock` or `vi.spyOn` of viem actions or `client.readContract` is wrong:
+  the actions resolve through `client.transport`, so the spy silently misses.
+- **Pinned Anvil forks** (`@morpho-org/test`) are required where correctness
+  depends on real chain state: oracles, accrual, position health under live
+  IRMs, multicall and deployless reads, revert behavior.
+- Unit tests are `*.test.ts` beside their module; integration and fork tests
+  are `*.integration.test.ts` under `packages/<pkg>/test/` only (singular
+  `test/`). Vitest unit and fork projects route the two sets separately.
+- Point at existing helpers in `@morpho-org/test` rather than asking for new
+  infrastructure.
+
+## 3. JSDoc on exports
+
+**Applies when** the diff adds or changes a symbol exported through
+`src/index.ts`.
+
+Read `docs/jsdoc-style.md` and use its checklist. Public exports carry a
+description, `@param`, `@returns`, `@throws` for each typed error an
+integrator may catch, and one runnable `@example`. The doc matches the code:
+no renamed arguments, removed return values or changed throws left behind.
+Public type parameters use domain names. Internal symbols don't need JSDoc.
+
+## 4. Markdown matches the code
+
+**Applies when** the diff changes Markdown, or changes code that Markdown
+describes.
+
+- Read the affected `README.md`, `AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `docs/**` and reviewer files. `CLAUDE.md` is a symlink to
+  `AGENTS.md`; don't check it twice.
+- Flag stale prose, inventories that no longer match (packages, personas,
+  chains, commands), and code blocks that no longer run.
+- A rule changed in `AGENTS.md` changes in every persona its
+  `> Applied by personas:` callout names, and in `.review/`.
+- Links, anchors and path references in changed files resolve. A rename or
+  removal updates every reference to the old path; grep for the old name.
+- Don't ask for new docs unless the diff changed what they would describe.
+
+## 5. Accepted ADRs are historical
+
+**Applies when** the diff touches `docs/adrs/`.
+
+An ADR already on the target branch keeps its implementation-time names and
+examples, including those migrated from the retired `docs/tibs/`. Only its
+Status row, its filename or a link to a renamed target may change; a changed
+decision is a new ADR that supersedes it and lists it in References. An ADR
+added in the same PR as its implementation may change with it. A new
+`docs/tibs/` file or `TIB-*` name is a finding: TIBs are retired.
+
+## Severity
+
+These follow the personas; `.review/review.md` maps them to Lupin's levels.
+
+- **High:** an onchain code path with no test; tests that still describe old
+  behavior; an entity flow without a cross-handle test; prose that would
+  mislead an integrator; broken links in `AGENTS.md` or root docs.
+- **Medium:** a missing unit test or JSDoc on a new export; a misplaced test
+  or wrong Vitest routing; an out-of-date inventory in a less visible doc;
+  stale pointers after a rename.
+- **Low:** missing edge cases where happy-path tests exist; a noncanonical
+  test name that still routes correctly; JSDoc style nits.
+
+## Report
+
+Each finding names the changed behavior and the test or doc that should
+cover it, and the regression it would miss or the reader it would mislead.
+Say whether you ran the tests or only read them.

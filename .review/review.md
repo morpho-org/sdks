@@ -1,25 +1,68 @@
 # SDK review brief
 
-Prioritize business-logic correctness, integration safety and CI/release integrity. Find consequential, non-obvious defects with evidence. Written SDK obligations remain binding; optional style preferences are not findings.
+These SDKs build transactions that move integrators' funds, so business-logic
+correctness, integration safety and CI/release integrity come first. Look for
+consequential, non-obvious defects and back each with evidence. Written SDK
+rules are binding even where no tool enforces them; optional style
+preferences are not findings.
 
-## Establish the contract
+## Where the rules live
 
-Read root AGENTS.md, MISSION.md and affected package/nested instructions in the reviewed checkout. Root rules govern conflicting persona advice; package instructions refine them. CLAUDE.md symlinks are the same source. Pinned ABI/address/math definitions, public barrels and actual callers establish the affected contract. Follow implementation owners through re-exports; source paths are starting points, not investigation limits.
+- Root `AGENTS.md`, `MISSION.md` and the affected package's nested
+  `AGENTS.md`, read in the reviewed checkout. The root wins on conflict;
+  package files refine it. `CLAUDE.md` is a symlink to `AGENTS.md`.
+- The review personas in `.agents/pr-review-engine/agents/`, which root
+  `AGENTS.md` §10 lists. While both reviewers run, they and `AGENTS.md` are
+  authoritative and the skills below mirror them. If a skill and its source
+  disagree, apply the source and report the drift.
+- Pinned ABIs, addresses and math helpers, public barrels (`src/index.ts`)
+  and actual callers define the contract a change affects. Follow re-exports
+  to the owning code; paths named in the skills are starting points.
+- Biome, knip and the test suites run in CI. Don't restate what they enforce.
 
-The legacy review engine (root §10, `.agents/pr-review-engine/`) stays authoritative while both run; these criteria mirror it.
+## Five areas
 
-## Five areas to account for
+Load an area's skill when the change implicates it, including protocol or
+security claims made in documentation-only changes. Covering an area doesn't
+require a finding or a tour of unrelated code.
 
-1. **Protocol and transaction safety — sdk-protocol-safety.** Assess decimal/unit and rounding/accounting invariants; pinned ABI/address/domain agreement; chain/account/spender/recipient authority; approvals, signatures, nonces and replay; routing, native funding, ordering and attacks across a complete transaction flow. Validate at the owning boundary: pure builders remain pure; entities/signing own their documented checks.
-2. **Integrator compatibility and architecture — sdk-compatibility.** Trace existing consumers through changed outputs, defaults, errors and state assumptions, including changes invisible to TypeScript signatures. Preserve package/layer ownership, public facades, stateless prepare/sign/build transport, immutability and applicable deprecation/migration duties.
-3. **Implementation and failure behavior — sdk-correctness.** Trace correct results, types/units, input identity, typed errors/causes, promises, optional lookups, fallback and caller-visible failures. Respect written conventions and generated-source ownership; investigate reachable injection/secrets rather than cosmetic alternatives.
-4. **Tests and documentation — sdk-evidence.** Check that assertions distinguish realistic regressions and protect changed public/security contracts. Use the correct pure, transport-mock or pinned-fork boundary. Verify required JSDoc/examples and active docs against actual behavior; preserve historical TIBs.
-5. **CI, release and automation integrity — sdk-release-integrity.** Trace dependency/install trust, workflow inputs/permissions, trusted execution and publication. Check semver/changesets, maintained dependents and applicable release evidence. Review criteria and agent instructions must match their actual consumer.
+1. **sdk-protocol-safety:** ABI and address agreement, routing, approvals,
+   signatures, chain and account checks, accounting invariants and action
+   purity.
+2. **sdk-compatibility:** what existing integrators see, the `morpho-sdk`
+   facade, layers and package boundaries, stateless entity flows, and the
+   deprecation lifecycle with its recorded exceptions.
+3. **sdk-correctness:** types and units, input mutation, typed errors that
+   reach the caller, `_try`, fallback and retry, generated code, secrets and
+   injection.
+4. **sdk-evidence:** tests that would catch a regression at the right
+   boundary (pure, mocked transport, pinned fork), JSDoc, Markdown accuracy,
+   links, and accepted ADRs.
+5. **sdk-release-integrity:** semver and changesets, dependency and install
+   trust, workflow permissions and secrets, publishing, and keeping review
+   criteria in sync with their source.
 
-Load an area's detailed criteria when the change implicates it, including protocol/security claims in documentation-only changes. Accounting for an area does not require a finding or exhaustive investigation of unrelated code.
+## Severity
 
-## Preserve exceptions and signal
+The skills use the personas' four tiers. The legacy reviewer requests changes
+on any critical or high finding, so report:
 
-Read the owning exception with its rule: async requirement resolvers coexist with synchronous encoders; helpers may reuse input identity; class instances are not deep-frozen; transport mocks are valid for shape/pure boundaries while real-state behavior needs pinned forks. Compatible dev-only lockfile drift, internal peer ranges, optional JSDoc release notes and documented changeset/deprecation exemptions remain valid.
+- critical and high as **critical**;
+- medium as **warning**;
+- low as **info**.
 
-Retain findings with a changed cause or newly exposed consequence and an applicable contract, after inspecting guards, intent and counterevidence. Root §9 governs touched/refactored surfaces; unrelated inherited debt is not a new issue. A reverting transaction, exploitable loss and written standards violation have different consequences. Distinguish static inspection from executed validation and unavailable evidence from a defect.
+## Keep the signal
+
+- Read each rule with its exceptions before reporting. Examples: async
+  requirement resolvers coexist with synchronous encoders; helpers may return
+  an input unchanged; class instances are never deep-frozen; mocked
+  transports are right for code that doesn't depend on chain state;
+  compatible dev-only lockfile drift, explicit internal peer ranges, optional
+  JSDoc changesets and the ADR-recorded deprecation exceptions are allowed.
+- Report what the change causes or newly exposes. `AGENTS.md` §9 applies to
+  code the diff touches or refactors; untouched inherited debt is not new.
+- Check guards, intent and counterevidence before keeping a finding. A
+  reverting transaction, an exploitable loss and a standards violation have
+  different consequences; say which it is.
+- Say what you executed and what you only read, and report evidence you
+  couldn't obtain as unavailable rather than as a defect.

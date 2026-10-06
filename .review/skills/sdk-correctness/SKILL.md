@@ -1,28 +1,122 @@
 ---
 name: sdk-correctness
-description: Assess changed implementation and failure behavior for types, units, input mutation, errors, promises, optional lookups, fallback, generated sources, secrets or injection.
+description: Implementation and failure behavior in TypeScript code in morpho-org/sdks-internal. Use when a change touches function bodies: types and assertions, bigint units, input mutation, error classes and causes, catch blocks, promises, optional lookups with _try, fallback or retry, generated GraphQL outputs, or code that handles secrets or untrusted strings. Checks that results are right and that failures reach the caller instead of dying silently. Not for protocol math or transaction authority (sdk-protocol-safety) or public API shape (sdk-compatibility).
 ---
 
 # Implementation and failure behavior
 
-Read root `AGENTS.md` §1–3 and §8–9 plus affected package contracts. Trace changed inputs to the public result, including failures that could be mistaken for success. Protocol math and authority use `sdk-protocol-safety`; API shape and ownership use `sdk-compatibility`.
+This skill applies the `code-quality`, `silent-failure-hunter` and
+`style-conventions` personas in `.agents/pr-review-engine/agents/` and root
+`AGENTS.md` §2, §3, §8 and §9. They are authoritative; when wording differs,
+they win and this file is out of date.
 
-## Results and conventions
+Trace each changed input to the public result, including failures that a
+caller could mistake for success. Biome and knip already run in `pnpm lint`;
+don't restate what they enforce.
 
-- Apply strict types and discriminated/exhaustive branches. Check unsafe assertions, any and diagnostic suppression against root exceptions: narrow test fixtures/adapters may use double assertions, and permitted suppressions require an issue/deletion plan.
-- Onchain quantities/rates use bigint; check scaling, numeric conversion and truncation against canonical helpers. `morpho-ts` adds nullability, numeric input-kind preservation and time assumptions; read its contract when implicated.
-- Inputs remain immutable and public fields readonly. Returning unchanged input identity is allowed unless freshness is promised. Descriptor freezing and class-instance exceptions follow the architecture area.
-- Apply written helper-extraction, guard-clause, naming and duplication rules to changed/refactored surfaces. Trust applicable mechanical checks for what they establish; avoid reporting cosmetic alternatives.
-- Reuse direct-dependency semantic helpers: isAddressEqual for address equality, explicitly typed _try for optional failure. Lowercasing is valid for normalized keys/output. Reuse exported SDK types and respect NodeNext/type-only imports.
-- Generated GraphQL/build outputs follow their authoritative inputs and generation path; an expected regenerated artifact differs from a manual edit. For `liquidity-sdk-viem`, inspect graphql inputs and codegen configuration.
+Apply each section only when its condition holds.
 
-## Failure propagation and trust
+## 1. Types and units
 
-- SDK failures use named exported classes; wrapping preserves cause. Check thrown-type compatibility and messages against the caller contract, including actionable instructions and the documented interpolation conventions.
-- Follow catches, promises, critical return values and callbacks through callers. A returned rejection can propagate correctly without a local catch. Logging-only nonrecoverable failures, detached promises or a swallowed cause need a concrete caller consequence.
-- _try(accessor, ExpectedError) names expected errors; unrelated errors propagate. Successful undefined must remain distinguishable from a caught failure using the documented tagged/null representation.
-- Check fallback/retry eligibility, restoration and outcomes. In `evm-simulation`, only ExternalServiceError permits backend fallback/bypass; SimulationRevertedError propagates as a bundle failure, and domain errors remain under SimulationPackageError.
-- Follow receipt/simulation results and loading/error states only where the changed code owns them. A deliberately returned descriptor/hash is different from representing an unmined or failed transaction as success. Inspect default/dead branches against actual unions and decoding.
-- Trace attacker-controlled input into commands, queries, evaluation, imports or HTML interpretation; inspect inherited escaping/validation. Identify real credentials versus fixtures/references and report locations without copying values. CI trust and dependency install behavior use `sdk-release-integrity`.
+**Applies when** the diff changes `.ts` code.
 
-Finish when implicated results/failure mechanisms have concrete checks and evidence, or explicit gaps. A retained finding identifies lost/misclassified behavior or a binding rule, not a preference for another implementation.
+- No `any`, `@ts-ignore`, or `@ts-expect-error` without an issue link and a
+  deletion plan, and no `as unknown as` outside tests (§2 rule 1). Test files
+  may use `as unknown as` for narrow fixtures or test-only adapters.
+- Unsafe `as` assertions, missing generics or an escape hatch on a hard-to-type
+  API point to the wrong shape; say what shape would type cleanly.
+- Onchain quantities and WAD-scaled rates are `bigint`, never `number`. Check
+  scaling, conversions and truncation against the canonical helpers.
+  `morpho-ts` adds rules on nullability, numeric input kinds and time; read
+  its contract when the diff relies on them.
+- Protocol constants are named `as const` lists, not magic numbers or
+  strings. `switch` over a union is exhaustive; a `default:` that the types
+  make unreachable is dead code.
+- SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`, `MarketParams`)
+  are reused, not redeclared.
+- Use the direct dependency's semantic helpers: viem's `isAddressEqual` for
+  address equality. Lowercasing stays valid when normalizing is the goal, as
+  for map keys or deterministic output.
+
+## 2. Inputs and generated code
+
+**Applies when** the diff changes a function that receives objects, or files
+under a generated path.
+
+- Input arguments are never mutated (§2 rule 4). Returning an input unchanged
+  is allowed unless a fresh object is promised.
+- Generated outputs (`src/api/sdk.ts`, anything under `lib/`) change only
+  through their inputs (`graphql/*.gql`) and codegen. A regenerated file that
+  matches its inputs is expected; a hand edit is a finding. For
+  `liquidity-sdk-viem`, read the GraphQL inputs and codegen config.
+- Written rules on guard clauses, helper extraction, naming and duplication
+  apply to touched and refactored code (§9). Don't report a cosmetic
+  alternative.
+
+## 3. Errors reach the caller
+
+**Applies when** the diff throws, catches, wraps, awaits or ignores a result.
+
+- Every failure is a named, exported error class, not `throw new Error`
+  (§2 rule 2). Wrapping keeps `cause`. Messages read like instructions in the
+  §3 format, with interpolated values quoted. A changed error class is a
+  change integrators pattern-match on.
+- Follow each `catch`, promise, callback and important return value to its
+  caller:
+  - an empty or broad `catch`, or one that only logs on a path that can't
+    recover;
+  - a promise with no rejection handling, or a `Promise.all` whose rejection
+    is dropped;
+  - a `simulate()` result or `tx.wait()` that is never checked or awaited;
+  - a callback called only on success;
+  - a `catch` that rethrows a generic error and loses the typed `cause`.
+  A returned rejection that propagates to the caller is fine without a local
+  `catch`.
+- Optional lookups use `_try(accessor, ExpectedError)` and name the expected
+  errors, so unrelated failures propagate. An accessor that can legitimately
+  return `undefined` must tag that absence (for example as `null`) so success
+  stays distinguishable from a caught failure.
+
+## 4. Fallback and retry
+
+**Applies when** the diff adds or changes a fallback, retry or bypass.
+
+Check which failures may trigger it, what state it restores, and what the
+caller is told. In `evm-simulation`, only `ExternalServiceError` permits a
+backend fallback or bypass; `SimulationRevertedError` propagates as a bundle
+failure, and domain errors stay under `SimulationPackageError`.
+
+## 5. Secrets and untrusted input
+
+**Applies when** the diff handles credentials, RPC URLs, or strings that
+reach a command, query, `eval`, `Function(...)`, dynamic `import()` or HTML.
+
+- Trace attacker-controlled input to the place it is interpreted, and check
+  the escaping or validation it inherits before reporting.
+- Hardcoded secrets, API keys, private keys, mnemonics or credentialed RPC
+  URLs are critical; tell real credentials apart from fixtures and give their
+  location without copying the value. Cross-check
+  `.agents/pr-review-engine/references/secrets.md`.
+- CI and install trust belong to `sdk-release-integrity`.
+
+## Severity
+
+These follow the personas; `.review/review.md` maps them to Lupin's levels.
+
+- **Critical:** a hardcoded secret; `eval` or `Function(...)` on user input.
+- **High:** `any`, `as unknown as` or a suppression without a deletion plan;
+  `throw new Error`; input mutation; a signature change that breaks callers
+  in the repo; a swallowed error or unawaited `tx.wait()` on a path that
+  moves money or signs; an unhandled rejection on the happy path of an
+  export.
+- **Medium:** duplication, deep nesting or magic numbers; an empty `catch` or
+  ignored return value on a non-critical path; a hand-rolled version of an
+  available semantic helper.
+- **Low:** a redeclared SDK type; a dead branch a tighter union would catch.
+
+## Report
+
+Each finding names the input and the path to the caller-visible result or
+failure, and the rule it breaks. A finding shows lost or misclassified
+behavior, or a binding written rule; preferring another implementation is
+not one.

@@ -1,34 +1,144 @@
 ---
 name: sdk-release-integrity
-description: Assess SDK CI, releases and automation for workflows, commands, dependencies, manifests, lockfiles, changesets, installation, publishing, review criteria or agent instructions.
+description: CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci or scripts/release, package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).
 ---
 
 # CI, release and automation integrity
 
-Read root `AGENTS.md` §7–10, affected workflows/scripts/tests, package/install configuration and actual release architecture. Follow the operator's command from input through trust boundaries, artifacts and outcomes, including clean setup, upgrades and partial failure. Source-tree success does not establish installed-package behavior.
+This skill applies the `ci-release-security`, `style-conventions` (changeset
+relevance) and `skill-authoring` personas in
+`.agents/pr-review-engine/agents/`, root `AGENTS.md` §7 and §10, and the
+secret inventory in `.github/workflows/AGENTS.md`. They are authoritative;
+when wording differs, §10 wins and this file is out of date.
 
-## Release and dependency contract
+CI holds privileged tokens and releases publish under the org's name, so a
+workflow or dependency change can leak secrets or ship a poisoned package.
+Review only workflows and settings the diff changes; don't speculate about
+others.
 
-- Published behavior and internal source maintenance follow patch/minor/major rules and require applicable changesets. Additions/deprecations are minor; removed/renamed/retyped public contracts are major subject to the deprecation contract in `sdk-compatibility`.
-- Audit maintained direct runtime dependents whose latest release must resolve a bumped dependency. Explicit internal-peer ranges need a compatibility decision and affected-dependent changesets; do not assume Changesets infers their release.
-- JSDoc-only source changes may carry an optional patch note. Metadata, non-API docs, fixtures, generated-output-only and tests-only changes need no release. Determine public-contract impact before classifying a documentation-looking diff.
-- Migration guides, major audit reports and minor dogfood evidence apply at their documented release boundary. A source PR does not imply publication already occurred. Preserve required release gates, signed commit/tag duties, org-scoped authentication, provenance and applicable approval/dry-run/tag-scope requirements.
-- Changesets configuration and release-bot wiring retain root §10's explicit review duties, including human review of every .changeset/config.json change and preservation of required release checks.
-- New runtime dependencies need a package-level reason and PR justification. Inspect declared ranges, lifecycle hooks, suspicious names, registries, install settings and removed consumers. Compatible dev-only lockfile resolution drift is allowed; runtime/peer drift or security-relevant metadata requires the corresponding manifest/release audit. Internal peer ranges retain their root exception.
-- Apply written dependency/publish/install review requirements without equating every violation to compromise. Missing registry evidence is a gap. The .npmrc restriction applies, but always-auth alone is not a secret value. Preserve strict minimum release age; bypasses need narrow emergency approval and removal before merge.
+Apply each section only when its condition holds.
 
-## Workflow and publication trust
+## 1. Semver and changesets
 
-- Trace GitHub-controlled input into shell/interpreter contexts. Use env/structured arguments and quoted consumption; inspect later evaluation. Static action inputs are not automatically executable. Review-only repository guidance grants no credentials or capabilities.
-- PR-target head checkout is permitted only when its code is never executed. Comment-driven workflows enforce the documented actor ACL before acting. Use explicit least-privilege permissions/secrets and third-party full-SHA action pins with release comments; retain the documented first-party Dependabot exception and new-publisher disclosure.
-- Inspect secret logging/tracing and child processes; env binding alone proves no redaction. Report credential locations, not values.
-- Data-dependent CI decisions use trusted TypeScript scripts with colocated tests. Linear setup/static argument marshalling is exempt. After head checkout, privileged/trusted decisions still use the default-branch script copy. Trace changed failures, retries and cleanup through the actual command.
-- Before minting write tokens, verify documented same-job checksum/trusted-PATH/environment/branch/hook hardening or a fresh trusted checkout with validated data-only handoff. Inspect actual hook disabling/rejection and the helper executed after minting; a split-job design need not reproduce unrelated same-job mechanics.
+**Applies when** the diff changes published package source, a package
+version, or `.changeset/`.
 
-## Review and instruction integrity
+- Behavior-affecting source changes ship a `.changeset/*.md` whose bump
+  matches the contract change: patch for fixes and internal maintenance,
+  minor for additions and deprecations, major for removed, renamed or retyped
+  public symbols.
+- No changeset for repo metadata, non-API docs, fixtures, generated outputs or
+  tests only. A JSDoc-only change may ship a patch; its absence is low unless
+  the export's contract changed.
+- A package bump is checked against its dependents. Maintained packages with a
+  direct runtime dependency on it get a patch when their latest release must
+  resolve the new version (for example `blue-sdk` address or ABI updates
+  patch `morpho-sdk`). Internal peer ranges are explicit semver, so Changesets
+  won't bump peer dependents: check the range and add their changesets.
+- A major also needs a migration guide. `.changeset/config.json` changes are
+  flagged for human review every time.
 
-- `.review/` mirrors the legacy review engine (root §10 and `.agents/pr-review-engine/`), which stays authoritative while both run. A rule changed on one side without the matching change on the other is a finding.
-- Manifest IDs, skill paths, frontmatter names and descriptions must agree, and path rules must still reach the files their concept lives in after renames or new packages.
-- Instruction changes are review subjects, not permission to change capabilities or output. Review criteria neither dispatch agents, run repair loops nor grant credentials.
+## 2. Dependencies and installs
 
-Finish with evidence for changed release/trust/instruction boundaries or explicit limits.
+**Applies when** the diff changes a `package.json` dependency,
+`pnpm-lock.yaml`, `.npmrc` or `pnpm-workspace.yaml`.
+
+- A new runtime or peer dependency of a published package is high by default
+  and needs a package-level reason in the PR body (§2 rule 9); a dev-only one
+  is medium. In both, flag `preinstall`, `install` or `postinstall` scripts,
+  `^` or `~` ranges on runtime dependencies, and names that resemble
+  typosquats. A removed dependency's users are removed too.
+- A lockfile change without a manifest change is fine when every changed
+  resolution is an existing dev dependency still within its range. It is a
+  finding when it changes runtime or peer resolutions, leaves a declared
+  range, changes install settings, or adds or removes packages with install
+  scripts.
+- `.npmrc`: `always-auth=true` or a committed `_authToken=` is critical; a
+  registry other than `registry.npmjs.org` needs human review. Flipping
+  `auto-install-peers` or `strict-peer-dependencies` is medium.
+- A `minimumReleaseAgeExclude` entry is high unless it is the §7 critical
+  security exception (exact `<package>@<version>`, advisory, severity and
+  publish date in the PR body, removal tracked) or has explicit maintainer
+  approval and is removed before merge. Removing `minimumReleaseAgeStrict` is
+  always high.
+
+## 3. Workflow trust
+
+**Applies when** the diff changes `.github/workflows/`, `.github/actions/`,
+`scripts/ci/` or `scripts/release/`.
+
+- **Injection (critical).** Attacker-controllable context
+  (`github.event.*`, `github.head_ref`, comment bodies, branch names) is bound
+  through `env:` and used as `$VAR`, never interpolated into `run:`,
+  `shell:` or action arguments.
+- **Trusted execution.** `pull_request_target` never checks out and runs PR
+  head code. Comment-triggered workflows gate on `author_association`
+  (`OWNER`, `MEMBER`, `COLLABORATOR`) before acting on text. Steps that run
+  against the PR head use the default-branch copy of a script.
+- **Logic is tested code (high).** A `run:` block that parses data, filters
+  or counts records, computes outputs or decides pass/fail belongs in a
+  TypeScript script under `scripts/ci/` with a colocated `*.test.ts`
+  (pattern: `scripts/ci/claude-review-gate.ts`). Linear setup steps and
+  marshalling static inputs are exempt. A new or changed CI script needs its
+  test; a new one written as `.mjs` or `.js` is medium.
+- **Pinning (high).** Third-party actions pin a full commit SHA with the tag
+  in a trailing comment. First-party `actions/*` and `github/*` may use tags.
+  Name the publisher of a newly used action so a maintainer can confirm it.
+- **Permissions (high).** Every workflow declares `permissions:`, default
+  `contents: read`, with job-level scopes where jobs differ. `id-token: write`
+  only for OIDC or provenance publishing. `secrets: inherit` is forbidden.
+- **Secrets (high).** Secrets are `env:`-bound, never interpolated into
+  `run:`, and only passed to SHA-pinned actions. Widening a secret's reach is
+  high, critical on the write-token or publish path: loosening the
+  `main`/`next` gate on `version-pr` and `publish`, moving a write or publish
+  secret into the ungated `test` job, or exposing any secret to a fork
+  trigger. The RPC URLs already on every branch are the accepted baseline. A
+  new secret name needs a row in `.github/workflows/AGENTS.md` (medium).
+
+## 4. Publishing and release commits
+
+**Applies when** the diff changes publish, tagging, release-commit or
+artifact-validation steps.
+
+- Publishing keeps `--provenance` (or the Changesets provenance path) and an
+  org-scoped `NODE_AUTH_TOKEN`, never a personal token. Removing provenance is
+  at least medium, high for runtime or peer packages. A `next`/`latest` tag
+  change needs an `environment:` with required reviewers.
+- Artifact identity is read the way the consumer reads it: the pacote read in
+  `scripts/ci/read-tarball-identity.ts`, never `tar -x`, `tar -t | grep` or a
+  hand-written tar or path parser. Replacing or demoting the pacote read is
+  critical; new parsing logic or a loosened rule in
+  `scripts/ci/verify-tarball-collisions.ts` is high.
+- Release commits stay GitHub-signed through `createCommitOnBranch`;
+  replacing it with local `git commit` and push is critical. A write-scoped
+  token is minted only after either same-job hardening (helper checksum and
+  `$PATH` verified, `$GITHUB_ENV` and `$GITHUB_PATH` truncated, hooks checked
+  or disabled) or a split-job boundary with a fresh checkout and a validated
+  data-only artifact. Enabled hooks before that step are critical.
+- Removing a required check from a release workflow's `needs:` is high.
+
+## 5. Review criteria and agent instructions
+
+**Applies when** the diff changes `.review/`, `.agents/`, `.claude/`,
+`.codex/`, an `AGENTS.md` or a `SKILL.md`.
+
+- While both reviewers run, the personas and `AGENTS.md` are the source and
+  `.review/` mirrors them. A rule changed in one changes in the other in the
+  same PR, keeping its conditions and exceptions; a mirrored rule that would
+  flag what its source allows is a finding.
+- `.review/manifest.json` registers each skill with a matching path, `name`
+  and description, and its path rules reach the files where violations would
+  appear.
+- Persona changes keep the inventory in sync: the engine roster, `AGENTS.md`
+  §10 tables, `applies:` frontmatter and `> Applied by personas:` callouts,
+  and for a conditional persona its trigger flag in the engine's Step 4. A
+  persona's `name:` equals its filename, frontmatter has no `<` or `>`, and
+  the engine is never symlinked into `.claude/commands/`.
+- Report contract breaks, not wording preferences.
+
+## Report
+
+Each finding names the workflow, step, manifest or file, what an attacker or
+a release could do because of it, and the specific fix: the `env:` rewrite,
+the SHA, the scope, the changeset. Say whether you checked registry metadata
+or only the lockfile.

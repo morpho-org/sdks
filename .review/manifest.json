@@ -5,35 +5,35 @@
     {
       "id": "sdk-protocol-safety",
       "title": "SDK protocol and transaction safety",
-      "description": "Use for changes to ABIs, addresses, accounting or rounding math, chain or account checks, approvals, signatures, routing, simulation or composed transaction flows: pinned protocol sources, funds and authority across a complete caller flow, and replay or ordering attacks.",
+      "description": "Protocol semantics and transaction safety in morpho-org/sdks-internal. Use when a change touches ABIs, addresses, typed data, operation routing, bundles, approvals, permits, signatures, chain or account checks, accounting or rounding math, LLTV or share-price limits, receipts or simulation. Checks that the SDK still models Morpho exactly and that a transaction moves funds and grants authority only as the caller intends. Not for public API shape or package boundaries (sdk-compatibility) or generic error handling (sdk-correctness).",
       "path": "skills/sdk-protocol-safety/SKILL.md",
       "agents": ["behavior", "security"]
     },
     {
       "id": "sdk-compatibility",
       "title": "SDK integrator compatibility and architecture",
-      "description": "Use for changes to public behavior, defaults, signatures, exports, state transport, dependencies, package boundaries or deprecations: what existing integrators see, layer ownership, stateless prepare/sign/build, and the deprecation lifecycle.",
+      "description": "Integrator compatibility and SDK architecture in morpho-org/sdks-internal. Use when a change alters public exports, signatures, defaults, return values, thrown errors, package boundaries, layering, the morpho-sdk facade, entity flows (getRequirements, sign, buildTx) or deprecations. Checks what existing integrators will see and whether the change respects layer ownership, stateless flows and the deprecation lifecycle. Not for protocol semantics (sdk-protocol-safety) or changesets and dependency installs (sdk-release-integrity).",
       "path": "skills/sdk-compatibility/SKILL.md",
       "agents": ["behavior", "design", "product"]
     },
     {
       "id": "sdk-correctness",
       "title": "SDK implementation and failure behavior",
-      "description": "Use for changes to .ts code: types and units, input mutation, typed errors and causes, promises, optional lookups, fallback, generated sources, secrets and injection.",
+      "description": "Implementation and failure behavior in TypeScript code in morpho-org/sdks-internal. Use when a change touches function bodies: types and assertions, bigint units, input mutation, error classes and causes, catch blocks, promises, optional lookups with _try, fallback or retry, generated GraphQL outputs, or code that handles secrets or untrusted strings. Checks that results are right and that failures reach the caller instead of dying silently. Not for protocol math or transaction authority (sdk-protocol-safety) or public API shape (sdk-compatibility).",
       "path": "skills/sdk-correctness/SKILL.md",
       "agents": ["behavior", "security"]
     },
     {
       "id": "sdk-evidence",
       "title": "SDK tests and documentation",
-      "description": "Use for changes to tests, JSDoc, examples or Markdown, and for public behavior that needs them: discriminating assertions, the pure, transport-mock or pinned-fork boundary, canonical JSDoc, and active docs and references.",
+      "description": "Tests and documentation in morpho-org/sdks-internal. Use when a change adds or modifies exports, onchain code paths, entity flows, tests, Vitest config, JSDoc, examples, README, AGENTS.md, ADRs or other Markdown, or renames files that docs point at. Checks that tests would catch a realistic regression at the right boundary (pure, mocked transport, or pinned Anvil fork), that JSDoc and docs match the code, and that links resolve. Not for whether the code itself is correct (the other sdk-* skills).",
       "path": "skills/sdk-evidence/SKILL.md",
       "agents": ["behavior", "design", "product"]
     },
     {
       "id": "sdk-release-integrity",
       "title": "SDK CI, release and automation integrity",
-      "description": "Use for changes to workflows, CI scripts, package manifests, lockfiles, changesets, install or publish settings, review criteria and agent instructions: semver and changesets, dependency trust, workflow trust and publication, and instruction integrity.",
+      "description": "CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions, scripts/ci or scripts/release, package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).",
       "path": "skills/sdk-release-integrity/SKILL.md",
       "agents": ["design", "security"]
     }
