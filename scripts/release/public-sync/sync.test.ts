@@ -736,6 +736,30 @@ describe("syncPublic", () => {
     );
   });
 
+  test("an empty bootstrap commit with a Source-Commit lets the first sync run on kept history", async () => {
+    const github = new FakeGitHub({ "README.md": "v0" });
+    const root = github.refs.get("main") ?? "";
+    const kept = github.addCommit({
+      files: new Map([["README.md", "v0"]]),
+      message: "existing public history",
+      parents: [root],
+    });
+    const seed = (source: string) =>
+      github.addCommit({
+        files: new Map([["README.md", "v0"]]),
+        message: `chore: start release sync from sdks-internal\n\nSource-Commit: ${source}`,
+        parents: [kept],
+      });
+    github.refs.set("main", seed(R2));
+    await expect(syncPublic({ github, ...release(R1, v1) })).rejects.toThrow(
+      "doesn't descend",
+    );
+    expect(github.pulls).toHaveLength(0);
+    github.refs.set("main", seed(R1));
+    await syncPublic({ github, ...release(R2, v1) });
+    expect(github.pulls).toHaveLength(1);
+  });
+
   test("an unverified commit stops the sync before the PR moves", async () => {
     const github = new FakeGitHub({});
     github.signCommits = false;

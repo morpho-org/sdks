@@ -18,7 +18,8 @@ then mints the App token.
 
 - **Ordering.** The release must descend from the `Source-Commit` of public `main` and of an
   open sync PR (`git merge-base --is-ancestor` on full history). There is no override; a root
-  commit on `main` with no trailer is the only exception (see setup step 6). An open sync PR
+  commit on `main` with no trailer is the only exception. Public `main` gets its first trailer
+  from the bootstrap commit (setup step 6). An open sync PR
   whose head has no trailer fails the sync.
 - **Idempotency.** No commit or branch update is made when public `main`, or the open sync PR
   on top of the current `main`, already has the tree hash. The sync only re-arms squash
@@ -61,6 +62,11 @@ token, API error).
    channel), and set repository variables `PUBLIC_SYNC_ALERT_OWNER` (mention, e.g.
    `<!subteam^ID>`) and optionally `PUBLIC_SYNC_MAX_PR_AGE_MINUTES`. Until then, alerts only
    fail their job.
-6. **Seed public `main`** before the first sync: it must exist and its tip must be a root
-   commit (e.g. a README). `sync.ts` fails on a repository with no `main`, and accepts a
-   commit without `Source-Commit` only as that root.
+6. **Seed public `main` with the bootstrap commit** before the rulesets of step 4 are enabled,
+   the App is installed and the first sync runs. `sync.ts` fails on a repository with no
+   `main`, and accepts a tip without `Source-Commit` only if it is a root commit. Public
+   `morpho-org/sdks` keeps its history, so an admin pushes one empty (`--allow-empty`), signed
+   commit on top of it with `Source-Commit: <internal commit the public tree was cut from>`:
+   after the final mirror, the tip of `main`, the same SHA on both repositories. Full steps:
+   [docs/release/public-repo-setup.md](../../../docs/release/public-repo-setup.md) section 10,
+   step 3.

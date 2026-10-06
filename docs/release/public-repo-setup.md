@@ -183,10 +183,24 @@ Target state after cutover (section 10, step 7). Until then `sdks-internal` stil
 
 1. **Freeze development on `morpho-org/sdks`.** No merges to its `main`. Pause the changesets "Version Packages" PR there.
 2. **Final sync of `sdks-internal` from `sdks`**: mirror `main`, branches, tags and notes once more, and check `git rev-parse main` matches on both.
-3. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
-4. **Apply sections 1–8 on `morpho-org/sdks`** (trusted publishers last, right before step 5).
-5. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
-6. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
-7. **Remove publishing from `sdks-internal`.** Delete `.github/workflows/publish.yml` entirely (its `publish` job with environment `prod`, and the `github-releases` job that needs it) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
+3. **Seed public `main` with the bootstrap commit**, before step 4 enables the rulesets, installs the sync App or runs the first sync. Public `main` keeps its history, so its tip is not a root commit and has no `Source-Commit` trailer; `sync.ts` refuses to sync on top of such a tip. An admin pushes one empty, signed commit whose trailer names the internal commit the public tree was last cut from. After step 2 that is the tip of `main`, the same SHA on both repositories:
 
-The existing git history of `morpho-org/sdks` stays: it is already public. The snapshot PR adds a commit on top of it; don't rewrite or force-push `main`.
+   ```bash
+   # In a clone of morpho-org/sdks-internal, after step 2.
+   git fetch origin main
+   SOURCE=$(git rev-parse origin/main)
+   # In a clone of morpho-org/sdks: public main must be that same commit.
+   git fetch origin main && git switch main && git merge --ff-only origin/main
+   test "$(git rev-parse HEAD)" = "$SOURCE"
+   git commit --allow-empty -S -m "chore: start release sync from sdks-internal" -m "Source-Commit: $SOURCE"
+   git push origin main
+   ```
+
+   The trailer must be the full 40-character lowercase SHA on its own line, and the commit must change no file (`--allow-empty`). Sign it with a key registered on the pushing account, so GitHub shows it as Verified. If `main` moved after step 2, repeat step 2 first: the SHA has to be an ancestor of every later internal release commit, or the first sync fails its ordering check.
+4. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
+5. **Apply sections 1–8 on `morpho-org/sdks`** (trusted publishers last, right before step 6).
+6. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
+7. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
+8. **Remove publishing from `sdks-internal`.** Delete `.github/workflows/publish.yml` entirely (its `publish` job with environment `prod`, and the `github-releases` job that needs it) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
+
+The existing git history of `morpho-org/sdks` stays: it is already public. The bootstrap commit (step 3) and each snapshot PR add commits on top of it; don't rewrite or force-push `main`.
