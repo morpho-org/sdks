@@ -40,9 +40,6 @@ export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
 }
 
 const validateParams = (params: MidnightTakeLendParams) => {
-  if (params.target.type === "assets" && params.target.assets <= 0n) {
-    throw new NonPositiveInputError("target.assets", params.target.assets);
-  }
   // Reject markets from another chain deployment before checking offers against them.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = validateTakeableOffers({
@@ -53,8 +50,8 @@ const validateParams = (params: MidnightTakeLendParams) => {
 
   const { target } = params;
   if (target.type === "assets") {
-    if (target.assets < 0n) {
-      throw new NegativeInputError("target.assets", target.assets);
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
     }
     if (target.minUnits < 0n) {
       throw new NegativeInputError("target.minUnits", target.minUnits);
@@ -63,8 +60,8 @@ const validateParams = (params: MidnightTakeLendParams) => {
     if (target.units <= 0n) {
       throw new NonPositiveInputError("target.units", target.units);
     }
-    if (target.maxBuyerAssets < 0n) {
-      throw new NegativeInputError(
+    if (target.maxBuyerAssets <= 0n) {
+      throw new NonPositiveInputError(
         "target.maxBuyerAssets",
         target.maxBuyerAssets,
       );
@@ -101,8 +98,8 @@ const validateParams = (params: MidnightTakeLendParams) => {
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
- * @throws {NonPositiveInputError} when the target amount or `deadline` is not positive.
- * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
+ * @throws {NonPositiveInputError} when the target amount, `maxBuyerAssets` or `deadline` is not positive.
+ * @throws {NegativeInputError} when `minUnits` or `maxContinuousFee` is negative.
  * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
@@ -173,6 +170,8 @@ export const midnightTakeLend = (
         takeableOffers: params.takeableOffers.length,
         maxContinuousFee: params.maxContinuousFee,
         deadline: params.deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
     },
   });

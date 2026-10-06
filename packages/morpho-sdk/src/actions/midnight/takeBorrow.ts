@@ -169,6 +169,8 @@ export const midnightTakeBorrow = (
         receiver: params.receiver,
         takeableOffers: params.takeableOffers.length,
         deadline: params.deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
     },
   });

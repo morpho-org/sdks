@@ -357,9 +357,11 @@ export class MorphoMidnight {
    * @returns Lazy loan-token approval and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when the target amount or `deadline` is not positive.
-   * @throws {NegativeInputError} when the target bound or `maxContinuousFee` is negative.
+   * @throws {NonPositiveInputError} when the target amount, `maxBuyerAssets` or `deadline` is not positive.
+   * @throws {NegativeInputError} when `minUnits` or `maxContinuousFee` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -435,6 +437,8 @@ export class MorphoMidnight {
    * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when the target amount, `maxUnits` or `deadline` is not positive.
    * @throws {NegativeInputError} when `minSellerAssets` is negative.
@@ -496,6 +500,8 @@ export class MorphoMidnight {
    * @returns Lazy collateral approvals and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {EmptyMidnightCollateralSuppliesError} when no collateral supply is provided.
    * @throws {UnknownCollateralIndexError} when a collateral index is not configured.
