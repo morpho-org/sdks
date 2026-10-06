@@ -20,8 +20,8 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 const KEY_NAME =
   "(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
-// `hdKeyToAccount`, and ethers' `new Wallet(…)`.
-const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*Wallet\(`;
+// `hdKeyToAccount`, and ethers' `new Wallet(…)`/`new SigningKey(…)`.
+const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(`;
 // A CLI flag with a space-separated value (`--private-key 0x…`), also across a
 // shell line continuation.
 const KEY_FLAG = String.raw`--?${KEY_NAME}\w*(?:[ \t]+|\\\n\s*)`;
@@ -84,6 +84,12 @@ const RULES = {
   // `mnemonicToAccount(process.env.M ?? "…")`, `mnemonic: env.M ? env.M : ("…")`.
   "mnemonic-fallback": new RegExp(
     String.raw`(?:${MNEMONIC_NAME}\w*|${MNEMONIC_SINK})[^;\n]{0,120}?(?:\?\?|\|\||\?(?![.?=])|:)=?\s*\(?\s*\\?["'\`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    "gi",
+  ),
+  // The same names and sinks as the start of a whole value, so a list or ternary
+  // with the Anvil phrase first still has every quoted phrase checked.
+  "mnemonic-list": new RegExp(
+    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?\s*[:=]|${MNEMONIC_SINK})`,
     "gi",
   ),
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
@@ -205,7 +211,8 @@ const PUBLIC_TEST_SECRETS = new Set([
 
 /**
  * Finds rule matches in files. Each distinct key or mnemonic value is reported
- * once per file, at its first occurrence. NUL bytes are dropped first, so UTF-16 text and
+ * once per file, under the first rule (in rule order) that matches it, which may
+ * not be its earliest line. NUL bytes are dropped first, so UTF-16 text and
  * text inside binaries are still scanned. A key or mnemonic whose value is exactly
  * a published test value (Anvil defaults) is skipped, and so is any key with 48
  * leading zero hex digits (a value that fits in 64 bits). File paths are scanned
@@ -259,8 +266,12 @@ export function scanFiles(
       for (const { 0: opener, index, groups } of source.matchAll(pattern)) {
         // A value can hold a test key and a real key, so each one is checked.
         const candidates =
-          rule === "wallet-key-list"
-            ? valueSecrets(source, { opener, start: index + opener.length })
+          rule === "wallet-key-list" || rule === "mnemonic-list"
+            ? valueSecrets(source, {
+                opener,
+                start: index + opener.length,
+                kind: rule === "mnemonic-list" ? "mnemonic" : "key",
+              })
             : [{ secret: groups?.secret, at: index, match: opener }];
         for (const { secret, at, match } of candidates) {
           const value = secret?.toLowerCase().replace(/^0x/, "");
@@ -287,7 +298,8 @@ export function scanFiles(
 }
 
 /**
- * Lists every 64-hex value in the key-named value that starts at `start`, plus the
+ * Lists every 64-hex value (`kind: "key"`) or quoted 12–24-word phrase
+ * (`kind: "mnemonic"`) in the named value that starts at `start`, plus the
  * items of a YAML block list under the name. The value ends at a `,`, `;` or
  * closing bracket outside any nesting or string, or at a line break unless the
  * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
@@ -299,19 +311,20 @@ export function scanFiles(
  * lists may hold blank and `#` comment lines.
  *
  * @param source - Whole file text.
- * @param value - The matched opener and the offset just after it.
+ * @param value - The matched opener, the offset just after it, and what to look for.
  * @returns Each candidate secret, its offset, and the text to report.
  */
 export function valueSecrets(
   source: string,
-  value: { opener: string; start: number },
+  value: { opener: string; start: number; kind?: "key" | "mnemonic" },
 ) {
   const { opener, start } = value;
+  const mnemonic = value.kind === "mnemonic";
   const limit = Math.min(source.length, start + 4096);
   const lineStart = source.lastIndexOf("\n", start - opener.length - 1) + 1;
   const dotenv =
     opener.endsWith("=") &&
-    /^[ \t]*(?:export[ \t]+)?$/.test(
+    /^[ \t]*(?:export[ \t]+)?[\w.-]*$/.test(
       source.slice(lineStart, start - opener.length),
     ) &&
     !/^[ \t]*[[({]/.test(source.slice(start, start + 200));
@@ -358,7 +371,9 @@ export function valueSecrets(
     }
     if (char !== undefined && /\S/.test(char)) seen = true;
   }
-  const hex = /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})(?![\w$])/gi;
+  const hex = mnemonic
+    ? /["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})["'`]/gi
+    : /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})(?![\w$])/gi;
   const inSpan = [...source.slice(start, end).matchAll(hex)].map(
     ({ 0: match, index, groups }) => ({ match, at: start + index, groups }),
   );
@@ -369,7 +384,11 @@ export function valueSecrets(
   const list = yaml?.[1] ?? "";
   const listStart = start + (yaml?.[0].length ?? 0) - list.length;
   const items = [
-    ...list.matchAll(/-[ \t]+["']?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi),
+    ...list.matchAll(
+      mnemonic
+        ? /-[ \t]+["']?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi
+        : /-[ \t]+["']?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    ),
   ].map(({ 0: match, index, groups }) => ({
     match,
     at: listStart + index,

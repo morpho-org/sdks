@@ -137,6 +137,8 @@ describe("scanFiles", () => {
     ["wallet-key", `privateKeyToAddress("0x${"ab".repeat(32)}")`],
     ["wallet-key", `const signer = new Wallet("0x${"ab".repeat(32)}");`],
     ["wallet-key", `new ethers.Wallet("0x${"ab".repeat(32)}")`],
+    ["wallet-key", `const key = new SigningKey("0x${"ab".repeat(32)}");`],
+    ["wallet-key", `new ethers.SigningKey("0x${"ab".repeat(32)}")`],
     ["wallet-key", `const pkey = "0x${"ab".repeat(32)}";`],
     ["wallet-key", `LIQUIDATOR_KEY=0x${"ab".repeat(32)}`],
     [
@@ -307,6 +309,8 @@ test.each([
   `PRIVATE_KEY:\n  - ${ANVIL_KEY}\n  - ${REAL_KEY}\n`,
   `accounts:\n  - "${REAL_KEY}"\n`,
   `PRIVATE_KEYS=${ANVIL_KEY},${REAL_KEY}`,
+  `DEPLOYER_PRIVATE_KEYS=${ANVIL_KEY},${REAL_KEY}`,
+  `export DEPLOYER_PRIVATE_KEYS=${ANVIL_KEY},${REAL_KEY}`,
   `PRIVATE_KEYS=${ANVIL_KEY} ${REAL_KEY}`,
   `export PRIVATE_KEYS="${ANVIL_KEY};${REAL_KEY}"`,
   `const PRIVATE_KEYS = "${ANVIL_KEY},${REAL_KEY}";`,
@@ -455,6 +459,21 @@ test.each([
 ])("flag a mnemonic in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({ rule: "mnemonic" }),
+  ]);
+});
+
+const ANVIL_MNEMONIC =
+  "test test test test test test test test test test test junk";
+test.each([
+  `const mnemonics = ["${ANVIL_MNEMONIC}", "${REAL_MNEMONIC}"];`,
+  `const mnemonic = isTest ? "${ANVIL_MNEMONIC}" : "${REAL_MNEMONIC}";`,
+  `mnemonics:\n  - ${ANVIL_MNEMONIC}\n  - ${REAL_MNEMONIC}\n`,
+])("flag a real mnemonic listed after the test one in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([
+    expect.objectContaining({
+      rule: "mnemonic-list",
+      match: expect.stringContaining(REAL_MNEMONIC),
+    }),
   ]);
 });
 
@@ -676,6 +695,16 @@ test("skip the Anvil default mnemonic passed to a seed-phrase sink", () => {
 test("fail closed on a key-named value longer than 4096 characters", () => {
   const list = `accounts: [\n${`  "${ANVIL_KEY}",\n`.repeat(60)}  "${REAL_KEY}",\n]`;
   expect(scanFiles([file("a.ts", list)])).toEqual([
+    expect.objectContaining({
+      rule: "wallet-key-list",
+      match: expect.stringContaining("longer than 4096"),
+    }),
+  ]);
+});
+
+test("fail closed on a YAML key list longer than 4096 characters", () => {
+  const list = `accounts:\n${`  - "${ANVIL_KEY}"\n`.repeat(60)}  - "${REAL_KEY}"\n`;
+  expect(scanFiles([file("a.yml", list)])).toEqual([
     expect.objectContaining({
       rule: "wallet-key-list",
       match: expect.stringContaining("longer than 4096"),
