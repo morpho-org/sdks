@@ -5,10 +5,6 @@ description: Integrator compatibility and SDK architecture in morpho-org/sdks-in
 
 # Integrator compatibility and architecture
 
-This skill applies the `module-api-architecture` persona in
-`.agents/pr-review-engine/agents/` and root `AGENTS.md` §1–4 and §7. They are
-authoritative; when wording differs, they win and this file is out of date.
-
 An SDK change is judged by what its consumers see. A change can type-check and
 still break an integrator, by changing a default, an error class or when a
 value is read, so trace real callers rather than signatures.
@@ -141,8 +137,6 @@ an exception's scope inherits it. Release duties are checked by
 `sdk-release-integrity`.
 
 ## Severity
-
-These follow the persona; `.review/review.md` maps them to Lupin's levels.
 
 - **Critical:** `buildTx` reads state written by `getRequirements()` or
   `sign()`.

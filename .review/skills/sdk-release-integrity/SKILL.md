@@ -5,12 +5,6 @@ description: CI, release and automation integrity in morpho-org/sdks-internal. U
 
 # CI, release and automation integrity
 
-This skill applies the `ci-release-security`, `style-conventions` (changeset
-relevance) and `skill-authoring` personas in
-`.agents/pr-review-engine/agents/`, root `AGENTS.md` §7 and §10, and the
-secret inventory in `.github/workflows/AGENTS.md`. They are authoritative;
-when wording differs, §10 wins and this file is out of date.
-
 CI holds privileged tokens and releases publish under the org's name, so a
 workflow or dependency change can leak secrets or ship a poisoned package.
 Review only workflows and settings the diff changes; don't speculate about

@@ -5,10 +5,6 @@ description: Protocol semantics and transaction safety in morpho-org/sdks-intern
 
 # Protocol and transaction safety
 
-This skill applies the `morpho-protocol` and `web3-security` personas in
-`.agents/pr-review-engine/agents/`. They and root `AGENTS.md` §1, §5 and §7 are
-authoritative; when wording differs, they win and this file is out of date.
-
 Two questions, asked together: does the SDK's model of Morpho still match the
 protocol, and is the transaction it builds safe to sign? A mistake here can
 send funds to the wrong contract or grant authority to the wrong spender, so
@@ -135,8 +131,6 @@ for or sequences transactions.
   `SimulationRevertedError` is a bundle failure, not a pass.
 
 ## Severity
-
-These follow the personas; `.review/review.md` maps them to Lupin's levels.
 
 - **Critical:** the wrong `to`, spender or operator can move funds or grant
   authority; ABI or typed-data drift yields valid signatures for the wrong

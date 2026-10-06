@@ -5,11 +5,6 @@ description: Implementation and failure behavior in TypeScript code in morpho-or
 
 # Implementation and failure behavior
 
-This skill applies the `code-quality`, `silent-failure-hunter` and
-`style-conventions` personas in `.agents/pr-review-engine/agents/` and root
-`AGENTS.md` §2, §3, §8 and §9. They are authoritative; when wording differs,
-they win and this file is out of date.
-
 Trace each changed input to the public result, including failures that a
 caller could mistake for success. Biome and knip already run in `pnpm lint`;
 don't restate what they enforce.
@@ -100,8 +95,6 @@ reach a command, query, `eval`, `Function(...)`, dynamic `import()` or HTML.
 - CI and install trust belong to `sdk-release-integrity`.
 
 ## Severity
-
-These follow the personas; `.review/review.md` maps them to Lupin's levels.
 
 - **Critical:** a hardcoded secret; `eval` or `Function(...)` on user input.
 - **High:** `any`, `as unknown as` or a suppression without a deletion plan;

@@ -5,10 +5,6 @@ description: Tests and documentation in morpho-org/sdks-internal. Use when a cha
 
 # Tests and documentation
 
-This skill applies the `test-coverage` and `documentation` personas in
-`.agents/pr-review-engine/agents/` and root `AGENTS.md` §5 and §6. They are
-authoritative; when wording differs, they win and this file is out of date.
-
 Tests and docs are the evidence a change works and the instructions the next
 integrator or agent follows. Missing evidence is not a defect in the code;
 report it as missing evidence, with what it leaves unproven.
@@ -97,8 +93,6 @@ added in the same PR as its implementation may change with it. A new
 `docs/tibs/` file or `TIB-*` name is a finding: TIBs are retired.
 
 ## Severity
-
-These follow the personas; `.review/review.md` maps them to Lupin's levels.
 
 - **High:** an onchain code path with no test; tests that still describe old
   behavior; an entity flow without a cross-handle test; prose that would

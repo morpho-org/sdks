@@ -11,10 +11,6 @@ preferences are not findings.
 - Root `AGENTS.md`, `MISSION.md` and the affected package's nested
   `AGENTS.md`, read in the reviewed checkout. The root wins on conflict;
   package files refine it. `CLAUDE.md` is a symlink to `AGENTS.md`.
-- The review personas in `.agents/pr-review-engine/agents/`, which root
-  `AGENTS.md` §10 lists. While both reviewers run, they and `AGENTS.md` are
-  authoritative and the skills below mirror them. If a skill and its source
-  disagree, apply the source and report the drift.
 - Pinned ABIs, addresses and math helpers, public barrels (`src/index.ts`)
   and actual callers define the contract a change affects. Follow re-exports
   to the owning code; paths named in the skills are starting points.
@@ -44,8 +40,8 @@ require a finding or a tour of unrelated code.
 
 ## Severity
 
-The skills use the personas' four tiers. The legacy reviewer requests changes
-on any critical or high finding, so report:
+The skills grade findings critical, high, medium or low. Both critical and
+high block a merge, so report:
 
 - critical and high as **critical**;
 - medium as **warning**;
