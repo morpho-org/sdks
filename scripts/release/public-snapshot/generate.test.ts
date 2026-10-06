@@ -242,6 +242,72 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"public/README.md" maps to "README.md"');
   });
 
+  test("error: a public/ file that is the parent directory of an allowlisted path fails the run", () => {
+    const { repo, sha } = commitRepo(
+      { ...BASE_FILES, "public/packages/a/src": "x\n" },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow(
+      '"packages/a/src" is a file in the public tree, but "packages/a/src/index.ts" needs it to be a directory',
+    );
+  });
+
+  test("error: a path with a control character fails the run", () => {
+    const { repo, sha } = commitRepo(BASE_FILES, INCLUDE);
+    const blob = execFileSync("git", [
+      "-C",
+      repo,
+      "rev-parse",
+      `${sha}:README.md`,
+    ])
+      .toString()
+      .trim();
+    execFileSync("git", [
+      "-C",
+      repo,
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `100644,${blob},packages/a/src/bad\nname.ts`,
+    ]);
+    commitStaged(repo);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "HEAD", outDir: tempDir() }),
+    ).toThrow("has a control character");
+  });
+
+  test("error: a --sha starting with a dash is read as a revision, not an option", () => {
+    const { repo } = commitRepo(BASE_FILES, INCLUDE);
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha: "--all", outDir: tempDir() }),
+    ).toThrow("Needed a single revision");
+  });
+
+  test.each([
+    { name: "array", dependencies: ["@morpho-org/b"] },
+    { name: "non-string range", dependencies: { "@morpho-org/b": 1 } },
+  ])("error: a $name dependency field fails the run", ({ dependencies }) => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          dependencies,
+        }),
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"packages/a/package.json" has a malformed "dependencies"');
+  });
+
   test("error: a public package depending on a private workspace fails the run", () => {
     const { repo, sha } = commitRepo(
       {
@@ -362,7 +428,11 @@ describe("isDenied", () => {
     "docs/retros/TEMPLATE.md",
     "packages/a/src/CLAUDE.md",
     "AGENTS.md",
+    "agents.md",
+    "packages/a/src/Claude.md",
     ".env",
+    ".ENV",
+    "packages/a/.Env.local",
     "packages/a/.env.local",
   ])("behavior: denies %s", (path) => {
     expect(isDenied(path)).toBe(true);

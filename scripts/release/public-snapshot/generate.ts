@@ -33,7 +33,8 @@ const DENIED_PREFIXES = [
   "docs/templates/",
 ] as const;
 
-const DENIED_NAMES = new Set(["AGENTS.md", "CLAUDE.md"]);
+/** Lowercase, so the check ignores case. */
+const DENIED_NAMES = new Set(["agents.md", "claude.md"]);
 
 const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -72,7 +73,7 @@ export interface PublicTreeManifest {
  * @returns Whether the path is hard-denied.
  */
 export function isDenied(path: string): boolean {
-  const name = posix.basename(path);
+  const name = posix.basename(path).toLowerCase();
   if (DENIED_NAMES.has(name)) return true;
   if (name.startsWith(".env") && name !== ".env.example") return true;
   return DENIED_PREFIXES.some((prefix) => path.startsWith(prefix));
@@ -100,7 +101,8 @@ function git(repo: string, args: string[]): Buffer {
  * @throws If `sha` or the allowlist can't be read, the allowlist is malformed, an
  *   allowlist entry selects nothing, a `public/` file maps to a hard-denied or
  *   already-selected path, a path has control characters, an entry is a submodule,
- *   a symlink leaves the tree, a package manifest has no name, a public package has a
+ *   a selected file is also the parent directory of another one, a symlink leaves the
+ *   tree, a package manifest has no name or a malformed dependency field, a public package has a
  *   `workspace:` dependency on a private one, or `outDir` is not empty.
  */
 export function generatePublicSnapshot(options: {
@@ -109,7 +111,12 @@ export function generatePublicSnapshot(options: {
   outDir: string;
 }): PublicTreeManifest {
   const { repo, outDir } = options;
-  const sha = git(repo, ["rev-parse", "--verify", `${options.sha}^{commit}`])
+  const sha = git(repo, [
+    "rev-parse",
+    "--verify",
+    "--end-of-options",
+    `${options.sha}^{commit}`,
+  ])
     .toString()
     .trim();
   const allowlist: unknown = JSON.parse(
@@ -196,6 +203,21 @@ export function generatePublicSnapshot(options: {
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
 
+  const paths = new Set(selected.map((entry) => entry.path));
+  for (const { path } of selected) {
+    for (
+      let parent = posix.dirname(path);
+      parent !== ".";
+      parent = posix.dirname(parent)
+    ) {
+      if (paths.has(parent)) {
+        throw new Error(
+          `"${parent}" is a file in the public tree, but "${path}" needs it to be a directory. Keep only one.`,
+        );
+      }
+    }
+  }
+
   const blobs = new Map<string, Buffer>();
   const shas = [...new Set(selected.map((entry) => entry.sha))];
   const batch =
@@ -221,7 +243,6 @@ export function generatePublicSnapshot(options: {
     blobs.set(blobSha, batch.subarray(start, start + Number(size)));
     offset = start + Number(size) + 1;
   }
-  const paths = new Set(selected.map((entry) => entry.path));
 
   const files = selected.map((entry): PublicTreeFile & { content: Buffer } => {
     const content = blobs.get(entry.sha);
@@ -263,7 +284,29 @@ export function generatePublicSnapshot(options: {
     ) {
       throw new Error(`"${file.path}" has no package name.`);
     }
-    packageNames.set(file.path, parsed as PackageManifest);
+    const dependencies: Partial<
+      Record<
+        (typeof DEPENDENCY_FIELDS)[number],
+        Readonly<Record<string, string>>
+      >
+    > = {};
+    for (const field of DEPENDENCY_FIELDS) {
+      const value: unknown = Reflect.get(parsed, field);
+      if (value === undefined) continue;
+      const malformed = new Error(
+        `"${file.path}" has a malformed "${field}". It must map package names to version ranges.`,
+      );
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw malformed;
+      }
+      const ranges: Record<string, string> = {};
+      for (const [name, range] of Object.entries(value)) {
+        if (typeof range !== "string") throw malformed;
+        ranges[name] = range;
+      }
+      dependencies[field] = ranges;
+    }
+    packageNames.set(file.path, { ...dependencies, name: parsed.name });
   }
   const publicNames = new Set(
     [...packageNames.values()].map(({ name }) => name),
