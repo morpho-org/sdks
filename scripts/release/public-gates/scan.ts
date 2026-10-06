@@ -66,7 +66,7 @@ const RULES = {
   // `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`); `\"`
   // catches code embedded in JSON.
   "wallet-key": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK}|${KEY_FLAG})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})n?\b`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=](?!=)|\?\?|\|\|)|${KEY_SINK}|${KEY_FLAG})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})n?\b`,
     "gi",
   ),
   // The same names and sinks, plus Hardhat's `accounts`, as the start of a whole
@@ -76,7 +76,7 @@ const RULES = {
   // caught whatever comes first. A quoted name followed by a comma starts the
   // next call argument: `vi.stubEnv("PRIVATE_KEY", "0x…")`, checked the same way.
   "wallet-key-list": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_NAME}\w*\\?["'\`]\s*,|${KEY_SINK}|\baccounts\\?["'\`]?\s*[:=])`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=](?!=)|${KEY_NAME}\w*\\?["'\`]\s*,|${KEY_SINK}|\baccounts\\?["'\`]?\s*[:=])`,
     "gi",
   ),
   // A hard-coded fallback or ternary branch after an env read with no assignment
@@ -393,7 +393,9 @@ export function scanFiles(
       // declaration of it is checked, and only for a key or phrase it holds, as
       // generic names (`hex`, `items`) would otherwise fail every long value.
       const kind = rule === "mnemonic-list" ? "mnemonic" : "key";
-      for (const { name: ident } of new Set(sinkNames.get(rule))) {
+      for (const ident of new Set(
+        sinkNames.get(rule)?.map((ref) => ref.name),
+      )) {
         const exported = new RegExp(
           String.raw`\bexport\s+(?:const|let|var)\s+${ident.replace(/\$/g, "\\$")}\s*(?::[^=;\n]{0,40})?=(?![=>])`,
           "g",
@@ -402,7 +404,12 @@ export function scanFiles(
           const start = index + opener.length;
           if (
             valueSecrets(source, { opener, start, kind }).some(
-              ({ secret }) => secret !== undefined,
+              // The overflow marker has no secret but must still fail the scan.
+              ({ secret, match }) =>
+                secret !== undefined ||
+                match.endsWith(
+                  `(value longer than ${VALUE_WINDOW} characters)`,
+                ),
             )
           ) {
             assigned.push([rule, opener, index]);

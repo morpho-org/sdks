@@ -701,6 +701,53 @@ test("flag a key exported by one file and passed to a sink in another", () => {
   ]);
 });
 
+test.each([
+  ["export let", `export let DEPLOYER = "${REAL_KEY}";`, "privateKeyToAccount"],
+  ["export var", `export var DEPLOYER = "${REAL_KEY}";`, "privateKeyToAccount"],
+  [
+    "a typed export",
+    `export const DEPLOYER: Hex = "${REAL_KEY}";`,
+    "privateKeyToAccount",
+  ],
+  [
+    "an exported phrase",
+    `export const DEPLOYER = "${Array(12).fill("legal").join(" ")}";`,
+    "mnemonicToAccount",
+  ],
+  [
+    "an exported list past the window",
+    `export const DEPLOYER = [${'"x",'.repeat(1500)} "${REAL_KEY}"];`,
+    "privateKeyToAccount",
+  ],
+])("flag %s passed to a sink in another file", (...[, keys, sink]) => {
+  const files = [
+    file("keys.ts", keys),
+    file("use.ts", `import { DEPLOYER } from "./keys";\n${sink}(DEPLOYER);`),
+  ];
+  expect(scanFiles(files)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ path: "keys.ts" })]),
+  );
+});
+
+test("fail closed on a mapped string receiver longer than 4096 characters", () => {
+  const content = `const w = "${REAL_KEY},${"0,".repeat(2500)}".split(",").map(privateKeyToAccount);`;
+  expect(scanFiles([file("a.ts", content)])).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        rule: "wallet-key-list",
+        match: expect.stringContaining("list longer than 4096 characters"),
+      }),
+    ]),
+  );
+});
+
+test.each([
+  `markets.find((m) => m.key === "${REAL_KEY}");`,
+  `if (privateKey == "${REAL_KEY}") throw new Error("pinned");`,
+])("an equality check is not an assignment: %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([]);
+});
+
 test.each([4, 8])("follow an alias chain of %i hops", (hops) => {
   const aliases = Array.from(
     { length: hops },
