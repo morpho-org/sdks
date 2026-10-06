@@ -3,6 +3,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -121,16 +122,6 @@ describe("verifyArtifact", () => {
       (dir: string) => write(dir, { "tarballs/b-1.0.0.tgz": "tgz" }),
     ],
     [
-      "a checksum for a tarball that isn't there",
-      (dir: string) => {
-        rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
-        write(dir, { "tarballs/b-1.0.0.tgz": "tgz" });
-        execFileSync("sh", ["-c", "sha256sum ./b-1.0.0.tgz >> SHA256SUMS"], {
-          cwd: join(dir, "tarballs"),
-        });
-      },
-    ],
-    [
       "a public package's tarball dropped, with checksums rewritten",
       (dir: string) => {
         rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
@@ -200,5 +191,15 @@ describe("verifyArtifact", () => {
     const dir = artifact();
     tamper(dir);
     expect(() => verifyArtifact(dir)).toThrow();
+  });
+
+  test("rejects a checksum for a tarball that isn't there", () => {
+    const dir = artifact();
+    write(dir, {
+      "tarballs/SHA256SUMS": `${readFileSync(join(dir, "tarballs/SHA256SUMS"), "utf8")}${"0".repeat(64)}  ./b-1.0.0.tgz\n`,
+    });
+    expect(() => verifyArtifact(dir)).toThrow(
+      "SHA256SUMS lists tarballs that aren't in the artifact.",
+    );
   });
 });
