@@ -224,7 +224,7 @@ describe("verifyArtifact", () => {
       "tarballs/SHA256SUMS": `${readFileSync(join(dir, "tarballs/SHA256SUMS"), "utf8")}${"0".repeat(64)}  ./b-1.0.0.tgz\n`,
     });
     expect(() => verifyArtifact(dir)).toThrow(
-      "SHA256SUMS lists tarballs that aren't in the artifact.",
+      "SHA256SUMS lists missing tarballs: b-1.0.0.tgz.",
     );
   });
 });
