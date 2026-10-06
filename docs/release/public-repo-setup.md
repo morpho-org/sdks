@@ -52,6 +52,8 @@ The `ci` check is the `ci` job of `.github/workflows/ci.yml`. Don't rename that 
 
 Release tags (`@morpho-org/<package>-v<version>`) can't be moved or deleted once `release.yml` pushes them.
 
+**Decision: keep the existing tag format `@morpho-org/<package>-vX.Y.Z`.** Every existing public tag and the `release.yml` tag step use it. Switching to `@morpho-org/<package>@x.y.z` would create a second tag for each version already released. SDK-1322 is being corrected to match.
+
 ```bash
 gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-package-tags.json"
 ```
@@ -69,7 +71,7 @@ gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" --input
 - Secrets and variables: **none**. Publishing uses OIDC only.
 - Admins can't bypass: leave "Allow administrators to bypass configured protection rules" off.
 
-**Required reviewers: decide before cutover.** The payload ships with none.
+**Required reviewers: shipped without.** The `npm` environment is created with no required reviewers, so releases stay automatic. Whether to add reviewers is still an open decision for the maintainers; the trade-off is below.
 
 | | No reviewers (payload default) | Required reviewers |
 | --- | --- | --- |
@@ -77,7 +79,7 @@ gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" --input
 | Protects against | Relies on the internal gates, the rulesets and the App key | Also a compromised sync App or App key: nothing reaches npm without a human |
 | Cost | None | A human per release; a queued release blocks later ones (`concurrency: release`) until approved |
 
-Recommendation: required reviewers (the SDK maintainers team, `prevent_self_review: false` since the App opens the PR) at least until the pipeline has shipped a few releases. To enable, set `"reviewers": [{ "type": "Team", "id": <team-id> }]` in `environment-npm.json` and rerun the `PUT`.
+To add reviewers later (for example the SDK maintainers team, with `prevent_self_review: false` since the App opens the PR), set `"reviewers": [{ "type": "Team", "id": <team-id> }]` in `environment-npm.json` and rerun the `PUT`.
 
 ## 6. Move each package's npm trusted publisher
 
