@@ -330,6 +330,29 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"packages/a/package.json" has a malformed "dependencies"');
   });
 
+  test("behavior: public packages may depend on each other through workspace:", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          dependencies: { "@morpho-org/b": "workspace:^" },
+        }),
+        "packages/b/package.json": JSON.stringify({ name: "@morpho-org/b" }),
+      },
+      [...INCLUDE, "packages/b/package.json"],
+    );
+
+    const manifest = generatePublicSnapshot({ repo, sha, outDir: tempDir() });
+
+    expect(manifest.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "packages/a/package.json",
+        "packages/b/package.json",
+      ]),
+    );
+  });
+
   test("error: a public package depending on a private workspace fails the run", () => {
     const { repo, sha } = commitRepo(
       {

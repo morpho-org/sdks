@@ -55,9 +55,11 @@ interface PublicTreeFile {
   readonly sha256: string;
 }
 
-type PackageManifest = { readonly name: string } & Partial<
+type DependencyMaps = Partial<
   Record<(typeof DEPENDENCY_FIELDS)[number], Readonly<Record<string, string>>>
 >;
+
+type PackageManifest = { readonly name: string } & DependencyMaps;
 
 /** Content of `public-tree.json`. */
 export interface PublicTreeManifest {
@@ -285,12 +287,7 @@ export function generatePublicSnapshot(options: {
     ) {
       throw new Error(`"${file.path}" has no package name.`);
     }
-    const dependencies: Partial<
-      Record<
-        (typeof DEPENDENCY_FIELDS)[number],
-        Readonly<Record<string, string>>
-      >
-    > = {};
+    const dependencies: DependencyMaps = {};
     for (const field of DEPENDENCY_FIELDS) {
       const value: unknown = Reflect.get(parsed, field);
       if (value === undefined) continue;
