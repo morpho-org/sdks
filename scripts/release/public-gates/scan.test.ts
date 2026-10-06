@@ -20,6 +20,7 @@ import {
   readTarballs,
   readTree,
   scanFiles,
+  valueSecrets,
 } from "./scan.ts";
 
 // Tests run concurrently, where onTestFinished can't tell tests apart, so one
@@ -120,6 +121,13 @@ describe("scanFiles", () => {
     ["wallet-key-list", `privateKey: hexToBytes("0x${"ab".repeat(32)}")`],
     ["wallet-key-list", `privateKeyToAccount(("0x${"ab".repeat(32)}" as Hex))`],
     ["wallet-key-list", `accounts: ["0x${"ab".repeat(32)}"]`],
+    ["wallet-key-list", `const accounts = ["0x${"ab".repeat(32)}"];`],
+    ["wallet-key-list", `privateKeys: [0x${"ab".repeat(32)}]`],
+    ["wallet-key", `privateKeyToAddress("0x${"ab".repeat(32)}")`],
+    ["wallet-key", `const signer = new Wallet("0x${"ab".repeat(32)}");`],
+    ["wallet-key", `new ethers.Wallet("0x${"ab".repeat(32)}")`],
+    ["wallet-key", `const pkey = "0x${"ab".repeat(32)}";`],
+    ["wallet-key", `LIQUIDATOR_KEY=0x${"ab".repeat(32)}`],
     [
       "wallet-key-fallback",
       `toAccount((process.env.PK as Hex) ?? "0x${"ab".repeat(32)}")`,
@@ -287,6 +295,16 @@ test.each([
   `privateKeyToAccount(process.env.PK ?? ("${REAL_KEY}" as Hex))`,
   `PRIVATE_KEY:\n  - ${ANVIL_KEY}\n  - ${REAL_KEY}\n`,
   `accounts:\n  - "${REAL_KEY}"\n`,
+  `PRIVATE_KEYS=${ANVIL_KEY},${REAL_KEY}`,
+  `PRIVATE_KEYS=${ANVIL_KEY} ${REAL_KEY}`,
+  `export PRIVATE_KEYS="${ANVIL_KEY};${REAL_KEY}"`,
+  `const PRIVATE_KEYS = "${ANVIL_KEY},${REAL_KEY}";`,
+  `const PRIVATE_KEYS = "${ANVIL_KEY} ${REAL_KEY}";`,
+  `privateKeys: [${ANVIL_KEY}, ${REAL_KEY}]`,
+  `private_keys:\n  # deployer\n  - ${REAL_KEY}\n`,
+  `private_keys: # deployers\n  - ${REAL_KEY}\n`,
+  `private_keys:\n  - ${ANVIL_KEY}\n\n  - ${REAL_KEY}\n`,
+  `const accounts = ["${ANVIL_KEY}", "${REAL_KEY}"];`,
 ])("flag a real key listed after a test key in %s", (line) => {
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
@@ -318,6 +336,19 @@ test.each([
       match.includes(HEX.slice(1)),
     ),
   ).toEqual([]);
+});
+
+test("valueSecrets lists every 64-hex value in a quoted, delimited value", () => {
+  const opener = "PRIVATE_KEYS = ";
+  const source = `${opener}"${ANVIL_KEY},${REAL_KEY}"; const id = "${REAL_KEY}";`;
+  expect(
+    valueSecrets(source, { opener, start: opener.length }).map(
+      ({ secret, at }) => ({ secret, at }),
+    ),
+  ).toEqual([
+    { secret: ANVIL_KEY, at: opener.length + 1 },
+    { secret: REAL_KEY, at: opener.length + 2 + ANVIL_KEY.length },
+  ]);
 });
 
 test.each([

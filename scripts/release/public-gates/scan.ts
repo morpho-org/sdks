@@ -13,6 +13,18 @@ import {
 /** Default location of the scan policy, relative to the repository root. */
 export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
+// Key-like names, shared by the wallet rules. No leading boundary, so prefixed
+// names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match. Any
+// `<role>_KEY` / `<role>-key` counts; camelCase `<role>Key` doesn't, since ids
+// such as `marketKey` hold 32-byte hashes.
+const KEY_NAME =
+  "(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z]))";
+// Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
+// `hdKeyToAccount`, and ethers' `new Wallet(…)`.
+const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*Wallet\(`;
+const MNEMONIC_NAME = "(?:mnemonic|seed[_-]?phrase)";
+const MNEMONIC_SINK = String.raw`mnemonicToAccount\(`;
+
 /** Text that must never reach the public repository or npm. */
 const RULES = {
   // Linear team keys of the morpho-labs workspace. Lookarounds instead of `\b`,
@@ -32,33 +44,43 @@ const RULES = {
   "aws-key": /\bAKIA[0-9A-Z]{16}\b/g,
   "slack-token": /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g,
   "anthropic-key": /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
-  // Wallet keys and mnemonics only next to a key-like name, since bare 32-byte
-  // hex values (market ids, hashes) are everywhere. No leading boundary, so
-  // prefixed names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match.
-  // A type annotation starts with a letter or backtick and is short, so it can't
-  // run across a key value. `??` and `||` catch hard-coded env fallbacks, also
-  // after `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`);
-  // `\"` catches code embedded in JSON.
-  "wallet-key":
-    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\]|\(["'`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'`]\))?\s*)*(?:(?::\s*[a-z`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|(?:privateKey|hdKey)ToAccount\()\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
-  // The same names, plus Hardhat's `accounts:`, as the start of a whole value:
-  // a list, a wrapper, a ternary or a fallback. Every quoted 64-hex value up to
-  // the end of that value is checked (see `valueSecrets`), so `[ANVIL_KEY, "0x…"]`
-  // and `cond ? "0x…" : env.PK` are caught whatever comes first.
-  "wallet-key-list":
-    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\(|\baccounts\s*:)/gi,
+  // Wallet keys and mnemonics only next to a key-like name or sink, since bare
+  // 32-byte hex values (market ids, hashes) are everywhere. A type annotation
+  // starts with a letter or backtick and is short, so it can't run across a key
+  // value. `??` and `||` catch hard-coded env fallbacks, also after
+  // `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`); `\"`
+  // catches code embedded in JSON.
+  "wallet-key": new RegExp(
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
+    "gi",
+  ),
+  // The same names and sinks, plus Hardhat's `accounts`, as the start of a whole
+  // value: a list, a wrapper, a ternary, a fallback or a delimited string. Every
+  // 64-hex value up to the end of that value is checked (see `valueSecrets`), so
+  // `[ANVIL_KEY, "0x…"]`, `"0x<anvil>,0x…"` and `cond ? "0x…" : env.PK` are
+  // caught whatever comes first.
+  "wallet-key-list": new RegExp(
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_SINK}|\baccounts\s*[:=])`,
+    "gi",
+  ),
   // A hard-coded fallback or ternary branch after an env read with no assignment
   // in front, or a logical assignment: `(process.env.PK as Hex) ?? "0x…"`,
   // `env.PK ?? ("0x…" as Hex)`, `privateKey ??= "0x…"`.
-  "wallet-key-fallback":
-    /(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\||\?(?![.?=]))=?\s*(?:(?:\(|(?:hexToBytes|toBytes)\()\s*)*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+  "wallet-key-fallback": new RegExp(
+    String.raw`${KEY_NAME}\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\||\?(?![.?=]))=?\s*(?:(?:\(|(?:hexToBytes|toBytes)\()\s*)*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
+    "gi",
+  ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
-  mnemonic:
-    /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
+  mnemonic: new RegExp(
+    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK})\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    "gi",
+  ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:
   // `mnemonicToAccount(process.env.M ?? "…")`, `mnemonic: env.M ? env.M : ("…")`.
-  "mnemonic-fallback":
-    /(?:(?:mnemonic|seed[_-]?phrase)\w*|mnemonicToAccount\()[^;\n]{0,120}?(?:\?\?|\|\||\?(?![.?=])|:)=?\s*\(?\s*\\?["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
+  "mnemonic-fallback": new RegExp(
+    String.raw`(?:${MNEMONIC_NAME}\w*|${MNEMONIC_SINK})[^;\n]{0,120}?(?:\?\?|\|\||\?(?![.?=])|:)=?\s*\(?\s*\\?["'\`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    "gi",
+  ),
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
@@ -259,22 +281,51 @@ export function scanFiles(
 }
 
 /**
- * Quoted 64-hex values in the value that starts at `start`, plus the items of a YAML
- * list under the name. The value ends at a `,`, `;` or closing bracket outside any
- * nesting, or at a line break unless the next line continues it (`?`, `:`, `|`, `&`,
- * `.`). Line and block comments are skipped, so a `[` in a comment can't end it early.
+ * Lists every 64-hex value in the key-named value that starts at `start`, plus the
+ * items of a YAML block list under the name. The value ends at a `,`, `;` or
+ * closing bracket outside any nesting or string, or at a line break unless the
+ * next line continues it (`?`, `:`, `|`, `&`, `.`). A dotenv-style `NAME=` at the
+ * start of a line runs to the end of the line, since its value is unquoted. Line
+ * and block comments are skipped, so a `[` in a comment can't end it early. YAML
+ * lists may hold blank and `#` comment lines.
+ *
+ * @param source - Whole file text.
+ * @param value - The matched opener and the offset just after it.
+ * @returns Each candidate secret, its offset, and the text to report.
  */
-function valueSecrets(
+export function valueSecrets(
   source: string,
   value: { opener: string; start: number },
 ) {
   const { opener, start } = value;
   const limit = Math.min(source.length, start + 4096);
+  const lineStart = source.lastIndexOf("\n", start - opener.length - 1) + 1;
+  const dotenv =
+    opener.endsWith("=") &&
+    /^[ \t]*(?:export[ \t]+)?$/.test(
+      source.slice(lineStart, start - opener.length),
+    );
   let depth = 0;
   let end = start;
   let seen = false;
+  let quote: string | undefined;
   for (; end < limit; end++) {
     const char = source[end];
+    if (char === "\n" && (dotenv || quote === '"' || quote === "'")) {
+      if (dotenv) break;
+      quote = undefined;
+    }
+    if (quote !== undefined) {
+      if (char === "\\") end++;
+      else if (char === quote) quote = undefined;
+      continue;
+    }
+    if (dotenv) continue;
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      seen = true;
+      continue;
+    }
     if (
       char === "/" &&
       source[end + 1] === "/" &&
@@ -298,17 +349,14 @@ function valueSecrets(
     }
     if (char !== undefined && /\S/.test(char)) seen = true;
   }
-  const span = source.slice(start, end);
-  const quoted = [
-    ...span.matchAll(/\\?["'`](?<secret>(?:0x)?[0-9a-f]{64})\b/gi),
-  ].map(({ 0: match, index, groups }) => ({
-    match,
-    at: start + index,
-    groups,
-  }));
-  const yaml = /^[ \t]*\r?\n((?:[ \t]*-[ \t]+[^\n]*(?:\n|$))+)/.exec(
-    source.slice(start, limit),
+  const hex = /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})(?![\w$])/gi;
+  const inSpan = [...source.slice(start, end).matchAll(hex)].map(
+    ({ 0: match, index, groups }) => ({ match, at: start + index, groups }),
   );
+  const yaml =
+    /^[ \t]*(?:#[^\n]*)?\r?\n((?:[ \t]*(?:#[^\n]*)?\r?\n|[ \t]*-[ \t]+[^\n]*(?:\n|$))+)/.exec(
+      source.slice(start, limit),
+    );
   const list = yaml?.[1] ?? "";
   const listStart = start + (yaml?.[0].length ?? 0) - list.length;
   const items = [
@@ -318,7 +366,7 @@ function valueSecrets(
     at: listStart + index,
     groups,
   }));
-  return [...quoted, ...items].map(({ match, at, groups }) => ({
+  return [...inSpan, ...items].map(({ match, at, groups }) => ({
     secret: groups?.secret,
     at,
     match: `${opener}…${match}`,
