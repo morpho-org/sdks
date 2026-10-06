@@ -46,6 +46,58 @@ export interface MidnightTakeRepayWithdrawCollateralParams
   readonly metadata?: Metadata;
 }
 
+const validateParams = (params: MidnightTakeRepayWithdrawCollateralParams) => {
+  if (params.target.type === "assets" && params.target.assets <= 0n) {
+    throw new NonPositiveInputError("target.assets", params.target.assets);
+  }
+  // Reject markets from another chain deployment before checking offers against them.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
+  for (const [
+    index,
+    { collateralIndex, assets },
+  ] of params.collateralWithdrawals.entries()) {
+    if (assets <= 0n) {
+      throw new NonPositiveInputError(
+        `collateralWithdrawals[${index}].assets`,
+        assets,
+      );
+    }
+    // Throws UnknownCollateralIndexError when the index is not configured on the market.
+    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+  }
+  const marketId = validateTakeableOffers({
+    market: params.market,
+    takeableOffers: params.takeableOffers,
+    expectedBuy: false,
+  });
+
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets < 0n) {
+      throw new NegativeInputError("target.assets", target.assets);
+    }
+    if (target.minUnits < 0n) {
+      throw new NegativeInputError("target.minUnits", target.minUnits);
+    }
+  } else {
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.maxBuyerAssets < 0n) {
+      throw new NegativeInputError(
+        "target.maxBuyerAssets",
+        target.maxBuyerAssets,
+      );
+    }
+  }
+  if (params.maxContinuousFee < 0n) {
+    throw new NegativeInputError("maxContinuousFee", params.maxContinuousFee);
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  return { marketId, referralFeePct, referralFeeRecipient };
+};
+
 /**
  * Encodes a `MidnightBundlesV2` reduce-only buy that repays `msg.sender`'s debt by taking
  * borrow-side offers, optionally repays the remainder directly, then withdraws collateral.
@@ -101,54 +153,9 @@ export interface MidnightTakeRepayWithdrawCollateralParams
 export const midnightTakeRepayWithdrawCollateral = (
   params: MidnightTakeRepayWithdrawCollateralParams,
 ): Readonly<Transaction<MidnightTakeRepayWithdrawCollateralAction>> => {
-  if (params.target.type === "assets" && params.target.assets <= 0n) {
-    throw new NonPositiveInputError("target.assets", params.target.assets);
-  }
-  // Reject markets from another chain deployment before checking offers against them.
-  validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  for (const [
-    index,
-    { collateralIndex, assets },
-  ] of params.collateralWithdrawals.entries()) {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError(
-        `collateralWithdrawals[${index}].assets`,
-        assets,
-      );
-    }
-    // Throws UnknownCollateralIndexError when the index is not configured on the market.
-    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-  }
-  const marketId = validateTakeableOffers({
-    market: params.market,
-    takeableOffers: params.takeableOffers,
-    expectedBuy: false,
-  });
-
+  const { marketId, referralFeePct, referralFeeRecipient } =
+    validateParams(params);
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.assets < 0n) {
-      throw new NegativeInputError("target.assets", target.assets);
-    }
-    if (target.minUnits < 0n) {
-      throw new NegativeInputError("target.minUnits", target.minUnits);
-    }
-  } else {
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.maxBuyerAssets < 0n) {
-      throw new NegativeInputError(
-        "target.maxBuyerAssets",
-        target.maxBuyerAssets,
-      );
-    }
-  }
-  if (params.maxContinuousFee < 0n) {
-    throw new NegativeInputError("maxContinuousFee", params.maxContinuousFee);
-  }
-  validateDeadline(params.deadline);
-  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   const market = MarketUtils.toStruct(params.market);
   const args = [
     true, // reduceOnly
