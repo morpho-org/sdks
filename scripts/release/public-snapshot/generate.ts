@@ -364,18 +364,23 @@ export function generatePublicSnapshot(options: {
           );
         }
         for (const [, script = ""] of command.matchAll(
-          /\bnode\s+(?:--\S+\s+)*(\S+\.[cm]?[jt]s)\b/g,
+          /\bnode\s+(?:--?[\w-]+(?:=\S+|\s+(?!\S+\.[cm]?[jt]s\b)\S+)?\s+)*(?!-)(\S+\.[cm]?[jt]s)\b/g,
         )) {
           references.push(posix.join(posix.dirname(file.path), script));
         }
-        // Any other argument naming a private repo file (`tsx x.ts`, `tsc -p x.json`).
+        // Any other argument naming a private repo file or a wholly private
+        // directory (`tsx x.ts`, `tsc -p x.json`, `--project=x.json`, `tsc -p dir`).
         for (const token of command.split(/[\s;&|()]+/)) {
-          const target = posix.join(
-            posix.dirname(file.path),
-            token.replace(/^["']|["']$/g, ""),
-          );
-          if (repoPaths.has(target) && !paths.has(target)) {
-            references.push(target);
+          for (const value of [token, token.replace(/^--?[\w-]+=/, "")]) {
+            const target = posix.join(
+              posix.dirname(file.path),
+              value.replace(/^["']|["']$/g, ""),
+            );
+            const inside = (path: string) => path.startsWith(`${target}/`);
+            const privateFile = repoPaths.has(target) && !paths.has(target);
+            const privateDir =
+              [...repoPaths].some(inside) && ![...paths].some(inside);
+            if (privateFile || privateDir) references.push(target);
           }
         }
       }

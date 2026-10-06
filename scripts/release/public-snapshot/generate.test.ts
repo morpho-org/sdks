@@ -540,6 +540,12 @@ describe("generatePublicSnapshot", () => {
       command: "node --import tsx ../../scripts/ci/x.ts",
     },
     { name: "tsc -p", command: "tsc -p ../../scripts/ci/x.ts" },
+    { name: "tsc --project=", command: "tsc --project=../../scripts/ci/x.ts" },
+    {
+      name: "node --import=",
+      command: "node --import=../../scripts/ci/x.ts src/index.ts",
+    },
+    { name: "tsc -p <dir>", command: "tsc -p ../../scripts/ci" },
   ])(
     "error: a $name package script naming a private file fails the run",
     ({ command }) => {
@@ -550,6 +556,7 @@ describe("generatePublicSnapshot", () => {
             name: "@morpho-org/a",
             scripts: { build: command },
           }),
+          "packages/a/src/index.ts": "export {};\n",
           "scripts/ci/x.ts": "export {};\n",
         },
         INCLUDE,
@@ -557,9 +564,45 @@ describe("generatePublicSnapshot", () => {
 
       expect(() =>
         generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
-      ).toThrow('references "scripts/ci/x.ts"');
+      ).toThrow(/references "scripts\/ci(?:\/x\.ts)?"/);
     },
   );
+
+  test("error: a root package script naming a private file fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "package.json": JSON.stringify({
+          scripts: { version: "node scripts/release/x.ts" },
+        }),
+        "scripts/release/x.ts": "export {};\n",
+      },
+      [...INCLUDE, "package.json"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"package.json" references "scripts/release/x.ts"');
+  });
+
+  test("behavior: a script naming a directory with public files passes", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { lint: "biome check --config-path=../../scripts" },
+        }),
+        "scripts/lint/check.ts": "export {};\n",
+        "scripts/ci/x.ts": "export {};\n",
+      },
+      [...INCLUDE, "scripts/lint/check.ts"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).not.toThrow();
+  });
 
   test("error: a reference to a private package's build output fails the run", () => {
     const { repo, sha } = commitRepo(
