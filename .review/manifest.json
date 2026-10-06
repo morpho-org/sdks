@@ -94,7 +94,8 @@
           "scripts/paths.ts",
           "scripts/generate-midnight-package-version.ts",
           "scripts/publish/**",
-          "scripts/workflow.ts"
+          "scripts/workflow.ts",
+          "public/.github/**"
         ],
         "lenses": ["security"],
         "minimumRisk": "high",

@@ -59,8 +59,9 @@ version, or `.changeset/`.
 ## 3. Workflow trust
 
 **Applies when** the diff changes `.github/workflows/`, `.github/actions/`,
-`scripts/ci/`, `scripts/release/`, `scripts/publish/`, `scripts/workflow.ts`, or
-the helpers `scripts/release/` imports (`scripts/paths.ts`,
+`scripts/ci/`, `scripts/release/`, `scripts/publish/`, `scripts/workflow.ts`,
+`public/.github/` (the public repo's workflows, which hold the npm publish
+path), or the helpers `scripts/release/` imports (`scripts/paths.ts`,
 `scripts/generate-midnight-package-version.ts`).
 
 - **Injection (critical).** Attacker-controllable context
