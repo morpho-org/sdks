@@ -129,35 +129,8 @@ export function tarballName(pkg: Pick<PublicPackage, "name" | "version">) {
 }
 
 /**
- * Packs every public package into `out` and writes `out/SHA256SUMS`. No package
- * defines a prepack or prepare hook, so `pnpm pack` ships the built `lib/` and
- * replaces `workspace:` ranges with real versions.
- *
- * @param root - Repository root, already built.
- * @param out - Output directory.
- */
-function packPublicPackages(root: string, out: string): void {
-  mkdirSync(out, { recursive: true });
-  for (const { dir } of listPublicPackages(root)) {
-    execFileSync("pnpm", ["pack", "--pack-destination", resolve(out)], {
-      cwd: join(root, dir),
-      stdio: ["ignore", "inherit", "inherit"],
-    });
-  }
-  const sums = readdirSync(out)
-    .filter((name) => name.endsWith(".tgz"))
-    .sort()
-    .map((name) => {
-      const hash = createHash("sha256")
-        .update(readFileSync(join(out, name)))
-        .digest("hex");
-      return `${hash}  ./${name}\n`;
-    });
-  writeFileSync(join(out, "SHA256SUMS"), sums.join(""));
-}
-
-/**
- * `pack.ts --out <dir>` packs every public package; `pack.ts --tags` prints, tab-separated,
+ * `pack.ts --out <dir>` packs every public package into `<dir>` and writes
+ * `<dir>/SHA256SUMS`; `pack.ts --tags` prints, tab-separated,
  * the release tag of every public package at its current version and the commit
  * that set that version.
  *
@@ -173,7 +146,26 @@ function main(argv: readonly string[] = process.argv.slice(2)): void {
       writeStdout(`${releaseTag(pkg)}\t${releaseCommit(".", pkg)}\n`);
     }
   } else if (values.out) {
-    packPublicPackages(".", values.out);
+    const out = values.out;
+    // No package defines a prepack or prepare hook, so `pnpm pack` ships the built
+    // `lib/` and replaces `workspace:` ranges with real versions.
+    mkdirSync(out, { recursive: true });
+    for (const { dir } of listPublicPackages(".")) {
+      execFileSync("pnpm", ["pack", "--pack-destination", resolve(out)], {
+        cwd: dir,
+        stdio: ["ignore", "inherit", "inherit"],
+      });
+    }
+    const sums = readdirSync(out)
+      .filter((name) => name.endsWith(".tgz"))
+      .sort()
+      .map((name) => {
+        const hash = createHash("sha256")
+          .update(readFileSync(join(out, name)))
+          .digest("hex");
+        return `${hash}  ./${name}\n`;
+      });
+    writeFileSync(join(out, "SHA256SUMS"), sums.join(""));
   } else {
     throw new Error("Usage: node scripts/publish/pack.ts --out <dir> | --tags");
   }
