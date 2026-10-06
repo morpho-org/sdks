@@ -19,8 +19,11 @@ import {
   type SendTransactionRequest,
   type TestActions,
   type TestRpcSchema,
+  TransactionReceiptNotFoundError,
   type UnionPartialBy,
+  type WaitForTransactionReceiptParameters,
   type WaitForTransactionReceiptReturnType,
+  WaitForTransactionReceiptTimeoutError,
   type WalletActions,
   type WalletRpcSchema,
   type WriteContractParameters,
@@ -28,8 +31,10 @@ import {
   walletActions,
 } from "viem";
 import {
+  getTransactionReceipt as viem_getTransactionReceipt,
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
+  waitForTransactionReceipt as viem_waitForTransactionReceipt,
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
@@ -126,6 +131,31 @@ export type DepositParameters<
   "abi" | "functionName"
 >;
 
+/**
+ * Creates a viem test client for a local Anvil node, polling every 50 ms.
+ *
+ * `waitForTransactionReceipt` called with only `hash` and `timeout` polls
+ * `eth_getTransactionReceipt` until the receipt exists or `timeout` (default
+ * 180 s) expires; any other option falls back to viem's implementation. Under
+ * automine, `sendTransaction`, `sendRawTransaction` and `writeContract` wait
+ * for the receipt before returning the hash.
+ *
+ * @param transport - HTTP transport to the Anvil node.
+ * @param chain - The chain the node forks.
+ * @returns The extended test client.
+ *
+ * @example
+ * import { createAnvilTestClient } from "@morpho-org/test";
+ * import { http, parseEther, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createAnvilTestClient(http("http://127.0.0.1:8545"), mainnet);
+ * const hash = await client.sendTransaction({
+ *   to: zeroAddress,
+ *   value: parseEther("1"),
+ * });
+ * // => "0x…", already mined under automine
+ */
 export const createAnvilTestClient = <chain extends Chain>(
   transport: HttpTransport,
   chain: chain,
@@ -136,6 +166,7 @@ export const createAnvilTestClient = <chain extends Chain>(
     account: testAccount(),
     transport: traced(transport),
     cacheTime: Number.POSITIVE_INFINITY,
+    pollingInterval: 50,
   })
     .extend(dealActions)
     .extend(traceActions)
@@ -144,7 +175,55 @@ export const createAnvilTestClient = <chain extends Chain>(
     .extend((client) => {
       let automine: boolean;
 
+      // viem waits for a new block before re-fetching a missing receipt, and
+      // dedupes that fetch into one already in flight. When Anvil mines during
+      // that request, automine produces no later block and the wait hangs, so
+      // poll the receipt directly unless the caller needs viem's other options.
+      const waitForTransactionReceipt = async (
+        args: WaitForTransactionReceiptParameters<chain>,
+      ) => {
+        const { hash, timeout = 180_000, ...options } = args;
+        if (Object.values(options).some((option) => option !== undefined))
+          return viem_waitForTransactionReceipt(client, args);
+
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+
+        const poll = async () => {
+          while (true) {
+            try {
+              return await viem_getTransactionReceipt(client, { hash });
+            } catch (error) {
+              if (!(error instanceof TransactionReceiptNotFoundError))
+                throw error;
+            }
+
+            await new Promise((resolve) =>
+              setTimeout(resolve, client.pollingInterval),
+            );
+            if (timedOut)
+              throw new WaitForTransactionReceiptTimeoutError({ hash });
+          }
+        };
+
+        try {
+          return await Promise.race([
+            poll(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => {
+                timedOut = true;
+                reject(new WaitForTransactionReceiptTimeoutError({ hash }));
+              }, timeout);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
       return {
+        waitForTransactionReceipt,
+
         async timestamp() {
           const latestBlock = await client.getBlock();
 
@@ -267,7 +346,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           args: DeployContractParameters<abi, chain, HDAccount>,
         ) {
           const hash = await client.deployContract(args);
-          const receipt = await client.waitForTransactionReceipt({ hash });
+          const receipt = await waitForTransactionReceipt({ hash });
 
           if (receipt.contractAddress == null)
             throw Error("no contract address");
@@ -299,7 +378,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_writeContract(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },
@@ -317,7 +396,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_sendTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },
@@ -325,7 +404,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await viem_sendRawTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
-            await client.waitForTransactionReceipt({ hash });
+            await waitForTransactionReceipt({ hash });
 
           return hash;
         },

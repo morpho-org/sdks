@@ -453,7 +453,7 @@ export namespace ChainUtils {
       name: "Robinhood Chain",
       id: ChainId.RobinhoodMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      explorerUrl: "https://robinhoodchain.blockscout.com",
+      explorerUrl: "https://robin.etherscan.io",
       identifier: "robinhood",
     },
   } satisfies Record<ChainId, ChainMetadata>;

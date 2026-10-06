@@ -521,7 +521,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     await expect(client.sendTransaction(tx)).resolves.toBeDefined();
   });
 
-  test("behavior: a stale fee-bearing vault with the wall clock ahead of the chain exits at the true floor (SDK-1263)", async ({
+  test("behavior: a stale fee-bearing vault with the wall clock ahead of the chain exits at the true floor", async ({
     client,
   }) => {
     const { vault: vaultAddress, depositAndAllocate } =
@@ -551,7 +551,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       .morpho.vaultV2(vaultAddress, mainnet.id);
     const vaultData = await vault.getData();
     const chainNow = await client.timestamp();
-    // SDK-1263: the integrator's wall clock runs 60 days ahead of the chain, so a floor priced
+    // The integrator's wall clock runs 60 days ahead of the chain, so a floor priced
     // off the `now` accrual alone projects interest and fee shares the chain has not realized.
     const now = chainNow + Time.s.from.d(60n);
     const deadline = now + 3_600n;
@@ -682,7 +682,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       ((final.assets - initial.assets) * 10n ** 27n) / measured;
     // The realized exit clears the fixed floor…
     expect(realizedPrice).toBeGreaterThanOrEqual(derivedFloor);
-    // …yet sits below the projection-only floor: this is exactly the SDK-1263 regime, where the
+    // …yet sits below the projection-only floor: this is exactly the stale-clock regime, where the
     // wall-clock projection prices shares the chain never realizes.
     expect(realizedPrice).toBeLessThan(projectedFloor);
     expect(grossBurnt).toBeLessThanOrEqual(approval.action.args.amount);

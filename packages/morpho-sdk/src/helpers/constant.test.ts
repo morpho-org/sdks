@@ -1,6 +1,7 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
+  DEFAULT_ALLOCATOR_CAP_HEADROOM,
   DEFAULT_CAP_ACCRUAL_BUFFER,
   DEFAULT_LLTV_BUFFER,
   DEFAULT_MAX_REALLOCATION_PENALTY,
@@ -22,6 +23,11 @@ describe("morpho-sdk helper constants", () => {
 
   test("DEFAULT_CAP_ACCRUAL_BUFFER is two hours", () => {
     expect(DEFAULT_CAP_ACCRUAL_BUFFER).toBe(7_200n);
+  });
+
+  test("DEFAULT_ALLOCATOR_CAP_HEADROOM is 1% (WAD/100)", () => {
+    expect(DEFAULT_ALLOCATOR_CAP_HEADROOM).toBe(MathLib.WAD / 100n);
+    expect(DEFAULT_ALLOCATOR_CAP_HEADROOM).toBe(10_000_000_000_000_000n);
   });
 
   test("MAX_ABSOLUTE_SHARE_PRICE is 100 RAY", () => {
