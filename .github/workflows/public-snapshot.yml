@@ -218,7 +218,8 @@ jobs:
   alert:
     name: Alert on failed public sync
     needs: [detect, snapshot, gates, verify, sync]
-    if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect.outputs.released == 'true'
+    # A failed detect leaves released unset: alert, it may have been a release.
+    if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect.result != 'success' || needs.detect.outputs.released == 'true')
     runs-on: ubuntu-latest
     environment: public-sync-alerts
     steps:

@@ -165,6 +165,13 @@ class FakeGitHub implements GitHub {
       else this.refs.set(name, input.sha ?? "");
       return undefined;
     }
+    if ((match = /^compare\/(\w+)\.\.\.(\w+)$/.exec(route))) {
+      let id: string | undefined = match[2];
+      while (id !== undefined && id !== match[1]) {
+        id = this.commits.get(id)?.parents[0];
+      }
+      return { behind_by: id === undefined ? 1 : 0 };
+    }
     if ((match = /^git\/commits\/(\w+)$/.exec(route))) {
       return this.commitJson(match[1] ?? "");
     }
@@ -427,7 +434,7 @@ describe("syncPublic", () => {
 
   test("a rerun of the same release changes nothing, before and after merge", async () => {
     const github = new FakeGitHub({});
-    const r = release(R1, v1);
+    const r = { ...release(R1, v1), maxBatchBytes: 30 };
     await syncPublic({ github, ...r });
     const commits = github.commits.size;
     expect(await syncPublic({ github, ...r })).toEqual({
@@ -445,6 +452,21 @@ describe("syncPublic", () => {
       true,
     );
     expect(github.pulls).toHaveLength(1);
+  });
+
+  test("a merged release can't be synced again with a different tree", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    github.merge(pull);
+    const writes = github.calls.length;
+    await expect(syncPublic({ github, ...release(R1, v2) })).rejects.toThrow(
+      "can't be synced twice",
+    );
+    expect(github.calls.slice(writes).every((c) => c.startsWith("GET"))).toBe(
+      true,
+    );
   });
 
   test("re-arms auto-merge on a current PR whose auto-merge was turned off", async () => {

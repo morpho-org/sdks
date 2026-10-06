@@ -300,6 +300,14 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
       `Release ${manifest.sourceCommit} doesn't descend from ${mainSource}, the source of public main. Only a newer release can be synced.`,
     );
   }
+  if (
+    mainSource === manifest.sourceCommit &&
+    main.tree.sha !== manifest.treeHash
+  ) {
+    throw new Error(
+      `Public main already carries release ${mainSource} with tree ${main.tree.sha}, not ${manifest.treeHash}. A release can't be synced twice with different trees.`,
+    );
+  }
   if (main.tree.sha === manifest.treeHash) {
     log(`Public main already has tree ${manifest.treeHash}.`);
     return { type: "up-to-date" };
@@ -325,11 +333,15 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
         `Release ${manifest.sourceCommit} doesn't descend from ${prSource}, the release of open sync PR #${pr.number}. Only a newer release can supersede it.`,
       );
     }
-    if (
+    // A multi-batch head sits several commits above main.
+    const onMain =
       head.tree.sha === manifest.treeHash &&
-      head.parents.length === 1 &&
-      head.parents[0]?.sha === mainSha
-    ) {
+      (
+        (await github.rest(
+          `${repoPath}/compare/${mainSha}...${pr.head.sha}`,
+        )) as { readonly behind_by: number }
+      ).behind_by === 0;
+    if (onMain) {
       const merge = pr.auto_merge;
       if (
         merge?.merge_method !== "squash" ||
