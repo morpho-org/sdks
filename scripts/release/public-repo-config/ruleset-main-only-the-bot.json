@@ -1,0 +1,24 @@
+{
+  "name": "main: only the bot",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] }
+  },
+  "bypass_actors": [
+    {
+      "actor_id": 0,
+      "actor_type": "Integration",
+      "bypass_mode": "always"
+    }
+  ],
+  "rules": [
+    {
+      "type": "update",
+      "parameters": { "update_allows_fetch_and_merge": false }
+    },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" },
+    { "type": "required_signatures" }
+  ]
+}
