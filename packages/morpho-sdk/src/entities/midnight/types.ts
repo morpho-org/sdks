@@ -10,8 +10,10 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
-import type { MidnightReferralFeeParams } from "../../actions/midnight/bundlesV2Take.js";
-import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
+import type {
+  MidnightReferralFeeParams,
+  MidnightTakeableOffer,
+} from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
