@@ -132,7 +132,7 @@ describe("verifyArtifact", () => {
     ],
     [
       "an unlisted tarball",
-      "Tarballs [a-1.0.0.tgz, b-1.0.0.tgz] don't match the public packages",
+      'Tarball "b-1.0.0.tgz" doesn\'t match SHA256SUMS.',
       (dir: string) => write(dir, { "tarballs/b-1.0.0.tgz": "tgz" }),
     ],
     [
@@ -148,7 +148,7 @@ describe("verifyArtifact", () => {
     ],
     [
       "no tarballs",
-      "Artifact has no tarballs.",
+      "No tarballs in",
       (dir: string) => {
         rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
         write(dir, { "tarballs/SHA256SUMS": "" });
@@ -161,7 +161,7 @@ describe("verifyArtifact", () => {
     ],
     [
       "a non-tarball file next to the tarballs",
-      'Unexpected "postinstall.sh" in tarballs/.',
+      'Unexpected "postinstall.sh" next to the tarballs.',
       (dir: string) => write(dir, { "tarballs/postinstall.sh": "x" }),
     ],
     [
