@@ -17,6 +17,9 @@
 | `VERSION_APP_ID`, `VERSION_APP_PRIVATE_KEY` | `version-pr` job (`push.yml` → `version-pr.yml`) | **`main`/`next` only**, via `if: github.ref_name == 'main' \|\| github.ref_name == 'next'` | **High** — GitHub App key; `create-github-app-token` mints a `contents: write` / `pull-requests: write` installation token |
 | npm publish auth | `publish` job (`publish.yml`) | OIDC trusted publishing — **no stored token**; privileged job carries `environment: prod` | **Critical** — publishes packages under the org identity |
 | `ANTHROPIC_SDK_API_KEY` | `claude` job (`claude.yml`) — passed to the SHA-pinned Claude action and to the failure-only log scrubber | repo-level, gated by the job `if`: same-repo, non-draft, non-Dependabot `pull_request` heads, or `@claude` mentions from `OWNER`/`MEMBER`/`COLLABORATOR` (bots fall through to the action's `allowed_bots`); **never fork-exposed** | **Medium** — metered Anthropic API key; no repo write capability, rotatable |
+| `LUPIN_APP_PRIVATE_KEY` | `lupin` job (`review.yml` → SHA-pinned `morpho-org/internal-tools/.github/workflows/lupin.yml`) | repo-level; `pull_request_target`, comment and dispatch events run the **default-branch** workflow, which checks out the base commit and only inspects PR content in Lupin's sandbox; `lupin.yml` checks the commenter's repository permission before acting on `/lupin` | **High** — Lupin GitHub App key; mints short-lived tokens to comment on PRs and download the Lupin release |
+| `AI_GATEWAY_API_KEY` | `lupin` job (`review.yml`) | same as above; never forwarded to PR-head code | **Medium** — metered model-gateway key; no repo write capability, rotatable |
+| `LUPIN_LINEAR_CLIENT_SECRET`, `LUPIN_BETTERSTACK_API_TOKEN` | `lupin` job (`review.yml`) | org secrets, same scope as above | **Low** — read-only tool credentials for Lupin reviewers |
 
 ## Invariants — breaking any of these is a finding, not a waiver
 
@@ -24,6 +27,7 @@
 - `VERSION_APP_PRIVATE_KEY` is forwarded only to `version-pr.yml`. Its write-scoped token is minted only after the hook-poisoning precondition checks, and the version commit is created via `createCommitOnBranch` (GitHub-signed). See §10 "Release-commit signing & write-token hardening".
 - The `publish` job keeps `environment: prod`, `id-token: write` isolated to that job, and `npm publish --provenance`. Replacing OIDC with a stored `NPM_TOKEN`/PAT, or dropping `--provenance` or `environment: prod`, is a downgrade → **high/critical** (see §10 "Publish-flow integrity").
 - The `claude` job keeps its same-repo / non-Dependabot `pull_request` gate and the `OWNER`/`MEMBER`/`COLLABORATOR` author-association gate on comment, review, and issue events. Loosening either widens who can spend `ANTHROPIC_SDK_API_KEY` → **medium**.
+- `review.yml` keeps calling `lupin.yml` at a full internal-tools commit SHA with its release named in the trailing comment, lists secrets explicitly (no `secrets: inherit`) and never checks out or runs PR-head code itself.
 - No secret with write, publish, or signing capability is moved into the ungated `test` job — or into any job reachable from a fork-accessible trigger.
 - RPC URLs stay `env:`-bound and are never interpolated into a `run:` string. Their every-branch scope is accepted **only** because they are low-sensitivity and write-access-only; a secret that gains write capability must not inherit this posture.
 - A new secret name added to any workflow gains a row in the inventory above **in the same PR**.

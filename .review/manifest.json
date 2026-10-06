@@ -1,0 +1,100 @@
+{
+  "version": 2,
+  "guidance": "review.md",
+  "skills": [
+    {
+      "id": "sdk-protocol-safety",
+      "title": "SDK protocol and transaction safety",
+      "description": "Use for changes to ABIs, addresses, accounting or rounding math, chain or account checks, approvals, signatures, routing, simulation or composed transaction flows: pinned protocol sources, funds and authority across a complete caller flow, and replay or ordering attacks.",
+      "path": "skills/sdk-protocol-safety/SKILL.md",
+      "agents": ["behavior", "security"]
+    },
+    {
+      "id": "sdk-compatibility",
+      "title": "SDK integrator compatibility and architecture",
+      "description": "Use for changes to public behavior, defaults, signatures, exports, state transport, dependencies, package boundaries or deprecations: what existing integrators see, layer ownership, stateless prepare/sign/build, and the deprecation lifecycle.",
+      "path": "skills/sdk-compatibility/SKILL.md",
+      "agents": ["behavior", "design", "product"]
+    },
+    {
+      "id": "sdk-correctness",
+      "title": "SDK implementation and failure behavior",
+      "description": "Use for changes to .ts code: types and units, input mutation, typed errors and causes, promises, optional lookups, fallback, generated sources, secrets and injection.",
+      "path": "skills/sdk-correctness/SKILL.md",
+      "agents": ["behavior", "security"]
+    },
+    {
+      "id": "sdk-evidence",
+      "title": "SDK tests and documentation",
+      "description": "Use for changes to tests, JSDoc, examples or Markdown, and for public behavior that needs them: discriminating assertions, the pure, transport-mock or pinned-fork boundary, canonical JSDoc, and active docs and references.",
+      "path": "skills/sdk-evidence/SKILL.md",
+      "agents": ["behavior", "design", "product"]
+    },
+    {
+      "id": "sdk-release-integrity",
+      "title": "SDK CI, release and automation integrity",
+      "description": "Use for changes to workflows, CI scripts, package manifests, lockfiles, changesets, install or publish settings, review criteria and agent instructions: semver and changesets, dependency trust, workflow trust and publication, and instruction integrity.",
+      "path": "skills/sdk-release-integrity/SKILL.md",
+      "agents": ["design", "security"]
+    }
+  ],
+  "routing": {
+    "baselineLenses": ["behavior"],
+    "pathRules": [
+      {
+        "id": "protocol-authority",
+        "paths": [
+          "packages/morpho-sdk/src/**",
+          "packages/blue-sdk/src/**",
+          "packages/blue-sdk-viem/src/**",
+          "packages/midnight-sdk/src/**",
+          "packages/wdk-protocol-lending-morpho-evm/src/**",
+          "packages/morpho-ts/src/**"
+        ],
+        "lenses": ["behavior", "security"],
+        "minimumRisk": "high",
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "dependencies",
+        "paths": [
+          "**/package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          ".npmrc",
+          ".changeset/**"
+        ],
+        "lenses": ["behavior", "security"],
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "review-and-agent-rules",
+        "paths": [
+          ".review/**",
+          ".agents/**",
+          ".claude/**",
+          ".codex/**",
+          "AGENTS.md",
+          "**/AGENTS.md",
+          "CLAUDE.md",
+          "**/CLAUDE.md",
+          "**/SKILL.md"
+        ],
+        "lenses": ["design"],
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "workflow-authority",
+        "paths": [
+          ".github/workflows/**",
+          ".github/actions/**",
+          "scripts/ci/**",
+          "scripts/release/**"
+        ],
+        "lenses": ["security"],
+        "minimumRisk": "high",
+        "minimumDepth": "thorough"
+      }
+    ]
+  }
+}
