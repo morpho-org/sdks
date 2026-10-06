@@ -2,6 +2,8 @@
 
 This monorepo contains the TypeScript SDK packages used to interact with the Morpho protocol, Morpho Vaults, simulation tooling, and related test utilities.
 
+[`public/CONTRIBUTING.md`](./public/CONTRIBUTING.md) is the copy published to `morpho-org/sdks`. When you change the setup, checks or chain-listing steps here, update it in the same PR.
+
 ## Development Setup
 
 ### Prerequisites
