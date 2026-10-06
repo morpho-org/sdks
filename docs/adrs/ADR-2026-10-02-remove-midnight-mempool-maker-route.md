@@ -50,8 +50,8 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
   `MakeOffersOutput` keep their v6 export names (`MidnightMakeOffersParams`,
   `MidnightMakeLendParams`, and `MidnightMakeOffersOutput`); `makeBorrow` continues to use
   `MakeOffersParams`, while `SupplyCollateralMakeBorrowParams` extends it with required
-  `MakeBorrowCollateral`; `MorphoMidnight.getOffersData` and the maker `offers` input accept only a
-  PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
+  `MidnightMakeBorrowCollateral`; `MorphoMidnight.getOffersData` and the maker `offers` input accept
+  only a PriceRatifierV1 or RateRatifierV1 tree (`MidnightMakerTreeInput`)
   instead of any `TreeInput`; `MidnightOfferValidationParams` drops `ratification`;
   `MidnightOffersData.ratifierType` becomes `"priceV1" | "rateV1"` and its `setterPayload` is
   replaced by `payload`; `MidnightSupplyCollateralMakeBorrowParams` requires

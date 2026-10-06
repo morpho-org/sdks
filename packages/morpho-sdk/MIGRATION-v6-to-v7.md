@@ -87,7 +87,7 @@ address.
 | `MidnightSupplyCollateralMakeBorrowParams` | `MidnightSupplyCollateralMakeBorrowParams` (required `collateral`) |
 | `MidnightMakeOffersOutput` | `MidnightMakeOffersOutput` (retyped) |
 | — | `MidnightMakeBorrowCollateral` |
-| — | `MidnightOfferPublication` and `MidnightCancelAndMakeParams` |
+| — | `MidnightOfferPublication`, `MidnightCancelAndMakeParams`, and `MidnightRootActivationSignature` |
 
 - `MidnightMakeOffersParams` is used by `makeBorrow`, as in v6, and does not include collateral.
   `MidnightSupplyCollateralMakeBorrowParams` extends it with required

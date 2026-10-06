@@ -157,6 +157,26 @@ describe("midnightCancelAndMake", () => {
     expect(decoded.args[4]).toEqual([{ collateralIndex: 0n, assets: 10n }]);
   });
 
+  test("behavior: accepts a plain-object collateral market", () => {
+    const supplies = [{ collateralIndex: 0n, assets: 10n }];
+    const withMarketParams = midnightCancelAndMake({
+      ...params,
+      publication: {
+        ...params.publication,
+        collateral: { market, supplies },
+      },
+    });
+    const withPlainObject = midnightCancelAndMake({
+      ...params,
+      publication: {
+        ...params.publication,
+        collateral: { market: midnightMarket, supplies },
+      },
+    });
+
+    expect(withPlainObject.data).toBe(withMarketParams.data);
+  });
+
   test("behavior: appends metadata and does not freeze caller input", () => {
     const groups = [groupA];
     const cancellations = [{ group: groupB, maxConsumed: 5n }];

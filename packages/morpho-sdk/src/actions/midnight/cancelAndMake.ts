@@ -1,6 +1,6 @@
 import {
   InvalidTreeError,
-  type MarketParams,
+  type MarketInput,
   MarketUtils,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
@@ -47,6 +47,12 @@ export interface MidnightRootActivationSignature {
   readonly s: Hex;
 }
 
+/** Collateral supplied for the maker before root activation; every offer must target `market`. */
+export interface MidnightMakeBorrowCollateral {
+  readonly market: MarketInput;
+  readonly supplies: readonly MidnightCollateralTransfer[];
+}
+
 /** Offer root activated and published by a Midnight Bundles V2 maker bundle. */
 export interface MidnightOfferPublication {
   /**
@@ -63,10 +69,7 @@ export interface MidnightOfferPublication {
   /** Optional delegated root-activation signature. */
   readonly rootSignature?: MidnightRootActivationSignature;
   /** Optional collateral supplied to `market` for the maker before activation. */
-  readonly collateral?: {
-    readonly market: MarketParams;
-    readonly supplies: readonly MidnightCollateralTransfer[];
-  };
+  readonly collateral?: MidnightMakeBorrowCollateral;
 }
 
 /**

@@ -124,7 +124,6 @@ export { MorphoBlue } from "./blue/index.js";
 export type {
   GetOffersDataParams as MidnightGetOffersDataParams,
   GetPositionDataParams as MidnightGetPositionDataParams,
-  MakeBorrowCollateral as MidnightMakeBorrowCollateral,
   MakeLendParams as MidnightMakeLendParams,
   MakeOffersOutput as MidnightMakeOffersOutput,
   MakeOffersParams as MidnightMakeOffersParams,

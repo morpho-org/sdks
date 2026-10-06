@@ -1,7 +1,6 @@
 import type {
   AccrualPosition,
   Market,
-  MarketInput,
   MidnightFetchParams,
   PriceRatifierV1TreeCreateRequest,
   RateRatifierV1TreeCreateRequest,
@@ -9,12 +8,12 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
+import type { MidnightMakeBorrowCollateral } from "../../actions/midnight/cancelAndMake.js";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
   MidnightCancelAndMakeAction,
-  MidnightCollateralTransfer,
   MidnightGroupCancellation,
 } from "../../types/action.js";
 
@@ -73,16 +72,10 @@ export interface MakeLendParams extends MakeOffersParams {
   readonly reservedLoanAssets?: bigint;
 }
 
-/** Collateral supplied before a borrow-offer publication; every offer must target `market`. */
-export interface MakeBorrowCollateral {
-  readonly market: MarketInput;
-  readonly supplies: readonly MidnightCollateralTransfer[];
-}
-
 /** Parameters for the Midnight collateral-supplying borrow maker flow. */
 export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   /** Required collateral supplied before activation; every offer must target `collateral.market`. */
-  readonly collateral: MakeBorrowCollateral;
+  readonly collateral: MidnightMakeBorrowCollateral;
 }
 
 /**
