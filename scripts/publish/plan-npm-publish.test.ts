@@ -94,12 +94,19 @@ describe("fetchRegistryState", () => {
   test("accepts a package whose every version was unpublished", async () => {
     const result = await fetchRegistryState(pkg.name, async () =>
       Response.json({
-        versions: {},
-        time: { created: "x", modified: "x", "7.1.0": "x" },
-        "dist-tags": {},
+        _id: pkg.name,
+        name: pkg.name,
+        time: {
+          created: "x",
+          modified: "x",
+          unpublished: { time: "x", versions: ["7.0.0", "7.1.0"] },
+        },
       }),
     );
-    expect(result).toStrictEqual({ versions: [], everPublished: ["7.1.0"] });
+    expect(result).toStrictEqual({
+      versions: [],
+      everPublished: ["7.0.0", "7.1.0"],
+    });
   });
 
   test("treats 404 as a new package", async () => {
@@ -127,6 +134,15 @@ describe("fetchRegistryState", () => {
     [{ versions: {}, time: {}, "dist-tags": "x" }, 'no "dist-tags" object'],
     [{ versions: {}, time: {}, "dist-tags": [] }, 'no "dist-tags" object'],
     [{ versions: [], time: {}, "dist-tags": {} }, 'no "versions" object'],
+    [{ time: { unpublished: {} } }, "malformed unpublished tombstone"],
+    [
+      { time: { unpublished: { versions: [7] } } },
+      "malformed unpublished tombstone",
+    ],
+    [
+      { versions: {}, time: { unpublished: { versions: [] } } },
+      "malformed unpublished tombstone",
+    ],
     [
       { versions: {}, time: {}, "dist-tags": { latest: 7 } },
       "non-string latest",

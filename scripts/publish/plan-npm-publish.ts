@@ -114,6 +114,33 @@ export async function fetchRegistryState(
     throw new Error(`GET ${url} returned a non-object packument.`);
   }
   const fields = body as Record<string, unknown>;
+  const rawTime = fields.time;
+  const tombstone =
+    typeof rawTime === "object" && rawTime != null && !Array.isArray(rawTime)
+      ? (rawTime as Record<string, unknown>).unpublished
+      : undefined;
+  // npm answers a fully unpublished package with a tombstone: no versions or
+  // dist-tags, and the unpublished versions under time.unpublished.versions.
+  if (tombstone !== undefined) {
+    const gone =
+      typeof tombstone === "object" && tombstone != null
+        ? (tombstone as Record<string, unknown>).versions
+        : undefined;
+    if (
+      !Array.isArray(gone) ||
+      !gone.every((version) => typeof version === "string") ||
+      fields.versions !== undefined ||
+      fields["dist-tags"] !== undefined
+    ) {
+      throw new Error(
+        `Packument of ${name} has a malformed unpublished tombstone.`,
+      );
+    }
+    const listed = Object.keys(rawTime as object).filter(
+      (key) => key !== "created" && key !== "modified" && key !== "unpublished",
+    );
+    return { versions: [], everPublished: [...new Set([...listed, ...gone])] };
+  }
   // versions, time and dist-tags must all be objects: a missing dist-tags would
   // hide latest and skip the guard against moving it back.
   const [versions, time, distTags] = (

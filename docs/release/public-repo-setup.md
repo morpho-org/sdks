@@ -158,7 +158,7 @@ Target state after cutover (section 10, step 7). Until then `sdks-internal` stil
 - npm: no trusted publisher names `morpho-org/sdks-internal` (section 6 lists every package's single entry), and no npm token exists in `sdks-internal` secrets, its environments or org secrets shared with it.
 - Workflows: `sdks-internal` has no workflow that runs `npm publish`, and its `public/.github/workflows/release.yml` never runs there (GitHub only runs `.github/workflows/`). `release.yml` also checks `github.repository == 'morpho-org/sdks'`.
 - To get there, delete `.github/workflows/publish.yml` from `sdks-internal` (its `github-releases` job needs `publish`, so the whole file goes), remove its call from `push.yml`, and delete the `prod` environment (section 10, step 7).
-- Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and `grep -rn "npm publish" .github/workflows` in `sdks-internal` finds nothing.
+- Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and in `sdks-internal` `grep -rnE '(npm|pnpm) publish( |$)' .github/workflows/*.yml | grep -vE '^[^:]*:[0-9]*:\s*#'` (publish commands in workflow YAML, comments excluded) finds nothing. Before cutover it finds only `publish.yml`.
 
 ## 10. Cutover order
 
