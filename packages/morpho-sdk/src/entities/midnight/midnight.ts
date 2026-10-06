@@ -641,19 +641,20 @@ export class MorphoMidnight {
         : params.target.maxBuyerAssets;
 
     return {
-      getRequirements: async () => [
-        ...(await getMidnightApprovalRequirements({
+      getRequirements: async () => {
+        const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           token: market.loanToken,
           owner: params.accountAddress,
           spender: tx.to,
           amount: pulledAssets,
-        })),
-        ...(await this.getBundlesV2AuthorizationRequirements(
+        });
+        const authorization = await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
-        )),
-      ],
+        );
+        return [...approvals, ...authorization];
+      },
       buildTx: () => tx,
     };
   }
