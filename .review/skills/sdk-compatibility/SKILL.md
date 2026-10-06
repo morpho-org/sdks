@@ -60,9 +60,8 @@ layers, or adds a framework dependency.
   `midnight-sdk` may use viem for documented encoding and fetch boundaries.
 - Internal `dependencies` use `workspace:` ranges; internal
   `peerDependencies` deliberately use explicit published ranges (§4).
-- Relative imports carry `.js` and type-only imports use `import type`.
-  Report these here only when they break module resolution for consumers;
-  otherwise they are style.
+- Relative imports carry `.js` (NodeNext), and an import used only for types
+  uses `import type`. Biome enforces neither; report each miss as medium.
 
 ## 4. Stateless entity flows
 

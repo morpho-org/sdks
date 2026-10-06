@@ -83,9 +83,12 @@ bounds, LLTV, repay or reallocation logic.
   `lastUpdate`. Nested markets that are newer are never rewound, and past
   timestamps aren't rejected. Vault V1 loss and fee reconciliation, and the
   unsupported-IRM errors for rate queries, stay intact.
-- `minSharePrice` and `maxSharePrice` protect deposit, borrow and repay paths
-  in the right direction, and the documented route keeps its inflation-attack
-  guard.
+- Share-price bounds sit where `packages/morpho-sdk/AGENTS.md` puts them and
+  point the right way: `maxSharePrice` on vault deposits and the
+  `migrateToV2` destination, `minSharePriceE27` on Vault V2 `forceWithdraw`.
+  The documented route keeps its inflation-attack guard. BlueBundlesV1 Blue
+  writes take no share-price bounds or `slippageTolerance` by design; their
+  absence there is not a finding.
 - LLTV, LLTV buffer, `WAD` and `ORACLE_PRICE_SCALE` math keeps its units; a
   scaled value is never compared with an unscaled one.
 - Repay: share repay where the protocol requires it, an upper-bound transfer,

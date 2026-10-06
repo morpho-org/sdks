@@ -128,7 +128,31 @@ artifact-validation steps.
   and for a conditional persona its trigger flag in the engine's Step 4. A
   persona's `name:` equals its filename, frontmatter has no `<` or `>`, and
   the engine is never symlinked into `.claude/commands/`.
+- Persona frontmatter keeps its contract: `kind: baseline` declares no
+  `trigger:`, `kind: conditional` declares one that Step 4 defines, and every
+  persona has `applies:`, `out-of-scope:`, `focus:` and severity calibration.
+- Reference pointers (`> Applied by personas:`, `applies:`, section anchors)
+  resolve in both directions.
 - Report contract breaks, not wording preferences.
+
+## Severity
+
+- **Critical:** script injection from attacker-controllable context; a
+  secret, write token or publish path reachable from a fork-accessible
+  trigger; loss of GitHub-signed release commits; enabled hooks before a
+  write-token step; publish identity read outside the consumer's own reader.
+- **High:** an unpinned third-party action; a missing or widened
+  `permissions:` scope; `secrets: inherit`; `pull_request_target` running PR
+  code; a write token minted without hardening or a split-job boundary; a
+  required check dropped from a release workflow's `needs:`; a new runtime or
+  peer dependency; a missing or wrong changeset for a published change;
+  persona contract breaks, an undeclared Step 4 trigger flag, or inventory
+  drift.
+- **Medium:** a new secret without an inventory row; a new dev dependency; a
+  provenance or SBOM step removed from a dev-only path; a dangling reference
+  pointer; deterministic workflow logic left in inline shell; a `.review/`
+  rule out of step with its source.
+- **Low:** wording that changes no enforced rule.
 
 ## Report
 

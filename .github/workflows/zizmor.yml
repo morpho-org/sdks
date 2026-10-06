@@ -47,6 +47,10 @@ jobs:
           repositories: internal-tools
           permission-contents: read
 
+      - name: Note skipped online audits
+        if: steps.token.outputs.token == ''
+        run: echo "::warning::No internal-tools token on this event, so zizmor ran offline only. Check changed action pins by hand."
+
       - name: Upload findings to code scanning
         if: env.CAN_UPLOAD == 'true'
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
