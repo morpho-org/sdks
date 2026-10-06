@@ -179,6 +179,8 @@ export type SyncOutcome =
   | { readonly type: "up-to-date" }
   /** The open sync PR already carries this tree on the current `main`. */
   | { readonly type: "pr-current"; readonly pr: number }
+  /** The open sync PR carried this tree with its checks already passed, so it was merged. */
+  | { readonly type: "merged"; readonly pr: number }
   /** The sync PR was opened, or updated to this release. */
   | { readonly type: "opened" | "updated"; readonly pr: number };
 
@@ -233,24 +235,6 @@ async function readRef(github: GitHub, branch: string) {
   }
 }
 
-async function setRef(
-  github: GitHub,
-  ref: { readonly branch: string; readonly sha: string },
-) {
-  const { branch, sha } = ref;
-  if ((await readRef(github, branch)) === undefined) {
-    await github.rest(`${repoPath}/git/refs`, {
-      method: "POST",
-      body: { ref: `refs/heads/${branch}`, sha },
-    });
-  } else {
-    await github.rest(`${repoPath}/git/refs/heads/${branch}`, {
-      method: "PATCH",
-      body: { sha, force: true },
-    });
-  }
-}
-
 async function readCommit(github: GitHub, sha: string) {
   return (await github.rest(`${repoPath}/git/commits/${sha}`)) as GitCommit;
 }
@@ -279,6 +263,15 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     sourceCommit: manifest.sourceCommit,
     treeHash: manifest.treeHash,
   });
+  // Everything that can fail without writing runs before the first write.
+  for (const file of manifest.files) {
+    // createCommitOnBranch writes every file as 100644.
+    if (file.mode !== "100644") {
+      throw new Error(
+        `"${file.path}" has mode ${file.mode}; the sync can only write regular non-executable files.`,
+      );
+    }
+  }
 
   const mainSha = await readRef(github, "main");
   if (mainSha === undefined) {
@@ -291,7 +284,7 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   if (mainSource === undefined) {
     if (main.parents.length > 0) {
       throw new Error(
-        `Public main ${mainSha} has no Source-Commit trailer but isn't the root commit. Only an empty repository may skip the ordering check.`,
+        `Public main ${mainSha} has no Source-Commit trailer but isn't the root commit. Only the root commit may skip the ordering check.`,
       );
     }
     log(`Public main ${mainSha} is the root commit: first sync.`);
@@ -312,6 +305,32 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     log(`Public main already has tree ${manifest.treeHash}.`);
     return { type: "up-to-date" };
   }
+
+  const tree = (await github.rest(
+    `${repoPath}/git/trees/${main.tree.sha}?recursive=1`,
+  )) as {
+    truncated: boolean;
+    tree: { path: string; type: string; sha: string; mode: string }[];
+  };
+  if (tree.truncated) {
+    throw new Error(
+      `Public main tree ${main.tree.sha} is too large to list in one call.`,
+    );
+  }
+  const remote = new Map<string, string>();
+  for (const entry of tree.tree) {
+    if (entry.type === "blob") remote.set(entry.path, entry.sha);
+  }
+  const batches = batchFileChanges(
+    planFileChanges(
+      manifest.files.map((file) => ({
+        path: file.path,
+        content: options.readFile(file.path),
+      })),
+      remote,
+    ),
+    options.maxBatchBytes,
+  );
 
   const open = (await github.rest(
     `${repoPath}/pulls?state=open&base=main&head=${PUBLIC_REPO.split("/")[0]}:${SYNC_BRANCH}`,
@@ -348,15 +367,25 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
         merge.commit_title !== message.headline ||
         merge.commit_message !== message.body
       ) {
-        await github.graphql(ENABLE_AUTO_MERGE, {
-          input: {
-            pullRequestId: pr.node_id,
-            mergeMethod: "SQUASH",
-            commitHeadline: message.headline,
-            commitBody: message.body,
-            expectedHeadOid: pr.head.sha,
-          },
-        });
+        const input = {
+          pullRequestId: pr.node_id,
+          mergeMethod: "SQUASH",
+          commitHeadline: message.headline,
+          commitBody: message.body,
+          expectedHeadOid: pr.head.sha,
+        };
+        const state = (await github.graphql(MERGE_STATE, {
+          id: pr.node_id,
+        })) as {
+          node: { mergeStateStatus: string };
+        };
+        // GitHub refuses auto-merge on a PR whose checks already passed.
+        if (state.node.mergeStateStatus === "CLEAN") {
+          await github.graphql(MERGE_PULL_REQUEST, { input });
+          log(`Sync PR #${pr.number} was already green: merged it.`);
+          return { type: "merged", pr: pr.number };
+        }
+        await github.graphql(ENABLE_AUTO_MERGE, { input });
       }
       log(`Sync PR #${pr.number} already carries tree ${manifest.treeHash}.`);
       return { type: "pr-current", pr: pr.number };
@@ -369,41 +398,17 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     }
   }
 
-  const tree = (await github.rest(
-    `${repoPath}/git/trees/${main.tree.sha}?recursive=1`,
-  )) as {
-    truncated: boolean;
-    tree: { path: string; type: string; sha: string; mode: string }[];
-  };
-  if (tree.truncated) {
-    throw new Error(
-      `Public main tree ${main.tree.sha} is too large to list in one call.`,
-    );
+  if ((await readRef(github, BUILD_BRANCH)) === undefined) {
+    await github.rest(`${repoPath}/git/refs`, {
+      method: "POST",
+      body: { ref: `refs/heads/${BUILD_BRANCH}`, sha: mainSha },
+    });
+  } else {
+    await github.rest(`${repoPath}/git/refs/heads/${BUILD_BRANCH}`, {
+      method: "PATCH",
+      body: { sha: mainSha, force: true },
+    });
   }
-  const remote = new Map<string, string>();
-  for (const entry of tree.tree) {
-    if (entry.type === "blob") remote.set(entry.path, entry.sha);
-  }
-  for (const file of manifest.files) {
-    // createCommitOnBranch writes every file as 100644.
-    if (file.mode !== "100644") {
-      throw new Error(
-        `"${file.path}" has mode ${file.mode}; the sync can only write regular non-executable files.`,
-      );
-    }
-  }
-  const batches = batchFileChanges(
-    planFileChanges(
-      manifest.files.map((file) => ({
-        path: file.path,
-        content: options.readFile(file.path),
-      })),
-      remote,
-    ),
-    options.maxBatchBytes,
-  );
-
-  await setRef(github, { branch: BUILD_BRANCH, sha: mainSha });
   let headSha = mainSha;
   for (const [index, batch] of batches.entries()) {
     const part =
@@ -437,7 +442,17 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   if ((await readRef(github, "main")) !== mainSha) {
     throw new Error("Public main moved during the sync. Rerun the job.");
   }
-  await setRef(github, { branch: SYNC_BRANCH, sha: headSha });
+  if ((await readRef(github, SYNC_BRANCH)) === undefined) {
+    await github.rest(`${repoPath}/git/refs`, {
+      method: "POST",
+      body: { ref: `refs/heads/${SYNC_BRANCH}`, sha: headSha },
+    });
+  } else {
+    await github.rest(`${repoPath}/git/refs/heads/${SYNC_BRANCH}`, {
+      method: "PATCH",
+      body: { sha: headSha, force: true },
+    });
+  }
   await github.rest(`${repoPath}/git/refs/heads/${BUILD_BRANCH}`, {
     method: "DELETE",
   });
@@ -492,22 +507,35 @@ const CREATE_COMMIT = `mutation($input: CreateCommitOnBranchInput!) {
 const ENABLE_AUTO_MERGE = `mutation($input: EnablePullRequestAutoMergeInput!) {
   enablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`;
+const MERGE_STATE = `query($id: ID!) {
+  node(id: $id) { ... on PullRequest { mergeStateStatus } }
+}`;
+const MERGE_PULL_REQUEST = `mutation($input: MergePullRequestInput!) {
+  mergePullRequest(input: $input) { clientMutationId }
+}`;
 const DISABLE_AUTO_MERGE = `mutation($input: DisablePullRequestAutoMergeInput!) {
   disablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`;
 
 async function run() {
   const { values } = parseArgs({
-    options: { dir: { type: "string" }, sha: { type: "string" } },
+    options: {
+      dir: { type: "string" },
+      sha: { type: "string" },
+      base: { type: "string" },
+    },
   });
   if (!values.dir || !values.sha) {
-    throw new Error("Usage: sync.ts --dir <artifact> --sha <RELEASE_SHA>");
+    throw new Error(
+      "Usage: sync.ts --dir <artifact> --sha <RELEASE_SHA> [--base <push before SHA>]",
+    );
   }
   const { dir, sha } = values;
   const token = readRequiredEnv(process.env, "GH_TOKEN");
   // Trusted code re-derives the tree from git before anything is written.
   const manifest = verifyArtifact(dir, { repo: ".", sha });
-  const packages = listReleasedPackages({ repo: ".", sha });
+  // Same range as detect-release.ts, so both see the same released packages.
+  const packages = listReleasedPackages({ repo: ".", sha, base: values.base });
   if (packages.length === 0) {
     throw new Error(`${sha} changes no public package version: not a release.`);
   }

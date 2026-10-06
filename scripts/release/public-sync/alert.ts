@@ -48,7 +48,12 @@ export async function findStaleSyncPr(options: {
   const ageMinutes = Math.floor(
     (options.now.getTime() - Date.parse(commit.committer.date)) / 60_000,
   );
-  if (!(ageMinutes > options.maxAgeMinutes)) return undefined;
+  if (!Number.isFinite(ageMinutes)) {
+    throw new Error(
+      `Sync PR #${pr.number} head commit has an unreadable date "${commit.committer.date}".`,
+    );
+  }
+  if (ageMinutes <= options.maxAgeMinutes) return undefined;
   return { number: pr.number, url: pr.html_url, ageMinutes };
 }
 

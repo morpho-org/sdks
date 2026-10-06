@@ -26,6 +26,16 @@ const pr = {
 const now = new Date("2026-10-06T12:00:00Z");
 
 describe("findStaleSyncPr", () => {
+  test("fails on an unreadable commit date instead of calling the PR fresh", async () => {
+    await expect(
+      findStaleSyncPr({
+        github: github([pr], "not a date"),
+        now,
+        maxAgeMinutes: 60,
+      }),
+    ).rejects.toThrow('unreadable date "not a date"');
+  });
+
   test("reports a PR past the threshold", async () => {
     await expect(
       findStaleSyncPr({

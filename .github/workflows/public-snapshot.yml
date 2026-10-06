@@ -193,7 +193,7 @@ jobs:
         run: |
           tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
           node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA"
-          if [ -n "$(find .git/hooks -type f ! -name '*.sample' -print -quit)" ]; then
+          if [ -n "$(find .git/hooks -mindepth 1 ! -type d ! -name '*.sample' -print -quit)" ]; then
             echo "::error::Unexpected git hooks before minting the public sync token."
             exit 1
           fi
@@ -212,7 +212,8 @@ jobs:
       - name: Open or update the sync PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: node scripts/release/public-sync/sync.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA"
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/release/public-sync/sync.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA" --base "$BEFORE_SHA"
 
   # Pages the owner when a release commit didn't reach its sync PR.
   alert:

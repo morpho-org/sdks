@@ -77,6 +77,12 @@ class FakeGitHub implements GitHub {
   readonly pulls: FakePull[] = [];
   readonly calls: string[] = [];
   signCommits = true;
+  /** `mergeStateStatus` the PR reports. */
+  mergeState = "BLOCKED";
+  /** Adds a stray file to every built commit, so its tree is wrong. */
+  corruptTree = false;
+  /** Runs after each built commit, e.g. to move `main` mid-sync. */
+  onCommit: (() => void) | undefined;
   private counter = 0;
 
   constructor(files: Record<string, string>, message = "Initial commit") {
@@ -224,6 +230,9 @@ class FakeGitHub implements GitHub {
     const input = variables.input as Record<string, unknown>;
     const name = /\{\s*(\w+)\(/.exec(query)?.[1] ?? "";
     this.calls.push(`graphql ${name}`);
+    if (name === "node") {
+      return { node: { mergeStateStatus: this.mergeState } };
+    }
     const pull = () => {
       const pr = this.pulls[Number(String(input.pullRequestId).slice(3)) - 1];
       if (!pr) throw new Error("missing pull");
@@ -242,6 +251,7 @@ class FakeGitHub implements GitHub {
       for (const { path, contents } of changes.additions) {
         files.set(path, Buffer.from(contents, "base64").toString());
       }
+      if (this.corruptTree) files.set("stray", "x");
       const message = input.message as { headline: string; body: string };
       const id = this.addCommit({
         files,
@@ -249,6 +259,7 @@ class FakeGitHub implements GitHub {
         parents: [head ?? ""],
       });
       this.refs.set(branch.branchName, id);
+      this.onCommit?.();
       return { createCommitOnBranch: { commit: { oid: id } } };
     }
     if (name === "enablePullRequestAutoMerge") {
@@ -258,6 +269,17 @@ class FakeGitHub implements GitHub {
         commit_title: String(input.commitHeadline),
         commit_message: String(input.commitBody),
       };
+      return {};
+    }
+    if (name === "mergePullRequest") {
+      const pr = pull();
+      expect(input.expectedHeadOid).toBe(this.refs.get(SYNC_BRANCH));
+      pr.auto_merge = {
+        merge_method: String(input.mergeMethod).toLowerCase(),
+        commit_title: String(input.commitHeadline),
+        commit_message: String(input.commitBody),
+      };
+      this.merge(pr);
       return {};
     }
     if (name === "disablePullRequestAutoMerge") {
@@ -480,6 +502,98 @@ describe("syncPublic", () => {
     expect(github.pulls[0]?.auto_merge?.commit_title).toBe(
       "Release @morpho-org/a@1.0.0",
     );
+  });
+
+  test("merges a current PR whose checks already passed instead of arming auto-merge", async () => {
+    const github = new FakeGitHub({});
+    const r = release(R1, v1);
+    await syncPublic({ github, ...r });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    pull.auto_merge = null;
+    github.mergeState = "CLEAN";
+    const before = github.calls.length;
+    expect(await syncPublic({ github, ...r })).toEqual({
+      type: "merged",
+      pr: 1,
+    });
+    expect(github.calls.slice(before)).not.toContain(
+      "graphql enablePullRequestAutoMerge",
+    );
+    const main = github.commits.get(github.refs.get("main") ?? "");
+    expect(treeHash(main?.files ?? new Map())).toBe(r.manifest.treeHash);
+    expect(main?.message).toContain(`Source-Commit: ${R1}`);
+    expect(pull.state).toBe("closed");
+  });
+
+  test("rebuilds an open PR with the right tree once public main moved past its base", async () => {
+    const github = new FakeGitHub({});
+    const r2 = release(R2, v2);
+    await syncPublic({ github, ...r2 });
+    const moved = github.addCommit({
+      files: new Map(Object.entries(v1)),
+      message: `Release a@1\n\nSource-Commit: ${R1}`,
+      parents: [github.refs.get("main") ?? ""],
+    });
+    github.refs.set("main", moved);
+    expect(await syncPublic({ github, ...r2 })).toEqual({
+      type: "updated",
+      pr: 1,
+    });
+    expect(github.calls).toContain("graphql disablePullRequestAutoMerge");
+    const head = github.commits.get(github.refs.get(SYNC_BRANCH) ?? "");
+    expect(head?.parents).toEqual([moved]);
+    expect(treeHash(head?.files ?? new Map())).toBe(r2.manifest.treeHash);
+    expect(github.pulls[0]?.auto_merge?.commit_message).toContain(R2);
+  });
+
+  test("a final tree mismatch stops the sync before sync/main or the PR moves", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    const head = github.refs.get(SYNC_BRANCH);
+    const title = github.pulls[0]?.title;
+    github.corruptTree = true;
+    await expect(syncPublic({ github, ...release(R2, v2) })).rejects.toThrow(
+      "Nothing was published",
+    );
+    expect(github.refs.get(SYNC_BRANCH)).toBe(head);
+    expect(github.pulls[0]?.title).toBe(title);
+    expect(github.calls).not.toContain("PATCH repos/morpho-org/sdks/pulls/1");
+  });
+
+  test("public main moving during the build stops the sync before sync/main moves", async () => {
+    const github = new FakeGitHub({});
+    github.onCommit = () => {
+      github.refs.set(
+        "main",
+        github.addCommit({ files: new Map(), message: "", parents: [] }),
+      );
+    };
+    await expect(syncPublic({ github, ...release(R1, v1) })).rejects.toThrow(
+      "Public main moved during the sync",
+    );
+    expect(github.refs.has(SYNC_BRANCH)).toBe(false);
+    expect(github.pulls).toHaveLength(0);
+  });
+
+  test("a non-regular file mode fails before the open PR is disarmed", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    const armed = github.pulls[0]?.auto_merge;
+    const writes = github.calls.length;
+    const r2 = release(R2, v2);
+    await expect(
+      syncPublic({
+        github,
+        ...r2,
+        manifest: {
+          ...r2.manifest,
+          files: r2.manifest.files.map((f) => ({ ...f, mode: "100755" })),
+        },
+      }),
+    ).rejects.toThrow("mode 100755");
+    expect(github.pulls[0]?.auto_merge).toEqual(armed);
+    expect(github.calls.slice(writes)).toEqual([]);
   });
 
   test("a newer release supersedes the open sync PR", async () => {

@@ -18,7 +18,7 @@ then mints the App token.
 
 - **Ordering.** The release must descend from the `Source-Commit` of public `main` and of an
   open sync PR (`git merge-base --is-ancestor` on full history). There is no override; a root
-  commit without a trailer (empty repository) is the only exception.
+  commit on `main` with no trailer is the only exception (see setup step 6).
 - **Idempotency.** Nothing is written when public `main`, or the open sync PR on top of the
   current `main`, already has the tree hash.
 - **Commits.** Built on scratch branch `sync/build` with `createCommitOnBranch`, which GitHub
@@ -42,11 +42,17 @@ then mints the App token.
    Environments create `public-sync`: deployment branches "Selected branches" = `main`, and
    environment secrets `PUBLIC_SYNC_APP_ID` (the App ID) and `PUBLIC_SYNC_APP_PRIVATE_KEY`
    (the `.pem` contents). Delete the downloaded key. Never add them as repository secrets.
-4. **Let the App bypass the public rulesets** on `main` only through a PR, and allow it to push
-   `sync/main` and `sync/build`; require public `ci.yml` before merging; enable auto-merge and
-   squash merges on the public repository.
+4. **Rulesets** ([docs/release/public-repo-setup.md](../../../docs/release/public-repo-setup.md)
+   sections 2 and 3). The App is the only bypass actor of ruleset A, which just restricts who
+   may update `main`. Ruleset B (pull request, squash, `ci` passing on an up-to-date branch)
+   has **no bypass actors**, the App included, so the App can't land anything on `main`
+   without public CI. Give the App push and force-push on `sync/*` only. Enable auto-merge
+   and squash merges on the public repository.
 5. **Alerts** (TBD: channel and owner): create environment `public-sync-alerts` (branches:
    `main`) with secret `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert
    channel), and set repository variables `PUBLIC_SYNC_ALERT_OWNER` (mention, e.g.
    `<!subteam^ID>`) and optionally `PUBLIC_SYNC_MAX_PR_AGE_MINUTES`. Until then, alerts only
    fail their job.
+6. **Seed public `main`** before the first sync: it must exist and its tip must be a root
+   commit (e.g. a README). `sync.ts` fails on a repository with no `main`, and accepts a
+   commit without `Source-Commit` only as that root.
