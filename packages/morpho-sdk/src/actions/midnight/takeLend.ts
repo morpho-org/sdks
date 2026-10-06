@@ -99,7 +99,7 @@ const validateParams = (params: MidnightTakeLendParams) => {
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
  * @throws {NonPositiveInputError} when the target amount, `maxBuyerAssets` or `deadline` is not positive.
- * @throws {NegativeInputError} when `minUnits` or `maxContinuousFee` is negative.
+ * @throws {NegativeInputError} when `minUnits`, `maxContinuousFee` or `referralFeePct` is negative.
  * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
