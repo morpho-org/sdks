@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   listPublicPackages,
   publicIdentity,
+  releaseCommit,
   releaseTag,
   tarballName,
 } from "./pack.ts";
@@ -76,5 +78,43 @@ describe("tarballName", () => {
 describe("releaseTag", () => {
   test("joins the name and version with -v", () => {
     expect(releaseTag({ name: "@x/a", version: "1.2.3" })).toBe("@x/a-v1.2.3");
+  });
+});
+
+describe("releaseCommit", () => {
+  test("returns the commit that set the current version, not a later one", () => {
+    const root = repoWith({});
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+    const commit = (version: string, extra: string) => {
+      mkdirSync(join(root, "packages/a"), { recursive: true });
+      writeFileSync(
+        join(root, "packages/a/package.json"),
+        JSON.stringify({ name: "a", version, description: extra }),
+      );
+      git("add", "-A");
+      git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-qm",
+        version,
+      );
+      return git("rev-parse", "HEAD");
+    };
+    git("init", "-q");
+    commit("1.0.0", "");
+    const release = commit("1.1.0", "");
+    commit("1.1.0", "edited later");
+    const pkg = { dir: "packages/a", name: "a", version: "1.1.0" };
+
+    expect(releaseCommit(root, pkg)).toBe(release);
+    expect(() => releaseCommit(root, { ...pkg, version: "9.0.0" })).toThrow(
+      "No commit sets a to 9.0.0.",
+    );
   });
 });

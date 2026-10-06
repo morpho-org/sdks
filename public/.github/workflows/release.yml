@@ -129,6 +129,8 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          # Full history, to tag each version on the commit that set it.
+          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -147,19 +149,19 @@ jobs:
           trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
 
           # Every current package version is on npm once publish succeeds, so any
-          # missing tag or release is created, whichever run or commit skipped it.
+          # missing tag or release is created, whichever run skipped it, on the
+          # commit that set that version (the one npm provenance records).
           # Not process substitution: a failing command must fail the step.
           node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
-          mapfile -t tags < "$RUNNER_TEMP/tags.txt"
-          if [ "${#tags[@]}" -eq 0 ]; then
+          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
             echo "::error::No package tags found."
             exit 1
           fi
           releases_dir="${RUNNER_TEMP}/github-releases"
           mkdir -p "$releases_dir"
-          for tag in "${tags[@]}"; do
+          while IFS=$'\t' read -r -u 3 tag commit; do
             if ! git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
-              git tag "$tag" -m "$tag"
+              git tag "$tag" "$commit" -m "$tag"
               git push --no-verify origin "refs/tags/${tag}"
             fi
             if ! gh release view "$tag" >/dev/null 2>&1; then
@@ -167,4 +169,4 @@ jobs:
               node scripts/publish/github-release-body.ts "$tag" "$body_file"
               gh release create "$tag" --title "$tag" --notes-file "$body_file" --verify-tag
             fi
-          done
+          done 3< "$RUNNER_TEMP/tags.txt"

@@ -76,6 +76,44 @@ export function releaseTag(pkg: TarballIdentity) {
 }
 
 /**
+ * Finds the commit that set a package to its current version, so a tag created
+ * by a later run still points at the commit npm provenance records.
+ *
+ * @param root - Repository root, with full history.
+ * @param pkg - The package, at its current version.
+ * @returns The commit SHA.
+ * @throws If no commit in the history sets that version.
+ */
+export function releaseCommit(root: string, pkg: PublicPackage): string {
+  const path = `${pkg.dir}/package.json`;
+  const versionAt = (revision: string) => {
+    try {
+      const manifest: unknown = JSON.parse(
+        execFileSync("git", ["-C", root, "show", `${revision}:${path}`], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }),
+      );
+      return publicIdentity(manifest)?.version;
+    } catch {
+      return undefined;
+    }
+  };
+  const commits = execFileSync(
+    "git",
+    ["-C", root, "log", "--format=%H", "--", path],
+    { encoding: "utf8" },
+  )
+    .split("\n")
+    .filter(Boolean);
+  for (const commit of commits) {
+    if (versionAt(commit) !== pkg.version) continue;
+    if (versionAt(`${commit}^`) !== pkg.version) return commit;
+  }
+  throw new Error(`No commit sets ${pkg.name} to ${pkg.version}.`);
+}
+
+/**
  * Formats the file name `pnpm pack` gives a package's tarball.
  *
  * @param pkg - The package.
@@ -114,8 +152,9 @@ function packPublicPackages(root: string, out: string): void {
 }
 
 /**
- * `pack.ts --out <dir>` packs every public package; `pack.ts --tags` prints the
- * release tag of every public package at its current version.
+ * `pack.ts --out <dir>` packs every public package; `pack.ts --tags` prints, tab-separated,
+ * the release tag of every public package at its current version and the commit
+ * that set that version.
  *
  * @param argv - Command-line arguments.
  */
@@ -126,7 +165,7 @@ function main(argv: readonly string[] = process.argv.slice(2)): void {
   });
   if (values.tags) {
     for (const pkg of listPublicPackages(".")) {
-      writeStdout(`${releaseTag(pkg)}\n`);
+      writeStdout(`${releaseTag(pkg)}\t${releaseCommit(".", pkg)}\n`);
     }
   } else if (values.out) {
     packPublicPackages(".", values.out);
