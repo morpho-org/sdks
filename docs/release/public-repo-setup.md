@@ -172,18 +172,18 @@ Record what was removed in the SDK-1322 ticket.
 
 ## 9. `sdks-internal` can never publish
 
-Target state after cutover (section 10, step 7). Until then `sdks-internal` still has the old `.github/workflows/publish.yml`.
+Target state after cutover (section 10, step 8). Until then `sdks-internal` still has the old `.github/workflows/publish.yml`.
 
 - npm: no trusted publisher names `morpho-org/sdks-internal` (section 6 lists every package's single entry), and no npm token exists in `sdks-internal` secrets, its environments or org secrets shared with it.
 - Workflows: `sdks-internal` has no workflow that runs `npm publish`, and its `public/.github/workflows/release.yml` never runs there (GitHub only runs `.github/workflows/`). `release.yml` also checks `github.repository == 'morpho-org/sdks'`.
-- To get there, delete `.github/workflows/publish.yml` from `sdks-internal` (its `github-releases` job needs `publish`, so the whole file goes), remove its call from `push.yml`, and delete the `prod` environment (section 10, step 7).
+- To get there, delete `.github/workflows/publish.yml` from `sdks-internal` (its `github-releases` job needs `publish`, so the whole file goes), remove its call from `push.yml`, and delete the `prod` environment (section 10, step 8).
 - Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and in `sdks-internal` `grep -rnE '(npm|pnpm) publish( |$)' .github/workflows/*.yml | grep -vE '^[^:]*:[0-9]*:\s*#'` (publish commands in workflow YAML, comments excluded) finds nothing. Before cutover it finds only `publish.yml`.
 
 ## 10. Cutover order
 
 1. **Freeze development on `morpho-org/sdks`.** No merges to its `main`. Pause the changesets "Version Packages" PR there.
 2. **Final sync of `sdks-internal` from `sdks`**: mirror `main`, branches, tags and notes once more, and check `git rev-parse main` matches on both.
-3. **Seed public `main` with the bootstrap commit**, before step 4 enables the rulesets, installs the sync App or runs the first sync. Public `main` keeps its history, so its tip is not a root commit and has no `Source-Commit` trailer; `sync.ts` refuses to sync on top of such a tip. An admin pushes one empty, signed commit whose trailer names the internal commit the public tree was last cut from. After step 2 that is the tip of `main`, the same SHA on both repositories:
+3. **Seed public `main` with the bootstrap commit**, before step 5 applies sections 1–8 (rulesets, sync App) and step 6 runs the first sync: once the rulesets are on, a direct push to `main` is rejected. Public `main` keeps its history, so its tip is not a root commit and has no `Source-Commit` trailer; `sync.ts` refuses to sync on top of such a tip. An admin pushes one empty, signed commit whose trailer names the internal commit the public tree was last cut from. After step 2 that is the tip of `main`, the same SHA on both repositories:
 
    ```bash
    # In a clone of morpho-org/sdks-internal, after step 2.

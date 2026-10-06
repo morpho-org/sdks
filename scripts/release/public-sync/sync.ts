@@ -285,7 +285,7 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   if (mainSource === undefined) {
     if (main.parents.length > 0) {
       throw new Error(
-        `Public main ${mainSha} has no Source-Commit trailer but isn't the root commit. Only the root commit may skip the ordering check.`,
+        `Public main ${mainSha} has no Source-Commit trailer but isn't the root commit. Only the root commit may skip the ordering check. Push the empty, signed bootstrap commit with a Source-Commit trailer (docs/release/public-repo-setup.md section 10, step 3) before syncing.`,
       );
     }
     log(`Public main ${mainSha} is the root commit: first sync.`);
