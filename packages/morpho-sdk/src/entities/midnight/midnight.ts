@@ -38,11 +38,11 @@ import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
 } from "../../actions/requirements/index.js";
+import { getBlueBuyCallbackAddress } from "../../helpers/getBlueBuyCallbackAddress.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
-import { getBlueBuyCallbackAddress } from "../../midnight/blueBuyCallback.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
