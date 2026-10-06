@@ -202,10 +202,13 @@ describe("main", () => {
     },
   );
 
-  test("rejects a malformed row", async () => {
-    await expect(
-      main([tsv("@morpho-org/blue-sdk\t7.3.0\n")], { fetchFn: registry }),
-    ).rejects.toThrow("Invalid release-set row");
+  test.each([
+    ["a missing field", "@morpho-org/blue-sdk\t7.3.0\n"],
+    ["an extra field", "@morpho-org/blue-sdk\t7.3.0\ta.tgz\textra\n"],
+  ])("rejects a row with %s", async (_, row) => {
+    await expect(main([tsv(row)], { fetchFn: registry })).rejects.toThrow(
+      "Invalid release-set row",
+    );
   });
 
   test.each([
