@@ -5,7 +5,6 @@ import {
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   type AccrualPosition,
-  blueBuyCallbackFactoryAbi,
   fetchAccrualPosition,
   fetchMarket,
   type Market,
@@ -24,7 +23,7 @@ import {
   type Hex,
   isAddressEqual,
 } from "viem";
-import { readContract, simulateContract } from "viem/actions";
+import { readContract } from "viem/actions";
 import {
   midnightCancelAndMake,
   midnightCancelOffer,
@@ -43,6 +42,7 @@ import { validateChainId } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
+import { getBlueBuyCallbackAddress } from "../../midnight/blueBuyCallback.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -766,9 +766,9 @@ export class MorphoMidnight {
    * to `abi.encode(blueMarket)`. The contract does not check supply share-price slippage, so
    * `blueMarket` must be protected against supply-share-price inflation; this method rejects
    * Blue markets with no supply shares. Calls the Midnight mempool validation API while
-   * preparing the tree. Simulates `createBlueBuyCallback(accountAddress, callbackSalt)` on the
-   * chain's `midnightBlueBuyCallbackFactory` from the maker to derive the callback, and reads
-   * `market(id)` on the chain's `blue` for its supply shares.
+   * preparing the tree. Computes the callback's CREATE2 address from the chain's
+   * `midnightBlueBuyCallbackFactory`, `accountAddress` and `callbackSalt`, and reads `market(id)`
+   * on the chain's `blue` for its supply shares.
    *
    * @param params - Maker, lend-side offers, Blue market, parked assets, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
@@ -781,7 +781,7 @@ export class MorphoMidnight {
    * @param params.callbackSalt - Salt selecting the maker's callback; the same salt reuses the same callback.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `blue` or V1 ratifier deployment.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `midnight`, `blue` or V1 ratifier deployment.
    * @throws {NonPositiveInputError} when `assetsToPark` is non-positive.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {NonPositiveInputError} when `deadline` is not positive.
@@ -821,17 +821,13 @@ export class MorphoMidnight {
     const { callbackSalt } = params;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
-    const blueReads = Promise.all([
-      simulateContract(this.client.viemClient, {
-        account: params.accountAddress,
-        address: getChainAddress(
-          this.chainId,
-          "midnightBlueBuyCallbackFactory",
-        ),
-        abi: blueBuyCallbackFactoryAbi,
-        functionName: "createBlueBuyCallback",
-        args: [params.accountAddress, callbackSalt],
-      }),
+    const callback = getBlueBuyCallbackAddress({
+      chainId: this.chainId,
+      owner: params.accountAddress,
+      salt: callbackSalt,
+    });
+    const [data, [, totalSupplyShares]] = await Promise.all([
+      this.getOffersData(params),
       readContract(this.client.viemClient, {
         address: getChainAddress(this.chainId, "blue"),
         abi: blueAbi,
@@ -839,8 +835,6 @@ export class MorphoMidnight {
         args: [blueMarketId],
       }),
     ]);
-    const [data, [{ result: callback }, [, totalSupplyShares]]] =
-      await Promise.all([this.getOffersData(params), blueReads]);
     if (totalSupplyShares === 0n) {
       throw new EmptyBlueParkingMarketError({ marketId: blueMarketId });
     }

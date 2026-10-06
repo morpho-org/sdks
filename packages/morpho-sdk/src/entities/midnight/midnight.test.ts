@@ -5,7 +5,6 @@ import {
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   AccrualPosition,
-  blueBuyCallbackFactoryAbi,
   type IOffer,
   Market,
   MarketParams,
@@ -24,7 +23,6 @@ import {
 } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
-  expectReadCall,
   type MockClientHandle,
   mockRead,
 } from "@morpho-org/test/mock";
@@ -33,13 +31,11 @@ import {
   type Chain,
   decodeFunctionData,
   encodeAbiParameters,
-  encodeFunctionResult,
   erc20Abi,
   getAddress,
   type Hex,
   maxUint256,
   numberToHex,
-  toFunctionSelector,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -53,6 +49,7 @@ import {
   midnightMarketId,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
+import { getBlueBuyCallbackAddress } from "../../midnight/blueBuyCallback.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -1184,11 +1181,11 @@ describe("MorphoMidnight", () => {
       irm: zeroAddress,
       lltv: 860000000000000000n,
     };
-    const callback = getAddress("0x000000000000000000000000000000000000cb01");
-    const blueBuyCallbackFactory = getChainAddress(
-      midnightChainId,
-      "midnightBlueBuyCallbackFactory",
-    );
+    const callback = getBlueBuyCallbackAddress({
+      chainId: midnightChainId,
+      owner: midnightAddresses.maker,
+      salt: zeroHash,
+    });
     const blue = getChainAddress(midnightChainId, "blue");
     const callbackData = encodeAbiParameters([marketParamsAbi], [blueMarket]);
     const blueOffer = (overrides: Partial<IOffer> = {}) =>
@@ -1198,14 +1195,6 @@ describe("MorphoMidnight", () => {
       handle: MidnightMockHandle,
       totalSupplyShares = 1_000_000n,
     ) => {
-      handle.dispatch.set(
-        `${blueBuyCallbackFactory.toLowerCase()}|${toFunctionSelector("createBlueBuyCallback(address,bytes32)")}`,
-        encodeFunctionResult({
-          abi: blueBuyCallbackFactoryAbi,
-          functionName: "createBlueBuyCallback",
-          result: callback,
-        }),
-      );
       mockRead(handle, {
         address: blue,
         abi: blueAbi,
@@ -1248,8 +1237,14 @@ describe("MorphoMidnight", () => {
       mockBlueReads(handle);
       mockAllowance({ handle, token: midnightAddresses.loanToken, result: 0n });
       mockMidnightAuthorization(handle, false);
-      const offer = blueOffer();
       const callbackSalt = `0x${"ee".repeat(32)}` as Hex;
+      const offer = blueOffer({
+        callback: getBlueBuyCallbackAddress({
+          chainId: midnightChainId,
+          owner: midnightAddresses.maker,
+          salt: callbackSalt,
+        }),
+      });
       const output = await prepare(handle, {
         offers: rateTree(offer),
         cancellations: [{ group: previousGroup, maxConsumed: 5n }],
@@ -1293,13 +1288,6 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         callbackSalt,
       });
-      expect(
-        expectReadCall(handle, {
-          address: blueBuyCallbackFactory,
-          abi: blueBuyCallbackFactoryAbi,
-          functionName: "createBlueBuyCallback",
-        }).map(({ args }) => args),
-      ).toEqual([[midnightAddresses.maker, callbackSalt]]);
     });
 
     test("error: NonPositiveInputError", async () => {
