@@ -71,7 +71,7 @@ gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" --input
 - Secrets and variables: **none**. Publishing uses OIDC only.
 - Admins can't bypass: leave "Allow administrators to bypass configured protection rules" off.
 
-**Required reviewers: shipped without.** The `npm` environment is created with no required reviewers, so releases stay automatic. Whether to add reviewers is still an open decision for the maintainers; the trade-off is below.
+**Required reviewers: open admin decision, not yet made.** Decide before cutover. `environment-npm.json` has no reviewers; add them before the `PUT` if you choose reviewers.
 
 | | No reviewers (payload default) | Required reviewers |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" --input
 | Protects against | Relies on the internal gates, the rulesets and the App key | Also a compromised sync App or App key: nothing reaches npm without a human |
 | Cost | None | A human per release; a queued release blocks later ones (`concurrency: release`) until approved |
 
-To add reviewers later (for example the SDK maintainers team, with `prevent_self_review: false` since the App opens the PR), set `"reviewers": [{ "type": "Team", "id": <team-id> }]` in `environment-npm.json` and rerun the `PUT`.
+To add reviewers (for example the SDK maintainers team, with `prevent_self_review: false` since the App opens the PR), set `"reviewers": [{ "type": "Team", "id": <team-id> }]` in `environment-npm.json` and rerun the `PUT`.
 
 ## 6. Move each package's npm trusted publisher
 
