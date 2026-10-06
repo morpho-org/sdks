@@ -87,8 +87,11 @@ const RULES = {
     "gi",
   ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
+  // A name or sink needs a quote before the phrase, so prose such as
+  // `Mnemonic: a list of twelve words …` in a README passes. Only the dotenv/shell
+  // `NAME=` shape and the `--mnemonic` flag take an unquoted phrase.
   mnemonic: new RegExp(
-    String.raw`(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK}|--${MNEMONIC_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+))\s*\\?["'\`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    String.raw`(?:(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK})\s*\\?["'\`]|(?:${MNEMONIC_NAME}\w*=(?!=)|--${MNEMONIC_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+))\s*\\?["'\`]?)(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
     "gi",
   ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:

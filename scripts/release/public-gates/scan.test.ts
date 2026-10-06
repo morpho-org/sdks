@@ -1044,3 +1044,22 @@ describe("redactPath", () => {
     );
   });
 });
+
+test.each([
+  "Mnemonic: a list of twelve or more words that you must keep private and never share online",
+  "Seed phrase: twelve plain english words that the wallet shows once and you write down",
+  "## Phrase: the words below are shown once by the wallet and you should never share them",
+])("pass mnemonic-like prose in a tarball README: %s", (line) => {
+  expect(scanFiles([entry("wdk-1.0.0.tgz:package/README.md", line)])).toEqual(
+    [],
+  );
+});
+
+test.each([
+  `MNEMONIC=${Array(12).fill("legal").join(" ")}`,
+  `anvil --mnemonic ${Array(12).fill("legal").join(" ")}`,
+])("flag an unquoted mnemonic in the dotenv or CLI shape: %s", (line) => {
+  expect(scanFiles([file("a.sh", line)])).toContainEqual(
+    expect.objectContaining({ rule: "mnemonic" }),
+  );
+});
