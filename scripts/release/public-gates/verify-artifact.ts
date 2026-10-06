@@ -14,12 +14,12 @@ import { tmpdir } from "node:os";
 import { join, posix, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
+import { listPublicPackages, tarballName } from "../../publish/pack.ts";
 import { verifyChecksums } from "../../publish/verify-release-set.ts";
 import {
   generatePublicSnapshot,
   type PublicTreeManifest,
 } from "../public-snapshot/generate.ts";
-import { listPublicPackages } from "./public-packages.ts";
 
 type FileMode = PublicTreeManifest["files"][number]["mode"];
 const MODES = [
@@ -162,9 +162,7 @@ export function verifyArtifact(
   // Same checks as the public release runs before publishing.
   const tarballs = verifyChecksums(join(dir, "tarballs"));
   // The gates job chose what to pack, so the set must come from the verified tree.
-  const expectedTarballs = listPublicPackages(treeDir)
-    .map(({ tarball }) => tarball)
-    .sort();
+  const expectedTarballs = listPublicPackages(treeDir).map(tarballName).sort();
   if (tarballs.join("\n") !== expectedTarballs.join("\n")) {
     throw new Error(
       `Tarballs [${tarballs.join(", ")}] don't match the public packages [${expectedTarballs.join(", ")}].`,

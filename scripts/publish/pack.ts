@@ -81,6 +81,16 @@ export function releaseTag(pkg: PackageIdentity) {
 }
 
 /**
+ * Formats the file name `pnpm pack` gives a package's tarball.
+ *
+ * @param pkg - The package.
+ * @returns `<scope>-<name>-<version>.tgz`, without the `@`.
+ */
+export function tarballName(pkg: Pick<PublicPackage, "name" | "version">) {
+  return `${pkg.name.replace(/^@/, "").replace("/", "-")}-${pkg.version}.tgz`;
+}
+
+/**
  * Packs every public package into `out` and writes `out/SHA256SUMS`. No package
  * defines a prepack or prepare hook, so `pnpm pack` ships the built `lib/` and
  * replaces `workspace:` ranges with real versions.

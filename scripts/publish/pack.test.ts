@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 
-import { listPublicPackages, publicIdentity, releaseTag } from "./pack.ts";
+import {
+  listPublicPackages,
+  publicIdentity,
+  releaseTag,
+  tarballName,
+} from "./pack.ts";
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -56,6 +61,15 @@ describe("listPublicPackages", () => {
       { dir: "packages/a", name: "@x/a", version: "1.0.0" },
       { dir: "packages/b", name: "@x/b", version: "2.0.0" },
     ]);
+  });
+});
+
+describe("tarballName", () => {
+  test("matches pnpm pack for scoped and unscoped names", () => {
+    expect(tarballName({ name: "@morpho-org/a", version: "1.0.0" })).toBe(
+      "morpho-org-a-1.0.0.tgz",
+    );
+    expect(tarballName({ name: "b", version: "2.0.0" })).toBe("b-2.0.0.tgz");
   });
 });
 
