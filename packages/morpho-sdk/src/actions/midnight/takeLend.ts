@@ -11,11 +11,11 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import {
-  type MidnightReferralFeeParams,
-  midnightBundlesV2Buy,
-} from "./bundlesV2Take.js";
-import type { MidnightTakeableOffer } from "./types.js";
+import { midnightTake } from "./take.js";
+import type {
+  MidnightReferralFeeParams,
+  MidnightTakeableOffer,
+} from "./types.js";
 
 /** Parameters for encoding a Midnight lend take from already selected offers. */
 export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
@@ -88,7 +88,8 @@ export const midnightTakeLend = (
     expectedBuy: false,
   });
 
-  let tx = midnightBundlesV2Buy({
+  let tx = midnightTake({
+    side: "buy",
     ...params,
     reduceOnly: false,
     repayEnabled: false,
