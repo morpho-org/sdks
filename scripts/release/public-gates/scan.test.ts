@@ -116,10 +116,21 @@ describe("scanFiles", () => {
     ["wallet-key", `const deployerKey = "0x${"ab".repeat(32)}";`],
     ["wallet-key", `SIGNER_KEY=0x${"ab".repeat(32)}`],
     ["wallet-key-list", `const PRIVATE_KEYS = ["0x${"ab".repeat(32)}"];`],
-    ["wallet-key-list", `privateKeys: [\n  "0x${"ab".repeat(32)}",\n]`],
+    ["wallet-key-list", `privateKeys: ["0x${"ab".repeat(32)}",\n]`],
     ["wallet-key-list", `privateKey: hexToBytes("0x${"ab".repeat(32)}")`],
     ["wallet-key-list", `privateKeyToAccount(("0x${"ab".repeat(32)}" as Hex))`],
     ["wallet-key-list", `accounts: ["0x${"ab".repeat(32)}"]`],
+    [
+      "wallet-key-fallback",
+      `privateKey: (process.env.PK as Hex) ?? "0x${"ab".repeat(32)}"`,
+    ],
+    [
+      "wallet-key-fallback",
+      `privateKeyToAccount(process.env.PK as Hex ?? "0x${"ab".repeat(32)}")`,
+    ],
+    ["wallet-key-fallback", `privateKey ??= "0x${"ab".repeat(32)}"`],
+    ["wallet-key-fallback", `privateKey ||= "0x${"ab".repeat(32)}"`],
+    ["mnemonic", `mnemonic ??= "${Array(12).fill("abandon").join(" ")}"`],
     ["mnemonic", `TEST_MNEMONIC="${Array(12).fill("abandon").join(" ")}"`],
     ["mnemonic", `seed_phrase: "${Array(24).fill("zoo").join(" ")}"`],
     ["github-token", `github_pat_${"a".repeat(22)}`],
@@ -237,6 +248,19 @@ test.each([
   expect(scanFiles([file("a.ts", line)])).toEqual([
     expect.objectContaining({
       rule: "wallet-key",
+      match: expect.stringContaining(REAL_KEY.slice(2)),
+    }),
+  ]);
+});
+
+test.each([
+  `accounts: ["${ANVIL_KEY}", "${REAL_KEY}"]`,
+  `accounts: [\n  "${ANVIL_KEY}",\n  "${REAL_KEY}",\n]`,
+  `const privateKeys = ["${ANVIL_KEY}", "${REAL_KEY}"];`,
+])("flag a real key listed after a test key in %s", (line) => {
+  expect(scanFiles([file("a.ts", line)])).toEqual([
+    expect.objectContaining({
+      rule: "wallet-key-list",
       match: expect.stringContaining(REAL_KEY.slice(2)),
     }),
   ]);

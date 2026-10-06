@@ -44,10 +44,14 @@ const RULES = {
   // The same names, plus Hardhat's `accounts:`, when the key sits in a list or a
   // wrapper: `["0x…"]`, `hexToBytes("0x…")`, `privateKeyToAccount(("0x…" as Hex))`.
   "wallet-key-list":
-    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\(|\baccounts\s*:)\s*(?:(?:[[(]|(?:hexToBytes|toBytes)\()\s*)+\\?["'`](?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
+    /(?:(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*\\?["'`]?\s*[:=]|(?:privateKey|hdKey)ToAccount\(|\baccounts\s*:)\s*(?:(?:[[(]|(?:hexToBytes|toBytes)\()\s*)+(?=\\?["'`](?:0x)?[0-9a-f]{64}\b)/gi,
+  // A hard-coded fallback after a cast or parenthesised env read, or a logical
+  // assignment: `(process.env.PK as Hex) ?? "0x…"`, `privateKey ??= "0x…"`.
+  "wallet-key-fallback":
+    /(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|pk(?![a-z]))\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\|)=?\s*\\?["'`]?(?<secret>(?:0x)?[0-9a-f]{64})\b/gi,
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   mnemonic:
-    /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|\?\?|\|\|)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
+    /(?:(?:mnemonic|seed[_-]?phrase)\w*\\?["'`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|mnemonicToAccount\()\s*\\?["'`]?(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b/gi,
   // Any scheme (`https`, `wss`, ...). A port followed by a block number
   // (`http://localhost:8545@19000000`) is a fork URL, and `${VAR}` is filled in
   // at run time.
@@ -196,6 +200,8 @@ export function scanFiles(
     // Whole-text matching, so a formatter-wrapped `KEY =\n  "0x…"` still matches.
     const source = text.toString("utf8");
     const fileFindings: Finding[] = [];
+    // Several wallet rules can match one key; report it once.
+    const reported = new Set<string>();
     const name = tarball
       ? path.slice(path.indexOf(".tgz:") + ".tgz:".length)
       : path;
@@ -211,17 +217,30 @@ export function scanFiles(
       index = source.indexOf("\n", index + 1);
     }
     for (const [rule, pattern] of rules) {
-      for (const { 0: match, index, groups } of source.matchAll(pattern)) {
-        const secret = groups?.secret?.toLowerCase().replace(/^0x/, "");
-        if (
-          secret !== undefined &&
-          (PUBLIC_TEST_SECRETS.has(secret) ||
-            /^0{48}[0-9a-f]{16}$/.test(secret))
-        ) {
-          continue;
+      for (const { 0: opener, index, groups } of source.matchAll(pattern)) {
+        // A list can hold a test key and a real key, so each element is checked.
+        const candidates =
+          rule === "wallet-key-list"
+            ? listSecrets(source, {
+                opener,
+                end: index + opener.length,
+                bracket: opener.includes("["),
+              })
+            : [{ secret: groups?.secret, at: index, match: opener }];
+        for (const { secret, at, match } of candidates) {
+          const value = secret?.toLowerCase().replace(/^0x/, "");
+          if (
+            value !== undefined &&
+            (PUBLIC_TEST_SECRETS.has(value) ||
+              /^0{48}[0-9a-f]{16}$/.test(value) ||
+              reported.has(value))
+          ) {
+            continue;
+          }
+          if (value !== undefined) reported.add(value);
+          const line = lineStarts.findLastIndex((start) => start <= at) + 1;
+          fileFindings.push({ path, line, rule, match, ...marker });
         }
-        const line = lineStarts.findLastIndex((start) => start <= index) + 1;
-        fileFindings.push({ path, line, rule, match, ...marker });
       }
     }
     fileFindings.sort(
@@ -230,6 +249,23 @@ export function scanFiles(
     findings.push(...fileFindings);
   }
   return findings;
+}
+
+/** Quoted 64-hex values from `start` up to the end of the list or wrapper. */
+function listSecrets(
+  source: string,
+  list: { opener: string; end: number; bracket: boolean },
+) {
+  const { opener, end: start, bracket } = list;
+  const end = source.indexOf(bracket ? "]" : ")", start);
+  const span = source.slice(start, end === -1 ? start + 4096 : end);
+  return [...span.matchAll(/\\?["'`](?<secret>(?:0x)?[0-9a-f]{64})\b/gi)].map(
+    ({ 0: match, index, groups }) => ({
+      secret: groups?.secret,
+      at: start + index,
+      match: `${opener}…${match}`,
+    }),
+  );
 }
 
 /**
