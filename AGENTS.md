@@ -250,6 +250,10 @@ Conditional personas (fire only when their trigger flag is true):
 
 Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/pr-review-engine/SKILL.md` Step 4. The `skill-authoring` persona checks that these inventory invariants — engine roster, this table, and the `> Applied by personas:` backlinks — stay in sync.
 
+### Lupin
+
+[Lupin](https://github.com/morpho-org/internal-tools/tree/main/packages/review-cli) also reviews PRs through [`.github/workflows/review.yml`](./.github/workflows/review.yml), using the criteria in [`.review/`](./.review/). Comment `/lupin review` on a PR to request one; automatic review is off until the `LUPIN_AUTO_REVIEW` repository variable is `true`. While both run, the personas above and this file stay authoritative: `.review/` mirrors them, and a rule changed here or in a persona changes in `.review/` in the same PR. No legacy persona checks this; Lupin's `sdk-release-integrity` skill does when Lupin runs.
+
 ### CI / release security rules (anchors `ci-release-security`)
 
 These are the rules `ci-release-security` enforces. They live here as source of truth; the persona references this section by anchor. When a rule changes here, update the persona body to match.

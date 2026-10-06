@@ -56,6 +56,7 @@ cache
 # auto generated files
 manifest.json
 !**/public/manifest.json
+!/.review/manifest.json
 
 # Logs
 logs
