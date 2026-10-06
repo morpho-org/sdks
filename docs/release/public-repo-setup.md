@@ -153,9 +153,11 @@ Record what was removed in the SDK-1322 ticket.
 
 ## 9. `sdks-internal` can never publish
 
+Target state after cutover (section 10, step 7). Until then `sdks-internal` still has the old `publish.yml` job.
+
 - npm: no trusted publisher names `morpho-org/sdks-internal` (section 6 lists every package's single entry), and no npm token exists in `sdks-internal` secrets, its environments or org secrets shared with it.
 - Workflows: `sdks-internal` has no workflow that runs `npm publish`, and its `public/.github/workflows/release.yml` never runs there (GitHub only runs `.github/workflows/`). `release.yml` also checks `github.repository == 'morpho-org/sdks'`.
-- Remove the old `publish` job (environment `prod`) from `sdks-internal` workflows and delete its `prod` environment once the cutover is done.
+- To get there, remove the old `publish` job (environment `prod`) from `sdks-internal` workflows and delete its `prod` environment (section 10, step 7).
 - Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and `grep -rn "npm publish" .github/workflows` in `sdks-internal` finds nothing.
 
 ## 10. Cutover order
@@ -163,8 +165,9 @@ Record what was removed in the SDK-1322 ticket.
 1. **Freeze development on `morpho-org/sdks`.** No merges to its `main`. Pause the changesets "Version Packages" PR there.
 2. **Final sync of `sdks-internal` from `sdks`**: mirror `main`, branches, tags and notes once more, and check `git rev-parse main` matches on both.
 3. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
-4. **Apply sections 1–9 on `morpho-org/sdks`** (trusted publishers last, right before step 5).
+4. **Apply sections 1–8 on `morpho-org/sdks`** (trusted publishers last, right before step 5).
 5. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; tags and GitHub Releases that already exist are left alone.
 6. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
+7. **Remove publishing from `sdks-internal`.** Delete the `publish` job (environment `prod`) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
 
 The existing git history of `morpho-org/sdks` stays: it is already public. The snapshot PR adds a commit on top of it; don't rewrite or force-push `main`.
