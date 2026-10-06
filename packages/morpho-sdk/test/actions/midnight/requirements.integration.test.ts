@@ -440,11 +440,13 @@ describe("Midnight requirements on fork", () => {
         accountAddress: client.account.address,
         target: { type: "units", units: amount, maxBuyerAssets: amount },
         takeableOffers: [
-          await prepareTakeableOffer({
-            client,
-            buy: false,
-            units: 2n * amount,
-          }),
+          (
+            await prepareTakeableOffer({
+              client,
+              buy: false,
+              units: 2n * amount,
+            })
+          ).takeableOffer,
         ],
         maxContinuousFee: maxUint256,
         deadline: maxUint256,
@@ -493,7 +495,7 @@ describe("Midnight requirements on fork", () => {
       client,
     }) => {
       const { midnightEntity, read, withdraw } = await setup(client);
-      const lendOffer = await prepareTakeableOffer({
+      const { takeableOffer: lendOffer } = await prepareTakeableOffer({
         client,
         buy: true,
         units: 4n * amount,
@@ -564,7 +566,7 @@ describe("Midnight requirements on fork", () => {
         ],
       });
       await expect(readWithdrawable()).resolves.toBe(repaid);
-      const lendOffer = await prepareTakeableOffer({
+      const { takeableOffer: lendOffer } = await prepareTakeableOffer({
         client,
         buy: true,
         units: 4n * amount,
@@ -591,7 +593,7 @@ describe("Midnight requirements on fork", () => {
     }) => {
       const { read, withdraw } = await setup(client);
       const half = amount / 2n;
-      const staleOffer = await prepareTakeableOffer({
+      const { takeableOffer: staleOffer } = await prepareTakeableOffer({
         client,
         buy: true,
         units: half,
@@ -611,7 +613,7 @@ describe("Midnight requirements on fork", () => {
         ),
       ).rejects.toThrow(toFunctionSelector("OutOfOffers()"));
 
-      const freshOffer = await prepareTakeableOffer({
+      const { takeableOffer: freshOffer } = await prepareTakeableOffer({
         client,
         buy: true,
         units: amount,
@@ -627,7 +629,7 @@ describe("Midnight requirements on fork", () => {
 
     test("enforces net proceeds bounds", async ({ client }) => {
       const { read, withdraw } = await setup(client);
-      const lendOffer = await prepareTakeableOffer({
+      const { takeableOffer: lendOffer } = await prepareTakeableOffer({
         client,
         buy: true,
         units: 4n * amount,
