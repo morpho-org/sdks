@@ -55,9 +55,18 @@ describe("verifyArtifact", () => {
     execFileSync("git", ["init", "-q", repo]);
     write(repo, {
       "scripts/release/public-snapshot/allowlist.json": JSON.stringify({
-        include: ["README.md", "link.md"],
+        include: ["README.md", "link.md", "packages/*/package.json"],
       }),
       "README.md": "hello\n",
+      "packages/a/package.json": JSON.stringify({
+        name: "a",
+        version: "1.0.0",
+      }),
+      "packages/internal/package.json": JSON.stringify({
+        name: "internal",
+        version: "1.0.0",
+        private: true,
+      }),
     });
     symlinkSync("README.md", join(repo, "link.md"));
     commitAll(repo);
@@ -80,13 +89,13 @@ describe("verifyArtifact", () => {
   }
 
   test("accepts an untouched artifact", () => {
-    expect(verifyArtifact(artifact()).files).toHaveLength(2);
+    expect(verifyArtifact(artifact()).files).toHaveLength(4);
   });
 
   test("accepts an artifact generated from the given commit", () => {
     const dir = artifact();
     const repo = sources.get(dir) ?? "";
-    expect(verifyArtifact(dir, { repo, sha: "HEAD" }).files).toHaveLength(2);
+    expect(verifyArtifact(dir, { repo, sha: "HEAD" }).files).toHaveLength(4);
   });
 
   test("rejects an artifact that another commit doesn't produce", () => {
@@ -117,6 +126,16 @@ describe("verifyArtifact", () => {
         rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
         write(dir, { "tarballs/b-1.0.0.tgz": "tgz" });
         execFileSync("sh", ["-c", "sha256sum ./b-1.0.0.tgz >> SHA256SUMS"], {
+          cwd: join(dir, "tarballs"),
+        });
+      },
+    ],
+    [
+      "a public package's tarball dropped, with checksums rewritten",
+      (dir: string) => {
+        rmSync(join(dir, "tarballs/a-1.0.0.tgz"));
+        write(dir, { "tarballs/internal-1.0.0.tgz": "tgz" });
+        execFileSync("sh", ["-c", "sha256sum ./*.tgz > SHA256SUMS"], {
           cwd: join(dir, "tarballs"),
         });
       },

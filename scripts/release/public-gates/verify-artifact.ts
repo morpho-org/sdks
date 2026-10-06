@@ -18,6 +18,7 @@ import {
   generatePublicSnapshot,
   type PublicTreeManifest,
 } from "../public-snapshot/generate.ts";
+import { listPublicPackages } from "./public-packages.ts";
 
 type FileMode = PublicTreeManifest["files"][number]["mode"];
 const MODES = [
@@ -76,7 +77,8 @@ export function parseManifest(value: unknown): PublicTreeManifest {
 /**
  * Checks a gate artifact before sync: `tree/` must hold exactly the entries in
  * `public-tree.json`, with the same type, executable bit and SHA-256, and every
- * tarball must match `tarballs/SHA256SUMS`. Throws on the first difference.
+ * tarball must match `tarballs/SHA256SUMS`, with exactly one tarball per public
+ * package of the verified tree. Throws on the first difference.
  *
  * With `source`, the tree is also regenerated from git at that commit and its
  * `public-tree.json` must match byte for byte, which ties the artifact to the
@@ -178,6 +180,15 @@ export function verifyArtifact(
     tarballs.push(name);
   }
   if (tarballs.length === 0) throw new Error("Artifact has no tarballs.");
+  // The gates job chose what to pack, so the set must come from the verified tree.
+  const expectedTarballs = listPublicPackages(treeDir)
+    .map(({ tarball }) => tarball)
+    .sort();
+  if (tarballs.sort().join("\n") !== expectedTarballs.join("\n")) {
+    throw new Error(
+      `Tarballs [${tarballs.join(", ")}] don't match the public packages [${expectedTarballs.join(", ")}].`,
+    );
+  }
   for (const name of tarballs) {
     const content = readFileSync(join(dir, "tarballs", name));
     if (sums.get(name) !== createHash("sha256").update(content).digest("hex")) {
