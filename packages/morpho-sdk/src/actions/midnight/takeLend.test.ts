@@ -139,6 +139,12 @@ describe("midnightTakeLend", () => {
         target: { type: "units", units: 0n, maxBuyerAssets: 1n },
       }),
     ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        target: { type: "units", units: 1n, maxBuyerAssets: 0n },
+      }),
+    ).toThrow(NonPositiveInputError);
     expect(() => midnightTakeLend({ ...params, deadline: 0n })).toThrow(
       NonPositiveInputError,
     );
