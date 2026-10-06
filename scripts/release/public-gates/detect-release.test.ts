@@ -76,6 +76,16 @@ describe("listReleasedPackages", () => {
     ]);
   });
 
+  test("lists a package made public at an unchanged version", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0", private: true } },
+      { a: { name: "@x/a", version: "1.0.0" } },
+    ]);
+    expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([
+      { name: "@x/a", version: "1.0.0" },
+    ]);
+  });
+
   test("returns nothing for a commit that changes no version", () => {
     const repo = repoWith([
       { a: { name: "@x/a", version: "1.0.0" } },
