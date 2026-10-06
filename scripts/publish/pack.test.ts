@@ -33,14 +33,22 @@ function repoWith(manifests: Record<string, object>): string {
 
 describe("publicIdentity", () => {
   test("returns the name and version of a public package", () => {
-    expect(publicIdentity({ name: "@x/a", version: "1.0.0" })).toEqual({
+    expect(publicIdentity({ name: "@x/a", version: "1.0.0" }, "m")).toEqual({
       name: "@x/a",
       version: "1.0.0",
     });
   });
 
   test("skips private packages", () => {
-    expect(publicIdentity({ name: "@x/a", private: true })).toBeUndefined();
+    expect(
+      publicIdentity({ name: "@x/a", private: true }, "m"),
+    ).toBeUndefined();
+  });
+
+  test("returns a package marked private: false", () => {
+    expect(
+      publicIdentity({ name: "@x/a", version: "1.0.0", private: false }, "m"),
+    ).toEqual({ name: "@x/a", version: "1.0.0" });
   });
 
   test.each([
@@ -48,7 +56,9 @@ describe("publicIdentity", () => {
     { name: "a non-string name", manifest: { name: 1, version: "1.0.0" } },
     { name: "a non-object", manifest: "x" },
   ])("rejects $name", ({ manifest }) => {
-    expect(() => publicIdentity(manifest)).toThrow();
+    expect(() => publicIdentity(manifest, '"x/package.json" at HEAD')).toThrow(
+      '"x/package.json" at HEAD',
+    );
   });
 });
 
@@ -122,6 +132,13 @@ describe("releaseCommit", () => {
     const { commit } = historyRepo();
     const root = commit("1.0.0");
     expect(releaseCommit(dirs.at(-1) ?? "", pkgAt("1.0.0"))).toBe(root);
+  });
+
+  test("returns the commit that added the package after the root commit", () => {
+    const { git, commit } = historyRepo();
+    git(...COMMITTER, "commit", "-q", "--allow-empty", "-m", "root");
+    const added = commit("1.0.0");
+    expect(releaseCommit(dirs.at(-1) ?? "", pkgAt("1.0.0"))).toBe(added);
   });
 
   test("returns the merge commit for a version set on a side branch", () => {

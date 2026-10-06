@@ -61,7 +61,7 @@ export function listReleasedPackages(options: {
       );
       // Throws on an incomplete public manifest, like listPublicPackages, or a
       // release could go undetected and skip the gates.
-      const identity = publicIdentity(manifest);
+      const identity = publicIdentity(manifest, `"${path}" at ${revision}`);
       if (identity) versions.set(path, identity);
     }
     return versions;

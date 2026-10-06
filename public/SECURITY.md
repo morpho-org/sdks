@@ -132,8 +132,8 @@ Each invariant has tests tagged with its ID (for example `describe("[INV-01] Dep
 
 Two architectural rules also carry security weight:
 
-- **Action-layer purity (§1).** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
-- **Typed failures (§2, §3).** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
+- **Action-layer purity.** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
+- **Typed failures.** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
 
 ## Supported versions
 

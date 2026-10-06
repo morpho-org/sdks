@@ -26,12 +26,17 @@ export interface PublicPackage extends TarballIdentity {
  * package is private and never published.
  *
  * @param manifest - Parsed `package.json`.
+ * @param location - Where the manifest came from, for error messages, such as
+ *   `"packages/a/package.json" at HEAD`.
  * @returns The name and version.
  * @throws If a non-private manifest lacks a string name or version.
  */
-export function publicIdentity(manifest: unknown): TarballIdentity | undefined {
+export function publicIdentity(
+  manifest: unknown,
+  location: string,
+): TarballIdentity | undefined {
   if (typeof manifest !== "object" || manifest === null) {
-    throw new Error("package.json must be an object.");
+    throw new Error(`${location} must be a JSON object.`);
   }
   if ("private" in manifest && manifest.private === true) return undefined;
   if (
@@ -40,7 +45,7 @@ export function publicIdentity(manifest: unknown): TarballIdentity | undefined {
     !("version" in manifest) ||
     typeof manifest.version !== "string"
   ) {
-    throw new Error("A public package.json needs a string name and version.");
+    throw new Error(`${location} needs a "name" and a "version".`);
   }
   return { name: manifest.name, version: manifest.version };
 }
@@ -59,6 +64,7 @@ export function listPublicPackages(root: string): PublicPackage[] {
     if (!existsSync(manifestPath)) continue;
     const identity = publicIdentity(
       JSON.parse(readFileSync(manifestPath, "utf8")),
+      `"${dir}/package.json"`,
     );
     if (identity) packages.push({ dir, ...identity });
   }
@@ -76,8 +82,11 @@ export function releaseTag(pkg: TarballIdentity) {
 }
 
 /**
- * Finds the commit that set a package to its current version, so a tag created
- * by a later run still points at the commit npm provenance records. Only
+ * Finds the commit that first set a package to its current version on the
+ * mainline, so a tag created by a later run still marks where the version was
+ * set. On a normal run that is also the commit npm provenance records; if an
+ * earlier run failed before publishing, provenance records the later commit that
+ * published it instead. Only
  * first-parent history counts: a version set on a side branch is released by
  * the commit that merged it into the mainline.
  *
@@ -95,7 +104,7 @@ export function releaseCommit(root: string, pkg: PublicPackage): string {
     // The package didn't exist at that commit: no version, not an error.
     if (!git("ls-tree", "--name-only", commit, "--", path).trim()) return;
     const manifest: unknown = JSON.parse(git("show", `${commit}:${path}`));
-    return publicIdentity(manifest)?.version;
+    return publicIdentity(manifest, `"${path}" at ${commit}`)?.version;
   };
   const history = git("log", "--first-parent", "--format=%H %P", "--", path)
     .split("\n")

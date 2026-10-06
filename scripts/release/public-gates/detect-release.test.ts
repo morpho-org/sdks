@@ -132,7 +132,7 @@ describe("listReleasedPackages", () => {
       { a: { name: "@x/a" } },
     ]);
     expect(() => listReleasedPackages({ repo, sha: "HEAD" })).toThrow(
-      "string name and version",
+      '"packages/a/package.json" at HEAD needs a "name" and a "version".',
     );
   });
 

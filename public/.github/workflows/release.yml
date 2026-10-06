@@ -150,7 +150,9 @@ jobs:
 
           # Every current package version is on npm once publish succeeds, so any
           # missing tag or release is created, whichever run skipped it, on the
-          # commit that set that version (the one npm provenance records).
+          # mainline commit that first set that version. npm provenance records
+          # the commit of the run that published it, which differs from the tag
+          # only when an earlier run failed before publishing.
           # Not process substitution: a failing command must fail the step.
           node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
           if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
