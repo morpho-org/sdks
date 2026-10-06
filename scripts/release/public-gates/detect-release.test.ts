@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 
-import { listReleasedPackages } from "./detect-release.ts";
+import { formatGithubOutput, listReleasedPackages } from "./detect-release.ts";
 
 // Tests run concurrently, so directories are removed once the file is done.
 const dirs: string[] = [];
@@ -84,8 +84,52 @@ describe("listReleasedPackages", () => {
     expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([]);
   });
 
+  test("compares with an explicit base, so a bump before the head commit counts", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0" } },
+      { a: { name: "@x/a", version: "1.1.0" } },
+      { a: { name: "@x/a", version: "1.1.0", description: "edit" } },
+    ]);
+    expect(listReleasedPackages({ repo, sha: "HEAD" })).toEqual([]);
+    expect(listReleasedPackages({ repo, sha: "HEAD", base: "HEAD~2" })).toEqual(
+      [{ name: "@x/a", version: "1.1.0" }],
+    );
+  });
+
+  test("falls back to the first parent for an all-zero base", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0" } },
+      { a: { name: "@x/a", version: "1.1.0" } },
+    ]);
+    expect(
+      listReleasedPackages({ repo, sha: "HEAD", base: "0".repeat(40) }),
+    ).toEqual([{ name: "@x/a", version: "1.1.0" }]);
+  });
+
+  test("fails on a public manifest without a version", () => {
+    const repo = repoWith([
+      { a: { name: "@x/a", version: "1.0.0" } },
+      { a: { name: "@x/a" } },
+    ]);
+    expect(() => listReleasedPackages({ repo, sha: "HEAD" })).toThrow(
+      '"packages/a/package.json" at HEAD needs a "name" and a "version".',
+    );
+  });
+
   test("fails when git can't read the parent commit", () => {
     const repo = repoWith([{ a: { name: "@x/a", version: "1.0.0" } }]);
     expect(() => listReleasedPackages({ repo, sha: "HEAD" })).toThrow();
+  });
+});
+
+describe("formatGithubOutput", () => {
+  test("writes released=true and the packages for a release", () => {
+    expect(formatGithubOutput([{ name: "@x/a", version: "1.1.0" }])).toBe(
+      'released=true\npackages=[{"name":"@x/a","version":"1.1.0"}]\n',
+    );
+  });
+
+  test("writes released=false otherwise", () => {
+    expect(formatGithubOutput([])).toBe("released=false\npackages=[]\n");
   });
 });
