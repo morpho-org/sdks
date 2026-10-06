@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-import { type PackageIdentity, publicIdentity } from "../../publish/pack.ts";
+import { publicIdentity } from "../../publish/pack.ts";
+import type { TarballIdentity } from "../../publish/read-tarball-identity.ts";
 
 /**
  * Lists the public packages that are new, renamed or bumped between `base` and `sha`:
@@ -25,15 +26,15 @@ export function listReleasedPackages(options: {
   repo: string;
   sha: string;
   base?: string;
-}): PackageIdentity[] {
+}): TarballIdentity[] {
   const { repo, sha } = options;
   const base =
     options.base && !/^0+$/.test(options.base) ? options.base : `${sha}^`;
   const [
-    before = new Map<string, PackageIdentity>(),
-    after = new Map<string, PackageIdentity>(),
+    before = new Map<string, TarballIdentity>(),
+    after = new Map<string, TarballIdentity>(),
   ] = [base, sha].map((revision) => {
-    const versions = new Map<string, PackageIdentity>();
+    const versions = new Map<string, TarballIdentity>();
     // Only manifests that exist are read, so any git failure is a real error.
     const paths = execFileSync(
       "git",
@@ -83,7 +84,7 @@ export function listReleasedPackages(options: {
  * @param released - Released packages.
  * @returns `released=<bool>` and `packages=<json>` lines.
  */
-export function formatGithubOutput(released: readonly PackageIdentity[]) {
+export function formatGithubOutput(released: readonly TarballIdentity[]) {
   return `released=${released.length > 0}\npackages=${JSON.stringify(released)}\n`;
 }
 

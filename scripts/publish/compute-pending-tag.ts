@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 import { isPathInside } from "../paths.ts";
 import { getErrorMessage } from "./helpers.ts";
+import { releaseTag } from "./pack.ts";
 
 const DEFAULT_BASE_REF = "HEAD^";
 const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
@@ -105,6 +106,7 @@ export function readPreviousPackageManifest(
  *
  * @param options Tag computation options.
  * @returns The package tag to create, or undefined when the version did not change.
+ * @throws If the manifest has no name or version.
  */
 export function computePendingTag(options: {
   baseRef?: string;
@@ -133,7 +135,13 @@ export function computePendingTag(options: {
     return undefined;
   }
 
-  return `${manifest.name}-v${manifest.version}`;
+  const { name, version } = manifest;
+  if (name === undefined || version === undefined) {
+    throw new Error(
+      `"${options.manifestPath}" needs a "name" and a "version".`,
+    );
+  }
+  return releaseTag({ name, version });
 }
 
 function resolveManifestPath(

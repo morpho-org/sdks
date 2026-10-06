@@ -7,11 +7,12 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
-import { listPublicPackages, type PackageIdentity } from "./pack.ts";
+import { listPublicPackages } from "./pack.ts";
 import {
   loadBundledPacote,
   type ManifestReader,
   readTarballIdentity,
+  type TarballIdentity,
 } from "./read-tarball-identity.ts";
 import {
   type EntryLister,
@@ -23,7 +24,7 @@ import {
 import { verifyTarballManifest } from "./verify-tarball-manifest.ts";
 
 /** A tarball cleared for publishing. */
-export interface ReleaseTarball extends PackageIdentity {
+export interface ReleaseTarball extends TarballIdentity {
   readonly file: string;
 }
 
@@ -81,7 +82,7 @@ export function verifyTarballStructure(
  * @param received - Identities read from the tarballs.
  */
 export function verifyReleaseMatch(
-  expected: readonly PackageIdentity[],
+  expected: readonly TarballIdentity[],
   received: readonly ReleaseTarball[],
 ): void {
   const byName = new Map<string, ReleaseTarball>();
@@ -170,7 +171,7 @@ export function verifyChecksums(dir: string): string[] {
  */
 export async function verifyReleaseSet(options: {
   dir: string;
-  expected: readonly PackageIdentity[];
+  expected: readonly TarballIdentity[];
   tar: EntryLister;
   pacote: ManifestReader;
 }): Promise<ReleaseTarball[]> {

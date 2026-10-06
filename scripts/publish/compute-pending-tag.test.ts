@@ -209,6 +209,16 @@ describe("readPreviousPackageManifest", () => {
 });
 
 describe("computePendingTag", () => {
+  test("behavior: rejects a manifest without a name", () => {
+    expect(() =>
+      computePendingTag({
+        manifest: { version: "1.1.0" },
+        manifestPath,
+        readPreviousManifest: () => undefined,
+      }),
+    ).toThrow(`"${manifestPath}" needs a "name" and a "version".`);
+  });
+
   test("default", () => {
     const root = createGitRepo({
       name: "@morpho-org/alpha",

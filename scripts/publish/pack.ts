@@ -13,15 +13,10 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
-
-/** The npm name and version of a package. */
-export interface PackageIdentity {
-  readonly name: string;
-  readonly version: string;
-}
+import type { TarballIdentity } from "./read-tarball-identity.ts";
 
 /** A package that is published to npm. */
-export interface PublicPackage extends PackageIdentity {
+export interface PublicPackage extends TarballIdentity {
   /** Directory relative to the repository root, such as `packages/blue-sdk`. */
   readonly dir: string;
 }
@@ -34,7 +29,7 @@ export interface PublicPackage extends PackageIdentity {
  * @returns The name and version.
  * @throws If a non-private manifest lacks a string name or version.
  */
-export function publicIdentity(manifest: unknown): PackageIdentity | undefined {
+export function publicIdentity(manifest: unknown): TarballIdentity | undefined {
   if (typeof manifest !== "object" || manifest === null) {
     throw new Error("package.json must be an object.");
   }
@@ -76,7 +71,7 @@ export function listPublicPackages(root: string): PublicPackage[] {
  * @param pkg - The package.
  * @returns `<name>-v<version>`.
  */
-export function releaseTag(pkg: PackageIdentity) {
+export function releaseTag(pkg: TarballIdentity) {
   return `${pkg.name}-v${pkg.version}`;
 }
 

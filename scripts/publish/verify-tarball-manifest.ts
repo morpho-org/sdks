@@ -15,6 +15,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
+import type { TarballIdentity } from "./read-tarball-identity.ts";
 
 const NPMJS_REGISTRY_URLS = new Set([
   "https://registry.npmjs.org",
@@ -32,12 +33,6 @@ const SEMVER_PATTERN =
 export interface TarballManifest {
   readonly publishConfig?: unknown;
   readonly [key: string]: unknown;
-}
-
-/** The validated `name`/`version` identity of a packed package manifest. */
-export interface TarballIdentity {
-  readonly name: string;
-  readonly version: string;
 }
 
 /**
