@@ -10,10 +10,11 @@ export interface ReleasedPackage {
 }
 
 /**
- * Lists the public packages whose version changed between `base` and `sha`. A push
- * is a release when this is non-empty. The public-snapshot workflow also runs on a
- * manual dispatch from `main`, so a sync must check this list itself rather than
- * trust that an artifact exists.
+ * Lists the public packages that are new, renamed or bumped between `base` and `sha`:
+ * any public package whose `name` or `version` differs from `base`, including one that
+ * was private or missing there. A push is a release when this is non-empty. The
+ * public-snapshot workflow also runs on a manual dispatch from `main`, so a sync must
+ * check this list itself rather than trust that an artifact exists.
  *
  * @param options.repo - Repository path.
  * @param options.sha - Commit to check.
