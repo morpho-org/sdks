@@ -929,7 +929,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         "block.timestamp",
       );
       if (number !== undefined && hash !== undefined && timestamp !== undefined)
-        block = { number, hash, timestamp };
+        block = { number, hash: hash.toLowerCase() as Hex, timestamp };
     }
     if (rawBlockNumber !== undefined)
       fieldErrors.push("block: cannot be combined with blockNumber");

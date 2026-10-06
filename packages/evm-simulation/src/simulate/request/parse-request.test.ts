@@ -537,6 +537,15 @@ describe("parseRequest", () => {
     expect(request.blockNumber).toBeUndefined();
   });
 
+  test("behavior: lowercases a supplied block hash", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      block: { number: 1n, hash: `0x${"AB".repeat(32)}`, timestamp: 1n },
+    });
+    expect(request.block?.hash).toBe(`0x${"ab".repeat(32)}`);
+  });
+
   test("error: SimulationValidationError for block combined with blockNumber", () => {
     expect(() =>
       parse({
