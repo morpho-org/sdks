@@ -102,6 +102,16 @@ describe("scanFiles", () => {
     ["wallet-key", `PRIVATE_KEY=0x1${"a".repeat(15)}${"0".repeat(48)}`],
     ["wallet-key", `const deployerPk = "0x${"ab".repeat(32)}";`],
     ["wallet-key", `ownerPK=0x${"ab".repeat(32)}`],
+    ["wallet-key", `const privateKey = 0x${"ab".repeat(32)}n;`],
+    ["wallet-key-list", `const PRIVATE_KEYS = [0x${"ab".repeat(32)}n];`],
+    ["wallet-key", `const signingKey = "0x${"ab".repeat(32)}";`],
+    ["wallet-key", `const sk = "0x${"ab".repeat(32)}";`],
+    ["wallet-key-list", `vi.stubEnv("PRIVATE_KEY", "0x${"ab".repeat(32)}");`],
+    [
+      "wallet-key-list",
+      `vm.envOr("PRIVATE_KEY", uint256(0x${"ab".repeat(32)}));`,
+    ],
+    ["wallet-key-list", `const key = env("PK", "0x${"ab".repeat(32)}");`],
     [
       "mnemonic",
       `MNEMONIC="test test test test test test test test test test test junk legal legal legal"`,
@@ -187,6 +197,10 @@ describe("scanFiles", () => {
           "a.md",
           "ERC-4626, EIP-2612, MYSDK-12, SDK-v2, morpho-org/sdks, notion of slack, http://localhost:8545@19000000, https://x:$" +
             "{TOKEN}@github.com, market 0x" +
+            "ab".repeat(32) +
+            ", marketKey = 0x" +
+            "ab".repeat(32) +
+            ", task = 0x" +
             "ab".repeat(32),
         ),
       ]),
@@ -344,6 +358,11 @@ test.each([
   expect(scanFiles([file("a.sh", line)])).toEqual([
     expect.objectContaining({ rule: "wallet-key" }),
   ]);
+});
+
+test("ignore the Anvil default key passed as a call argument", () => {
+  const line = `vi.stubEnv("PRIVATE_KEY", "${ANVIL_KEY}");`;
+  expect(scanFiles([file("a.ts", line)])).toEqual([]);
 });
 
 test("ignore the Anvil default key passed as a CLI flag", () => {
@@ -631,6 +650,17 @@ describe("evaluate", () => {
       exitCode: 1,
       errors: ['a.md:1: linear-key: "SDK-1"'],
     });
+  });
+
+  test("redacts secrets in its messages", () => {
+    const secret = `0x${"ab".repeat(32)}`;
+    const blocking = scanFiles([file("a.ts", `const pk = "${secret}";`)]);
+    expect(blocking).toEqual([expect.objectContaining({ rule: "wallet-key" })]);
+    const { errors } = evaluate({ ...base, blocking, tarballs: 1 });
+    expect(errors).toEqual([
+      'a.ts:1: wallet-key: "pk ="… (72 characters, redacted)',
+    ]);
+    expect(errors.join("\n")).not.toContain("ab".repeat(8));
   });
 
   test("fails on an unused exception when the tree is scanned", () => {

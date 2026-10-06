@@ -15,10 +15,11 @@ export const POLICY_PATH = "scripts/release/public-gates/scan-policy.json";
 
 // Key-like names, shared by the wallet rules. No leading boundary, so prefixed
 // names such as `DEPLOYER_PRIVATE_KEY` and `walletPrivateKey` match. Any
-// `<role>_KEY` / `<role>-key` counts; camelCase `<role>Key` doesn't, since ids
-// such as `marketKey` hold 32-byte hashes.
+// `<role>_KEY` / `<role>-key` counts. Matching ignores case, so camelCase
+// matches for the listed roles (`walletKey`, `signingKey`), but not for other
+// names such as `marketKey`, which hold 32-byte hashes.
 const KEY_NAME =
-  "(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z]))";
+  "(?:priv(?:ate)?[_-]?key|secret[_-]?key|(?:signer|signing|deployer|wallet|owner|account)[_-]?key|[a-z]+[_-]key|pk(?:ey)?(?![a-z])|(?<![a-z])sk(?![a-z]))";
 // Calls that take a raw key: viem's `privateKeyToAccount`/`privateKeyToAddress`,
 // `hdKeyToAccount`, and ethers' `new Wallet(…)`/`new SigningKey(…)`.
 const KEY_SINK = String.raw`(?:privateKey|hdKey)\w*\(|\bnew\s+(?:[\w$]+\.)*(?:Wallet|SigningKey)\(`;
@@ -56,23 +57,24 @@ const RULES = {
   // `env["KEY"]`, `getEnv("KEY")` or a chain of env reads (`?? env.B ??`); `\"`
   // catches code embedded in JSON.
   "wallet-key": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK}|${KEY_FLAG})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?[\])]?\s*(?:(?:\?\?|\|\|)\s*(?![0-9a-f]{64}\b)[a-z_$][\w$]*(?:\??\.(?![0-9a-f]{64}\b)[a-z_$][\w$]*)*(?:(?:\?\.)?\[["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\]|\(["'\`](?![0-9a-f]{64}\b)[a-z_$][\w$]*["'\`]\))?\s*)*(?:(?::\s*[a-z\`][^=;\n"',]{0,40})?[:=]|\?\?|\|\|)|${KEY_SINK}|${KEY_FLAG})\s*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})n?\b`,
     "gi",
   ),
   // The same names and sinks, plus Hardhat's `accounts`, as the start of a whole
   // value: a list, a wrapper, a ternary, a fallback or a delimited string. Every
   // 64-hex value up to the end of that value is checked (see `valueSecrets`), so
   // `[ANVIL_KEY, "0x…"]`, `"0x<anvil>,0x…"` and `cond ? "0x…" : env.PK` are
-  // caught whatever comes first.
+  // caught whatever comes first. A quoted name followed by a comma starts the
+  // next call argument: `vi.stubEnv("PRIVATE_KEY", "0x…")`, checked the same way.
   "wallet-key-list": new RegExp(
-    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_SINK}|\baccounts\\?["'\`]?\s*[:=])`,
+    String.raw`(?:${KEY_NAME}\w*\\?["'\`]?\s*[:=]|${KEY_NAME}\w*\\?["'\`]\s*,|${KEY_SINK}|\baccounts\\?["'\`]?\s*[:=])`,
     "gi",
   ),
   // A hard-coded fallback or ternary branch after an env read with no assignment
   // in front, or a logical assignment: `(process.env.PK as Hex) ?? "0x…"`,
   // `env.PK ?? ("0x…" as Hex)`, `privateKey ??= "0x…"`.
   "wallet-key-fallback": new RegExp(
-    String.raw`${KEY_NAME}\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\||\?(?![.?=]))=?\s*(?:(?:\(|(?:hexToBytes|toBytes)\()\s*)*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})\b`,
+    String.raw`${KEY_NAME}\w*(?:(?![0-9a-f]{64}\b)[^;\n]){0,120}?(?:\?\?|\|\||\?(?![.?=]))=?\s*(?:(?:\(|(?:hexToBytes|toBytes)\()\s*)*\\?["'\`]?(?<secret>(?:0x)?[0-9a-f]{64})n?\b`,
     "gi",
   ),
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
@@ -102,6 +104,25 @@ const RULES = {
 } as const satisfies Record<string, RegExp>;
 
 type RuleId = keyof typeof RULES | "blocked-term";
+
+// Rules whose match holds a credential, printed redacted so a caught leak doesn't
+// end up in CI logs.
+const SECRET_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
+  "private-key",
+  "github-token",
+  "npm-token",
+  "aws-key",
+  "slack-token",
+  "anthropic-key",
+  "wallet-key",
+  "wallet-key-list",
+  "wallet-key-fallback",
+  "mnemonic",
+  "mnemonic-fallback",
+  "mnemonic-list",
+  "url-credentials",
+  "rpc-key",
+]);
 
 /** One allowed occurrence: the same rule matching the same text in matching files. */
 export interface ScanException {
@@ -373,7 +394,7 @@ export function valueSecrets(
   }
   const hex = mnemonic
     ? /["'`](?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})["'`]/gi
-    : /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})(?![\w$])/gi;
+    : /(?<![\w$])(?<secret>(?:0x)?[0-9a-f]{64})n?(?![\w$])/gi;
   const inSpan = [...source.slice(start, end).matchAll(hex)].map(
     ({ 0: match, index, groups }) => ({ match, at: start + index, groups }),
   );
@@ -549,7 +570,10 @@ export function evaluate(result: {
   if (result.treeFiles === 0) errors.push("The tree is empty.");
   if (result.tarballs === 0) errors.push("No .tgz files to scan.");
   for (const { path, line, rule, match } of result.blocking) {
-    errors.push(`${path}:${line}: ${rule}: ${JSON.stringify(match)}`);
+    const shown = SECRET_RULES.has(rule)
+      ? `${JSON.stringify(match.slice(0, 4))}… (${match.length} characters, redacted)`
+      : JSON.stringify(match);
+    errors.push(`${path}:${line}: ${rule}: ${shown}`);
   }
   // Exceptions apply to tree findings only, so stale exceptions are reported on
   // tree scans only.
