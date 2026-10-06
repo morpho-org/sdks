@@ -109,6 +109,24 @@ describe("fetchRegistryState", () => {
     });
   });
 
+  test("merges versions listed in time with the unpublished ones", async () => {
+    const result = await fetchRegistryState(pkg.name, async () =>
+      Response.json({
+        time: {
+          created: "x",
+          modified: "x",
+          "6.0.0": "x",
+          "7.0.0": "x",
+          unpublished: { time: "x", versions: ["7.0.0", "7.1.0"] },
+        },
+      }),
+    );
+    expect(result).toStrictEqual({
+      versions: [],
+      everPublished: ["6.0.0", "7.0.0", "7.1.0"],
+    });
+  });
+
   test("treats 404 as a new package", async () => {
     await expect(
       fetchRegistryState(
@@ -141,6 +159,10 @@ describe("fetchRegistryState", () => {
     ],
     [
       { versions: {}, time: { unpublished: { versions: [] } } },
+      "malformed unpublished tombstone",
+    ],
+    [
+      { "dist-tags": {}, time: { unpublished: { versions: [] } } },
       "malformed unpublished tombstone",
     ],
     [
