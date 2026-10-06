@@ -248,8 +248,8 @@ async function readCommit(github: GitHub, sha: string) {
  * GitHub-signed `createCommitOnBranch` commits, checks every one is verified and that the
  * final tree hash matches, opens or retitles the single sync PR, and enables squash
  * auto-merge with the release message. When the open sync PR already carries the tree and
- * its checks are green (`mergeStateStatus` `CLEAN`), auto-merge can't be armed, so it is
- * merged directly (`mergePullRequest`, squash, same message).
+ * GitHub can already merge it (`mergeStateStatus` `CLEAN`, `UNSTABLE` or `HAS_HOOKS`),
+ * auto-merge can't be armed, so it is merged directly (`mergePullRequest`, squash, same message).
  *
  * @param options - See {@link SyncOptions}.
  * @returns What changed.
@@ -403,8 +403,8 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
         })) as {
           node: { mergeStateStatus: string };
         };
-        // GitHub refuses auto-merge on a PR whose checks already passed.
-        if (state.node.mergeStateStatus === "CLEAN") {
+        // GitHub refuses auto-merge on a PR it can already merge.
+        if (MERGEABLE_NOW.has(state.node.mergeStateStatus)) {
           await github.graphql(MERGE_PULL_REQUEST, { input });
           log(`Sync PR #${pr.number} was already green: merged it.`);
           return { type: "merged", pr: pr.number };
@@ -532,6 +532,8 @@ const DISABLE_AUTO_MERGE = `mutation($input: DisablePullRequestAutoMergeInput!) 
   disablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`;
 
+/** States in which GitHub merges a PR now and refuses to arm auto-merge. */
+const MERGEABLE_NOW = new Set(["CLEAN", "UNSTABLE", "HAS_HOOKS"]);
 /**
  * Asks git whether `ancestor` is an ancestor of (or equal to) `descendant`, with hooks off.
  *

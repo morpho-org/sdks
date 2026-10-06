@@ -513,27 +513,30 @@ describe("syncPublic", () => {
     );
   });
 
-  test("merges a current PR whose checks already passed instead of arming auto-merge", async () => {
-    const github = new FakeGitHub({});
-    const r = release(R1, v1);
-    await syncPublic({ github, ...r });
-    const pull = github.pulls[0];
-    if (!pull) throw new Error("no pull");
-    pull.auto_merge = null;
-    github.mergeState = "CLEAN";
-    const before = github.calls.length;
-    expect(await syncPublic({ github, ...r })).toEqual({
-      type: "merged",
-      pr: 1,
-    });
-    expect(github.calls.slice(before)).not.toContain(
-      "graphql enablePullRequestAutoMerge",
-    );
-    const main = github.commits.get(github.refs.get("main") ?? "");
-    expect(treeHash(main?.files ?? new Map())).toBe(r.manifest.treeHash);
-    expect(main?.message).toContain(`Source-Commit: ${R1}`);
-    expect(pull.state).toBe("closed");
-  });
+  test.each(["CLEAN", "UNSTABLE", "HAS_HOOKS"])(
+    "merges a current PR in state %s instead of arming auto-merge",
+    async (mergeState) => {
+      const github = new FakeGitHub({});
+      const r = release(R1, v1);
+      await syncPublic({ github, ...r });
+      const pull = github.pulls[0];
+      if (!pull) throw new Error("no pull");
+      pull.auto_merge = null;
+      github.mergeState = mergeState;
+      const before = github.calls.length;
+      expect(await syncPublic({ github, ...r })).toEqual({
+        type: "merged",
+        pr: 1,
+      });
+      expect(github.calls.slice(before)).not.toContain(
+        "graphql enablePullRequestAutoMerge",
+      );
+      const main = github.commits.get(github.refs.get("main") ?? "");
+      expect(treeHash(main?.files ?? new Map())).toBe(r.manifest.treeHash);
+      expect(main?.message).toContain(`Source-Commit: ${R1}`);
+      expect(pull.state).toBe("closed");
+    },
+  );
 
   test("rebuilds an open PR with the right tree once public main moved past its base", async () => {
     const github = new FakeGitHub({});

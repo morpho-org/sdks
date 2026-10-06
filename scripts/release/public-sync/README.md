@@ -23,8 +23,8 @@ then mints the App token.
   whose head has no trailer fails the sync.
 - **Idempotency.** No commit or branch update is made when public `main`, or the open sync PR
   on top of the current `main`, already has the tree hash. The sync only re-arms squash
-  auto-merge with the release message when it isn't armed that way. If that PR's checks are already green
-  (`mergeStateStatus` `CLEAN`), auto-merge can't be armed, so the sync squash-merges it
+  auto-merge with the release message when it isn't armed that way. If GitHub can already merge that PR
+  (`mergeStateStatus` `CLEAN`, `UNSTABLE` or `HAS_HOOKS`), auto-merge can't be armed, so the sync squash-merges it
   directly (`mergePullRequest`) with the release message.
 - **Commits.** Built on scratch branch `sync/build` with `createCommitOnBranch`, which GitHub
   signs, in batches of at most 25 MB of contents. Every commit must show `verified`, and the
