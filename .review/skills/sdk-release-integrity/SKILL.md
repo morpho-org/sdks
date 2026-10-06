@@ -79,6 +79,12 @@ path), or the helpers `scripts/release/` imports (`scripts/paths.ts`,
   (pattern: `scripts/ci/claude-review-gate.ts`). Linear setup steps and
   marshalling static inputs are exempt. A new or changed CI script needs its
   test; a new one written as `.mjs` or `.js` is medium.
+  Exception: the `release` job of `public/.github/workflows/release.yml`
+  checks each `release-plan` row (tag format, ancestor commit, notes file) in
+  inline bash, because that job holds `contents: write` and must run no
+  repository code. Don't flag that loop for being inline; flag as high any
+  change that loosens an anchor or character class, drops a check, or runs
+  repository code (`node`, `pnpm`, a script) in that job.
 - **Pinning (high).** Third-party actions pin a full commit SHA with the tag
   in a trailing comment. First-party `actions/*` and `github/*` may use tags.
   Name the publisher of a newly used action so a maintainer can confirm it.
