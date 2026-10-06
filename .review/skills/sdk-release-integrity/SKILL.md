@@ -144,11 +144,11 @@ artifact-validation steps.
 ## Severity
 
 - **Critical:** script injection from attacker-controllable context; a
-  write token or publish path reachable from a fork-accessible trigger; loss of GitHub-signed release commits; enabled hooks before a
-  write-token step; publish identity read outside the consumer's own reader.
+  write token or publish path reachable from a fork-accessible trigger; loss
+  of GitHub-signed release commits; enabled hooks before a write-token step;
+  publish identity read outside the consumer's own reader.
 - **High:** any other secret exposed to a fork-accessible trigger; an
-  unpinned third-party action; a missing or widened
-  `permissions:` scope; `secrets: inherit`; `pull_request_target` running PR
+  unpinned third-party action; a missing or widened `permissions:` scope; `secrets: inherit`; `pull_request_target` running PR
   code; a write token minted without hardening or a split-job boundary; a
   required check dropped from a release workflow's `needs:`; untested
   data-deriving logic in an inline `run:` block; a new runtime or
