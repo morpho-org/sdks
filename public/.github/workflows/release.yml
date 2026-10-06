@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          while IFS=$'\t' read -r name version tgz; do
+          while IFS=$'\t' read -r -u 3 name version tgz; do
             if npm view "${name}@${version}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
               echo "Already on npm: ${name}@${version}"
               continue
@@ -115,7 +115,7 @@ jobs:
               --tag latest \
               --ignore-scripts \
               --registry https://registry.npmjs.org
-          done < "$RUNNER_TEMP/release-set.tsv"
+          done 3< "$RUNNER_TEMP/release-set.tsv"
 
   tag:
     name: Tags & GitHub Releases
