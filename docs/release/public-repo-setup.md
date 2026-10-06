@@ -69,7 +69,11 @@ gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" --input
 
 - Deployment branches: **`main` only** (custom policy, branch `main`). No tags.
 - Secrets and variables: **none**. Publishing uses OIDC only.
-- Admins can't bypass: leave "Allow administrators to bypass configured protection rules" off.
+- Admins can't bypass. The API can't set this and a new environment may allow it, so after the `PUT` open Settings → Environments → `npm`, untick "Allow administrators to bypass configured protection rules" and save. Check it:
+
+  ```bash
+  gh api "repos/$REPO/environments/npm" --jq .can_admins_bypass   # must print false
+  ```
 
 **Required reviewers: open admin decision, not yet made.** Decide before cutover. `environment-npm.json` has no reviewers; add them before the `PUT` if you choose reviewers.
 

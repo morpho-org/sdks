@@ -21,6 +21,13 @@ describe("compareVersions", () => {
     { a: "1.10.0", b: "1.9.0", sign: 1 },
     { a: "2.0.0", b: "10.0.0", sign: -1 },
     { a: "1.0.0", b: "1.0.0-beta.1", sign: 1 },
+    { a: "1.0.0-beta.2", b: "1.0.0-beta.1", sign: 1 },
+    { a: "1.0.0-beta.10", b: "1.0.0-beta.9", sign: 1 },
+    { a: "1.0.0-alpha", b: "1.0.0-beta", sign: -1 },
+    { a: "1.0.0-1", b: "1.0.0-alpha", sign: -1 },
+    { a: "1.0.0-beta", b: "1.0.0-beta.1", sign: -1 },
+    { a: "1.0.0-beta.1", b: "1.0.0-beta.1", sign: 0 },
+    { a: "1.0.0+build.1", b: "1.0.0", sign: 0 },
   ])("compares $a with $b", ({ a, b, sign }) => {
     expect(Math.sign(compareVersions(a, b))).toBe(sign);
   });
@@ -97,9 +104,22 @@ describe("fetchRegistryState", () => {
     ).rejects.toThrow("returned 503");
   });
 
-  test("fails closed on a malformed packument", async () => {
+  test.each([
+    [{ versions: {}, "dist-tags": {} }, 'no "time" object'],
+    [{ time: {}, "dist-tags": {} }, 'no "versions" object'],
+    [{ versions: {}, time: {} }, 'no "dist-tags" object'],
+    [{ versions: {}, time: {}, "dist-tags": "x" }, 'no "dist-tags" object'],
+    [
+      { versions: {}, time: {}, "dist-tags": { latest: 7 } },
+      "non-string latest",
+    ],
+    [
+      { versions: { "7.2.0": {} }, time: {}, "dist-tags": {} },
+      "versions but no latest",
+    ],
+  ])("fails closed on the malformed packument %j", async (body, message) => {
     await expect(
-      fetchRegistryState(pkg.name, async () => Response.json({ versions: {} })),
-    ).rejects.toThrow('no "time" object');
+      fetchRegistryState(pkg.name, async () => Response.json(body)),
+    ).rejects.toThrow(message);
   });
 });

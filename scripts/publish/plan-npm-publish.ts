@@ -20,26 +20,47 @@ export interface RegistryState {
 export type RegistryFetch = (url: string) => Promise<Response>;
 
 /**
- * Compares two versions by their `x.y.z` core; a prerelease sorts below its stable core.
+ * Compares two versions by SemVer precedence: the `x.y.z` core, then a prerelease
+ * sorts below its stable core, and prerelease identifiers compare one by one (numeric
+ * ones numerically and below alphanumeric ones, which compare in ASCII order).
  *
  * @returns A negative number, zero or a positive number, like a sort comparator.
  */
 export function compareVersions(a: string, b: string): number {
-  const parse = (version: string) => {
-    const match = /^(\d+)\.(\d+)\.(\d+)(-.+)?$/.exec(version);
+  const [left, right] = [a, b].map((version) => {
+    const match =
+      /^(\d+)\.(\d+)\.(\d+)(?:-([0-9a-z-]+(?:\.[0-9a-z-]+)*))?(?:\+[0-9a-z.-]+)?$/i.exec(
+        version,
+      );
     if (!match) throw new Error(`Unrecognized version "${version}".`);
     return {
       core: [Number(match[1]), Number(match[2]), Number(match[3])],
-      prerelease: match[4] != null,
+      prerelease: match[4]?.split(".") ?? [],
     };
-  };
-  const left = parse(a);
-  const right = parse(b);
+  });
+  if (left == null || right == null) throw new Error("Unreachable.");
   for (let i = 0; i < 3; i++) {
     const diff = (left.core[i] ?? 0) - (right.core[i] ?? 0);
     if (diff !== 0) return diff;
   }
-  return Number(right.prerelease) - Number(left.prerelease);
+  if (left.prerelease.length === 0 || right.prerelease.length === 0) {
+    return right.prerelease.length - left.prerelease.length;
+  }
+  for (
+    let i = 0;
+    i < Math.min(left.prerelease.length, right.prerelease.length);
+    i++
+  ) {
+    const l = left.prerelease[i] ?? "";
+    const r = right.prerelease[i] ?? "";
+    if (l === r) continue;
+    const lNum = /^\d+$/.test(l);
+    const rNum = /^\d+$/.test(r);
+    if (lNum && rNum) return Number(l) - Number(r);
+    if (lNum !== rNum) return lNum ? -1 : 1;
+    return l < r ? -1 : 1;
+  }
+  return left.prerelease.length - right.prerelease.length;
 }
 
 /**
@@ -92,24 +113,31 @@ export async function fetchRegistryState(
   if (typeof body !== "object" || body == null) {
     throw new Error(`GET ${url} returned a non-object packument.`);
   }
-  const {
-    versions,
-    time,
-    "dist-tags": distTags,
-  } = body as Record<string, unknown>;
-  const keys = (value: unknown, field: string) => {
-    if (typeof value !== "object" || value == null) {
+  const fields = body as Record<string, unknown>;
+  // versions, time and dist-tags must all be objects: a missing dist-tags would
+  // hide latest and skip the guard against moving it back.
+  const [versions, time, distTags] = (
+    ["versions", "time", "dist-tags"] as const
+  ).map((field) => {
+    const value = fields[field];
+    if (typeof value !== "object" || value == null || Array.isArray(value)) {
       throw new Error(`Packument of ${name} has no "${field}" object.`);
     }
-    return Object.keys(value);
-  };
-  const latest = (distTags as Record<string, unknown> | undefined)?.latest;
+    return value as Record<string, unknown>;
+  });
+  if (versions == null || time == null || distTags == null) {
+    throw new Error("Unreachable.");
+  }
+  const { latest } = distTags;
   if (latest != null && typeof latest !== "string") {
     throw new Error(`Packument of ${name} has a non-string latest tag.`);
   }
+  if (latest == null && Object.keys(versions).length > 0) {
+    throw new Error(`Packument of ${name} has versions but no latest tag.`);
+  }
   return {
-    versions: keys(versions, "versions"),
-    everPublished: keys(time, "time").filter(
+    versions: Object.keys(versions),
+    everPublished: Object.keys(time).filter(
       (key) => key !== "created" && key !== "modified",
     ),
     ...(latest == null ? {} : { latest }),

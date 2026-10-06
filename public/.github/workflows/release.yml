@@ -173,24 +173,35 @@ jobs:
       # the mainline commit that first set that version. npm provenance records
       # the commit of the run that published it, which differs from the tag only
       # when an earlier run failed before publishing.
-      # Only git and gh run while the token is set.
+      # Only git and gh run while the token is set. Earlier steps can write
+      # $GITHUB_ENV and $GITHUB_PATH, so PATH and the variables that load code
+      # into bash or git are reset here and both run by absolute path.
       - name: Push package tags and create GitHub Releases
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PATH: /usr/bin:/bin
+          BASH_ENV: ""
+          ENV: ""
+          LD_PRELOAD: ""
+          LD_LIBRARY_PATH: ""
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
+          GIT_CONFIG_COUNT: "0"
+          GIT_EXEC_PATH: ""
         run: |
           set -euo pipefail
-          git config core.hooksPath /dev/null
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
+          /usr/bin/git config core.hooksPath /dev/null
+          /usr/bin/git config user.name "github-actions[bot]"
+          /usr/bin/git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          /usr/bin/git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap '/usr/bin/git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
           while IFS=$'\t' read -r -u 3 tag commit; do
-            if ! git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
-              git tag "$tag" "$commit" -m "$tag"
-              git push --no-verify origin "refs/tags/${tag}"
+            if ! /usr/bin/git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+              /usr/bin/git tag "$tag" "$commit" -m "$tag"
+              /usr/bin/git push --no-verify origin "refs/tags/${tag}"
             fi
-            if ! gh release view "$tag" >/dev/null 2>&1; then
-              gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/github-releases/${tag//\//__}.md" --verify-tag
+            if ! /usr/bin/gh release view "$tag" >/dev/null 2>&1; then
+              /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/github-releases/${tag//\//__}.md" --verify-tag
             fi
           done 3< "$RUNNER_TEMP/tags.txt"
