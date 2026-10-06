@@ -49,7 +49,7 @@ import {
   midnightMarketId,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
-import { getBlueBuyCallbackAddress } from "../../midnight/blueBuyCallback.js";
+import { getBlueBuyCallbackAddress } from "../../helpers/getBlueBuyCallbackAddress.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
