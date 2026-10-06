@@ -517,6 +517,67 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('"packages/a/package.json" has a malformed "scripts"');
   });
 
+  test("error: a public file requiring a private file fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "scripts/lint/check.cjs":
+          'const { isMain } = require("../ci/workflow.cjs");\n',
+        "scripts/ci/workflow.cjs": "module.exports = { isMain: true };\n",
+      },
+      [...INCLUDE, "scripts/lint/check.cjs"],
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('"scripts/lint/check.cjs" references "scripts/ci/workflow.cjs"');
+  });
+
+  test.each([
+    { name: "tsx", command: "tsx ../../scripts/ci/x.ts" },
+    {
+      name: "node --import",
+      command: "node --import tsx ../../scripts/ci/x.ts",
+    },
+    { name: "tsc -p", command: "tsc -p ../../scripts/ci/x.ts" },
+  ])(
+    "error: a $name package script naming a private file fails the run",
+    ({ command }) => {
+      const { repo, sha } = commitRepo(
+        {
+          ...BASE_FILES,
+          "packages/a/package.json": JSON.stringify({
+            name: "@morpho-org/a",
+            scripts: { build: command },
+          }),
+          "scripts/ci/x.ts": "export {};\n",
+        },
+        INCLUDE,
+      );
+
+      expect(() =>
+        generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+      ).toThrow('references "scripts/ci/x.ts"');
+    },
+  );
+
+  test("error: a reference to a private package's build output fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { start: "node ../private/lib/esm/cli.js" },
+        }),
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('references "packages/private/lib/esm/cli.js"');
+  });
+
   test("behavior: a package script running its own build output passes", () => {
     const { repo, sha } = commitRepo(
       {

@@ -107,8 +107,8 @@ function git(repo: string, args: string[]): Buffer {
  *   a selected file is also the parent directory of another one, a symlink leaves the
  *   tree, a package manifest has no name or a malformed dependency field, a public package has a
  *   `workspace:` dependency on a private one, a public source file's relative import or
- *   a `node <path>` package script points outside the public tree (`packages/<name>/lib/`
- *   build output excepted), a package has malformed `scripts`, or `outDir` is not empty.
+ *   a package script argument points outside the public tree (a public package's
+ *   `packages/<name>/lib/` build output excepted), a package has malformed `scripts`, or `outDir` is not empty.
  */
 export function generatePublicSnapshot(options: {
   repo: string;
@@ -209,6 +209,7 @@ export function generatePublicSnapshot(options: {
   );
 
   const paths = new Set(selected.map((entry) => entry.path));
+  const repoPaths = new Set(entries.map((entry) => entry.path));
   for (const { path } of selected) {
     for (
       let parent = posix.dirname(path);
@@ -332,7 +333,9 @@ export function generatePublicSnapshot(options: {
         ...source.matchAll(
           /^\s*(?:(?:import|export)\b[^"'\n;]*?\bfrom\s*|import\s*|\}\s*from\s*)["'](\.\.?\/[^"']+)["']/gm,
         ),
-        ...source.matchAll(/\bimport\s*\(\s*["'](\.\.?\/[^"']+)["']/g),
+        ...source.matchAll(
+          /\b(?:import|require)\s*\(\s*["'](\.\.?\/[^"']+)["']/g,
+        ),
       ];
       for (const [, specifier = ""] of specifiers) {
         references.push(posix.join(posix.dirname(file.path), specifier));
@@ -365,6 +368,16 @@ export function generatePublicSnapshot(options: {
         )) {
           references.push(posix.join(posix.dirname(file.path), script));
         }
+        // Any other argument naming a private repo file (`tsx x.ts`, `tsc -p x.json`).
+        for (const token of command.split(/[\s;&|()]+/)) {
+          const target = posix.join(
+            posix.dirname(file.path),
+            token.replace(/^["']|["']$/g, ""),
+          );
+          if (repoPaths.has(target) && !paths.has(target)) {
+            references.push(target);
+          }
+        }
       }
     }
     for (const reference of references) {
@@ -374,7 +387,10 @@ export function generatePublicSnapshot(options: {
         `${reference}.ts`,
         `${reference}/index.ts`,
       ];
-      const isBuildOutput = /^packages\/[^/]+\/lib\//.test(reference);
+      const builtPackage = /^packages\/([^/]+)\/lib\//.exec(reference)?.[1];
+      const isBuildOutput =
+        builtPackage !== undefined &&
+        paths.has(`packages/${builtPackage}/package.json`);
       if (!isBuildOutput && !candidates.some((c) => paths.has(c))) {
         throw new Error(
           `"${file.path}" references "${reference}", which isn't in the public tree. Allowlist it or move it out of private paths.`,
