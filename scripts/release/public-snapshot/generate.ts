@@ -364,7 +364,7 @@ export function generatePublicSnapshot(options: {
           );
         }
         for (const [, script = ""] of command.matchAll(
-          /\bnode\s+(?:--?[\w-]+(?:=\S+|\s+(?!\S+\.[cm]?[jt]s\b)\S+)?\s+)*(?!-)(\S+\.[cm]?[jt]s)\b/g,
+          /\bnode\s+(?:--?[\w-]+(?:=\S+|\s+(?!\S+\.[cm]?[jt]s\b)\S+)?\s+)*(?!-)["']?([^\s"']+\.[cm]?[jt]s)\b/g,
         )) {
           references.push(posix.join(posix.dirname(file.path), script));
         }

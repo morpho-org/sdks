@@ -634,6 +634,45 @@ describe("generatePublicSnapshot", () => {
     ).toThrow('references "packages/private/lib/esm/cli.js"');
   });
 
+  test.each([
+    ["double", 'node "./src/index.ts"'],
+    ["single", "node './src/index.ts'"],
+  ])("behavior: a %s-quoted public node script path passes", (_, command) => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { start: command },
+        }),
+        "packages/a/src/index.ts": "export {};\n",
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).not.toThrow();
+  });
+
+  test("error: a quoted private node script path fails the run", () => {
+    const { repo, sha } = commitRepo(
+      {
+        ...BASE_FILES,
+        "packages/a/package.json": JSON.stringify({
+          name: "@morpho-org/a",
+          scripts: { build: 'node "../../scripts/release/version.ts"' },
+        }),
+        "scripts/release/version.ts": "export {};\n",
+      },
+      INCLUDE,
+    );
+
+    expect(() =>
+      generatePublicSnapshot({ repo, sha, outDir: tempDir() }),
+    ).toThrow('references "scripts/release/version.ts"');
+  });
+
   test("behavior: a package script running its own build output passes", () => {
     const { repo, sha } = commitRepo(
       {
