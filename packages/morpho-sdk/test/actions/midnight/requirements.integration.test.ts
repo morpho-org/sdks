@@ -20,6 +20,7 @@ import {
   padHex,
   parseEther,
   parseUnits,
+  toFunctionSelector,
   toHex,
   zeroAddress,
 } from "viem";
@@ -72,6 +73,10 @@ const marketData = new Market({
   tickSpacing: 1,
 });
 const marketId = MarketUtils.toId(marketData.params);
+
+/** Selectors of the MidnightBundlesV2 custom errors these tests expect. */
+const OUT_OF_OFFERS = toFunctionSelector("OutOfOffers()");
+const UNITS_TOO_LOW = toFunctionSelector("UnitsTooLow()");
 
 const offerMaker = "0x9000000000000000000000000000000000000000" as Address;
 
@@ -129,6 +134,12 @@ const prepareTakeableOffer = async (params: {
       functionName: "approve",
       args: [midnight, collateralAssets],
     });
+    const collateralBefore = await params.client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "collateral",
+      args: [marketId, offerMaker, 0n],
+    });
     const supply = params.client
       .extend(morphoViemExtension())
       .morpho.midnight(base.id)
@@ -149,7 +160,7 @@ const prepareTakeableOffer = async (params: {
         functionName: "collateral",
         args: [marketId, offerMaker, 0n],
       }),
-    ).resolves.toBe(collateralAssets);
+    ).resolves.toBe(collateralBefore + collateralAssets);
   }
 
   const tree = Tree.create([
@@ -175,11 +186,69 @@ const prepareTakeableOffer = async (params: {
   if (!item) throw new Error("expected a ratified offer");
 
   return {
-    units: params.units,
-    offer: OfferUtils.toStruct({ offer: item.offer }),
-    ratifierData: item.ratifierData,
+    root: tree.root,
+    takeableOffer: {
+      units: params.units,
+      offer: OfferUtils.toStruct({ offer: item.offer }),
+      ratifierData: item.ratifierData,
+    },
   };
 };
+
+const sendRequirements = async (
+  client: AnvilTestClient<typeof base>,
+  requirements: readonly ({ readonly to?: Address } | object)[],
+) => {
+  for (const requirement of requirements) {
+    if (!("to" in requirement)) {
+      throw new Error("expected an onchain call requirement");
+    }
+    await client.sendTransaction(
+      requirement as Parameters<typeof client.sendTransaction>[0],
+    );
+  }
+};
+
+/** Supplies 1 WETH and borrows 1 USDC through a lend offer; returns the borrower's debt. */
+const openBorrowPosition = async (client: AnvilTestClient<typeof base>) => {
+  const collateralAssets = parseEther("1");
+  const loanAssets = parseUnits("1", 6);
+  await installTestOracle(client);
+  await deployMidnightBundlesV2(client);
+  await client.deal({ erc20: wNative, amount: collateralAssets });
+  const { takeableOffer: lendOffer } = await prepareTakeableOffer({
+    client,
+    buy: true,
+    units: 2n * loanAssets,
+  });
+  const midnightEntity = client
+    .extend(morphoViemExtension())
+    .morpho.midnight(base.id);
+  const borrow = midnightEntity.supplyCollateralTakeBorrow({
+    marketData,
+    accountAddress: client.account.address,
+    collateralSupplies: [{ collateralIndex: 0n, assets: collateralAssets }],
+    target: { type: "assets", assets: loanAssets, maxUnits: 2n * loanAssets },
+    takeableOffers: [lendOffer],
+    deadline: maxUint256,
+  });
+  await sendRequirements(client, await borrow.getRequirements());
+  await client.sendTransaction(borrow.buildTx());
+  const debt = await readPosition(client, "debt");
+  expect(debt).toBeGreaterThan(0n);
+  return { midnightEntity, debt, collateralAssets };
+};
+
+const readPosition = (
+  client: AnvilTestClient<typeof base>,
+  functionName: "debt" | "credit",
+) =>
+  client.readContract({
+    address: midnight,
+    abi: midnightAbi,
+    functionName,
+    args: [marketId, client.account.address],
+  });
 
 describe("Midnight requirements on fork", () => {
   test("resolves ERC20 approvals from live token allowance state", async ({
@@ -311,7 +380,7 @@ describe("Midnight requirements on fork", () => {
       await installTestOracle(client);
       await deployMidnightBundlesV2(client);
       await client.deal({ erc20: usdc, amount });
-      const takeableOffer = await prepareTakeableOffer({
+      const { takeableOffer } = await prepareTakeableOffer({
         client,
         buy: false,
         units: 2n * amount,
@@ -390,7 +459,7 @@ describe("Midnight requirements on fork", () => {
       }),
     ).resolves.toBe(collateralAssets);
 
-    const takeableOffer = await prepareTakeableOffer({
+    const { takeableOffer } = await prepareTakeableOffer({
       client,
       buy: true,
       units: 2n * loanAssets,
@@ -431,7 +500,7 @@ describe("Midnight requirements on fork", () => {
     await installTestOracle(client);
     await deployMidnightBundlesV2(client);
     await client.deal({ erc20: wNative, amount: collateralAssets });
-    const takeableOffer = await prepareTakeableOffer({
+    const { takeableOffer } = await prepareTakeableOffer({
       client,
       buy: true,
       units: 2n * loanAssets,
@@ -533,7 +602,7 @@ describe("Midnight requirements on fork", () => {
     await installTestOracle(client);
     await deployMidnightBundlesV2(client);
     await client.deal({ erc20: wNative, amount: collateralAssets });
-    const lendOffer = await prepareTakeableOffer({
+    const { takeableOffer: lendOffer } = await prepareTakeableOffer({
       client,
       buy: true,
       units: 2n * loanAssets,
@@ -565,7 +634,7 @@ describe("Midnight requirements on fork", () => {
     expect(debt).toBeGreaterThan(0n);
 
     // The offer covers half the debt; repayEnabled repays the rest directly.
-    const borrowOffer = await prepareTakeableOffer({
+    const { takeableOffer: borrowOffer } = await prepareTakeableOffer({
       client,
       buy: false,
       units: debt / 2n,
@@ -611,5 +680,162 @@ describe("Midnight requirements on fork", () => {
         args: [marketId, account, 0n],
       }),
     ).resolves.toBe(0n);
+  });
+
+  test("take-repay-withdraw-collateral partially fills an offer larger than the target", async ({
+    client,
+  }) => {
+    const { midnightEntity, debt } = await openBorrowPosition(client);
+    const { takeableOffer: borrowOffer } = await prepareTakeableOffer({
+      client,
+      buy: false,
+      units: 2n * debt,
+    });
+    const maxBuyerAssets = 2n * debt;
+    await client.deal({ erc20: usdc, amount: maxBuyerAssets });
+    const repay = midnightEntity.takeRepayWithdrawCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: debt / 2n, maxBuyerAssets },
+      takeableOffers: [borrowOffer],
+      repayEnabled: false,
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    await sendRequirements(client, await repay.getRequirements());
+    await client.sendTransaction(repay.buildTx());
+
+    await expect(readPosition(client, "debt")).resolves.toBe(debt - debt / 2n);
+    await expect(readPosition(client, "credit")).resolves.toBe(0n);
+    // The unspent part of maxBuyerAssets is refunded.
+    await expect(
+      client.readContract({
+        address: usdc,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [client.account.address],
+      }),
+    ).resolves.toBeGreaterThan(maxBuyerAssets - debt / 2n);
+  });
+
+  test("take-repay-withdraw-collateral skips a stale offer and fills the next one", async ({
+    client,
+  }) => {
+    const { midnightEntity, debt } = await openBorrowPosition(client);
+    const stale = await prepareTakeableOffer({
+      client,
+      buy: false,
+      units: debt,
+    });
+    await client.writeContract({
+      account: offerMaker,
+      address: setterRatifier,
+      abi: setterRatifierAbi,
+      functionName: "setIsRootRatified",
+      args: [offerMaker, stale.root, false],
+    });
+    const { takeableOffer: liveOffer } = await prepareTakeableOffer({
+      client,
+      buy: false,
+      units: debt + 1n,
+    });
+    await client.deal({ erc20: usdc, amount: 2n * debt });
+    const staleOnly = midnightEntity.takeRepayWithdrawCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: maxUint256, maxBuyerAssets: 2n * debt },
+      takeableOffers: [stale.takeableOffer],
+      repayEnabled: false,
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    await sendRequirements(client, await staleOnly.getRequirements());
+    await expect(client.sendTransaction(staleOnly.buildTx())).rejects.toThrow(
+      OUT_OF_OFFERS,
+    );
+
+    const repay = midnightEntity.takeRepayWithdrawCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: maxUint256, maxBuyerAssets: 2n * debt },
+      takeableOffers: [stale.takeableOffer, liveOffer],
+      repayEnabled: false,
+      collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    await sendRequirements(client, await repay.getRequirements());
+    await client.sendTransaction(repay.buildTx());
+
+    await expect(readPosition(client, "debt")).resolves.toBe(0n);
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        args: [marketId, client.account.address, 0n],
+      }),
+    ).resolves.toBe(0n);
+  });
+
+  test.for([
+    { name: "units target above maxBuyerAssets", type: "units" },
+    { name: "assets target below minUnits", type: "assets" },
+  ] as const)(
+    "take-repay-withdraw-collateral reverts when the aggregate bound is not met ($name)",
+    async ({ type }, { client }) => {
+      const { midnightEntity, debt } = await openBorrowPosition(client);
+      const { takeableOffer: borrowOffer } = await prepareTakeableOffer({
+        client,
+        buy: false,
+        units: debt,
+      });
+      await client.deal({ erc20: usdc, amount: debt });
+      const repay = midnightEntity.takeRepayWithdrawCollateral({
+        marketData,
+        accountAddress: client.account.address,
+        target:
+          type === "units"
+            ? { type, units: debt, maxBuyerAssets: 1n }
+            : { type, assets: debt / 2n, minUnits: debt },
+        takeableOffers: [borrowOffer],
+        repayEnabled: false,
+        maxContinuousFee: maxUint256,
+        deadline: maxUint256,
+      });
+      await sendRequirements(client, await repay.getRequirements());
+
+      await expect(client.sendTransaction(repay.buildTx())).rejects.toThrow(
+        type === "units" ? OUT_OF_OFFERS : UNITS_TOO_LOW,
+      );
+      await expect(readPosition(client, "debt")).resolves.toBe(debt);
+    },
+  );
+
+  test("take-repay-withdraw-collateral reverts when offers run out and repayEnabled is false", async ({
+    client,
+  }) => {
+    const { midnightEntity, debt } = await openBorrowPosition(client);
+    const { takeableOffer: borrowOffer } = await prepareTakeableOffer({
+      client,
+      buy: false,
+      units: debt / 2n,
+    });
+    await client.deal({ erc20: usdc, amount: 2n * debt });
+    const repay = midnightEntity.takeRepayWithdrawCollateral({
+      marketData,
+      accountAddress: client.account.address,
+      target: { type: "units", units: maxUint256, maxBuyerAssets: 2n * debt },
+      takeableOffers: [borrowOffer],
+      repayEnabled: false,
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
+    });
+    await sendRequirements(client, await repay.getRequirements());
+
+    await expect(client.sendTransaction(repay.buildTx())).rejects.toThrow(
+      OUT_OF_OFFERS,
+    );
+    await expect(readPosition(client, "debt")).resolves.toBe(debt);
   });
 });
