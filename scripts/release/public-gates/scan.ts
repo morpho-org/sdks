@@ -8,14 +8,14 @@ import {
   readFileSync,
   readlinkSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import { basename, join, matchesGlob, relative, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
 
-import type {
-  TarEntry,
-  TarStreamEntry,
+import {
+  loadBundledTar,
+  type TarEntry,
+  type TarStreamEntry,
 } from "../../ci/verify-tarball-collisions.ts";
 
 /** Default location of the scan policy, relative to the repository root. */
@@ -820,45 +820,6 @@ export type TarballParser = (opts: {
   onIgnoredEntry: (entry: TarEntry) => void;
 }) => NodeJS.WritableStream;
 
-interface TarParserModule {
-  Parser: new (opts: {
-    strict: boolean;
-    onReadEntry: (entry: TarStreamEntry) => void;
-  }) => NodeJS.WritableStream & {
-    on(
-      event: "ignoredEntry",
-      listener: (entry: TarEntry) => void,
-    ): NodeJS.WritableStream;
-  };
-}
-
-function isTarParserModule(value: unknown): value is TarParserModule {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "Parser" in value &&
-    typeof value.Parser === "function"
-  );
-}
-
-/**
- * Loads the streaming parser of the node-tar bundled with npm at `npmRoot`.
- *
- * @param npmRoot - The global npm module root, as returned by `npm root -g`.
- * @returns A parser factory.
- * @throws If the bundled module has no `Parser`.
- */
-export function loadBundledTarParser(npmRoot: string): TarballParser {
-  const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
-    "tar",
-  );
-  if (!isTarParserModule(tar)) {
-    throw new Error(`Bundled tar at "${npmRoot}" does not expose Parser.`);
-  }
-  return ({ onIgnoredEntry, ...opts }) =>
-    new tar.Parser(opts).on("ignoredEntry", onIgnoredEntry);
-}
-
 /**
  * Reads every file in npm tarballs with npm's bundled node-tar, the parser npm
  * publish uses. Paths look like `<tarball>.tgz:package/...`.
@@ -872,15 +833,21 @@ export function loadBundledTarParser(npmRoot: string): TarballParser {
  */
 export async function readTarballs(
   tarballs: readonly string[],
-  parser: TarballParser = loadBundledTarParser(
-    execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(),
-  ),
+  parser?: TarballParser,
 ): Promise<ScannedFile[]> {
+  let parse = parser;
+  if (parse === undefined) {
+    const tar = loadBundledTar(
+      execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(),
+    );
+    parse = ({ onIgnoredEntry, ...opts }) =>
+      new tar.Parser(opts).on("ignoredEntry", onIgnoredEntry);
+  }
   const files: ScannedFile[] = [];
   for (const tarball of tarballs) {
     const irregular: string[] = [];
     let hasManifest = false;
-    const stream = parser({
+    const stream = parse({
       strict: true,
       onIgnoredEntry: (entry) => {
         irregular.push(

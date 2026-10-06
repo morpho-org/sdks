@@ -734,4 +734,23 @@ describe("verifyTarballEntries", () => {
       expect(() => loadBundledTar(dir)).toThrow(/does not expose list/);
     });
   });
+
+  test("error: loadBundledTar rejects a module without Parser", async () => {
+    await withTempDir(async (dir) => {
+      const npmDir = join(dir, "npm");
+      const tarDir = join(npmDir, "node_modules", "tar");
+      mkdirSync(tarDir, { recursive: true });
+      writeFileSync(join(npmDir, "package.json"), '{"name":"npm"}');
+      writeFileSync(
+        join(tarDir, "package.json"),
+        '{"name":"tar","main":"index.js"}',
+      );
+      writeFileSync(
+        join(tarDir, "index.js"),
+        "module.exports = { list: async () => {} };",
+      );
+
+      expect(() => loadBundledTar(dir)).toThrow(/and Parser/);
+    });
+  });
 });

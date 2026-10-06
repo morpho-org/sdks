@@ -38,12 +38,28 @@ export interface EntryLister {
   }): Promise<unknown>;
 }
 
-function isEntryLister(value: unknown): value is EntryLister {
+/** The node-tar streaming parser, used to read entry contents. */
+export interface TarParser {
+  /** Creates a writable stream that parses an archive. */
+  Parser: new (opts: {
+    strict: boolean;
+    onReadEntry: (entry: TarStreamEntry) => void;
+  }) => NodeJS.WritableStream & {
+    on(
+      event: "ignoredEntry",
+      listener: (entry: TarEntry) => void,
+    ): NodeJS.WritableStream;
+  };
+}
+
+function isBundledTar(value: unknown): value is EntryLister & TarParser {
   return (
     typeof value === "object" &&
     value !== null &&
     "list" in value &&
-    typeof value.list === "function"
+    typeof value.list === "function" &&
+    "Parser" in value &&
+    typeof value.Parser === "function"
   );
 }
 
@@ -51,14 +67,17 @@ function isEntryLister(value: unknown): value is EntryLister {
  * Loads node-tar bundled with the npm installation at `npmRoot`.
  *
  * @param npmRoot - The global npm module root, as returned by `npm root -g`.
- * @returns A minimal entry lister backed by npm's bundled node-tar.
+ * @returns npm's bundled node-tar, narrowed to its lister and parser.
+ * @throws If the bundled module has no `list()` or no `Parser`.
  */
-export function loadBundledTar(npmRoot: string): EntryLister {
+export function loadBundledTar(npmRoot: string): EntryLister & TarParser {
   const tar: unknown = createRequire(join(npmRoot, "npm", "package.json"))(
     "tar",
   );
-  if (!isEntryLister(tar)) {
-    throw new Error(`Bundled tar at "${npmRoot}" does not expose list().`);
+  if (!isBundledTar(tar)) {
+    throw new Error(
+      `Bundled tar at "${npmRoot}" does not expose list() and Parser.`,
+    );
   }
   return tar;
 }
