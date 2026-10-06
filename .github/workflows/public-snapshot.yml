@@ -23,6 +23,14 @@ jobs:
     outputs:
       released: ${{ steps.detect.outputs.released }}
     steps:
+      # The later jobs only run on main, so a dispatch from another ref would
+      # finish green without running the gates.
+      - name: Require main for manual runs
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from main: other refs skip the snapshot and the gates."
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
