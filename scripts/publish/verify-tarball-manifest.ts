@@ -111,6 +111,29 @@ export function verifyManifestIdentity(
 }
 
 /**
+ * Parses a stored `package.json` and rejects anything that isn't a JSON object.
+ *
+ * @param text - File contents.
+ * @param label - Where the file came from, for the error message.
+ * @returns The manifest, ready for {@link verifyTarballManifest}.
+ * @throws If the text isn't JSON or its top level isn't an object.
+ */
+export function parseTarballManifest(
+  text: string,
+  label: string,
+): TarballManifest {
+  const manifest: unknown = JSON.parse(text);
+  if (
+    manifest === null ||
+    typeof manifest !== "object" ||
+    Array.isArray(manifest)
+  ) {
+    throw new Error(`Manifest at "${label}" is not a JSON object.`);
+  }
+  return manifest as TarballManifest;
+}
+
+/**
  * Runs every manifest gate (`publishConfig` allowlist first, then identity)
  * and returns the validated `name`/`version`.
  */
@@ -134,16 +157,9 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     throw new Error(`Manifest path "${manifestPath}" is not a regular file.`);
   }
 
-  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-  if (
-    manifest === null ||
-    typeof manifest !== "object" ||
-    Array.isArray(manifest)
-  ) {
-    throw new Error(`Manifest at "${manifestPath}" is not a JSON object.`);
-  }
-
-  const { name, version } = verifyTarballManifest(manifest as TarballManifest);
+  const { name, version } = verifyTarballManifest(
+    parseTarballManifest(readFileSync(manifestPath, "utf8"), manifestPath),
+  );
   writeStdout(`${name}@${version}\n`);
 }
 

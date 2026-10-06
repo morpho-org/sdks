@@ -183,6 +183,13 @@ describe("verifyReleaseSet", () => {
     await expect(run(dir)).rejects.toThrow("Unable to list tarball");
   });
 
+  test("rejects a package.json that isn't a JSON object", async () => {
+    const dir = tarballs({ "a.tgz": { "package/package.json": "null" } });
+    await expect(run(dir)).rejects.toThrow(
+      'Manifest at "a.tgz:package/package.json" is not a JSON object.',
+    );
+  });
+
   test("rejects a disallowed publishConfig", async () => {
     const dir = tarballs({
       "a.tgz": {

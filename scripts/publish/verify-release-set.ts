@@ -21,7 +21,10 @@ import {
   type TarEntry,
   verifyTarballEntries,
 } from "./verify-tarball-collisions.ts";
-import { verifyTarballManifest } from "./verify-tarball-manifest.ts";
+import {
+  parseTarballManifest,
+  verifyTarballManifest,
+} from "./verify-tarball-manifest.ts";
 
 /** A tarball cleared for publishing. */
 export interface ReleaseTarball extends TarballIdentity {
@@ -196,10 +199,13 @@ export async function verifyReleaseSet(options: {
     });
     verifyTarballStructure(file, entries);
     verifyTarballEntries(entries);
-    const { name, version } = await readTarballIdentity(path, options.pacote);
     const stored = verifyTarballManifest(
-      JSON.parse(Buffer.concat(manifestChunks).toString("utf8")),
+      parseTarballManifest(
+        Buffer.concat(manifestChunks).toString("utf8"),
+        `${file}:package/package.json`,
+      ),
     );
+    const { name, version } = await readTarballIdentity(path, options.pacote);
     if (stored.name !== name || stored.version !== version) {
       throw new Error(
         `Tarball "${file}": package.json says ${stored.name}@${stored.version} but npm would publish ${name}@${version}.`,
