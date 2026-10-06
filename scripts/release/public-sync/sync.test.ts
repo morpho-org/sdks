@@ -84,6 +84,8 @@ class FakeGitHub implements GitHub {
   signCommits = true;
   /** `mergeStateStatus` the PR reports. */
   mergeState = "BLOCKED";
+  /** States reported before `mergeState`, one per query. */
+  mergeStates: string[] = [];
   /** Adds a stray file to every built commit, so its tree is wrong. */
   corruptTree = false;
   /** Reports every recursive tree listing as truncated. */
@@ -240,7 +242,9 @@ class FakeGitHub implements GitHub {
     const name = /\{\s*(\w+)\(/.exec(query)?.[1] ?? "";
     this.calls.push(`graphql ${name}`);
     if (name === "node") {
-      return { node: { mergeStateStatus: this.mergeState } };
+      return {
+        node: { mergeStateStatus: this.mergeStates.shift() ?? this.mergeState },
+      };
     }
     const pull = () => {
       const pr = this.pulls[Number(String(input.pullRequestId).slice(3)) - 1];
@@ -537,6 +541,50 @@ describe("syncPublic", () => {
       expect(pull.state).toBe("closed");
     },
   );
+
+  test("re-reads an UNKNOWN merge state before choosing merge or auto-merge", async () => {
+    const github = new FakeGitHub({});
+    const r = release(R1, v1);
+    await syncPublic({ github, ...r });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    pull.auto_merge = null;
+    github.mergeStates = ["UNKNOWN", "UNKNOWN"];
+    github.mergeState = "CLEAN";
+    const waits: number[] = [];
+    const before = github.calls.length;
+    expect(
+      await syncPublic({
+        github,
+        ...r,
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      }),
+    ).toEqual({ type: "merged", pr: 1 });
+    expect(waits).toHaveLength(2);
+    expect(
+      github.calls.slice(before).filter((call) => call === "graphql node"),
+    ).toHaveLength(3);
+    expect(github.calls.slice(before)).not.toContain(
+      "graphql enablePullRequestAutoMerge",
+    );
+  });
+
+  test("arms auto-merge when the merge state stays UNKNOWN", async () => {
+    const github = new FakeGitHub({});
+    const r = release(R1, v1);
+    await syncPublic({ github, ...r });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    pull.auto_merge = null;
+    github.mergeState = "UNKNOWN";
+    expect(await syncPublic({ github, ...r, sleep: async () => {} })).toEqual({
+      type: "pr-current",
+      pr: 1,
+    });
+    expect(github.calls).toContain("graphql enablePullRequestAutoMerge");
+  });
 
   test("rebuilds an open PR with the right tree once public main moved past its base", async () => {
     const github = new FakeGitHub({});

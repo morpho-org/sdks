@@ -176,7 +176,7 @@ export type SyncOutcome =
   | { readonly type: "up-to-date" }
   /** The open sync PR already carries this tree on the current `main`. */
   | { readonly type: "pr-current"; readonly pr: number }
-  /** The open sync PR carried this tree with its checks already passed, so it was merged. */
+  /** The open sync PR carried this tree and GitHub could already merge it (`CLEAN`, `UNSTABLE` or `HAS_HOOKS`), so it was merged. */
   | { readonly type: "merged"; readonly pr: number }
   /** The sync PR was opened, or updated to this release. */
   | { readonly type: "opened" | "updated"; readonly pr: number };
@@ -192,6 +192,8 @@ export interface SyncOptions {
   readonly isAncestor: (ancestor: string, descendant: string) => boolean;
   readonly log?: (message: string) => void;
   readonly maxBatchBytes?: number;
+  /** Waits before re-reading a merge state GitHub is still computing. Defaults to a real timer. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 interface GitCommit {
@@ -398,15 +400,28 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
           commitBody: message.body,
           expectedHeadOid: pr.head.sha,
         };
-        const state = (await github.graphql(MERGE_STATE, {
-          id: pr.node_id,
-        })) as {
-          node: { mergeStateStatus: string };
-        };
+        const sleep =
+          options.sleep ??
+          ((ms: number) =>
+            new Promise<void>((resolve) => setTimeout(resolve, ms)));
+        let mergeState = "UNKNOWN";
+        // GitHub computes the merge state lazily: `UNKNOWN` until it has.
+        for (let attempt = 0; attempt < MERGE_STATE_ATTEMPTS; attempt++) {
+          if (attempt > 0) await sleep(MERGE_STATE_DELAY_MS);
+          const state = (await github.graphql(MERGE_STATE, {
+            id: pr.node_id,
+          })) as {
+            node: { mergeStateStatus: string };
+          };
+          mergeState = state.node.mergeStateStatus;
+          if (mergeState !== "UNKNOWN") break;
+        }
         // GitHub refuses auto-merge on a PR it can already merge.
-        if (MERGEABLE_NOW.has(state.node.mergeStateStatus)) {
+        if (MERGEABLE_NOW.has(mergeState)) {
           await github.graphql(MERGE_PULL_REQUEST, { input });
-          log(`Sync PR #${pr.number} was already green: merged it.`);
+          log(
+            `Sync PR #${pr.number} was already mergeable (${mergeState}): merged it.`,
+          );
           return { type: "merged", pr: pr.number };
         }
         await github.graphql(ENABLE_AUTO_MERGE, { input });
@@ -534,6 +549,9 @@ const DISABLE_AUTO_MERGE = `mutation($input: DisablePullRequestAutoMergeInput!) 
 
 /** States in which GitHub merges a PR now and refuses to arm auto-merge. */
 const MERGEABLE_NOW = new Set(["CLEAN", "UNSTABLE", "HAS_HOOKS"]);
+/** Reads of a merge state still `UNKNOWN` before arming auto-merge anyway. */
+const MERGE_STATE_ATTEMPTS = 5;
+const MERGE_STATE_DELAY_MS = 2000;
 /**
  * Asks git whether `ancestor` is an ancestor of (or equal to) `descendant`, with hooks off.
  *
