@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
-import type { PackageIdentity } from "./pack.ts";
+import type { TarballIdentity } from "./read-tarball-identity.ts";
 
 const REGISTRY = "https://registry.npmjs.org";
 
@@ -52,7 +52,7 @@ export function compareVersions(a: string, b: string): number {
  * @returns `true` to publish, `false` to skip.
  */
 export function shouldPublish(
-  { name, version }: PackageIdentity,
+  { name, version }: TarballIdentity,
   state: RegistryState | undefined,
 ): boolean {
   if (state == null) return true;
