@@ -86,6 +86,8 @@ class FakeGitHub implements GitHub {
   mergeState = "BLOCKED";
   /** Adds a stray file to every built commit, so its tree is wrong. */
   corruptTree = false;
+  /** Reports every recursive tree listing as truncated. */
+  truncateTrees = false;
   /** Runs after each built commit, e.g. to move `main` mid-sync. */
   onCommit: (() => void) | undefined;
   private counter = 0;
@@ -192,7 +194,7 @@ class FakeGitHub implements GitHub {
       );
       if (!commit) throw new GitHubApiError("missing tree", 404);
       return {
-        truncated: false,
+        truncated: this.truncateTrees,
         tree: [...commit.files].map(([file, content]) => ({
           path: file,
           type: "blob",
@@ -564,6 +566,39 @@ describe("syncPublic", () => {
     expect(github.refs.get(SYNC_BRANCH)).toBe(head);
     expect(github.pulls[0]?.title).toBe(title);
     expect(github.calls).not.toContain("PATCH repos/morpho-org/sdks/pulls/1");
+  });
+
+  test("a truncated public main tree fails before anything is written", async () => {
+    const github = new FakeGitHub({ "README.md": "placeholder" });
+    github.truncateTrees = true;
+    await expect(syncPublic({ github, ...release(R1, v1) })).rejects.toThrow(
+      "too large to list in one call",
+    );
+    expect(github.calls.every((c) => c.startsWith("GET"))).toBe(true);
+    expect(github.pulls).toHaveLength(0);
+  });
+
+  test("a rerun after a failed build reuses the leftover sync/build and opens the PR", async () => {
+    const github = new FakeGitHub({ "README.md": "placeholder" });
+    const r = release(R1, v1);
+    github.corruptTree = true;
+    await expect(syncPublic({ github, ...r })).rejects.toThrow(
+      "Nothing was published",
+    );
+    expect(github.refs.has(BUILD_BRANCH)).toBe(true);
+    expect(github.refs.has(SYNC_BRANCH)).toBe(false);
+
+    github.corruptTree = false;
+    expect(await syncPublic({ github, ...r })).toEqual({
+      type: "opened",
+      pr: 1,
+    });
+    expect(github.calls).toContain(
+      `PATCH repos/morpho-org/sdks/git/refs/heads/${BUILD_BRANCH}`,
+    );
+    expect(github.refs.has(BUILD_BRANCH)).toBe(false);
+    const head = github.commits.get(github.refs.get(SYNC_BRANCH) ?? "");
+    expect(treeHash(head?.files ?? new Map())).toBe(r.manifest.treeHash);
   });
 
   test("public main moving during the build stops the sync before sync/main moves", async () => {

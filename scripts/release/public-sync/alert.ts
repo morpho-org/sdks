@@ -156,22 +156,25 @@ async function run() {
   });
   const webhook = env.PUBLIC_SYNC_ALERT_WEBHOOK_URL;
   if (webhook) {
-    let status: number | undefined;
+    let response: Response;
     try {
-      const response = await fetch(webhook, {
+      response = await fetch(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      status = response.ok ? undefined : response.status;
     } catch (error) {
       throw new Error(`Alert webhook call failed, nobody was paged. ${text}`, {
-        cause: cause ?? error,
+        cause:
+          cause === undefined
+            ? error
+            : new AggregateError([error, cause], "Webhook and watch errors"),
       });
     }
-    if (status !== undefined) {
+    if (!response.ok) {
+      const body = (await response.text().catch(() => "")).slice(0, 500);
       throw new Error(
-        `Alert webhook answered ${status}, nobody was paged. ${text}`,
+        `Alert webhook answered ${response.status} ${JSON.stringify(body)}, nobody was paged. ${text}`,
         cause === undefined ? undefined : { cause },
       );
     }

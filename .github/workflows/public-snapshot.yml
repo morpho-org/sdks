@@ -215,12 +215,13 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: node scripts/release/public-sync/sync.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA" --base "$BEFORE_SHA"
 
-  # Pages the owner when a release commit didn't reach its sync PR.
+  # Pages the owner when a release commit didn't reach its sync PR, including
+  # when a newer run's sync cancelled this one while it waited in public-sync.
   alert:
     name: Alert on failed public sync
     needs: [detect, snapshot, gates, verify, sync]
     # A failed detect leaves released unset: alert, it may have been a release.
-    if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect.result != 'success' || needs.detect.outputs.released == 'true')
+    if: always() && (failure() || needs.sync.result == 'cancelled') && github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect.result != 'success' || needs.detect.outputs.released == 'true')
     runs-on: ubuntu-latest
     environment: public-sync-alerts
     steps:
