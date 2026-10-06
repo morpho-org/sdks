@@ -89,10 +89,12 @@ const RULES = {
   // Words are joined by spaces or tabs only, so a phrase can't run into the next line.
   // A name or sink needs a quote before the phrase, so prose such as
   // `Mnemonic: a list of twelve words …` in a README passes. Only the dotenv/shell
-  // `NAME=` shape and the `--mnemonic` flag take an unquoted phrase.
+  // `NAME=` shape, the `--mnemonic` flag and a bare YAML key at the start of a line
+  // take an unquoted phrase; the YAML one only when every word to the end of the
+  // line is BIP-39-shaped (3–8 letters), which prose with `a` or `of` is not.
   mnemonic: new RegExp(
-    String.raw`(?:(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK})\s*\\?["'\`]|(?:${MNEMONIC_NAME}\w*=(?!=)|--${MNEMONIC_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+))\s*\\?["'\`]?)(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
-    "gi",
+    String.raw`(?:(?:${MNEMONIC_NAME}\w*\\?["'\`]?[\])]?\s*(?:[:=]|(?:\?\?|\|\|)=?)|${MNEMONIC_SINK})\s*\\?["'\`]|(?:${MNEMONIC_NAME}\w*=(?!=)|--${MNEMONIC_NAME}\w*(?:[ \t]*\\\n\s*|[ \t]+))\s*\\?["'\`]?|^[ \t]*-?[ \t]*${MNEMONIC_NAME}\w*:[ \t]*(?=(?:[a-z]{3,8}[ \t]+){11,23}[a-z]{3,8}[ \t]*$))(?<secret>[a-z]+(?:[ \t]+[a-z]+){11,23})\b`,
+    "gim",
   ),
   // A seed phrase hard-coded behind an env read or in a ternary branch:
   // `mnemonicToAccount(process.env.M ?? "…")`, `mnemonic: env.M ? env.M : ("…")`.

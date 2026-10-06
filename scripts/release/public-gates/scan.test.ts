@@ -1063,3 +1063,23 @@ test.each([
     expect.objectContaining({ rule: "mnemonic" }),
   );
 });
+
+test.each([
+  `MNEMONIC: legal winner thank year wave sausage worth useful legal winner thank yellow`,
+  `  - seed_phrase: legal winner thank year wave sausage worth useful legal winner thank yellow`,
+])("flag an unquoted mnemonic as a YAML value: %s", (line) => {
+  expect(scanFiles([file("config.yml", line)])).toContainEqual(
+    expect.objectContaining({ rule: "mnemonic" }),
+  );
+});
+
+test("pass YAML-shaped prose with short words after a mnemonic key", () => {
+  expect(
+    scanFiles([
+      file(
+        "config.yml",
+        "mnemonic: a list of twelve or more words that you must keep private and never share",
+      ),
+    ]),
+  ).toEqual([]);
+});
