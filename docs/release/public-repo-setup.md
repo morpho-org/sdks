@@ -24,7 +24,7 @@ CONFIG=scripts/release/public-repo-config
 
 ## 2. `main` ruleset A, "only the bot"
 
-Only the sync App can move `main`, and only with signed commits. Squash merges made through GitHub are signed by GitHub.
+Only the sync App can move `main`. Signed commits are required by ruleset B, which the App can't bypass; squash merges made through GitHub are signed by GitHub.
 
 1. Find the sync App's ID (org Settings → GitHub Apps → the sync App → App ID).
 2. Replace `"actor_id": 0` in `ruleset-main-only-the-bot.json` with that ID. It must be the only bypass actor; no team, role or deploy key.
@@ -34,7 +34,7 @@ Only the sync App can move `main`, and only with signed commits. Squash merges m
    gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-main-only-the-bot.json"
    ```
 
-Rules: restrict updates, require signed commits. Force pushes and deletions are blocked in ruleset B, which nobody can bypass, so a leaked App key can't rewrite or delete `main`.
+Rules: restrict updates. Signed commits, force pushes and deletions are enforced in ruleset B, which nobody can bypass, so a leaked App key can't rewrite or delete `main`.
 
 ## 3. `main` ruleset B, "always checked"
 
@@ -44,7 +44,7 @@ Nobody, including the App and admins, gets to `main` without a pull request on a
 gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-main-always-checked.json"
 ```
 
-Rules: block force pushes, restrict deletions, pull request required (0 approvals: the content was reviewed in `sdks-internal`, and the App merges), squash only, required status check `ci` from GitHub Actions (integration 15368), **require branches to be up to date** (`strict_required_status_checks_policy`). Bypass list is empty.
+Rules: block force pushes, restrict deletions, require signed commits, pull request required (0 approvals: the content was reviewed in `sdks-internal`, and the App merges), squash only, required status check `ci` from GitHub Actions (integration 15368), **require branches to be up to date** (`strict_required_status_checks_policy`). Bypass list is empty.
 
 The `ci` check is the `ci` job of `.github/workflows/ci.yml`. Don't rename that job without updating this ruleset.
 
