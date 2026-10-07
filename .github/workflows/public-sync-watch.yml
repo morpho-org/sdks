@@ -1,0 +1,67 @@
+name: Public sync watch
+
+# Alerts when the sync PR on public morpho-org/sdks stays open past
+# MAX_AGE_MINUTES: its CI failed, a check is stuck, or auto-merge is off, and while
+# no sync PR is open but the newest one was closed without merging. Also
+# alerts (watch-failed) when it can't check the sync PR. Alerts as well while the
+# newest public release.yml run on main since the last success ended other than
+# success, or hasn't completed MAX_AGE_MINUTES after its latest attempt started
+# (queued, waiting for approval). A later success clears it.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-sync-watch
+  cancel-in-progress: false
+
+jobs:
+  stale-sync-pr:
+    name: Check sync PR age
+    runs-on: ubuntu-latest
+    environment: public-sync-alerts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # TBD (SDK-1371): the alert channel (its incoming webhook), owner and threshold aren't chosen yet.
+      - name: Alert on a stale sync PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAX_AGE_MINUTES: ${{ vars.PUBLIC_SYNC_MAX_PR_AGE_MINUTES || '60' }}
+          PUBLIC_SYNC_ALERT_WEBHOOK_URL: ${{ secrets.PUBLIC_SYNC_ALERT_WEBHOOK_URL }}
+          PUBLIC_SYNC_ALERT_OWNER: ${{ vars.PUBLIC_SYNC_ALERT_OWNER }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/release/public-sync/alert.ts stale
+
+  failed-release:
+    name: Check public release run
+    runs-on: ubuntu-latest
+    environment: public-sync-alerts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Alert on a failed public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAX_AGE_MINUTES: ${{ vars.PUBLIC_SYNC_MAX_PR_AGE_MINUTES || '60' }}
+          PUBLIC_SYNC_ALERT_WEBHOOK_URL: ${{ secrets.PUBLIC_SYNC_ALERT_WEBHOOK_URL }}
+          PUBLIC_SYNC_ALERT_OWNER: ${{ vars.PUBLIC_SYNC_ALERT_OWNER }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/release/public-sync/alert.ts release

@@ -1,8 +1,9 @@
 name: Public snapshot
 
 # Builds the public tree for a release commit and runs the public gates on it.
-# Only an artifact from a passing run may be synced to the public repo, where
-# merging triggers the npm release. Nothing here holds a secret or write access.
+# Only an artifact from a passing run is synced to the public repo, where
+# merging triggers the npm release. Only the `sync` job holds a write token, for
+# public morpho-org/sdks; it installs and runs no dependency code.
 
 on:
   push:
@@ -149,3 +150,97 @@ jobs:
           tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
           node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA"
           node scripts/release/public-gates/scan.ts --tarballs "$RUNNER_TEMP/public/tarballs"
+
+  # Opens or updates the single sync PR on public morpho-org/sdks and arms its
+  # squash auto-merge. Split-job boundary: a fresh full-history checkout, the
+  # verified tree artifact, no install, hooks checked, then the token is minted.
+  sync:
+    name: Open public sync PR
+    needs: [detect, verify]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment: public-sync
+    concurrency:
+      group: public-sync
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          # The ordering check needs every release commit.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-tree-${{ github.sha }}
+          path: ${{ runner.temp }}
+          digest-mismatch: error
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-tarballs-${{ github.sha }}
+          path: ${{ runner.temp }}/public/tarballs
+          digest-mismatch: error
+
+      - name: Verify artifact and check for git hooks
+        run: |
+          tar -xf "$RUNNER_TEMP/public-tree.tar" -C "$RUNNER_TEMP/public"
+          node scripts/release/public-gates/verify-artifact.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA"
+          if [ -n "$(find .git/hooks -mindepth 1 ! -type d ! -name '*.sample' -print -quit)" ]; then
+            echo "::error::Unexpected git hooks before minting the public sync token."
+            exit 1
+          fi
+
+      - name: Mint public sync token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PUBLIC_SYNC_APP_ID }}
+          private-key: ${{ secrets.PUBLIC_SYNC_APP_PRIVATE_KEY }}
+          owner: morpho-org
+          repositories: sdks
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Open or update the sync PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/release/public-sync/sync.ts --dir "$RUNNER_TEMP/public" --sha "$GITHUB_SHA" --base "$BEFORE_SHA"
+
+  # Pages the owner when a release commit didn't reach its sync PR, including
+  # when a job was cancelled, such as a sync superseded while it waited in
+  # public-sync.
+  alert:
+    name: Alert on failed public sync
+    needs: [detect, snapshot, gates, verify, sync]
+    # A failed detect leaves released unset: alert, it may have been a release.
+    if: always() && (failure() || contains(needs.*.result, 'cancelled')) && github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect.result != 'success' || needs.detect.outputs.released == 'true')
+    runs-on: ubuntu-latest
+    environment: public-sync-alerts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # TBD (SDK-1371): the alert channel (its incoming webhook) and owner aren't chosen yet.
+      - name: Alert
+        env:
+          PUBLIC_SYNC_ALERT_WEBHOOK_URL: ${{ secrets.PUBLIC_SYNC_ALERT_WEBHOOK_URL }}
+          PUBLIC_SYNC_ALERT_OWNER: ${{ vars.PUBLIC_SYNC_ALERT_OWNER }}
+          RELEASE_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/release/public-sync/alert.ts failed
