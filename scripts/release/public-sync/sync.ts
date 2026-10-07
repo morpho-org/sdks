@@ -528,8 +528,8 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     nodeId = pr.node_id;
     // GitHub moves an open PR's head after a ref update in the background.
     let prHead: string | undefined;
-    for (let attempt = 0; attempt < MERGE_STATE_ATTEMPTS; attempt++) {
-      if (attempt > 0) await sleep(MERGE_STATE_DELAY_MS);
+    for (let attempt = 0; attempt < PR_HEAD_ATTEMPTS; attempt++) {
+      if (attempt > 0) await sleep(PR_HEAD_DELAY_MS);
       const current = (await github.rest(
         `${repoPath}/pulls/${pr.number}`,
       )) as PullRequest;
@@ -576,6 +576,9 @@ const MERGEABLE_NOW = new Set(["CLEAN", "UNSTABLE", "HAS_HOOKS"]);
 /** Reads of a merge state still `UNKNOWN` before arming auto-merge anyway. */
 const MERGE_STATE_ATTEMPTS = 5;
 const MERGE_STATE_DELAY_MS = 2000;
+/** Reads of an updated PR before failing because its head hasn't moved to the new `sync/main`. */
+const PR_HEAD_ATTEMPTS = 5;
+const PR_HEAD_DELAY_MS = 2000;
 /**
  * Asks git whether `ancestor` is an ancestor of (or equal to) `descendant`, with hooks off.
  *
