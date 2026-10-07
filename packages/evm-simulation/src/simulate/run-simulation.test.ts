@@ -192,7 +192,7 @@ describe.sequential("runSimulation", () => {
     expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
   });
 
-  test("error: a successor whose parentHash is not the supplied block hash is rejected", async () => {
+  test("behavior: a mixed-case supplied block hash matches the successor parentHash", async () => {
     const actual = await vi.importActual<typeof import("./backends/index.js")>(
       "./backends/index.js",
     );
@@ -207,7 +207,7 @@ describe.sequential("runSimulation", () => {
           {
             number: numberToHex(STATE_BLOCK + 1n),
             hash: `0x${"cd".repeat(32)}`,
-            parentHash: `0x${"ef".repeat(32)}`,
+            parentHash: STATE_BLOCK_HASH,
             timestamp: numberToHex(STATE_BLOCK_TIMESTAMP + 12n),
             calls: [
               { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
@@ -216,17 +216,16 @@ describe.sequential("runSimulation", () => {
         ]);
       }),
     );
-    await expect(
-      simulate(config, {
-        chainId: CHAIN_ID,
-        transactions: [TRANSACTION],
-        block: {
-          number: STATE_BLOCK,
-          hash: STATE_BLOCK_HASH,
-          timestamp: STATE_BLOCK_TIMESTAMP,
-        },
-      }),
-    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
+    const result = await simulate(config, {
+      chainId: CHAIN_ID,
+      transactions: [TRANSACTION],
+      block: {
+        number: STATE_BLOCK,
+        hash: STATE_BLOCK_HASH.toUpperCase().replace("0X", "0x") as Hex,
+        timestamp: STATE_BLOCK_TIMESTAMP,
+      },
+    });
+    expect(result.calls).toHaveLength(1);
     expect(methods).toEqual(["eth_simulateV1"]);
   });
 
