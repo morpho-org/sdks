@@ -166,7 +166,8 @@ export interface SimulationCall {
    * Gas consumed by this call's root frame, not a safe gas limit. This is
    * post-refund consumption and does not account for EIP-150's 63/64 rule in
    * nested calls, so consumers deriving a limit must add their own headroom,
-   * larger than headroom derived from `eth_estimateGas`.
+   * larger than headroom derived from `eth_estimateGas`. On Monad it reports the
+   * call's gas limit (150M by default) instead of gas consumed.
    */
   readonly gasUsed: bigint;
 }

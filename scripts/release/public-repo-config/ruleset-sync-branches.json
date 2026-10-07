@@ -1,0 +1,22 @@
+{
+  "name": "sync/*: only the bot",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": { "include": ["refs/heads/sync/*"], "exclude": [] }
+  },
+  "bypass_actors": [
+    {
+      "actor_id": 0,
+      "actor_type": "Integration",
+      "bypass_mode": "always"
+    }
+  ],
+  "rules": [
+    { "type": "creation" },
+    {
+      "type": "update",
+      "parameters": { "update_allows_fetch_and_merge": false }
+    }
+  ]
+}

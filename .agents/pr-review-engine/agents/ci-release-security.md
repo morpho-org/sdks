@@ -31,7 +31,9 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 
 ### Untested inline CI logic (HIGH)
 
-- A `run:` block that derives a decision or a value from data — parses API responses, filters or counts records, computes step outputs, or decides pass/fail — via inline `jq`/`awk`/shell. Not in scope: linear setup sequences (install, `sysctl`, `cp`), a single command with a static error message on failure, or marshalling static workflow inputs into command arguments. Per AGENTS.md §10 that logic belongs in a TypeScript script under `scripts/ci/` (run as `node <script>.ts`) with colocated `*.test.ts` in the `scripts` project (pattern: `scripts/ci/claude-review-gate.ts`); the step only invokes it. Also flag a new or changed script under `scripts/ci/` or `scripts/release/` that lands without a matching `*.test.ts` change, a new CI script written as `.mjs`/`.js` instead of `.ts` (**medium**), and a step that runs the workspace copy of such a script after the workspace has been switched to the PR head instead of the trusted default-branch copy.
+- A `run:` block that derives a decision or a value from data — parses API responses, filters or counts records, computes step outputs, or decides pass/fail — via inline `jq`/`awk`/shell. Not in scope: linear setup sequences (install, `sysctl`, `cp`), a single command with a static error message on failure, or marshalling static workflow inputs into command arguments. Per AGENTS.md §10 that logic belongs in a TypeScript script under `scripts/ci/` (or `scripts/publish/` for npm publish checks that the public repository also runs) (run as `node <script>.ts`) with colocated `*.test.ts` in the `scripts` project (pattern: `scripts/ci/claude-review-gate.ts`); the step only invokes it. Also flag a new or changed script under `scripts/ci/`, `scripts/publish/` or `scripts/release/` that lands without a matching `*.test.ts` change, a new CI script written as `.mjs`/`.js` instead of `.ts` (**medium**), and a step that runs the workspace copy of such a script after the workspace has been switched to the PR head instead of the trusted default-branch copy.
+
+- Exception: the `release` job of `public/.github/workflows/release.yml` checks each `release-plan` row (tag format, ancestor commit, notes file) and that an existing tag points at the row's commit, in inline bash, because that job holds `contents: write` and must run no repository code (see [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md)). Don't flag that loop for being inline; flag as **high** any change that loosens an anchor or character class, drops a check, or runs repository code (`node`, `pnpm`, a script) in that job.
 
 ### Action pinning (HIGH)
 
@@ -42,17 +44,19 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 ### Workflow `permissions:` scopes (HIGH)
 
 - Missing top-level `permissions:` block in a new workflow — defaults to write-all on classic-permissions repos. Require an explicit `permissions:` block (job-level if scopes differ between jobs).
-- Wide scopes where narrow ones would do: `contents: write` when only `contents: read` is needed; `id-token: write` outside of OIDC/provenance-publishing jobs; `pull-requests: write` outside of bot-comment jobs.
+- Wide scopes where narrow ones would do: `contents: write` when only `contents: read` is needed; `id-token: write` outside the `publish` job of the public `public/.github/workflows/release.yml`; `pull-requests: write` outside of bot-comment jobs.
 - `secrets: inherit` passed to reusable workflows is forbidden — list secrets explicitly (per AGENTS.md §10).
 
 ### Secret exposure (HIGH)
 
 - `secrets.*` interpolated into a `run:` block where it lands in logs (shell echo, `set -x`, error paths). Use `env:` to bind the secret, then reference `$VAR` inside the script so GitHub's redaction works.
 - Secrets passed as arguments to third-party actions whose source is not pinned to a SHA.
-- **Scope widening** (per AGENTS.md §10 "Secret scoping & branch-gating"). Each secret's intended reach + sensitivity is recorded in [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md). Flag a diff that removes/loosens the `if: github.ref_name == 'main' || github.ref_name == 'next'` gate on the `version-pr`/`publish` jobs, moves a write/publish/signing secret into the ungated `test` job (every-branch), or exposes any secret to a fork-accessible trigger — **high**, **critical** for the write-token or publish path. Do **not** file "a repo secret is readable on a branch push" as a finding by itself: a low-sensitivity, write-access-only secret already repo-level on every branch (the RPC URLs) is the accepted baseline; flag only a regression of the gates above.
+- **Scope widening** (per AGENTS.md §10 "Secret scoping & branch-gating"). Each secret's intended reach + sensitivity is recorded in [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md). Flag a diff that removes/loosens the `if: github.ref_name == 'main' || github.ref_name == 'next'` gate on the `version-pr` job, moves a write/publish/signing secret into the ungated `test` job (every-branch), or exposes any secret to a fork-accessible trigger — **high**, **critical** for the write-token or publish path. Do **not** file "a repo secret is readable on a branch push" as a finding by itself: a low-sensitivity, write-access-only secret already repo-level on every branch (the RPC URLs) is the accepted baseline; flag only a regression of the gates above.
 - New secret name added to a workflow without a matching row in the inventory in [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md) — **medium**, surface for inventory parity.
 
 ### Publish-flow integrity (HIGH → CRITICAL)
+
+- Only the public `public/.github/workflows/release.yml` publishes. A workflow under `.github/workflows/` that requests `id-token: write`, runs `npm publish`/`pnpm publish`, or creates package tags or GitHub Releases adds a second publish path — **critical** (per [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md) invariants).
 
 - `npm publish` / `pnpm publish` invocations: confirm `--provenance` is set (or that publishing happens via Changesets' provenance-aware path). Loss of provenance on an existing-provenance package is a downgrade.
 - Authentication: confirm publishes use `NODE_AUTH_TOKEN` / `NPM_TOKEN` scoped to the org and not a personal access token; flag PATs.
@@ -62,12 +66,12 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 
 ### Artifact identity / path injection (HIGH → CRITICAL)
 
-Per AGENTS.md §10 — a privileged job validating an artifact from an unprivileged job must read the checked value through the consumer's own code path (for npm tarballs: bundled `pacote.manifest`, via `scripts/ci/read-tarball-identity.ts`). Flag any diff that:
+Per AGENTS.md §10 — a privileged job validating an artifact from an unprivileged job must read the checked value through the consumer's own code path (for npm tarballs: bundled `pacote.manifest`, via `scripts/publish/read-tarball-identity.ts`). Flag any diff that:
 
-- Derives the published name/version from a literal `tar -x <path>` / `tar -t | grep` / `node -p require(...)` on an extracted file instead of the pacote read. **High**. Validating the extracted `package/package.json` (the `publishConfig` allowlist in `scripts/ci/verify-tarball-manifest.ts`) is fine only while the workflow asserts its `name@version` equals the pacote identity; dropping that equality check is **high**.
-- Adds or extends hand-rolled tar/PAX/ustar/path-normalization logic under `scripts/ci/` to predict node-tar behaviour. **High** — the fix is reusing the toolchain's reader, not more emulation.
+- Derives the published name/version from a literal `tar -x <path>` / `tar -t | grep` / `node -p require(...)` on an extracted file instead of the pacote read. **High**. Validating the extracted `package/package.json` (the `publishConfig` allowlist in `scripts/publish/verify-tarball-manifest.ts`) is fine only while the workflow asserts its `name@version` equals the pacote identity; dropping that equality check is **high**.
+- Adds or extends hand-rolled tar/PAX/ustar/path-normalization logic under `scripts/ci/` or `scripts/publish/` to predict node-tar behaviour. **High** — the fix is reusing the toolchain's reader, not more emulation.
 - Removes the pacote read or demotes it below a GNU-tar structural check as the identity source of truth. **Critical**.
-- Changes to `scripts/ci/verify-tarball-collisions.ts` that loosen a segment rule or drop `strict: true` — **high**; the script may model consumer filesystem folding and pacote's `.gitignore` → `.npmignore` extraction rename, but must not parse archive bytes itself.
+- Changes to `scripts/publish/verify-tarball-collisions.ts` that loosen a segment rule or drop `strict: true` — **high**; the script may model consumer filesystem folding and pacote's `.gitignore` → `.npmignore` extraction rename, but must not parse archive bytes itself.
 
 ### Release-commit signing & write-token hardening (HIGH → CRITICAL)
 

@@ -21,6 +21,7 @@ jobs:
 
     permissions:
       contents: read # checkout
+      actions: read # upload-sarif reads the workflow run on private repos
       security-events: write # upload SARIF results to code scanning
 
     env:
@@ -32,17 +33,41 @@ jobs:
         with:
           persist-credentials: false
 
+      # zizmor's online audits read the tags of every pinned action. internal-tools
+      # (review.yml's Lupin workflow) is private, so github.token can't read it.
+      # Fork and Dependabot PRs get no secrets; they run the offline audits only.
+      - name: Mint internal-tools read token
+        if: env.CAN_UPLOAD == 'true'
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.LUPIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.LUPIN_APP_PRIVATE_KEY }}
+          owner: morpho-org
+          repositories: internal-tools
+          permission-contents: read
+
+      - name: Note skipped online audits
+        if: steps.token.outputs.token == ''
+        run: echo "::warning::No internal-tools token on this event, so zizmor ran offline only. Check changed action pins by hand."
+
       - name: Upload findings to code scanning
         if: env.CAN_UPLOAD == 'true'
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           version: 1.30.1
+          token: ${{ steps.token.outputs.token || github.token }}
+          # The default `.` input also scans public/.github/workflows.
+          online-audits: ${{ steps.token.outputs.token != '' }}
 
       # SARIF mode exits 0 on findings, so this step is what fails the check.
       - name: Fail on medium or higher findings
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           version: 1.30.1
+          token: ${{ steps.token.outputs.token || github.token }}
+          # The default `.` input also scans public/.github/workflows.
+          online-audits: ${{ steps.token.outputs.token != '' }}
           advanced-security: false
           annotations: true
           min-severity: medium

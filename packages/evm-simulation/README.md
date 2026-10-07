@@ -48,7 +48,7 @@ try {
 
 Every transaction requires a positive safe-integer `chainId` matching the top-level request. Missing, invalid or mismatched transaction chain IDs throw `SimulationValidationError` before RPC work. The backend includes the chain ID as a hex quantity in every `eth_simulateV1` call, including preparation calls and state reads, so supporting nodes reject a request targeting another chain.
 
-Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 

@@ -2,6 +2,8 @@
 
 This monorepo contains the TypeScript SDK packages used to interact with the Morpho protocol, Morpho Vaults, simulation tooling, and related test utilities.
 
+[`public/CONTRIBUTING.md`](./public/CONTRIBUTING.md) is the copy published to `morpho-org/sdks`. When you change the setup, checks or chain-listing steps here, update it in the same PR.
+
 ## Development Setup
 
 ### Prerequisites
@@ -79,7 +81,7 @@ Skip the changeset when the diff is repo metadata, non-API documentation-only, f
 
 ### Release flow (what happens after merge)
 
-After changes land on `main` or `next`, the push workflow runs lint, build, and tests. If pending changesets exist, CI runs `pnpm run version`, pushes `changeset-release/<branch>`, and opens or updates the `chore: version packages (<branch>)` release PR. The release PR merge triggers publishing — `latest` from `main`, `next` from `next`. The publish job pushes git tags and creates one GitHub Release per published package.
+After changes land on `main` or `next`, the push workflow runs lint, build, and tests. If pending changesets exist, CI runs `pnpm run version`, pushes `changeset-release/<branch>`, and opens or updates the `chore: version packages (<branch>)` release PR. Merging the `main` release PR syncs the public snapshot to `morpho-org/sdks` through an auto-merged `sync/main` PR, and that repository's `release.yml` publishes to npm, pushes git tags and creates one GitHub Release per published package. Nothing publishes from this repository.
 
 Before merging `next` back into `main`, run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 

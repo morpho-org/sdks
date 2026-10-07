@@ -1,10 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
 import {
+  addGitCommitCheck,
+  addGitTagCheck,
   aggregateSeverity,
   checkTarballFiles,
   classifyAuditSignatures,
@@ -21,6 +26,7 @@ import {
   evaluateTarballIntegrity,
   evaluateTarballLayout,
   evaluateTrustedPublisher,
+  fetchReleaseRefs,
   findInstallProblems,
   findInstallScripts,
   hasManifestBin,
@@ -288,6 +294,84 @@ describe("evaluateProvenance", () => {
     ).toMatchObject({ status: "pass" });
   });
 
+  test("accepts the public release.yml pipeline on main", async () => {
+    const releaseSigner: TestBundleVerifier = async (_bundle, options) => {
+      expect(options.certificateIdentityURI).toBe(
+        "^https://github\\.com/morpho-org/sdks/\\.github/workflows/release\\.yml@refs/heads/main$",
+      );
+      return {
+        identity: {
+          subjectAlternativeName:
+            "https://github.com/morpho-org/sdks/.github/workflows/release.yml@refs/heads/main",
+        },
+      };
+    };
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/release.yml" }),
+      ),
+      integrity,
+      releaseSigner,
+    );
+    expect(result.findings).toEqual([]);
+    expect(result.gitCommit).toBe("bedd89c1".padEnd(40, "0"));
+  });
+
+  test("fails CRITICAL for release.yml on next, which only the legacy pipeline used", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({
+          workflowPath: ".github/workflows/release.yml",
+          ref: "refs/heads/next",
+        }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL for a workflow path that is not a trusted publisher", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/publish.yml" }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.find(({ id }) => id === "provenance.signature"),
+    ).toMatchObject({
+      severity: "CRITICAL",
+      detail: "Predicate workflow path is not a trusted publish workflow.",
+    });
+  });
+
+  test("fails CRITICAL when release.yml provenance is signed by the legacy publish.yml", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/release.yml" }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
   test("fails CRITICAL when the signed payload is tampered with", async () => {
     const signedAttestation = attestations(statement());
     const envelope = signedAttestation[0]?.bundle?.dsseEnvelope;
@@ -534,7 +618,6 @@ describe("evaluateProvenance", () => {
   test.each([
     ["wrong repository", { repository: "https://github.com/other/repo" }],
     ["wrong repository_id", { repositoryId: "123" }],
-    ["wrong workflow path", { workflowPath: ".github/workflows/publish.yml" }],
     ["wrong event", { event: "pull_request" }],
     ["self-hosted builder", { builder: "https://example.com/self-hosted" }],
   ])("fails CRITICAL for %s", async (_case, overrides) => {
@@ -1013,5 +1096,148 @@ describe("selectPreviousVersion", () => {
 
   test("returns null when there is no earlier eligible version", () => {
     expect(selectPreviousVersion(packument, "1.0.0")).toBeNull();
+  });
+});
+
+describe("fetchReleaseRefs", () => {
+  const isolatedGit = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      env: isolatedGit,
+    }).trim();
+  const commit = (cwd: string, message: string) =>
+    git(
+      cwd,
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      message,
+    );
+
+  function withRepos(run: (remote: string, local: string) => void): void {
+    const root = mkdtempSync(join(tmpdir(), "verify-npm-release-"));
+    try {
+      const remote = join(root, "remote");
+      const local = join(root, "local");
+      git(root, "init", "-q", "-b", "main", remote);
+      commit(remote, "release");
+      git(remote, "tag", "pkg-v1.0.0");
+      git(root, "init", "-q", "-b", "main", local);
+      run(remote, local);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("fetches main and next when the repository has both", () => {
+    withRepos((remote, local) => {
+      git(remote, "checkout", "-q", "-b", "next");
+      commit(remote, "prerelease");
+
+      fetchReleaseRefs(local, remote);
+
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/main")).toBe(
+        git(remote, "rev-parse", "main"),
+      );
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/next")).toBe(
+        git(remote, "rev-parse", "next"),
+      );
+    });
+  });
+
+  test("fetches main and drops a stale next when the repository has no next branch", () => {
+    withRepos((remote, local) => {
+      git(remote, "checkout", "-q", "-b", "next");
+      commit(remote, "prerelease");
+      fetchReleaseRefs(local, remote);
+      git(remote, "checkout", "-q", "main");
+      git(remote, "branch", "-q", "-D", "next");
+
+      fetchReleaseRefs(local, remote);
+
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/main")).toBe(
+        git(remote, "rev-parse", "main"),
+      );
+      expect(
+        git(local, "for-each-ref", "refs/remotes/morpho-org-sdks/next"),
+      ).toBe("");
+    });
+  });
+
+  test("keeps public tags apart from the checkout's own tags and prunes deleted ones", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      git(local, "tag", "pkg-v1.0.0");
+      git(local, "tag", "pkg-v0.9.0");
+      const localTag = git(local, "rev-parse", "pkg-v1.0.0");
+
+      fetchReleaseRefs(local, remote);
+
+      expect(
+        git(
+          local,
+          "rev-parse",
+          "refs/morpho-org-sdks/tags/pkg-v1.0.0^{commit}",
+        ),
+      ).toBe(git(remote, "rev-parse", "pkg-v1.0.0"));
+      expect(git(local, "rev-parse", "refs/tags/pkg-v1.0.0")).toBe(localTag);
+      expect(
+        git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v0.9.0"),
+      ).toBe("");
+
+      git(remote, "tag", "-d", "pkg-v1.0.0");
+      fetchReleaseRefs(local, remote);
+
+      expect(
+        git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v1.0.0"),
+      ).toBe("");
+    });
+  });
+
+  test("checks commits against the public ref even when a local ref has the same short name", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      const internalCommit = git(local, "rev-parse", "HEAD");
+      git(local, "tag", "morpho-org-sdks/main");
+      fetchReleaseRefs(local, remote);
+
+      const check = (sha: string) => {
+        const checks: Parameters<typeof addGitCommitCheck>[2] = [];
+        addGitCommitCheck(sha, local, checks, []);
+        return checks[0]?.status;
+      };
+
+      expect(check(internalCommit)).not.toBe("pass");
+      expect(check(git(remote, "rev-parse", "main"))).toBe("pass");
+    });
+  });
+
+  test("checks tags against the public tag namespace, not local tags", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      git(local, "tag", "pkg-v2.0.0");
+      const localCommit = git(local, "rev-parse", "HEAD");
+      fetchReleaseRefs(local, remote);
+
+      const check = (version: string, sha: string) => {
+        const checks: Parameters<typeof addGitTagCheck>[4] = [];
+        addGitTagCheck("pkg", version, sha, local, checks, []);
+        return checks[0]?.status;
+      };
+
+      expect(check("2.0.0", localCommit)).not.toBe("pass");
+      expect(check("1.0.0", git(remote, "rev-parse", "main"))).toBe("pass");
+    });
   });
 });

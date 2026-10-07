@@ -1,0 +1,106 @@
+{
+  "version": 2,
+  "guidance": "review.md",
+  "skills": [
+    {
+      "id": "sdk-protocol-safety",
+      "title": "SDK protocol and transaction safety",
+      "description": "Protocol semantics and transaction safety in morpho-org/sdks-internal. Use when a change touches ABIs, addresses, typed data, operation routing, bundles, approvals, permits, signatures, chain or account checks, accounting or rounding math, LLTV or share-price limits, receipts or simulation. Checks that the SDK still models Morpho exactly and that a transaction moves funds and grants authority only as the caller intends. Not for public API shape or package boundaries (sdk-compatibility) or generic error handling (sdk-correctness).",
+      "path": "skills/sdk-protocol-safety/SKILL.md",
+      "agents": ["behavior", "security"]
+    },
+    {
+      "id": "sdk-compatibility",
+      "title": "SDK integrator compatibility and architecture",
+      "description": "Integrator compatibility and SDK architecture in morpho-org/sdks-internal. Use when a change alters public exports, signatures, defaults, return values, thrown errors, package boundaries, layering, the morpho-sdk facade, entity flows (getRequirements, sign, buildTx) or deprecations. Checks what existing integrators will see and whether the change respects layer ownership, stateless flows and the deprecation lifecycle. Not for protocol semantics (sdk-protocol-safety) or changesets and dependency installs (sdk-release-integrity).",
+      "path": "skills/sdk-compatibility/SKILL.md",
+      "agents": ["behavior", "design", "product"]
+    },
+    {
+      "id": "sdk-correctness",
+      "title": "SDK implementation and failure behavior",
+      "description": "Implementation and failure behavior in TypeScript code in morpho-org/sdks-internal. Use when a change touches function bodies: types and assertions, bigint units, input mutation, error classes and causes, catch blocks, promises, optional lookups with _try, fallback or retry, generated GraphQL outputs, or code that handles secrets or untrusted strings. Checks that results are right and that failures reach the caller instead of dying silently. Not for protocol math or transaction authority (sdk-protocol-safety) or public API shape (sdk-compatibility).",
+      "path": "skills/sdk-correctness/SKILL.md",
+      "agents": ["behavior", "security"]
+    },
+    {
+      "id": "sdk-evidence",
+      "title": "SDK tests and documentation",
+      "description": "Tests and documentation in morpho-org/sdks-internal. Use when a change adds or modifies exports, onchain code paths, entity flows, tests, Vitest config, JSDoc, examples, README, AGENTS.md, ADRs or other Markdown, or renames files that docs point at. Checks that tests would catch a realistic regression at the right boundary (pure, mocked transport, or pinned Anvil fork), that JSDoc and docs match the code, and that links resolve. Not for whether the code itself is correct (the other sdk-* skills).",
+      "path": "skills/sdk-evidence/SKILL.md",
+      "agents": ["behavior", "design", "product"]
+    },
+    {
+      "id": "sdk-release-integrity",
+      "title": "SDK CI, release and automation integrity",
+      "description": "CI, release and automation integrity in morpho-org/sdks-internal. Use when a change touches GitHub workflows or actions (including public/.github), scripts/ci, scripts/release or scripts/publish (and the helpers they import: scripts/workflow.ts, scripts/paths.ts and scripts/generate-midnight-package-version.ts), package.json dependencies or versions, pnpm-lock.yaml, .npmrc, pnpm-workspace.yaml, changesets, publishing, or the review and agent instructions (.review, .agents, .claude, AGENTS.md, SKILL.md files). Checks semver and changesets, dependency trust, workflow permissions and secrets, publish integrity, and that review criteria stay in sync with their source. Not for package API design (sdk-compatibility).",
+      "path": "skills/sdk-release-integrity/SKILL.md",
+      "agents": ["design", "security"]
+    }
+  ],
+  "routing": {
+    "baselineLenses": ["behavior"],
+    "pathRules": [
+      {
+        "id": "protocol-authority",
+        "paths": [
+          "packages/morpho-sdk/src/**",
+          "packages/blue-sdk/src/**",
+          "packages/blue-sdk-viem/src/**",
+          "packages/midnight-sdk/src/**",
+          "packages/wdk-protocol-lending-morpho-evm/src/**",
+          "packages/evm-simulation/src/**",
+          "packages/morpho-ts/src/**"
+        ],
+        "lenses": ["behavior", "security"],
+        "minimumRisk": "high",
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "dependencies",
+        "paths": [
+          "**/package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          ".npmrc",
+          ".changeset/**"
+        ],
+        "lenses": ["behavior", "security"],
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "review-and-agent-rules",
+        "paths": [
+          ".review/**",
+          ".agents/**",
+          ".claude/**",
+          ".codex/**",
+          "AGENTS.md",
+          "**/AGENTS.md",
+          "CLAUDE.md",
+          "**/CLAUDE.md",
+          "**/SKILL.md"
+        ],
+        "lenses": ["design"],
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "workflow-authority",
+        "paths": [
+          ".github/workflows/**",
+          ".github/actions/**",
+          "scripts/ci/**",
+          "scripts/release/**",
+          "scripts/paths.ts",
+          "scripts/generate-midnight-package-version.ts",
+          "scripts/publish/**",
+          "scripts/workflow.ts",
+          "public/.github/**"
+        ],
+        "lenses": ["security"],
+        "minimumRisk": "high",
+        "minimumDepth": "thorough"
+      }
+    ]
+  }
+}

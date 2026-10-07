@@ -1,3 +1,4 @@
+import { ChainId } from "@morpho-org/blue-sdk";
 import { type Address, type Hex, numberToHex } from "viem";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -74,6 +75,15 @@ const execution = (
       })),
     stateReads: [],
   }) as unknown as SimulationExecution;
+
+function pinnedBlockParam(fetch: ReturnType<typeof stubFetch>["fetch"]) {
+  return fetch.mock.calls
+    .map(
+      ([, init]) =>
+        JSON.parse(String(init?.body)) as { method: string; params: unknown[] },
+    )
+    .find(({ method }) => method === "eth_getBlockByNumber")?.params[0];
+}
 
 function stubFetch(calls: readonly unknown[]) {
   const methods: string[] = [];
@@ -162,7 +172,7 @@ describe.sequential("runSimulation", () => {
       "./backends/index.js",
     );
     mockExecutePlan.mockImplementationOnce(actual.executePlan);
-    const { methods } = stubFetch([
+    const { fetch, methods } = stubFetch([
       { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
     ]);
     const result = await simulate(config, {
@@ -172,6 +182,39 @@ describe.sequential("runSimulation", () => {
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
     expect(methods).toEqual(["eth_getBlockByNumber", "eth_simulateV1"]);
+    expect(pinnedBlockParam(fetch)).toBe("latest");
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
+  });
+
+  test("behavior: Monad pins to the finalized block and sends validation: true", async () => {
+    const { fetch } = stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.MonadMainnet,
+        transactions: [{ ...TRANSACTION, chainId: ChainId.MonadMainnet }],
+      },
+    );
+    expect(pinnedBlockParam(fetch)).toBe("finalized");
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
+  });
+
+  test("behavior: Monad keeps an explicit blockNumber", async () => {
+    const { fetch } = stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.MonadMainnet,
+        transactions: [{ ...TRANSACTION, chainId: ChainId.MonadMainnet }],
+        blockNumber: STATE_BLOCK,
+      },
+    );
+    expect(pinnedBlockParam(fetch)).toBe(numberToHex(STATE_BLOCK));
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
   test("behavior: a supplied block sends only eth_simulateV1", async () => {

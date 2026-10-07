@@ -10,15 +10,15 @@
  * remaining variables are those of the delegated command.
  */
 
-import { type FetchLike, main as gateMain } from "./claude-review-gate.ts";
-import { main as scrubMain } from "./scrub-transcript.ts";
-import { verify as verifyTrusted } from "./trusted-scripts.ts";
 import {
   isMain,
   readRequiredEnv,
   reportCliError,
   writeStdout,
-} from "./workflow.ts";
+} from "../workflow.ts";
+import { type FetchLike, main as gateMain } from "./claude-review-gate.ts";
+import { main as scrubMain } from "./scrub-transcript.ts";
+import { verify as verifyTrusted } from "./trusted-scripts.ts";
 
 /** Injectable argv/env/output boundaries of the CLI. */
 export interface PostClaudeOptions {

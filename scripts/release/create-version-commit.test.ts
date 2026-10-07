@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test, vi } from "vitest";
-
+import {
+  MIDNIGHT_VERSION_SOURCE_PATH,
+  renderMidnightPackageVersionSource,
+} from "../generate-midnight-package-version.ts";
 import {
   collectVersionChanges,
   createSignedVersionCommit,
@@ -19,10 +22,6 @@ import {
   main,
   pushReleaseBranchWithLease,
 } from "./create-version-commit.ts";
-import {
-  MIDNIGHT_VERSION_SOURCE_PATH,
-  renderMidnightPackageVersionSource,
-} from "./generate-midnight-package-version.ts";
 
 const tempDirs: string[] = [];
 

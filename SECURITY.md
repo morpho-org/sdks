@@ -131,7 +131,7 @@ These are the guarantees the codebase commits to ([`AGENTS.md`](./AGENTS.md) §5
 | INV-06 | Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
 | INV-07 | Accounting | Morpho Blue withdrawals and repayments never exceed the position they act on, and Midnight `redeem` never exceeds the user's credit. Vault V1/V2 `withdraw`/`redeem` and Midnight `repayWithdrawCollateral` are bounded only on-chain. Amounts fit in `uint256`; deadlines are positive. | `validateWithdrawAmount`, `validateWithdrawShares`, `validateRepayAmount`, `validateRepayShares` (Blue entity), `MidnightRedeemExceedsCreditError`, `validateUint256Field`, `validateDeadline`. |
 
-Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR.
+Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR, and add the same row to [`public/SECURITY.md`](./public/SECURITY.md): the public release gates run this lint against that copy.
 
 Two architectural rules from [`AGENTS.md`](./AGENTS.md) also carry security weight:
 
@@ -159,14 +159,12 @@ When a new major is released, the previous major stops receiving fixes. Packages
 
 ## Release integrity and verification
 
-Packages are released with [Changesets](https://github.com/changesets/changesets) from the `main` (stable) and `next` (prerelease) branches ([ADR-2026-05-12](./docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md)):
+Packages are versioned with [Changesets](https://github.com/changesets/changesets) here and published only from the public `morpho-org/sdks` repository ([`docs/release/public-repo-setup.md`](./docs/release/public-repo-setup.md)):
 
-1. Merging to `main` or `next` runs [`push.yml`](./.github/workflows/push.yml). After lint, build and tests pass, [`version-pr.yml`](./.github/workflows/version-pr.yml) opens or refreshes a release PR with GitHub-signed version commits.
-2. Merging the release PR runs [`publish.yml`](./.github/workflows/publish.yml):
-   - an unprivileged **Build & pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions;
-   - a privileged **Publish** job, in the `prod` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry;
-   - it then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
-3. Package git tags and GitHub releases are created only after npm accepts the publish.
+1. Merging to `main` runs [`push.yml`](./.github/workflows/push.yml). After lint, build and tests pass, [`version-pr.yml`](./.github/workflows/version-pr.yml) opens or refreshes a release PR with GitHub-signed version commits.
+2. Merging the release PR runs [`public-snapshot.yml`](./.github/workflows/public-snapshot.yml), which builds the allowlisted public tree and opens or updates the `sync/main` PR on `morpho-org/sdks`. It auto-merges once public `ci` passes.
+3. That merge runs the public [`release.yml`](./public/.github/workflows/release.yml): an unprivileged job packs the tarballs, a privileged **Publish** job in the `npm` environment checks them and runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**, then package git tags and GitHub releases are created. No long-lived npm token is stored, and no workflow of this repository publishes.
+4. A failed sync, a sync PR that stays open, or a failed public release posts to the release alert channel.
 
 [`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md) and [`AGENTS.md`](./AGENTS.md) §10 hold the rules these workflows must keep, including "Artifact identity: ask the consumer, don't emulate it". Changes under `.github/` and to `.changeset/config.json` need review from `@morpho-org/security` ([`CODEOWNERS`](./.github/CODEOWNERS)).
 
@@ -185,7 +183,7 @@ curl -s "$(npm view "@morpho-org/morpho-sdk@$VERSION" dist.attestations.url)" \
   | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/push.yml"`, on `refs/heads/main` (or `refs/heads/next` for prereleases). This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
+The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`. Versions published before the public repository became release-only show `.github/workflows/push.yml`, on `refs/heads/main` or `refs/heads/next` for prereleases. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
 
 ## Dependency policy
 
@@ -218,7 +216,7 @@ Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings 
 - **Automated PR review.** Every non-draft PR from a branch in this repository (except Dependabot's) is reviewed automatically by Claude through [`claude.yml`](./.github/workflows/claude.yml), using the review personas in [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). The security-focused ones are [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (transaction parameters, permits, Action-layer purity, the invariants above), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (swallowed errors) and, for CI and release changes, [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md).
 - **Workflow audit.** [`zizmor.yml`](./.github/workflows/zizmor.yml) audits every GitHub Actions workflow on each PR and uploads findings to code scanning.
 - **Pinned actions.** Third-party GitHub Actions are pinned to full commit SHAs and run with least-privilege `permissions:`.
-- **Release monitoring.** [`npm-release-watch.yml`](./.github/workflows/npm-release-watch.yml) checks npm every 10 minutes for new `@morpho-org/*` publishes and opens an issue for each so it can be matched against an expected release.
+- **Release monitoring.** [`npm-release-watch.yml`](./public/.github/workflows/npm-release-watch.yml), on `morpho-org/sdks`, checks npm every 10 minutes for new `@morpho-org/*` publishes and opens an issue for each so it can be matched against an expected release.
 - **Fork tests.** Contract round-trips are tested against Anvil forks at pinned blocks, not mocks ([`AGENTS.md`](./AGENTS.md) §5).
 
 ## Secure usage for integrators
@@ -241,4 +239,5 @@ This file summarizes rules that live elsewhere. When one of these changes, updat
 - [`AGENTS.md`](./AGENTS.md) §1 (Action-layer purity), §2 (forbidden patterns), §5 (security invariants), §7 (releases and audits) and §10 (CI and release security);
 - [`THREAT_MODEL.md`](./THREAT_MODEL.md);
 - the release workflows under [`.github/workflows/`](./.github/workflows/);
+- [`public/SECURITY.md`](./public/SECURITY.md), the copy published to `morpho-org/sdks`, which describes its `release.yml` flow instead of this repository's. Copy every change to this file into it in the same PR, with three exceptions: the "Release integrity and verification" section, which the public copy rewrites for its own flow; this "Keeping this document accurate" section, which it leaves out; and links to files that are not in the public tree (workflows, `.agents/`, `.github/` files, `CODEOWNERS`, `THREAT_MODEL.md`, `AGENTS.md`, ADRs), which it rewrites as plain prose;
 - the package list and supported majors.

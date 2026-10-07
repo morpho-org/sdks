@@ -1,5 +1,15 @@
 # @morpho-org/evm-simulation
 
+## 5.0.1
+
+### Patch Changes
+
+- [#1298](https://github.com/morpho-org/sdks/pull/1298) [`e9c3ca8`](https://github.com/morpho-org/sdks/commit/e9c3ca83c150a786ebdd795caed62880c3b47405) Thanks [@0xbulma](https://github.com/0xbulma)! - Fix Monad (chain 143) simulations, which all failed under 5.0.0. Monad nodes reject `eth_simulateV1` with `validation: false` ("not supported yet"), so Monad now sends `validation: true`; its simulated block has base fee 0, so gas is still not charged and native balance movements stay free of gas. Monad's `latest` block is not final: simulating at its number runs on another parent, which failed the pinned-block check, so Monad now pins to `finalized` when no `blockNumber` is given. On Monad, `gasUsed` reports the call's gas limit rather than the gas consumed.
+
+- Updated dependencies [[`1e11c9d`](https://github.com/morpho-org/sdks/commit/1e11c9db3f6dd7f961f777a9129727d8625a1720), [`a3a136d`](https://github.com/morpho-org/sdks/commit/a3a136d8a75ede41a22db0f9aa0ea308767ceba0)]:
+  - @morpho-org/morpho-sdk@6.6.0
+  - @morpho-org/morpho-ts@3.2.1
+
 ## 5.0.0
 
 ### Major Changes

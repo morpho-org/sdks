@@ -1,4 +1,5 @@
 import {
+  ChainId,
   getChainAddresses,
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
@@ -63,11 +64,15 @@ export async function runSimulation(params: {
     throw new UnsupportedChainError(request.chainId);
   const morpho = addresses?.blue ?? zeroAddress;
 
+  // Monad nodes reject `validation: false` and charge no gas in the simulated
+  // block either way. Its `latest` block is not final: simulating at its number
+  // runs on another parent, so default to `finalized`.
+  const monad = request.chainId === ChainId.MonadMainnet;
   const pinnedBlock =
     request.block ??
     (await resolvePinnedBlock({
       client,
-      blockNumber: request.blockNumber,
+      blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
       signal,
     }));
 
@@ -105,6 +110,7 @@ export async function runSimulation(params: {
     client,
     plan,
     stateBlock: pinnedBlock,
+    validation: monad,
   });
 
   const userCalls = execution.calls

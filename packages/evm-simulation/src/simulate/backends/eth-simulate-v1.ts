@@ -92,10 +92,12 @@ export const rpc = async <T>(
  * The caller resolves (or supplies) the state block before this boundary.
  *
  * 1. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
- *    calls with their per-call `from` and `chainId`, and `traceTransfers: true`
- *    so the node synthesizes native-ETH moves as transfer logs, and
- *    `validation: false`. Validation-off means gas is not charged, which is
- *    how gas is separated from economic effects. **No balance override is
+ *    calls with their per-call `from` and `chainId`, `traceTransfers: true`
+ *    so the node synthesizes native-ETH moves as transfer logs, and `validation: false`
+ *    (`true` on Monad, whose nodes reject `false` and charge no gas in the
+ *    simulated block). Validation-off means gas is not charged, which is how
+ *    gas is separated from economic effects.
+ *    **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
  * 2. **Response validation** — the simulated block must be exactly
@@ -107,7 +109,8 @@ export const rpc = async <T>(
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - Shared simulation client, execution plan, and state block.
+ * @param params - Shared simulation client, execution plan, state block, and
+ *   the `validation` flag to send.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -126,8 +129,9 @@ export async function executePlan(params: {
   client: Client;
   plan: ExecutionPlan;
   stateBlock: StateBlock;
+  validation: boolean;
 }): Promise<SimulationExecution> {
-  const { client, plan, stateBlock } = params;
+  const { client, plan, stateBlock, validation } = params;
 
   const response = await rpc("eth_simulateV1", () =>
     client.request({
@@ -146,7 +150,7 @@ export async function executePlan(params: {
             },
           ],
           traceTransfers: true,
-          validation: false,
+          validation,
         },
         numberToHex(stateBlock.number),
       ],

@@ -7,31 +7,51 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-
-import { loadBundledPacote } from "../ci/read-tarball-identity.ts";
-import {
-  listTarballEntries,
-  loadBundledTar,
-  type TarEntry,
-} from "../ci/verify-tarball-collisions.ts";
 import {
   getErrorMessage,
   parseReleaseSpec,
   sanitizeLogLine,
-} from "./helpers.ts";
+} from "../publish/helpers.ts";
+import { releaseTag } from "../publish/pack.ts";
+import { loadBundledPacote } from "../publish/read-tarball-identity.ts";
+import {
+  listTarballEntries,
+  loadBundledTar,
+  type TarEntry,
+} from "../publish/verify-tarball-collisions.ts";
 
 // These verification values intentionally remain constants, not runtime options.
 const EXPECTED = {
   repository: "https://github.com/morpho-org/sdks",
   repositoryId: "829304716",
-  workflowPath: ".github/workflows/push.yml",
-  signerWorkflowPath: ".github/workflows/publish.yml",
-  refs: ["refs/heads/main", "refs/heads/next"],
   builder: "https://github.com/actions/runner/github-hosted",
   event: "push",
   githubRepository: "morpho-org/sdks",
   registry: "https://registry.npmjs.org",
 } as const;
+
+interface Publisher {
+  /** Workflow the run started from (`workflow.path` of the provenance). */
+  readonly workflowPath: string;
+  /** Workflow file that holds the publishing job (the Sigstore signer). */
+  readonly signerWorkflowPath: string;
+  readonly refs: readonly string[];
+}
+
+/** Pipelines allowed to publish, matched on the provenance `workflow.path`. */
+const PUBLISHERS: readonly Publisher[] = [
+  {
+    workflowPath: ".github/workflows/release.yml",
+    signerWorkflowPath: ".github/workflows/release.yml",
+    refs: ["refs/heads/main"],
+  },
+  // Versions published before the repository became release-only (SDK-1322).
+  {
+    workflowPath: ".github/workflows/push.yml",
+    signerWorkflowPath: ".github/workflows/publish.yml",
+    refs: ["refs/heads/main", "refs/heads/next"],
+  },
+];
 
 const SLSA_PREDICATE_TYPE = "https://slsa.dev/provenance/v1";
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -401,8 +421,12 @@ export async function evaluateProvenance(
   const gitCommit =
     provenance.buildDefinition?.resolvedDependencies?.[0]?.digest?.gitCommit ??
     null;
+  const publisher = PUBLISHERS.find(
+    ({ workflowPath }) => workflowPath === workflow?.path,
+  );
   let signature = await evaluateSlsaSignature(
     attestation,
+    publisher,
     workflow?.ref,
     gitCommit,
     options.verifyBundle,
@@ -477,14 +501,13 @@ export async function evaluateProvenance(
       `repository_id expected ${EXPECTED.repositoryId}, got ${github?.repository_id ?? "(missing)"}`,
     );
   }
-  if (workflow?.path !== EXPECTED.workflowPath) {
+  if (publisher === undefined) {
     mismatches.push(
-      `workflow path expected ${EXPECTED.workflowPath}, got ${workflow?.path ?? "(missing)"}`,
+      `workflow path expected ${PUBLISHERS.map(({ workflowPath }) => workflowPath).join(" or ")}, got ${workflow?.path ?? "(missing)"}`,
     );
-  }
-  if (!EXPECTED.refs.some((ref) => ref === workflow?.ref)) {
+  } else if (!publisher.refs.some((ref) => ref === workflow?.ref)) {
     mismatches.push(
-      `ref expected ${EXPECTED.refs.join(" or ")}, got ${workflow?.ref ?? "(missing)"}`,
+      `ref expected ${publisher.refs.join(" or ")} for ${publisher.workflowPath}, got ${workflow?.ref ?? "(missing)"}`,
     );
   }
   if (workflow?.ref !== signature.signerRef) {
@@ -524,6 +547,7 @@ export async function evaluateProvenance(
 // biome-ignore lint/complexity/useMaxParams: Keep verifier inputs explicit.
 async function evaluateSlsaSignature(
   attestation: Attestation,
+  publisher: Publisher | undefined,
   workflowRef: string | undefined,
   gitCommit: string | null,
   verifyBundle?: BundleVerifier,
@@ -538,9 +562,17 @@ async function evaluateSlsaSignature(
       signerRef: null,
     };
   }
+  if (publisher === undefined) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: "Predicate workflow path is not a trusted publish workflow.",
+      signerRef: null,
+    };
+  }
   if (
     workflowRef == null ||
-    !EXPECTED.refs.some((ref) => ref === workflowRef)
+    !publisher.refs.some((ref) => ref === workflowRef)
   ) {
     return {
       status: "fail",
@@ -561,7 +593,7 @@ async function evaluateSlsaSignature(
   try {
     const verifyOptions: SigstoreVerifyOptions = {
       certificateIssuer: "https://token.actions.githubusercontent.com",
-      certificateIdentityURI: `^${`${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${workflowRef}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+      certificateIdentityURI: `^${`${EXPECTED.repository}/${publisher.signerWorkflowPath}@${workflowRef}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
       certificateOIDs: {
         "1.3.6.1.4.1.57264.1.11": encodeFulcioOidValue("github-hosted"),
         "1.3.6.1.4.1.57264.1.12": encodeFulcioOidValue(EXPECTED.repository),
@@ -569,7 +601,7 @@ async function evaluateSlsaSignature(
         "1.3.6.1.4.1.57264.1.14": encodeFulcioOidValue(workflowRef),
         "1.3.6.1.4.1.57264.1.15": encodeFulcioOidValue(EXPECTED.repositoryId),
         "1.3.6.1.4.1.57264.1.18": encodeFulcioOidValue(
-          `${EXPECTED.repository}/${EXPECTED.workflowPath}@${workflowRef}`,
+          `${EXPECTED.repository}/${publisher.workflowPath}@${workflowRef}`,
         ),
         "1.3.6.1.4.1.57264.1.20": encodeFulcioOidValue(EXPECTED.event),
       },
@@ -589,10 +621,10 @@ async function evaluateSlsaSignature(
       signer = await verifyBundle(bundle, verifyOptions);
     }
     const signerIdentity = signer.identity?.subjectAlternativeName;
-    const signerRef = EXPECTED.refs.find(
+    const signerRef = publisher.refs.find(
       (ref) =>
         signerIdentity ===
-        `${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${ref}`,
+        `${EXPECTED.repository}/${publisher.signerWorkflowPath}@${ref}`,
     );
     if (signerRef == null) {
       return {
@@ -1247,42 +1279,60 @@ function isGitCommandError(error: unknown, stderrPattern: RegExp): boolean {
   return stderrPattern.test(`${stderr}\n${getErrorMessage(error)}`);
 }
 
-function fetchReleaseRefs(cwd: string): void {
+/**
+ * Remote-tracking namespace for the public repository's branches. The verifier fetches
+ * them from `EXPECTED.repository` by URL, so it checks the public history and tags
+ * whatever the checkout's `origin` is (for example `sdks-internal`).
+ */
+const PUBLIC_REFS = "refs/remotes/morpho-org-sdks";
+// Full ref names: a local tag or branch named `morpho-org-sdks/main` must not shadow them.
+const PUBLIC_MAIN = `${PUBLIC_REFS}/main`;
+const PUBLIC_NEXT = `${PUBLIC_REFS}/next`;
+/** Public tags, kept apart from the checkout's own `refs/tags`. */
+const PUBLIC_TAGS = "refs/morpho-org-sdks/tags";
+
+/**
+ * Fetches the release branches and tags of the public repository.
+ *
+ * @param cwd The checkout to fetch into.
+ * @param repository The repository URL; the public repository outside tests.
+ * @internal
+ */
+export function fetchReleaseRefs(
+  cwd: string,
+  repository: string = EXPECTED.repository,
+): void {
   const unshallow =
     execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
-  try {
+  const fetchPublicRefs = (branches: readonly string[]) =>
     execGit(
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
-        "origin",
-        "main",
-        "next",
-        "--tags",
-        "--force",
+        "--no-tags",
+        "--prune",
+        repository,
+        ...branches.map(
+          (branch) => `+refs/heads/${branch}:${PUBLIC_REFS}/${branch}`,
+        ),
+        `+refs/tags/*:${PUBLIC_TAGS}/*`,
       ],
       cwd,
     );
+  try {
+    fetchPublicRefs(["main", "next"]);
   } catch (error) {
     if (
       !isGitCommandError(
         error,
-        /couldn't find remote ref next|could not find remote ref next/i,
+        /(?:couldn't|could not) find remote ref (?:refs\/heads\/)?next\b/i,
       )
     ) {
       throw error;
     }
-    execGit(
-      [
-        "fetch",
-        ...(unshallow ? ["--unshallow"] : []),
-        "origin",
-        "main",
-        "--tags",
-        "--force",
-      ],
-      cwd,
-    );
+    fetchPublicRefs(["main"]);
+    // A next ref left by an earlier run would let checks pass on a deleted branch.
+    execGit(["update-ref", "-d", `${PUBLIC_REFS}/next`], cwd);
   }
 }
 
@@ -1318,8 +1368,8 @@ function checkPackageKnown(
     known ? "pass" : "fail",
     "HIGH",
     known
-      ? `${name} is a non-private package in origin/main or origin/next.`
-      : `${name} is not a non-private package in origin/main or origin/next.`,
+      ? `${name} is a non-private package in morpho-org/sdks main or next.`
+      : `${name} is not a non-private package in morpho-org/sdks main or next.`,
   );
 }
 
@@ -1350,7 +1400,7 @@ export function evaluateGitCommitReachability(
     : {
         status: "fail",
         severity: "CRITICAL",
-        detail: `${commit} is not an ancestor of origin/main or origin/next.`,
+        detail: `${commit} is not an ancestor of morpho-org/sdks main or next.`,
       };
 }
 
@@ -1384,8 +1434,17 @@ export function evaluateGitTagDecision(options: {
   };
 }
 
+/**
+ * Records whether the provenance commit is reachable from a fetched public release branch.
+ *
+ * @param commit The provenance `gitCommit`.
+ * @param cwd The checkout holding the fetched public refs.
+ * @param checks The check list to append to.
+ * @param findings The finding list to append to.
+ * @internal
+ */
 // biome-ignore lint/complexity/useMaxParams: Keep source and report state explicit.
-function addGitCommitCheck(
+export function addGitCommitCheck(
   commit: string | null,
   cwd: string,
   checks: VerificationCheck[],
@@ -1404,7 +1463,7 @@ function addGitCommitCheck(
     );
     return;
   }
-  for (const ref of ["origin/main", "origin/next"]) {
+  for (const ref of [PUBLIC_MAIN, PUBLIC_NEXT]) {
     try {
       execGit(["merge-base", "--is-ancestor", commit, ref], cwd);
       const evaluation = evaluateGitCommitReachability(commit, true);
@@ -1456,8 +1515,19 @@ function getErrorStatus(error: unknown): number | undefined {
     : undefined;
 }
 
+/**
+ * Records whether the public release tag points to the provenance commit.
+ *
+ * @param name The npm package name.
+ * @param version The package version.
+ * @param commit The provenance `gitCommit`.
+ * @param cwd The checkout holding the fetched public tags.
+ * @param checks The check list to append to.
+ * @param findings The finding list to append to.
+ * @internal
+ */
 // biome-ignore lint/complexity/useMaxParams: Keep release and report inputs explicit.
-function addGitTagCheck(
+export function addGitTagCheck(
   name: string,
   version: string,
   commit: string | null,
@@ -1465,11 +1535,11 @@ function addGitTagCheck(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): void {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   let taggedCommit: string;
   try {
     taggedCommit = execGit(
-      ["rev-parse", "--verify", `refs/tags/${tag}^{commit}`],
+      ["rev-parse", "--verify", `${PUBLIC_TAGS}/${tag}^{commit}`],
       cwd,
     ).trim();
   } catch (error) {
@@ -1833,7 +1903,7 @@ async function checkGithubRelease(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): Promise<void> {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   const headers: HeadersInit =
     token == null ? {} : { Authorization: `Bearer ${token}` };
@@ -1969,11 +2039,11 @@ async function verifyNpmRelease(options: {
   let mainSources: PackageSource[] = [];
   if (refsFetched) {
     try {
-      mainSources = readPackageSourcesAtRef("origin/main", cwd);
+      mainSources = readPackageSourcesAtRef(PUBLIC_MAIN, cwd);
       let nextSources: PackageSource[] = [];
       try {
-        execGit(["rev-parse", "--verify", "--quiet", "origin/next"], cwd);
-        nextSources = readPackageSourcesAtRef("origin/next", cwd);
+        execGit(["rev-parse", "--verify", "--quiet", PUBLIC_NEXT], cwd);
+        nextSources = readPackageSourcesAtRef(PUBLIC_NEXT, cwd);
       } catch (error) {
         if (
           getErrorStatus(error) !== 1 &&
