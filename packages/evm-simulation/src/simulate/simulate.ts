@@ -55,7 +55,8 @@ import { runSimulation } from "./run-simulation.js";
  *   final), resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, or share quotes for
+ *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, a non-positive
+ *   `blockOverrides.gasLimit`, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
