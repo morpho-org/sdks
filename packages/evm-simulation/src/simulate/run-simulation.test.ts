@@ -75,6 +75,15 @@ const execution = (
     stateReads: [],
   }) as unknown as SimulationExecution;
 
+function pinnedBlockParam(fetch: ReturnType<typeof stubFetch>["fetch"]) {
+  return fetch.mock.calls
+    .map(
+      ([, init]) =>
+        JSON.parse(String(init?.body)) as { method: string; params: unknown[] },
+    )
+    .find(({ method }) => method === "eth_getBlockByNumber")?.params[0];
+}
+
 function stubFetch(chainId: number, calls: readonly unknown[]) {
   const methods: string[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
@@ -159,7 +168,7 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: an unregistered configured chain works without limits", async () => {
-    const { methods } = stubFetch(CHAIN_ID, []);
+    const { fetch, methods } = stubFetch(CHAIN_ID, []);
     const result = await simulate(config, {
       chainId: CHAIN_ID,
       transactions: [TRANSACTION],
@@ -167,6 +176,7 @@ describe.sequential("runSimulation", () => {
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
     expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
+    expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
   });
 
@@ -178,16 +188,23 @@ describe.sequential("runSimulation", () => {
       },
       { chainId: ChainId.MonadMainnet, transactions: [TRANSACTION] },
     );
-    const blockRequest = fetch.mock.calls
-      .map(
-        ([, init]) =>
-          JSON.parse(String(init?.body)) as {
-            method: string;
-            params: unknown[];
-          },
-      )
-      .find(({ method }) => method === "eth_getBlockByNumber");
-    expect(blockRequest?.params[0]).toBe("finalized");
+    expect(pinnedBlockParam(fetch)).toBe("finalized");
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
+  });
+
+  test("behavior: Monad keeps an explicit blockNumber", async () => {
+    const { fetch } = stubFetch(ChainId.MonadMainnet, []);
+    await simulate(
+      {
+        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.MonadMainnet,
+        transactions: [TRANSACTION],
+        blockNumber: STATE_BLOCK,
+      },
+    );
+    expect(pinnedBlockParam(fetch)).toBe(numberToHex(STATE_BLOCK));
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
