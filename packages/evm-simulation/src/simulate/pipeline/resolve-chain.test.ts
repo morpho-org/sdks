@@ -66,4 +66,17 @@ describe("resolveChain", () => {
       );
     },
   );
+
+  it.each([0, "", "false"])(
+    "throws SimulationValidationError for parentHashCheck %j",
+    (parentHashCheck) => {
+      const entry = {
+        simulateV1Url: "http://rpc.local",
+        parentHashCheck,
+      } as unknown as ChainSimulationConfig;
+      expect(() => resolveChain(makeConfig([[988, entry]]), 988)).toThrow(
+        SimulationValidationError,
+      );
+    },
+  );
 });

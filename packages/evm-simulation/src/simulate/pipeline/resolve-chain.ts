@@ -11,7 +11,8 @@ import type { ChainSimulationConfig, SimulationConfig } from "../../types.js";
  * when the chain is absent from the map or has no `simulateV1Url` (defensive —
  * the type already requires it at construction). Throws
  * `SimulationValidationError` when `blockOverrides.gasLimit` is set but is
- * not a positive bigint, so a misconfiguration never surfaces as a bypassable
+ * not a positive bigint, or `parentHashCheck` is set but is not a boolean, so a
+ * misconfiguration never surfaces as a bypassable
  * `ExternalServiceError`.
  */
 export function resolveChain(
@@ -26,8 +27,14 @@ export function resolveChain(
     (typeof gasLimit !== "bigint" || gasLimit <= 0n)
   )
     throw new SimulationValidationError(
-      `Chain ${chainId} blockOverrides.gasLimit must be a positive bigint`,
+      `Chain ${chainId} blockOverrides.gasLimit must be a positive bigint, got "${String(gasLimit)}" (${typeof gasLimit}). Pass a bigint greater than 0n or omit gasLimit.`,
       ["blockOverrides.gasLimit"],
+    );
+  const parentHashCheck: unknown = entry.parentHashCheck;
+  if (parentHashCheck !== undefined && typeof parentHashCheck !== "boolean")
+    throw new SimulationValidationError(
+      `Chain ${chainId} parentHashCheck must be a boolean, got "${String(parentHashCheck)}" (${typeof parentHashCheck}). Pass true or false, or omit parentHashCheck.`,
+      ["parentHashCheck"],
     );
   return entry;
 }

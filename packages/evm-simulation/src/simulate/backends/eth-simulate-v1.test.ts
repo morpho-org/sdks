@@ -295,6 +295,40 @@ describe.sequential("executePlan", () => {
     );
   });
 
+  test("behavior: parentHashCheck false accepts a successor with a foreign parentHash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const evidence = await executePlan({ ...params, parentHashCheck: false });
+    expect(evidence.block.blockNumber).toBe(STATE_BLOCK + 1n);
+  });
+
+  test("error: parentHashCheck true rejects a successor with a foreign parentHash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+  });
+
+  test("error: parentHashCheck false still detects a reorg of the pinned block", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(
+        rpc(blockResult({ hash: `0x${"ef".repeat(32)}` })),
+      );
+    await expect(
+      executePlan({ ...params, parentHashCheck: false }),
+    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
+  });
+
   test("error: InvalidSimulationResponseError when the state block hash changes mid-flight", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
