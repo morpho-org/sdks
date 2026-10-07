@@ -24,14 +24,34 @@ import {
 const EXPECTED = {
   repository: "https://github.com/morpho-org/sdks",
   repositoryId: "829304716",
-  workflowPath: ".github/workflows/push.yml",
-  signerWorkflowPath: ".github/workflows/publish.yml",
-  refs: ["refs/heads/main", "refs/heads/next"],
   builder: "https://github.com/actions/runner/github-hosted",
   event: "push",
   githubRepository: "morpho-org/sdks",
   registry: "https://registry.npmjs.org",
 } as const;
+
+interface Publisher {
+  /** Workflow the run started from (`workflow.path` of the provenance). */
+  readonly workflowPath: string;
+  /** Workflow file that holds the publishing job (the Sigstore signer). */
+  readonly signerWorkflowPath: string;
+  readonly refs: readonly string[];
+}
+
+/** Pipelines allowed to publish, matched on the provenance `workflow.path`. */
+const PUBLISHERS: readonly Publisher[] = [
+  {
+    workflowPath: ".github/workflows/release.yml",
+    signerWorkflowPath: ".github/workflows/release.yml",
+    refs: ["refs/heads/main"],
+  },
+  // Versions published before the repository became release-only (SDK-1322).
+  {
+    workflowPath: ".github/workflows/push.yml",
+    signerWorkflowPath: ".github/workflows/publish.yml",
+    refs: ["refs/heads/main", "refs/heads/next"],
+  },
+];
 
 const SLSA_PREDICATE_TYPE = "https://slsa.dev/provenance/v1";
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -401,8 +421,12 @@ export async function evaluateProvenance(
   const gitCommit =
     provenance.buildDefinition?.resolvedDependencies?.[0]?.digest?.gitCommit ??
     null;
+  const publisher = PUBLISHERS.find(
+    ({ workflowPath }) => workflowPath === workflow?.path,
+  );
   let signature = await evaluateSlsaSignature(
     attestation,
+    publisher,
     workflow?.ref,
     gitCommit,
     options.verifyBundle,
@@ -477,14 +501,13 @@ export async function evaluateProvenance(
       `repository_id expected ${EXPECTED.repositoryId}, got ${github?.repository_id ?? "(missing)"}`,
     );
   }
-  if (workflow?.path !== EXPECTED.workflowPath) {
+  if (publisher === undefined) {
     mismatches.push(
-      `workflow path expected ${EXPECTED.workflowPath}, got ${workflow?.path ?? "(missing)"}`,
+      `workflow path expected ${PUBLISHERS.map(({ workflowPath }) => workflowPath).join(" or ")}, got ${workflow?.path ?? "(missing)"}`,
     );
-  }
-  if (!EXPECTED.refs.some((ref) => ref === workflow?.ref)) {
+  } else if (!publisher.refs.some((ref) => ref === workflow?.ref)) {
     mismatches.push(
-      `ref expected ${EXPECTED.refs.join(" or ")}, got ${workflow?.ref ?? "(missing)"}`,
+      `ref expected ${publisher.refs.join(" or ")} for ${publisher.workflowPath}, got ${workflow?.ref ?? "(missing)"}`,
     );
   }
   if (workflow?.ref !== signature.signerRef) {
@@ -524,6 +547,7 @@ export async function evaluateProvenance(
 // biome-ignore lint/complexity/useMaxParams: Keep verifier inputs explicit.
 async function evaluateSlsaSignature(
   attestation: Attestation,
+  publisher: Publisher | undefined,
   workflowRef: string | undefined,
   gitCommit: string | null,
   verifyBundle?: BundleVerifier,
@@ -538,9 +562,17 @@ async function evaluateSlsaSignature(
       signerRef: null,
     };
   }
+  if (publisher === undefined) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: "Predicate workflow path is not a trusted publish workflow.",
+      signerRef: null,
+    };
+  }
   if (
     workflowRef == null ||
-    !EXPECTED.refs.some((ref) => ref === workflowRef)
+    !publisher.refs.some((ref) => ref === workflowRef)
   ) {
     return {
       status: "fail",
@@ -561,7 +593,7 @@ async function evaluateSlsaSignature(
   try {
     const verifyOptions: SigstoreVerifyOptions = {
       certificateIssuer: "https://token.actions.githubusercontent.com",
-      certificateIdentityURI: `^${`${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${workflowRef}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+      certificateIdentityURI: `^${`${EXPECTED.repository}/${publisher.signerWorkflowPath}@${workflowRef}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
       certificateOIDs: {
         "1.3.6.1.4.1.57264.1.11": encodeFulcioOidValue("github-hosted"),
         "1.3.6.1.4.1.57264.1.12": encodeFulcioOidValue(EXPECTED.repository),
@@ -569,7 +601,7 @@ async function evaluateSlsaSignature(
         "1.3.6.1.4.1.57264.1.14": encodeFulcioOidValue(workflowRef),
         "1.3.6.1.4.1.57264.1.15": encodeFulcioOidValue(EXPECTED.repositoryId),
         "1.3.6.1.4.1.57264.1.18": encodeFulcioOidValue(
-          `${EXPECTED.repository}/${EXPECTED.workflowPath}@${workflowRef}`,
+          `${EXPECTED.repository}/${publisher.workflowPath}@${workflowRef}`,
         ),
         "1.3.6.1.4.1.57264.1.20": encodeFulcioOidValue(EXPECTED.event),
       },
@@ -589,10 +621,10 @@ async function evaluateSlsaSignature(
       signer = await verifyBundle(bundle, verifyOptions);
     }
     const signerIdentity = signer.identity?.subjectAlternativeName;
-    const signerRef = EXPECTED.refs.find(
+    const signerRef = publisher.refs.find(
       (ref) =>
         signerIdentity ===
-        `${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${ref}`,
+        `${EXPECTED.repository}/${publisher.signerWorkflowPath}@${ref}`,
     );
     if (signerRef == null) {
       return {

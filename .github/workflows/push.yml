@@ -58,18 +58,3 @@ jobs:
     secrets:
       VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
       VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
-
-  publish:
-    if: github.ref_name == 'main' || github.ref_name == 'next'
-
-    permissions:
-      contents: write
-      id-token: write
-
-    needs:
-      - lint
-      - build
-      - test
-      - version-pr
-
-    uses: $/.github/workflows/publish.yml

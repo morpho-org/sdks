@@ -288,6 +288,84 @@ describe("evaluateProvenance", () => {
     ).toMatchObject({ status: "pass" });
   });
 
+  test("accepts the public release.yml pipeline on main", async () => {
+    const releaseSigner: TestBundleVerifier = async (_bundle, options) => {
+      expect(options.certificateIdentityURI).toBe(
+        "^https://github\\.com/morpho-org/sdks/\\.github/workflows/release\\.yml@refs/heads/main$",
+      );
+      return {
+        identity: {
+          subjectAlternativeName:
+            "https://github.com/morpho-org/sdks/.github/workflows/release.yml@refs/heads/main",
+        },
+      };
+    };
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/release.yml" }),
+      ),
+      integrity,
+      releaseSigner,
+    );
+    expect(result.findings).toEqual([]);
+    expect(result.gitCommit).toBe("bedd89c1".padEnd(40, "0"));
+  });
+
+  test("fails CRITICAL for release.yml on next, which only the legacy pipeline used", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({
+          workflowPath: ".github/workflows/release.yml",
+          ref: "refs/heads/next",
+        }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL for a workflow path that is not a trusted publisher", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/publish.yml" }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.find(({ id }) => id === "provenance.signature"),
+    ).toMatchObject({
+      severity: "CRITICAL",
+      detail: "Predicate workflow path is not a trusted publish workflow.",
+    });
+  });
+
+  test("fails CRITICAL when release.yml provenance is signed by the legacy publish.yml", async () => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(
+        statement({ workflowPath: ".github/workflows/release.yml" }),
+      ),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
   test("fails CRITICAL when the signed payload is tampered with", async () => {
     const signedAttestation = attestations(statement());
     const envelope = signedAttestation[0]?.bundle?.dsseEnvelope;
@@ -534,7 +612,6 @@ describe("evaluateProvenance", () => {
   test.each([
     ["wrong repository", { repository: "https://github.com/other/repo" }],
     ["wrong repository_id", { repositoryId: "123" }],
-    ["wrong workflow path", { workflowPath: ".github/workflows/publish.yml" }],
     ["wrong event", { event: "pull_request" }],
     ["self-hosted builder", { builder: "https://example.com/self-hosted" }],
   ])("fails CRITICAL for %s", async (_case, overrides) => {

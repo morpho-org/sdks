@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * verify-tarball-manifest.ts — the publishConfig allowlist gate of
- * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
+ * `.github/workflows/release.yml`. Run with Node's native TypeScript support:
  *
  *   node scripts/publish/verify-tarball-manifest.ts <path/to/package.json>
  *
@@ -87,7 +87,7 @@ export function verifyPublishConfig(manifest: TarballManifest): void {
 
 /**
  * Verifies that a packed package manifest's `name` and `version` are safe to
- * trust for the artifact bijection check in `publish.yml`, and returns them.
+ * trust for the artifact bijection check in `release.yml`, and returns them.
  */
 export function verifyManifestIdentity(
   manifest: TarballManifest,
