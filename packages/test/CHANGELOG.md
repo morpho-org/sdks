@@ -1,5 +1,11 @@
 # @morpho-org/test
 
+## 2.10.1
+
+### Patch Changes
+
+- [#1289](https://github.com/morpho-org/sdks/pull/1289) [`579b7ef`](https://github.com/morpho-org/sdks/commit/579b7efe6e6ca82a5705cd6e6b1ab7f6c5e093cf) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Poll local Anvil test clients every 50 ms so transaction receipt waits return as soon as automined transactions are available instead of waiting for viem's default polling interval. When called with only `hash` and `timeout`, the test client's `waitForTransactionReceipt` now polls `eth_getTransactionReceipt` directly. viem only re-fetches a missing receipt when a new block appears, so a transaction mined while that fetch was in flight could hang the wait forever under automine. Calls that pass any other option still use viem's implementation.
+
 ## 2.10.0
 
 ### Minor Changes

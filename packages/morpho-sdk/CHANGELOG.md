@@ -1,5 +1,16 @@
 # @morpho-org/morpho-sdk
 
+## 6.6.0
+
+### Minor Changes
+
+- [#1273](https://github.com/morpho-org/sdks/pull/1273) [`1e11c9d`](https://github.com/morpho-org/sdks/commit/1e11c9db3f6dd7f961f777a9129727d8625a1720) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Operation reallocation plans no longer fill a BluePublicAllocator target cap. When a plan toward the 90% utilization target would come within `allocatorCapHeadroom` of that cap (new option; `DEFAULT_ALLOCATOR_CAP_HEADROOM` is 1% of the cap), the plan moves only the operation's absolute shortfall, or what vaults below their cap were already moving if that is more. It uses the full cap only when the shortfall needs it. The kept headroom prevents `AbsoluteCapExceeded()` reverts when another allocation of up to that size lands on the market between quote and inclusion. A shortfall-only plan leaves the market fully utilized, so a competing borrow or withdraw landing first can still make it revert.
+
+### Patch Changes
+
+- Updated dependencies [[`a3a136d`](https://github.com/morpho-org/sdks/commit/a3a136d8a75ede41a22db0f9aa0ea308767ceba0)]:
+  - @morpho-org/morpho-ts@3.2.1
+
 ## 6.5.0
 
 ### Minor Changes

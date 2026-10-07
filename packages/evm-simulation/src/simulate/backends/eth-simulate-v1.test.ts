@@ -108,6 +108,7 @@ beforeEach(() => {
       hash: `0x${"ab".repeat(32)}`,
       timestamp: 1_700_000_000n,
     },
+    validation: false,
   };
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -163,6 +164,17 @@ describe.sequential("executePlan", () => {
     // The pinned block is resolved by the caller; this boundary simulates
     // once and then re-fetches that same block for the reorg check.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("behavior: request body carries the validation flag", async () => {
+    respondHappy(okCalls(3));
+    await executePlan({ ...params, validation: true });
+    const request: unknown = JSON.parse(
+      String(fetchMock.mock.calls[0]?.[1]?.body),
+    );
+    expect(
+      (request as { params: [{ validation: unknown }] }).params[0].validation,
+    ).toBe(true);
   });
 
   test("error: InvalidSimulationResponseError when the result is not one block", async () => {
