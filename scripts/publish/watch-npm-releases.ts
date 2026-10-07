@@ -8,7 +8,7 @@ import {
   getErrorMessage,
   parseReleaseSpec,
   sanitizeLogLine,
-} from "../publish/helpers.ts";
+} from "./helpers.ts";
 
 const REGISTRY_URL = "https://registry.npmjs.org";
 const GITHUB_API_URL = "https://api.github.com";
@@ -228,7 +228,7 @@ export async function main(
             },
             body: JSON.stringify({
               title,
-              body: `Opened by npm-release-watch (SDK-1264). A Devin Automation verifies this release and comments here.\n\nhttps://www.npmjs.com/package/${name}/v/${version}`,
+              body: `Opened by npm-release-watch. A Devin Automation verifies this release and comments here.\n\nhttps://www.npmjs.com/package/${name}/v/${version}`,
             }),
             redirect: "error",
           },

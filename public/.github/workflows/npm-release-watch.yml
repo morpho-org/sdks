@@ -33,4 +33,4 @@ jobs:
       - name: Watch npm releases
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/release/watch-npm-releases.ts
+        run: node scripts/publish/watch-npm-releases.ts

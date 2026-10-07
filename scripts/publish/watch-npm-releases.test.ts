@@ -16,7 +16,7 @@ const ENV = {
   GITHUB_REPOSITORY: "morpho-org/sdks",
 };
 const ISSUE_BODY =
-  "Opened by npm-release-watch (SDK-1264). A Devin Automation verifies this release and comments here.\n\nhttps://www.npmjs.com/package/@morpho-org/blue-sdk/v/1.2.3";
+  "Opened by npm-release-watch. A Devin Automation verifies this release and comments here.\n\nhttps://www.npmjs.com/package/@morpho-org/blue-sdk/v/1.2.3";
 
 function createRepository(
   packages: { directory: string; name: string }[],

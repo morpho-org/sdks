@@ -185,18 +185,18 @@ Record what was removed in the SDK-1322 ticket.
 
 ## 9. `sdks-internal` can never publish
 
-Target state after cutover (section 10, step 8). Until then `sdks-internal` still has the old `.github/workflows/publish.yml`.
+Reached before the first sync (section 10, step 6).
 
 - npm: no trusted publisher names `morpho-org/sdks-internal` (section 6 lists every package's single entry), and no npm token exists in `sdks-internal` secrets, its environments or org secrets shared with it.
 - Workflows: `sdks-internal` has no workflow that runs `npm publish`, and its `public/.github/workflows/release.yml` never runs there (GitHub only runs `.github/workflows/`). `release.yml` also checks `github.repository == 'morpho-org/sdks'`.
-- To get there, delete `.github/workflows/publish.yml` from `sdks-internal` (its `github-releases` job needs `publish`, so the whole file goes), remove its call from `push.yml`, and delete the `prod` environment (section 10, step 8).
-- Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and in `sdks-internal` `grep -rnE '(npm|pnpm) publish( |$)' .github/workflows/*.yml | grep -vE '^[^:]*:[0-9]*:\s*#'` (publish commands in workflow YAML, comments excluded) finds nothing. Before cutover it finds only `publish.yml`.
+- `sdks-internal` no longer has `.github/workflows/publish.yml` or a `publish` job in `push.yml`. What's left is deleting its `prod` environment (section 10, step 6).
+- Check: `gh api repos/morpho-org/sdks-internal/environments --jq '.environments[].name'` lists no publishing environment, and in `sdks-internal` `grep -rnE '(npm|pnpm) publish( |$)' .github/workflows/*.yml | grep -vE '^[^:]*:[0-9]*:\s*#'` (publish commands in workflow YAML, comments excluded) finds nothing.
 
 ## 10. Cutover order
 
 1. **Freeze development on `morpho-org/sdks`.** No merges to its `main`. Pause the changesets "Version Packages" PR there.
 2. **Final sync of `sdks-internal` from `sdks`**: mirror `main`, branches, tags and notes once more, and check `git rev-parse main` matches on both.
-3. **Seed public `main` with the bootstrap commit**, before step 5 sets up the sync App and applies sections 1–8 and step 6 runs the first sync: once the rulesets are on, a direct push to `main` is rejected. Public `main` keeps its history, so its tip is not a root commit and has no `Source-Commit` trailer; `sync.ts` refuses to sync on top of such a tip. An admin pushes one empty, signed commit whose trailer names the internal commit the public tree was last cut from. After step 2 that is the tip of `main`, the same SHA on both repositories:
+3. **Seed public `main` with the bootstrap commit**, before step 5 sets up the sync App and applies sections 1–8 and step 7 runs the first sync: once the rulesets are on, a direct push to `main` is rejected. Public `main` keeps its history, so its tip is not a root commit and has no `Source-Commit` trailer; `sync.ts` refuses to sync on top of such a tip. An admin pushes one empty, signed commit whose trailer names the internal commit the public tree was last cut from. After step 2 that is the tip of `main`, the same SHA on both repositories:
 
    ```bash
    # In a clone of morpho-org/sdks-internal, after step 2.
@@ -211,9 +211,9 @@ Target state after cutover (section 10, step 8). Until then `sdks-internal` stil
 
    The trailer must be the full 40-character lowercase SHA on its own line, and the commit must change no file (`--allow-empty`). Sign it with a key registered on the pushing account, so GitHub shows it as Verified. If `main` moved after step 2, repeat step 2 first: the SHA has to be an ancestor of every later internal release commit, or the first sync fails its ordering check.
 4. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
-5. **Set up the sync App, then apply sections 1–8 on `morpho-org/sdks`.** First follow [`scripts/release/public-sync/README.md`](../../scripts/release/public-sync/README.md) Setup steps 2–4 and 6: create the App, install it on `morpho-org/sdks` only, and create the internal `public-sync` and `public-sync-alerts` environments. Sections 2, 3 (the `sync/*` ruleset) and 8 need the App to exist. Then apply sections 1–8 (trusted publishers last, right before step 6).
-6. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
-7. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
-8. **Remove publishing from `sdks-internal`.** Delete `.github/workflows/publish.yml` entirely (its `publish` job with environment `prod`, and the `github-releases` job that needs it) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
+5. **Set up the sync App, then apply sections 1–8 on `morpho-org/sdks`.** First follow [`scripts/release/public-sync/README.md`](../../scripts/release/public-sync/README.md) Setup steps 2–4 and 6: create the App, install it on `morpho-org/sdks` only, and create the internal `public-sync` and `public-sync-alerts` environments. Sections 2, 3 (the `sync/*` ruleset) and 8 need the App to exist. Then apply sections 1–8 (trusted publishers last, right before step 7).
+6. **Check `sdks-internal` can't publish.** `publish.yml` is already gone, so a release commit there runs no publish job. Delete the `prod` environment and run the section 9 checks before any release commit lands on internal `main`.
+7. **First full snapshot PR replaces the public tree. It needs a real release.** The `sync` job of `public-snapshot.yml` runs only for a push to `main` that changes a published package version; a manual run builds and checks the tree but doesn't sync. So merge a "Version Packages" PR on `sdks-internal` (add a `patch` changeset first if none is pending). The sync job then opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
+8. Watch that first run: `publish` should publish only the new versions, `release` should create nothing unexpected, and `npm-release-watch.yml`, now on `morpho-org/sdks`, should open one issue per new version within 10 minutes.
 
 The existing git history of `morpho-org/sdks` stays: it is already public. The bootstrap commit (step 3) and each snapshot PR add commits on top of it; don't rewrite or force-push `main`.

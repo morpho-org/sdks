@@ -90,12 +90,17 @@ path), or the helpers `scripts/release/` imports (`scripts/paths.ts`,
   Name the publisher of a newly used action so a maintainer can confirm it.
 - **Permissions (high).** Every workflow declares `permissions:`, default
   `contents: read`, with job-level scopes where jobs differ. `id-token: write`
-  only for OIDC or provenance publishing. `secrets: inherit` is forbidden.
+  only in the `publish` job of the public `release.yml`. `secrets: inherit` is
+  forbidden.
+- **No internal publish path (critical).** Only the public
+  `public/.github/workflows/release.yml` publishes. A workflow under
+  `.github/workflows/` that requests `id-token: write`, runs `npm publish` or
+  `pnpm publish`, or creates package tags or GitHub Releases is critical.
 - **Secrets (high).** Secrets are `env:`-bound, never interpolated into
   `run:`, and only passed to SHA-pinned third-party actions (first-party
   `actions/*` and `github/*` may use tags). Widening a secret's reach is
   high, critical on the write-token or publish path: loosening the
-  `main`/`next` gate on `version-pr` and `publish`, moving a write or publish
+  `main`/`next` gate on `version-pr`, moving a write or publish
   secret into the ungated `test` job, or exposing any secret to a fork
   trigger. The RPC URLs already on every branch are the accepted baseline. A
   new secret name needs a row in `.github/workflows/AGENTS.md` (medium).
