@@ -69,7 +69,7 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
- *   `parentHash` (not checked on Stable, chain 988), a block timestamp earlier than the pinned block's, a
+ *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable, chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, a quoted balance/position read whose non-empty
  *   return data cannot be decoded, a state-block hash that changed or a pinned
  *   block that vanished mid-flight, or an
