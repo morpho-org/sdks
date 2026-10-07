@@ -9,7 +9,7 @@ import {
 
 /**
  * `BlueBuyCallback` creation bytecode from `morpho-org/midnight` commit
- * `4603969e`, embedded in the `BlueBuyCallbackFactory` deployed on Ethereum, Base and Robinhood.
+ * `4603969e`, embedded in the `BlueBuyCallbackFactory` deployed on Ethereum, Base, Robinhood and Arc.
  */
 const blueBuyCallbackBytecode: Hex = `0x${[
   "60e0806040523461012657606081611611803803809161001f828561012a565b",
@@ -195,13 +195,17 @@ const blueBuyCallbackBytecode: Hex = `0x${[
  * Computes the CREATE2 address of `owner`'s `BlueBuyCallback` for `salt`, as deployed or
  * returned by the chain's `midnightBlueBuyCallbackFactory.createBlueBuyCallback(owner, salt)`.
  *
- * @internal
+ * Use it to fill each offer's `callback` before calling `supplyBlueMakeLend`.
  *
  * @param params.chainId - Chain whose `midnightBlueBuyCallbackFactory`, `midnight` and `blue` are used.
  * @param params.owner - Callback owner, the maker.
  * @param params.salt - Callback salt.
  * @returns The callback address, whether or not it is deployed yet.
  * @throws {UnknownAddressError} when the chain has no `midnightBlueBuyCallbackFactory`, `midnight` or `blue` deployment.
+ * @example
+ * ```ts
+ * const callback = getBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
+ * ```
  */
 export const getBlueBuyCallbackAddress = ({
   chainId,
