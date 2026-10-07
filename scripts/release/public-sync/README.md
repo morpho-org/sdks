@@ -71,11 +71,12 @@ also pages a `watch-failed` alert when it can't check (bad threshold, missing to
    sections 2 and 3). The App is the only bypass actor of ruleset A, which just restricts who
    may update `main`. Ruleset B (pull request, squash, `ci` passing on an up-to-date branch)
    has **no bypass actors**, the App included, so the App can't land anything on `main`
-   without public CI. No ruleset covers `sync/*`: with Contents write the App creates and
-   force-updates `sync/main` and its scratch branch `sync/build`, so don't add a ruleset on
-   `sync/*` that blocks force pushes or requires pull requests. Enable auto-merge and squash
-   merges on the public repository. Then check that ruleset A lists only the App as bypass
-   actor and ruleset B lists none.
+   without public CI. The `sync/*` ruleset (section 3) lets only the App create or push
+   `sync/main` and its scratch branch `sync/build`, so nobody else can change the PR after
+   auto-merge is armed. It must not block force pushes or require pull requests: the App
+   force-updates both branches. Enable auto-merge and squash
+   merges on the public repository. Then check that ruleset A and the `sync/*` ruleset list only the
+   App as bypass actor and ruleset B lists none.
 6. **Alerts** (TBD: channel and owner): create environment `public-sync-alerts` (branches:
    `main`) with secret `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert
    channel), and set repository variables `PUBLIC_SYNC_ALERT_OWNER` (mention, e.g.

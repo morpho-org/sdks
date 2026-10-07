@@ -214,6 +214,24 @@ describe("resolveReleaseAlert", () => {
     });
     expect(result.cause).toBeInstanceOf(Error);
   });
+
+  test.each([["1h"], ["0"], [undefined]])(
+    "pages a watch-failed alert on threshold %j",
+    async (maxAgeMinutes) => {
+      const result = await resolveReleaseAlert({
+        github: () => releaseRuns([run]),
+        now,
+        maxAgeMinutes,
+      });
+      expect(result.alert).toEqual({
+        type: "watch-failed",
+        reason: expect.stringContaining(
+          "MAX_AGE_MINUTES must be a positive integer",
+        ),
+      });
+      expect(result.cause).toBeInstanceOf(Error);
+    },
+  );
 });
 
 describe("resolveStaleAlert", () => {
@@ -320,6 +338,38 @@ describe("formatAlert", () => {
         { owner: "@o", runUrl: "r" },
       ),
     ).toContain("u has been open for 90 minutes");
+  });
+});
+
+describe("formatAlert release-failed", () => {
+  const where = { owner: "@o", runUrl: "r" };
+
+  test("reports a stuck run with its status and age", () => {
+    expect(
+      formatAlert(
+        {
+          type: "release-failed",
+          run: { url: "u", sha: "s", conclusion: "queued", stuckMinutes: 61 },
+        },
+        where,
+      ),
+    ).toBe(
+      "@o Public release u has been queued for 61 minutes on public main s: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until this run is rerun to success. Run: r",
+    );
+  });
+
+  test("reports a completed failure with its conclusion", () => {
+    expect(
+      formatAlert(
+        {
+          type: "release-failed",
+          run: { url: "u", sha: "s", conclusion: "failure" },
+        },
+        where,
+      ),
+    ).toBe(
+      "@o Public release u ended failure on public main s: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until this run is rerun to success. Run: r",
+    );
   });
 });
 

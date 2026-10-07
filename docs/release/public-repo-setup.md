@@ -48,6 +48,19 @@ Rules: block force pushes, restrict deletions, require signed commits, pull requ
 
 The `ci` check is the `ci` job of `.github/workflows/ci.yml`. Don't rename that job without updating this ruleset.
 
+### `sync/*` ruleset, "only the bot"
+
+Only the sync App can create or push `sync/main` and its scratch branch `sync/build`. GitHub keeps auto-merge armed when someone with write access pushes to a PR's head branch, so without this ruleset a push to `sync/main` after the App armed auto-merge would merge under the App's `Source-Commit` message once `ci` passes, skipping every internal gate.
+
+1. Replace `"actor_id": 0` in `ruleset-sync-branches.json` with the sync App's ID (as in section 2). It must be the only bypass actor.
+2. Create it:
+
+   ```bash
+   gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-sync-branches.json"
+   ```
+
+Rules: restrict creations and restrict updates, bypassed by the App, which creates and force-updates both branches. No force-push block and no required pull request: those would stop the App too. Deletions stay allowed, so GitHub can delete `sync/main` after the merge and the App can delete `sync/build`; a deleted `sync/main` only closes the PR, and the next sync opens it again.
+
 ## 4. Tag ruleset for `@morpho-org/*`
 
 Release tags (`@morpho-org/<package>-v<version>`) can't be moved or deleted once `release.yml` pushes them.

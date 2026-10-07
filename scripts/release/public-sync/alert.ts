@@ -4,12 +4,12 @@
  *
  *   node scripts/release/public-sync/alert.ts failed   # a release didn't reach its sync PR
  *   node scripts/release/public-sync/alert.ts stale    # the sync PR is open too long
- *   node scripts/release/public-sync/alert.ts release  # public release.yml failed on main
+ *   node scripts/release/public-sync/alert.ts release  # public release.yml failed or is stuck on main
  *
  * Reads `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert channel),
  * `PUBLIC_SYNC_ALERT_OWNER` (mention of the on-call owner) and `RUN_URL`; `failed` also
  * reads `RELEASE_SHA`, `stale` reads `GH_TOKEN` and `MAX_AGE_MINUTES`, and `release`
- * reads `GH_TOKEN` (a watch that can't check pages a `watch-failed` alert). An alert
+ * reads `GH_TOKEN` and `MAX_AGE_MINUTES` (a watch that can't check pages a `watch-failed` alert). An alert
  * always fails the step, so it shows even while the webhook isn't configured.
  */
 
@@ -159,9 +159,9 @@ export function formatAlert(
         ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
         : alert.type === "release-failed" &&
             alert.run.stuckMinutes !== undefined
-          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds.`
+          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until this run is rerun to success.`
           : alert.type === "release-failed"
-            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
+            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until this run is rerun to success.`
             : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
