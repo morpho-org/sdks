@@ -37,11 +37,12 @@ then mints the App token.
 
 `alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
 `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes). The
-same watch pages while any of the 20 newest public `release.yml` runs on `main` ended other than
-`success`, or hasn't completed `MAX_AGE_MINUTES` after it was created (queued, or waiting for `npm`
-approval), until that run is rerun to success. A later successful run doesn't clear it: each run publishes
-only the versions its own commit declares, so the failed run's versions would stay missing from npm. It
-also pages a `watch-failed` alert when it can't check (bad threshold, missing token, API error).
+same watch pages while a public `release.yml` run on `main` newer than the newest successful one
+(among the 20 newest) ended other than `success`, or hasn't completed
+`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` after its latest attempt started (queued, or waiting for `npm`
+approval). A later successful run clears it: each run publishes every version its commit declares
+that npm doesn't have yet. Only a version a later bump replaced before it was published is never
+published; its notes ship with the next version. It also pages a `watch-failed` alert when it can't check (bad threshold, missing token, API error).
 
 ## Setup (org admin)
 
@@ -80,5 +81,6 @@ also pages a `watch-failed` alert when it can't check (bad threshold, missing to
 6. **Alerts** (TBD: channel and owner): create environment `public-sync-alerts` (branches:
    `main`) with secret `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert
    channel), and set repository variables `PUBLIC_SYNC_ALERT_OWNER` (mention, e.g.
-   `<!subteam^ID>`) and optionally `PUBLIC_SYNC_MAX_PR_AGE_MINUTES`. Until then, alerts only
+   `<!subteam^ID>`) and optionally `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60), the threshold of both the
+   sync-PR age and the stuck-release checks. Until then, alerts only
    fail their job.

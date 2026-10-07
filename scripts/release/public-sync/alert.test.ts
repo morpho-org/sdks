@@ -86,7 +86,7 @@ const run = {
   head_sha: "b",
   status: "completed",
   conclusion: "failure",
-  created_at: "2026-10-06T11:30:00Z",
+  run_started_at: "2026-10-06T11:30:00Z",
 };
 const releaseWindow = { now, maxAgeMinutes: 60 };
 
@@ -113,7 +113,7 @@ describe("findFailedRelease", () => {
           ...run,
           status: "queued",
           conclusion: null,
-          created_at: "2026-10-06T11:00:00Z",
+          run_started_at: "2026-10-06T11:00:00Z",
         },
       ],
       [],
@@ -134,7 +134,7 @@ describe("findFailedRelease", () => {
               ...run,
               status,
               conclusion: null,
-              created_at: "2026-10-06T10:59:00Z",
+              run_started_at: "2026-10-06T10:59:00Z",
             },
           ]),
           releaseWindow,
@@ -148,24 +148,34 @@ describe("findFailedRelease", () => {
     },
   );
 
-  test("keeps reporting a failed run after a later run succeeds", async () => {
-    const later = {
-      ...run,
-      html_url: "https://github.com/morpho-org/sdks/actions/runs/10",
-      head_sha: "c",
-      conclusion: "success",
-    };
+  test("reports nothing once a later run succeeds", async () => {
     await expect(
-      findFailedRelease(releaseRuns([later, run]), releaseWindow),
+      findFailedRelease(
+        releaseRuns([{ ...run, head_sha: "c", conclusion: "success" }, run]),
+        releaseWindow,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  test("reports a failure newer than the newest success", async () => {
+    await expect(
+      findFailedRelease(
+        releaseRuns([run, { ...run, head_sha: "c", conclusion: "success" }]),
+        releaseWindow,
+      ),
     ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion: "failure" });
   });
 
-  test("reports nothing once the failed run is rerun to success", async () => {
+  test("doesn't report a rerun of an old run as stuck", async () => {
     await expect(
       findFailedRelease(
         releaseRuns([
-          { ...run, head_sha: "c", conclusion: "success" },
-          { ...run, conclusion: "success" },
+          {
+            ...run,
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-01T00:00:00Z",
+          },
         ]),
         releaseWindow,
       ),
@@ -176,11 +186,16 @@ describe("findFailedRelease", () => {
     await expect(
       findFailedRelease(
         releaseRuns([
-          { ...run, status: "queued", conclusion: null, created_at: "soon" },
+          {
+            ...run,
+            status: "queued",
+            conclusion: null,
+            run_started_at: "soon",
+          },
         ]),
         releaseWindow,
       ),
-    ).rejects.toThrow(/unreadable creation date "soon"/);
+    ).rejects.toThrow(/unreadable start time "soon"/);
   });
 });
 
@@ -354,7 +369,7 @@ describe("formatAlert release-failed", () => {
         where,
       ),
     ).toBe(
-      "@o Public release u has been queued for 61 minutes on public main s: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until this run is rerun to success. Run: r",
+      "@o Public release u has been queued for 61 minutes on public main s: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds. Run: r",
     );
   });
 
@@ -368,7 +383,7 @@ describe("formatAlert release-failed", () => {
         where,
       ),
     ).toBe(
-      "@o Public release u ended failure on public main s: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until this run is rerun to success. Run: r",
+      "@o Public release u ended failure on public main s: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds. Run: r",
     );
   });
 });

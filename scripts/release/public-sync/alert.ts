@@ -75,22 +75,23 @@ export interface FailedRelease {
   readonly stuckMinutes?: number;
 }
 
-/** Newest `release.yml` runs checked; an older failure is no longer reported. */
+/** Newest `release.yml` runs checked for one newer than the newest success. */
 const RELEASE_RUNS_CHECKED = 20;
 const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=${RELEASE_RUNS_CHECKED}`;
 
 /**
  * Reads the newest `RELEASE_RUNS_CHECKED` `release.yml` runs on public `main` and reports
- * the newest one that failed or is stuck. Each run publishes only the versions its own
- * commit declares, so a later success doesn't cover an earlier failure: a run stays
- * reported until it is rerun to success, or until it falls out of the checked window.
+ * the newest one, newer than the newest success, that failed or is stuck. A run publishes
+ * every version its commit declares that npm doesn't have yet, so a success covers every
+ * older run. The one exception is a version a later bump replaced before it was published:
+ * it's never published, and its notes ship with the next version.
  *
  * @param github - Client able to read the public repository.
  * @param options.now - Current time.
  * @param options.maxAgeMinutes - Minutes a run may stay queued, waiting or in progress.
  * @returns The newest run whose latest attempt completed with any conclusion but
  *   `success`, or that hasn't completed after `maxAgeMinutes`, else `undefined`.
- * @throws If a run that hasn't completed has an unreadable creation date.
+ * @throws If a run that hasn't completed has an unreadable start time.
  */
 export async function findFailedRelease(
   github: GitHub,
@@ -102,12 +103,12 @@ export async function findFailedRelease(
       head_sha: string;
       status: string;
       conclusion: string | null;
-      created_at: string;
+      run_started_at: string;
     }[];
   };
   for (const release of runs) {
     if (release.status === "completed") {
-      if (release.conclusion === "success") continue;
+      if (release.conclusion === "success") return undefined;
       return {
         url: release.html_url,
         sha: release.head_sha,
@@ -115,11 +116,11 @@ export async function findFailedRelease(
       };
     }
     const ageMinutes = Math.floor(
-      (options.now.getTime() - Date.parse(release.created_at)) / 60_000,
+      (options.now.getTime() - Date.parse(release.run_started_at)) / 60_000,
     );
     if (Number.isNaN(ageMinutes)) {
       throw new Error(
-        `Public release release ${release.html_url} has an unreadable creation date "${release.created_at}".`,
+        `Public release run ${release.html_url} has an unreadable start time "${release.run_started_at}".`,
       );
     }
     if (ageMinutes <= options.maxAgeMinutes) continue;
@@ -159,9 +160,9 @@ export function formatAlert(
         ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
         : alert.type === "release-failed" &&
             alert.run.stuckMinutes !== undefined
-          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until this run is rerun to success.`
+          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds.`
           : alert.type === "release-failed"
-            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until this run is rerun to success.`
+            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
             : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
