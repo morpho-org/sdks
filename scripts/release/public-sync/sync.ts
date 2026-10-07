@@ -198,7 +198,7 @@ export interface SyncOptions {
   readonly isAncestor: (ancestor: string, descendant: string) => boolean;
   readonly log?: (message: string) => void;
   readonly maxBatchBytes?: number;
-  /** Waits before re-reading a merge state GitHub is still computing. Defaults to a real timer. */
+  /** Waits before re-reading a merge state or PR head GitHub is still updating. Defaults to a real timer. */
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
@@ -267,6 +267,9 @@ async function readCommit(github: GitHub, sha: string) {
 export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   const { github, manifest, isAncestor } = options;
   const log = options.log ?? (() => {});
+  const sleep =
+    options.sleep ??
+    ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   // Everything that can fail without writing runs before the first write.
   for (const file of manifest.files) {
     // createCommitOnBranch writes every file as 100644.
@@ -410,10 +413,6 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
           commitBody: message.body,
           expectedHeadOid: pr.head.sha,
         };
-        const sleep =
-          options.sleep ??
-          ((ms: number) =>
-            new Promise<void>((resolve) => setTimeout(resolve, ms)));
         let mergeState = "UNKNOWN";
         // GitHub computes the merge state lazily: `UNKNOWN` until it has.
         for (let attempt = 0; attempt < MERGE_STATE_ATTEMPTS; attempt++) {
@@ -527,6 +526,21 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     });
     number = pr.number;
     nodeId = pr.node_id;
+    // GitHub moves an open PR's head after a ref update in the background.
+    let prHead: string | undefined;
+    for (let attempt = 0; attempt < MERGE_STATE_ATTEMPTS; attempt++) {
+      if (attempt > 0) await sleep(MERGE_STATE_DELAY_MS);
+      const current = (await github.rest(
+        `${repoPath}/pulls/${pr.number}`,
+      )) as PullRequest;
+      prHead = current.head.sha;
+      if (prHead === headSha) break;
+    }
+    if (prHead !== headSha) {
+      throw new Error(
+        `Sync PR #${pr.number} still shows head ${prHead}, expected ${headSha}. Rerun the job.`,
+      );
+    }
   }
   await github.graphql(ENABLE_AUTO_MERGE, {
     input: {

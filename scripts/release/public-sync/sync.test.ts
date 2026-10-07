@@ -90,6 +90,9 @@ class FakeGitHub implements GitHub {
   corruptTree = false;
   /** Reports every recursive tree listing as truncated. */
   truncateTrees = false;
+  /** `GET pulls/{n}` reads that still report the previous PR head. */
+  staleHeadReads = 0;
+  private previousHead: string | undefined;
   /** Runs after each built commit, e.g. to move `main` mid-sync. */
   onCommit: (() => void) | undefined;
   private counter = 0;
@@ -178,6 +181,7 @@ class FakeGitHub implements GitHub {
     if ((match = /^git\/refs\/heads\/(.+)$/.exec(route))) {
       const name = match[1] ?? "";
       if (!this.refs.has(name)) throw new GitHubApiError("missing", 422);
+      if (name === SYNC_BRANCH) this.previousHead = this.refs.get(name);
       if (method === "DELETE") this.refs.delete(name);
       else this.refs.set(name, input.sha ?? "");
       return undefined;
@@ -223,6 +227,14 @@ class FakeGitHub implements GitHub {
       };
       this.pulls.push(pull);
       return this.pullJson(pull);
+    }
+    if ((match = /^pulls\/(\d+)$/.exec(route)) && method === "GET") {
+      const pull = this.pulls[Number(match[1]) - 1];
+      if (!pull) throw new GitHubApiError("missing pull", 404);
+      const json = this.pullJson(pull);
+      if (this.staleHeadReads === 0) return json;
+      this.staleHeadReads--;
+      return { ...json, head: { sha: this.previousHead } };
     }
     if ((match = /^pulls\/(\d+)$/.exec(route)) && method === "PATCH") {
       const pull = this.pulls[Number(match[1]) - 1];
@@ -605,6 +617,36 @@ describe("syncPublic", () => {
     expect(head?.parents).toEqual([moved]);
     expect(treeHash(head?.files ?? new Map())).toBe(r2.manifest.treeHash);
     expect(github.pulls[0]?.auto_merge?.commit_message).toContain(R2);
+  });
+
+  test("waits for the PR head to follow sync/main before arming auto-merge", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    github.staleHeadReads = 2;
+    const waits: number[] = [];
+    expect(
+      await syncPublic({
+        github,
+        ...release(R2, v2),
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      }),
+    ).toEqual({ type: "updated", pr: 1 });
+    expect(waits).toHaveLength(2);
+    expect(github.pulls[0]?.auto_merge?.commit_message).toContain(R2);
+  });
+
+  test("fails without arming auto-merge when the PR head never follows sync/main", async () => {
+    const github = new FakeGitHub({});
+    await syncPublic({ github, ...release(R1, v1) });
+    const pull = github.pulls[0];
+    if (!pull) throw new Error("no pull");
+    github.staleHeadReads = 100;
+    await expect(
+      syncPublic({ github, ...release(R2, v2), sleep: async () => {} }),
+    ).rejects.toThrow(/still shows head .*Rerun the job/);
+    expect(pull.auto_merge).toBeNull();
   });
 
   test("a rerun after a partial failure repairs the PR text and drops sync/build", async () => {
