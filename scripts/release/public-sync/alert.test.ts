@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  findFailedRelease,
   findStaleSyncPr,
   formatAlert,
+  resolveReleaseAlert,
   resolveStaleAlert,
   sendAlert,
 } from "./alert.ts";
@@ -62,6 +64,76 @@ describe("findStaleSyncPr", () => {
     await expect(
       findStaleSyncPr({ github: github([], ""), now, maxAgeMinutes: 60 }),
     ).resolves.toBeUndefined();
+  });
+});
+
+function releaseRuns(runs: unknown[]): GitHub {
+  return {
+    async rest(path) {
+      expect(path).toBe(
+        "repos/morpho-org/sdks/actions/workflows/release.yml/runs?branch=main&per_page=1",
+      );
+      return { workflow_runs: runs };
+    },
+    async graphql() {
+      throw new Error("unused");
+    },
+  };
+}
+
+const run = {
+  html_url: "https://github.com/morpho-org/sdks/actions/runs/9",
+  head_sha: "b",
+  status: "completed",
+  conclusion: "failure",
+};
+
+describe("findFailedRelease", () => {
+  test.each(["failure", "timed_out", "startup_failure"])(
+    "reports a latest run that ended %s",
+    async (conclusion) => {
+      await expect(
+        findFailedRelease(releaseRuns([{ ...run, conclusion }])),
+      ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion });
+    },
+  );
+
+  test("ignores a successful, running or missing latest run", async () => {
+    for (const runs of [
+      [{ ...run, conclusion: "success" }],
+      [{ ...run, status: "in_progress", conclusion: null }],
+      [],
+    ]) {
+      await expect(
+        findFailedRelease(releaseRuns(runs)),
+      ).resolves.toBeUndefined();
+    }
+  });
+});
+
+describe("resolveReleaseAlert", () => {
+  test("returns a release-failed alert", async () => {
+    await expect(
+      resolveReleaseAlert({ github: () => releaseRuns([run]) }),
+    ).resolves.toEqual({
+      alert: {
+        type: "release-failed",
+        run: { url: run.html_url, sha: "b", conclusion: "failure" },
+      },
+    });
+  });
+
+  test("pages a watch-failed alert when the runs can't be read", async () => {
+    const result = await resolveReleaseAlert({
+      github: () => {
+        throw new Error("GH_TOKEN is not set.");
+      },
+    });
+    expect(result.alert).toEqual({
+      type: "watch-failed",
+      reason: "GH_TOKEN is not set.",
+    });
+    expect(result.cause).toBeInstanceOf(Error);
   });
 });
 
@@ -150,7 +222,7 @@ describe("formatAlert", () => {
         { owner: "@o", runUrl: "https://run" },
       ),
     ).toBe(
-      "@o Public sync watch failed, so a stuck sync PR may go unnoticed: GET pulls returned 502. Run: https://run",
+      "@o Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: GET pulls returned 502. Run: https://run",
     );
   });
 

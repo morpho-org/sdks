@@ -21,7 +21,7 @@
 | `AI_GATEWAY_API_KEY` | `lupin` job (`review.yml`) | same as above; never forwarded to PR-head code | **Medium** — metered model-gateway key; no repo write capability, rotatable |
 | `LUPIN_LINEAR_CLIENT_SECRET`, `LUPIN_BETTERSTACK_API_TOKEN` | `lupin` job (`review.yml`) | org secrets, same scope as above | **Low** — read-only tool credentials for Lupin reviewers |
 | `PUBLIC_SYNC_APP_ID`, `PUBLIC_SYNC_APP_PRIVATE_KEY` | `sync` job (`public-snapshot.yml`) | **`public-sync` environment only** (deployment branch `main`), job gated to `push` of a release commit on `main`; App installed on public `morpho-org/sdks` only, token minted with `repositories: sdks` and only `contents`, `pull-requests` and `workflows` write | **Critical** — opens and auto-merges the PR whose merge publishes to npm |
-| `PUBLIC_SYNC_ALERT_WEBHOOK_URL` | `alert` job (`public-snapshot.yml`), `stale-sync-pr` job (`public-sync-watch.yml`) | **`public-sync-alerts` environment only** (deployment branch `main`) | **Low** — posts to the alert channel only; rotatable |
+| `PUBLIC_SYNC_ALERT_WEBHOOK_URL` | `alert` job (`public-snapshot.yml`), `stale-sync-pr` and `failed-release` jobs (`public-sync-watch.yml`) | **`public-sync-alerts` environment only** (deployment branch `main`) | **Low** — posts to the alert channel only; rotatable |
 
 ## Invariants — breaking any of these is a finding, not a waiver
 

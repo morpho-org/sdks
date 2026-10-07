@@ -4,11 +4,12 @@
  *
  *   node scripts/release/public-sync/alert.ts failed   # a release didn't reach its sync PR
  *   node scripts/release/public-sync/alert.ts stale    # the sync PR is open too long
+ *   node scripts/release/public-sync/alert.ts release  # public release.yml failed on main
  *
  * Reads `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert channel),
  * `PUBLIC_SYNC_ALERT_OWNER` (mention of the on-call owner) and `RUN_URL`; `failed` also
- * reads `RELEASE_SHA`, and `stale` reads `GH_TOKEN` and `MAX_AGE_MINUTES` (a watch that
- * can't check the sync PR pages a `watch-failed` alert). An alert
+ * reads `RELEASE_SHA`, `stale` reads `GH_TOKEN` and `MAX_AGE_MINUTES`, and `release`
+ * reads `GH_TOKEN` (a watch that can't check pages a `watch-failed` alert). An alert
  * always fails the step, so it shows even while the webhook isn't configured.
  */
 
@@ -64,10 +65,54 @@ export async function findStaleSyncPr(options: {
   return { number: pr.number, url: pr.html_url, ageMinutes };
 }
 
+/** Latest `release.yml` run on public `main`, when it failed. */
+export interface FailedRelease {
+  readonly url: string;
+  readonly sha: string;
+  readonly conclusion: string;
+}
+
+const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=1`;
+const FAILED_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure"]);
+
+/**
+ * Reads the latest `release.yml` run on public `main`. It keeps being reported until a
+ * later run (or a rerun) succeeds, since a failed run can leave packages off npm.
+ *
+ * @param github - Client able to read the public repository.
+ * @returns The run when it completed with a failure, else `undefined`.
+ */
+export async function findFailedRelease(
+  github: GitHub,
+): Promise<FailedRelease | undefined> {
+  const { workflow_runs: runs } = (await github.rest(RELEASE_RUNS_PATH)) as {
+    workflow_runs: {
+      html_url: string;
+      head_sha: string;
+      status: string;
+      conclusion: string | null;
+    }[];
+  };
+  const latest = runs[0];
+  if (
+    latest === undefined ||
+    latest.status !== "completed" ||
+    !FAILED_CONCLUSIONS.has(latest.conclusion ?? "")
+  ) {
+    return undefined;
+  }
+  return {
+    url: latest.html_url,
+    sha: latest.head_sha,
+    conclusion: latest.conclusion ?? "",
+  };
+}
+
 /** What an alert reports. */
 export type Alert =
   | { readonly type: "failed"; readonly releaseSha: string }
   | { readonly type: "stale"; readonly pr: StaleSyncPr }
+  | { readonly type: "release-failed"; readonly run: FailedRelease }
   | { readonly type: "watch-failed"; readonly reason: string };
 
 /**
@@ -87,7 +132,9 @@ export function formatAlert(
       ? `Public sync failed for internal release ${alert.releaseSha}: the public PR wasn't opened or updated. Check the run, fix, and rerun the failed jobs.`
       : alert.type === "stale"
         ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
-        : `Public sync watch failed, so a stuck sync PR may go unnoticed: ${alert.reason}`;
+        : alert.type === "release-failed"
+          ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
+          : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
 
@@ -129,6 +176,31 @@ export async function resolveStaleAlert(options: {
   }
 }
 
+/**
+ * Decides the alert of the `release` watch. Any failure becomes a `watch-failed` alert.
+ *
+ * @param options.github - Builds the client; called inside the guard, so a missing token pages too.
+ * @returns The alert to send, if any, and the error behind a `watch-failed` alert.
+ */
+export async function resolveReleaseAlert(options: {
+  readonly github: () => GitHub;
+}): Promise<{ readonly alert?: Alert; readonly cause?: unknown }> {
+  try {
+    const failed = await findFailedRelease(options.github());
+    return failed === undefined
+      ? {}
+      : { alert: { type: "release-failed", run: failed } };
+  } catch (error) {
+    return {
+      alert: {
+        type: "watch-failed",
+        reason: error instanceof Error ? error.message : String(error),
+      },
+      cause: error,
+    };
+  }
+}
+
 async function run() {
   const mode = process.argv[2];
   const env = process.env;
@@ -142,11 +214,19 @@ async function run() {
       now: new Date(),
       maxAgeMinutes: env.MAX_AGE_MINUTES,
     }));
+  } else if (mode === "release") {
+    ({ alert, cause } = await resolveReleaseAlert({
+      github: () => createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
+    }));
   } else {
-    throw new Error("Usage: alert.ts failed|stale");
+    throw new Error("Usage: alert.ts failed|stale|release");
   }
   if (alert === undefined) {
-    console.log("No stale sync PR.");
+    console.log(
+      mode === "stale"
+        ? "No stale sync PR."
+        : "Latest public release run didn't fail.",
+    );
     return;
   }
 

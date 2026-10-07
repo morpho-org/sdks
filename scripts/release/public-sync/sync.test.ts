@@ -811,6 +811,40 @@ describe("syncPublic", () => {
     expect(github.pulls).toHaveLength(1);
   });
 
+  test("a superseding release lists every package since public main's source", async () => {
+    const github = new FakeGitHub({ "README.md": "v0" });
+    github.refs.set(
+      "main",
+      github.addCommit({
+        files: new Map([["README.md", "v0"]]),
+        message: `chore: start release sync from sdks-internal\n\nSource-Commit: ${R1}`,
+        parents: [github.refs.get("main") ?? ""],
+      }),
+    );
+    const bases: string[] = [];
+    const packagesSince = (base: string) => {
+      bases.push(base);
+      return [
+        { name: "@morpho-org/a", version: "1.0.0" },
+        { name: "@morpho-org/b", version: "2.0.0" },
+      ];
+    };
+    await syncPublic({ github, ...release(R2, v1), packagesSince });
+    await syncPublic({
+      github,
+      ...release(R3, v2),
+      packages: [{ name: "@morpho-org/b", version: "2.0.0" }],
+      packagesSince,
+    });
+    expect(bases).toEqual([R1, R1]);
+    const pull = github.pulls[0];
+    expect(pull?.title).toBe(
+      "Release @morpho-org/a@1.0.0, @morpho-org/b@2.0.0",
+    );
+    expect(pull?.body).toContain("`@morpho-org/a@1.0.0`");
+    expect(pull?.auto_merge?.commit_title).toBe(pull?.title);
+  });
+
   test("an unverified commit stops the sync before the PR moves", async () => {
     const github = new FakeGitHub({});
     github.signCommits = false;

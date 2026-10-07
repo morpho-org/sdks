@@ -188,6 +188,12 @@ export interface SyncOptions {
   /** Reads a file of the public tree by its public path. */
   readonly readFile: (path: string) => Buffer;
   readonly packages: readonly TarballIdentity[];
+  /**
+   * Packages whose version changed between an internal commit and the release. When public
+   * `main` has a `Source-Commit`, the PR text lists these instead of `packages`, so a release
+   * that replaces an unmerged one still names what the merge publishes.
+   */
+  readonly packagesSince?: (sourceCommit: string) => readonly TarballIdentity[];
   /** Whether `ancestor` is an ancestor of (or equal to) `descendant` in internal history. */
   readonly isAncestor: (ancestor: string, descendant: string) => boolean;
   readonly log?: (message: string) => void;
@@ -261,11 +267,6 @@ async function readCommit(github: GitHub, sha: string) {
 export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   const { github, manifest, isAncestor } = options;
   const log = options.log ?? (() => {});
-  const message = buildReleaseMessage({
-    packages: options.packages,
-    sourceCommit: manifest.sourceCommit,
-    treeHash: manifest.treeHash,
-  });
   // Everything that can fail without writing runs before the first write.
   for (const file of manifest.files) {
     // createCommitOnBranch writes every file as 100644.
@@ -308,6 +309,15 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
     log(`Public main already has tree ${manifest.treeHash}.`);
     return { type: "up-to-date" };
   }
+  const packages =
+    mainSource === undefined || options.packagesSince === undefined
+      ? options.packages
+      : options.packagesSince(mainSource);
+  const message = buildReleaseMessage({
+    packages,
+    sourceCommit: manifest.sourceCommit,
+    treeHash: manifest.treeHash,
+  });
 
   const tree = (await github.rest(
     `${repoPath}/git/trees/${main.tree.sha}?recursive=1`,
@@ -338,7 +348,7 @@ export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   const prBody = [
     "Release snapshot of the internal repository. Merging it publishes every package below that isn't on npm yet.",
     "",
-    ...options.packages.map((pkg) => `- \`${pkg.name}@${pkg.version}\``),
+    ...packages.map((pkg) => `- \`${pkg.name}@${pkg.version}\``),
     "",
     message.body.replace("\n", "  \n"),
     "",
@@ -619,6 +629,7 @@ async function run() {
     github: createGitHub({ token }),
     manifest,
     packages,
+    packagesSince: (base) => listReleasedPackages({ repo: ".", sha, base }),
     readFile: (path) => readFileSync(join(dir, "tree", path)),
     isAncestor: (ancestor, descendant) =>
       gitIsAncestor({ ancestor, descendant }),
