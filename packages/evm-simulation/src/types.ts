@@ -7,6 +7,14 @@ import type { Address, Hex } from "viem";
 export interface ChainSimulationConfig {
   /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
   readonly simulateV1Url: string;
+  /**
+   * Block overrides forwarded to `eth_simulateV1` as the simulated block's
+   * `blockOverrides`. Omitted fields leave the node's defaults untouched.
+   */
+  readonly blockOverrides?: {
+    /** Gas limit of the simulated block. Omitted: no gas limit override is sent. */
+    readonly gasLimit?: bigint;
+  };
 }
 
 /**

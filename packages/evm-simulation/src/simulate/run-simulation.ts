@@ -115,6 +115,7 @@ export async function runSimulation(params: {
     plan,
     stateBlock: pinnedBlock,
     validation: monad,
+    blockGasLimit: chain.blockOverrides?.gasLimit,
   });
 
   const userCalls = execution.calls

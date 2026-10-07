@@ -178,6 +178,26 @@ describe.sequential("runSimulation", () => {
     expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
     expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
+  });
+
+  test("behavior: a configured block gas limit is forwarded to execution", async () => {
+    stubFetch(CHAIN_ID, []);
+    await simulate(
+      {
+        chains: new Map([
+          [
+            CHAIN_ID,
+            {
+              simulateV1Url: RPC_URL,
+              blockOverrides: { gasLimit: 16_777_216n },
+            },
+          ],
+        ]),
+      },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBe(16_777_216n);
   });
 
   test("behavior: Monad pins to the finalized block and sends validation: true", async () => {

@@ -166,6 +166,33 @@ describe.sequential("executePlan", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  test("behavior: no blockOverrides are sent without a block gas limit", async () => {
+    respondHappy(okCalls(3));
+    await executePlan(params);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [Record<string, unknown>] }];
+    };
+    expect("blockOverrides" in request.params[0].blockStateCalls[0]).toBe(
+      false,
+    );
+  });
+
+  test("behavior: a block gas limit is sent as blockOverrides.gasLimit", async () => {
+    respondHappy(okCalls(3));
+    await executePlan({ ...params, blockGasLimit: 16_777_216n });
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [Record<string, unknown>] }];
+    };
+    const blockStateCall = request.params[0].blockStateCalls[0];
+    expect(blockStateCall.blockOverrides).toEqual({ gasLimit: "0x1000000" });
+    // The override sets the block limit only; calls carry no explicit gas.
+    expect(
+      (blockStateCall.calls as Record<string, unknown>[]).some(
+        (call) => "gas" in call,
+      ),
+    ).toBe(false);
+  });
+
   test("behavior: request body carries the validation flag", async () => {
     respondHappy(okCalls(3));
     await executePlan({ ...params, validation: true });
