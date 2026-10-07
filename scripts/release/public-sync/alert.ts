@@ -65,7 +65,7 @@ export async function findStaleSyncPr(options: {
   return { number: pr.number, url: pr.html_url, ageMinutes };
 }
 
-/** Latest `release.yml` run on public `main`, when it failed. */
+/** Latest `release.yml` run on public `main`, when it didn't succeed. */
 export interface FailedRelease {
   readonly url: string;
   readonly sha: string;
@@ -73,14 +73,13 @@ export interface FailedRelease {
 }
 
 const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=1`;
-const FAILED_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure"]);
 
 /**
  * Reads the latest `release.yml` run on public `main`. It keeps being reported until a
  * later run (or a rerun) succeeds, since a failed run can leave packages off npm.
  *
  * @param github - Client able to read the public repository.
- * @returns The run when it completed with a failure, else `undefined`.
+ * @returns The run when it completed with any conclusion but `success`, else `undefined`.
  */
 export async function findFailedRelease(
   github: GitHub,
@@ -97,7 +96,7 @@ export async function findFailedRelease(
   if (
     latest === undefined ||
     latest.status !== "completed" ||
-    !FAILED_CONCLUSIONS.has(latest.conclusion ?? "")
+    latest.conclusion === "success"
   ) {
     return undefined;
   }

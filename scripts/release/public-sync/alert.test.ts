@@ -89,14 +89,18 @@ const run = {
 };
 
 describe("findFailedRelease", () => {
-  test.each(["failure", "timed_out", "startup_failure"])(
-    "reports a latest run that ended %s",
-    async (conclusion) => {
-      await expect(
-        findFailedRelease(releaseRuns([{ ...run, conclusion }])),
-      ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion });
-    },
-  );
+  test.each([
+    "failure",
+    "timed_out",
+    "startup_failure",
+    "cancelled",
+    "skipped",
+    "action_required",
+  ])("reports a latest run that ended %s", async (conclusion) => {
+    await expect(
+      findFailedRelease(releaseRuns([{ ...run, conclusion }])),
+    ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion });
+  });
 
   test("ignores a successful, running or missing latest run", async () => {
     for (const runs of [

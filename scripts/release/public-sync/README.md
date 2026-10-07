@@ -31,11 +31,13 @@ then mints the App token.
   last one must have the expected tree, before `sync/main` moves. Only `100644` files can be
   written; another mode fails the sync.
 - **Supersede.** A newer release disarms auto-merge, force-moves `sync/main` and retitles the
-  same PR. More than one open sync PR fails the sync.
+  same PR. The PR title, body and squash message list every package whose version changed
+  between public `main`'s `Source-Commit` and the release, so they name everything the merge
+  publishes. More than one open sync PR fails the sync.
 
 `alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
 `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes). The
-same watch pages while the latest public `release.yml` run on `main` failed, until a run
+same watch pages while the latest public `release.yml` run on `main` ended other than `success`, until a run
 succeeds, since the merged release may then be missing from npm. It also pages a `watch-failed`
 alert when it can't check (bad threshold, missing token, API error).
 
