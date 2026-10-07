@@ -1287,6 +1287,8 @@ function isGitCommandError(error: unknown, stderrPattern: RegExp): boolean {
 const PUBLIC_REFS = "refs/remotes/morpho-org-sdks";
 const PUBLIC_MAIN = "morpho-org-sdks/main";
 const PUBLIC_NEXT = "morpho-org-sdks/next";
+/** Public tags, kept apart from the checkout's own `refs/tags`. */
+const PUBLIC_TAGS = "refs/morpho-org-sdks/tags";
 
 /**
  * Fetches the release branches and tags of the public repository.
@@ -1301,19 +1303,22 @@ export function fetchReleaseRefs(
 ): void {
   const unshallow =
     execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
-  try {
+  const fetch = (branches: readonly string[]) =>
     execGit(
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
+        "--no-tags",
         repository,
-        `+refs/heads/main:${PUBLIC_REFS}/main`,
-        `+refs/heads/next:${PUBLIC_REFS}/next`,
-        "--tags",
-        "--force",
+        ...branches.map(
+          (branch) => `+refs/heads/${branch}:${PUBLIC_REFS}/${branch}`,
+        ),
+        `+refs/tags/*:${PUBLIC_TAGS}/*`,
       ],
       cwd,
     );
+  try {
+    fetch(["main", "next"]);
   } catch (error) {
     if (
       !isGitCommandError(
@@ -1323,17 +1328,9 @@ export function fetchReleaseRefs(
     ) {
       throw error;
     }
-    execGit(
-      [
-        "fetch",
-        ...(unshallow ? ["--unshallow"] : []),
-        repository,
-        `+refs/heads/main:${PUBLIC_REFS}/main`,
-        "--tags",
-        "--force",
-      ],
-      cwd,
-    );
+    fetch(["main"]);
+    // A next ref left by an earlier run would let checks pass on a deleted branch.
+    execGit(["update-ref", "-d", `${PUBLIC_REFS}/next`], cwd);
   }
 }
 
@@ -1520,7 +1517,7 @@ function addGitTagCheck(
   let taggedCommit: string;
   try {
     taggedCommit = execGit(
-      ["rev-parse", "--verify", `refs/tags/${tag}^{commit}`],
+      ["rev-parse", "--verify", `${PUBLIC_TAGS}/${tag}^{commit}`],
       cwd,
     ).trim();
   } catch (error) {

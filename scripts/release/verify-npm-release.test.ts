@@ -1103,43 +1103,96 @@ describe("fetchReleaseRefs", () => {
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
   };
-  test("fetches main when the repository has no next branch", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      env: isolatedGit,
+    }).trim();
+  const commit = (cwd: string, message: string) =>
+    git(
+      cwd,
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      message,
+    );
+
+  function withRepos(run: (remote: string, local: string) => void): void {
     const root = mkdtempSync(join(tmpdir(), "verify-npm-release-"));
     try {
-      const git = (cwd: string, ...args: string[]) =>
-        execFileSync("git", args, {
-          cwd,
-          encoding: "utf8",
-          env: isolatedGit,
-        }).trim();
       const remote = join(root, "remote");
       const local = join(root, "local");
-      execFileSync("git", ["init", "-q", "-b", "main", remote], {
-        env: isolatedGit,
-      });
-      git(
-        remote,
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "release",
-      );
+      git(root, "init", "-q", "-b", "main", remote);
+      commit(remote, "release");
       git(remote, "tag", "pkg-v1.0.0");
-      execFileSync("git", ["init", "-q", local], { env: isolatedGit });
+      git(root, "init", "-q", "-b", "main", local);
+      run(remote, local);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("fetches main and next when the repository has both", () => {
+    withRepos((remote, local) => {
+      git(remote, "checkout", "-q", "-b", "next");
+      commit(remote, "prerelease");
 
       fetchReleaseRefs(local, remote);
 
       expect(git(local, "rev-parse", "morpho-org-sdks/main")).toBe(
         git(remote, "rev-parse", "main"),
       );
-      expect(git(local, "tag", "--list")).toBe("pkg-v1.0.0");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+      expect(git(local, "rev-parse", "morpho-org-sdks/next")).toBe(
+        git(remote, "rev-parse", "next"),
+      );
+    });
+  });
+
+  test("fetches main and drops a stale next when the repository has no next branch", () => {
+    withRepos((remote, local) => {
+      git(remote, "checkout", "-q", "-b", "next");
+      commit(remote, "prerelease");
+      fetchReleaseRefs(local, remote);
+      git(remote, "checkout", "-q", "main");
+      git(remote, "branch", "-q", "-D", "next");
+
+      fetchReleaseRefs(local, remote);
+
+      expect(git(local, "rev-parse", "morpho-org-sdks/main")).toBe(
+        git(remote, "rev-parse", "main"),
+      );
+      expect(
+        git(local, "for-each-ref", "refs/remotes/morpho-org-sdks/next"),
+      ).toBe("");
+    });
+  });
+
+  test("keeps public tags apart from the checkout's own tags", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      git(local, "tag", "pkg-v1.0.0");
+      git(local, "tag", "pkg-v0.9.0");
+      const localTag = git(local, "rev-parse", "pkg-v1.0.0");
+
+      fetchReleaseRefs(local, remote);
+
+      expect(
+        git(
+          local,
+          "rev-parse",
+          "refs/morpho-org-sdks/tags/pkg-v1.0.0^{commit}",
+        ),
+      ).toBe(git(remote, "rev-parse", "pkg-v1.0.0"));
+      expect(git(local, "rev-parse", "refs/tags/pkg-v1.0.0")).toBe(localTag);
+      expect(
+        git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v0.9.0"),
+      ).toBe("");
+    });
   });
 });

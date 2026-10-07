@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; publishing superseded by the public release flow ([`public-repo-setup.md`](../release/public-repo-setup.md), SDK-1322) |
+| **Status** | accepted  |
 | **Date**   | 2026-05-12 |
 | **Author** | @rubilmax |
 | **Scope**  | Repo-wide |
