@@ -51,8 +51,12 @@ token, API error).
    step 3.
 2. **Create the GitHub App** (org settings → Developer settings → GitHub Apps → New), owned by
    morpho-org: name e.g. `morpho-sdks-public-sync`, webhook off, "Only on this account".
-   Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**
-   (Metadata: Read is implied). Nothing else, no organization or account permissions.
+   Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**,
+   **Workflows: Read and write** (Metadata: Read is implied). Nothing else, no organization or
+   account permissions. Workflows write is needed because the public tree ships
+   `.github/workflows/`, and GitHub rejects an App commit there without it. This App is the only
+   holder of it on `morpho-org/sdks`, and a workflow change still lands only through the sync PR,
+   which ruleset B's required `ci` check gates like every other merge.
 3. **Install it on public `morpho-org/sdks` only** ("Only select repositories").
 4. **Generate a private key**, then in internal `morpho-org/sdks-internal` → Settings →
    Environments create `public-sync`: deployment branches "Selected branches" = `main`, and

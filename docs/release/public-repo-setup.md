@@ -166,7 +166,7 @@ Org Settings → GitHub Apps → Installed GitHub Apps. For each App installed o
 
 - Any App with `contents: write`, `pull_requests: write`, `administration`, `workflows` or `actions: write` on the public repository can push a branch, open or merge a PR, or edit workflows. Exclude it from `morpho-org/sdks` (switch it to "Only select repositories") unless it is the sync App.
 - Read-only Apps (code scanning, dashboards) can stay.
-- The sync App is installed on `morpho-org/sdks` only, with `contents: write` and `pull_requests: write`, and nothing else.
+- The sync App is installed on `morpho-org/sdks` only, with `contents: write`, `pull_requests: write` and `workflows: write`, and nothing else. It needs `workflows: write` because the public tree ships `.github/workflows/`, and GitHub rejects an App commit there without it. It is the only holder of that permission on `morpho-org/sdks`. A workflow change still lands only through the sync PR, and ruleset B (no bypass actors) requires `ci` to pass before every merge, that one included.
 
 Record what was removed in the SDK-1322 ticket.
 
