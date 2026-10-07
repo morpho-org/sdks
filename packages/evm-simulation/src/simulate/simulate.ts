@@ -40,8 +40,9 @@ import { runSimulation } from "./run-simulation.js";
  * separating gas from economic effects. Monad nodes reject `false`, so Monad
  * simulations send `true`; its simulated block charges no gas either way.
  *
- * @param config - Required per-chain `eth_simulateV1` URL, optional logger, and
- *   the overall timeout budget.
+ * @param config - Required per-chain `eth_simulateV1` URL, optional per-chain
+ *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
+ *   overall timeout budget.
  * @param params - Per-call simulation input.
  * @param params.chainId - Chain id the bundle targets; must match the endpoint.
  * @param params.transactions - The bundle's transactions, in execution order.
@@ -55,7 +56,9 @@ import { runSimulation } from "./run-simulation.js";
  *   final), resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, or share quotes for
+ *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, a
+ *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
+ *   that is not a boolean, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
@@ -69,7 +72,7 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
- *   `parentHash`, a block timestamp earlier than the pinned block's, a
+ *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable, chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, a quoted balance/position read whose non-empty
  *   return data cannot be decoded, a state-block hash that changed or a pinned
  *   block that vanished mid-flight, or an

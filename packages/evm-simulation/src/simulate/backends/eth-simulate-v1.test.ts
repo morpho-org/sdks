@@ -109,6 +109,7 @@ beforeEach(() => {
       timestamp: 1_700_000_000n,
     },
     validation: false,
+    parentHashCheck: true,
   };
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -164,6 +165,33 @@ describe.sequential("executePlan", () => {
     // The pinned block is resolved by the caller; this boundary simulates
     // once and then re-fetches that same block for the reorg check.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("behavior: no blockOverrides are sent without a block gas limit", async () => {
+    respondHappy(okCalls(3));
+    await executePlan(params);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [Record<string, unknown>] }];
+    };
+    expect("blockOverrides" in request.params[0].blockStateCalls[0]).toBe(
+      false,
+    );
+  });
+
+  test("behavior: a block gas limit is sent as blockOverrides.gasLimit", async () => {
+    respondHappy(okCalls(3));
+    await executePlan({ ...params, blockGasLimit: 16_777_216n });
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [Record<string, unknown>] }];
+    };
+    const blockStateCall = request.params[0].blockStateCalls[0];
+    expect(blockStateCall.blockOverrides).toEqual({ gasLimit: "0x1000000" });
+    // The override sets the block limit only; calls carry no explicit gas.
+    expect(
+      (blockStateCall.calls as Record<string, unknown>[]).some(
+        (call) => "gas" in call,
+      ),
+    ).toBe(false);
   });
 
   test("behavior: request body carries the validation flag", async () => {
@@ -265,6 +293,40 @@ describe.sequential("executePlan", () => {
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
+  });
+
+  test("behavior: parentHashCheck false accepts a successor with a foreign parentHash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const evidence = await executePlan({ ...params, parentHashCheck: false });
+    expect(evidence.block.blockNumber).toBe(STATE_BLOCK + 1n);
+  });
+
+  test("error: parentHashCheck true rejects a successor with a foreign parentHash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+  });
+
+  test("error: parentHashCheck false still detects a reorg of the pinned block", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"99".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(
+        rpc(blockResult({ hash: `0x${"ef".repeat(32)}` })),
+      );
+    await expect(
+      executePlan({ ...params, parentHashCheck: false }),
+    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
   });
 
   test("error: InvalidSimulationResponseError when the state block hash changes mid-flight", async () => {

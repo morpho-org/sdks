@@ -38,9 +38,10 @@ const makePlan = (
     authorizationIndex: number;
     calls: { from: Address; to: Address; data: `0x${string}`; value: bigint }[];
   }[] = [],
+  request = parsed,
 ) =>
   planExecution({
-    request: parsed,
+    request,
     owner: OWNER,
     preparations,
     reads,
@@ -94,6 +95,20 @@ const parse = (
     stateBlockNumber: 24_000_000n,
     stateBlockHash: BLOCK_HASH,
     stateBlockTimestamp: NOW,
+    parentHashCheck: true,
+  });
+
+const parseWithoutParentHashCheck = (
+  plan: ReturnType<typeof makePlan>,
+  blocks: ReturnType<typeof buildBlocks>,
+) =>
+  parseSimulationResponse({
+    plan,
+    blocks,
+    stateBlockNumber: 24_000_000n,
+    stateBlockHash: BLOCK_HASH,
+    stateBlockTimestamp: NOW,
+    parentHashCheck: false,
   });
 
 describe("parseSimulationResponse", () => {
@@ -248,5 +263,45 @@ describe("parseSimulationResponse", () => {
     const blocks = buildBlocks(plan);
     blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
     expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+  });
+
+  describe("parentHashCheck off", () => {
+    test("behavior: a successor parentHash that is not the pinned hash is accepted", () => {
+      const plan = makePlan();
+      const blocks = buildBlocks(plan);
+      blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
+      expect(parseWithoutParentHashCheck(plan, blocks).block.blockNumber).toBe(
+        24_000_001n,
+      );
+    });
+
+    test("behavior: a successor with no parentHash is accepted", () => {
+      const plan = makePlan();
+      const blocks = buildBlocks(plan);
+      delete (blocks[0] as { parentHash?: string }).parentHash;
+      expect(parseWithoutParentHashCheck(plan, blocks).block.blockNumber).toBe(
+        24_000_001n,
+      );
+    });
+
+    test("error: InvalidSimulationResponseError for a block beyond the successor", () => {
+      const plan = makePlan();
+      const blocks = buildBlocks(plan);
+      blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
+      blocks[0]!.number = numberToHex(24_000_002n);
+      expect(() => parseWithoutParentHashCheck(plan, blocks)).toThrow(
+        InvalidSimulationResponseError,
+      );
+    });
+
+    test("error: InvalidSimulationResponseError for a timestamp behind the pinned block", () => {
+      const plan = makePlan();
+      const blocks = buildBlocks(plan);
+      blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
+      blocks[0]!.timestamp = numberToHex(NOW - 1n);
+      expect(() => parseWithoutParentHashCheck(plan, blocks)).toThrow(
+        InvalidSimulationResponseError,
+      );
+    });
   });
 });
