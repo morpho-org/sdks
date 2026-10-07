@@ -28,13 +28,13 @@ export function resolveChain(
   )
     throw new SimulationValidationError(
       `Chain ${chainId} blockOverrides.gasLimit must be a positive bigint, got "${String(gasLimit)}" (${typeof gasLimit}). Pass a bigint greater than 0n or omit gasLimit.`,
-      ["blockOverrides.gasLimit"],
+      ["blockOverrides.gasLimit: must be a positive bigint"],
     );
   const parentHashCheck: unknown = entry.parentHashCheck;
   if (parentHashCheck !== undefined && typeof parentHashCheck !== "boolean")
     throw new SimulationValidationError(
       `Chain ${chainId} parentHashCheck must be a boolean, got "${String(parentHashCheck)}" (${typeof parentHashCheck}). Pass true or false, or omit parentHashCheck.`,
-      ["parentHashCheck"],
+      ["parentHashCheck: must be a boolean"],
     );
   return entry;
 }
