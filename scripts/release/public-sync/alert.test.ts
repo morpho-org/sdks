@@ -86,7 +86,9 @@ const run = {
   head_sha: "b",
   status: "completed",
   conclusion: "failure",
+  created_at: "2026-10-06T11:30:00Z",
 };
+const releaseWindow = { now, maxAgeMinutes: 60 };
 
 describe("findFailedRelease", () => {
   test.each([
@@ -98,27 +100,74 @@ describe("findFailedRelease", () => {
     "action_required",
   ])("reports a latest run that ended %s", async (conclusion) => {
     await expect(
-      findFailedRelease(releaseRuns([{ ...run, conclusion }])),
+      findFailedRelease(releaseRuns([{ ...run, conclusion }]), releaseWindow),
     ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion });
   });
 
-  test("ignores a successful, running or missing latest run", async () => {
+  test("ignores a successful, recently started or missing latest run", async () => {
     for (const runs of [
       [{ ...run, conclusion: "success" }],
       [{ ...run, status: "in_progress", conclusion: null }],
+      [
+        {
+          ...run,
+          status: "queued",
+          conclusion: null,
+          created_at: "2026-10-06T11:00:00Z",
+        },
+      ],
       [],
     ]) {
       await expect(
-        findFailedRelease(releaseRuns(runs)),
+        findFailedRelease(releaseRuns(runs), releaseWindow),
       ).resolves.toBeUndefined();
     }
+  });
+
+  test.each(["queued", "waiting", "in_progress", "pending"])(
+    "reports a latest run still %s past the threshold",
+    async (status) => {
+      await expect(
+        findFailedRelease(
+          releaseRuns([
+            {
+              ...run,
+              status,
+              conclusion: null,
+              created_at: "2026-10-06T10:59:00Z",
+            },
+          ]),
+          releaseWindow,
+        ),
+      ).resolves.toEqual({
+        url: run.html_url,
+        sha: "b",
+        conclusion: status,
+        stuckMinutes: 61,
+      });
+    },
+  );
+
+  test("throws on a stuck run with an unreadable date", async () => {
+    await expect(
+      findFailedRelease(
+        releaseRuns([
+          { ...run, status: "queued", conclusion: null, created_at: "soon" },
+        ]),
+        releaseWindow,
+      ),
+    ).rejects.toThrow(/unreadable creation date "soon"/);
   });
 });
 
 describe("resolveReleaseAlert", () => {
   test("returns a release-failed alert", async () => {
     await expect(
-      resolveReleaseAlert({ github: () => releaseRuns([run]) }),
+      resolveReleaseAlert({
+        github: () => releaseRuns([run]),
+        now,
+        maxAgeMinutes: "60",
+      }),
     ).resolves.toEqual({
       alert: {
         type: "release-failed",
@@ -129,6 +178,8 @@ describe("resolveReleaseAlert", () => {
 
   test("pages a watch-failed alert when the runs can't be read", async () => {
     const result = await resolveReleaseAlert({
+      now,
+      maxAgeMinutes: "60",
       github: () => {
         throw new Error("GH_TOKEN is not set.");
       },

@@ -37,7 +37,8 @@ then mints the App token.
 
 `alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
 `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes). The
-same watch pages while the latest public `release.yml` run on `main` ended other than `success`, until a run
+same watch pages while the latest public `release.yml` run on `main` ended other than `success`, or hasn't
+completed `MAX_AGE_MINUTES` after it was created (queued, or waiting for `npm` approval), until a run
 succeeds, since the merged release may then be missing from npm. It also pages a `watch-failed`
 alert when it can't check (bad threshold, missing token, API error).
 

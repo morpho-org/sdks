@@ -65,24 +65,32 @@ export async function findStaleSyncPr(options: {
   return { number: pr.number, url: pr.html_url, ageMinutes };
 }
 
-/** Latest `release.yml` run on public `main`, when it didn't succeed. */
+/** Latest `release.yml` run on public `main`, when it didn't succeed or is stuck. */
 export interface FailedRelease {
   readonly url: string;
   readonly sha: string;
+  /** Conclusion of a completed run, or the status (`queued`, `waiting`, ...) of a stuck one. */
   readonly conclusion: string;
+  /** Set when the run hasn't completed: minutes since it was created. */
+  readonly stuckMinutes?: number;
 }
 
 const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=1`;
 
 /**
  * Reads the latest `release.yml` run on public `main`. It keeps being reported until a
- * later run (or a rerun) succeeds, since a failed run can leave packages off npm.
+ * later run (or a rerun) succeeds, since a failed or stuck run can leave packages off npm.
  *
  * @param github - Client able to read the public repository.
- * @returns The run when it completed with any conclusion but `success`, else `undefined`.
+ * @param options.now - Current time.
+ * @param options.maxAgeMinutes - Minutes a run may stay queued, waiting or in progress.
+ * @returns The run when it completed with any conclusion but `success`, or hasn't completed
+ *   after `maxAgeMinutes`, else `undefined`.
+ * @throws If a run that hasn't completed has an unreadable creation date.
  */
 export async function findFailedRelease(
   github: GitHub,
+  options: { readonly now: Date; readonly maxAgeMinutes: number },
 ): Promise<FailedRelease | undefined> {
   const { workflow_runs: runs } = (await github.rest(RELEASE_RUNS_PATH)) as {
     workflow_runs: {
@@ -90,16 +98,29 @@ export async function findFailedRelease(
       head_sha: string;
       status: string;
       conclusion: string | null;
+      created_at: string;
     }[];
   };
   const latest = runs[0];
-  if (
-    latest === undefined ||
-    latest.status !== "completed" ||
-    latest.conclusion === "success"
-  ) {
-    return undefined;
+  if (latest === undefined) return undefined;
+  if (latest.status !== "completed") {
+    const ageMinutes = Math.floor(
+      (options.now.getTime() - Date.parse(latest.created_at)) / 60_000,
+    );
+    if (Number.isNaN(ageMinutes)) {
+      throw new Error(
+        `Public release run ${latest.html_url} has an unreadable creation date "${latest.created_at}".`,
+      );
+    }
+    if (ageMinutes <= options.maxAgeMinutes) return undefined;
+    return {
+      url: latest.html_url,
+      sha: latest.head_sha,
+      conclusion: latest.status,
+      stuckMinutes: ageMinutes,
+    };
   }
+  if (latest.conclusion === "success") return undefined;
   return {
     url: latest.html_url,
     sha: latest.head_sha,
@@ -131,9 +152,12 @@ export function formatAlert(
       ? `Public sync failed for internal release ${alert.releaseSha}: the public PR wasn't opened or updated. Check the run, fix, and rerun the failed jobs.`
       : alert.type === "stale"
         ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
-        : alert.type === "release-failed"
-          ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
-          : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
+        : alert.type === "release-failed" &&
+            alert.run.stuckMinutes !== undefined
+          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds.`
+          : alert.type === "release-failed"
+            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
+            : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
 
@@ -176,16 +200,30 @@ export async function resolveStaleAlert(options: {
 }
 
 /**
- * Decides the alert of the `release` watch. Any failure becomes a `watch-failed` alert.
+ * Decides the alert of the `release` watch. Any failure, from a bad threshold to an
+ * API error, becomes a `watch-failed` alert.
  *
  * @param options.github - Builds the client; called inside the guard, so a missing token pages too.
+ * @param options.now - Current time.
+ * @param options.maxAgeMinutes - Raw threshold for a run that hasn't completed, a positive integer.
  * @returns The alert to send, if any, and the error behind a `watch-failed` alert.
  */
 export async function resolveReleaseAlert(options: {
   readonly github: () => GitHub;
+  readonly now: Date;
+  readonly maxAgeMinutes: string | undefined;
 }): Promise<{ readonly alert?: Alert; readonly cause?: unknown }> {
   try {
-    const failed = await findFailedRelease(options.github());
+    const maxAgeMinutes = Number(options.maxAgeMinutes);
+    if (!Number.isInteger(maxAgeMinutes) || maxAgeMinutes <= 0) {
+      throw new Error(
+        `MAX_AGE_MINUTES must be a positive integer, got ${JSON.stringify(options.maxAgeMinutes)}.`,
+      );
+    }
+    const failed = await findFailedRelease(options.github(), {
+      now: options.now,
+      maxAgeMinutes,
+    });
     return failed === undefined
       ? {}
       : { alert: { type: "release-failed", run: failed } };
@@ -216,6 +254,8 @@ async function run() {
   } else if (mode === "release") {
     ({ alert, cause } = await resolveReleaseAlert({
       github: () => createGitHub({ token: readRequiredEnv(env, "GH_TOKEN") }),
+      now: new Date(),
+      maxAgeMinutes: env.MAX_AGE_MINUTES,
     }));
   } else {
     throw new Error("Usage: alert.ts failed|stale|release");
@@ -224,7 +264,7 @@ async function run() {
     console.log(
       mode === "stale"
         ? "No stale sync PR."
-        : "Latest public release run didn't fail.",
+        : "Latest public release run didn't fail and isn't stuck.",
     );
     return;
   }

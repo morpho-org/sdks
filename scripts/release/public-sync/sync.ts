@@ -261,8 +261,10 @@ async function readCommit(github: GitHub, sha: string) {
  *
  * @param options - See {@link SyncOptions}.
  * @returns What changed.
- * @throws On an ordering violation, a moved `main`, an unverified commit, a tree mismatch,
- *   several open sync PRs, or any API failure.
+ * @throws On an ordering violation, a missing or moved `main`, a file mode other than
+ *   `100644`, an open sync PR whose head has no `Source-Commit`, a release synced again with
+ *   a different tree, a sync PR head that never follows the new `sync/main`, an unverified
+ *   commit, a tree mismatch, several open sync PRs, or any API failure.
  */
 export async function syncPublic(options: SyncOptions): Promise<SyncOutcome> {
   const { github, manifest, isAncestor } = options;
