@@ -1,5 +1,11 @@
 # @morpho-org/morpho-ts
 
+## 3.2.1
+
+### Patch Changes
+
+- [#1274](https://github.com/morpho-org/sdks/pull/1274) [`a3a136d`](https://github.com/morpho-org/sdks/commit/a3a136d8a75ede41a22db0f9aa0ea308767ceba0) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Point Robinhood Chain (4663) `explorerUrl` in `ChainUtils.CHAIN_METADATA` to `https://robin.etherscan.io` instead of Blockscout.
+
 ## 3.2.0
 
 ### Minor Changes
