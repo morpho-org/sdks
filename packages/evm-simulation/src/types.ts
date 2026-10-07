@@ -10,7 +10,8 @@ export interface ChainSimulationConfig {
   /**
    * `validation` flag sent with `eth_simulateV1` (default `false`, so gas is not
    * charged). Set `true` only for chains whose nodes reject `false` and still
-   * charge no gas in the simulated block, such as Monad.
+   * charge no gas in the simulated block, such as Monad. On Monad,
+   * `SimulationCall.gasUsed` then reports the call's gas limit, not gas consumed.
    */
   readonly validation?: boolean;
 }
@@ -170,7 +171,9 @@ export interface SimulationCall {
    * Gas consumed by this call's root frame, not a safe gas limit. This is
    * post-refund consumption and does not account for EIP-150's 63/64 rule in
    * nested calls, so consumers deriving a limit must add their own headroom,
-   * larger than headroom derived from `eth_estimateGas`.
+   * larger than headroom derived from `eth_estimateGas`. On chains configured
+   * with `validation: true` such as Monad, it can report the call's gas limit
+   * (150M by default) instead of gas consumed.
    */
   readonly gasUsed: bigint;
 }
