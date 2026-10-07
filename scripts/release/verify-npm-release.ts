@@ -1288,7 +1288,17 @@ const PUBLIC_REFS = "refs/remotes/morpho-org-sdks";
 const PUBLIC_MAIN = "morpho-org-sdks/main";
 const PUBLIC_NEXT = "morpho-org-sdks/next";
 
-function fetchReleaseRefs(cwd: string): void {
+/**
+ * Fetches the release branches and tags of the public repository.
+ *
+ * @param cwd The checkout to fetch into.
+ * @param repository The repository URL; the public repository outside tests.
+ * @internal
+ */
+export function fetchReleaseRefs(
+  cwd: string,
+  repository: string = EXPECTED.repository,
+): void {
   const unshallow =
     execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
   try {
@@ -1296,7 +1306,7 @@ function fetchReleaseRefs(cwd: string): void {
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
-        EXPECTED.repository,
+        repository,
         `+refs/heads/main:${PUBLIC_REFS}/main`,
         `+refs/heads/next:${PUBLIC_REFS}/next`,
         "--tags",
@@ -1308,7 +1318,7 @@ function fetchReleaseRefs(cwd: string): void {
     if (
       !isGitCommandError(
         error,
-        /couldn't find remote ref next|could not find remote ref next/i,
+        /(?:couldn't|could not) find remote ref (?:refs\/heads\/)?next\b/i,
       )
     ) {
       throw error;
@@ -1317,7 +1327,7 @@ function fetchReleaseRefs(cwd: string): void {
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
-        EXPECTED.repository,
+        repository,
         `+refs/heads/main:${PUBLIC_REFS}/main`,
         "--tags",
         "--force",

@@ -1,5 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
@@ -21,6 +24,7 @@ import {
   evaluateTarballIntegrity,
   evaluateTarballLayout,
   evaluateTrustedPublisher,
+  fetchReleaseRefs,
   findInstallProblems,
   findInstallScripts,
   hasManifestBin,
@@ -1090,5 +1094,52 @@ describe("selectPreviousVersion", () => {
 
   test("returns null when there is no earlier eligible version", () => {
     expect(selectPreviousVersion(packument, "1.0.0")).toBeNull();
+  });
+});
+
+describe("fetchReleaseRefs", () => {
+  const isolatedGit = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  test("fetches main when the repository has no next branch", () => {
+    const root = mkdtempSync(join(tmpdir(), "verify-npm-release-"));
+    try {
+      const git = (cwd: string, ...args: string[]) =>
+        execFileSync("git", args, {
+          cwd,
+          encoding: "utf8",
+          env: isolatedGit,
+        }).trim();
+      const remote = join(root, "remote");
+      const local = join(root, "local");
+      execFileSync("git", ["init", "-q", "-b", "main", remote], {
+        env: isolatedGit,
+      });
+      git(
+        remote,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "release",
+      );
+      git(remote, "tag", "pkg-v1.0.0");
+      execFileSync("git", ["init", "-q", local], { env: isolatedGit });
+
+      fetchReleaseRefs(local, remote);
+
+      expect(git(local, "rev-parse", "morpho-org-sdks/main")).toBe(
+        git(remote, "rev-parse", "main"),
+      );
+      expect(git(local, "tag", "--list")).toBe("pkg-v1.0.0");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
