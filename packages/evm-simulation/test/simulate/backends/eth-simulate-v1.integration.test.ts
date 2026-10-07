@@ -74,6 +74,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
         plan,
         stateBlock: await pin(client),
         validation: false,
+        parentHashCheck: true,
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
   });
@@ -93,6 +94,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       plan,
       stateBlock,
       validation: false,
+      parentHashCheck: true,
     });
 
     expect(execution.block.chainId).toBe(mainnet.id);
@@ -109,6 +111,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       plan,
       stateBlock,
       validation: false,
+      parentHashCheck: true,
     });
     expect(again.block).toEqual(execution.block);
     expect(again.stateReads).toEqual(execution.stateReads);
@@ -130,6 +133,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       ),
       stateBlock,
       validation: false,
+      parentHashCheck: true,
     });
     expect(execution.calls).toHaveLength(1);
     // traceTransfers synthesizes the native move as a transfer log, which is
@@ -170,6 +174,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       ),
       stateBlock,
       validation: false,
+      parentHashCheck: true,
     });
     expect(execution.calls).toHaveLength(2);
     expect(execution.calls.every((c) => c.result.status)).toBe(true);

@@ -96,7 +96,9 @@ export const rpc = async <T>(
  *    so the node synthesizes native-ETH moves as transfer logs, and `validation: false`
  *    (`true` on Monad, whose nodes reject `false` and charge no gas in the
  *    simulated block). Validation-off means gas is not charged, which is how
- *    gas is separated from economic effects.
+ *    gas is separated from economic effects. When `blockGasLimit` is set,
+ *    it is sent as the block's `blockOverrides.gasLimit`; otherwise no block
+ *    override is sent.
  *    **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
@@ -109,8 +111,9 @@ export const rpc = async <T>(
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - Shared simulation client, execution plan, state block, and
- *   the `validation` flag to send.
+ * @param params - Shared simulation client, execution plan, state block, the
+ *   `validation` flag to send, the optional simulated block gas limit, and
+ *   whether to check the successor `parentHash`.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -130,8 +133,17 @@ export async function executePlan(params: {
   plan: ExecutionPlan;
   stateBlock: StateBlock;
   validation: boolean;
+  blockGasLimit?: bigint | undefined;
+  parentHashCheck: boolean;
 }): Promise<SimulationExecution> {
-  const { client, plan, stateBlock, validation } = params;
+  const {
+    client,
+    plan,
+    stateBlock,
+    validation,
+    blockGasLimit,
+    parentHashCheck,
+  } = params;
 
   const response = await rpc("eth_simulateV1", () =>
     client.request({
@@ -140,6 +152,9 @@ export async function executePlan(params: {
         {
           blockStateCalls: [
             {
+              ...(blockGasLimit !== undefined && {
+                blockOverrides: { gasLimit: numberToHex(blockGasLimit) },
+              }),
               calls: plan.calls.map((call) => ({
                 chainId: numberToHex(call.transaction.chainId),
                 from: call.transaction.from,
@@ -163,5 +178,6 @@ export async function executePlan(params: {
     stateBlockNumber: stateBlock.number,
     stateBlockHash: stateBlock.hash,
     stateBlockTimestamp: stateBlock.timestamp,
+    parentHashCheck,
   });
 }

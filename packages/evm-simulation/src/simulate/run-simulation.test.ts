@@ -184,6 +184,71 @@ describe.sequential("runSimulation", () => {
     expect(methods).toEqual(["eth_getBlockByNumber", "eth_simulateV1"]);
     expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
+    expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
+  });
+
+  test("behavior: a configured block gas limit is forwarded to execution", async () => {
+    stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([
+          [
+            CHAIN_ID,
+            {
+              simulateV1Url: RPC_URL,
+              blockOverrides: { gasLimit: 16_777_216n },
+            },
+          ],
+        ]),
+      },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBe(16_777_216n);
+  });
+
+  test("behavior: Stable turns the parentHash check off by default", async () => {
+    stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([[ChainId.StableMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.StableMainnet,
+        transactions: [{ ...TRANSACTION, chainId: ChainId.StableMainnet }],
+      },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(false);
+  });
+
+  test("behavior: a configured parentHashCheck overrides the chain default", async () => {
+    stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([
+          [
+            ChainId.StableMainnet,
+            { simulateV1Url: RPC_URL, parentHashCheck: true },
+          ],
+        ]),
+      },
+      {
+        chainId: ChainId.StableMainnet,
+        transactions: [{ ...TRANSACTION, chainId: ChainId.StableMainnet }],
+      },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
+
+    stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([
+          [CHAIN_ID, { simulateV1Url: RPC_URL, parentHashCheck: false }],
+        ]),
+      },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[1]?.[0].parentHashCheck).toBe(false);
   });
 
   test("behavior: Monad pins to the finalized block and sends validation: true", async () => {
