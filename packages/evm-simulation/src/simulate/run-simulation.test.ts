@@ -178,6 +178,19 @@ describe.sequential("runSimulation", () => {
     expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
     expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
+  });
+
+  test("behavior: Stable sets its per-transaction block gas limit", async () => {
+    stubFetch(ChainId.StableMainnet, []);
+    await simulate(
+      {
+        chains: new Map([[ChainId.StableMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      { chainId: ChainId.StableMainnet, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBe(16_777_216n);
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
   });
 
   test("behavior: Monad pins to the finalized block and sends validation: true", async () => {
@@ -190,6 +203,7 @@ describe.sequential("runSimulation", () => {
     );
     expect(pinnedBlockParam(fetch)).toBe("finalized");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
   });
 
   test("behavior: Monad keeps an explicit blockNumber", async () => {
@@ -206,6 +220,7 @@ describe.sequential("runSimulation", () => {
     );
     expect(pinnedBlockParam(fetch)).toBe(numberToHex(STATE_BLOCK));
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
+    expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
   });
 
   test("error: chain mismatch is detected before block lookup", async () => {

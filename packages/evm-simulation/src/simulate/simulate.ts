@@ -39,6 +39,8 @@ import { runSimulation } from "./run-simulation.js";
  * they would on-chain. `validation: false` keeps gas from being charged,
  * separating gas from economic effects. Monad nodes reject `false`, so Monad
  * simulations send `true`; its simulated block charges no gas either way.
+ * Stable nodes give the simulated block a 0 gas limit, so Stable simulations
+ * override it to the chain's 2^24 per-transaction gas cap.
  *
  * @param config - Required per-chain `eth_simulateV1` URL, optional logger, and
  *   the overall timeout budget.

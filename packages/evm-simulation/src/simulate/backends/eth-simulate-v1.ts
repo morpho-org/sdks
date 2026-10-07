@@ -131,7 +131,9 @@ export async function assertEndpointChain(params: {
  *    synthesizes native-ETH moves as transfer logs, and `validation: false`
  *    (`true` on Monad, whose nodes reject `false` and charge no gas in the
  *    simulated block). Validation-off means gas is not charged, which is how
- *    gas is separated from economic effects.
+ *    gas is separated from economic effects. Stable's nodes give the
+ *    simulated block a 0 gas limit, so it sends a `blockOverrides.gasLimit`
+ *    of 2^24, Stable's per-transaction gas cap.
  *    **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
@@ -150,7 +152,9 @@ export async function assertEndpointChain(params: {
  * no fallback backend.
  *
  * @param params - Shared simulation client, execution plan, already-pinned
- *   state block, and the `validation` flag to send.
+ *   state block, the `validation` flag, and optional block gas limit. Stable's
+ *   nodes give the simulated block a 0 gas limit; 2^24 is its per-transaction
+ *   gas cap.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -171,8 +175,9 @@ export async function executePlan(params: {
   plan: ExecutionPlan;
   stateBlock: PinnedBlock;
   validation: boolean;
+  blockGasLimit?: bigint;
 }): Promise<SimulationExecution> {
-  const { client, plan, stateBlock, validation } = params;
+  const { client, plan, stateBlock, validation, blockGasLimit } = params;
 
   const response = await rpc("eth_simulateV1", () =>
     client.request({
@@ -181,6 +186,9 @@ export async function executePlan(params: {
         {
           blockStateCalls: [
             {
+              ...(blockGasLimit !== undefined && {
+                blockOverrides: { gasLimit: numberToHex(blockGasLimit) },
+              }),
               calls: plan.calls.map((call) => ({
                 from: call.transaction.from,
                 to: call.transaction.to,

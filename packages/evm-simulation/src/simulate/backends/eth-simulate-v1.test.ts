@@ -161,9 +161,28 @@ describe.sequential("executePlan", () => {
           }
         ).params[0].blockStateCalls[0],
     ).toBe(false);
+    expect(
+      "blockOverrides" in
+        (
+          request as {
+            params: [{ blockStateCalls: [Record<string, unknown>] }];
+          }
+        ).params[0].blockStateCalls[0],
+    ).toBe(false);
     // The pinned block is resolved by the caller; this boundary simulates
     // once and then re-fetches that same block for the reorg check.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("behavior: request body carries the optional block gas limit", async () => {
+    respondHappy(okCalls(3));
+    await executePlan({ ...params, blockGasLimit: 16_777_216n });
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [Record<string, unknown>] }];
+    };
+    expect(request.params[0].blockStateCalls[0]?.blockOverrides).toEqual({
+      gasLimit: "0x1000000",
+    });
   });
 
   test("behavior: request body carries the validation flag", async () => {

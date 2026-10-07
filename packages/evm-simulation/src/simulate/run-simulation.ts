@@ -30,6 +30,9 @@ import { verifySlippage } from "./verify-slippage.js";
 /** Total execution budget for a single `simulate()` call. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
+// Stable nodes give the simulated block a 0 gas limit; 2^24 is its per-tx cap.
+const STABLE_SIMULATION_BLOCK_GAS_LIMIT = 2n ** 24n;
+
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
  * resolve quoted assets → plan quoted observations → execution →
@@ -110,11 +113,13 @@ export async function runSimulation(params: {
   });
 
   // Execute against the block resolved once above; the boundary rechecks its hash.
+  const stable = request.chainId === ChainId.StableMainnet;
   const execution = await executePlan({
     client,
     plan,
     stateBlock: pinnedBlock,
     validation: monad,
+    blockGasLimit: stable ? STABLE_SIMULATION_BLOCK_GAS_LIMIT : undefined,
   });
 
   const userCalls = execution.calls
