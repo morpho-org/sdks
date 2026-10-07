@@ -14,7 +14,12 @@ const SPENDER: Address = getAddress(
 );
 
 const prepare = (authorizations: SimulationAuthorization[]) =>
-  prepareAuthorizations({ authorizations, owner: OWNER, morpho: MORPHO });
+  prepareAuthorizations({
+    chainId: 1,
+    authorizations,
+    owner: OWNER,
+    morpho: MORPHO,
+  });
 
 describe("prepareAuthorizations", () => {
   test("erc20Approval → approve(spender, amount)", () => {
@@ -33,6 +38,7 @@ describe("prepareAuthorizations", () => {
     expect(call.to).toBe(TOKEN);
     expect(call.data.startsWith("0x095ea7b3")).toBe(true);
     expect(call.value).toBe(0n);
+    expect(call.chainId).toBe(1);
   });
 
   test("blueAuthorization → setAuthorization(authorized, true)", () => {

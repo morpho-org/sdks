@@ -4,19 +4,20 @@ import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
 import type { SimulationAuthorization } from "../authorizations.js";
 import type { SimulationTransaction } from "../types.js";
 
-// biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
-const approvalTx = (
-  owner: Address,
-  token: Address,
-  spender: Address,
-  amount: bigint,
-): Required<Readonly<SimulationTransaction>> => ({
-  from: getAddress(owner),
-  to: getAddress(token),
+const approvalTx = (params: {
+  readonly chainId: number;
+  readonly owner: Address;
+  readonly token: Address;
+  readonly spender: Address;
+  readonly amount: bigint;
+}): Required<Readonly<SimulationTransaction>> => ({
+  chainId: params.chainId,
+  from: getAddress(params.owner),
+  to: getAddress(params.token),
   data: encodeFunctionData({
     abi: erc20Abi,
     functionName: "approve",
-    args: [spender, amount],
+    args: [params.spender, params.amount],
   }),
   value: 0n,
 });
@@ -42,14 +43,17 @@ export interface PlannedPreparation {
  * Final mode produces no preparations. Successful execution proves only the
  * simulated permissions, not the validity of a future signature.
  *
+ * @param params - Authorizations, target chain, owner and Morpho contract.
+ * @returns Deep-frozen preparation calls carrying the target chain ID.
  * @internal
  */
 export function prepareAuthorizations(params: {
+  readonly chainId: number;
   readonly authorizations: readonly SimulationAuthorization[];
   readonly owner: Address;
   readonly morpho: Address;
 }): readonly PlannedPreparation[] {
-  const { authorizations, owner, morpho } = params;
+  const { chainId, authorizations, owner, morpho } = params;
 
   const preparations: PlannedPreparation[] = [];
 
@@ -58,29 +62,39 @@ export function prepareAuthorizations(params: {
 
     switch (auth.type) {
       case "erc20Approval":
-        calls.push(approvalTx(owner, auth.token, auth.spender, auth.amount));
+        calls.push(
+          approvalTx({
+            chainId,
+            owner,
+            token: auth.token,
+            spender: auth.spender,
+            amount: auth.amount,
+          }),
+        );
         break;
       case "erc2612Permit": {
         const { message, domain } = auth.typedData;
         calls.push(
-          approvalTx(
+          approvalTx({
+            chainId,
             owner,
-            domain.verifyingContract,
-            message.spender,
-            message.value,
-          ),
+            token: domain.verifyingContract,
+            spender: message.spender,
+            amount: message.value,
+          }),
         );
         break;
       }
       case "permit2SignatureTransfer": {
         const { message } = auth.typedData;
         calls.push(
-          approvalTx(
+          approvalTx({
+            chainId,
             owner,
-            message.permitted.token,
-            message.spender,
-            message.permitted.amount,
-          ),
+            token: message.permitted.token,
+            spender: message.spender,
+            amount: message.permitted.amount,
+          }),
         );
         break;
       }
@@ -89,6 +103,7 @@ export function prepareAuthorizations(params: {
         const { authorized, isAuthorized } =
           auth.type === "blueAuthorization" ? auth : auth.typedData.message;
         calls.push({
+          chainId,
           from: getAddress(owner),
           to: getAddress(morpho),
           data: encodeFunctionData({

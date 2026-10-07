@@ -34,7 +34,7 @@ try {
       chainId: 1,
       // mode: "final" (default) executes the signed calldata against actual
       // permissions; mode: "preview" accepts typed authorization descriptors.
-      transactions: [{ from: user, to: vault, data: encodedDeposit }],
+      transactions: [{ chainId: 1, from: user, to: vault, data: encodedDeposit }],
       // limits: { operations: [{ type: "vaultV1Deposit", vault, quote: { sharesMinted: 1000n }, slippageTolerance: 10_000000000000000n }] },
     },
   );
@@ -45,6 +45,8 @@ try {
   throw err;
 }
 ```
+
+Every transaction requires a positive safe-integer `chainId` matching the top-level request. Missing, invalid or mismatched transaction chain IDs throw `SimulationValidationError` before RPC work. The backend includes the chain ID as a hex quantity in every `eth_simulateV1` call, including preparation calls and state reads, so supporting nodes reject a request targeting another chain.
 
 Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
@@ -167,3 +169,5 @@ Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+See the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) for the required transaction chain ID.

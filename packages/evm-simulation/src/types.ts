@@ -32,6 +32,8 @@ export interface SimulationConfig {
  * in a bundle — the orchestrator rejects mixed senders with `SimulationValidationError`.
  */
 export interface SimulationTransaction {
+  /** Target chain; must equal the enclosing SimulateParams.chainId. */
+  readonly chainId: number;
   readonly from: Address;
   readonly to: Address;
   readonly data: Hex;

@@ -41,7 +41,9 @@ function makeConfig(
 function makeParams(overrides: object = {}): SimulateParams {
   return {
     chainId: 1,
-    transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
+    transactions: [
+      { chainId: 1, from: USER, to: VAULT, data: "0x12345678" as Hex },
+    ],
     blockNumber: 20000000n,
     ...overrides,
   } as SimulateParams;
@@ -166,7 +168,15 @@ describe.sequential("simulate — error propagation", () => {
   it("propagates UnsupportedChainError", async () => {
     mockRunSimulation.mockRejectedValueOnce(new UnsupportedChainError(999999));
     await expect(
-      simulate(makeConfig(), makeParams({ chainId: 999999 })),
+      simulate(
+        makeConfig(),
+        makeParams({
+          chainId: 999999,
+          transactions: [
+            { chainId: 999999, from: USER, to: VAULT, data: "0x" },
+          ],
+        }),
+      ),
     ).rejects.toThrow(UnsupportedChainError);
   });
 });

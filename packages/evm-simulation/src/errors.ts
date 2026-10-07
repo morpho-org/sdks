@@ -341,7 +341,7 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  * try {
  *   await simulate(config, {
  *     chainId: 1,
- *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
+ *     transactions: [{ chainId: 1, from: user, to: vault, data: encodedDeposit }],
  *   });
  * } catch (e) {
  *   if (!isSimulationPackageError(e)) throw e;

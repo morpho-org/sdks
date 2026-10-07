@@ -73,6 +73,7 @@ export function planExecution(params: {
       phase: "before",
       read,
       transaction: {
+        chainId: request.chainId,
         from: zeroAddress,
         to: read.to,
         data: read.data,
@@ -97,6 +98,7 @@ export function planExecution(params: {
       type: "transaction",
       transactionIndex: i,
       transaction: {
+        chainId: transaction.chainId,
         from: transaction.from,
         to: transaction.to,
         data: transaction.data,
@@ -111,6 +113,7 @@ export function planExecution(params: {
       phase: "after",
       read,
       transaction: {
+        chainId: request.chainId,
         from: zeroAddress,
         to: read.to,
         data: read.data,

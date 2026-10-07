@@ -10,6 +10,7 @@ import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
+import { prepareAuthorizations } from "../prepare.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
 import { createSimulationClient } from "./client.js";
@@ -28,6 +29,7 @@ function makePlan(transactions = 1): ExecutionPlan {
   const request = parseRequest({
     chainId: 1,
     transactions: Array.from({ length: transactions }, () => ({
+      chainId: 1,
       from: OWNER,
       to: VAULT,
       data: "0x12",
@@ -95,6 +97,47 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("executePlan", () => {
+  test("behavior: forwards the chainId for transactions, preparations and state reads", async () => {
+    const chainId = 8453;
+    params.plan = planExecution({
+      request: parseRequest({
+        chainId,
+        transactions: [{ chainId, from: OWNER, to: VAULT, data: "0x12" }],
+      }),
+      owner: OWNER,
+      preparations: prepareAuthorizations({
+        chainId,
+        owner: OWNER,
+        morpho: VAULT,
+        authorizations: [
+          {
+            type: "erc20Approval",
+            token: USDC,
+            owner: OWNER,
+            spender: VAULT,
+            amount: 1n,
+          },
+        ],
+      }),
+      reads: [makeBalanceRead(USDC, OWNER)],
+    });
+    respondHappy(okCalls(4));
+    await executePlan(params);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      params: [{ blockStateCalls: [{ calls: { chainId: string }[] }] }];
+    };
+    expect(params.plan.calls.map((call) => call.type)).toEqual([
+      "stateRead",
+      "preparation",
+      "transaction",
+      "stateRead",
+    ]);
+    expect(
+      request.params[0].blockStateCalls[0].calls.map((call) => call.chainId),
+    ).toEqual(Array(4).fill("0x2105"));
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   test("default", async () => {
     respondHappy(okCalls(3));
     const evidence = await executePlan(params);
@@ -124,7 +167,13 @@ describe.sequential("executePlan", () => {
             {
               calls: [
                 { from: zeroAddress, to: USDC, value: "0x0" },
-                { from: OWNER, to: VAULT, data: "0x12", value: "0x0" },
+                {
+                  chainId: "0x1",
+                  from: OWNER,
+                  to: VAULT,
+                  data: "0x12",
+                  value: "0x0",
+                },
                 { from: zeroAddress, to: USDC, value: "0x0" },
               ],
             },

@@ -21,6 +21,7 @@ const _MARKET_ID =
   "0x00000000000000000000000000000000000000000000000000000000000000aa";
 
 const tx = (overrides: object = {}) => ({
+  chainId: 1,
   from: OWNER,
   to: TARGET,
   data: "0x12345678",
@@ -74,6 +75,45 @@ const permit2Auth: SimulationAuthorization = {
 const parse = (input: unknown) => parseRequest(input as SimulateParams);
 
 describe("parseRequest", () => {
+  test.each([
+    undefined,
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    NaN,
+    Infinity,
+    "1",
+    1n,
+  ])(
+    "error: SimulationValidationError for invalid transaction chainId %s",
+    (chainId) => {
+      expect(() =>
+        parse({ chainId: 1, transactions: [tx({ chainId })] }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+
+  test("error: SimulationValidationError when a transaction targets another chain", () => {
+    let error: unknown;
+    try {
+      parse({ chainId: 1, transactions: [tx(), tx({ chainId: 8453 })] });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect((error as SimulationValidationError).fieldErrors).toContain(
+      'transactions[1].chainId: must match chainId "1", got "8453"',
+    );
+  });
+
+  test("behavior: preserves a matching non-mainnet transaction chainId", () => {
+    expect(
+      parse({ chainId: 8453, transactions: [tx({ chainId: 8453 })] })
+        .transactions[0]?.chainId,
+    ).toBe(8453);
+  });
+
   test.each([
     { quote: {}, slippageTolerance: 0n },
     { quote: { sharesMinted: 1n } },
@@ -209,7 +249,7 @@ describe("parseRequest", () => {
     expect(request.authorizations).toEqual([]);
     expect(request.chainId).toBe(1);
     expect(request.transactions).toEqual([
-      { from: OWNER, to: TARGET, data: "0x12345678", value: 0n },
+      { chainId: 1, from: OWNER, to: TARGET, data: "0x12345678", value: 0n },
     ]);
   });
 
@@ -219,6 +259,7 @@ describe("parseRequest", () => {
       mode: "preview",
       transactions: [
         {
+          chainId: 1,
           from: OWNER.toLowerCase(),
           to: TARGET.toLowerCase(),
           data: "0x12",

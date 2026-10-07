@@ -92,8 +92,8 @@ export const rpc = async <T>(
  * The caller resolves (or supplies) the state block before this boundary.
  *
  * 1. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
- *    calls with their per-call `from`, `traceTransfers: true` so the node
- *    synthesizes native-ETH moves as transfer logs, and
+ *    calls with their per-call `from` and `chainId`, and `traceTransfers: true`
+ *    so the node synthesizes native-ETH moves as transfer logs, and
  *    `validation: false`. Validation-off means gas is not charged, which is
  *    how gas is separated from economic effects. **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
@@ -137,6 +137,7 @@ export async function executePlan(params: {
           blockStateCalls: [
             {
               calls: plan.calls.map((call) => ({
+                chainId: numberToHex(call.transaction.chainId),
                 from: call.transaction.from,
                 to: call.transaction.to,
                 data: call.transaction.data,

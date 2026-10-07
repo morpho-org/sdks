@@ -28,7 +28,7 @@ const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 
 const parsed = parseRequest({
   chainId: 1,
-  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+  transactions: [{ chainId: 1, from: OWNER, to: TARGET, data: "0x12345678" }],
 });
 
 const reads = [makeBalanceRead(TOKEN, OWNER)];
@@ -36,7 +36,13 @@ const reads = [makeBalanceRead(TOKEN, OWNER)];
 const makePlan = (
   preparations: {
     authorizationIndex: number;
-    calls: { from: Address; to: Address; data: `0x${string}`; value: bigint }[];
+    calls: {
+      chainId: number;
+      from: Address;
+      to: Address;
+      data: `0x${string}`;
+      value: bigint;
+    }[];
   }[] = [],
 ) =>
   planExecution({
@@ -101,7 +107,9 @@ describe("parseSimulationResponse", () => {
     const plan = makePlan([
       {
         authorizationIndex: 2,
-        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+        calls: [
+          { chainId: 1, from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n },
+        ],
       },
     ]);
     const execution = parse(plan, buildBlocks(plan));
@@ -132,7 +140,9 @@ describe("parseSimulationResponse", () => {
     const plan = makePlan([
       {
         authorizationIndex: 0,
-        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+        calls: [
+          { chainId: 1, from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n },
+        ],
       },
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
@@ -161,7 +171,9 @@ describe("parseSimulationResponse", () => {
     const plan = makePlan([
       {
         authorizationIndex: 0,
-        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+        calls: [
+          { chainId: 1, from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n },
+        ],
       },
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");

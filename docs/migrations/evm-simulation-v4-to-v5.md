@@ -43,7 +43,7 @@ must handle all seven as hard failures. `ExternalServiceError` remains for
 transport failures, timeouts and malformed JSON-RPC envelopes.
 Failures and timeouts reject the call; they do not produce a successful result.
 
-Since 5.1.0, the endpoint's `eth_chainId` and a mid-flight reorg of the pinned
+In v6, the endpoint's `eth_chainId` and a mid-flight reorg of the pinned
 block are no longer checked, so those two failures no longer occur and five
 hard failures remain. `SimulationConfig.chains` must map each chain to a
 matching URL.

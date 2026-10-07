@@ -86,6 +86,7 @@ export async function runSimulation(params: {
 
   const preparations = preview
     ? prepareAuthorizations({
+        chainId: request.chainId,
         authorizations: request.authorizations,
         owner,
         morpho,

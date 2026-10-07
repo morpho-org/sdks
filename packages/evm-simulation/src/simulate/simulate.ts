@@ -106,6 +106,7 @@ import { runSimulation } from "./run-simulation.js";
  *     chainId: 1,
  *     transactions: [
  *       {
+ *         chainId: 1,
  *         from: user,
  *         to: usdc,
  *         data: encodeFunctionData({
