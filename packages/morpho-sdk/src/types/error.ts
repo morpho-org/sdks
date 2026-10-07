@@ -1844,3 +1844,12 @@ export class RefinanceTokenMismatchError extends Error {
     );
   }
 }
+
+/** Thrown when a maker limit-exit offer can increase or open a position. */
+export class MidnightOfferNotReduceOnlyError extends Error {
+  constructor(params: { readonly index: number }) {
+    super(
+      `Midnight exit offer "${params.index}" must have reduceOnly=true. Rebuild the offer tree for the exit intent.`,
+    );
+  }
+}
