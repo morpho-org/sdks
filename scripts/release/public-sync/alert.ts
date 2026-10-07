@@ -3,7 +3,7 @@
  * alert.ts — alerting hooks of the public sync.
  *
  *   node scripts/release/public-sync/alert.ts failed   # a release didn't reach its sync PR
- *   node scripts/release/public-sync/alert.ts stale    # the sync PR is open too long
+ *   node scripts/release/public-sync/alert.ts stale    # the sync PR is open too long, or the newest one was closed unmerged
  *   node scripts/release/public-sync/alert.ts release  # public release.yml failed or is stuck on main
  *
  * Reads `PUBLIC_SYNC_ALERT_WEBHOOK_URL` (incoming webhook of the alert channel),
@@ -69,15 +69,17 @@ export async function findStaleSyncPr(options: {
 /**
  * Finds the newest closed sync PR when it was closed without merging. The sync never
  * closes its PR, so that PR was closed by hand, or by deleting `sync/main`, and its
- * release won't ship until the next sync. Call it only when no sync PR is open: the
- * next sync opens a new one, which clears this.
+ * release won't ship until the next sync. An open sync PR clears this, so it is checked
+ * first and the closed one is ignored while any sync PR is open.
  *
  * @param github - Client able to read the public repository.
- * @returns The PR, or `undefined` when the newest closed sync PR was merged or there is none.
+ * @returns The PR, or `undefined` when a sync PR is open, or the newest closed one was merged or there is none.
  */
 export async function findAbandonedSyncPr(
   github: GitHub,
 ): Promise<{ readonly number: number; readonly url: string } | undefined> {
+  const open = (await github.rest(OPEN_SYNC_PRS_PATH)) as unknown[];
+  if (open.length > 0) return undefined;
   const [pr] = (await github.rest(LAST_CLOSED_SYNC_PR_PATH)) as {
     number: number;
     html_url: string;
@@ -303,7 +305,7 @@ async function run() {
   if (alert === undefined) {
     console.log(
       mode === "stale"
-        ? "No stale sync PR."
+        ? "No stale or abandoned sync PR."
         : "No recent public release run failed or is stuck.",
     );
     return;

@@ -125,6 +125,19 @@ describe("findFailedRelease", () => {
     }
   });
 
+  test("looks past a recent unfinished run to the older runs", async () => {
+    const fresh = { ...run, status: "in_progress", conclusion: null };
+    await expect(
+      findFailedRelease(releaseRuns([fresh, run]), releaseWindow),
+    ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion: "failure" });
+    await expect(
+      findFailedRelease(
+        releaseRuns([fresh, { ...run, conclusion: "success" }]),
+        releaseWindow,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   test.each(["queued", "waiting", "in_progress", "pending"])(
     "reports a latest run still %s past the threshold",
     async (status) => {
@@ -254,6 +267,7 @@ describe("findAbandonedSyncPr", () => {
   function closed(pulls: unknown[]): GitHub {
     return {
       async rest(path) {
+        if (path.includes("state=open")) return [];
         expect(path).toBe(
           "repos/morpho-org/sdks/pulls?state=closed&base=main&head=morpho-org:sync/main&sort=created&direction=desc&per_page=1",
         );
@@ -322,6 +336,27 @@ describe("resolveStaleAlert", () => {
     await expect(
       resolveStaleAlert({
         github: () => github([pr], "2026-10-06T11:30:00Z"),
+        now,
+        maxAgeMinutes: "60",
+      }),
+    ).resolves.toEqual({});
+  });
+
+  test("ignores a closed unmerged PR while a recent sync PR is open", async () => {
+    await expect(
+      resolveStaleAlert({
+        github: () => ({
+          async rest(path) {
+            if (path.includes("state=open")) return [pr];
+            if (path.includes("state=closed")) {
+              return [{ ...pr, number: 6, merged_at: null }];
+            }
+            return { committer: { date: "2026-10-06T11:30:00Z" } };
+          },
+          async graphql() {
+            throw new Error("unused");
+          },
+        }),
         now,
         maxAgeMinutes: "60",
       }),
