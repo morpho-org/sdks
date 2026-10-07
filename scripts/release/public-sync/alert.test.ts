@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  findAbandonedSyncPr,
   findFailedRelease,
   findStaleSyncPr,
   formatAlert,
@@ -249,7 +250,59 @@ describe("resolveReleaseAlert", () => {
   );
 });
 
+describe("findAbandonedSyncPr", () => {
+  function closed(pulls: unknown[]): GitHub {
+    return {
+      async rest(path) {
+        expect(path).toBe(
+          "repos/morpho-org/sdks/pulls?state=closed&base=main&head=morpho-org:sync/main&sort=created&direction=desc&per_page=1",
+        );
+        return pulls;
+      },
+      async graphql() {
+        throw new Error("unused");
+      },
+    };
+  }
+
+  test("reports the newest sync PR closed without merging", async () => {
+    await expect(
+      findAbandonedSyncPr(closed([{ ...pr, merged_at: null }])),
+    ).resolves.toEqual({ number: 7, url: pr.html_url });
+  });
+
+  test("ignores a merged PR and no PR", async () => {
+    await expect(
+      findAbandonedSyncPr(
+        closed([{ ...pr, merged_at: "2026-10-06T11:00:00Z" }]),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(findAbandonedSyncPr(closed([]))).resolves.toBeUndefined();
+  });
+});
+
 describe("resolveStaleAlert", () => {
+  test("returns an abandoned alert when no sync PR is open", async () => {
+    await expect(
+      resolveStaleAlert({
+        github: () => ({
+          async rest(path) {
+            return path.includes("state=open")
+              ? []
+              : [{ ...pr, merged_at: null }];
+          },
+          async graphql() {
+            throw new Error("unused");
+          },
+        }),
+        now,
+        maxAgeMinutes: "60",
+      }),
+    ).resolves.toEqual({
+      alert: { type: "abandoned", pr: { number: 7, url: pr.html_url } },
+    });
+  });
+
   test("returns a stale alert past the threshold", async () => {
     await expect(
       resolveStaleAlert({
@@ -354,6 +407,17 @@ describe("formatAlert", () => {
       ),
     ).toContain("u has been open for 90 minutes");
   });
+});
+
+test("formatAlert reports a sync PR closed without merging", () => {
+  expect(
+    formatAlert(
+      { type: "abandoned", pr: { number: 7, url: "u" } },
+      { owner: "@o", runUrl: "r" },
+    ),
+  ).toBe(
+    "@o Public sync PR u was closed without merging and no sync PR is open: its release won't reach npm until the next sync. Rerun the sync job of the latest internal release. Run: r",
+  );
 });
 
 describe("formatAlert release-failed", () => {

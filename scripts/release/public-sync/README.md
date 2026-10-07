@@ -36,7 +36,9 @@ then mints the App token.
   publishes. More than one open sync PR fails the sync.
 
 `alert.ts` pages on a failed sync (`alert` job) and on a sync PR open longer than
-`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes). The
+`PUBLIC_SYNC_MAX_PR_AGE_MINUTES` (default 60; `public-sync-watch.yml`, every 15 minutes), or, while
+no sync PR is open, on a newest sync PR closed without merging: the sync never closes its PR, so
+its release won't ship until the sync job reruns. The
 same watch pages while a public `release.yml` run on `main` newer than the newest successful one
 (among the 20 newest) ended other than `success`, or hasn't completed
 `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` after its latest attempt started (queued, or waiting for `npm`

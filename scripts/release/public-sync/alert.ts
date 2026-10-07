@@ -17,6 +17,7 @@ import { isMain, readRequiredEnv, reportCliError } from "../../workflow.ts";
 import {
   createGitHub,
   type GitHub,
+  LAST_CLOSED_SYNC_PR_PATH,
   OPEN_SYNC_PRS_PATH,
   PUBLIC_REPO,
 } from "./github.ts";
@@ -63,6 +64,27 @@ export async function findStaleSyncPr(options: {
   }
   if (ageMinutes <= options.maxAgeMinutes) return undefined;
   return { number: pr.number, url: pr.html_url, ageMinutes };
+}
+
+/**
+ * Finds the newest closed sync PR when it was closed without merging. The sync never
+ * closes its PR, so that PR was closed by hand, or by deleting `sync/main`, and its
+ * release won't ship until the next sync. Call it only when no sync PR is open: the
+ * next sync opens a new one, which clears this.
+ *
+ * @param github - Client able to read the public repository.
+ * @returns The PR, or `undefined` when the newest closed sync PR was merged or there is none.
+ */
+export async function findAbandonedSyncPr(
+  github: GitHub,
+): Promise<{ readonly number: number; readonly url: string } | undefined> {
+  const [pr] = (await github.rest(LAST_CLOSED_SYNC_PR_PATH)) as {
+    number: number;
+    html_url: string;
+    merged_at: string | null;
+  }[];
+  if (pr === undefined || pr.merged_at !== null) return undefined;
+  return { number: pr.number, url: pr.html_url };
 }
 
 /** A recent `release.yml` run on public `main` that didn't succeed or is stuck. */
@@ -138,6 +160,10 @@ export async function findFailedRelease(
 export type Alert =
   | { readonly type: "failed"; readonly releaseSha: string }
   | { readonly type: "stale"; readonly pr: StaleSyncPr }
+  | {
+      readonly type: "abandoned";
+      readonly pr: { readonly number: number; readonly url: string };
+    }
   | { readonly type: "release-failed"; readonly run: FailedRelease }
   | { readonly type: "watch-failed"; readonly reason: string };
 
@@ -158,17 +184,20 @@ export function formatAlert(
       ? `Public sync failed for internal release ${alert.releaseSha}: the public PR wasn't opened or updated. Check the run, fix, and rerun the failed jobs.`
       : alert.type === "stale"
         ? `Public sync PR ${alert.pr.url} has been open for ${alert.pr.ageMinutes} minutes without merging. Check its CI and auto-merge.`
-        : alert.type === "release-failed" &&
-            alert.run.stuckMinutes !== undefined
-          ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds.`
-          : alert.type === "release-failed"
-            ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
-            : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
+        : alert.type === "abandoned"
+          ? `Public sync PR ${alert.pr.url} was closed without merging and no sync PR is open: its release won't reach npm until the next sync. Rerun the sync job of the latest internal release.`
+          : alert.type === "release-failed" &&
+              alert.run.stuckMinutes !== undefined
+            ? `Public release ${alert.run.url} has been ${alert.run.conclusion} for ${alert.run.stuckMinutes} minutes on public main ${alert.run.sha}: its packages aren't on npm yet. Approve, unblock or cancel and rerun it; this alert repeats until a release run succeeds.`
+            : alert.type === "release-failed"
+              ? `Public release ${alert.run.url} ended ${alert.run.conclusion} on public main ${alert.run.sha}: packages may be missing from npm, tags or GitHub Releases. Fix and rerun it; this alert repeats until a release run succeeds.`
+              : `Public sync watch failed, so a stuck sync PR or failed release may go unnoticed: ${alert.reason}`;
   return `${where.owner} ${text} Run: ${where.runUrl}`;
 }
 
 /**
- * Decides the alert of the `stale` watch. Any failure, from a bad threshold to an
+ * Decides the alert of the `stale` watch: a sync PR open too long or, when none is open,
+ * one closed without merging. Any failure, from a bad threshold to an
  * API error, becomes a `watch-failed` alert, so a broken watch still pages.
  *
  * @param options.github - Builds the client; called inside the guard, so a missing token pages too.
@@ -188,12 +217,17 @@ export async function resolveStaleAlert(options: {
         `MAX_AGE_MINUTES must be a positive integer, got ${JSON.stringify(options.maxAgeMinutes)}.`,
       );
     }
+    const github = options.github();
     const pr = await findStaleSyncPr({
-      github: options.github(),
+      github,
       now: options.now,
       maxAgeMinutes,
     });
-    return pr === undefined ? {} : { alert: { type: "stale", pr } };
+    if (pr !== undefined) return { alert: { type: "stale", pr } };
+    const abandoned = await findAbandonedSyncPr(github);
+    return abandoned === undefined
+      ? {}
+      : { alert: { type: "abandoned", pr: abandoned } };
   } catch (error) {
     return {
       alert: {

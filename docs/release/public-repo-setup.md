@@ -59,7 +59,7 @@ Only the sync App can create or push `sync/main` and its scratch branch `sync/bu
    gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-sync-branches.json"
    ```
 
-Rules: restrict creations and restrict updates, bypassed by the App, which creates and force-updates both branches. No force-push block and no required pull request: those would stop the App too. Deletions stay allowed, so GitHub can delete `sync/main` after the merge and the App can delete `sync/build`; a deleted `sync/main` only closes the PR, and the next sync opens it again.
+Rules: restrict creations and restrict updates, bypassed by the App, which creates and force-updates both branches. No force-push block and no required pull request: those would stop the App too. Deletions stay allowed, so GitHub can delete `sync/main` after the merge and the App can delete `sync/build`; a deleted `sync/main` closes the PR, the stale watch pages while no sync PR is open, and the next sync opens a new one.
 
 ## 4. Tag ruleset for `@morpho-org/*`
 
@@ -211,7 +211,7 @@ Target state after cutover (section 10, step 8). Until then `sdks-internal` stil
 
    The trailer must be the full 40-character lowercase SHA on its own line, and the commit must change no file (`--allow-empty`). Sign it with a key registered on the pushing account, so GitHub shows it as Verified. If `main` moved after step 2, repeat step 2 first: the SHA has to be an ancestor of every later internal release commit, or the first sync fails its ordering check.
 4. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
-5. **Set up the sync App, then apply sections 1–8 on `morpho-org/sdks`.** First follow [`scripts/release/public-sync/README.md`](../../scripts/release/public-sync/README.md) Setup steps 2–4 and 6: create the App, install it on `morpho-org/sdks` only, and create the internal `public-sync` and `public-sync-alerts` environments. Sections 2 and 8 need the App to exist. Then apply sections 1–8 (trusted publishers last, right before step 6).
+5. **Set up the sync App, then apply sections 1–8 on `morpho-org/sdks`.** First follow [`scripts/release/public-sync/README.md`](../../scripts/release/public-sync/README.md) Setup steps 2–4 and 6: create the App, install it on `morpho-org/sdks` only, and create the internal `public-sync` and `public-sync-alerts` environments. Sections 2, 3 (the `sync/*` ruleset) and 8 need the App to exist. Then apply sections 1–8 (trusted publishers last, right before step 6).
 6. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
 7. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
 8. **Remove publishing from `sdks-internal`.** Delete `.github/workflows/publish.yml` entirely (its `publish` job with environment `prod`, and the `github-releases` job that needs it) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
