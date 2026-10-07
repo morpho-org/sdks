@@ -54,17 +54,24 @@ Release tags (`@morpho-org/<package>-v<version>`) can't be moved or deleted once
 
 **Decision: keep the existing tag format `@morpho-org/<package>-vX.Y.Z`.** Every existing public tag and the `release.yml` tag step use it. Switching to `@morpho-org/<package>@x.y.z` would create a second tag for each version already released. SDK-1322 is being corrected to match.
 
-Before applying the ruleset, check that every existing package tag points at the commit `release.yml` expects. The `release` job fails the run on a tag that points elsewhere, and once the ruleset applies, fixing that tag means editing the ruleset. In a checkout of public `main` with dependencies installed (`pnpm install --frozen-lockfile`), this prints nothing when all tags match:
+Before applying the ruleset, check that every existing package tag points at the commit `release.yml` expects. The `release` job fails the run on a tag that points elsewhere, and once the ruleset applies, fixing that tag means editing the ruleset. In a checkout of public `main` with dependencies installed (`pnpm install --frozen-lockfile`), this ends with `checked N release tags` when it ran, and lists every tag on the wrong commit:
 
 ```bash
-git fetch --tags origin
-node scripts/publish/pack.ts --tags | while IFS=$'\t' read -r tag commit; do
-  actual=$(git rev-parse -q --verify "refs/tags/${tag}^{commit}") || continue
-  [ "$actual" = "$commit" ] || echo "$tag: on $actual, expected $commit"
-done
+(
+  set -euo pipefail
+  git fetch --tags origin
+  rows=$(mktemp)
+  node scripts/publish/pack.ts --tags > "$rows"
+  [ -s "$rows" ] || { echo "pack.ts --tags printed no rows" >&2; exit 1; }
+  while IFS=$'\t' read -r tag commit; do
+    actual=$(git rev-parse -q --verify "refs/tags/${tag}^{commit}") || continue
+    [ "$actual" = "$commit" ] || echo "$tag: on $actual, expected $commit"
+  done < "$rows"
+  echo "checked $(wc -l < "$rows") release tags"
+)
 ```
 
-Move or delete each tag it lists before going on.
+If it stops with an error or doesn't print the `checked` line, fix the checkout first. Move or delete each tag it lists before going on.
 
 ```bash
 gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-package-tags.json"
