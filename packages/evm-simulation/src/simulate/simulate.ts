@@ -36,10 +36,9 @@ import { runSimulation } from "./run-simulation.js";
  *
  * **Funding.** `value` transfers are funded by the sender's real native
  * balance — no balance inflation — so under-funded bundles revert exactly as
- * they would on-chain. `validation: false` (the default per chain) keeps gas
- * from being charged, separating gas from economic effects. Set a chain's
- * `validation: true` only where its nodes reject `false` and still charge no
- * gas (Monad).
+ * they would on-chain. `validation: false` keeps gas from being charged,
+ * separating gas from economic effects. Monad nodes reject `false`, so Monad
+ * simulations send `true`; its simulated block charges no gas either way.
  *
  * @param config - Required per-chain `eth_simulateV1` URL, optional logger, and
  *   the overall timeout budget.
@@ -52,7 +51,8 @@ import { runSimulation } from "./run-simulation.js";
  * @param params.limits - Optional quotes and percentage tolerances; unquoted amounts require no reads.
  * @param params.blockNumber - Optional pinned block number or `BlockTag` other
  *   than `"pending"`.
- *   Defaults to `latest`, resolved exactly once.
+ *   Defaults to `latest` (`finalized` on Monad, whose `latest` block is not
+ *   final), resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
  *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, or share quotes for

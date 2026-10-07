@@ -128,9 +128,10 @@ export async function assertEndpointChain(params: {
  *
  * 1. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from`, `traceTransfers: true` so the node
- *    synthesizes native-ETH moves as transfer logs, and the chain's
- *    `validation` flag (`false` unless configured). Validation-off means gas
- *    is not charged, which is how gas is separated from economic effects.
+ *    synthesizes native-ETH moves as transfer logs, and `validation: false`
+ *    (`true` on Monad, whose nodes reject `false` and charge no gas in the
+ *    simulated block). Validation-off means gas is not charged, which is how
+ *    gas is separated from economic effects.
  *    **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
@@ -149,7 +150,7 @@ export async function assertEndpointChain(params: {
  * no fallback backend.
  *
  * @param params - Shared simulation client, execution plan, already-pinned
- *   state block, and the chain's `validation` flag.
+ *   state block, and the `validation` flag to send.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,

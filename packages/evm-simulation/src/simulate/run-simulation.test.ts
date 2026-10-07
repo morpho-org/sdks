@@ -1,3 +1,4 @@
+import { ChainId } from "@morpho-org/blue-sdk";
 import { type Address, type Hex, numberToHex } from "viem";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -169,16 +170,24 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
   });
 
-  test("behavior: passes the chain's validation flag to execution", async () => {
-    stubFetch(CHAIN_ID, []);
+  test("behavior: Monad pins to the finalized block and sends validation: true", async () => {
+    const { fetch } = stubFetch(ChainId.MonadMainnet, []);
     await simulate(
       {
-        chains: new Map([
-          [CHAIN_ID, { simulateV1Url: RPC_URL, validation: true }],
-        ]),
+        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
       },
-      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+      { chainId: ChainId.MonadMainnet, transactions: [TRANSACTION] },
     );
+    const blockRequest = fetch.mock.calls
+      .map(
+        ([, init]) =>
+          JSON.parse(String(init?.body)) as {
+            method: string;
+            params: unknown[];
+          },
+      )
+      .find(({ method }) => method === "eth_getBlockByNumber");
+    expect(blockRequest?.params[0]).toBe("finalized");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 

@@ -166,7 +166,7 @@ describe.sequential("executePlan", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  test("behavior: request body carries the configured validation flag", async () => {
+  test("behavior: request body carries the validation flag", async () => {
     respondHappy(okCalls(3));
     await executePlan({ ...params, validation: true });
     const request: unknown = JSON.parse(
