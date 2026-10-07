@@ -1279,6 +1279,15 @@ function isGitCommandError(error: unknown, stderrPattern: RegExp): boolean {
   return stderrPattern.test(`${stderr}\n${getErrorMessage(error)}`);
 }
 
+/**
+ * Remote-tracking namespace for the public repository's branches. The verifier fetches
+ * them from `EXPECTED.repository` by URL, so it checks the public history and tags
+ * whatever the checkout's `origin` is (for example `sdks-internal`).
+ */
+const PUBLIC_REFS = "refs/remotes/morpho-org-sdks";
+const PUBLIC_MAIN = "morpho-org-sdks/main";
+const PUBLIC_NEXT = "morpho-org-sdks/next";
+
 function fetchReleaseRefs(cwd: string): void {
   const unshallow =
     execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
@@ -1287,9 +1296,9 @@ function fetchReleaseRefs(cwd: string): void {
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
-        "origin",
-        "main",
-        "next",
+        EXPECTED.repository,
+        `+refs/heads/main:${PUBLIC_REFS}/main`,
+        `+refs/heads/next:${PUBLIC_REFS}/next`,
         "--tags",
         "--force",
       ],
@@ -1308,8 +1317,8 @@ function fetchReleaseRefs(cwd: string): void {
       [
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
-        "origin",
-        "main",
+        EXPECTED.repository,
+        `+refs/heads/main:${PUBLIC_REFS}/main`,
         "--tags",
         "--force",
       ],
@@ -1350,8 +1359,8 @@ function checkPackageKnown(
     known ? "pass" : "fail",
     "HIGH",
     known
-      ? `${name} is a non-private package in origin/main or origin/next.`
-      : `${name} is not a non-private package in origin/main or origin/next.`,
+      ? `${name} is a non-private package in morpho-org/sdks main or next.`
+      : `${name} is not a non-private package in morpho-org/sdks main or next.`,
   );
 }
 
@@ -1382,7 +1391,7 @@ export function evaluateGitCommitReachability(
     : {
         status: "fail",
         severity: "CRITICAL",
-        detail: `${commit} is not an ancestor of origin/main or origin/next.`,
+        detail: `${commit} is not an ancestor of morpho-org/sdks main or next.`,
       };
 }
 
@@ -1436,7 +1445,7 @@ function addGitCommitCheck(
     );
     return;
   }
-  for (const ref of ["origin/main", "origin/next"]) {
+  for (const ref of [PUBLIC_MAIN, PUBLIC_NEXT]) {
     try {
       execGit(["merge-base", "--is-ancestor", commit, ref], cwd);
       const evaluation = evaluateGitCommitReachability(commit, true);
@@ -2001,11 +2010,11 @@ async function verifyNpmRelease(options: {
   let mainSources: PackageSource[] = [];
   if (refsFetched) {
     try {
-      mainSources = readPackageSourcesAtRef("origin/main", cwd);
+      mainSources = readPackageSourcesAtRef(PUBLIC_MAIN, cwd);
       let nextSources: PackageSource[] = [];
       try {
-        execGit(["rev-parse", "--verify", "--quiet", "origin/next"], cwd);
-        nextSources = readPackageSourcesAtRef("origin/next", cwd);
+        execGit(["rev-parse", "--verify", "--quiet", PUBLIC_NEXT], cwd);
+        nextSources = readPackageSourcesAtRef(PUBLIC_NEXT, cwd);
       } catch (error) {
         if (
           getErrorStatus(error) !== 1 &&
