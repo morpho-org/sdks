@@ -13,6 +13,7 @@ import {
   midnightBundlesV2Abi,
   Offer,
   Payload,
+  PriceRatifierV1,
   RateRatifierV1,
   Tree,
   UnknownCollateralIndexError,
@@ -67,6 +68,7 @@ import {
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
+  MidnightOfferNotReduceOnlyError,
   MidnightOfferRatifierMismatchError,
   MidnightOfferSideMismatchError,
   MidnightRedeemExceedsCreditError,
@@ -1419,6 +1421,164 @@ describe("MorphoMidnight", () => {
           offers: rateTree(makerOffer({ buy: true })),
         }),
       ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+  });
+
+  describe.each(["makeWithdraw", "makeRepay"] as const)("%s", (method) => {
+    const buy = method === "makeRepay";
+    const prepare = (
+      handle: MidnightMockHandle,
+      offers: MidnightMakerTreeInput,
+    ) => {
+      const params = {
+        accountAddress: midnightAddresses.maker,
+        offers,
+        deadline: maxUint256,
+        validation: offerValidation,
+        cancellations: [{ group: previousGroup, maxConsumed: 5n }],
+      };
+      const entity = midnightWithHandle(handle);
+      return method === "makeRepay"
+        ? entity.makeRepay({
+            ...params,
+            loanToken: midnightAddresses.loanToken,
+            loanAssets: 1_000n,
+            reservedLoanAssets: 500n,
+          })
+        : entity.makeWithdraw(params);
+    };
+
+    test.each(["priceV1", "rateV1"] as const)(
+      "behavior: publishes an unchanged %s units-capped exit",
+      async (type) => {
+        const handle = createMockClient(midnightTestChain);
+        mockMidnightAuthorization(handle, false);
+        if (buy)
+          mockAllowance({
+            handle,
+            token: midnightAddresses.loanToken,
+            result: 0n,
+          });
+        const ratifier = type === "priceV1" ? priceRatifierV1 : rateRatifierV1;
+        const offer = makerOffer({
+          buy,
+          reduceOnly: true,
+          maxAssets: 0n,
+          maxUnits: 100n,
+          ratifier,
+        });
+        const tree =
+          type === "priceV1"
+            ? Tree.create({ type, entries: [{ offer }] })
+            : Tree.create({ type, entries: [{ offer, rate: 1_000_000_000n }] });
+        const output = await prepare(handle, tree);
+        const tx = output.buildTx();
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
+        expect(output.root).toBe(tree.root);
+        expect(output.groups).toEqual([makerGroup]);
+        expect(output.ratifierType).toBe(type);
+        expect(tx.to).toBe(midnightBundlesV2);
+        expect(tx.value).toBe(0n);
+        expect(Object.isFrozen(tx)).toBe(true);
+        expect(decoded.functionName).toBe("midnightBundlesV2CancelAndMake");
+        expect(decoded.args[1]).toBe(0n);
+        expect(decoded.args[4]).toEqual([]);
+        expect(decoded.args[5]).toBe(ratifier);
+        expect(decoded.args[6]).toBe(tree.root);
+        expect(decoded.args.slice(7, 13)).toEqual([
+          0n,
+          0n,
+          0n,
+          0,
+          zeroHash,
+          zeroHash,
+        ]);
+        expect(decoded.args[13]).toEqual([
+          { group: previousGroup, maxConsumed: 5n },
+        ]);
+        const items =
+          tree.type === "priceV1"
+            ? PriceRatifierV1.ratify({ tree })
+            : RateRatifierV1.ratify({ tree });
+        expect(decoded.args[14]).toBe(await Payload.encode(items));
+        const requirements = await output.getRequirements();
+        expect(requirements.map(({ action }) => action)).toEqual([
+          ...(buy
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightAddresses.midnight, amount: 1_500n },
+                },
+              ]
+            : []),
+          {
+            type: "midnightAuthorization",
+            args: {
+              authorized: midnightBundlesV2,
+              isAuthorized: true,
+              onBehalf: midnightAddresses.maker,
+            },
+          },
+        ]);
+        expect(
+          requirements.every((requirement) => !("sign" in requirement)),
+        ).toBe(true);
+        const fresh = await prepare(createMockClient(midnightTestChain), tree);
+        expect(fresh.buildTx()).toEqual(tx);
+      },
+    );
+
+    test("error: rejects a non-reduce-only offer anywhere in the tree", async () => {
+      await expect(
+        prepare(
+          createMockClient(midnightTestChain),
+          rateTree(
+            makerOffer({
+              buy,
+              reduceOnly: true,
+              maxAssets: 0n,
+              maxUnits: 100n,
+            }),
+            makerOffer({ buy, reduceOnly: false, group: previousGroup }),
+          ),
+        ),
+      ).rejects.toThrow(MidnightOfferNotReduceOnlyError);
+    });
+
+    test("error: rejects the opposite exit side", async () => {
+      await expect(
+        prepare(
+          createMockClient(midnightTestChain),
+          rateTree(
+            makerOffer({
+              buy: !buy,
+              reduceOnly: true,
+              maxAssets: 0n,
+              maxUnits: 100n,
+            }),
+          ),
+        ),
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+
+    test("error: retains maker validation", async () => {
+      await expect(
+        prepare(
+          createMockClient(midnightTestChain),
+          rateTree(
+            makerOffer({
+              buy,
+              reduceOnly: true,
+              maxAssets: 0n,
+              maxUnits: 100n,
+              maker: midnightAddresses.taker,
+            }),
+          ),
+        ),
+      ).rejects.toThrow(MidnightOfferMakerMismatchError);
     });
   });
 
