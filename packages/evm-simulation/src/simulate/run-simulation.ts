@@ -107,7 +107,6 @@ export async function runSimulation(params: {
   // Execute against the block resolved once above.
   const execution = await executePlan({
     client,
-    chainId: request.chainId,
     plan,
     stateBlock: pinnedBlock,
     validation: monad,

@@ -67,7 +67,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     await expect(
       executePlan({
         client,
-        chainId,
         plan,
         stateBlock: await pin(client),
         validation: false,
@@ -88,7 +87,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
 
     const execution = await executePlan({
       client,
-      chainId: mainnet.id,
       plan,
       stateBlock,
       validation: false,
@@ -106,7 +104,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     // Re-running at the same pin yields a deep-equal block and readings.
     const again = await executePlan({
       client,
-      chainId: mainnet.id,
       plan,
       stateBlock,
       validation: false,
@@ -126,7 +123,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const stateBlock = await pin(client);
     const execution = await executePlan({
       client,
-      chainId: mainnet.id,
       plan: planFor(
         [{ to: RECIPIENT, data: "0x", value: amount }],
         client.account.address,
@@ -151,7 +147,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const stateBlock = await pin(client);
     const execution = await executePlan({
       client,
-      chainId: mainnet.id,
       plan: planFor(
         [
           {

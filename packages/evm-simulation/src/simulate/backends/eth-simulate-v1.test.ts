@@ -84,7 +84,6 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   params = {
     client: createSimulationClient(RPC_URL),
-    chainId: 1,
     plan: makePlan(),
     stateBlock: {
       number: STATE_BLOCK,
