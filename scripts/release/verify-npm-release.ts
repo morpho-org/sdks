@@ -1309,6 +1309,7 @@ export function fetchReleaseRefs(
         "fetch",
         ...(unshallow ? ["--unshallow"] : []),
         "--no-tags",
+        "--prune",
         repository,
         ...branches.map(
           (branch) => `+refs/heads/${branch}:${PUBLIC_REFS}/${branch}`,

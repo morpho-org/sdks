@@ -44,7 +44,7 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 ### Workflow `permissions:` scopes (HIGH)
 
 - Missing top-level `permissions:` block in a new workflow — defaults to write-all on classic-permissions repos. Require an explicit `permissions:` block (job-level if scopes differ between jobs).
-- Wide scopes where narrow ones would do: `contents: write` when only `contents: read` is needed; `id-token: write` outside of OIDC/provenance-publishing jobs; `pull-requests: write` outside of bot-comment jobs.
+- Wide scopes where narrow ones would do: `contents: write` when only `contents: read` is needed; `id-token: write` outside the `publish` job of the public `public/.github/workflows/release.yml`; `pull-requests: write` outside of bot-comment jobs.
 - `secrets: inherit` passed to reusable workflows is forbidden — list secrets explicitly (per AGENTS.md §10).
 
 ### Secret exposure (HIGH)

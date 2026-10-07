@@ -1173,7 +1173,7 @@ describe("fetchReleaseRefs", () => {
     });
   });
 
-  test("keeps public tags apart from the checkout's own tags", () => {
+  test("keeps public tags apart from the checkout's own tags and prunes deleted ones", () => {
     withRepos((remote, local) => {
       commit(local, "internal");
       git(local, "tag", "pkg-v1.0.0");
@@ -1192,6 +1192,13 @@ describe("fetchReleaseRefs", () => {
       expect(git(local, "rev-parse", "refs/tags/pkg-v1.0.0")).toBe(localTag);
       expect(
         git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v0.9.0"),
+      ).toBe("");
+
+      git(remote, "tag", "-d", "pkg-v1.0.0");
+      fetchReleaseRefs(local, remote);
+
+      expect(
+        git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v1.0.0"),
       ).toBe("");
     });
   });
