@@ -1285,8 +1285,9 @@ function isGitCommandError(error: unknown, stderrPattern: RegExp): boolean {
  * whatever the checkout's `origin` is (for example `sdks-internal`).
  */
 const PUBLIC_REFS = "refs/remotes/morpho-org-sdks";
-const PUBLIC_MAIN = "morpho-org-sdks/main";
-const PUBLIC_NEXT = "morpho-org-sdks/next";
+// Full ref names: a local tag or branch named `morpho-org-sdks/main` must not shadow them.
+const PUBLIC_MAIN = `${PUBLIC_REFS}/main`;
+const PUBLIC_NEXT = `${PUBLIC_REFS}/next`;
 /** Public tags, kept apart from the checkout's own `refs/tags`. */
 const PUBLIC_TAGS = "refs/morpho-org-sdks/tags";
 
@@ -1433,8 +1434,17 @@ export function evaluateGitTagDecision(options: {
   };
 }
 
+/**
+ * Records whether the provenance commit is reachable from a fetched public release branch.
+ *
+ * @param commit The provenance `gitCommit`.
+ * @param cwd The checkout holding the fetched public refs.
+ * @param checks The check list to append to.
+ * @param findings The finding list to append to.
+ * @internal
+ */
 // biome-ignore lint/complexity/useMaxParams: Keep source and report state explicit.
-function addGitCommitCheck(
+export function addGitCommitCheck(
   commit: string | null,
   cwd: string,
   checks: VerificationCheck[],

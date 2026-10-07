@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 import {
+  addGitCommitCheck,
   aggregateSeverity,
   checkTarballFiles,
   classifyAuditSignatures,
@@ -1200,6 +1201,24 @@ describe("fetchReleaseRefs", () => {
       expect(
         git(local, "for-each-ref", "refs/morpho-org-sdks/tags/pkg-v1.0.0"),
       ).toBe("");
+    });
+  });
+
+  test("checks commits against the public ref even when a local ref has the same short name", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      const internalCommit = git(local, "rev-parse", "HEAD");
+      git(local, "tag", "morpho-org-sdks/main");
+      fetchReleaseRefs(local, remote);
+
+      const check = (sha: string) => {
+        const checks: Parameters<typeof addGitCommitCheck>[2] = [];
+        addGitCommitCheck(sha, local, checks, []);
+        return checks[0]?.status;
+      };
+
+      expect(check(internalCommit)).not.toBe("pass");
+      expect(check(git(remote, "rev-parse", "main"))).toBe("pass");
     });
   });
 });
