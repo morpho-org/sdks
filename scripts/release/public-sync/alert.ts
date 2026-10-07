@@ -17,6 +17,7 @@ import { isMain, readRequiredEnv, reportCliError } from "../../workflow.ts";
 import {
   createGitHub,
   type GitHub,
+  GitHubApiError,
   LAST_CLOSED_SYNC_PR_PATH,
   OPEN_SYNC_PRS_PATH,
   PUBLIC_REPO,
@@ -114,14 +115,24 @@ const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/ru
  * @param options.now - Current time.
  * @param options.maxAgeMinutes - Minutes a run may stay queued, waiting or in progress.
  * @returns The newest run whose latest attempt completed with any conclusion but
- *   `success`, or that hasn't completed after `maxAgeMinutes`, else `undefined`.
+ *   `success`, or that hasn't completed after `maxAgeMinutes`, else `undefined`
+ *   (also while public `main` has no `release.yml` yet, before cutover).
  * @throws If a run that hasn't completed has an unreadable start time.
  */
 export async function findFailedRelease(
   github: GitHub,
   options: { readonly now: Date; readonly maxAgeMinutes: number },
 ): Promise<FailedRelease | undefined> {
-  const { workflow_runs: runs } = (await github.rest(RELEASE_RUNS_PATH)) as {
+  let response: unknown;
+  try {
+    response = await github.rest(RELEASE_RUNS_PATH);
+  } catch (error) {
+    // Until cutover merges the first snapshot, public main has no release.yml.
+    if (error instanceof GitHubApiError && error.status === 404)
+      return undefined;
+    throw error;
+  }
+  const { workflow_runs: runs } = response as {
     workflow_runs: {
       html_url: string;
       head_sha: string;

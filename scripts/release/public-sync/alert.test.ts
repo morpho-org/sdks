@@ -125,6 +125,31 @@ describe("findFailedRelease", () => {
     }
   });
 
+  test("reports nothing while public main has no release.yml", async () => {
+    const missing: GitHub = {
+      async rest() {
+        throw new GitHubApiError("not found", 404);
+      },
+      async graphql() {
+        throw new Error("unused");
+      },
+    };
+    await expect(
+      findFailedRelease(missing, releaseWindow),
+    ).resolves.toBeUndefined();
+    await expect(
+      findFailedRelease(
+        {
+          ...missing,
+          async rest() {
+            throw new GitHubApiError("server error", 500);
+          },
+        },
+        releaseWindow,
+      ),
+    ).rejects.toThrow("server error");
+  });
+
   test("looks past a recent unfinished run to the older runs", async () => {
     const fresh = { ...run, status: "in_progress", conclusion: null };
     await expect(

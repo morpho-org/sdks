@@ -43,7 +43,7 @@ same watch pages while a public `release.yml` run on `main` newer than the newes
 (among the 20 newest) ended other than `success`, or hasn't completed
 `PUBLIC_SYNC_MAX_PR_AGE_MINUTES` after its latest attempt started (queued, or waiting for `npm`
 approval). A later successful run clears it: each run publishes every version its commit declares
-that npm doesn't have yet. Only a version a later bump replaced before it was published is never
+that npm doesn't have yet. Until cutover merges the first snapshot, public `main` has no `release.yml`; the watch treats that 404 as nothing to report. Only a version a later bump replaced before it was published is never
 published; its notes ship with the next version. It also pages a `watch-failed` alert when it can't check (bad threshold, missing token, API error).
 
 ## Setup (org admin)
