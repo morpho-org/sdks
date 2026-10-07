@@ -93,7 +93,7 @@ export interface FailedRelease {
   readonly sha: string;
   /** Conclusion of a completed run, or the status (`queued`, `waiting`, ...) of a stuck one. */
   readonly conclusion: string;
-  /** Set when the run hasn't completed: minutes since it was created. */
+  /** Set when the run hasn't completed: minutes since its latest attempt started. */
   readonly stuckMinutes?: number;
 }
 
