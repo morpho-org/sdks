@@ -261,6 +261,14 @@ jobs:
             if ! /usr/bin/git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
               /usr/bin/git tag "$tag" "$commit" -m "$tag"
               /usr/bin/git push --no-verify origin "refs/tags/${tag}"
+            else
+              # A tag can't be moved once the ruleset applies, so one on another
+              # commit must stop the run before it becomes a Release.
+              /usr/bin/git fetch --no-tags origin "+refs/tags/${tag}:refs/tags/${tag}"
+              if [ "$(/usr/bin/git rev-parse "refs/tags/${tag}^{commit}")" != "$commit" ]; then
+                echo "::error::Tag ${tag} exists on a commit other than ${commit}."
+                exit 1
+              fi
             fi
             if ! /usr/bin/gh release view "$tag" >/dev/null 2>&1; then
               /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$plan/notes/${tag//\//__}.md" --verify-tag
