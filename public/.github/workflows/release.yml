@@ -139,6 +139,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      release-plan-id: ${{ steps.release-plan.outputs.artifact-id }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -171,7 +173,8 @@ jobs:
             node scripts/publish/github-release-body.ts "$tag" "$out/notes/${tag//\//__}.md"
           done 3< "$out/tags.txt"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - id: release-plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-plan
           path: ${{ runner.temp }}/release-plan
@@ -194,9 +197,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # By id, so the job checks exactly the artifact prepare-release uploaded.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-plan
+          artifact-ids: ${{ needs.prepare-release.outputs.release-plan-id }}
+          # Extract into path itself, as a download by name does.
+          merge-multiple: true
           path: ${{ runner.temp }}/release-plan
 
       # Every current package version is on npm once publish succeeds, so any
