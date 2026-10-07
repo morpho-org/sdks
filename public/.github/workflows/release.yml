@@ -197,6 +197,17 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # An empty id would make download-artifact fetch every artifact in the run.
+      - name: Require the release-plan artifact id
+        shell: bash
+        env:
+          RELEASE_PLAN_ID: ${{ needs.prepare-release.outputs.release-plan-id }}
+        run: |
+          if [ -z "$RELEASE_PLAN_ID" ]; then
+            echo "::error::prepare-release did not output the release-plan artifact id."
+            exit 1
+          fi
+
       # By id, so the job checks exactly the artifact prepare-release uploaded.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
