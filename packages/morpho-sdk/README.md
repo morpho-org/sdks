@@ -44,10 +44,16 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
-| | `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow`, `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.
+
+`makeWithdraw` publishes reduce-only sell offers for lend limit exits. `makeRepay` publishes
+reduce-only buy offers for borrow limit exits and uses the same loan reserve inputs as `makeLend`.
+Both preserve the supplied offer tree and use `midnightCancelAndMake`; neither executes a fill
+or withdraws collateral during publication. Send their approval/authorization requirements first,
+then call `buildTx()` without a separate root signature.
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,

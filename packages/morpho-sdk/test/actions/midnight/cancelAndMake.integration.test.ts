@@ -105,7 +105,11 @@ const deployMidnightBundlesV2 = async (
 
 const rateTree = (
   client: AnvilTestClient<typeof base>,
-  params: { readonly buy: boolean; readonly group: Hex },
+  params: {
+    readonly buy: boolean;
+    readonly group: Hex;
+    readonly reduceOnly?: boolean;
+  },
 ) =>
   Tree.create({
     type: "rateV1",
@@ -122,8 +126,9 @@ const rateTree = (
           receiverIfMakerIsSeller: params.buy
             ? zeroAddress
             : client.account.address,
-          maxUnits: 0n,
-          maxAssets: parseUnits("1", 6),
+          reduceOnly: params.reduceOnly ?? false,
+          maxUnits: params.reduceOnly ? parseUnits("1", 6) : 0n,
+          maxAssets: params.reduceOnly ? 0n : parseUnits("1", 6),
         }),
         rate: 1_000_000_000n,
       },
@@ -132,7 +137,11 @@ const rateTree = (
 
 const priceTree = (
   client: AnvilTestClient<typeof base>,
-  params: { readonly buy: boolean; readonly group: Hex },
+  params: {
+    readonly buy: boolean;
+    readonly group: Hex;
+    readonly reduceOnly?: boolean;
+  },
 ) =>
   Tree.create({
     type: "priceV1",
@@ -149,8 +158,9 @@ const priceTree = (
           receiverIfMakerIsSeller: params.buy
             ? zeroAddress
             : client.account.address,
-          maxUnits: 0n,
-          maxAssets: parseUnits("1", 6),
+          reduceOnly: params.reduceOnly ?? false,
+          maxUnits: params.reduceOnly ? parseUnits("1", 6) : 0n,
+          maxAssets: params.reduceOnly ? 0n : parseUnits("1", 6),
         }),
       },
     ],
@@ -194,6 +204,50 @@ const fulfilRequirements = async (
 };
 
 describe("Midnight maker offers on fork", () => {
+  for (const method of ["makeWithdraw", "makeRepay"] as const) {
+    for (const type of ["priceV1", "rateV1"] as const) {
+      test(`publishes ${method} through ${type} without a root signature`, async ({
+        client,
+      }) => {
+        await deployMidnightBundlesV2(client);
+        const entity = client
+          .extend(morphoViemExtension())
+          .morpho.midnight(base.id);
+        const offers = (type === "priceV1" ? priceTree : rateTree)(client, {
+          buy: method === "makeRepay",
+          group: groupA,
+          reduceOnly: true,
+        });
+        const params = {
+          accountAddress: client.account.address,
+          offers,
+          deadline: maxUint256,
+          validation,
+        };
+        const output =
+          method === "makeRepay"
+            ? await entity.makeRepay({
+                ...params,
+                loanToken: usdc,
+                loanAssets: parseUnits("1", 6),
+              })
+            : await entity.makeWithdraw(params);
+        await fulfilRequirements(client, output);
+        const hash = await client.sendTransaction(output.buildTx());
+        expect((await client.waitForTransactionReceipt({ hash })).status).toBe(
+          "success",
+        );
+        await expect(
+          (type === "priceV1" ? isPriceRootRatified : isRootRatified)(
+            client,
+            output.root,
+          ),
+        ).resolves.toBe(true);
+        await expect(consumed(client, groupA)).resolves.toBe(0n);
+      });
+    }
+  }
+
   test("publishes lend offers, then atomically reposts them", async ({
     client,
   }) => {
