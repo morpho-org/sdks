@@ -19,7 +19,7 @@ CONFIG=scripts/release/public-repo-config
   - **Allow `morpho-org` actions and reusable workflows, plus these**: `actions/*`, `pnpm/action-setup@*`. Every action is pinned by SHA in the workflows.
   - **Workflow permissions: read repository contents**. Leave "Allow GitHub Actions to create and approve pull requests" off.
   - **Fork pull request workflows: require approval for all external contributors.** `ci.yml` is safe for forks (no secrets, read-only token), but it still runs their code.
-- Collaborators and teams: **no human gets `write` or `maintain`**; admins only. A human with `write` could create a `@morpho-org/*` tag before `release.yml` does, and it would then skip it. Contributors open PRs from forks.
+- Collaborators and teams: **no human gets `write` or `maintain`**; admins only. A human with `write` could create a `@morpho-org/*` tag on another commit before `release.yml` does. Every release run would then fail until an admin temporarily disables the `package tags` ruleset and deletes the tag. Contributors open PRs from forks.
 - Secrets and variables: **none** at repository level. Check that no org secret or variable is shared with `morpho-org/sdks`.
 
 ## 2. `main` ruleset A, "only the bot"
