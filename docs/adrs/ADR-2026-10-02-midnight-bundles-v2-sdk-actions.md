@@ -55,6 +55,8 @@ whose arguments the entity methods fill.
 | `cancelAndMakeBorrow` | `midnightCancelAndMake` | `CancelAndMake` | borrow-side offers, `assetsToPark = 0`, no collateral supplies |
 | `supplyBlueMakeLend` | `midnightCancelAndMake` | `CancelAndMake` | lend-side offers whose callback is the maker's derived `BlueBuyCallback`, `assetsToPark > 0` |
 | `supplyCollateralMakeBorrow` | `midnightCancelAndMake` | `CancelAndMake` | borrow-side offers, non-empty collateral supplies, `assetsToPark = 0` |
+| `makeWithdraw` | `midnightCancelAndMake` | `CancelAndMake` | reduce-only sell offers (`buy = false`), `assetsToPark = 0`, no collateral supplies |
+| `makeRepay` | `midnightCancelAndMake` | `CancelAndMake` | reduce-only buy offers (`buy = true`), `assetsToPark = 0`, no collateral supplies |
 | `takeLend` | `midnightTakeLend` | `BuyWith{Units,Assets}Target…` | `reduceOnly = false`, `repayEnabled = false`, no collateral withdrawals |
 | `takeRepayWithdrawCollateral` | `midnightTakeRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, non-empty `offerFills`; `repayEnabled` is an input |
 | `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; no referral fee; an assets repay encodes `targetBuyerAssets = minUnits = assets`, a full repay encodes `targetUnits = maxUint256` |
@@ -109,6 +111,35 @@ Rules shared by the maker actions:
   `signatureDeadline` reach `buildTx` only through the signature's `args`, as required by
   ADR-2026-09-23-stateless-entity-flows. A contract-wallet maker and `cancelOffers` take no
   signature.
+
+### Dedicated maker limit exits
+
+`makeWithdraw` publishes lend limit exits: sell existing credit with `buy = false` and
+`reduceOnly = true`. `makeRepay` publishes borrow limit exits: buy credit to reduce existing debt
+with `buy = true` and `reduceOnly = true`. Both reject any offer with the wrong side or without
+`reduceOnly`, including mixed trees. They preserve the supplied tree and group caps instead of
+rewriting offers after their root has been computed. Markets app uses `maxUnits` caps for these exits.
+
+These methods share `midnightCancelAndMake` with the other maker intents. `makeWithdraw` uses
+`MakeOffersParams`; `makeRepay` uses `MakeLendParams`, including `loanToken`, `loanAssets` and
+`reservedLoanAssets`. This reuses the existing parameter shapes rather than exporting aliases.
+Both accept PriceRatifierV1 and RateRatifierV1 trees and optional guarded group cancellations.
+As specified by the superseding maker-route ADR, entity methods need no separate root signature.
+
+Publication does not execute the exit. A later taker fill sells credit or offsets debt, with
+`reduceOnly` enforced against the maker's position at fill time. A stale offer cannot open the
+opposite position; a fill may revert rather than automatically clamp to the remaining position.
+Neither method withdraws collateral, redeems credit directly, supplies collateral, or parks assets
+on Blue. These methods therefore differ from immediate taker exits and direct repayment.
+
+`makeWithdraw` requires only Midnight authorization of MidnightBundlesV2. `makeRepay` also
+requires loan-token approval to Midnight for `loanAssets + reservedLoanAssets`, as in `makeLend`.
+For grouped alternative offers, callers reserve the group's loan budget once, not once per leg.
+Midnight pulls these loan assets when an offer fills; the publication bundle pulls none.
+
+The established `makeLend` and `makeBorrow` methods remain available and retain their existing
+validation. The dedicated exit methods add stricter intent checks without changing those methods.
+Both return `MakeOffersOutput`, including the shared `midnightCancelAndMake` action metadata.
 
 ### Every entrypoint acts for the sender
 
@@ -169,7 +200,7 @@ encoding follow from that:
   collateral-supply list, removes `reservedCollateralAssets` because approvals cover only the pulled
   assets, and no longer accepts `EcrecoverRatifier`- or `SetterRatifier`-ratified offers. The four
   V1 flows also keep their action names. The migration guide lists each.
-- `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
+- `makeWithdraw`, `makeRepay`, `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
 - `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
 - `makeLend` and `makeBorrow` do not use V1 and are not covered by the route replacement: they are
@@ -191,6 +222,10 @@ beyond the derived-callback check, Blue market safety policy for parked assets, 
 selection, or any `evm-simulation` change beyond the bundle-retention guard.
 
 ## Invariants
+
+- `makeWithdraw` and `makeRepay` reject non-reduce-only or wrong-side offers, preserve units caps,
+  publish with zero root-signature fields, and resolve only the requirements described above
+  → entity unit tests and fork publication tests for both intents.
 
 - Every migrated and added Midnight bundle action targets the chain's `midnightBundlesV2` address
   and encodes a `midnightBundlesV2*` selector → unit tests per action builder.
