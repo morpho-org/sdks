@@ -1304,7 +1304,7 @@ export function fetchReleaseRefs(
 ): void {
   const unshallow =
     execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
-  const fetch = (branches: readonly string[]) =>
+  const fetchPublicRefs = (branches: readonly string[]) =>
     execGit(
       [
         "fetch",
@@ -1320,7 +1320,7 @@ export function fetchReleaseRefs(
       cwd,
     );
   try {
-    fetch(["main", "next"]);
+    fetchPublicRefs(["main", "next"]);
   } catch (error) {
     if (
       !isGitCommandError(
@@ -1330,7 +1330,7 @@ export function fetchReleaseRefs(
     ) {
       throw error;
     }
-    fetch(["main"]);
+    fetchPublicRefs(["main"]);
     // A next ref left by an earlier run would let checks pass on a deleted branch.
     execGit(["update-ref", "-d", `${PUBLIC_REFS}/next`], cwd);
   }
@@ -1515,8 +1515,19 @@ function getErrorStatus(error: unknown): number | undefined {
     : undefined;
 }
 
+/**
+ * Records whether the public release tag points to the provenance commit.
+ *
+ * @param name The npm package name.
+ * @param version The package version.
+ * @param commit The provenance `gitCommit`.
+ * @param cwd The checkout holding the fetched public tags.
+ * @param checks The check list to append to.
+ * @param findings The finding list to append to.
+ * @internal
+ */
 // biome-ignore lint/complexity/useMaxParams: Keep release and report inputs explicit.
-function addGitTagCheck(
+export function addGitTagCheck(
   name: string,
   version: string,
   commit: string | null,

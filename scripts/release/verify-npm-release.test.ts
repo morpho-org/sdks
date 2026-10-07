@@ -9,6 +9,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   addGitCommitCheck,
+  addGitTagCheck,
   aggregateSeverity,
   checkTarballFiles,
   classifyAuditSignatures,
@@ -1146,10 +1147,10 @@ describe("fetchReleaseRefs", () => {
 
       fetchReleaseRefs(local, remote);
 
-      expect(git(local, "rev-parse", "morpho-org-sdks/main")).toBe(
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/main")).toBe(
         git(remote, "rev-parse", "main"),
       );
-      expect(git(local, "rev-parse", "morpho-org-sdks/next")).toBe(
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/next")).toBe(
         git(remote, "rev-parse", "next"),
       );
     });
@@ -1165,7 +1166,7 @@ describe("fetchReleaseRefs", () => {
 
       fetchReleaseRefs(local, remote);
 
-      expect(git(local, "rev-parse", "morpho-org-sdks/main")).toBe(
+      expect(git(local, "rev-parse", "refs/remotes/morpho-org-sdks/main")).toBe(
         git(remote, "rev-parse", "main"),
       );
       expect(
@@ -1219,6 +1220,24 @@ describe("fetchReleaseRefs", () => {
 
       expect(check(internalCommit)).not.toBe("pass");
       expect(check(git(remote, "rev-parse", "main"))).toBe("pass");
+    });
+  });
+
+  test("checks tags against the public tag namespace, not local tags", () => {
+    withRepos((remote, local) => {
+      commit(local, "internal");
+      git(local, "tag", "pkg-v2.0.0");
+      const localCommit = git(local, "rev-parse", "HEAD");
+      fetchReleaseRefs(local, remote);
+
+      const check = (version: string, sha: string) => {
+        const checks: Parameters<typeof addGitTagCheck>[4] = [];
+        addGitTagCheck("pkg", version, sha, local, checks, []);
+        return checks[0]?.status;
+      };
+
+      expect(check("2.0.0", localCommit)).not.toBe("pass");
+      expect(check("1.0.0", git(remote, "rev-parse", "main"))).toBe("pass");
     });
   });
 });
