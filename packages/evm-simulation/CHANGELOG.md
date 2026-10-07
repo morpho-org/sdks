@@ -1,5 +1,11 @@
 # @morpho-org/evm-simulation
 
+## 5.1.0
+
+### Minor Changes
+
+- [#1303](https://github.com/morpho-org/sdks/pull/1303) [`4a52357`](https://github.com/morpho-org/sdks/commit/4a5235786fcbb29f2e144cba41d32e273577c160) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add optional `ChainSimulationConfig.blockOverrides.gasLimit`, sent to `eth_simulateV1` as the simulated block's `blockOverrides.gasLimit`. Without it, requests are unchanged; a value that is not a positive bigint throws `SimulationValidationError`, as does a `parentHashCheck` that is not a boolean. Add optional `ChainSimulationConfig.parentHashCheck` to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on everywhere else. The block number, timestamp and reorg checks always apply.
+
 ## 5.0.1
 
 ### Patch Changes

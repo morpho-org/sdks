@@ -111,6 +111,7 @@ export function parseSimulationResponse(params: {
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
   readonly stateBlockTimestamp: bigint;
+  readonly parentHashCheck: boolean;
 }): SimulationExecution {
   const { plan, blocks } = params;
   const errorContext: SimulationErrorContext = {
@@ -141,8 +142,10 @@ export function parseSimulationResponse(params: {
   }
   // Anvil re-hashes the pinned block, so only the geth-style successor can be
   // pinned by hash: it must report a parentHash (geth always does) equal to
-  // the pinned state block hash.
+  // the pinned state block hash. With `parentHashCheck` off (Stable by
+  // default) the block number, timestamp and reorg checks still apply.
   if (
+    params.parentHashCheck &&
     blockNumber === params.stateBlockNumber + 1n &&
     block.parentHash !== params.stateBlockHash
   ) {
