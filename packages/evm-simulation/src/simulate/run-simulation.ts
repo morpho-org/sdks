@@ -109,6 +109,7 @@ export async function runSimulation(params: {
     client,
     plan,
     stateBlock: pinnedBlock,
+    validation: chain.validation ?? false,
   });
 
   const userCalls = execution.calls

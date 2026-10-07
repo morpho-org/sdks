@@ -36,8 +36,10 @@ import { runSimulation } from "./run-simulation.js";
  *
  * **Funding.** `value` transfers are funded by the sender's real native
  * balance — no balance inflation — so under-funded bundles revert exactly as
- * they would on-chain. `validation: false` keeps gas from being charged,
- * separating gas from economic effects.
+ * they would on-chain. `validation: false` (the default per chain) keeps gas
+ * from being charged, separating gas from economic effects. Set a chain's
+ * `validation: true` only where its nodes reject `false` and still charge no
+ * gas (Monad).
  *
  * @param config - Required per-chain `eth_simulateV1` URL, optional logger, and
  *   the overall timeout budget.

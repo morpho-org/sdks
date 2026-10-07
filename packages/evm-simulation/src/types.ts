@@ -7,6 +7,12 @@ import type { Address, Hex } from "viem";
 export interface ChainSimulationConfig {
   /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
   readonly simulateV1Url: string;
+  /**
+   * `validation` flag sent with `eth_simulateV1` (default `false`, so gas is not
+   * charged). Set `true` only for chains whose nodes reject `false` and still
+   * charge no gas in the simulated block, such as Monad.
+   */
+  readonly validation?: boolean;
 }
 
 /**

@@ -166,6 +166,20 @@ describe.sequential("runSimulation", () => {
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
     expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
+  });
+
+  test("behavior: passes the chain's validation flag to execution", async () => {
+    stubFetch(CHAIN_ID, []);
+    await simulate(
+      {
+        chains: new Map([
+          [CHAIN_ID, { simulateV1Url: RPC_URL, validation: true }],
+        ]),
+      },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
   test("error: chain mismatch is detected before block lookup", async () => {
