@@ -7,18 +7,18 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-
-import { loadBundledPacote } from "../ci/read-tarball-identity.ts";
-import {
-  listTarballEntries,
-  loadBundledTar,
-  type TarEntry,
-} from "../ci/verify-tarball-collisions.ts";
 import {
   getErrorMessage,
   parseReleaseSpec,
   sanitizeLogLine,
-} from "./helpers.ts";
+} from "../publish/helpers.ts";
+import { releaseTag } from "../publish/pack.ts";
+import { loadBundledPacote } from "../publish/read-tarball-identity.ts";
+import {
+  listTarballEntries,
+  loadBundledTar,
+  type TarEntry,
+} from "../publish/verify-tarball-collisions.ts";
 
 // These verification values intentionally remain constants, not runtime options.
 const EXPECTED = {
@@ -1465,7 +1465,7 @@ function addGitTagCheck(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): void {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   let taggedCommit: string;
   try {
     taggedCommit = execGit(
@@ -1833,7 +1833,7 @@ async function checkGithubRelease(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): Promise<void> {
-  const tag = `${name}-v${version}`;
+  const tag = releaseTag({ name, version });
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   const headers: HeadersInit =
     token == null ? {} : { Authorization: `Bearer ${token}` };

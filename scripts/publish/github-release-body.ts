@@ -4,7 +4,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside } from "./helpers.ts";
+import { isPathInside } from "../paths.ts";
+import { getErrorMessage } from "./helpers.ts";
 
 const DEFAULT_PACKAGES_DIR = "packages";
 const PACKAGE_TAG_SEPARATORS = ["-v", "@"];
@@ -156,7 +157,7 @@ export function main(
   const [tag, bodyFile] = args;
   if (tag == null || bodyFile == null) {
     throw new Error(
-      "Usage: node scripts/release/github-release-body.ts <tag> <body-file>",
+      "Usage: node scripts/publish/github-release-body.ts <tag> <body-file>",
     );
   }
 

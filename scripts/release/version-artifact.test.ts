@@ -10,12 +10,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-
-import { applyVersionArtifact, main } from "./apply-version-artifact.ts";
 import {
   MIDNIGHT_VERSION_SOURCE_PATH,
   renderMidnightPackageVersionSource,
-} from "./generate-midnight-package-version.ts";
+} from "../generate-midnight-package-version.ts";
+import { applyVersionArtifact, main } from "./apply-version-artifact.ts";
 import { writeVersionArtifact } from "./write-version-artifact.ts";
 
 const tempDirs: string[] = [];

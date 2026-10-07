@@ -8,7 +8,7 @@ import {
   getErrorMessage,
   parseReleaseSpec,
   sanitizeLogLine,
-} from "./helpers.ts";
+} from "../publish/helpers.ts";
 
 const REGISTRY_URL = "https://registry.npmjs.org";
 const GITHUB_API_URL = "https://api.github.com";

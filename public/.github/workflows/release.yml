@@ -1,0 +1,174 @@
+name: Release
+
+# Every merge to main is a release: the repository only receives release
+# snapshots. Publishing is idempotent, so a rerun only publishes, tags and
+# releases what is missing.
+#
+#   pack     unprivileged: install, build and pack the exact bytes to publish
+#   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
+#   tag      package tags and GitHub Releases for every current package version
+#
+# Repository settings this workflow relies on (a workflow file can't enforce them,
+# since a pull request could edit it):
+#   - The `npm` environment allows deployments from `main` only and has required
+#     reviewers. Each npm trusted publisher names this repository, this file and
+#     the `npm` environment.
+#   - A `main` ruleset blocks direct and force pushes and requires `CI` to pass.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Queue every push: a replaced run would skip the versions it alone declares.
+concurrency:
+  group: release
+  queue: max
+
+jobs:
+  pack:
+    name: Build & pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: true
+      HUSKY: 0
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build:ci
+
+      - name: Pack publishable tarballs
+        run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+          if-no-files-found: error
+          retention-days: 1
+
+  # Holds the npm OIDC token. It installs nothing and runs only Node, the npm
+  # bundled with it and scripts from this commit, on tarballs whose digests and
+  # identities it checks first.
+  publish:
+    name: Publish to npm
+    needs: pack
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CI: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Require npm with trusted publishing
+        run: node scripts/publish/require-trusted-publishing-npm.ts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+
+      # Checksums, layout, collisions, the identity npm reads and publishConfig,
+      # against the packages declared at this commit. A tampered pack job can't
+      # make this job publish anything else.
+      - name: Verify tarballs
+        run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
+
+      - name: Publish packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r -u 3 name version tgz; do
+            if npm view "${name}@${version}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
+              echo "Already on npm: ${name}@${version}"
+              continue
+            fi
+            npm publish "$tgz" \
+              --provenance \
+              --access public \
+              --tag latest \
+              --ignore-scripts \
+              --registry https://registry.npmjs.org
+          done 3< "$RUNNER_TEMP/release-set.tsv"
+
+  tag:
+    name: Tags & GitHub Releases
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          # Full history, to tag each version on the commit that set it.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Push package tags and create GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config core.hooksPath /dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
+
+          # Every current package version is on npm once publish succeeds, so any
+          # missing tag or release is created, whichever run skipped it, on the
+          # mainline commit that first set that version. npm provenance records
+          # the commit of the run that published it, which differs from the tag
+          # only when an earlier run failed before publishing.
+          # Not process substitution: a failing command must fail the step.
+          node scripts/publish/pack.ts --tags > "$RUNNER_TEMP/tags.txt"
+          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
+            echo "::error::No package tags found."
+            exit 1
+          fi
+          releases_dir="${RUNNER_TEMP}/github-releases"
+          mkdir -p "$releases_dir"
+          while IFS=$'\t' read -r -u 3 tag commit; do
+            if ! git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+              git tag "$tag" "$commit" -m "$tag"
+              git push --no-verify origin "refs/tags/${tag}"
+            fi
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              body_file="${releases_dir}/${tag//\//__}.md"
+              node scripts/publish/github-release-body.ts "$tag" "$body_file"
+              gh release create "$tag" --title "$tag" --notes-file "$body_file" --verify-tag
+            fi
+          done 3< "$RUNNER_TEMP/tags.txt"

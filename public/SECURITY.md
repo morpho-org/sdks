@@ -2,8 +2,6 @@
 
 The Morpho SDK packages build transactions and signature requests that move real funds on the Morpho protocol. This document is for security researchers, auditors and integrators. It covers how to report a vulnerability, what is in scope, the guarantees the SDKs commit to, how releases are produced and verified, and how to use the SDKs safely.
 
-[`THREAT_MODEL.md`](./THREAT_MODEL.md) is the source of truth for what the SDKs trust and what they check. This file summarizes it and does not repeat it.
-
 ## Contents
 
 - [Reporting a vulnerability](#reporting-a-vulnerability)
@@ -17,7 +15,6 @@ The Morpho SDK packages build transactions and signature requests that move real
 - [Dependency policy](#dependency-policy)
 - [Audits and assurance](#audits-and-assurance)
 - [Secure usage for integrators](#secure-usage-for-integrators)
-- [Keeping this document accurate](#keeping-this-document-accurate)
 
 ## Reporting a vulnerability
 
@@ -109,17 +106,17 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 
 - Bugs in `viem`, `wagmi` or other third-party dependencies; report them upstream. A way the SDK misuses a dependency is in scope.
 - Bugs in deployed smart contracts; see [SDK or protocol?](#sdk-or-protocol).
-- Findings whose only precondition is a malicious or compromised RPC, simulation, bundler or paymaster endpoint, unless the report shows a check the SDK could make against a source the endpoint cannot forge. [`THREAT_MODEL.md`](./THREAT_MODEL.md) lists each audited case, what the SDK checks and its accepted gaps.
-- Findings whose only precondition is a malicious integrator: a wrong client-to-chain pairing, an attacker-chosen address passed in or registered by the integrator, or a modified SDK. See [`THREAT_MODEL.md`](./THREAT_MODEL.md#integrator-inputs-and-the-address-registry).
+- Findings whose only precondition is a malicious or compromised RPC, simulation, bundler or paymaster endpoint, unless the report shows a check the SDK could make against a source the endpoint cannot forge.
+- Findings whose only precondition is a malicious integrator: a wrong client-to-chain pairing, an attacker-chosen address passed in or registered by the integrator, or a modified SDK.
 - Social engineering, denial of service against npm or GitHub, and physical attacks.
 
 ### Trust boundaries in short
 
-The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id. [`THREAT_MODEL.md`](./THREAT_MODEL.md) has the full list.
+The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id.
 
 ## Security invariants
 
-These are the guarantees the codebase commits to ([`AGENTS.md`](./AGENTS.md) §5 "Security invariants are tests"). A change that weakens one is a security bug.
+These are the guarantees the codebase commits to. A change that weakens one is a security bug.
 
 | ID | Invariant | What it means | Where it is enforced |
 | --- | --- | --- | --- |
@@ -131,12 +128,12 @@ These are the guarantees the codebase commits to ([`AGENTS.md`](./AGENTS.md) §5
 | INV-06 | Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
 | INV-07 | Accounting | Morpho Blue withdrawals and repayments never exceed the position they act on, and Midnight `redeem` never exceeds the user's credit. Vault V1/V2 `withdraw`/`redeem` and Midnight `repayWithdrawCollateral` are bounded only on-chain. Amounts fit in `uint256`; deadlines are positive. | `validateWithdrawAmount`, `validateWithdrawShares`, `validateRepayAmount`, `validateRepayShares` (Blue entity), `MidnightRedeemExceedsCreditError`, `validateUint256Field`, `validateDeadline`. |
 
-Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR, and add the same row to [`public/SECURITY.md`](./public/SECURITY.md): the public release gates run this lint against that copy.
+Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR.
 
-Two architectural rules from [`AGENTS.md`](./AGENTS.md) also carry security weight:
+Two architectural rules also carry security weight:
 
-- **Action-layer purity (§1).** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
-- **Typed failures (§2, §3).** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
+- **Action-layer purity.** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
+- **Typed failures.** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
 
 ## Supported versions
 
@@ -155,20 +152,16 @@ Security fixes ship only in the latest major line of each maintained package. Pr
 | `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered |
 | `@morpho-org/consumer-sdk` | Not maintained in this repository |
 
-When a new major is released, the previous major stops receiving fixes. Packages are deprecated following [ADR-2026-05-13](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md). The latest major is the one tagged `latest` on npm (`npm view <package> version`); each package's `CHANGELOG.md` lists its releases.
+When a new major is released, the previous major stops receiving fixes. The latest major is the one tagged `latest` on npm (`npm view <package> version`); each package's `CHANGELOG.md` lists its releases.
 
 ## Release integrity and verification
 
-Packages are released with [Changesets](https://github.com/changesets/changesets) from the `main` (stable) and `next` (prerelease) branches ([ADR-2026-05-12](./docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md)):
+Packages are developed in a private repository. Each release is published to this repository as a snapshot commit on `main`, built from an allowlist of public files and scanned for internal references and secrets before it is opened as a pull request here.
 
-1. Merging to `main` or `next` runs [`push.yml`](./.github/workflows/push.yml). After lint, build and tests pass, [`version-pr.yml`](./.github/workflows/version-pr.yml) opens or refreshes a release PR with GitHub-signed version commits.
-2. Merging the release PR runs [`publish.yml`](./.github/workflows/publish.yml):
-   - an unprivileged **Build & pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions;
-   - a privileged **Publish** job, in the `prod` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry;
-   - it then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
-3. Package git tags and GitHub releases are created only after npm accepts the publish.
-
-[`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md) and [`AGENTS.md`](./AGENTS.md) §10 hold the rules these workflows must keep, including "Artifact identity: ask the consumer, don't emulate it". Changes under `.github/` and to `.changeset/config.json` need review from `@morpho-org/security` ([`CODEOWNERS`](./.github/CODEOWNERS)).
+1. A release snapshot merged to `main` runs [`release.yml`](./.github/workflows/release.yml).
+2. An unprivileged **Pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions.
+3. A privileged **Publish** job, in the `npm` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry. It then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
+4. Package git tags and GitHub releases are created only after npm accepts the publish, on the commit that set each version.
 
 ### Verifying a release
 
@@ -185,16 +178,16 @@ curl -s "$(npm view "@morpho-org/morpho-sdk@$VERSION" dist.attestations.url)" \
   | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-The output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/push.yml"`, on `refs/heads/main` (or `refs/heads/next` for prereleases). This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from another repository or workflow, as suspect and report it.
+For a version published by this pipeline, the output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`. Versions published before this repository became release-only were built from the same repository by `.github/workflows/push.yml`, on `refs/heads/main`, or `refs/heads/next` for prereleases. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from any other repository or workflow, as suspect and report it.
 
 ## Dependency policy
 
 - **Lockfile.** `pnpm-lock.yaml` is committed and CI installs with `pnpm install --frozen-lockfile`.
-- **Minimum release age.** pnpm refuses dependency versions published less than 3 days ago (`minimumReleaseAge: 4320`, `minimumReleaseAgeStrict: true` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml)). The only exception is a critical-severity security fix, under the rules in [`AGENTS.md`](./AGENTS.md) §7.
+- **Minimum release age.** pnpm refuses dependency versions published less than 3 days ago (`minimumReleaseAge: 4320`, `minimumReleaseAgeStrict: true` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml)). The only exception is a critical-severity security fix.
 - **Peer dependencies.** `viem` is a peer dependency, so integrators control its version. Several packages also take sibling `@morpho-org/*` packages as peers; the exact ranges are in each `package.json`.
 - **Caret ranges.** Runtime dependencies, including `@morpho-org/*` ones, may use caret ranges so coordinated patch and minor releases reach consumers without a release per upstream patch. Cantina flagged this in 2025 ([audit](#audits-and-assurance), finding 3.1.1); we accepted it and rely on consumer lockfiles, release age and provenance instead.
-- **New dependencies.** A new runtime dependency needs a written justification in its PR and is reviewed as high risk ([`AGENTS.md`](./AGENTS.md) §2 and §10).
-- **Updates.** Dependency maintenance and security bumps are automated and opened as PRs that go through the same review and checks as any other change. [`.github/dependency-maintenance.json`](./.github/dependency-maintenance.json) records any update deliberately postponed and why.
+- **New dependencies.** A new runtime dependency needs a written justification in its PR and is reviewed as high risk.
+- **Updates.** Dependency maintenance and security bumps are automated and opened as PRs that go through the same review and checks as any other change.
 
 ### Recommendations for consumers
 
@@ -211,15 +204,15 @@ The output should show `"repository": "https://github.com/morpho-org/sdks"` and 
 | --- | --- | --- | --- | --- |
 | 2025-05-20 to 2025-06-02 | Cantina (Cantina Managed) | `morpho-org/sdks` at commit `3ba8fd4a` | 0 critical, 0 high, 1 medium, 11 low, 5 informational. 8 fixed, 9 acknowledged. The medium (caret version ranges) was acknowledged; see [Dependency policy](#dependency-policy). | [`audits/2025-06-26-morpho-sdks-cantinacode.pdf`](./audits/2025-06-26-morpho-sdks-cantinacode.pdf) |
 
-Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings are fixed in place and named in package changelogs ("Cantina finding …"), and findings closed as out of scope are recorded in [`THREAT_MODEL.md`](./THREAT_MODEL.md). Every major release also gets a Cantina audit, with the public report linked from its changelog entry ([`AGENTS.md`](./AGENTS.md) §7).
+Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings are fixed in place and named in package changelogs ("Cantina finding …"). Every major release also gets a Cantina audit, with the public report linked from its changelog entry.
 
 ### Continuous checks
 
-- **Automated PR review.** Every non-draft PR from a branch in this repository (except Dependabot's) is reviewed automatically by Claude through [`claude.yml`](./.github/workflows/claude.yml), using the review personas in [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). The security-focused ones are [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (transaction parameters, permits, Action-layer purity, the invariants above), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (swallowed errors) and, for CI and release changes, [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md).
-- **Workflow audit.** [`zizmor.yml`](./.github/workflows/zizmor.yml) audits every GitHub Actions workflow on each PR and uploads findings to code scanning.
+- **Automated PR review.** Every change is reviewed, by people and by automated security review, before it is released here.
+- **Workflow audit.** Every GitHub Actions workflow is audited with zizmor on each change.
 - **Pinned actions.** Third-party GitHub Actions are pinned to full commit SHAs and run with least-privilege `permissions:`.
-- **Release monitoring.** [`npm-release-watch.yml`](./.github/workflows/npm-release-watch.yml) checks npm every 10 minutes for new `@morpho-org/*` publishes and opens an issue for each so it can be matched against an expected release.
-- **Fork tests.** Contract round-trips are tested against Anvil forks at pinned blocks, not mocks ([`AGENTS.md`](./AGENTS.md) §5).
+- **Release monitoring.** npm is checked every 10 minutes for new `@morpho-org/*` publishes, and each one is matched against an expected release.
+- **Fork tests.** Contract round-trips are tested against Anvil forks at pinned blocks, not mocks.
 
 ## Secure usage for integrators
 
@@ -230,16 +223,7 @@ Since then, Cantina has reviewed the monorepo on an ongoing basis. Its findings 
 - **Keep slippage and deadlines tight.** Use the smallest slippage tolerance your flow can tolerate (the SDK caps it at 10%) and short deadlines for signature-based operations.
 - **Send `value` only for native flows.** Native amounts are wrapped into the chain's wrapped native token, and the SDK rejects them for any other asset. Do not add `value` to a transaction the SDK built without it.
 - **Sign only what you built.** Present permit and Permit2 signatures produced by the SDK for the transaction you are about to send, and do not reuse them across chains or spenders.
-- **Simulate before broadcasting.** Run the bundle through [`@morpho-org/evm-simulation`](./packages/evm-simulation) and show the user the balance changes. A simulation is only as honest as its backend ([`THREAT_MODEL.md`](./THREAT_MODEL.md)).
+- **Simulate before broadcasting.** Run the bundle through [`@morpho-org/evm-simulation`](./packages/evm-simulation) and show the user the balance changes. A simulation is only as honest as its backend.
 - **Use RPC endpoints you trust,** and pair each client with the transport for the same chain. The SDK cannot detect a lying node.
 - **Register custom addresses once, at startup.** `registerCustomAddresses` rejects overrides of existing entries; treat the addresses you register as part of your trusted configuration.
 
-## Keeping this document accurate
-
-This file summarizes rules that live elsewhere. When one of these changes, update this file in the same PR:
-
-- [`AGENTS.md`](./AGENTS.md) §1 (Action-layer purity), §2 (forbidden patterns), §5 (security invariants), §7 (releases and audits) and §10 (CI and release security);
-- [`THREAT_MODEL.md`](./THREAT_MODEL.md);
-- the release workflows under [`.github/workflows/`](./.github/workflows/);
-- [`public/SECURITY.md`](./public/SECURITY.md), the copy published to `morpho-org/sdks`, which describes its `release.yml` flow instead of this repository's. Copy every change to this file into it in the same PR, with three exceptions: the "Release integrity and verification" section, which the public copy rewrites for its own flow; this "Keeping this document accurate" section, which it leaves out; and links to files that are not in the public tree (workflows, `.agents/`, `.github/` files, `CODEOWNERS`, `THREAT_MODEL.md`, `AGENTS.md`, ADRs), which it rewrites as plain prose;
-- the package list and supported majors.

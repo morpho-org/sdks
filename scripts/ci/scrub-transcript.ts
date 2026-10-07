@@ -29,7 +29,7 @@ import {
   readRequiredEnv,
   reportCliError,
   writeStdout,
-} from "./workflow.ts";
+} from "../workflow.ts";
 
 /** Replacement written over every masked secret. */
 export const MASK = "***";

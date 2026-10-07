@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, matchesGlob, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSync } from "vite";
-import { isMain } from "../ci/workflow.ts";
 
 const ID_PATTERN = /INV-\d{2}/;
 
@@ -295,4 +294,4 @@ const main = async (): Promise<void> => {
   );
 };
 
-if (isMain(import.meta.url)) await main();
+if (import.meta.main) await main();

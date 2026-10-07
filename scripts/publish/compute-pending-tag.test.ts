@@ -209,6 +209,16 @@ describe("readPreviousPackageManifest", () => {
 });
 
 describe("computePendingTag", () => {
+  test("behavior: rejects a manifest without a name", () => {
+    expect(() =>
+      computePendingTag({
+        manifest: { version: "1.1.0" },
+        manifestPath,
+        readPreviousManifest: () => undefined,
+      }),
+    ).toThrow(`"${manifestPath}" needs a "name" and a "version".`);
+  });
+
   test("default", () => {
     const root = createGitRepo({
       name: "@morpho-org/alpha",
@@ -295,7 +305,7 @@ describe("main", () => {
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/compute-pending-tag.ts <manifest-path>",
+      "Usage: node scripts/publish/compute-pending-tag.ts <manifest-path>",
     );
   });
 

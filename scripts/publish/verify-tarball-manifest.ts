@@ -3,7 +3,7 @@
  * verify-tarball-manifest.ts — the publishConfig allowlist gate of
  * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
  *
- *   node scripts/ci/verify-tarball-manifest.ts <path/to/package.json>
+ *   node scripts/publish/verify-tarball-manifest.ts <path/to/package.json>
  *
  * Exits 0 and prints the validated `name@version` when the manifest's
  * `publishConfig` is restricted to the allowlist; exits 1 with an `::error::`
@@ -14,7 +14,8 @@
 
 import { lstatSync, readFileSync } from "node:fs";
 
-import { isMain, reportCliError, writeStdout } from "./workflow.ts";
+import { isMain, reportCliError, writeStdout } from "../workflow.ts";
+import type { TarballIdentity } from "./read-tarball-identity.ts";
 
 const NPMJS_REGISTRY_URLS = new Set([
   "https://registry.npmjs.org",
@@ -32,12 +33,6 @@ const SEMVER_PATTERN =
 export interface TarballManifest {
   readonly publishConfig?: unknown;
   readonly [key: string]: unknown;
-}
-
-/** The validated `name`/`version` identity of a packed package manifest. */
-export interface TarballIdentity {
-  readonly name: string;
-  readonly version: string;
 }
 
 /**
@@ -116,6 +111,29 @@ export function verifyManifestIdentity(
 }
 
 /**
+ * Parses a stored `package.json` and rejects anything that isn't a JSON object.
+ *
+ * @param text - File contents.
+ * @param label - Where the file came from, for the error message.
+ * @returns The manifest, ready for {@link verifyTarballManifest}.
+ * @throws If the text isn't JSON or its top level isn't an object.
+ */
+export function parseTarballManifest(
+  text: string,
+  label: string,
+): TarballManifest {
+  const manifest: unknown = JSON.parse(text);
+  if (
+    manifest === null ||
+    typeof manifest !== "object" ||
+    Array.isArray(manifest)
+  ) {
+    throw new Error(`Manifest at "${label}" is not a JSON object.`);
+  }
+  return manifest as TarballManifest;
+}
+
+/**
  * Runs every manifest gate (`publishConfig` allowlist first, then identity)
  * and returns the validated `name`/`version`.
  */
@@ -126,12 +144,12 @@ export function verifyTarballManifest(
   return verifyManifestIdentity(manifest);
 }
 
-/** CLI entrypoint: `node scripts/ci/verify-tarball-manifest.ts <manifest-path>`. */
+/** CLI entrypoint: `node scripts/publish/verify-tarball-manifest.ts <manifest-path>`. */
 export function main(argv: readonly string[] = process.argv.slice(2)): void {
   const manifestPath = argv[0];
   if (manifestPath == null) {
     throw new Error(
-      "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
+      "Usage: node scripts/publish/verify-tarball-manifest.ts <manifest-path>",
     );
   }
 
@@ -139,16 +157,9 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     throw new Error(`Manifest path "${manifestPath}" is not a regular file.`);
   }
 
-  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-  if (
-    manifest === null ||
-    typeof manifest !== "object" ||
-    Array.isArray(manifest)
-  ) {
-    throw new Error(`Manifest at "${manifestPath}" is not a JSON object.`);
-  }
-
-  const { name, version } = verifyTarballManifest(manifest as TarballManifest);
+  const { name, version } = verifyTarballManifest(
+    parseTarballManifest(readFileSync(manifestPath, "utf8"), manifestPath),
+  );
   writeStdout(`${name}@${version}\n`);
 }
 
