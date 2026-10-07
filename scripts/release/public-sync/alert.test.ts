@@ -125,29 +125,29 @@ describe("findFailedRelease", () => {
     }
   });
 
-  test("reports nothing while public main has no release.yml", async () => {
-    const missing: GitHub = {
-      async rest() {
-        throw new GitHubApiError("not found", 404);
+  test("reports nothing only while public main has no release.yml", async () => {
+    const respond = (file: number, runs = 404): GitHub => ({
+      async rest(path) {
+        const status = path.includes("/contents/") ? file : runs;
+        if (status === 200) return {};
+        throw new GitHubApiError(`status ${status} for ${path}`, status);
       },
       async graphql() {
         throw new Error("unused");
       },
-    };
+    });
     await expect(
-      findFailedRelease(missing, releaseWindow),
+      findFailedRelease(respond(404), releaseWindow),
     ).resolves.toBeUndefined();
     await expect(
-      findFailedRelease(
-        {
-          ...missing,
-          async rest() {
-            throw new GitHubApiError("server error", 500);
-          },
-        },
-        releaseWindow,
-      ),
-    ).rejects.toThrow("server error");
+      findFailedRelease(respond(200), releaseWindow),
+    ).rejects.toThrow("status 404 for repos/morpho-org/sdks/actions/");
+    await expect(
+      findFailedRelease(respond(500), releaseWindow),
+    ).rejects.toThrow("status 500");
+    await expect(
+      findFailedRelease(respond(404, 500), releaseWindow),
+    ).rejects.toThrow("status 500");
   });
 
   test("looks past a recent unfinished run to the older runs", async () => {

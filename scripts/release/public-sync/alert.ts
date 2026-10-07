@@ -102,6 +102,7 @@ export interface FailedRelease {
 
 /** Newest `release.yml` runs checked for one newer than the newest success. */
 const RELEASE_RUNS_CHECKED = 20;
+const RELEASE_WORKFLOW_FILE_PATH = `repos/${PUBLIC_REPO}/contents/.github/workflows/release.yml?ref=main`;
 const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=${RELEASE_RUNS_CHECKED}`;
 
 /**
@@ -116,7 +117,8 @@ const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/ru
  * @param options.maxAgeMinutes - Minutes a run may stay queued, waiting or in progress.
  * @returns The newest run whose latest attempt completed with any conclusion but
  *   `success`, or that hasn't completed after `maxAgeMinutes`, else `undefined`
- *   (also while public `main` has no `release.yml` yet, before cutover).
+ *   (also while public `main` has no `release.yml` file yet, before cutover).
+ * @throws If the runs can't be read while public `main` has `release.yml`.
  * @throws If a run that hasn't completed has an unreadable start time.
  */
 export async function findFailedRelease(
@@ -127,9 +129,17 @@ export async function findFailedRelease(
   try {
     response = await github.rest(RELEASE_RUNS_PATH);
   } catch (error) {
-    // Until cutover merges the first snapshot, public main has no release.yml.
-    if (error instanceof GitHubApiError && error.status === 404)
-      return undefined;
+    if (!(error instanceof GitHubApiError) || error.status !== 404) throw error;
+    // Until cutover merges the first snapshot, public main has no release.yml. Once it
+    // has one, a 404 means the watch can't see its runs: rethrow so it pages.
+    try {
+      await github.rest(RELEASE_WORKFLOW_FILE_PATH);
+    } catch (fileError) {
+      if (fileError instanceof GitHubApiError && fileError.status === 404) {
+        return undefined;
+      }
+      throw fileError;
+    }
     throw error;
   }
   const { workflow_runs: runs } = response as {
