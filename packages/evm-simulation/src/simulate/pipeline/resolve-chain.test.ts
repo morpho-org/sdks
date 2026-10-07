@@ -1,4 +1,7 @@
-import { UnsupportedChainError } from "../../errors.js";
+import {
+  SimulationValidationError,
+  UnsupportedChainError,
+} from "../../errors.js";
 import type { ChainSimulationConfig, SimulationConfig } from "../../types.js";
 import { resolveChain } from "./resolve-chain.js";
 
@@ -42,4 +45,38 @@ describe("resolveChain", () => {
       expect((e as UnsupportedChainError).chainId).toBe(42);
     }
   });
+
+  it("accepts a positive blockOverrides.gasLimit", () => {
+    const entry = {
+      simulateV1Url: "http://rpc.local",
+      blockOverrides: { gasLimit: 16_777_216n },
+    };
+    expect(resolveChain(makeConfig([[988, entry]]), 988)).toBe(entry);
+  });
+
+  it.each([0n, -1n, 16_777_216])(
+    "throws SimulationValidationError for gasLimit %s",
+    (gasLimit) => {
+      const entry = {
+        simulateV1Url: "http://rpc.local",
+        blockOverrides: { gasLimit },
+      } as unknown as ChainSimulationConfig;
+      expect(() => resolveChain(makeConfig([[988, entry]]), 988)).toThrow(
+        SimulationValidationError,
+      );
+    },
+  );
+
+  it.each([0, "", "false"])(
+    "throws SimulationValidationError for parentHashCheck %j",
+    (parentHashCheck) => {
+      const entry = {
+        simulateV1Url: "http://rpc.local",
+        parentHashCheck,
+      } as unknown as ChainSimulationConfig;
+      expect(() => resolveChain(makeConfig([[988, entry]]), 988)).toThrow(
+        SimulationValidationError,
+      );
+    },
+  );
 });
