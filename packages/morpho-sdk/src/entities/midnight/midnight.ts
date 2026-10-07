@@ -40,7 +40,7 @@ import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
 } from "../../actions/requirements/index.js";
-import { getBlueBuyCallbackAddress } from "../../helpers/getBlueBuyCallbackAddress.js";
+import { getMidnightBlueBuyCallbackAddress } from "../../helpers/callback.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
@@ -60,6 +60,7 @@ import {
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
+  MidnightOfferNotReduceOnlyError,
   MidnightOfferRatifierMismatchError,
   type MidnightRedeemAction,
   MidnightRedeemExceedsCreditError,
@@ -135,6 +136,8 @@ export type MidnightActions = Pick<
   | "makeLend"
   | "makeBorrow"
   | "supplyBlueMakeLend"
+  | "makeWithdraw"
+  | "makeRepay"
   | "supplyCollateralMakeBorrow"
   | "redeem"
   | "repayWithdrawCollateral"
@@ -942,6 +945,8 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
+   * const callback = getMidnightBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
+   * const callbackData = encodeAbiParameters([marketParamsAbi], [blueMarket]);
    * const output = await midnight.supplyBlueMakeLend({
    *   accountAddress: maker,
    *   offers: {
@@ -963,7 +968,7 @@ export class MorphoMidnight {
     const { callbackSalt } = params;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
-    const callback = getBlueBuyCallbackAddress({
+    const callback = getMidnightBlueBuyCallbackAddress({
       chainId: this.chainId,
       owner: params.accountAddress,
       salt: callbackSalt,
@@ -1111,6 +1116,120 @@ export class MorphoMidnight {
         this.getBundlesV2AuthorizationRequirements(data.accountAddress),
       buildTx: () => tx,
     };
+  }
+
+  /**
+   * Publishes reduce-only sell offers for a lend limit exit through MidnightBundlesV2.
+   *
+   * Reuses {@link MorphoMidnight.makeBorrow} publication and requirement handling.
+   * No tokens are pulled during publication and no token approval is required.
+   * Execution waits for a taker; publication does not close the position or withdraw collateral.
+   * Every offer must already have `buy = false` and `reduceOnly = true`.
+   * The supplied tree, group caps and prices are preserved; no separate root signature is needed.
+   *
+   * @param params - Maker, reduce-only offers, optional cancellations, and deadline.
+   * @param params.accountAddress - Maker expected on every offer; must send the transaction.
+   * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
+   * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.validation - Optional Midnight mempool API request controls.
+   * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
+   * @throws {ChainIdMismatchError} when the client chain differs from this entity's chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
+   * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
+   * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
+   * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
+   * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
+   * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
+   * @throws {MidnightOfferNotReduceOnlyError} when any offer can increase a position.
+   * @example
+   * ```ts
+   * const output = await midnight.makeWithdraw({
+   *   accountAddress: maker,
+   *   offers: { type: "priceV1", entries: [{ offer: reduceOnlySellOffer }] },
+   *   deadline: maxUint256,
+   * });
+   * const requirements = await output.getRequirements();
+   * const tx = output.buildTx();
+   * ```
+   */
+  async makeWithdraw(params: MakeOffersParams): Promise<MakeOffersOutput> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const tree = Tree.from(params.offers);
+    // Reject the wrong exit intent before calling the mempool validation API.
+    validateOfferSides(tree.offers, false);
+    for (const [index, offer] of tree.offers.entries()) {
+      if (!offer.reduceOnly)
+        throw new MidnightOfferNotReduceOnlyError({ index });
+    }
+    return this.makeBorrow({ ...params, offers: tree });
+  }
+
+  /**
+   * Publishes reduce-only buy offers for a borrow limit exit through MidnightBundlesV2.
+   *
+   * Reuses {@link MorphoMidnight.makeLend} publication and requirement handling.
+   * Loan assets are pulled by Midnight when the offers fill, not during publication.
+   * The loan reserve uses the same approval sizing as `makeLend`.
+   * Execution waits for a taker; publication does not close the position or withdraw collateral.
+   * Every offer must already have `buy = true` and `reduceOnly = true`.
+   * The supplied tree, group caps and prices are preserved; no separate root signature is needed.
+   *
+   * @param params - Maker, reduce-only offers, optional cancellations, loan reserve, and deadline.
+   * @param params.accountAddress - Maker expected on every offer; must send the transaction.
+   * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
+   * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.validation - Optional Midnight mempool API request controls.
+   * @param params.loanToken - Loan token shared by every offer market.
+   * @param params.loanAssets - New loan reserve assigned to the published groups.
+   * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
+   * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
+   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
+   * @throws {NonPositiveInputError} when `loanAssets` is non-positive.
+   * @throws {NegativeInputError} when `reservedLoanAssets` or a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
+   * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
+   * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
+   * @throws {MidnightOfferSideMismatchError} when an offer is not lend-side.
+   * @throws {MidnightOfferMarketLoanTokenMismatchError} when an offer uses another loan token.
+   * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
+   * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
+   * @throws {MidnightOfferNotReduceOnlyError} when any offer can increase a position.
+   * @example
+   * ```ts
+   * const output = await midnight.makeRepay({
+   *   accountAddress: maker,
+   *   offers: { type: "priceV1", entries: [{ offer: reduceOnlyBuyOffer }] },
+   *   loanToken,
+   *   loanAssets: 1_000_000n,
+   *   deadline: maxUint256,
+   * });
+   * const requirements = await output.getRequirements();
+   * const tx = output.buildTx();
+   * ```
+   */
+  async makeRepay(params: MakeLendParams): Promise<MakeOffersOutput> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const tree = Tree.from(params.offers);
+    // Reject the wrong exit intent before calling the mempool validation API.
+    validateOfferSides(tree.offers, true);
+    for (const [index, offer] of tree.offers.entries()) {
+      if (!offer.reduceOnly)
+        throw new MidnightOfferNotReduceOnlyError({ index });
+    }
+    return this.makeLend({ ...params, offers: tree });
   }
 
   /**
