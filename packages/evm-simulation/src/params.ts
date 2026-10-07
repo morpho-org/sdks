@@ -38,8 +38,9 @@ export interface SimulateParams {
    * lookup; with no asset metadata reads it then sends only `eth_simulateV1`.
    * Cannot be combined with `blockNumber`.
    * Not checked against the endpoint: `hash` is compared only when the node
-   * reports the next block (its `parentHash`), and `timestamp` only bounds the
-   * simulated block's timestamp. */
+   * reports the next block (its `parentHash`) and `parentHashCheck` is on (off
+   * by default on Stable, 988), and `timestamp` only bounds the simulated
+   * block's timestamp. */
   readonly block?: StateBlock;
   /** Caller-selected quotes and percentage tolerances. Omitted limits are unchecked. */
   readonly limits?: SimulationLimits;
