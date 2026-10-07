@@ -49,7 +49,7 @@ import {
   midnightMarketId,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
-import { getBlueBuyCallbackAddress } from "../../helpers/callback.js";
+import { getMidnightBlueBuyCallbackAddress } from "../../helpers/callback.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -1181,7 +1181,7 @@ describe("MorphoMidnight", () => {
       irm: zeroAddress,
       lltv: 860000000000000000n,
     };
-    const callback = getBlueBuyCallbackAddress({
+    const callback = getMidnightBlueBuyCallbackAddress({
       chainId: midnightChainId,
       owner: midnightAddresses.maker,
       salt: zeroHash,
@@ -1239,7 +1239,7 @@ describe("MorphoMidnight", () => {
       mockMidnightAuthorization(handle, false);
       const callbackSalt = `0x${"ee".repeat(32)}` as Hex;
       const offer = blueOffer({
-        callback: getBlueBuyCallbackAddress({
+        callback: getMidnightBlueBuyCallbackAddress({
           chainId: midnightChainId,
           owner: midnightAddresses.maker,
           salt: callbackSalt,

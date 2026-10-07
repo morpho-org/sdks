@@ -204,10 +204,19 @@ const blueBuyCallbackBytecode: Hex = `0x${[
  * @throws {UnknownAddressError} when the chain has no `midnightBlueBuyCallbackFactory`, `midnight` or `blue` deployment.
  * @example
  * ```ts
- * const callback = getBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
+ * import { getMidnightBlueBuyCallbackAddress } from "@morpho-org/morpho-sdk";
+ * import { ChainId } from "@morpho-org/morpho-ts";
+ * import { keccak256, toHex } from "viem";
+ *
+ * const callback = getMidnightBlueBuyCallbackAddress({
+ *   chainId: ChainId.EthMainnet,
+ *   owner: "0x1111111111111111111111111111111111111111",
+ *   salt: keccak256(toHex("my-strategy")),
+ * });
+ * // `callback` is the maker's BlueBuyCallback address, deployed or not.
  * ```
  */
-export const getBlueBuyCallbackAddress = ({
+export const getMidnightBlueBuyCallbackAddress = ({
   chainId,
   owner,
   salt,

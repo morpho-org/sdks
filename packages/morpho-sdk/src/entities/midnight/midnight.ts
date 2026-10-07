@@ -38,7 +38,7 @@ import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
 } from "../../actions/requirements/index.js";
-import { getBlueBuyCallbackAddress } from "../../helpers/callback.js";
+import { getMidnightBlueBuyCallbackAddress } from "../../helpers/callback.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
@@ -800,7 +800,7 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example
    * ```ts
-   * const callback = getBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
+   * const callback = getMidnightBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
    * const callbackData = encodeAbiParameters([marketParamsAbi], [blueMarket]);
    * const output = await midnight.supplyBlueMakeLend({
    *   accountAddress: maker,
@@ -823,7 +823,7 @@ export class MorphoMidnight {
     const { callbackSalt } = params;
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
 
-    const callback = getBlueBuyCallbackAddress({
+    const callback = getMidnightBlueBuyCallbackAddress({
       chainId: this.chainId,
       owner: params.accountAddress,
       salt: callbackSalt,

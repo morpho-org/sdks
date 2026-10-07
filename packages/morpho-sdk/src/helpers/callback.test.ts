@@ -1,8 +1,8 @@
 import { ChainId, UnknownAddressError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
-import { getBlueBuyCallbackAddress } from "./callback.js";
+import { getMidnightBlueBuyCallbackAddress } from "./callback.js";
 
-describe("getBlueBuyCallbackAddress", () => {
+describe("getMidnightBlueBuyCallbackAddress", () => {
   const owner = "0x1111111111111111111111111111111111111111";
   const salt = `0x${"ab".repeat(32)}` as const;
 
@@ -14,7 +14,7 @@ describe("getBlueBuyCallbackAddress", () => {
   ])(
     "matches the factory's createBlueBuyCallback on chain %i",
     (chainId, expected) => {
-      expect(getBlueBuyCallbackAddress({ chainId, owner, salt })).toBe(
+      expect(getMidnightBlueBuyCallbackAddress({ chainId, owner, salt })).toBe(
         expected,
       );
     },
@@ -22,7 +22,7 @@ describe("getBlueBuyCallbackAddress", () => {
 
   test("error: UnknownAddressError when the chain has no callback factory", () => {
     expect(() =>
-      getBlueBuyCallbackAddress({
+      getMidnightBlueBuyCallbackAddress({
         chainId: ChainId.ArbitrumMainnet,
         owner,
         salt,
