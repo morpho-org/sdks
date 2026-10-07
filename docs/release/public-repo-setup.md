@@ -54,6 +54,18 @@ Release tags (`@morpho-org/<package>-v<version>`) can't be moved or deleted once
 
 **Decision: keep the existing tag format `@morpho-org/<package>-vX.Y.Z`.** Every existing public tag and the `release.yml` tag step use it. Switching to `@morpho-org/<package>@x.y.z` would create a second tag for each version already released. SDK-1322 is being corrected to match.
 
+Before applying the ruleset, check that every existing package tag points at the commit `release.yml` expects. The `release` job fails the run on a tag that points elsewhere, and once the ruleset applies, fixing that tag means editing the ruleset. In a checkout of public `main` with dependencies installed (`pnpm install --frozen-lockfile`), this prints nothing when all tags match:
+
+```bash
+git fetch --tags origin
+node scripts/publish/pack.ts --tags | while IFS=$'\t' read -r tag commit; do
+  actual=$(git rev-parse -q --verify "refs/tags/${tag}^{commit}") || continue
+  [ "$actual" = "$commit" ] || echo "$tag: on $actual, expected $commit"
+done
+```
+
+Move or delete each tag it lists before going on.
+
 ```bash
 gh api -X POST "repos/$REPO/rulesets" --input "$CONFIG/ruleset-package-tags.json"
 ```
@@ -166,7 +178,7 @@ Target state after cutover (section 10, step 7). Until then `sdks-internal` stil
 2. **Final sync of `sdks-internal` from `sdks`**: mirror `main`, branches, tags and notes once more, and check `git rev-parse main` matches on both.
 3. **Move developers to `sdks-internal`.** Open PRs move or get recreated there; `sdks` stops taking development PRs.
 4. **Apply sections 1–8 on `morpho-org/sdks`** (trusted publishers last, right before step 5).
-5. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; tags and GitHub Releases that already exist are left alone.
+5. **First full snapshot PR replaces the public tree.** The sync job opens `sync/main` with the complete allowlisted tree; `ci` runs, the App merges, and `release.yml` runs. Everything already on npm is skipped; GitHub Releases that already exist are left alone, and so are tags on the expected commit. A tag on any other commit stops the `release` job, which is why section 4 checks the tags first.
 6. Watch that first run: `publish` should report every version as already on npm (or publish only new ones), and `release` should create nothing unexpected.
 7. **Remove publishing from `sdks-internal`.** Delete `.github/workflows/publish.yml` entirely (its `publish` job with environment `prod`, and the `github-releases` job that needs it) and its call from `push.yml`, delete the `prod` environment, then run the section 9 checks.
 
