@@ -192,6 +192,44 @@ describe.sequential("runSimulation", () => {
     expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
   });
 
+  test("error: a successor whose parentHash is not the supplied block hash is rejected", async () => {
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    mockExecutePlan.mockImplementationOnce(actual.executePlan);
+    const methods: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+        const { method } = JSON.parse(String(init?.body)) as { method: string };
+        methods.push(method);
+        return rpc([
+          {
+            number: numberToHex(STATE_BLOCK + 1n),
+            hash: `0x${"cd".repeat(32)}`,
+            parentHash: `0x${"ef".repeat(32)}`,
+            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP + 12n),
+            calls: [
+              { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
+            ],
+          },
+        ]);
+      }),
+    );
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+        block: {
+          number: STATE_BLOCK,
+          hash: STATE_BLOCK_HASH,
+          timestamp: STATE_BLOCK_TIMESTAMP,
+        },
+      }),
+    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
+    expect(methods).toEqual(["eth_simulateV1"]);
+  });
+
   test("error: block lookup transport failures do not expose the RPC URL", async () => {
     vi.stubGlobal(
       "fetch",
