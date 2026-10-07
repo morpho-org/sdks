@@ -157,14 +157,20 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: an unregistered configured chain works without limits", async () => {
-    const { methods } = stubFetch([]);
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    mockExecutePlan.mockImplementationOnce(actual.executePlan);
+    const { methods } = stubFetch([
+      { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
+    ]);
     const result = await simulate(config, {
       chainId: CHAIN_ID,
       transactions: [TRANSACTION],
     });
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
-    expect(methods).toEqual(["eth_getBlockByNumber"]);
+    expect(methods).toEqual(["eth_getBlockByNumber", "eth_simulateV1"]);
   });
 
   test("behavior: a supplied block sends only eth_simulateV1", async () => {
