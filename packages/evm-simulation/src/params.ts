@@ -11,8 +11,11 @@ export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
 /** A mined block the simulation runs on top of. */
 export interface StateBlock {
+  /** Block number the simulation runs on top of. */
   readonly number: bigint;
+  /** Hash of that block; compared to the next block's `parentHash`. */
   readonly hash: Hex;
+  /** Block timestamp in Unix seconds; the simulated block must not be earlier. */
   readonly timestamp: bigint;
 }
 
