@@ -44,8 +44,9 @@ import { runSimulation } from "./run-simulation.js";
  *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
  *   overall timeout budget.
  * @param params - Per-call simulation input.
- * @param params.chainId - Chain id the bundle targets. The endpoint's chain is
- *   not checked; configure `SimulationConfig.chains` with the matching URL.
+ * @param params.chainId - Chain id the bundle targets. Sent on every call inside
+ *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
+ *   there is no separate `eth_chainId` lookup.
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`.
  * @param params.mode - `"final"` (default) or `"preview"`.
@@ -112,7 +113,6 @@ import { runSimulation } from "./run-simulation.js";
  *     chainId: 1,
  *     transactions: [
  *       {
- *         chainId: 1,
  *         from: user,
  *         to: usdc,
  *         data: encodeFunctionData({

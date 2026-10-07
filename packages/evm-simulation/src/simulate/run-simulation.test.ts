@@ -33,7 +33,6 @@ const STATE_BLOCK = 20_000_000n;
 const STATE_BLOCK_HASH: Hex = `0x${"ab".repeat(32)}`;
 const STATE_BLOCK_TIMESTAMP = 1_700_000_000n;
 const TRANSACTION: SimulationTransaction = {
-  chainId: CHAIN_ID,
   from: OWNER,
   to: TARGET,
   data: "0x12345678" as Hex,
@@ -215,7 +214,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.StableMainnet,
-        transactions: [{ ...TRANSACTION, chainId: ChainId.StableMainnet }],
+        transactions: [TRANSACTION],
       },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(false);
@@ -234,7 +233,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.StableMainnet,
-        transactions: [{ ...TRANSACTION, chainId: ChainId.StableMainnet }],
+        transactions: [TRANSACTION],
       },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
@@ -259,7 +258,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.MonadMainnet,
-        transactions: [{ ...TRANSACTION, chainId: ChainId.MonadMainnet }],
+        transactions: [TRANSACTION],
       },
     );
     expect(pinnedBlockParam(fetch)).toBe("finalized");
@@ -274,7 +273,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.MonadMainnet,
-        transactions: [{ ...TRANSACTION, chainId: ChainId.MonadMainnet }],
+        transactions: [TRANSACTION],
         blockNumber: STATE_BLOCK,
       },
     );
@@ -382,7 +381,7 @@ describe.sequential("runSimulation", () => {
       { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
       {
         chainId: 1,
-        transactions: [{ ...TRANSACTION, chainId: 1 }],
+        transactions: [TRANSACTION],
         limits: {
           operations: [
             {

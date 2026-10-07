@@ -111,7 +111,8 @@ export const rpc = async <T>(
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - Shared simulation client, execution plan, state block, the
+ * @param params - Shared simulation client, target chain ID (sent on every
+ *   call), execution plan, state block, the
  *   `validation` flag to send, the optional simulated block gas limit, and
  *   whether to check the successor `parentHash`.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
@@ -130,6 +131,7 @@ export const rpc = async <T>(
  */
 export async function executePlan(params: {
   client: Client;
+  chainId: number;
   plan: ExecutionPlan;
   stateBlock: StateBlock;
   validation: boolean;
@@ -138,6 +140,7 @@ export async function executePlan(params: {
 }): Promise<SimulationExecution> {
   const {
     client,
+    chainId,
     plan,
     stateBlock,
     validation,
@@ -156,7 +159,7 @@ export async function executePlan(params: {
                 blockOverrides: { gasLimit: numberToHex(blockGasLimit) },
               }),
               calls: plan.calls.map((call) => ({
-                chainId: numberToHex(call.transaction.chainId),
+                chainId: numberToHex(chainId),
                 from: call.transaction.from,
                 to: call.transaction.to,
                 data: call.transaction.data,

@@ -91,7 +91,6 @@ export async function runSimulation(params: {
 
   const preparations = preview
     ? prepareAuthorizations({
-        chainId: request.chainId,
         authorizations: request.authorizations,
         owner,
         morpho,
@@ -108,6 +107,7 @@ export async function runSimulation(params: {
   // Execute against the block resolved once above.
   const execution = await executePlan({
     client,
+    chainId: request.chainId,
     plan,
     stateBlock: pinnedBlock,
     validation: monad,

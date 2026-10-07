@@ -128,7 +128,7 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
 - A truncated result (fewer calls than planned) is a non-bypassable `InvalidSimulationResponseError`.
 - A malicious token, not the endpoint, emits a fake `Transfer`. Reading balances from the node adds nothing: a token that lies in its events can also lie in `balanceOf`.
-- The endpoint serves another chain. Each transaction must declare the request's `chainId`, and every simulated call forwards it to the node. Geth rejects a supplied call chain ID that differs from its configured chain, without a separate `eth_chainId` lookup. An endpoint that ignores the field or lies about execution can still simulate against the wrong state; trusting the endpoint remains an accepted residual.
+- The endpoint serves another chain. There is no separate `eth_chainId` lookup; instead every simulated call carries the request's `chainId`, and geth rejects a call chain ID that differs from its own chain. That rejection surfaces as `ExternalServiceError`. An endpoint that ignores the field or lies about execution can still simulate against the wrong state; trusting the endpoint remains an accepted residual.
 - Results carry no block provenance: the pinned state block is resolved and checked internally but not returned on `SimulationResult`; callers that need a reproducible pin must pass an explicit `blockNumber` or `block`.
 
 #### Chain identity and transaction submission (`wdk-protocol-lending-morpho-evm`, `liquidity-sdk-viem`)

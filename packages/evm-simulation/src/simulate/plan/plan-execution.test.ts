@@ -13,7 +13,6 @@ const makeRequest = (count: number) =>
   parseRequest({
     chainId: 1,
     transactions: Array.from({ length: count }, () => ({
-      chainId: 1,
       from: OWNER,
       to: TARGET,
       data: "0x12345678",
@@ -26,13 +25,7 @@ const plan = (
   txCount: number,
   preparations: {
     authorizationIndex: number;
-    calls: {
-      chainId: number;
-      from: Address;
-      to: Address;
-      data: `0x${string}`;
-      value: bigint;
-    }[];
+    calls: { from: Address; to: Address; data: `0x${string}`; value: bigint }[];
   }[] = [],
 ) =>
   planExecution({
@@ -47,9 +40,7 @@ describe("planExecution", () => {
     const types = plan(2, [
       {
         authorizationIndex: 0,
-        calls: [
-          { chainId: 1, from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n },
-        ],
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
       },
     ]).calls.map((c) =>
       c.type === "transaction"
@@ -89,9 +80,7 @@ describe("planExecution", () => {
     const calls = plan(1, [
       {
         authorizationIndex: 2,
-        calls: [
-          { chainId: 1, from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n },
-        ],
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
       },
     ]).calls;
     const prep = calls.find((c) => c.type === "preparation");

@@ -34,7 +34,7 @@ try {
       chainId: 1,
       // mode: "final" (default) executes the signed calldata against actual
       // permissions; mode: "preview" accepts typed authorization descriptors.
-      transactions: [{ chainId: 1, from: user, to: vault, data: encodedDeposit }],
+      transactions: [{ from: user, to: vault, data: encodedDeposit }],
       // limits: { operations: [{ type: "vaultV1Deposit", vault, quote: { sharesMinted: 1000n }, slippageTolerance: 10_000000000000000n }] },
     },
   );
@@ -46,7 +46,7 @@ try {
 }
 ```
 
-Every transaction requires a positive safe-integer `chainId` matching the top-level request. Missing, invalid or mismatched transaction chain IDs throw `SimulationValidationError` before RPC work. The backend includes the chain ID as a hex quantity in every `eth_simulateV1` call, including preparation calls and state reads, so supporting nodes reject a request targeting another chain.
+Every call inside `eth_simulateV1`, including preparation calls and state reads, carries the request's `chainId` as a hex quantity, so nodes that check it (geth does) reject an endpoint on another chain.
 
 Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
@@ -169,5 +169,3 @@ Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
-
-See the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) for the required transaction chain ID.

@@ -99,7 +99,6 @@ describe.sequential("simulate pipeline — blue supply", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -160,7 +159,6 @@ describe.sequential("simulate pipeline — blue supply", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -231,7 +229,6 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -302,7 +299,6 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: repayTx.to,
           data: repayTx.data,
@@ -404,7 +400,6 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: addresses.bundles!.blueBundlesV1!,
           data,
@@ -449,7 +444,6 @@ describe.sequential("simulate pipeline — negatives", () => {
         authorizations,
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -479,7 +473,6 @@ describe.sequential("simulate pipeline — negatives", () => {
         chainId: mainnet.id,
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -531,7 +524,6 @@ describe.sequential("simulate pipeline — negatives", () => {
         },
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -549,7 +541,6 @@ describe.sequential("simulate pipeline — negatives", () => {
       chainId: mainnet.id,
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
           data: "0xd0e30db0",
@@ -589,7 +580,6 @@ describe.sequential("simulate pipeline — negatives", () => {
         chainId: mainnet.id,
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -648,7 +638,6 @@ describe.sequential("simulate pipeline — vault V1", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: depositTx.to,
           data: depositTx.data,
@@ -718,7 +707,6 @@ describe.sequential("simulate pipeline — vault V1", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: withdrawTx.to,
           data: withdrawTx.data,
@@ -761,7 +749,6 @@ describe.sequential("simulate pipeline — vault V1", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: redeemTx.to,
           data: redeemTx.data,
@@ -793,7 +780,6 @@ describe.sequential("simulate pipeline — vault V2", () => {
     });
     const transactions = [
       {
-        chainId: 1,
         from: client.account.address,
         to: KEYROCK,
         data: encodeFunctionData({
@@ -958,7 +944,6 @@ describe.sequential("simulate pipeline — vault V2", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: exitTx.to,
           data: exitTx.data,
@@ -1091,7 +1076,6 @@ describe.sequential("simulate pipeline — vault exits", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -1171,7 +1155,6 @@ describe.sequential("simulate pipeline — vault exits", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -1230,7 +1213,6 @@ describe.sequential("simulate pipeline — vault exits", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -1329,7 +1311,6 @@ describe.sequential("simulate pipeline — blue refinance", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,

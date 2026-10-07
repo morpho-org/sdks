@@ -92,7 +92,6 @@ describe.sequential("simulate — real revert propagation", () => {
         chainId: mainnet.id,
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -132,7 +131,6 @@ describe.sequential("simulate — real native funding", () => {
         chainId: mainnet.id,
         transactions: [
           {
-            chainId: 1,
             from: client.account.address,
             to: tx.to,
             data: tx.data,
@@ -176,7 +174,6 @@ describe.sequential("simulate — real native funding", () => {
       },
       transactions: [
         {
-          chainId: 1,
           from: client.account.address,
           to: tx.to,
           data: tx.data,
@@ -233,7 +230,6 @@ describe.sequential("simulate — sequential state and stable indices", () => {
         })
         .buildTx();
       transactions.push({
-        chainId: 1,
         from: client.account.address,
         to: tx.to,
         data: tx.data,

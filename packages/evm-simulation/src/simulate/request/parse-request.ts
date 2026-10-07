@@ -35,7 +35,6 @@ import { operationMeasurementPlan } from "../measurement-plan.js";
  * @internal
  */
 export interface ParsedTransaction {
-  readonly chainId: number;
   readonly from: Address;
   readonly to: Address;
   readonly data: Hex;
@@ -145,7 +144,7 @@ const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
 const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
-const TRANSACTION_KEYS = ["chainId", "from", "to", "data", "value"] as const;
+const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
 const LIMITS_KEYS = ["operations"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -858,18 +857,6 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         allow: TRANSACTION_KEYS,
         path,
       });
-      const transactionChainId = readField(tx, "chainId");
-      if (
-        typeof transactionChainId !== "number" ||
-        !Number.isSafeInteger(transactionChainId) ||
-        transactionChainId <= 0
-      ) {
-        fieldErrors.push(`${path}.chainId: must be a positive safe integer`);
-      } else if (transactionChainId !== chainId) {
-        fieldErrors.push(
-          `${path}.chainId: must match chainId "${chainId}", got "${transactionChainId}"`,
-        );
-      }
       const from = check.address(readField(tx, "from"), `${path}.from`);
       const to = check.address(readField(tx, "to"), `${path}.to`);
       if (from !== undefined && isAddressEqual(from, zeroAddress)) {
@@ -882,19 +869,8 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       const rawValue = readField(tx, "value");
       const value =
         rawValue === undefined ? 0n : check.uint256(rawValue, `${path}.value`);
-      if (
-        typeof transactionChainId === "number" &&
-        from !== undefined &&
-        to !== undefined &&
-        data !== undefined
-      ) {
-        transactions.push({
-          chainId: transactionChainId,
-          from,
-          to,
-          data,
-          value: value ?? 0n,
-        });
+      if (from !== undefined && to !== undefined && data !== undefined) {
+        transactions.push({ from, to, data, value: value ?? 0n });
         transactionIndices.push(i);
       }
     }

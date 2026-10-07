@@ -10,12 +10,6 @@ import {
 import type { SimulationTransaction } from "./types.js";
 
 describe("SimulateParams", () => {
-  test("types: SimulationTransaction requires chainId", () => {
-    expectTypeOf<SimulationTransaction["chainId"]>().toEqualTypeOf<number>();
-    expectTypeOf<Pick<SimulationTransaction, "chainId">>().toEqualTypeOf<{
-      readonly chainId: number;
-    }>();
-  });
   test("default", () => {
     expect(SIMULATION_MODES).toEqual(["preview", "final"]);
     expectTypeOf<SimulationMode>().toEqualTypeOf<"preview" | "final">();
