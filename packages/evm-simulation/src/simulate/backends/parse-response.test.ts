@@ -1,4 +1,3 @@
-import { ChainId } from "@morpho-org/blue-sdk";
 import {
   type Address,
   encodeFunctionResult,
@@ -27,12 +26,10 @@ const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const NOW = 1_700_000_000n;
 const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 
-const parseChain = (chainId: number) =>
-  parseRequest({
-    chainId,
-    transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-  });
-const parsed = parseChain(1);
+const parsed = parseRequest({
+  chainId: 1,
+  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+});
 
 const reads = [makeBalanceRead(TOKEN, OWNER)];
 
@@ -98,6 +95,20 @@ const parse = (
     stateBlockNumber: 24_000_000n,
     stateBlockHash: BLOCK_HASH,
     stateBlockTimestamp: NOW,
+    parentHashCheck: true,
+  });
+
+const parseWithoutParentHashCheck = (
+  plan: ReturnType<typeof makePlan>,
+  blocks: ReturnType<typeof buildBlocks>,
+) =>
+  parseSimulationResponse({
+    plan,
+    blocks,
+    stateBlockNumber: 24_000_000n,
+    stateBlockHash: BLOCK_HASH,
+    stateBlockTimestamp: NOW,
+    parentHashCheck: false,
   });
 
 describe("parseSimulationResponse", () => {
@@ -254,37 +265,43 @@ describe("parseSimulationResponse", () => {
     expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
   });
 
-  describe("Stable (988) parentHash", () => {
-    const stablePlan = () => makePlan([], parseChain(ChainId.StableMainnet));
-
+  describe("parentHashCheck off", () => {
     test("behavior: a successor parentHash that is not the pinned hash is accepted", () => {
-      const plan = stablePlan();
+      const plan = makePlan();
       const blocks = buildBlocks(plan);
       blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
-      expect(parse(plan, blocks).block.blockNumber).toBe(24_000_001n);
+      expect(parseWithoutParentHashCheck(plan, blocks).block.blockNumber).toBe(
+        24_000_001n,
+      );
     });
 
     test("behavior: a successor with no parentHash is accepted", () => {
-      const plan = stablePlan();
+      const plan = makePlan();
       const blocks = buildBlocks(plan);
       delete (blocks[0] as { parentHash?: string }).parentHash;
-      expect(parse(plan, blocks).block.blockNumber).toBe(24_000_001n);
+      expect(parseWithoutParentHashCheck(plan, blocks).block.blockNumber).toBe(
+        24_000_001n,
+      );
     });
 
     test("error: InvalidSimulationResponseError for a block beyond the successor", () => {
-      const plan = stablePlan();
+      const plan = makePlan();
       const blocks = buildBlocks(plan);
       blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
       blocks[0]!.number = numberToHex(24_000_002n);
-      expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+      expect(() => parseWithoutParentHashCheck(plan, blocks)).toThrow(
+        InvalidSimulationResponseError,
+      );
     });
 
     test("error: InvalidSimulationResponseError for a timestamp behind the pinned block", () => {
-      const plan = stablePlan();
+      const plan = makePlan();
       const blocks = buildBlocks(plan);
       blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
       blocks[0]!.timestamp = numberToHex(NOW - 1n);
-      expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+      expect(() => parseWithoutParentHashCheck(plan, blocks)).toThrow(
+        InvalidSimulationResponseError,
+      );
     });
   });
 });

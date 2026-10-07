@@ -116,6 +116,8 @@ export async function runSimulation(params: {
     stateBlock: pinnedBlock,
     validation: monad,
     blockGasLimit: chain.blockOverrides?.gasLimit,
+    parentHashCheck:
+      chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
   });
 
   const userCalls = execution.calls

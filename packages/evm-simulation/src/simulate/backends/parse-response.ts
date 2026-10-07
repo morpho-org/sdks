@@ -1,4 +1,3 @@
-import { ChainId } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Hex, isAddress, isHex } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
@@ -112,6 +111,7 @@ export function parseSimulationResponse(params: {
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
   readonly stateBlockTimestamp: bigint;
+  readonly parentHashCheck: boolean;
 }): SimulationExecution {
   const { plan, blocks } = params;
   const errorContext: SimulationErrorContext = {
@@ -142,12 +142,11 @@ export function parseSimulationResponse(params: {
   }
   // Anvil re-hashes the pinned block, so only the geth-style successor can be
   // pinned by hash: it must report a parentHash (geth always does) equal to
-  // the pinned state block hash. Stable nodes report a simulated parentHash
-  // that never matches the canonical hash, so Stable relies on the block
-  // number, timestamp and post-simulation reorg checks instead.
+  // the pinned state block hash. With `parentHashCheck` off (Stable by
+  // default) the block number, timestamp and reorg checks still apply.
   if (
+    params.parentHashCheck &&
     blockNumber === params.stateBlockNumber + 1n &&
-    plan.request.chainId !== ChainId.StableMainnet &&
     block.parentHash !== params.stateBlockHash
   ) {
     throw new InvalidSimulationResponseError(

@@ -15,6 +15,13 @@ export interface ChainSimulationConfig {
     /** Gas limit of the simulated block. Omitted: no gas limit override is sent. */
     readonly gasLimit?: bigint;
   };
+  /**
+   * Whether a simulated successor block's `parentHash` must equal the pinned
+   * state block hash. Block number, timestamp and reorg checks always run.
+   * Omitted: on everywhere except Stable (988), whose nodes report a
+   * `parentHash` that never matches the pinned block.
+   */
+  readonly parentHashCheck?: boolean;
 }
 
 /**

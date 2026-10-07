@@ -152,8 +152,8 @@ export async function assertEndpointChain(params: {
  * no fallback backend.
  *
  * @param params - Shared simulation client, execution plan, already-pinned
- *   state block, the `validation` flag to send, and the optional simulated
- *   block gas limit.
+ *   state block, the `validation` flag to send, the optional simulated
+ *   block gas limit, and whether to check the successor `parentHash`.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -175,8 +175,16 @@ export async function executePlan(params: {
   stateBlock: PinnedBlock;
   validation: boolean;
   blockGasLimit?: bigint | undefined;
+  parentHashCheck: boolean;
 }): Promise<SimulationExecution> {
-  const { client, plan, stateBlock, validation, blockGasLimit } = params;
+  const {
+    client,
+    plan,
+    stateBlock,
+    validation,
+    blockGasLimit,
+    parentHashCheck,
+  } = params;
 
   const response = await rpc("eth_simulateV1", () =>
     client.request({
@@ -215,6 +223,7 @@ export async function executePlan(params: {
     stateBlockNumber: stateBlock.number,
     stateBlockHash: stateBlock.hash,
     stateBlockTimestamp: stateBlock.timestamp,
+    parentHashCheck,
   });
 
   // Reorg window: the pinned state block must still carry the same hash

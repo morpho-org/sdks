@@ -109,6 +109,7 @@ beforeEach(() => {
       timestamp: 1_700_000_000n,
     },
     validation: false,
+    parentHashCheck: true,
   };
 });
 afterEach(() => vi.unstubAllGlobals());
