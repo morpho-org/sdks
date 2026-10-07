@@ -3,8 +3,9 @@ name: Public sync watch
 # Alerts when the sync PR on public morpho-org/sdks stays open past
 # MAX_AGE_MINUTES: its CI failed, a check is stuck, or auto-merge is off. Also
 # alerts (watch-failed) when it can't check the sync PR. Alerts as well while the
-# latest public release.yml run on main ended other than success, or hasn't completed
-# after MAX_AGE_MINUTES (queued, waiting for approval), until a run succeeds.
+# one of the 20 newest public release.yml runs on main ended other than success, or
+# hasn't completed after MAX_AGE_MINUTES (queued, waiting for approval), until that
+# run is rerun to success.
 
 on:
   schedule:

@@ -71,7 +71,7 @@ function releaseRuns(runs: unknown[]): GitHub {
   return {
     async rest(path) {
       expect(path).toBe(
-        "repos/morpho-org/sdks/actions/workflows/release.yml/runs?branch=main&per_page=1",
+        "repos/morpho-org/sdks/actions/workflows/release.yml/runs?branch=main&per_page=20",
       );
       return { workflow_runs: runs };
     },
@@ -147,6 +147,30 @@ describe("findFailedRelease", () => {
       });
     },
   );
+
+  test("keeps reporting a failed run after a later run succeeds", async () => {
+    const later = {
+      ...run,
+      html_url: "https://github.com/morpho-org/sdks/actions/runs/10",
+      head_sha: "c",
+      conclusion: "success",
+    };
+    await expect(
+      findFailedRelease(releaseRuns([later, run]), releaseWindow),
+    ).resolves.toEqual({ url: run.html_url, sha: "b", conclusion: "failure" });
+  });
+
+  test("reports nothing once the failed run is rerun to success", async () => {
+    await expect(
+      findFailedRelease(
+        releaseRuns([
+          { ...run, head_sha: "c", conclusion: "success" },
+          { ...run, conclusion: "success" },
+        ]),
+        releaseWindow,
+      ),
+    ).resolves.toBeUndefined();
+  });
 
   test("throws on a stuck run with an unreadable date", async () => {
     await expect(

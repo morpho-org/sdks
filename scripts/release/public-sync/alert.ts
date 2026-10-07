@@ -65,7 +65,7 @@ export async function findStaleSyncPr(options: {
   return { number: pr.number, url: pr.html_url, ageMinutes };
 }
 
-/** Latest `release.yml` run on public `main`, when it didn't succeed or is stuck. */
+/** A recent `release.yml` run on public `main` that didn't succeed or is stuck. */
 export interface FailedRelease {
   readonly url: string;
   readonly sha: string;
@@ -75,17 +75,21 @@ export interface FailedRelease {
   readonly stuckMinutes?: number;
 }
 
-const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=1`;
+/** Newest `release.yml` runs checked; an older failure is no longer reported. */
+const RELEASE_RUNS_CHECKED = 20;
+const RELEASE_RUNS_PATH = `repos/${PUBLIC_REPO}/actions/workflows/release.yml/runs?branch=main&per_page=${RELEASE_RUNS_CHECKED}`;
 
 /**
- * Reads the latest `release.yml` run on public `main`. It keeps being reported until a
- * later run (or a rerun) succeeds, since a failed or stuck run can leave packages off npm.
+ * Reads the newest `RELEASE_RUNS_CHECKED` `release.yml` runs on public `main` and reports
+ * the newest one that failed or is stuck. Each run publishes only the versions its own
+ * commit declares, so a later success doesn't cover an earlier failure: a run stays
+ * reported until it is rerun to success, or until it falls out of the checked window.
  *
  * @param github - Client able to read the public repository.
  * @param options.now - Current time.
  * @param options.maxAgeMinutes - Minutes a run may stay queued, waiting or in progress.
- * @returns The run when it completed with any conclusion but `success`, or hasn't completed
- *   after `maxAgeMinutes`, else `undefined`.
+ * @returns The newest run whose latest attempt completed with any conclusion but
+ *   `success`, or that hasn't completed after `maxAgeMinutes`, else `undefined`.
  * @throws If a run that hasn't completed has an unreadable creation date.
  */
 export async function findFailedRelease(
@@ -101,31 +105,32 @@ export async function findFailedRelease(
       created_at: string;
     }[];
   };
-  const latest = runs[0];
-  if (latest === undefined) return undefined;
-  if (latest.status !== "completed") {
+  for (const release of runs) {
+    if (release.status === "completed") {
+      if (release.conclusion === "success") continue;
+      return {
+        url: release.html_url,
+        sha: release.head_sha,
+        conclusion: release.conclusion ?? "",
+      };
+    }
     const ageMinutes = Math.floor(
-      (options.now.getTime() - Date.parse(latest.created_at)) / 60_000,
+      (options.now.getTime() - Date.parse(release.created_at)) / 60_000,
     );
     if (Number.isNaN(ageMinutes)) {
       throw new Error(
-        `Public release run ${latest.html_url} has an unreadable creation date "${latest.created_at}".`,
+        `Public release release ${release.html_url} has an unreadable creation date "${release.created_at}".`,
       );
     }
-    if (ageMinutes <= options.maxAgeMinutes) return undefined;
+    if (ageMinutes <= options.maxAgeMinutes) continue;
     return {
-      url: latest.html_url,
-      sha: latest.head_sha,
-      conclusion: latest.status,
+      url: release.html_url,
+      sha: release.head_sha,
+      conclusion: release.status,
       stuckMinutes: ageMinutes,
     };
   }
-  if (latest.conclusion === "success") return undefined;
-  return {
-    url: latest.html_url,
-    sha: latest.head_sha,
-    conclusion: latest.conclusion ?? "",
-  };
+  return undefined;
 }
 
 /** What an alert reports. */
@@ -264,7 +269,7 @@ async function run() {
     console.log(
       mode === "stale"
         ? "No stale sync PR."
-        : "Latest public release run didn't fail and isn't stuck.",
+        : "No recent public release run failed or is stuck.",
     );
     return;
   }
