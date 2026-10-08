@@ -26,7 +26,7 @@ import { assembleResult } from "./result.js";
 import { decodeStateRead, planStateReads } from "./state/read-state.js";
 import { verifySlippage } from "./verify-slippage.js";
 
-/** Total execution budget for a single `simulate()` call. */
+/** Default budget for the steps `simulate()` drives between RPC requests. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
 /**

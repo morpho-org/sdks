@@ -65,3 +65,8 @@ block lookup or quoted-asset metadata reads — still surface as the bypassable
 `ExternalServiceError`, and on a wrong-chain endpoint can fail first with a
 generic node error; `InvalidChainIdError` is not guaranteed for every
 wrong-chain configuration.
+
+An endpoint that does not implement `eth_simulateV1` also fails with
+`ExternalServiceError` (bypassable). A caller whose client transport points at
+an endpoint without `eth_simulateV1` must not treat that as an outage and
+proceed without a simulation — the transport is misconfigured.

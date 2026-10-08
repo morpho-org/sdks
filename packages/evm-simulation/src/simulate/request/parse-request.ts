@@ -846,7 +846,7 @@ export function parseRequest(
     !Number.isSafeInteger(chainId) ||
     chainId <= 0
   ) {
-    fieldErrors.push("chainId: must be a positive safe integer");
+    fieldErrors.push("client.chain.id: must be a positive safe integer");
   }
 
   // transactions
