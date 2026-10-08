@@ -2,7 +2,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { ExternalServiceError } from "../../../src/errors.js";
+import { InvalidSimulationResponseError } from "../../../src/errors.js";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
@@ -50,7 +50,7 @@ const pin = async (client: AnvilTestClient<typeof mainnet>) => {
 };
 
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
-  test("error: ExternalServiceError when the node rejects a different call chainId", async ({
+  test("error: InvalidSimulationResponseError when the node rejects a different call chainId", async ({
     client,
   }) => {
     const chainId = 8453;
@@ -72,7 +72,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
         validation: false,
         parentHashCheck: true,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
   });
 
   test("deterministic pinned metadata", async ({ client }) => {

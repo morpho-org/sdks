@@ -7,6 +7,7 @@ import {
 } from "viem";
 import {
   ExternalServiceError,
+  InvalidSimulationResponseError,
   SimulationPackageError,
   SimulationRevertedError,
 } from "../../errors.js";
@@ -35,6 +36,15 @@ const isNodeRevert = (error: unknown): error is Error =>
  */
 const safeMessage = (error: unknown): string =>
   error instanceof BaseError ? error.shortMessage : String(error);
+
+/**
+ * Match a node rejecting the per-call `chainId` because it serves another
+ * chain. Each node words it differently: geth "chainId does not match node's",
+ * Anvil "invalid chain id for signer", Monad "Invalid chain ID: expected …".
+ */
+const isChainIdMismatch = (error: unknown): boolean =>
+  error instanceof Error &&
+  /chainId does not match node's|invalid chain id/i.test(error.message);
 
 /** The JSON-RPC methods this boundary calls. */
 type RpcLabel = "eth_getBlock" | "eth_simulateV1";
@@ -67,6 +77,14 @@ const toBoundaryError = (
     );
     reverted.cause = error;
     return reverted;
+  }
+  // A wrong-chain endpoint is misconfiguration, not an outage: callers must
+  // not bypass it like an `ExternalServiceError`.
+  if (label === "eth_simulateV1" && isChainIdMismatch(error)) {
+    return new InvalidSimulationResponseError(
+      `eth_simulateV1 endpoint rejected the request chainId: ${safeMessage(error)}. Point SimulationConfig.chains at an RPC URL for this chain.`,
+      { cause: error },
+    );
   }
   return new ExternalServiceError(`${label} error: ${safeMessage(error)}`, {
     cause: error,
@@ -112,8 +130,9 @@ export const rpc = async <T>(
  * no fallback backend.
  *
  * @param params - Shared simulation client, execution plan (its request
- *   `chainId` is sent on every call), state block, the `validation` flag to send, the optional simulated block gas limit, and
- *   whether to check the successor `parentHash`.
+ *   `chainId` is sent on every call), state block, the `validation` flag to
+ *   send, the optional simulated block gas limit, and whether to check the
+ *   successor `parentHash`.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -121,7 +140,8 @@ export const rpc = async <T>(
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (bad shape, call-count mismatch, block other than the state block
  *   or its successor, a block timestamp earlier than the state block's, or a
- *   per-call result that fails normalization).
+ *   per-call result that fails normalization), or when the node rejects the
+ *   request `chainId` because it serves another chain.
  * @throws {MissingVerificationEvidenceError} When a planned state read fails.
  * @throws {SimulationRevertedError} When a preparation or user transaction
  *   reverts or the node reports a bundle-level revert (code 3 / insufficient

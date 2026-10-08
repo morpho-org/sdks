@@ -358,6 +358,30 @@ describe.sequential("executePlan", () => {
     },
   );
 
+  test.each([
+    {
+      node: "geth",
+      code: -32000,
+      message: "chainId does not match node's (have=1, want=988)",
+    },
+    { node: "Anvil", code: -32003, message: "invalid chain id for signer" },
+    {
+      node: "Monad",
+      code: -32003,
+      message: "Invalid chain ID: expected 143, got 1",
+    },
+  ])(
+    "error: InvalidSimulationResponseError when the node rejects the chainId ($node)",
+    async ({ code, message }) => {
+      fetchMock.mockResolvedValueOnce(
+        Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
+      );
+      await expect(executePlan(params)).rejects.toBeInstanceOf(
+        InvalidSimulationResponseError,
+      );
+    },
+  );
+
   test("error: ExternalServiceError for an aborted/timeout fetch", async () => {
     fetchMock.mockRejectedValueOnce(
       Object.assign(new Error("aborted"), { name: "AbortError" }),

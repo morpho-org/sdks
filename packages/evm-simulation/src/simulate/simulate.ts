@@ -82,7 +82,8 @@ import { runSimulation } from "./run-simulation.js";
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded).
+ *   non-empty return data cannot be decoded), or when the node rejects the
+ *   request `chainId` because it serves another chain.
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
