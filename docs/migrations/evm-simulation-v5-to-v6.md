@@ -1,5 +1,9 @@
 # EVM simulation v5 → v6
 
+> [!WARNING]
+> v6 is a breaking release **with no deprecation period**: the v5
+> config API is removed outright, so upgrade and switch in one step.
+
 ## Pass a client instead of a config
 
 `simulate()` now takes the caller's viem client. `SimulationConfig`,
