@@ -250,7 +250,11 @@ export class SimulationValidationError extends SimulationPackageError {
   }
 }
 
-/** Chain ID not configured for any simulation method. Not bypassable. */
+/**
+ * Limits or preview authorizations need a Morpho Blue address that the
+ * chain does not register in blue-sdk's `getChainAddresses`. Not
+ * bypassable.
+ */
 export class UnsupportedChainError extends SimulationPackageError {
   override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
@@ -342,17 +346,19 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
+ * import { createPublicClient, http } from "viem";
  * import type { Address, Hex } from "viem";
+ * import { mainnet } from "viem/chains";
  *
  * declare const user: Address;
  * declare const vault: Address;
  * declare const encodedDeposit: Hex;
- * const config = {
- *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
- * };
+ * const client = createPublicClient({
+ *   chain: mainnet,
+ *   transport: http("https://rpc.example"),
+ * });
  * try {
- *   await simulate(config, {
- *     chainId: 1,
+ *   await simulate(client, {
  *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
  *   });
  * } catch (e) {

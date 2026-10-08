@@ -10,6 +10,7 @@ import { vi } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
 import {
   ExternalServiceError,
+  InvalidChainIdError,
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
@@ -139,6 +140,27 @@ describe.sequential("simulate — pipeline delegation", () => {
       simulate(CLIENT, makeParams({ authorizations: [] } as never)),
     ).rejects.toThrow(SimulationValidationError);
     expect(mockRunSimulation).not.toHaveBeenCalled();
+  });
+});
+
+describe.sequential("simulate — client chain", () => {
+  it("throws InvalidChainIdError for a client without a chain", async () => {
+    // A chainless client doesn't satisfy the signature — JS callers can
+    // still pass one, so the guard is exercised through a test-only cast.
+    const chainless = createPublicClient({
+      transport: http("http://localhost:8545"),
+    });
+    await expect(
+      simulate(chainless as unknown as typeof CLIENT, makeParams()),
+    ).rejects.toBeInstanceOf(InvalidChainIdError);
+    expect(mockRunSimulation).not.toHaveBeenCalled();
+  });
+
+  it("passes params.logger to runSimulation", async () => {
+    const logger = { info() {}, warn() {}, error() {} };
+    await simulate(CLIENT, makeParams({ logger }));
+    expect(mockRunSimulation.mock.calls[0]![0].logger).toBe(logger);
+    expect(Object.isFrozen(logger)).toBe(false);
   });
 });
 

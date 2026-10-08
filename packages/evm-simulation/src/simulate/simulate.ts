@@ -60,6 +60,16 @@ import { runSimulation } from "./run-simulation.js";
  *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
  *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
  *   combined with `blockNumber`.
+ * @param params.blockOverrides - Optional `eth_simulateV1` block overrides;
+ *   `gasLimit` is sent as the simulated block's gas limit. Unset means no
+ *   override.
+ * @param params.parentHashCheck - Optional check that the simulated block's
+ *   `parentHash` equals the pinned block hash. Defaults to on, and to off on
+ *   Stable (chain 988), whose nodes never report a matching `parentHash`.
+ * @param params.timeoutMs - Bounds the steps `simulate()` drives between
+ *   calls (default 5000 ms); in-flight requests follow the client transport's
+ *   own timeout and retry policy.
+ * @param params.logger - Optional logger for parsing and retention warnings.
  * @throws {InvalidChainIdError} when the node rejects the request `chainId`
  *   because it serves another chain — the client's transport points at the
  *   wrong chain.
@@ -72,9 +82,9 @@ import { runSimulation } from "./run-simulation.js";
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
- * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
- *   endpoint configured, or limits/preview authorizations require a Morpho
- *   Blue address absent from blue-sdk's `getChainAddresses`.
+ * @throws {UnsupportedChainError} when limits or preview authorizations
+ *   require a Morpho Blue address absent from blue-sdk's
+ *   `getChainAddresses`.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
  * @throws {MissingVerificationEvidenceError} when a planned state read fails
  *   or returns empty data, native outgoing traces do not cover value
@@ -151,5 +161,6 @@ export async function simulate(
   return runSimulation({
     client,
     request: parseRequest(params, client.chain.id),
+    logger: params.logger,
   });
 }

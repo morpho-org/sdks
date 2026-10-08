@@ -11,6 +11,7 @@ import {
   UnsupportedChainError,
 } from "../errors.js";
 import type { VerifiedSimulationResult } from "../result.js";
+import type { SimulationLogger } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
@@ -43,8 +44,9 @@ const DEFAULT_TIMEOUT_MS = 5000;
 export async function runSimulation(params: {
   readonly client: Client<Transport, Chain>;
   readonly request: ParsedRequest;
+  readonly logger?: SimulationLogger;
 }): Promise<VerifiedSimulationResult> {
-  const { client, request } = params;
+  const { client, request, logger } = params;
   const signal = AbortSignal.timeout(request.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   const limits = { operations: request.limits?.operations ?? [] };
@@ -139,7 +141,7 @@ export async function runSimulation(params: {
     );
   const transfers = parseTransfers(userCalls, {
     wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
-    logger: request.logger,
+    logger,
   });
 
   const assetChanges = groupAssetChanges(
@@ -183,7 +185,7 @@ export async function runSimulation(params: {
     chainId: request.chainId,
     transfers,
     assetChanges,
-    logger: request.logger,
+    logger,
   });
 
   return assembleResult({

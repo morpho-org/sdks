@@ -555,6 +555,44 @@ describe("parseRequest", () => {
     ).toThrow(SimulationValidationError);
   });
 
+  test.each([
+    { blockOverrides: 1 },
+    { blockOverrides: { gasLimit: 0n } },
+    { blockOverrides: { gasLimit: -1n } },
+    { blockOverrides: { gasLimit: 1 } },
+    { blockOverrides: { gasLimit: 1n, extra: 1 } },
+    { parentHashCheck: 0 },
+    { parentHashCheck: "false" },
+    { timeoutMs: 0 },
+    { timeoutMs: -1 },
+    { timeoutMs: 1500.5 },
+    { timeoutMs: Number.POSITIVE_INFINITY },
+    { timeoutMs: 2_147_483_648 },
+    { timeoutMs: "5000" },
+  ])("error: SimulationValidationError for %o", (input) => {
+    expect(() => parse({ transactions: [tx()], ...input })).toThrow(
+      SimulationValidationError,
+    );
+  });
+
+  test("behavior: passes through blockOverrides, parentHashCheck and timeoutMs", () => {
+    const request = parse({
+      transactions: [tx()],
+      blockOverrides: { gasLimit: 30_000_000n },
+      parentHashCheck: false,
+      timeoutMs: 1000,
+    });
+    expect(request.blockOverrides).toEqual({ gasLimit: 30_000_000n });
+    expect(request.parentHashCheck).toBe(false);
+    expect(request.timeoutMs).toBe(1000);
+  });
+
+  test("behavior: does not freeze the caller's logger", () => {
+    const logger = { info() {}, warn() {}, error() {} };
+    parse({ transactions: [tx()], logger });
+    expect(Object.isFrozen(logger)).toBe(false);
+  });
+
   test("behavior: accepts blockNumber 'finalized'", () => {
     const request = parse({
       transactions: [tx()],

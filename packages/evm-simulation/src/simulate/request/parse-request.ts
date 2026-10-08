@@ -56,8 +56,10 @@ export interface ParsedRequest {
   readonly blockOverrides?: { readonly gasLimit?: bigint };
   readonly parentHashCheck?: boolean;
   readonly timeoutMs?: number;
-  readonly logger?: SimulateParams["logger"];
 }
+
+// `AbortSignal.timeout` accepts a uint32; anything larger wraps to ~1 ms.
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 // ─── Scalar validators ────────────────────────────────────────────────────────
 
@@ -986,11 +988,12 @@ export function parseRequest(
   if (
     rawTimeoutMs !== undefined &&
     (typeof rawTimeoutMs !== "number" ||
-      !Number.isFinite(rawTimeoutMs) ||
-      rawTimeoutMs <= 0)
+      !Number.isInteger(rawTimeoutMs) ||
+      rawTimeoutMs <= 0 ||
+      rawTimeoutMs > MAX_TIMEOUT_MS)
   )
     fieldErrors.push(
-      `timeoutMs: must be a positive finite number (got ${String(rawTimeoutMs)}: ${typeof rawTimeoutMs})`,
+      `timeoutMs: must be a positive integer no greater than ${MAX_TIMEOUT_MS} (got ${String(rawTimeoutMs)}: ${typeof rawTimeoutMs})`,
     );
   else if (rawTimeoutMs !== undefined) timeoutMs = rawTimeoutMs;
 
@@ -1123,6 +1126,5 @@ export function parseRequest(
     ...(blockOverrides !== undefined ? { blockOverrides } : {}),
     ...(parentHashCheck !== undefined ? { parentHashCheck } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-    ...(input.logger !== undefined ? { logger: input.logger } : {}),
   });
 }

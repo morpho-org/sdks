@@ -107,6 +107,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("executePlan", () => {
+  test("error: ExternalServiceError for an already-aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      executePlan({ ...params, signal: controller.signal }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("default", async () => {
     respondHappy(okCalls(3));
     const evidence = await executePlan(params);
