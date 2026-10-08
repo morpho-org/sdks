@@ -18,7 +18,7 @@
 - The caller's client supplies the endpoint; it must support `eth_simulateV1` with per-call `from` and `traceTransfers`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
 
-- The unreleased v5 stack follows the narrow lifecycle exceptions in root `AGENTS.md` §7 — `ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` for the SDK-1291 Tenderly backend removal and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` for the SDK-1293 legacy authorization-variant and `"pending"` removals; SDK-1293 replaced the legacy authorization variants, narrowed `SimulateParams.blockNumber` to exclude `"pending"`, and cut the runtime over to the new input/authorization/limit types.
+- v5 is released (5.1.0). The two narrow §7 exceptions — `ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` (SDK-1291 Tenderly backend) and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` (SDK-1293 legacy authorization variants and `"pending"`) — covered the v5 lifecycle only and do not extend to later removals. The v6 removal of `SimulationConfig`, `ChainSimulationConfig` and `SimulateParams.chainId` ships as a major with no deprecation period by maintainer decision (SDK-1373); it has no ADR and no §7 entry.
 
 ## Continuous Improvement
 

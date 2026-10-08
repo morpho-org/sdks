@@ -31,6 +31,17 @@ const result = await simulate(client, { timeoutMs: 5000, transactions });
 from the chain config onto `SimulateParams`. Callers simulating several
 chains pass the client for each chain — there is no longer a shared config map.
 
+## Removed checks and the `block` input
+
+v6 drops the `eth_chainId` lookup and the post-simulation re-fetch that
+reported a reorged pinned block as `InvalidSimulationResponseError`; a
+mid-flight reorg is no longer detected or reported.
+
+The new optional `block` parameter (`{ number, hash, timestamp }`, exported as
+`StateBlock`) supplies the state block directly and skips the block lookup,
+so a simulation without quoted-asset metadata reads sends only
+`eth_simulateV1`. `block` cannot be combined with `blockNumber`.
+
 ## Error mapping
 
 A node that rejects the request `chainId` (endpoint on another chain) now

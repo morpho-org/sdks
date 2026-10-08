@@ -70,7 +70,8 @@ import { runSimulation } from "./run-simulation.js";
  *   calls (default 5000 ms); in-flight requests follow the client transport's
  *   own timeout and retry policy.
  * @param params.logger - Optional logger for parsing and retention warnings.
- * @throws {InvalidChainIdError} when the node rejects the request `chainId`
+ * @throws {InvalidChainIdError} when `client` was built without a `chain`,
+ *   or when the node rejects the request `chainId`
  *   because it serves another chain — the client's transport points at the
  *   wrong chain.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad

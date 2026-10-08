@@ -263,7 +263,10 @@ export class UnsupportedChainError extends SimulationPackageError {
     public readonly chainId: number,
     context?: SimulationErrorContext,
   ) {
-    super(`Chain ${chainId} is not configured for simulation`, { context });
+    super(
+      `Chain ${chainId} has no Morpho Blue address in getChainAddresses, which limits and preview authorizations require. Remove them or use a supported chain.`,
+      { context },
+    );
   }
 }
 
