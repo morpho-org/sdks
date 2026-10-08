@@ -18,7 +18,7 @@
 - The caller's client supplies the endpoint; it must support `eth_simulateV1` with per-call `from` and `traceTransfers`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
 
-- v5 is released (5.1.0). The two narrow §7 exceptions — `ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` (SDK-1291 Tenderly backend) and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` (SDK-1293 legacy authorization variants and `"pending"`) — covered the v5 lifecycle only and do not extend to later removals. The v6 removal of `SimulationConfig`, `ChainSimulationConfig` and `SimulateParams.chainId` ships as a major with no deprecation period by maintainer decision (SDK-1373); it has no ADR and no §7 entry.
+- v5 is released (5.1.0). The two narrow §7 exceptions — `ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` (SDK-1291 Tenderly backend) and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` (SDK-1293 legacy authorization variants and `"pending"`) — covered the v5 lifecycle only and do not extend to later removals. The v6 removal of `SimulationConfig`, `ChainSimulationConfig` and `SimulateParams.chainId` and the `simulate(config, params)` → `simulate(client, params)` retype ship as a major with no deprecation period under the named §7 exception `ADR-2026-10-08-evm-simulation-viem-client-without-deprecation` (SDK-1373), which also supersedes ADR-2026-10-01's `timeoutMs` invariant.
 
 ## Continuous Improvement
 

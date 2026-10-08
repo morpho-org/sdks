@@ -129,6 +129,11 @@ scope its ADR lists:
   `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`):
   the Tenderly config and fallback, the two legacy authorization variants,
   and `"pending"` as a block number.
+- **EVM simulation v6**
+  (`ADR-2026-10-08-evm-simulation-viem-client-without-deprecation`):
+  `SimulationConfig`, `ChainSimulationConfig`, `SimulateParams.chainId`,
+  `resolveChain`, `createSimulationClient`, and the
+  `simulate(config, params)` → `simulate(client, params)` retype.
 
 No exception waives the major changeset, migration guide, maintained-dependent
 audit or continued availability of the previous major, and no break outside
