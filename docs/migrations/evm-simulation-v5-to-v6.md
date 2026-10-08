@@ -66,6 +66,10 @@ block lookup or quoted-asset metadata reads — still surface as the bypassable
 generic node error; `InvalidChainIdError` is not guaranteed for every
 wrong-chain configuration.
 
+`UnsupportedChainError` also changed meaning: it no longer signals a missing
+endpoint, since the chain now comes from `client.chain.id`. It covers only a
+missing Morpho Blue address when limits or preview authorizations are used.
+
 An endpoint that does not implement `eth_simulateV1` also fails with
 `ExternalServiceError` (bypassable). A caller whose client transport points at
 an endpoint without `eth_simulateV1` must not treat that as an outage and
