@@ -10,8 +10,8 @@ import { runSimulation } from "./run-simulation.js";
  *
  * Parses and normalizes the request → resolves a single pinned block (skipped
  * when `params.block` is supplied) → resolves quoted-asset metadata → plans
- * state reads and the execution → executes once through `eth_simulateV1` under
- * the full timeout budget (simulation with in-block state reads → response
+ * state reads and the execution → executes once through `eth_simulateV1`
+ * (simulation with in-block state reads → response
  * parsing) → derives ERC20/WETH9 transfers and net asset changes from the
  * user calls only → decodes quoted balances/positions → runs slippage checks
  * → asserts no funds are retained by standalone `bundles` periphery contracts
@@ -102,8 +102,8 @@ import { runSimulation } from "./run-simulation.js";
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
  *   Never bypassable.
- * @throws {ExternalServiceError} when the RPC is unavailable within the
- *   timeout budget or returns a malformed JSON-RPC envelope. A looked-up state
+ * @throws {ExternalServiceError} when the RPC fails or times out (per the
+ *   client transport) or returns a malformed JSON-RPC envelope. A looked-up state
  *   block without number/hash is reported as `InvalidSimulationResponseError`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
