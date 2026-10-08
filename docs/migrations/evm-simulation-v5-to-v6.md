@@ -31,6 +31,20 @@ const result = await simulate(client, { timeoutMs: 5000, transactions });
 from the chain config onto `SimulateParams`. Callers simulating several
 chains pass the client for each chain — there is no longer a shared config map.
 
+`timeoutMs` also changed meaning. In v5 it aborted the whole call, including
+an in-flight `eth_simulateV1` request. In v6 the caller's client owns the
+transport, so `timeoutMs` only bounds the steps `simulate()` drives between
+requests — an in-flight request follows the transport's own timeout and retry
+policy (viem's `http()` defaults: 10 s timeout, 3 retries). To keep a similar
+cap, set it on the transport:
+
+```ts
+const client = createPublicClient({
+  chain: mainnet,
+  transport: http(simulateV1Url, { timeout: 5000, retryCount: 0 }),
+});
+```
+
 ## Removed checks and the `block` input
 
 v6 drops the `eth_chainId` lookup and the post-simulation re-fetch that
