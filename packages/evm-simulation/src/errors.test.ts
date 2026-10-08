@@ -5,6 +5,7 @@ import {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
+  InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   MissingVerificationEvidenceError,
@@ -198,6 +199,20 @@ describe("verification error classes", () => {
     [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
     [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
   ] as const;
+
+  it("InvalidChainIdError is an InvalidSimulationResponseError with its name and code", () => {
+    const cause = new Error("root");
+    const err = new InvalidChainIdError("boom", { context: CONTEXT, cause });
+    expect(err).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(err).toBeInstanceOf(SimulationPackageError);
+    // Shares the parent's literals so 5.1 instanceof/code handlers still match.
+    expect(err.name).toBe("InvalidSimulationResponseError");
+    expect(err.code).toBe("INVALID_SIMULATION_RESPONSE");
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(err.cause).toBe(cause);
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
 
   it.each(cases)("%s has its literal code and name", (Ctor, code) => {
     const err = new Ctor("boom", { context: CONTEXT });

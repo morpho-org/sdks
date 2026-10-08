@@ -1,0 +1,289 @@
+name: Release
+
+# Every merge to main is a release: the repository only receives release
+# snapshots. Publishing is idempotent, so a rerun only publishes, tags and
+# releases what is missing.
+#
+#   pack     unprivileged: install, build and pack the exact bytes to publish
+#   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
+#   prepare-release  read-only: compute package tags and release notes as data
+#   release  package tags and GitHub Releases for every current package version;
+#            runs no repository code
+#
+# Repository settings this workflow relies on (a workflow file can't enforce them,
+# since a pull request could edit it):
+#   - The `npm` environment allows deployments from `main` only and stores no
+#     secrets. Each npm trusted publisher names this repository, this file and
+#     the `npm` environment.
+#   - `main` rulesets: only the sync App may update it (signed commits, no force
+#     push or deletion), and every change needs a pull request with `ci` passing.
+#   - No workflow in this repository saves or restores an Actions cache, so code
+#     run by `pack` can't poison anything a privileged job reads.
+# The private sync refuses to open a sync PR, and pages after cutover, while
+# any of the environment and ruleset settings above is missing.
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+# Queue every push and never cancel a running release: a replaced run would skip
+# the versions it alone declares. `queue` is newer than actionlint's schema.
+concurrency:
+  group: release
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  pack:
+    name: Build & pack
+    # A fork of this repository must not try to release.
+    if: github.repository == 'morpho-org/sdks'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    env:
+      CI: true
+      HUSKY: 0
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build:ci
+
+      - name: Pack publishable tarballs
+        run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+          if-no-files-found: error
+
+  # Holds the npm OIDC token. It installs nothing and runs only Node, the npm
+  # bundled with it and dependency-free scripts from this commit, on tarballs
+  # whose digests and identities it checks first.
+  publish:
+    name: Publish to npm
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    permissions:
+      contents: read # checkout
+      id-token: write # npm trusted publishing and provenance
+    env:
+      CI: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # An exact Node release fixes the bundled npm (11.19.1), which supports
+      # trusted publishing. Bump it with .nvmrc's major.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          package-manager-cache: false
+
+      - name: Require npm with trusted publishing
+        run: node scripts/publish/require-trusted-publishing-npm.ts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+
+      # Checksums, layout, collisions, the identity npm reads and publishConfig,
+      # against the packages declared at this commit. A tampered pack job can't
+      # make this job publish anything else.
+      - name: Verify tarballs
+        run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
+
+      # Skips versions already on npm and fails on any that npm would refuse or
+      # that would move `latest` back, before anything is uploaded.
+      - name: Plan publish
+        run: node scripts/publish/plan-npm-publish.ts "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
+
+      - name: Publish packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r -u 3 name version tgz; do
+            echo "Publishing ${name}@${version}"
+            npm publish "$tgz" \
+              --provenance \
+              --access public \
+              --tag latest \
+              --ignore-scripts \
+              --registry https://registry.npmjs.org
+          done 3< "$RUNNER_TEMP/to-publish.tsv"
+
+  prepare-release:
+    name: Prepare tags & release notes
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      release-plan-id: ${{ steps.release-plan.outputs.artifact-id }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          # Full history, to tag each version on the commit that set it.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # Repository scripts run in this read-only job, so nothing they leave on the
+      # runner (PATH, git config, env files) reaches the job that holds the token.
+      - name: Prepare tags and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release-plan"
+          mkdir -p "$out/notes"
+          # Not process substitution: a failing command must fail the step.
+          node scripts/publish/pack.ts --tags > "$out/tags.txt"
+          if [ ! -s "$out/tags.txt" ]; then
+            echo "::error::No package tags found."
+            exit 1
+          fi
+          while IFS=$'\t' read -r -u 3 tag _commit; do
+            node scripts/publish/github-release-body.ts "$tag" "$out/notes/${tag//\//__}.md"
+          done 3< "$out/tags.txt"
+
+      - id: release-plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/release-plan
+          if-no-files-found: error
+
+  release:
+    name: Tags & GitHub Releases
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # push package tags and create GitHub Releases
+
+    # No repository code runs in this job: a fresh checkout, the data artifact
+    # from prepare-release, and git and gh by absolute path.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      # An empty id would make download-artifact fetch every artifact in the run.
+      - name: Require the release-plan artifact id
+        shell: bash
+        env:
+          RELEASE_PLAN_ID: ${{ needs.prepare-release.outputs.release-plan-id }}
+        run: |
+          if [ -z "$RELEASE_PLAN_ID" ]; then
+            echo "::error::prepare-release did not output the release-plan artifact id."
+            exit 1
+          fi
+
+      # By id, so the job checks exactly the artifact prepare-release uploaded.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare-release.outputs.release-plan-id }}
+          # Extract into path itself, as a download by name does.
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-plan
+
+      # Every current package version is on npm once publish succeeds, so any
+      # missing tag or release is created, whichever run or commit skipped it, on
+      # the mainline commit that first set that version. npm provenance records
+      # the commit of the run that published it, which differs from the tag only
+      # when an earlier run failed before publishing.
+      # Each row is checked before use: a package tag, a commit on this run's
+      # history, and a notes file. PATH and the variables that load code into bash
+      # or git are reset, and the token is set only in this step.
+      - name: Push package tags and create GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATH: /usr/bin:/bin
+          BASH_ENV: ""
+          ENV: ""
+          LD_PRELOAD: ""
+          LD_LIBRARY_PATH: ""
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
+          GIT_CONFIG_COUNT: "0"
+          GIT_CONFIG_PARAMETERS: ""
+          GIT_EXEC_PATH: ""
+          GH_CONFIG_DIR: ${{ runner.temp }}/gh-config
+          GH_HOST: github.com
+        run: |
+          set -euo pipefail
+          plan="$RUNNER_TEMP/release-plan"
+          while IFS=$'\t' read -r -u 3 tag commit; do
+            if ! [[ "$tag" =~ ^@morpho-org/[a-z0-9-]+-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
+              || ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]] \
+              || [ ! -f "$plan/notes/${tag//\//__}.md" ] \
+              || ! /usr/bin/git merge-base --is-ancestor "$commit" "$GITHUB_SHA"; then
+              echo "::error::Invalid release-plan row: ${tag}"
+              exit 1
+            fi
+          done 3< "$plan/tags.txt"
+          /usr/bin/git config core.hooksPath /dev/null
+          /usr/bin/git config user.name "github-actions[bot]"
+          /usr/bin/git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          /usr/bin/git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap '/usr/bin/git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
+          while IFS=$'\t' read -r -u 3 tag commit; do
+            # Released already: nothing to create. The legacy pipeline tagged some
+            # versions on commits outside main's first-parent history.
+            if found=$(/usr/bin/gh release view "$tag" --json isDraft --jq .isDraft 2>&1); then
+              if [ "$found" = "false" ]; then
+                continue
+              fi
+              echo "::error::Release ${tag} is a draft. Delete it and re-run: the job tags ${commit} and creates the Release. Publishing the draft would skip that tag check."
+              exit 1
+            fi
+            if [ "$found" != "release not found" ]; then
+              echo "::error::Release lookup for ${tag} failed: ${found}"
+              exit 1
+            fi
+            if ! /usr/bin/git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+              /usr/bin/git tag "$tag" "$commit" -m "$tag"
+              /usr/bin/git push --no-verify origin "refs/tags/${tag}"
+            else
+              # A tag can't be moved once the ruleset applies, so one on another
+              # commit must stop the run before it becomes a Release.
+              /usr/bin/git fetch --no-tags origin "+refs/tags/${tag}:refs/tags/${tag}"
+              if [ "$(/usr/bin/git rev-parse "refs/tags/${tag}^{commit}")" != "$commit" ]; then
+                echo "::error::Tag ${tag} exists on a commit other than ${commit}."
+                exit 1
+              fi
+            fi
+            /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$plan/notes/${tag//\//__}.md" --verify-tag
+          done 3< "$plan/tags.txt"

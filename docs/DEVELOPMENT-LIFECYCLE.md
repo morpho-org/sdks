@@ -1,8 +1,7 @@
 # Development Lifecycle
 
-This page is the short version. The full guide is the
-[Software Development Lifecycle Guide (Notion)](https://app.notion.com/p/morpho-labs/Software-Development-Lifecycle-Guide-3ddd69939e6d81709ea9e944915abefc).
-When the two disagree, Notion wins.
+This page is the short version. The full guide is the internal Software Development
+Lifecycle Guide in Notion; when the two disagree, Notion wins.
 
 Every project accumulates one written document, the **Technical Project Plan**, as it moves through
 the phases below. Decisions that are hard to revert or set a new technical standard are recorded

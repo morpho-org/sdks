@@ -7,10 +7,10 @@ import {
   MissingVerificationEvidenceError,
   UnsupportedChainError,
 } from "../errors.js";
+import type { StateBlock } from "../params.js";
 import type { SimulationConfig, SimulationTransaction } from "../types.js";
 import type { executePlan } from "./backends/index.js";
 import type { SimulationExecution } from "./backends/parse-response.js";
-import type { PinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { ExecutionPlan, PlannedCall } from "./plan/plan-execution.js";
 import { simulate } from "./simulate.js";
 
@@ -30,7 +30,7 @@ const RPC_URL = "https://rpc.example";
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
 const TARGET: Address = "0x2222222222222222222222222222222222222222";
 const STATE_BLOCK = 20_000_000n;
-const STATE_BLOCK_HASH = `0x${"ab".repeat(32)}`;
+const STATE_BLOCK_HASH: Hex = `0x${"ab".repeat(32)}`;
 const STATE_BLOCK_TIMESTAMP = 1_700_000_000n;
 const TRANSACTION: SimulationTransaction = {
   from: OWNER,
@@ -45,7 +45,7 @@ let userCallCount = 1;
 
 const execution = (
   plan: ExecutionPlan,
-  stateBlock: PinnedBlock,
+  stateBlock: StateBlock,
 ): SimulationExecution =>
   ({
     plan,
@@ -84,12 +84,11 @@ function pinnedBlockParam(fetch: ReturnType<typeof stubFetch>["fetch"]) {
     .find(({ method }) => method === "eth_getBlockByNumber")?.params[0];
 }
 
-function stubFetch(chainId: number, calls: readonly unknown[]) {
+function stubFetch(calls: readonly unknown[]) {
   const methods: string[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
     const { method } = JSON.parse(String(init?.body)) as { method: string };
     methods.push(method);
-    if (method === "eth_chainId") return rpc(numberToHex(BigInt(chainId)));
     if (method === "eth_getBlockByNumber")
       return rpc({
         number: numberToHex(STATE_BLOCK),
@@ -126,7 +125,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
   test("error: an unregistered chain requires Morpho addresses for limits", async () => {
-    const { fetch } = stubFetch(CHAIN_ID, []);
+    const { fetch } = stubFetch([]);
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
@@ -147,7 +146,7 @@ describe.sequential("runSimulation", () => {
   });
 
   test("error: preview authorizations on an unregistered chain require Morpho addresses", async () => {
-    const { fetch } = stubFetch(CHAIN_ID, []);
+    const { fetch } = stubFetch([]);
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
@@ -168,14 +167,20 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: an unregistered configured chain works without limits", async () => {
-    const { fetch, methods } = stubFetch(CHAIN_ID, []);
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    mockExecutePlan.mockImplementationOnce(actual.executePlan);
+    const { fetch, methods } = stubFetch([
+      { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
+    ]);
     const result = await simulate(config, {
       chainId: CHAIN_ID,
       transactions: [TRANSACTION],
     });
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
-    expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
+    expect(methods).toEqual(["eth_getBlockByNumber", "eth_simulateV1"]);
     expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
@@ -183,7 +188,7 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: a configured block gas limit is forwarded to execution", async () => {
-    stubFetch(CHAIN_ID, []);
+    stubFetch([]);
     await simulate(
       {
         chains: new Map([
@@ -202,18 +207,21 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: Stable turns the parentHash check off by default", async () => {
-    stubFetch(ChainId.StableMainnet, []);
+    stubFetch([]);
     await simulate(
       {
         chains: new Map([[ChainId.StableMainnet, { simulateV1Url: RPC_URL }]]),
       },
-      { chainId: ChainId.StableMainnet, transactions: [TRANSACTION] },
+      {
+        chainId: ChainId.StableMainnet,
+        transactions: [TRANSACTION],
+      },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(false);
   });
 
   test("behavior: a configured parentHashCheck overrides the chain default", async () => {
-    stubFetch(ChainId.StableMainnet, []);
+    stubFetch([]);
     await simulate(
       {
         chains: new Map([
@@ -223,11 +231,14 @@ describe.sequential("runSimulation", () => {
           ],
         ]),
       },
-      { chainId: ChainId.StableMainnet, transactions: [TRANSACTION] },
+      {
+        chainId: ChainId.StableMainnet,
+        transactions: [TRANSACTION],
+      },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
 
-    stubFetch(CHAIN_ID, []);
+    stubFetch([]);
     await simulate(
       {
         chains: new Map([
@@ -240,19 +251,22 @@ describe.sequential("runSimulation", () => {
   });
 
   test("behavior: Monad pins to the finalized block and sends validation: true", async () => {
-    const { fetch } = stubFetch(ChainId.MonadMainnet, []);
+    const { fetch } = stubFetch([]);
     await simulate(
       {
         chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
       },
-      { chainId: ChainId.MonadMainnet, transactions: [TRANSACTION] },
+      {
+        chainId: ChainId.MonadMainnet,
+        transactions: [TRANSACTION],
+      },
     );
     expect(pinnedBlockParam(fetch)).toBe("finalized");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
   test("behavior: Monad keeps an explicit blockNumber", async () => {
-    const { fetch } = stubFetch(ChainId.MonadMainnet, []);
+    const { fetch } = stubFetch([]);
     await simulate(
       {
         chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
@@ -267,18 +281,69 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
-  test("error: chain mismatch is detected before block lookup", async () => {
-    const { methods } = stubFetch(1, []);
-    await expect(
-      simulate(config, {
-        chainId: CHAIN_ID,
-        transactions: [TRANSACTION],
-      }),
-    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
-    expect(methods).toEqual(["eth_chainId"]);
+  test("behavior: a supplied block sends only eth_simulateV1", async () => {
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    mockExecutePlan.mockImplementationOnce(actual.executePlan);
+    const { fetch, methods } = stubFetch([
+      { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
+    ]);
+    const result = await simulate(config, {
+      chainId: CHAIN_ID,
+      transactions: [TRANSACTION],
+      block: {
+        number: STATE_BLOCK,
+        hash: STATE_BLOCK_HASH,
+        timestamp: STATE_BLOCK_TIMESTAMP,
+      },
+    });
+    expect(result.calls).toHaveLength(1);
+    expect(methods).toEqual(["eth_simulateV1"]);
+    const request = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as {
+      params: unknown[];
+    };
+    expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
   });
 
-  test("error: eth_chainId transport failures do not expose the RPC URL", async () => {
+  test("behavior: a mixed-case supplied block hash matches the successor parentHash", async () => {
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    mockExecutePlan.mockImplementationOnce(actual.executePlan);
+    const methods: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+        const { method } = JSON.parse(String(init?.body)) as { method: string };
+        methods.push(method);
+        return rpc([
+          {
+            number: numberToHex(STATE_BLOCK + 1n),
+            hash: `0x${"cd".repeat(32)}`,
+            parentHash: STATE_BLOCK_HASH,
+            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP + 12n),
+            calls: [
+              { status: "0x1", gasUsed: "0x5208", returnData: "0x", logs: [] },
+            ],
+          },
+        ]);
+      }),
+    );
+    const result = await simulate(config, {
+      chainId: CHAIN_ID,
+      transactions: [TRANSACTION],
+      block: {
+        number: STATE_BLOCK,
+        hash: STATE_BLOCK_HASH.toUpperCase().replace("0X", "0x") as Hex,
+        timestamp: STATE_BLOCK_TIMESTAMP,
+      },
+    });
+    expect(result.calls).toHaveLength(1);
+    expect(methods).toEqual(["eth_simulateV1"]);
+  });
+
+  test("error: block lookup transport failures do not expose the RPC URL", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -294,7 +359,7 @@ describe.sequential("runSimulation", () => {
   });
 
   test("error: MissingVerificationEvidenceError carries context for an empty state read", async () => {
-    stubFetch(1, []);
+    stubFetch([]);
     let plannedReadId: string | undefined;
     mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => ({
       ...execution(plan, stateBlock),
@@ -342,7 +407,7 @@ describe.sequential("runSimulation", () => {
   });
 
   test("error: a user-call count mismatch is an invalid response", async () => {
-    const { methods } = stubFetch(CHAIN_ID, []);
+    const { methods } = stubFetch([]);
     userCallCount = 0;
     await expect(
       simulate(config, {
@@ -350,6 +415,6 @@ describe.sequential("runSimulation", () => {
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
-    expect(methods).toEqual(["eth_chainId", "eth_getBlockByNumber"]);
+    expect(methods).toEqual(["eth_getBlockByNumber"]);
   });
 });

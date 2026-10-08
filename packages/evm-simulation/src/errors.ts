@@ -271,11 +271,26 @@ export class UnsupportedOperationError extends SimulationPackageError {
   readonly code = "UNSUPPORTED_OPERATION";
 }
 
-/** The simulation backend returned a response that cannot be parsed. */
+/**
+ * The simulation backend returned a response that cannot be parsed.
+ * {@link InvalidChainIdError} subclasses this class and shares its `name`
+ * and `code`; check `instanceof InvalidChainIdError` first to tell the two
+ * apart.
+ */
 export class InvalidSimulationResponseError extends SimulationPackageError {
   override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
 }
+
+/**
+ * The node rejected the request `chainId`: the endpoint is on a different
+ * chain than configured. This is misconfiguration, not an outage, so unlike
+ * {@link ExternalServiceError} callers must not bypass it.
+ * Extends {@link InvalidSimulationResponseError} and shares its `name` and
+ * `code`, so v5 callers that match on either still catch it;
+ * `instanceof InvalidChainIdError` is how to tell the two apart.
+ */
+export class InvalidChainIdError extends InvalidSimulationResponseError {}
 
 /** State needed to verify an operation could not be fetched or derived. */
 export class MissingVerificationEvidenceError extends SimulationPackageError {

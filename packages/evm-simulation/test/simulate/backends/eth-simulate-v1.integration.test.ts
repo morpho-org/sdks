@@ -2,6 +2,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
+import { InvalidChainIdError } from "../../../src/errors.js";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
@@ -49,6 +50,31 @@ const pin = async (client: AnvilTestClient<typeof mainnet>) => {
 };
 
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
+  test("error: InvalidChainIdError when the node rejects a different call chainId", async ({
+    client,
+  }) => {
+    const chainId = 8453;
+    const owner = client.account.address;
+    const plan = planExecution({
+      request: parseRequest({
+        chainId,
+        transactions: [{ from: owner, to: RECIPIENT, data: "0x" }],
+      }),
+      owner,
+      preparations: [],
+      reads: [],
+    });
+    await expect(
+      executePlan({
+        client,
+        plan,
+        stateBlock: await pin(client),
+        validation: false,
+        parentHashCheck: true,
+      }),
+    ).rejects.toBeInstanceOf(InvalidChainIdError);
+  });
+
   test("deterministic pinned metadata", async ({ client }) => {
     // Anvil requires the eth_simulateV1 pin to equal node head and reports
     // block.number === the pin (no base+1 advancement like geth).

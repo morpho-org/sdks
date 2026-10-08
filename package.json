@@ -37,13 +37,12 @@
     "test:coverage": "pnpm test --coverage",
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
     "changeset": "changeset",
-    "version": "changeset version && node scripts/release/generate-midnight-package-version.ts",
+    "version": "changeset version && node scripts/generate-midnight-package-version.ts",
     "release": "changeset publish",
     "verify:deployless-artifacts": "pnpm --filter @morpho-org/blue-sdk-viem compile && pnpm --filter @morpho-org/midnight-sdk compile && git diff --exit-code HEAD -- packages/blue-sdk-viem/src/queries packages/midnight-sdk/src/queries && test -z \"$(git ls-files --others --exclude-standard -- packages/blue-sdk-viem/src/queries packages/midnight-sdk/src/queries)\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
-    "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.1",
     "@commitlint/cli": "21.2.1",
     "@commitlint/config-conventional": "21.2.0",

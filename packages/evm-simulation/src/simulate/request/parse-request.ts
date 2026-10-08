@@ -27,6 +27,7 @@ import {
   SIMULATION_MODES,
   type SimulateParams,
   type SimulationMode,
+  type StateBlock,
 } from "../../params.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
 
@@ -50,6 +51,7 @@ export interface ParsedRequest {
   /** Always empty in final mode. */
   readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
+  readonly block?: StateBlock;
   readonly limits?: SimulationLimits;
 }
 
@@ -143,6 +145,7 @@ const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
 const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
+const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
 const LIMITS_KEYS = ["operations"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   erc20Approval: ["type", "token", "owner", "spender", "amount"],
@@ -816,6 +819,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       "chainId",
       "transactions",
       "blockNumber",
+      "block",
       "mode",
       "authorizations",
       "limits",
@@ -905,6 +909,30 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         );
       }
     }
+  }
+
+  // block
+  const rawBlock = input.block;
+  let block: StateBlock | undefined;
+  if (rawBlock !== undefined) {
+    if (!isRecord(rawBlock)) {
+      fieldErrors.push("block: must be an object");
+    } else {
+      check.keys(rawBlock, { allow: BLOCK_KEYS, path: "block" });
+      const number = check.uint256(
+        readField(rawBlock, "number"),
+        "block.number",
+      );
+      const hash = check.bytes32(readField(rawBlock, "hash"), "block.hash");
+      const timestamp = check.uint256(
+        readField(rawBlock, "timestamp"),
+        "block.timestamp",
+      );
+      if (number !== undefined && hash !== undefined && timestamp !== undefined)
+        block = { number, hash: hash.toLowerCase() as Hex, timestamp };
+    }
+    if (rawBlockNumber !== undefined)
+      fieldErrors.push("block: cannot be combined with blockNumber");
   }
 
   // authorizations
@@ -1031,6 +1059,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
     transactions,
     authorizations: mode === "preview" ? authorizations : [],
     ...(blockNumber !== undefined ? { blockNumber } : {}),
+    ...(block !== undefined ? { block } : {}),
     ...(normalizedLimits !== undefined ? { limits: normalizedLimits } : {}),
   });
 }

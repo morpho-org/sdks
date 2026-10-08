@@ -22,6 +22,7 @@ describe("SimulateParams", () => {
       | "mode"
       | "authorizations"
       | "blockNumber"
+      | "block"
       | "limits"
     >();
     expectTypeOf<SimulateParams["chainId"]>().toEqualTypeOf<number>();

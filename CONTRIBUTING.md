@@ -53,35 +53,18 @@ pnpm coverage:report
 
 Biome owns formatting and linting. Run `pnpm lint` before pushing; the repository also runs Biome through lint-staged when hooks are installed.
 
-The full style and packaging rules — NodeNext imports, `.js` extensions, type-only imports, `bigint` for onchain quantities, SDK type reuse, generated-output edits, etc. — live in [`AGENTS.md`](./AGENTS.md) §8. Don't restate them here; if you change them, change them there.
+## How This Repository Is Released
+
+This repository holds the source of each published release. Every commit on `main` is a release: it is synced from the SDK team's development repository once that release has passed its checks, and merging it publishes the changed packages to npm with provenance, tags them and creates one GitHub Release per package.
 
 ## Pull Request Process
 
-1. Create a focused branch from the target base branch.
-2. Make the smallest coherent change for the PR — one concern per PR (see [`AGENTS.md`](./AGENTS.md) §8).
-3. Add or update tests when behavior changes. Colocate `*.test.ts` unit tests with their modules; put `*.integration.test.ts` fork/integration tests under the package's `test/` directory. See [`AGENTS.md`](./AGENTS.md) §5.
+1. Create a focused branch from `main`.
+2. Make the smallest coherent change, one concern per PR.
+3. Add or update tests when behavior changes. Colocate `*.test.ts` unit tests with their modules; put `*.integration.test.ts` fork/integration tests under the package's `test/` directory.
 4. Run `pnpm lint` and `pnpm test`.
-5. Add a changeset only for semver-relevant published package changes (see Changesets below).
 
-## Changesets
-
-This repository uses [Changesets](https://github.com/changesets/changesets) for release management. The full policy on when a changeset is required, the bump levels, and the pre/post-release flow lives in [`AGENTS.md`](./AGENTS.md) §7 — read it once, then use this section as the operational quick-reference.
-
-When a PR changes published package source in a way that should be released:
-
-```bash
-pnpm changeset
-```
-
-Bump levels: `patch` (bug fixes / internal maintenance), `minor` (additive surface), `major` (breaking changes). Commit the generated `.changeset/*.md` with the source change. Do NOT update `CHANGELOG.md` files manually in the feature PR — the generated release PR owns those edits.
-
-Skip the changeset when the diff is repo metadata, non-API documentation-only, fixture-only, generated-output-only, or tests-only. JSDoc-only changes to published package source MAY ship a patch changeset when maintainers want them in release notes.
-
-### Release flow (what happens after merge)
-
-After changes land on `main` or `next`, the push workflow runs lint, build, and tests. If pending changesets exist, CI runs `pnpm run version`, pushes `changeset-release/<branch>`, and opens or updates the `chore: version packages (<branch>)` release PR. The release PR merge triggers publishing — `latest` from `main`, `next` from `next`. The publish job pushes git tags and creates one GitHub Release per published package.
-
-Before merging `next` back into `main`, run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
+Maintainers port accepted changes to the development repository, and they reach `main` with the next release.
 
 ## Listing a New Chain to Support
 

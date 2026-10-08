@@ -1,1 +1,0 @@
-../../.agents/commands/review-pr-gh.md
