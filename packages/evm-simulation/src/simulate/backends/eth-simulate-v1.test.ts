@@ -1,11 +1,4 @@
-import {
-  type Address,
-  createPublicClient,
-  getAddress,
-  http,
-  numberToHex,
-  zeroAddress,
-} from "viem";
+import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -20,7 +13,7 @@ import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
-
+import { createSimulationClient } from "./client.js";
 import { executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -33,16 +26,14 @@ const fetchMock = vi.fn<typeof fetch>();
 let params!: Parameters<typeof executePlan>[0];
 
 function makePlan(transactions = 1): ExecutionPlan {
-  const request = parseRequest(
-    {
-      transactions: Array.from({ length: transactions }, () => ({
-        from: OWNER,
-        to: VAULT,
-        data: "0x12",
-      })),
-    },
-    1,
-  );
+  const request = parseRequest({
+    chainId: 1,
+    transactions: Array.from({ length: transactions }, () => ({
+      from: OWNER,
+      to: VAULT,
+      data: "0x12",
+    })),
+  });
   return planExecution({
     request,
     owner: OWNER,
@@ -93,7 +84,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   params = {
-    client: createPublicClient({ transport: http(RPC_URL) }),
+    client: createSimulationClient(RPC_URL),
     plan: makePlan(),
     stateBlock: {
       number: STATE_BLOCK,
@@ -107,15 +98,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("executePlan", () => {
-  test("error: ExternalServiceError for an already-aborted signal", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      executePlan({ ...params, signal: controller.signal }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   test("default", async () => {
     respondHappy(okCalls(3));
     const evidence = await executePlan(params);

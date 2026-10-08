@@ -17,6 +17,7 @@ import { SimulationRevertedError, simulate } from "../../src/index.js";
 // the shared 24_593_903 pin in `test/setup.ts` predates them.
 const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
+  chainId: mainnet.id,
   forkBlockNumber: 25_832_676n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
@@ -54,12 +55,11 @@ const WstethWethBlue = new MarketParams({
   lltv: 945_000_000_000_000_000n,
 });
 
-const simulateWithTimeout = (
-  client: Parameters<typeof simulate>[0],
-  params: Parameters<typeof simulate>[1],
-) =>
+const configFor = (client: { transport: { url?: string } }) => ({
   // Cold fork reads may exceed the production default while fetching upstream state.
-  simulate(client, { timeoutMs: 30_000, ...params });
+  timeoutMs: 30_000,
+  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+});
 
 describe.sequential("simulate — real revert propagation", () => {
   test("error: SimulationRevertedError for insufficient ERC-20 balance", async ({
@@ -88,7 +88,8 @@ describe.sequential("simulate — real revert propagation", () => {
 
     const tx = action.buildTx();
     await expect(
-      simulateWithTimeout(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         transactions: [
           {
             from: client.account.address,
@@ -126,7 +127,8 @@ describe.sequential("simulate — real native funding", () => {
 
     await client.setBalance({ address: client.account.address, value: 0n });
     await expect(
-      simulateWithTimeout(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         transactions: [
           {
             from: client.account.address,
@@ -157,7 +159,8 @@ describe.sequential("simulate — real native funding", () => {
       .buildTx();
 
     await client.setBalance({ address: client.account.address, value: assets });
-    const result = await simulateWithTimeout(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -239,7 +242,8 @@ describe.sequential("simulate — sequential state and stable indices", () => {
     });
     await client.deal({ erc20: WETH, amount: supplies[2]![2] });
 
-    const result = await simulateWithTimeout(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: supplies.map(([marketParams]) => ({
           type: "blueSupply" as const,

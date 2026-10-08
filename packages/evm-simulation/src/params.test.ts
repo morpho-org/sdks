@@ -7,7 +7,7 @@ import {
   type SimulateParams,
   type SimulationMode,
 } from "./params.js";
-import type { SimulationLogger, SimulationTransaction } from "./types.js";
+import type { SimulationTransaction } from "./types.js";
 
 describe("SimulateParams", () => {
   test("default", () => {
@@ -15,19 +15,17 @@ describe("SimulateParams", () => {
     expectTypeOf<SimulationMode>().toEqualTypeOf<"preview" | "final">();
   });
 
-  test("behavior: v6 field set", () => {
+  test("behavior: v5 field set", () => {
     expectTypeOf<keyof SimulateParams>().toEqualTypeOf<
+      | "chainId"
       | "transactions"
       | "mode"
       | "authorizations"
       | "blockNumber"
       | "block"
       | "limits"
-      | "blockOverrides"
-      | "parentHashCheck"
-      | "timeoutMs"
-      | "logger"
     >();
+    expectTypeOf<SimulateParams["chainId"]>().toEqualTypeOf<number>();
     expectTypeOf<SimulateParams["transactions"]>().toEqualTypeOf<
       readonly SimulationTransaction[]
     >();
@@ -43,22 +41,11 @@ describe("SimulateParams", () => {
     expectTypeOf<SimulateParams["limits"]>().toEqualTypeOf<
       SimulationLimits | undefined
     >();
-    expectTypeOf<SimulateParams["blockOverrides"]>().toEqualTypeOf<
-      { readonly gasLimit?: bigint } | undefined
-    >();
-    expectTypeOf<SimulateParams["parentHashCheck"]>().toEqualTypeOf<
-      boolean | undefined
-    >();
-    expectTypeOf<SimulateParams["timeoutMs"]>().toEqualTypeOf<
-      number | undefined
-    >();
-    expectTypeOf<SimulateParams["logger"]>().toEqualTypeOf<
-      SimulationLogger | undefined
-    >();
   });
 
-  test("behavior: only transactions is required", () => {
+  test("behavior: only chainId and transactions are required", () => {
     expectTypeOf<{
+      readonly chainId: number;
       readonly transactions: readonly SimulationTransaction[];
     }>().toMatchTypeOf<SimulateParams>();
   });

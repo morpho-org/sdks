@@ -32,6 +32,7 @@ import {
  */
 const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
+  chainId: mainnet.id,
   forkBlockNumber: 25_832_676n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
@@ -49,6 +50,10 @@ const CbbtcUsdcBlue = new MarketParams({
   oracle: "0xA6D6950c9F177F1De7f7757FB33539e3Ec60182a",
   irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
   lltv: 860_000_000_000_000_000n,
+});
+
+const configFor = (client: { transport: { url?: string } }) => ({
+  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
 });
 
 describe.sequential("simulate pipeline — blue supply", () => {
@@ -77,7 +82,8 @@ describe.sequential("simulate pipeline — blue supply", () => {
     await client.deal({ erc20: USDC, amount: assets });
 
     const tx = action.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -134,7 +140,8 @@ describe.sequential("simulate pipeline — blue supply", () => {
       requirements,
     });
     const tx = action.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations,
       limits: {
@@ -203,7 +210,8 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     );
 
     const tx = action.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations,
       limits: {
@@ -275,7 +283,8 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     }
     await client.deal({ erc20: USDC, amount: parseUnits("100", 6) });
     const repayTx = repay.buildTx();
-    const repayResult = await simulate(client, {
+    const repayResult = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -374,7 +383,8 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
         maxUint256,
       ],
     });
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -428,7 +438,8 @@ describe.sequential("simulate pipeline — negatives", () => {
     }).map((a) => (a.type === "erc20Approval" ? { ...a, amount: 1n } : a));
     const tx = action.buildTx();
     await expect(
-      simulate(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         mode: "preview",
         authorizations,
         transactions: [
@@ -458,7 +469,8 @@ describe.sequential("simulate pipeline — negatives", () => {
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
     await expect(
-      simulate(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         transactions: [
           {
             from: client.account.address,
@@ -496,7 +508,8 @@ describe.sequential("simulate pipeline — negatives", () => {
     }
     const tx = action.buildTx();
     await expect(
-      simulate(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         limits: {
           operations: [
             {
@@ -524,7 +537,8 @@ describe.sequential("simulate pipeline — negatives", () => {
   test("behavior: a raw WETH deposit runs unchecked without limits.operations", async ({
     client,
   }) => {
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       transactions: [
         {
           from: client.account.address,
@@ -562,7 +576,8 @@ describe.sequential("simulate pipeline — negatives", () => {
     }
     const tx = action.buildTx();
     await expect(
-      simulate(client, {
+      simulate(configFor(client), {
+        chainId: mainnet.id,
         transactions: [
           {
             from: client.account.address,
@@ -609,7 +624,8 @@ describe.sequential("simulate pipeline — vault V1", () => {
       });
     }
     const depositTx = deposit.buildTx();
-    const depositResult = await simulate(client, {
+    const depositResult = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -675,7 +691,8 @@ describe.sequential("simulate pipeline — vault V1", () => {
       requirements: withdrawReqs,
     });
     const withdrawTx = withdraw.buildTx();
-    const withdrawResult = await simulate(client, {
+    const withdrawResult = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations: withdrawAuths,
       limits: {
@@ -718,7 +735,8 @@ describe.sequential("simulate pipeline — vault V1", () => {
       });
     }
     const redeemTx = redeem.buildTx();
-    const redeemResult = await simulate(client, {
+    const redeemResult = await simulate(configFor(client), {
+      chainId: mainnet.id,
       limits: {
         operations: [
           {
@@ -771,8 +789,9 @@ describe.sequential("simulate pipeline — vault V2", () => {
         }),
       },
     ];
-    const input = { timeoutMs: 30_000, transactions };
-    const unchecked = await simulate(client, input);
+    const config = { ...configFor(client), timeoutMs: 30_000 };
+    const input = { chainId: mainnet.id, transactions };
+    const unchecked = await simulate(config, input);
     expect(unchecked.verification.operations).toEqual([]);
     const sharesMinted = unchecked.transfers
       .filter(
@@ -789,7 +808,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       slippageTolerance: 0n,
       quote: { sharesMinted, assetsPaid: assets },
     };
-    const result = await simulate(client, {
+    const result = await simulate(config, {
       ...input,
       limits: { operations: [operation] },
     });
@@ -797,7 +816,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       slippageTolerance: 0n,
       quote: { sharesMinted, assetsPaid: assets },
     });
-    const tolerated = await simulate(client, {
+    const tolerated = await simulate(config, {
       ...input,
       limits: {
         operations: [
@@ -832,7 +851,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       { account: client.account.address },
     ]) {
       await expect(
-        simulate(client, {
+        simulate(config, {
           ...input,
           limits: { operations: [{ ...operation, ...override }] },
         }),
@@ -907,7 +926,8 @@ describe.sequential("simulate pipeline — vault V2", () => {
       requirements: exitReqs,
     });
     const exitTx = exit.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations: exitAuths,
       limits: {
@@ -1035,7 +1055,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
       requirements: await migration.getRequirements(),
     });
     const tx = migration.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations: auths,
       limits: {
@@ -1117,7 +1138,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
     // forceRedeem emits no requirements — the multicall burns the caller's
     // shares inside the vault itself.
     const tx = exit.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations: [],
       limits: {
@@ -1175,7 +1197,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
       requirements: await exit.getRequirements(),
     });
     const tx = exit.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations: auths,
       limits: {
@@ -1267,7 +1290,8 @@ describe.sequential("simulate pipeline — blue refinance", () => {
       requirements: await refinance.getRequirements(),
     });
     const tx = refinance.buildTx();
-    const result = await simulate(client, {
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
       mode: "preview",
       authorizations,
       limits: {

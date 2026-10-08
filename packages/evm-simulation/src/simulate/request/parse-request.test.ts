@@ -71,22 +71,7 @@ const permit2Auth: SimulationAuthorization = {
   },
 };
 
-const parse = (input: unknown, chainId = 1) =>
-  parseRequest(input as SimulateParams, chainId);
-
-describe("parseRequest — client chainId", () => {
-  test.each([0, -1, 1.5, "1" as never])(
-    "error: SimulationValidationError for chainId %s",
-    (chainId) => {
-      expect(() =>
-        parseRequest(
-          { transactions: [tx()] } as SimulateParams,
-          chainId as number,
-        ),
-      ).toThrow(SimulationValidationError);
-    },
-  );
-});
+const parse = (input: unknown) => parseRequest(input as SimulateParams);
 
 describe("parseRequest", () => {
   test.each([
@@ -103,6 +88,7 @@ describe("parseRequest", () => {
     (fields) => {
       expect(() =>
         parse({
+          chainId: 1,
           transactions: [tx()],
           limits: {
             operations: [{ type: "vaultV2Deposit", vault: TARGET, ...fields }],
@@ -122,6 +108,7 @@ describe("parseRequest", () => {
       };
       expect(
         parse({
+          chainId: 1,
           transactions: [tx()],
           limits: { operations: [operation] },
         }).limits?.operations,
@@ -130,6 +117,7 @@ describe("parseRequest", () => {
   );
   test("behavior: separate asset overrides are preserved", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
       limits: {
         operations: [
@@ -159,6 +147,7 @@ describe("parseRequest", () => {
   ])("error: SimulationValidationError for removed bound %s", (field) => {
     expect(() =>
       parse({
+        chainId: 1,
         transactions: [tx()],
         limits: {
           operations: [
@@ -185,6 +174,7 @@ describe("parseRequest", () => {
       const error = (() => {
         try {
           parse({
+            chainId: 1,
             transactions: [tx()],
             limits: {
               operations: [
@@ -212,6 +202,7 @@ describe("parseRequest", () => {
 
   test("default", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
     });
     expect(request.mode).toBe("final");
@@ -224,6 +215,7 @@ describe("parseRequest", () => {
 
   test("behavior: normalizes addresses, value, mode and authorizations", () => {
     const request = parse({
+      chainId: 1,
       mode: "preview",
       transactions: [
         {
@@ -258,6 +250,7 @@ describe("parseRequest", () => {
 
   test("behavior: preview without authorizations parses", () => {
     const request = parse({
+      chainId: 1,
       mode: "preview",
       transactions: [tx()],
     });
@@ -266,6 +259,7 @@ describe("parseRequest", () => {
 
   test("behavior: accepts typed authorizations in preview", () => {
     const request = parse({
+      chainId: 1,
       mode: "preview",
       transactions: [tx()],
       authorizations: [erc20Approval, permit2Auth],
@@ -274,7 +268,7 @@ describe("parseRequest", () => {
   });
 
   test("behavior: result is deep-frozen", () => {
-    const request = parse({ transactions: [tx()] });
+    const request = parse({ chainId: 1, transactions: [tx()] });
     expect(Object.isFrozen(request)).toBe(true);
     expect(Object.isFrozen(request.transactions)).toBe(true);
     expect(Object.isFrozen(request.transactions[0])).toBe(true);
@@ -289,6 +283,7 @@ describe("parseRequest", () => {
   ])("error: SimulationValidationError for %s", (_name, authorization) => {
     expect(() =>
       parse({
+        chainId: 1,
         mode: "preview",
         transactions: [tx()],
         authorizations: [authorization],
@@ -299,6 +294,7 @@ describe("parseRequest", () => {
   test("error: SimulationValidationError for PermitSingle-shaped typedData", () => {
     expect(() =>
       parse({
+        chainId: 1,
         mode: "preview",
         transactions: [tx()],
         authorizations: [
@@ -319,6 +315,7 @@ describe("parseRequest", () => {
     ["oversized value", { transactions: [tx({ value: maxUint256 + 1n })] }],
     ["mixed senders", { transactions: [tx(), tx({ from: SPENDER })] }],
     ["empty transactions", { transactions: [] }],
+    ["bad chainId", { chainId: 0, transactions: [tx()] }],
     ["malformed from", { transactions: [tx({ from: "0xnotanaddress" })] }],
     [
       "final mode with authorizations",
@@ -378,7 +375,9 @@ describe("parseRequest", () => {
       { transactions: [tx()], limits: { legacyPolicy: 1n } },
     ],
   ])("error: SimulationValidationError for %s", (_name, input) => {
-    expect(() => parse(input)).toThrow(SimulationValidationError);
+    expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
+      SimulationValidationError,
+    );
   });
 
   test.each([
@@ -391,6 +390,7 @@ describe("parseRequest", () => {
     "behavior: accepts a vaultV1MigrateToV2 limit with %s",
     (_name, fields) => {
       const request = parse({
+        chainId: 1,
         transactions: [tx()],
         limits: {
           operations: [
@@ -409,6 +409,7 @@ describe("parseRequest", () => {
 
   test("behavior: accepts assetPaid on a vaultV1MigrateToV2 limit", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
       limits: {
         operations: [
@@ -431,6 +432,7 @@ describe("parseRequest", () => {
   test("error: rejects asset on a vaultV1MigrateToV2 limit", () => {
     expect(() =>
       parse({
+        chainId: 1,
         transactions: [tx()],
         limits: {
           operations: [
@@ -452,6 +454,7 @@ describe("parseRequest", () => {
     const error = (() => {
       try {
         parse({
+          chainId: 1,
           transactions: [tx()],
           limits: {
             operations: [
@@ -481,7 +484,7 @@ describe("parseRequest", () => {
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
       try {
-        parse({ transactions: [tx()], blockNumber: "pending" });
+        parse({ chainId: 1, transactions: [tx()], blockNumber: "pending" });
       } catch (caught) {
         return caught;
       }
@@ -498,6 +501,7 @@ describe("parseRequest", () => {
     const error = (() => {
       try {
         parse({
+          chainId: 1,
           transactions: [
             tx({ to: "0xnotanaddress" }),
             tx(),
@@ -528,13 +532,14 @@ describe("parseRequest", () => {
       hash: `0x${"ab".repeat(32)}`,
       timestamp: 1_700_000_000n,
     } as const;
-    const request = parse({ transactions: [tx()], block });
+    const request = parse({ chainId: 1, transactions: [tx()], block });
     expect(request.block).toEqual(block);
     expect(request.blockNumber).toBeUndefined();
   });
 
   test("behavior: lowercases a supplied block hash", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
       block: { number: 1n, hash: `0x${"AB".repeat(32)}`, timestamp: 1n },
     });
@@ -544,6 +549,7 @@ describe("parseRequest", () => {
   test("error: SimulationValidationError for block combined with blockNumber", () => {
     expect(() =>
       parse({
+        chainId: 1,
         transactions: [tx()],
         blockNumber: 1n,
         block: {
@@ -555,46 +561,9 @@ describe("parseRequest", () => {
     ).toThrow(SimulationValidationError);
   });
 
-  test.each([
-    { blockOverrides: 1 },
-    { blockOverrides: { gasLimit: 0n } },
-    { blockOverrides: { gasLimit: -1n } },
-    { blockOverrides: { gasLimit: 1 } },
-    { blockOverrides: { gasLimit: 1n, extra: 1 } },
-    { parentHashCheck: 0 },
-    { parentHashCheck: "false" },
-    { timeoutMs: 0 },
-    { timeoutMs: -1 },
-    { timeoutMs: 1500.5 },
-    { timeoutMs: Number.POSITIVE_INFINITY },
-    { timeoutMs: 2_147_483_648 },
-    { timeoutMs: "5000" },
-  ])("error: SimulationValidationError for %o", (input) => {
-    expect(() => parse({ transactions: [tx()], ...input })).toThrow(
-      SimulationValidationError,
-    );
-  });
-
-  test("behavior: passes through blockOverrides, parentHashCheck and timeoutMs", () => {
-    const request = parse({
-      transactions: [tx()],
-      blockOverrides: { gasLimit: 30_000_000n },
-      parentHashCheck: false,
-      timeoutMs: 1000,
-    });
-    expect(request.blockOverrides).toEqual({ gasLimit: 30_000_000n });
-    expect(request.parentHashCheck).toBe(false);
-    expect(request.timeoutMs).toBe(1000);
-  });
-
-  test("behavior: does not freeze the caller's logger", () => {
-    const logger = { info() {}, warn() {}, error() {} };
-    parse({ transactions: [tx()], logger });
-    expect(Object.isFrozen(logger)).toBe(false);
-  });
-
   test("behavior: accepts blockNumber 'finalized'", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
       blockNumber: "finalized",
     });
@@ -602,19 +571,20 @@ describe("parseRequest", () => {
   });
 
   test("error: SimulationValidationError for non-object input", () => {
-    expect(() => parseRequest(null as unknown as SimulateParams, 1)).toThrow(
+    expect(() => parseRequest(null as unknown as SimulateParams)).toThrow(
       SimulationValidationError,
     );
-    expect(() => parseRequest("x" as unknown as SimulateParams, 1)).toThrow(
+    expect(() => parseRequest("x" as unknown as SimulateParams)).toThrow(
       SimulationValidationError,
     );
-    expect(() => parseRequest(42 as unknown as SimulateParams, 1)).toThrow(
+    expect(() => parseRequest(42 as unknown as SimulateParams)).toThrow(
       SimulationValidationError,
     );
   });
 
   test("type-level: SimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
+      readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
     }>().toExtend<SimulateParams>();
   });
@@ -690,6 +660,7 @@ describe("parseRequest", () => {
 
   test("behavior: input objects are not returned or frozen", () => {
     const input = {
+      chainId: 1,
       mode: "preview",
       transactions: [tx()],
       authorizations: [erc20Approval, permit2Auth],
@@ -757,7 +728,6 @@ describe("parseRequest", () => {
     ],
     ["unknown transaction field", { transactions: [tx({ gasPrice: 1n })] }],
     ["unknown input field", { transactions: [tx()], stateOverrides: {} }],
-    ["removed v5 chainId field", { transactions: [tx()], chainId: 1 }],
     [
       "unknown authorization field",
       {
@@ -767,7 +737,9 @@ describe("parseRequest", () => {
       },
     ],
   ])("error: SimulationValidationError for %s", (_name, input) => {
-    expect(() => parse(input)).toThrow(SimulationValidationError);
+    expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
+      SimulationValidationError,
+    );
   });
 
   test.each([
@@ -1084,12 +1056,15 @@ describe("parseRequest", () => {
       { transactions: [tx()], limits: { operations: {} } },
     ],
   ])("error: SimulationValidationError for %s", (_name, input) => {
-    expect(() => parse(input)).toThrow(SimulationValidationError);
+    expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
+      SimulationValidationError,
+    );
   });
 
   test("error: SimulationValidationError for a prototype-polluting authorization type", () => {
     expect(() =>
       parse({
+        chainId: 1,
         mode: "preview",
         transactions: [tx()],
         authorizations: [{ type: "constructor" }],
@@ -1099,6 +1074,7 @@ describe("parseRequest", () => {
 
   test("behavior: accepts a blueWithdraw limit with share and asset bounds", () => {
     const request = parse({
+      chainId: 1,
       transactions: [tx()],
       limits: {
         operations: [
@@ -1119,6 +1095,7 @@ describe("parseRequest", () => {
 
   test("behavior: preview parses permit and blue signature authorizations", () => {
     const request = parse({
+      chainId: 1,
       mode: "preview",
       transactions: [tx()],
       authorizations: [permitAuth, blueSigAuth],
@@ -1166,6 +1143,7 @@ describe("parseRequest", () => {
       const error = (() => {
         try {
           parse({
+            chainId: 1,
             mode: "preview",
             transactions: [tx()],
             authorizations: [authorization],
@@ -1190,7 +1168,7 @@ describe("parseRequest", () => {
     ] as const) {
       const error = (() => {
         try {
-          parse({ transactions: [tx(txOverrides)] });
+          parse({ chainId: 1, transactions: [tx(txOverrides)] });
         } catch (caught) {
           return caught;
         }

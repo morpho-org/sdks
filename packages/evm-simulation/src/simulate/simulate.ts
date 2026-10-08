@@ -1,7 +1,6 @@
-import type { Chain, Client, Transport } from "viem";
-import { InvalidChainIdError } from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
+import type { SimulationConfig } from "../types.js";
 import { parseRequest } from "./request/index.js";
 import { runSimulation } from "./run-simulation.js";
 
@@ -10,8 +9,8 @@ import { runSimulation } from "./run-simulation.js";
  *
  * Parses and normalizes the request → resolves a single pinned block (skipped
  * when `params.block` is supplied) → resolves quoted-asset metadata → plans
- * state reads and the execution → executes once through `eth_simulateV1`
- * (simulation with in-block state reads → response
+ * state reads and the execution → executes once through `eth_simulateV1` under
+ * the full timeout budget (simulation with in-block state reads → response
  * parsing) → derives ERC20/WETH9 transfers and net asset changes from the
  * user calls only → decodes quoted balances/positions → runs slippage checks
  * → asserts no funds are retained by standalone `bundles` periphery contracts
@@ -41,12 +40,13 @@ import { runSimulation } from "./run-simulation.js";
  * separating gas from economic effects. Monad nodes reject `false`, so Monad
  * simulations send `true`; its simulated block charges no gas either way.
  *
- * @param client - The caller's viem client; its `chain` sets the chain the
- *   bundle targets and its transport owns the RPC endpoint, timeout and
- *   retries. `client.chain.id` is sent on every call inside `eth_simulateV1`,
- *   so nodes that check it reject a wrong-chain endpoint; there is no
- *   separate `eth_chainId` lookup.
+ * @param config - Required per-chain `eth_simulateV1` URL, optional per-chain
+ *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
+ *   overall timeout budget.
  * @param params - Per-call simulation input.
+ * @param params.chainId - Chain id the bundle targets. Sent on every call inside
+ *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
+ *   there is no separate `eth_chainId` lookup.
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`.
  * @param params.mode - `"final"` (default) or `"preview"`.
@@ -60,33 +60,18 @@ import { runSimulation } from "./run-simulation.js";
  *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
  *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
  *   combined with `blockNumber`.
- * @param params.blockOverrides - Optional `eth_simulateV1` block overrides;
- *   `gasLimit` is sent as the simulated block's gas limit. Unset means no
- *   override.
- * @param params.parentHashCheck - Optional check that the simulated block's
- *   `parentHash` equals the pinned block hash. Defaults to on, and to off on
- *   Stable (chain 988), whose nodes never report a matching `parentHash`.
- * @param params.timeoutMs - Bounds the steps `simulate()` drives between
- *   calls (default 5000 ms); in-flight requests follow the client transport's
- *   own timeout and retry policy.
- * @param params.logger - Optional logger for parsing and retention warnings.
- * @throws {InvalidChainIdError} when `client` was built without a `chain`,
- *   or when the node rejects the request `chainId`
- *   because it serves another chain — the client's transport points at the
- *   wrong chain.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
  *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
- *   a malformed `block` or one combined with `blockNumber`, a `timeoutMs`
- *   that is not a positive integer within the `AbortSignal.timeout` range, a
+ *   a malformed `block` or one combined with `blockNumber`, a
  *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
  *   that is not a boolean, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
- * @throws {UnsupportedChainError} when limits or preview authorizations
- *   require a Morpho Blue address absent from blue-sdk's
- *   `getChainAddresses`.
+ * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
+ *   endpoint configured, or limits/preview authorizations require a Morpho
+ *   Blue address absent from blue-sdk's `getChainAddresses`.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
  * @throws {MissingVerificationEvidenceError} when a planned state read fails
  *   or returns empty data, native outgoing traces do not cover value
@@ -97,13 +82,14 @@ import { runSimulation } from "./run-simulation.js";
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded).
+ *   non-empty return data cannot be decoded), or when the node rejects the
+ *   request `chainId` because it serves another chain.
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
  *   Never bypassable.
- * @throws {ExternalServiceError} when the RPC fails or times out (per the
- *   client transport) or returns a malformed JSON-RPC envelope. A looked-up state
+ * @throws {ExternalServiceError} when the RPC is unavailable within the
+ *   timeout budget or returns a malformed JSON-RPC envelope. A looked-up state
  *   block without number/hash is reported as `InvalidSimulationResponseError`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
@@ -115,27 +101,17 @@ import { runSimulation } from "./run-simulation.js";
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import {
- *   type Address,
- *   createPublicClient,
- *   encodeFunctionData,
- *   erc20Abi,
- *   getAddress,
- *   http,
- * } from "viem";
- * import { mainnet } from "viem/chains";
+ * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
  *
- * const client = createPublicClient({
- *   chain: mainnet,
- *   transport: http("https://rpc.example"),
- * });
+ * const rpcUrl = "https://rpc.example";
  * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
  * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
  * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
  *
  * const result = await simulate(
- *   client,
+ *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
  *   {
+ *     chainId: 1,
  *     transactions: [
  *       {
  *         from: user,
@@ -152,17 +128,8 @@ import { runSimulation } from "./run-simulation.js";
  * ```
  */
 export async function simulate(
-  client: Client<Transport, Chain>,
+  config: SimulationConfig,
   params: SimulateParams,
 ): Promise<VerifiedSimulationResult> {
-  if (client.chain === undefined)
-    // Unreachable through the type but reachable for JS callers.
-    throw new InvalidChainIdError(
-      "simulate() requires a client built with a chain (client.chain is undefined). Pass one created with `chain: <chain>` so the target chain is known.",
-    );
-  return runSimulation({
-    client,
-    request: parseRequest(params, client.chain.id),
-    logger: params.logger,
-  });
+  return runSimulation({ config, request: parseRequest(params) });
 }

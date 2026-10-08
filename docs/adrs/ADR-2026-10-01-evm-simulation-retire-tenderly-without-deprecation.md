@@ -2,7 +2,7 @@
 
 | Field      | Value                                |
 | ---------- | ------------------------------------ |
-| **Status** | accepted; `timeoutMs` abort budget superseded by ADR-2026-10-08-evm-simulation-viem-client-without-deprecation |
+| **Status** | accepted                             |
 | **Date**   | 2026-10-01                           |
 | **Author** | @jinmel                              |
 | **Scope**  | `evm-simulation` 5.0.0               |

@@ -53,13 +53,7 @@ export interface ParsedRequest {
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly block?: StateBlock;
   readonly limits?: SimulationLimits;
-  readonly blockOverrides?: { readonly gasLimit?: bigint };
-  readonly parentHashCheck?: boolean;
-  readonly timeoutMs?: number;
 }
-
-// `AbortSignal.timeout` accepts a uint32; anything larger wraps to ~1 ms.
-const MAX_TIMEOUT_MS = 2_147_483_647;
 
 // ─── Scalar validators ────────────────────────────────────────────────────────
 
@@ -811,10 +805,7 @@ const OPERATION_SPECS: Record<
  *   violation.
  * @internal
  */
-export function parseRequest(
-  input: SimulateParams,
-  chainId: number,
-): ParsedRequest {
+export function parseRequest(input: SimulateParams): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 
@@ -825,28 +816,26 @@ export function parseRequest(
   }
   check.keys(input, {
     allow: [
+      "chainId",
       "transactions",
       "blockNumber",
       "block",
       "mode",
       "authorizations",
       "limits",
-      "blockOverrides",
-      "parentHashCheck",
-      "timeoutMs",
-      "logger",
     ],
     path: "input",
   });
 
-  // chainId (from the passed client's chain)
+  // chainId
+  const chainId = input.chainId;
   if (
     typeof chainId !== "number" ||
     !Number.isInteger(chainId) ||
     !Number.isSafeInteger(chainId) ||
     chainId <= 0
   ) {
-    fieldErrors.push("client.chain.id: must be a positive safe integer");
+    fieldErrors.push("chainId: must be a positive safe integer");
   }
 
   // transactions
@@ -945,57 +934,6 @@ export function parseRequest(
     if (rawBlockNumber !== undefined)
       fieldErrors.push("block: cannot be combined with blockNumber");
   }
-
-  // blockOverrides
-  const rawBlockOverrides = input.blockOverrides;
-  let blockOverrides: ParsedRequest["blockOverrides"];
-  if (rawBlockOverrides !== undefined) {
-    if (!isRecord(rawBlockOverrides)) {
-      fieldErrors.push("blockOverrides: must be an object");
-    } else {
-      check.keys(rawBlockOverrides, {
-        allow: ["gasLimit"],
-        path: "blockOverrides",
-      });
-      const gasLimit = readField(rawBlockOverrides, "gasLimit");
-      if (
-        gasLimit !== undefined &&
-        (typeof gasLimit !== "bigint" || gasLimit <= 0n)
-      )
-        fieldErrors.push(
-          `blockOverrides.gasLimit: must be a positive bigint (got ${String(gasLimit)}: ${typeof gasLimit})`,
-        );
-      else if (gasLimit !== undefined) blockOverrides = { gasLimit };
-    }
-  }
-
-  // parentHashCheck
-  const rawParentHashCheck = input.parentHashCheck;
-  let parentHashCheck: boolean | undefined;
-  if (
-    rawParentHashCheck !== undefined &&
-    typeof rawParentHashCheck !== "boolean"
-  )
-    fieldErrors.push(
-      `parentHashCheck: must be a boolean (got ${String(rawParentHashCheck)}: ${typeof rawParentHashCheck})`,
-    );
-  else if (rawParentHashCheck !== undefined)
-    parentHashCheck = rawParentHashCheck;
-
-  // timeoutMs
-  const rawTimeoutMs = input.timeoutMs;
-  let timeoutMs: number | undefined;
-  if (
-    rawTimeoutMs !== undefined &&
-    (typeof rawTimeoutMs !== "number" ||
-      !Number.isInteger(rawTimeoutMs) ||
-      rawTimeoutMs <= 0 ||
-      rawTimeoutMs > MAX_TIMEOUT_MS)
-  )
-    fieldErrors.push(
-      `timeoutMs: must be a positive integer no greater than ${MAX_TIMEOUT_MS} (got ${String(rawTimeoutMs)}: ${typeof rawTimeoutMs})`,
-    );
-  else if (rawTimeoutMs !== undefined) timeoutMs = rawTimeoutMs;
 
   // authorizations
   const rawAuthorizations = input.authorizations;
@@ -1123,8 +1061,5 @@ export function parseRequest(
     ...(blockNumber !== undefined ? { blockNumber } : {}),
     ...(block !== undefined ? { block } : {}),
     ...(normalizedLimits !== undefined ? { limits: normalizedLimits } : {}),
-    ...(blockOverrides !== undefined ? { blockOverrides } : {}),
-    ...(parentHashCheck !== undefined ? { parentHashCheck } : {}),
-    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
   });
 }

@@ -10,16 +10,14 @@ const TARGET: Address = getAddress(
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 
 const makeRequest = (count: number) =>
-  parseRequest(
-    {
-      transactions: Array.from({ length: count }, () => ({
-        from: OWNER,
-        to: TARGET,
-        data: "0x12345678",
-      })),
-    },
-    1,
-  );
+  parseRequest({
+    chainId: 1,
+    transactions: Array.from({ length: count }, () => ({
+      from: OWNER,
+      to: TARGET,
+      data: "0x12345678",
+    })),
+  });
 
 const reads = [makeBalanceRead(TOKEN, OWNER)];
 

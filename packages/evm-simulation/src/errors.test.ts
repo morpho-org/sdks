@@ -76,7 +76,6 @@ describe("error hierarchy", () => {
       new ExternalServiceError("x"),
       new SimulationValidationError("x"),
       new UnsupportedChainError(1),
-      new InvalidChainIdError("x", { context: CONTEXT }),
     ];
     for (const err of instances) {
       expect(err).toBeInstanceOf(SimulationPackageError);
@@ -437,9 +436,9 @@ describe("SIMULATION_ERROR_CODES", () => {
     new ExternalServiceError("x"),
     new SimulationValidationError("x"),
     new UnsupportedChainError(1),
-    new InvalidChainIdError("x", { context: CONTEXT }),
     new UnsupportedOperationError("x", { context: CONTEXT }),
     new InvalidSimulationResponseError("x", { context: CONTEXT }),
+    new InvalidChainIdError("x", { context: CONTEXT }),
     new MissingVerificationEvidenceError("x", { context: CONTEXT }),
     new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
     new ConsumerLimitViolationError("x", { context: CONTEXT }),

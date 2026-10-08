@@ -12,12 +12,12 @@ import { SIMULATION_MODES } from "./params.js";
 export const SIMULATION_ERROR_CODES = [
   "VALIDATION_ERROR",
   "UNSUPPORTED_CHAIN",
-  "INVALID_CHAIN_ID",
   "EXTERNAL_SERVICE_ERROR",
   "SIMULATION_REVERTED",
   "BLACKLIST_ERROR",
   "UNSUPPORTED_OPERATION",
   "INVALID_SIMULATION_RESPONSE",
+  "INVALID_CHAIN_ID",
   "MISSING_VERIFICATION_EVIDENCE",
   "AUTHORIZATION_REQUEST_MISMATCH",
   "CONSUMER_LIMIT_VIOLATION",
@@ -250,11 +250,7 @@ export class SimulationValidationError extends SimulationPackageError {
   }
 }
 
-/**
- * Limits or preview authorizations need a Morpho Blue address that the
- * chain does not register in blue-sdk's `getChainAddresses`. Not
- * bypassable.
- */
+/** Chain ID not configured for any simulation method. Not bypassable. */
 export class UnsupportedChainError extends SimulationPackageError {
   override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
@@ -263,21 +259,8 @@ export class UnsupportedChainError extends SimulationPackageError {
     public readonly chainId: number,
     context?: SimulationErrorContext,
   ) {
-    super(
-      `Chain ${chainId} has no Morpho Blue address in getChainAddresses, which limits and preview authorizations require. Remove them or use a supported chain.`,
-      { context },
-    );
+    super(`Chain ${chainId} is not configured for simulation`, { context });
   }
-}
-
-/**
- * The client's chain is missing, or the endpoint serves a different chain
- * than `client.chain.id`. Not bypassable — a wrong-chain endpoint is
- * misconfiguration, not an outage callers may proceed past.
- */
-export class InvalidChainIdError extends SimulationPackageError {
-  override readonly name = "InvalidChainIdError";
-  readonly code = "INVALID_CHAIN_ID";
 }
 
 /**
@@ -293,6 +276,16 @@ export class UnsupportedOperationError extends SimulationPackageError {
 export class InvalidSimulationResponseError extends SimulationPackageError {
   override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
+}
+
+/**
+ * The node rejected the request `chainId`: the endpoint is on a different
+ * chain than configured. This is misconfiguration, not an outage, so unlike
+ * {@link ExternalServiceError} callers must not bypass it.
+ */
+export class InvalidChainIdError extends SimulationPackageError {
+  override readonly name = "InvalidChainIdError";
+  readonly code = "INVALID_CHAIN_ID";
 }
 
 /** State needed to verify an operation could not be fetched or derived. */
@@ -323,12 +316,12 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
   Object.freeze({
     VALIDATION_ERROR: "SimulationValidationError",
     UNSUPPORTED_CHAIN: "UnsupportedChainError",
-    INVALID_CHAIN_ID: "InvalidChainIdError",
     EXTERNAL_SERVICE_ERROR: "ExternalServiceError",
     SIMULATION_REVERTED: "SimulationRevertedError",
     BLACKLIST_ERROR: "BlacklistViolationError",
     UNSUPPORTED_OPERATION: "UnsupportedOperationError",
     INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
+    INVALID_CHAIN_ID: "InvalidChainIdError",
     MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
     AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
     CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
@@ -349,19 +342,17 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
- * import { createPublicClient, http } from "viem";
  * import type { Address, Hex } from "viem";
- * import { mainnet } from "viem/chains";
  *
  * declare const user: Address;
  * declare const vault: Address;
  * declare const encodedDeposit: Hex;
- * const client = createPublicClient({
- *   chain: mainnet,
- *   transport: http("https://rpc.example"),
- * });
+ * const config = {
+ *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
+ * };
  * try {
- *   await simulate(client, {
+ *   await simulate(config, {
+ *     chainId: 1,
  *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
  *   });
  * } catch (e) {

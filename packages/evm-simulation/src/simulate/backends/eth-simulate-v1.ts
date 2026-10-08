@@ -79,7 +79,7 @@ const toBoundaryError = (
     /chainId does not match node's|invalid chain id/i.test(error.message)
   ) {
     return new InvalidChainIdError(
-      `eth_simulateV1 endpoint rejected the request chainId: ${safeMessage(error)}. Point the client's transport at an RPC endpoint for this chain.`,
+      `eth_simulateV1 endpoint rejected the request chainId: ${safeMessage(error)}. Point SimulationConfig.chains at an RPC URL for this chain.`,
       { cause: error },
     );
   }
@@ -134,12 +134,12 @@ export const rpc = async <T>(
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
  *   or malformed JSON-RPC envelopes.
- * @throws {InvalidChainIdError} When the node rejects the request `chainId`
- *   because it serves another chain.
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (bad shape, call-count mismatch, block other than the state block
  *   or its successor, a block timestamp earlier than the state block's, or a
  *   per-call result that fails normalization).
+ * @throws {InvalidChainIdError} When the node rejects the request `chainId`
+ *   because it serves another chain.
  * @throws {MissingVerificationEvidenceError} When a planned state read fails.
  * @throws {SimulationRevertedError} When a preparation or user transaction
  *   reverts or the node reports a bundle-level revert (code 3 / insufficient
@@ -153,7 +153,6 @@ export async function executePlan(params: {
   validation: boolean;
   blockGasLimit?: bigint | undefined;
   parentHashCheck: boolean;
-  signal?: AbortSignal;
 }): Promise<SimulationExecution> {
   const {
     client,
@@ -162,12 +161,10 @@ export async function executePlan(params: {
     validation,
     blockGasLimit,
     parentHashCheck,
-    signal,
   } = params;
 
-  const response = await rpc("eth_simulateV1", () => {
-    signal?.throwIfAborted();
-    return client.request({
+  const response = await rpc("eth_simulateV1", () =>
+    client.request({
       method: "eth_simulateV1",
       params: [
         {
@@ -190,8 +187,8 @@ export async function executePlan(params: {
         },
         numberToHex(stateBlock.number),
       ],
-    });
-  });
+    }),
+  );
 
   return parseSimulationResponse({
     plan,
