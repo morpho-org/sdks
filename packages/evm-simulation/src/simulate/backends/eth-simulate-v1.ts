@@ -37,15 +37,6 @@ const isNodeRevert = (error: unknown): error is Error =>
 const safeMessage = (error: unknown): string =>
   error instanceof BaseError ? error.shortMessage : String(error);
 
-/**
- * Match a node rejecting the per-call `chainId` because it serves another
- * chain. Each node words it differently: geth "chainId does not match node's",
- * Anvil "invalid chain id for signer", Monad "Invalid chain ID: expected …".
- */
-const isChainIdMismatch = (error: unknown): boolean =>
-  error instanceof Error &&
-  /chainId does not match node's|invalid chain id/i.test(error.message);
-
 /** The JSON-RPC methods this boundary calls. */
 type RpcLabel = "eth_getBlock" | "eth_simulateV1";
 
@@ -79,8 +70,14 @@ const toBoundaryError = (
     return reverted;
   }
   // A wrong-chain endpoint is misconfiguration, not an outage: callers must
-  // not bypass it like an `ExternalServiceError`.
-  if (label === "eth_simulateV1" && isChainIdMismatch(error)) {
+  // not bypass it like an `ExternalServiceError`. Each node words the per-call
+  // `chainId` rejection differently: geth "chainId does not match node's",
+  // Anvil "invalid chain id for signer", Monad "Invalid chain ID: expected …".
+  if (
+    label === "eth_simulateV1" &&
+    error instanceof Error &&
+    /chainId does not match node's|invalid chain id/i.test(error.message)
+  ) {
     return new InvalidSimulationResponseError(
       `eth_simulateV1 endpoint rejected the request chainId: ${safeMessage(error)}. Point SimulationConfig.chains at an RPC URL for this chain.`,
       { cause: error },
