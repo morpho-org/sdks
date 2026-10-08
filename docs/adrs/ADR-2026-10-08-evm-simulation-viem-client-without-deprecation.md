@@ -34,8 +34,7 @@ deprecation flow.
 `evm-simulation` 6.0.0 removes, in one step and without the successor-introduction,
 `@deprecated` and one-minor coexistence steps of the §7 flow:
 
-- `SimulationConfig`, `ChainSimulationConfig`, `SimulateParams.chainId`,
-  `resolveChain` and `createSimulationClient`;
+- `SimulationConfig`, `ChainSimulationConfig` and `SimulateParams.chainId`;
 - the `simulate(config, params)` signature in favor of
   `simulate(client, params)`, where `client` is the caller's
   `Client<Transport, Chain>`.
@@ -46,11 +45,16 @@ The chain id comes from `client.chain.id`; a client without `chain` throws
 is unchanged: every call inside `eth_simulateV1` still carries the chain id as a
 hex quantity, so a node on a different chain still rejects the simulation.
 
-This also supersedes the `ADR-2026-10-01` invariant that "`timeoutMs` aborts the
-`eth_simulateV1` request": the caller's client owns the transport, so `timeoutMs`
-bounds only the steps `simulate()` drives between requests; in-flight requests
-follow the caller transport's own timeout and retry policy. The rest of
-ADR-2026-10-01 is unchanged.
+This also supersedes two clauses of `ADR-2026-10-01` — the Decision sentence that
+"`timeoutMs` (default 5000) is the abort budget for that request" and the
+invariant that "`timeoutMs` aborts the `eth_simulateV1` request": the caller's
+client owns the transport, so `timeoutMs` bounds only the steps `simulate()`
+drives between requests; in-flight requests follow the caller transport's own
+timeout and retry policy. The rest of ADR-2026-10-01 is unchanged.
+
+It likewise supersedes the `simulate(config, params)` / `config.chains` /
+`SimulateParams.chainId` part of `ADR-2026-09-18`'s Public Interface section;
+the rest of that record is unchanged.
 
 The exception does not waive the major changeset, the v5→v6 migration guide, the
 maintained-dependent audit, or continued availability of `evm-simulation` 5.x.
@@ -58,12 +62,11 @@ No other removal inherits it.
 
 ## Invariants
 
-- `evm-simulation` 6.0.0 exports no `SimulationConfig`, `ChainSimulationConfig`,
-  `resolveChain` or `createSimulationClient`, and `SimulateParams` has no
-  `chainId` field → `tsc` rejects all of them.
+- `evm-simulation` 6.0.0 exports no `SimulationConfig` or `ChainSimulationConfig`,
+  and `SimulateParams` has no `chainId` field → `tsc` rejects all of them.
 - `simulate` accepts a caller `Client<Transport, Chain>` → `tsc` rejects a
-  client typed without `chain`, and the request parser unit test proves the
-  runtime `InvalidChainIdError` for a chain-less client.
+  client typed without `chain`, and the `simulate()` unit test for a client
+  without a chain asserts `InvalidChainIdError`.
 - Every call inside `eth_simulateV1` carries `client.chain.id` as a hex
   quantity → the boundary unit test asserts the request shape.
 
@@ -80,5 +83,6 @@ No other removal inherits it.
 
 ## References
 
-- [`ADR-2026-10-01`](./ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation.md) — superseded in part (the `timeoutMs` invariant only).
+- [`ADR-2026-09-18`](./ADR-2026-09-18-evm-simulation-calldata-verification.md) — superseded in part (the `simulate(config, params)` public interface only).
+- [`ADR-2026-10-01`](./ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation.md) — superseded in part (the `timeoutMs` abort-budget Decision sentence and invariant only).
 - [`ADR-2026-10-02`](./ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation.md) — same §7 exception pattern for the v5 line.

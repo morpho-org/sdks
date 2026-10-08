@@ -132,8 +132,7 @@ scope its ADR lists:
 - **EVM simulation v6**
   (`ADR-2026-10-08-evm-simulation-viem-client-without-deprecation`):
   `SimulationConfig`, `ChainSimulationConfig`, `SimulateParams.chainId`,
-  `resolveChain`, `createSimulationClient`, and the
-  `simulate(config, params)` → `simulate(client, params)` retype.
+  and the `simulate(config, params)` → `simulate(client, params)` retype.
 
 No exception waives the major changeset, migration guide, maintained-dependent
 audit or continued availability of the previous major, and no break outside
