@@ -112,7 +112,7 @@
     "typescript": "catalog:",
     "viem": "^2.55.10",
     "vitest": "catalog:",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   },
   "publishConfig": {
     "exports": {
