@@ -7,11 +7,11 @@ import { runSimulation } from "./run-simulation.js";
 /**
  * Simulate a bundle of EVM transactions.
  *
- * Parses and normalizes the request → resolves the chain identity → resolves
- * a single pinned block → resolves quoted-asset metadata → plans state reads
- * and the execution → executes once through `eth_simulateV1` under the full
- * timeout budget (simulation with in-block state reads → response parsing →
- * reorg check) → derives ERC20/WETH9 transfers and net asset changes from the
+ * Parses and normalizes the request → resolves a single pinned block (skipped
+ * when `params.block` is supplied) → resolves quoted-asset metadata → plans
+ * state reads and the execution → executes once through `eth_simulateV1` under
+ * the full timeout budget (simulation with in-block state reads → response
+ * parsing) → derives ERC20/WETH9 transfers and net asset changes from the
  * user calls only → decodes quoted balances/positions → runs slippage checks
  * → asserts no funds are retained by standalone `bundles` periphery contracts
  * → returns the result. The caller reads whichever fields they need:
@@ -44,7 +44,9 @@ import { runSimulation } from "./run-simulation.js";
  *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
  *   overall timeout budget.
  * @param params - Per-call simulation input.
- * @param params.chainId - Chain id the bundle targets; must match the endpoint.
+ * @param params.chainId - Chain id the bundle targets. Sent on every call inside
+ *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
+ *   there is no separate `eth_chainId` lookup.
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`.
  * @param params.mode - `"final"` (default) or `"preview"`.
@@ -54,9 +56,14 @@ import { runSimulation } from "./run-simulation.js";
  *   than `"pending"`.
  *   Defaults to `latest` (`finalized` on Monad, whose `latest` block is not
  *   final), resolved exactly once.
+ * @param params.block - Optional caller-supplied state block (`number`,
+ *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
+ *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
+ *   combined with `blockNumber`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, unknown fields, a `"pending"` block tag, a
+ *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
+ *   a malformed `block` or one combined with `blockNumber`, a
  *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
  *   that is not a boolean, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
@@ -72,20 +79,21 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
- *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable, chain 988), a block timestamp earlier than the pinned block's, a
- *   malformed per-call result, a quoted balance/position read whose non-empty
- *   return data cannot be decoded, a state-block hash that changed or a pinned
- *   block that vanished mid-flight, or an
- *   endpoint whose `eth_chainId` differs from `params.chainId`; chain identity
- *   is checked before any block lookup).
+ *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
+ *   chain 988), a block timestamp earlier than the pinned block's, a
+ *   malformed per-call result, or a quoted balance/position read whose
+ *   non-empty return data cannot be decoded).
+ * @throws {InvalidChainIdError} when the node rejects the request `chainId`
+ *   because the endpoint serves another chain (a subclass of
+ *   `InvalidSimulationResponseError` sharing its `name`/`code`;
+ *   `instanceof InvalidChainIdError` tells them apart). Never bypassable.
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
  *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
- *   timeout budget or returns a malformed JSON-RPC envelope. Chain-id
- *   mismatches and a state block without number/hash are reported as
- *   `InvalidSimulationResponseError`.
+ *   timeout budget or returns a malformed JSON-RPC envelope. A looked-up state
+ *   block without number/hash is reported as `InvalidSimulationResponseError`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
  *   stamped with `txIdx`), per-account net `assetChanges`, and per-operation

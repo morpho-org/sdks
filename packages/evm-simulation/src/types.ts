@@ -17,7 +17,7 @@ export interface ChainSimulationConfig {
   };
   /**
    * Whether a simulated successor block's `parentHash` must equal the pinned
-   * state block hash. Block number, timestamp and reorg checks always run.
+   * state block hash. Block number and timestamp checks always run.
    * Omitted: on everywhere except Stable (988), whose nodes report a
    * `parentHash` that never matches the pinned block.
    */

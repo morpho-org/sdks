@@ -31,6 +31,7 @@ export {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
+  InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   MissingVerificationEvidenceError,
@@ -64,6 +65,7 @@ export {
 export type {
   SimulateParams,
   SimulationMode,
+  StateBlock,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
 export { toSimulationAuthorizations } from "./requirements/index.js";

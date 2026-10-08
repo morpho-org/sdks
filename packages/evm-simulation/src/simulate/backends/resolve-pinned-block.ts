@@ -1,21 +1,14 @@
-import type { BlockTag, Client, Hex } from "viem";
+import type { BlockTag, Client } from "viem";
 import { getBlock } from "viem/actions";
 import { InvalidSimulationResponseError } from "../../errors.js";
+import type { StateBlock } from "../../params.js";
 import { rpc } from "./eth-simulate-v1.js";
-
-/** One concrete canonical block: the state anchor for every pinned read. @internal */
-export interface PinnedBlock {
-  readonly number: bigint;
-  readonly hash: Hex;
-  readonly timestamp: bigint;
-}
 
 /**
  * Resolve the requested state block exactly once so `latest` cannot drift.
  *
- * Every downstream read and the `eth_simulateV1` call pin this number; the
- * execution boundary re-fetches the hash afterwards to detect a reorg that
- * swapped the block mid-flight.
+ * Every downstream read and the `eth_simulateV1` call pin this number. Skipped
+ * when the caller supplies `SimulateParams.block`.
  *
  * @param params - Resolution parameters.
  * @param params.client - Shared simulation client (created by
@@ -24,7 +17,7 @@ export interface PinnedBlock {
  *   `latest`.
  * @param params.signal - Optional pipeline abort signal; checked around the
  *   request so an aborted pipeline never produces a pin.
- * @returns The resolved {@link PinnedBlock}.
+ * @returns The resolved {@link StateBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts, or an
  *   aborted signal.
  * @throws {InvalidSimulationResponseError} When the node returns a block
@@ -35,7 +28,7 @@ export async function resolvePinnedBlock(params: {
   readonly client: Client;
   readonly blockNumber?: bigint | BlockTag;
   readonly signal?: AbortSignal;
-}): Promise<PinnedBlock> {
+}): Promise<StateBlock> {
   const { client, blockNumber, signal } = params;
   const block = await rpc("eth_getBlock", async () => {
     signal?.throwIfAborted();

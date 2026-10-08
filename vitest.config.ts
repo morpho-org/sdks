@@ -18,6 +18,10 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       include: [
         "packages/**/src/**/*.{ts,tsx}",
+        "scripts/generate-midnight-package-version.ts",
+        "scripts/paths.ts",
+        "scripts/workflow.ts",
+        "scripts/publish/**/*.ts",
         "scripts/ci/**/*.ts",
         "scripts/release/**/*.ts",
       ],

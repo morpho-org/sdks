@@ -526,6 +526,41 @@ describe("parseRequest", () => {
     ).toBe(false);
   });
 
+  test("behavior: accepts a supplied block", () => {
+    const block = {
+      number: 20_000_000n,
+      hash: `0x${"ab".repeat(32)}`,
+      timestamp: 1_700_000_000n,
+    } as const;
+    const request = parse({ chainId: 1, transactions: [tx()], block });
+    expect(request.block).toEqual(block);
+    expect(request.blockNumber).toBeUndefined();
+  });
+
+  test("behavior: lowercases a supplied block hash", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      block: { number: 1n, hash: `0x${"AB".repeat(32)}`, timestamp: 1n },
+    });
+    expect(request.block?.hash).toBe(`0x${"ab".repeat(32)}`);
+  });
+
+  test("error: SimulationValidationError for block combined with blockNumber", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        blockNumber: 1n,
+        block: {
+          number: 1n,
+          hash: `0x${"ab".repeat(32)}`,
+          timestamp: 1n,
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+
   test("behavior: accepts blockNumber 'finalized'", () => {
     const request = parse({
       chainId: 1,
@@ -968,6 +1003,47 @@ describe("parseRequest", () => {
     ],
     ["invalid mode", { mode: "draft", transactions: [tx()] }],
     ["negative blockNumber", { blockNumber: -1n, transactions: [tx()] }],
+    ["non-object block", { block: 1n, transactions: [tx()] }],
+    [
+      "short block hash",
+      {
+        block: { number: 1n, hash: "0xab", timestamp: 1n },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "unknown block key",
+      {
+        block: {
+          number: 1n,
+          hash: `0x${"ab".repeat(32)}`,
+          timestamp: 1n,
+          extra: 1,
+        },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "negative block number",
+      {
+        block: { number: -1n, hash: `0x${"ab".repeat(32)}`, timestamp: 1n },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "missing block timestamp",
+      {
+        block: { number: 1n, hash: `0x${"ab".repeat(32)}` },
+        transactions: [tx()],
+      },
+    ],
+    [
+      "non-bigint block timestamp",
+      {
+        block: { number: 1n, hash: `0x${"ab".repeat(32)}`, timestamp: 1 },
+        transactions: [tx()],
+      },
+    ],
     ["non-hex data", { transactions: [tx({ data: "0xzz" })] }],
     ["non-object transaction", { transactions: [42] }],
     [

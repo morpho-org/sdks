@@ -43,6 +43,24 @@ must handle all seven as hard failures. `ExternalServiceError` remains for
 transport failures, timeouts and malformed JSON-RPC envelopes.
 Failures and timeouts reject the call; they do not produce a successful result.
 
+Since 5.2.0, there is no `eth_chainId` lookup. Every call inside
+`eth_simulateV1` carries the request's `chainId` instead, and a node that
+checks it (geth, Anvil, Monad and Stable do) rejects a wrong-chain endpoint
+with the new `InvalidChainIdError`, a subclass of
+`InvalidSimulationResponseError` that shares its `name` and `code`, so
+existing `instanceof` handlers and `code === "INVALID_SIMULATION_RESPONSE"`
+matches keep working unchanged; `instanceof InvalidChainIdError` is how to
+tell the two apart. It is non-bypassable —
+handle it as a hard failure alongside the remaining
+`InvalidSimulationResponseError` cases. Failures that are not the chain-ID rejection —
+the block lookup or a metadata read, or `eth_simulateV1` resolving a supplied
+`block`/`blockNumber` above the other chain's head ("header not found") —
+still surface as `ExternalServiceError`. An
+endpoint that ignores the field is not detected, so `SimulationConfig.chains`
+must map each chain to a matching URL. A mid-flight reorg of the pinned block
+is no longer checked, so that failure no longer occurs and six hard failures
+remain.
+
 `simulationTxs`, `calls`, `transfers`, and `assetChanges` retain their shapes in
 this step. Native transfers, including internal transfers such as WETH refunds,
 come from `traceTransfers`; they are counted once in net balance changes.

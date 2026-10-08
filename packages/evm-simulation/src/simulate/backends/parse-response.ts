@@ -143,7 +143,7 @@ export function parseSimulationResponse(params: {
   // Anvil re-hashes the pinned block, so only the geth-style successor can be
   // pinned by hash: it must report a parentHash (geth always does) equal to
   // the pinned state block hash. With `parentHashCheck` off (Stable by
-  // default) the block number, timestamp and reorg checks still apply.
+  // default) the block number and timestamp checks still apply.
   if (
     params.parentHashCheck &&
     blockNumber === params.stateBlockNumber + 1n &&
