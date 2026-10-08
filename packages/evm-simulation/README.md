@@ -14,24 +14,20 @@ pnpm add @morpho-org/evm-simulation
 ## Usage
 
 ```ts
-import {
-  simulate,
-  type SimulationConfig,
-  SimulationRevertedError
-} from "@morpho-org/evm-simulation";
+import { simulate, SimulationRevertedError } from "@morpho-org/evm-simulation";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
 
-const config: SimulationConfig = {
-  chains: new Map([
-    [1, { simulateV1Url: process.env.MAINNET_RPC_URL! }],
-  ]),
-  timeoutMs: 5000,
-};
+const client = createPublicClient({
+  chain: mainnet,
+  transport: http(process.env.MAINNET_RPC_URL!),
+});
 
 try {
   const { simulationTxs, calls, transfers, assetChanges } = await simulate(
-    config,
+    client,
     {
-      chainId: 1,
+      timeoutMs: 5000,
       // mode: "final" (default) executes the signed calldata against actual
       // permissions; mode: "preview" accepts typed authorization descriptors.
       transactions: [{ from: user, to: vault, data: encodedDeposit }],
@@ -46,20 +42,20 @@ try {
 }
 ```
 
-Every call inside `eth_simulateV1`, including preparation calls and state reads, carries the request's `chainId` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain with `InvalidSimulationResponseError`.
+Every call inside `eth_simulateV1`, including preparation calls and state reads, carries `client.chain.id` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain with `InvalidChainIdError`.
 
-Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+The client's transport must point at a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on the params to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `parentHashCheck` on the params to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. `timeoutMs` (default 5000 ms) bounds the steps `simulate()` drives between calls; in-flight requests follow the client transport's own timeout and retry policy. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
-Upgrading from v4? See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover.
+Upgrading? See the [v5 → v6](../../docs/migrations/evm-simulation-v5-to-v6.md) and [v4 → v5](../../docs/migrations/evm-simulation-v4-to-v5.md) migration guides.
 
 ### API surface
 
 All symbols below are re-exported from the package root.
 
-- `simulate(config, params)` — run a bundle through the simulation pipeline.
-- Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
+- `simulate(client, params)` — run a bundle through the simulation pipeline.
+- `SimulationLogger` (passed as `params.logger`).
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
 - `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
 - Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits` and `SlippageQuote`.

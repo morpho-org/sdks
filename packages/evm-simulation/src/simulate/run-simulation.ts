@@ -4,22 +4,20 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { _try } from "@morpho-org/morpho-ts";
+import type { Chain, Client, Transport } from "viem";
 import { zeroAddress } from "viem";
 import {
   InvalidSimulationResponseError,
   UnsupportedChainError,
 } from "../errors.js";
 import type { VerifiedSimulationResult } from "../result.js";
-import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
-import { createSimulationClient } from "./backends/client.js";
 import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { CheckContext } from "./context.js";
 import { parseTransfers } from "./parsing/index.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
-import { resolveChain } from "./pipeline/resolve-chain.js";
 import { planExecution } from "./plan/plan-execution.js";
 import { prepareAuthorizations } from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
@@ -35,20 +33,19 @@ const DEFAULT_TIMEOUT_MS = 5000;
  * resolve quoted assets → plan quoted observations → execution →
  * slippage comparisons → bundle-retention assertion → result assembly.
  *
- * One `AbortSignal` (the request timeout) covers every RPC step.
+ * The caller's client owns the transport (its own timeout and retry policy);
+ * `request.timeoutMs` bounds the steps this pipeline drives between calls.
  *
  * @internal
- * @param params - The simulation config and the parsed caller request.
+ * @param params - The caller's chain-bound client and the parsed request.
  * @returns The deep-frozen {@link VerifiedSimulationResult}.
  */
 export async function runSimulation(params: {
-  readonly config: SimulationConfig;
+  readonly client: Client<Transport, Chain>;
   readonly request: ParsedRequest;
 }): Promise<VerifiedSimulationResult> {
-  const { config, request } = params;
-  const chain = resolveChain(config, request.chainId);
-  const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const client = createSimulationClient(chain.simulateV1Url, signal);
+  const { client, request } = params;
+  const signal = AbortSignal.timeout(request.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   const limits = { operations: request.limits?.operations ?? [] };
   const preview = request.mode === "preview";
@@ -110,9 +107,10 @@ export async function runSimulation(params: {
     plan,
     stateBlock: pinnedBlock,
     validation: monad,
-    blockGasLimit: chain.blockOverrides?.gasLimit,
+    blockGasLimit: request.blockOverrides?.gasLimit,
     parentHashCheck:
-      chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
+      request.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
+    signal,
   });
 
   const userCalls = execution.calls
@@ -141,7 +139,7 @@ export async function runSimulation(params: {
     );
   const transfers = parseTransfers(userCalls, {
     wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
-    logger: config.logger,
+    logger: request.logger,
   });
 
   const assetChanges = groupAssetChanges(
@@ -185,7 +183,7 @@ export async function runSimulation(params: {
     chainId: request.chainId,
     transfers,
     assetChanges,
-    logger: config.logger,
+    logger: request.logger,
   });
 
   return assembleResult({

@@ -1,4 +1,11 @@
-import { type Address, getAddress, type Hex } from "viem";
+import {
+  type Address,
+  createPublicClient,
+  getAddress,
+  type Hex,
+  http,
+} from "viem";
+import { mainnet } from "viem/chains";
 import { vi } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
 import {
@@ -9,7 +16,6 @@ import {
 } from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
-import type { SimulationConfig } from "../types.js";
 import type { runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
 
@@ -28,21 +34,16 @@ const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
 
-function makeConfig(
-  overrides: Partial<SimulationConfig> = {},
-): SimulationConfig {
-  return {
-    chains: new Map([[1, { simulateV1Url: "http://localhost:8545" }]]),
-    timeoutMs: 5000,
-    ...overrides,
-  };
-}
+const CLIENT = createPublicClient({
+  chain: mainnet,
+  transport: http("http://localhost:8545"),
+});
 
 function makeParams(overrides: object = {}): SimulateParams {
   return {
-    chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
+    timeoutMs: 5000,
     ...overrides,
   } as SimulateParams;
 }
@@ -74,26 +75,23 @@ beforeEach(() => {
 
 describe.sequential("simulate — pipeline delegation", () => {
   it("delegates to runSimulation with the parsed request and config", async () => {
-    const result = await simulate(makeConfig(), makeParams());
+    const result = await simulate(CLIENT, makeParams());
     expect(result).toEqual(makeResult());
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
     const arg = mockRunSimulation.mock.calls[0]![0];
-    expect(arg.config).toEqual(makeConfig());
+    expect(arg.client).toBe(CLIENT);
     expect(arg.request.chainId).toBe(1);
   });
 
   it("defaults to final mode", async () => {
-    await simulate(makeConfig(), makeParams());
+    await simulate(CLIENT, makeParams());
     expect(mockRunSimulation.mock.calls[0]![0].request.mode ?? "final").toBe(
       "final",
     );
   });
 
   it("preview without authorizations executes", async () => {
-    const result = await simulate(
-      makeConfig(),
-      makeParams({ mode: "preview" }),
-    );
+    const result = await simulate(CLIENT, makeParams({ mode: "preview" }));
     expect(result).toEqual(makeResult());
   });
 
@@ -108,7 +106,7 @@ describe.sequential("simulate — pipeline delegation", () => {
       },
     ];
     const result = await simulate(
-      makeConfig(),
+      CLIENT,
       makeParams({ mode: "preview", authorizations }),
     );
     expect(result).toEqual(makeResult());
@@ -116,7 +114,7 @@ describe.sequential("simulate — pipeline delegation", () => {
   });
 
   it("limits execute through the pipeline", async () => {
-    const result = await simulate(makeConfig(), makeParams({ limits: {} }));
+    const result = await simulate(CLIENT, makeParams({ limits: {} }));
     expect(result).toEqual(makeResult());
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
@@ -124,7 +122,7 @@ describe.sequential("simulate — pipeline delegation", () => {
   it("legacy signature authorization variant throws SimulationValidationError", async () => {
     await expect(
       simulate(
-        makeConfig(),
+        CLIENT,
         makeParams({
           mode: "preview",
           authorizations: [
@@ -138,7 +136,7 @@ describe.sequential("simulate — pipeline delegation", () => {
 
   it("final mode with authorizations throws SimulationValidationError", async () => {
     await expect(
-      simulate(makeConfig(), makeParams({ authorizations: [] } as never)),
+      simulate(CLIENT, makeParams({ authorizations: [] } as never)),
     ).rejects.toThrow(SimulationValidationError);
     expect(mockRunSimulation).not.toHaveBeenCalled();
   });
@@ -149,7 +147,7 @@ describe.sequential("simulate — error propagation", () => {
     mockRunSimulation.mockRejectedValueOnce(
       new SimulationRevertedError("ERC20: transfer amount exceeds balance"),
     );
-    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
+    await expect(simulate(CLIENT, makeParams())).rejects.toThrow(
       SimulationRevertedError,
     );
   });
@@ -158,15 +156,15 @@ describe.sequential("simulate — error propagation", () => {
     mockRunSimulation.mockRejectedValueOnce(
       new ExternalServiceError("RPC down"),
     );
-    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
+    await expect(simulate(CLIENT, makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
   });
 
   it("propagates UnsupportedChainError", async () => {
     mockRunSimulation.mockRejectedValueOnce(new UnsupportedChainError(999999));
-    await expect(
-      simulate(makeConfig(), makeParams({ chainId: 999999 })),
-    ).rejects.toThrow(UnsupportedChainError);
+    await expect(simulate(CLIENT, makeParams())).rejects.toThrow(
+      UnsupportedChainError,
+    );
   });
 });

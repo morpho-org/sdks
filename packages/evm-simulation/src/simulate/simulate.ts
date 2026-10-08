@@ -1,6 +1,7 @@
+import type { Chain, Client, Transport } from "viem";
+import { InvalidChainIdError } from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
-import type { SimulationConfig } from "../types.js";
 import { parseRequest } from "./request/index.js";
 import { runSimulation } from "./run-simulation.js";
 
@@ -40,13 +41,12 @@ import { runSimulation } from "./run-simulation.js";
  * separating gas from economic effects. Monad nodes reject `false`, so Monad
  * simulations send `true`; its simulated block charges no gas either way.
  *
- * @param config - Required per-chain `eth_simulateV1` URL, optional per-chain
- *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
- *   overall timeout budget.
+ * @param client - The caller's viem client; its `chain` sets the chain the
+ *   bundle targets and its transport owns the RPC endpoint, timeout and
+ *   retries. `client.chain.id` is sent on every call inside `eth_simulateV1`,
+ *   so nodes that check it reject a wrong-chain endpoint; there is no
+ *   separate `eth_chainId` lookup.
  * @param params - Per-call simulation input.
- * @param params.chainId - Chain id the bundle targets. Sent on every call inside
- *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
- *   there is no separate `eth_chainId` lookup.
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`.
  * @param params.mode - `"final"` (default) or `"preview"`.
@@ -60,6 +60,9 @@ import { runSimulation } from "./run-simulation.js";
  *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
  *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
  *   combined with `blockNumber`.
+ * @throws {InvalidChainIdError} when the node rejects the request `chainId`
+ *   because it serves another chain — the client's transport points at the
+ *   wrong chain.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
  *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
@@ -82,8 +85,7 @@ import { runSimulation } from "./run-simulation.js";
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded), or when the node rejects the
- *   request `chainId` because it serves another chain.
+ *   non-empty return data cannot be decoded).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
@@ -101,17 +103,27 @@ import { runSimulation } from "./run-simulation.js";
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
+ * import {
+ *   type Address,
+ *   createPublicClient,
+ *   encodeFunctionData,
+ *   erc20Abi,
+ *   getAddress,
+ *   http,
+ * } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const rpcUrl = "https://rpc.example";
+ * const client = createPublicClient({
+ *   chain: mainnet,
+ *   transport: http("https://rpc.example"),
+ * });
  * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
  * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
  * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
  *
  * const result = await simulate(
- *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
+ *   client,
  *   {
- *     chainId: 1,
  *     transactions: [
  *       {
  *         from: user,
@@ -128,8 +140,16 @@ import { runSimulation } from "./run-simulation.js";
  * ```
  */
 export async function simulate(
-  config: SimulationConfig,
+  client: Client<Transport, Chain>,
   params: SimulateParams,
 ): Promise<VerifiedSimulationResult> {
-  return runSimulation({ config, request: parseRequest(params) });
+  if (client.chain === undefined)
+    // Unreachable through the type but reachable for JS callers.
+    throw new InvalidChainIdError(
+      "simulate() requires a client built with a chain (client.chain is undefined). Pass one created with `chain: <chain>` so the target chain is known.",
+    );
+  return runSimulation({
+    client,
+    request: parseRequest(params, client.chain.id),
+  });
 }

@@ -1,44 +1,5 @@
 import type { Address, Hex } from "viem";
 
-// ─── Config ────────────────────────────────────────────────────────────────────
-// Shapes the caller constructs once and passes into `simulate()`.
-
-/** Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`. */
-export interface ChainSimulationConfig {
-  /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
-  readonly simulateV1Url: string;
-  /**
-   * Block overrides forwarded to `eth_simulateV1` as the simulated block's
-   * `blockOverrides`. Omitted fields leave the node's defaults untouched.
-   */
-  readonly blockOverrides?: {
-    /** Gas limit of the simulated block. Omitted: no gas limit override is sent. */
-    readonly gasLimit?: bigint;
-  };
-  /**
-   * Whether a simulated successor block's `parentHash` must equal the pinned
-   * state block hash. Block number and timestamp checks always run.
-   * Omitted: on everywhere except Stable (988), whose nodes report a
-   * `parentHash` that never matches the pinned block.
-   */
-  readonly parentHashCheck?: boolean;
-}
-
-/**
- * Top-level configuration for `simulate`.
- *
- * Every chain entry must supply an `eth_simulateV1` endpoint. An absent chain
- * or missing endpoint throws `UnsupportedChainError`; execution never selects
- * another provider after a failure.
- */
-export interface SimulationConfig {
-  /** Per-chain simulation endpoints. */
-  chains: Map<number, ChainSimulationConfig>;
-  logger?: SimulationLogger;
-  /** Overall execution timeout budget in ms (default 5000). */
-  timeoutMs?: number;
-}
-
 // ─── Call-site data ────────────────────────────────────────────────────────────
 // Shapes the caller passes per-call or receives back.
 

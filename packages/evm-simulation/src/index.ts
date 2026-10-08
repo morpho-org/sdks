@@ -31,6 +31,7 @@ export {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
+  InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   MissingVerificationEvidenceError,
@@ -79,10 +80,8 @@ export { simulate } from "./simulate/index.js";
 export type {
   AccountAssetChanges,
   AssetChange,
-  ChainSimulationConfig,
   RawLog,
   SimulationCall,
-  SimulationConfig,
   SimulationLogger,
   SimulationResult,
   SimulationTransaction,

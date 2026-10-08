@@ -1,7 +1,7 @@
 import type { BlockTag, Hex } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationLimits } from "./limits.js";
-import type { SimulationTransaction } from "./types.js";
+import type { SimulationLogger, SimulationTransaction } from "./types.js";
 
 /** Every simulation mode; source of `SimulationMode`. */
 export const SIMULATION_MODES = ["preview", "final"] as const;
@@ -20,11 +20,11 @@ export interface StateBlock {
 }
 
 /**
- * Input to `simulate()`. `authorizations` is accepted only in "preview";
+ * Input to `simulate()`. The chain comes from the passed client's
+ * `client.chain.id`; `authorizations` is accepted only in "preview";
  * `mode` defaults to "final".
  */
 export interface SimulateParams {
-  readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
   /** Defaults to "final". */
   readonly mode?: SimulationMode;
@@ -44,4 +44,25 @@ export interface SimulateParams {
   readonly block?: StateBlock;
   /** Caller-selected quotes and percentage tolerances. Omitted limits are unchecked. */
   readonly limits?: SimulationLimits;
+  /**
+   * Block overrides forwarded to `eth_simulateV1` as the simulated block's
+   * `blockOverrides`. Omitted fields leave the node's defaults untouched.
+   */
+  readonly blockOverrides?: {
+    /** Gas limit of the simulated block. Omitted: no gas limit override is sent. */
+    readonly gasLimit?: bigint;
+  };
+  /**
+   * Whether a simulated successor block's `parentHash` must equal the pinned
+   * state block hash. Block number and timestamp checks always run.
+   * Omitted: on everywhere except Stable (988), whose nodes report a
+   * `parentHash` that never matches the pinned block.
+   */
+  readonly parentHashCheck?: boolean;
+  /** Overall execution timeout budget in ms (default 5000). In-flight requests
+   * obey the caller's client transport (its own timeout and retry policy); the
+   * budget bounds the steps `simulate()` drives. */
+  readonly timeoutMs?: number;
+  /** Optional logger for transfer-parsing and retention warnings. */
+  readonly logger?: SimulationLogger;
 }

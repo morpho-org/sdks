@@ -1,17 +1,17 @@
-import { numberToHex } from "viem";
+import { createPublicClient, http, numberToHex } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
 } from "../../errors.js";
-import { createSimulationClient } from "./client.js";
 import { resolvePinnedBlock } from "./resolve-pinned-block.js";
 
 const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-const client = () => createSimulationClient("https://rpc.example");
+const client = () =>
+  createPublicClient({ transport: http("https://rpc.example") });
 
 const block = {
   number: numberToHex(20_000_000n),

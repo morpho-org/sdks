@@ -11,8 +11,7 @@ import { rpc } from "./eth-simulate-v1.js";
  * when the caller supplies `SimulateParams.block`.
  *
  * @param params - Resolution parameters.
- * @param params.client - Shared simulation client (created by
- *   {@link createSimulationClient}).
+ * @param params.client - Caller's simulation client.
  * @param params.blockNumber - Requested block number or tag; defaults to
  *   `latest`.
  * @param params.signal - Optional pipeline abort signal; checked around the

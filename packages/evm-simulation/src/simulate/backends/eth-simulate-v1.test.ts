@@ -1,7 +1,15 @@
-import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
+import {
+  type Address,
+  createPublicClient,
+  getAddress,
+  http,
+  numberToHex,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
+  InvalidChainIdError,
   InvalidSimulationResponseError,
   MissingVerificationEvidenceError,
   SimulationRevertedError,
@@ -12,7 +20,7 @@ import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
-import { createSimulationClient } from "./client.js";
+
 import { executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -25,14 +33,16 @@ const fetchMock = vi.fn<typeof fetch>();
 let params!: Parameters<typeof executePlan>[0];
 
 function makePlan(transactions = 1): ExecutionPlan {
-  const request = parseRequest({
-    chainId: 1,
-    transactions: Array.from({ length: transactions }, () => ({
-      from: OWNER,
-      to: VAULT,
-      data: "0x12",
-    })),
-  });
+  const request = parseRequest(
+    {
+      transactions: Array.from({ length: transactions }, () => ({
+        from: OWNER,
+        to: VAULT,
+        data: "0x12",
+      })),
+    },
+    1,
+  );
   return planExecution({
     request,
     owner: OWNER,
@@ -83,7 +93,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   params = {
-    client: createSimulationClient(RPC_URL),
+    client: createPublicClient({ transport: http(RPC_URL) }),
     plan: makePlan(),
     stateBlock: {
       number: STATE_BLOCK,
@@ -371,13 +381,13 @@ describe.sequential("executePlan", () => {
       message: "Invalid chain ID: expected 143, got 1",
     },
   ])(
-    "error: InvalidSimulationResponseError when the node rejects the chainId ($node)",
+    "error: InvalidChainIdError when the node rejects the chainId ($node)",
     async ({ code, message }) => {
       fetchMock.mockResolvedValueOnce(
         Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
       );
       await expect(executePlan(params)).rejects.toBeInstanceOf(
-        InvalidSimulationResponseError,
+        InvalidChainIdError,
       );
     },
   );

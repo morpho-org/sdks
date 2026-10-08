@@ -26,10 +26,10 @@ const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const NOW = 1_700_000_000n;
 const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 
-const parsed = parseRequest({
-  chainId: 1,
-  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-});
+const parsed = parseRequest(
+  { transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }] },
+  1,
+);
 
 const reads = [makeBalanceRead(TOKEN, OWNER)];
 

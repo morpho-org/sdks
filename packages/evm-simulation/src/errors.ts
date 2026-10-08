@@ -12,6 +12,7 @@ import { SIMULATION_MODES } from "./params.js";
 export const SIMULATION_ERROR_CODES = [
   "VALIDATION_ERROR",
   "UNSUPPORTED_CHAIN",
+  "INVALID_CHAIN_ID",
   "EXTERNAL_SERVICE_ERROR",
   "SIMULATION_REVERTED",
   "BLACKLIST_ERROR",
@@ -263,6 +264,16 @@ export class UnsupportedChainError extends SimulationPackageError {
 }
 
 /**
+ * The client's chain is missing, or the endpoint serves a different chain
+ * than `client.chain.id`. Not bypassable — a wrong-chain endpoint is
+ * misconfiguration, not an outage callers may proceed past.
+ */
+export class InvalidChainIdError extends SimulationPackageError {
+  override readonly name = "InvalidChainIdError";
+  readonly code = "INVALID_CHAIN_ID";
+}
+
+/**
  * An SDK requirement passed to `toSimulationAuthorizations` cannot be
  * converted into a simulation authorization.
  */
@@ -305,6 +316,7 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
   Object.freeze({
     VALIDATION_ERROR: "SimulationValidationError",
     UNSUPPORTED_CHAIN: "UnsupportedChainError",
+    INVALID_CHAIN_ID: "InvalidChainIdError",
     EXTERNAL_SERVICE_ERROR: "ExternalServiceError",
     SIMULATION_REVERTED: "SimulationRevertedError",
     BLACKLIST_ERROR: "BlacklistViolationError",
