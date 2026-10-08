@@ -59,9 +59,10 @@ export interface SimulateParams {
    * `parentHash` that never matches the pinned block.
    */
   readonly parentHashCheck?: boolean;
-  /** Overall execution timeout budget in ms (default 5000). In-flight requests
-   * obey the caller's client transport (its own timeout and retry policy); the
-   * budget bounds the steps `simulate()` drives. */
+  /** Overall execution timeout budget in ms (default 5000). Must be a
+   * positive integer within the `AbortSignal.timeout` range. In-flight
+   * requests obey the caller's client transport (its own timeout and retry
+   * policy); the budget bounds the steps `simulate()` drives. */
   readonly timeoutMs?: number;
   /** Optional logger for transfer-parsing and retention warnings. */
   readonly logger?: SimulationLogger;

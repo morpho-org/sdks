@@ -77,7 +77,8 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
  *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
- *   a malformed `block` or one combined with `blockNumber`, a
+ *   a malformed `block` or one combined with `blockNumber`, a `timeoutMs`
+ *   that is not a positive integer within the `AbortSignal.timeout` range, a
  *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
  *   that is not a boolean, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`).

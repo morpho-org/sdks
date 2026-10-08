@@ -373,4 +373,33 @@ describe.sequential("runSimulation", () => {
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
     expect(methods).toEqual(["eth_getBlockByNumber"]);
   });
+
+  test("error: a caller's timeoutMs bounds the block lookup", async () => {
+    // A lookup resolving past the budget trips the shared signal, so
+    // eth_simulateV1 is never requested.
+    const methods: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+        const { method } = JSON.parse(String(init?.body)) as { method: string };
+        methods.push(method);
+        if (method === "eth_getBlockByNumber") {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return rpc({
+            number: numberToHex(STATE_BLOCK),
+            hash: STATE_BLOCK_HASH,
+            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+          });
+        }
+        throw new Error(`Unexpected RPC method ${method}`);
+      }),
+    );
+    await expect(
+      simulate(client(), {
+        transactions: [TRANSACTION],
+        timeoutMs: 1,
+      }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+    expect(methods).toEqual(["eth_getBlockByNumber"]);
+  });
 });
