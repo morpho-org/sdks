@@ -18,10 +18,12 @@ per-chain knobs (`blockOverrides.gasLimit`, `parentHashCheck`), plus `logger` an
 its own viem client on that URL.
 
 That config layer duplicates what every caller already has: a viem client whose
-`chain.id` names the chain and whose transport names the endpoint. Keeping both
-means two chain identifiers that can disagree — the config key and the transport's
-actual node — and forces the package to own transport policy (timeout budget,
-zero retries) that should belong to the caller. The v5 lifecycle ADRs
+`chain.id` names the chain and whose transport names the endpoint. The caller's
+client also handles transport — timeouts, retries, fallback endpoints — better
+than the package's hand-rolled raw RPC calls, and there is no reason to reinvent
+it. Keeping both means two chain identifiers that can disagree — the config key
+and the transport's actual node — and forces the package to own transport policy
+that belongs to the caller. The v5 lifecycle ADRs
 (`ADR-2026-10-01`, `ADR-2026-10-02`) covered removals inside the unpublished v5
 line; v5 is now released (5.1.0), so the client refactor is a removal from a
 published API and AGENTS.md §7 requires a recorded decision to skip the 4-step
