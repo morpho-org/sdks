@@ -9,6 +9,7 @@ import {
   erc20Abi,
   erc4626Abi,
   type HDAccount,
+  type Hash,
   type HttpTransport,
   maxUint256,
   type PublicActions,
@@ -221,6 +222,30 @@ export const createAnvilTestClient = <chain extends Chain>(
         }
       };
 
+      const waitForAutominedReceipt = async (
+        hash: Hash,
+        previousBlockNumber: bigint,
+      ) => {
+        const timeout = 180_000;
+        const deadline = Date.now() + timeout;
+
+        while (
+          (await client.getBlockNumber({ cacheTime: 0 })) <= previousBlockNumber
+        ) {
+          if (Date.now() >= deadline)
+            throw new WaitForTransactionReceiptTimeoutError({ hash });
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, client.pollingInterval),
+          );
+        }
+
+        return waitForTransactionReceipt({
+          hash,
+          timeout: Math.max(1, deadline - Date.now()),
+        });
+      };
+
       return {
         waitForTransactionReceipt,
 
@@ -375,10 +400,15 @@ export const createAnvilTestClient = <chain extends Chain>(
             chainOverride
           >,
         ) {
+          const shouldWaitForReceipt = (automine ??=
+            await client.getAutomine());
+          const previousBlockNumber = shouldWaitForReceipt
+            ? await client.getBlockNumber({ cacheTime: 0 })
+            : undefined;
           const hash = await viem_writeContract(client, args);
 
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
+          if (shouldWaitForReceipt && previousBlockNumber !== undefined)
+            await waitForAutominedReceipt(hash, previousBlockNumber);
 
           return hash;
         },
@@ -393,18 +423,28 @@ export const createAnvilTestClient = <chain extends Chain>(
             request
           >,
         ) {
+          const shouldWaitForReceipt = (automine ??=
+            await client.getAutomine());
+          const previousBlockNumber = shouldWaitForReceipt
+            ? await client.getBlockNumber({ cacheTime: 0 })
+            : undefined;
           const hash = await viem_sendTransaction(client, args);
 
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
+          if (shouldWaitForReceipt && previousBlockNumber !== undefined)
+            await waitForAutominedReceipt(hash, previousBlockNumber);
 
           return hash;
         },
         async sendRawTransaction(args: SendRawTransactionParameters) {
+          const shouldWaitForReceipt = (automine ??=
+            await client.getAutomine());
+          const previousBlockNumber = shouldWaitForReceipt
+            ? await client.getBlockNumber({ cacheTime: 0 })
+            : undefined;
           const hash = await viem_sendRawTransaction(client, args);
 
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
+          if (shouldWaitForReceipt && previousBlockNumber !== undefined)
+            await waitForAutominedReceipt(hash, previousBlockNumber);
 
           return hash;
         },
