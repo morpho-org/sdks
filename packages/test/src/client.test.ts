@@ -103,6 +103,52 @@ describe("createAnvilTestClient", () => {
     }
   });
 
+  test("waits for the automined block before querying its receipt", async () => {
+    let sent = false;
+    let postSendBlockPolls = 0;
+
+    const node = await startNode(async (method) => {
+      if (method === "anvil_getAutomine") return { result: true };
+
+      if (method === "eth_blockNumber") {
+        if (!sent) return { result: numberToHex(100) };
+        postSendBlockPolls += 1;
+        return {
+          result: numberToHex(postSendBlockPolls >= 2 ? 101 : 100),
+        };
+      }
+
+      if (method === "eth_sendRawTransaction") {
+        sent = true;
+        return { result: hash };
+      }
+
+      if (method === "eth_getTransactionReceipt") {
+        expect(postSendBlockPolls).toBeGreaterThanOrEqual(2);
+        return { result: receipt };
+      }
+
+      return { result: null };
+    });
+
+    try {
+      await expect(
+        node.client.sendRawTransaction({ serializedTransaction: "0x01" }),
+      ).resolves.toBe(hash);
+
+      expect(node.methods).toEqual([
+        "anvil_getAutomine",
+        "eth_blockNumber",
+        "eth_sendRawTransaction",
+        "eth_blockNumber",
+        "eth_blockNumber",
+        "eth_getTransactionReceipt",
+      ]);
+    } finally {
+      node.close();
+    }
+  });
+
   test("times out when the receipt never appears", async () => {
     const node = await startNode(async () => ({ result: null }));
     try {
