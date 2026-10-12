@@ -6,7 +6,7 @@ import { UnsupportedErc20ApprovalSpenderError } from "../types/index.js";
 export type RequirementSpenderKey =
   | "permit2"
   | "midnight"
-  | "midnightBundles"
+  | "midnightBundlesV2"
   | "vaultExitBundlesV1"
   | "vaultBundlesV1"
   | "blueBundlesV1";
@@ -28,8 +28,8 @@ export type RequirementSpenderKey =
  *
  * validateRequirementSpender({
  *   chainId: 8453,
- *   spender: getChainAddress(8453, "midnightBundles"),
- *   allowed: ["midnightBundles"],
+ *   spender: getChainAddress(8453, "midnight"),
+ *   allowed: ["midnight"],
  * });
  * ```
  */
@@ -38,13 +38,13 @@ export const validateRequirementSpender = (params: {
   readonly spender: Address;
   readonly allowed: readonly RequirementSpenderKey[];
 }): void => {
-  const { permit2, midnight, midnightBundles, bundles } = getChainAddresses(
+  const { permit2, midnight, midnightBundlesV2, bundles } = getChainAddresses(
     params.chainId,
   );
   const addresses = {
     permit2,
     midnight,
-    midnightBundles,
+    midnightBundlesV2,
     vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
     vaultBundlesV1: bundles?.vaultBundlesV1,
     blueBundlesV1: bundles?.blueBundlesV1,
@@ -62,7 +62,6 @@ export const validateRequirementSpender = (params: {
       chainId: params.chainId,
       permit2,
       midnight,
-      midnightBundles,
       supportedSpenders,
     });
   }

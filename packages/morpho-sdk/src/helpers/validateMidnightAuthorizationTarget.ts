@@ -8,7 +8,7 @@ import { UnsupportedMidnightAuthorizationTargetError } from "../types/index.js";
  * @param params - Authorization target validation parameters.
  * @param params.chainId - Chain id used to resolve supported Midnight operators.
  * @param params.authorized - Operator address receiving authorization.
- * @returns Nothing after the operator matches MidnightBundles or a supported ratifier.
+ * @returns Nothing after the operator matches MidnightBundlesV2.
  * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not a supported operator.
  * @internal
  */
@@ -16,13 +16,8 @@ export const validateMidnightAuthorizationTarget = (params: {
   readonly chainId: number;
   readonly authorized: Address;
 }): void => {
-  const { midnightBundles, ecrecoverRatifier, setterRatifier } =
-    getChainAddresses(params.chainId);
-  const supportedTargets = [
-    midnightBundles,
-    ecrecoverRatifier,
-    setterRatifier,
-  ].filter((target): target is Address => target != null);
+  const { midnightBundlesV2 } = getChainAddresses(params.chainId);
+  const supportedTargets = midnightBundlesV2 == null ? [] : [midnightBundlesV2];
 
   if (
     !supportedTargets.some((supported) =>

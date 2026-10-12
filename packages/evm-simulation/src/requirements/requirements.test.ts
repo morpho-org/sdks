@@ -378,7 +378,7 @@ describe("toSimulationAuthorizations", () => {
         },
       },
       sign: neverSign,
-    } as ActionRequirement;
+    } as unknown as ActionRequirement;
 
     expect(() =>
       toSimulationAuthorizations({

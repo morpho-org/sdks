@@ -116,10 +116,25 @@ at the SDK level. The differences are at the protocol layer:
 
 - **Fixed-rate markets**: Midnight represents lending and borrowing through signed or
   contract-ratified offers with prices fixed until market maturity.
-- **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
-  collateral supply, credit redemption, and cancellation call Midnight directly.
-- **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
-  signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
+- **Taker routing**: Fixed-rate takes, including `takeRepayWithdrawCollateral`, call the
+  `MidnightBundlesV2` buy/sell entrypoints with an assets or units target;
+  `repayWithdrawCollateral` encodes a reduce-only V2 buy with no offer fills; collateral supply and
+  credit redemption call Midnight directly. Batch `cancelOffers` encodes one
+  `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared
+  `midnightCancelAndMake` builder.
+- **Maker routing**: `makeLend`, `makeBorrow`, and
+  `supplyCollateralMakeBorrow` validate a PriceRatifierV1 or RateRatifierV1 offer tree, then encode
+  one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, activates the root and
+  publishes the payload. Each method builds `midnightCancelAndMake` directly. `makeBorrow` takes no
+  collateral; `supplyCollateralMakeBorrow` requires and supplies it.
+  `supplyBlueMakeLend` uses the same call to park loan assets in a Morpho Blue market for the
+  maker's `BlueBuyCallback`, which funds the lend offers when they are taken. The entity derives the
+  callback from the factory, requires every offer to use it with `abi.encode(blueMarket)`, and
+  rejects Blue markets with no supply because the contract does not check supply share-price slippage.
+- **Maker limit exits**: `makeWithdraw` (lend exit) and `makeRepay` (borrow exit) require reduce-only
+  offers on the matching side (`buy = false` / `buy = true`) and reuse the shared maker publication
+  logic. Non-exit `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow`, and
+  `supplyBlueMakeLend` reject reduce-only offers.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 

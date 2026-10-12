@@ -1,4 +1,5 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import {
   decodeFunctionData,
   erc20Abi,
@@ -14,6 +15,8 @@ import {
 } from "../../../../test/fixtures/midnight.js";
 import { UnsupportedErc20ApprovalSpenderError } from "../../../types/index.js";
 import { encodeErc20Approval } from "./encodeErc20Approval.js";
+
+const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 
 describe("encodeErc20Approval", () => {
   const { permit2, usdc } = addressesRegistry[mainnet.id];
@@ -77,7 +80,7 @@ describe("encodeErc20Approval", () => {
 
   test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
-    { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
+    { name: "MidnightBundlesV2", spender: midnightBundlesV2 },
   ])("behavior: encodes an approval for $name", ({ spender }) => {
     const transaction = encodeErc20Approval({
       token: midnightAddresses.loanToken,

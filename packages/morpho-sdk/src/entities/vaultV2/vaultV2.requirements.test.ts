@@ -6,7 +6,13 @@ import {
   expectReadCall,
   mockRead,
 } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  erc20Abi,
+  serializeSignature,
+  toHex,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -19,6 +25,7 @@ import {
   signerAddress,
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../constants.js";
 import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
@@ -851,26 +858,102 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
       withdrawA.buildTx([signature]),
     );
 
-    // A permit signed for a larger amount than the derived share cap is rejected.
-    const oversizedSignature = {
+    // A permit signed for any amount between the derived share cap and the cap divided by
+    // `1 - slippageTolerance` is accepted; one above that ceiling is rejected.
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
+      requiredShareAllowance: permit.action.args.amount,
+      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+    const permitAction = permit.action;
+    if (permitAction.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const permitArgs = permitAction.args;
+    const oversizedSignature = (
+      signedAmount: bigint,
+    ): Erc2612RequirementSignature => ({
       action: {
-        ...permit.action,
-        args: { ...permit.action.args, amount: permit.action.args.amount + 1n },
+        ...permitAction,
+        args: { ...permitArgs, amount: signedAmount },
       },
       args: {
         owner: signerAddress,
         asset: IN_KIND_VAULT,
-        amount: permit.action.args.amount + 1n,
-        nonce: permit.action.args.nonce ?? 0n,
-        deadline: permit.action.args.deadline,
+        amount: signedAmount,
+        nonce: permitArgs.nonce ?? 0n,
+        deadline: permitArgs.deadline,
         signature: signature.args.signature,
       },
-    } satisfies Erc2612RequirementSignature;
-    expect(() => withdrawB.buildTx([oversizedSignature])).toThrowError(
+    });
+    expect(() =>
+      withdrawB.buildTx([oversizedSignature(maxShareAllowance)]),
+    ).not.toThrow();
+    expect(() =>
+      withdrawB.buildTx([oversizedSignature(maxShareAllowance + 1n)]),
+    ).toThrowError(
       expect.objectContaining({
         name: "BundlesPermitMismatchError",
         field: "amount",
       }),
     );
+  });
+
+  test("behavior: a permit signed on an earlier snapshot finalizes on a fresher handle", async () => {
+    const largerAmount = 10_000_000n;
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    };
+    const deadline = Time.timestamp() + 7_200n;
+    const withdrawA = makeVault().withdraw({
+      amount: largerAmount,
+      userAddress: signerAddress,
+      vaultData: inKindVaultV2Data({
+        totalAssets: 1_000_000n,
+        totalSupply: 1_000_000n,
+      }),
+      deadline,
+    });
+
+    const permit = (await withdrawA.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (permit?.action.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const signature = await permit.sign(signerWalletClient, signerAddress);
+    const signedAmount = permit.action.args.amount;
+
+    // A fresher snapshot prices shares slightly higher, so it derives a smaller cap: the permit
+    // signed for the earlier, larger cap stays within `[cap, cap / (1 - slippageTolerance)]`.
+    const withdrawB = makeVault().withdraw({
+      amount: largerAmount,
+      userAddress: signerAddress,
+      vaultData: inKindVaultV2Data({
+        totalAssets: 1_000_150n,
+        totalSupply: 1_000_000n,
+      }),
+      deadline,
+    });
+
+    const tx = withdrawB.buildTx([signature]);
+    const decoded = decodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      data: tx.data,
+    });
+    expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+    expect(decoded.args?.[3]).toMatchObject({ value: signedAmount });
   });
 });

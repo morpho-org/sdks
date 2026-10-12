@@ -1,6 +1,5 @@
 import {
   type IOffer,
-  MAX_CONTINUOUS_FEE,
   MarketParams,
   MarketUtils,
   OfferUtils,
@@ -15,7 +14,6 @@ const midnightLiquidationCursor = 250000000000000000n;
 
 export const midnightAddresses = {
   midnight: getChainAddress(midnightChainId, "midnight"),
-  midnightBundles: getChainAddress(midnightChainId, "midnightBundles"),
   midnightMempool: getChainAddress(midnightChainId, "midnightMempool"),
   ecrecoverRatifier: getChainAddress(midnightChainId, "ecrecoverRatifier"),
   setterRatifier: getChainAddress(midnightChainId, "setterRatifier"),
@@ -82,7 +80,7 @@ export const midnightBaseOffer = (overrides: Partial<IOffer> = {}): IOffer => ({
   reduceOnly: overrides.reduceOnly ?? false,
   maxUnits: overrides.maxUnits ?? 100n,
   maxAssets: overrides.maxAssets ?? 0n,
-  continuousFeeCap: overrides.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
+  continuousFeeCap: overrides.continuousFeeCap ?? 0n,
 });
 
 export const midnightApiTake = (

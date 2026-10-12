@@ -1,147 +1,249 @@
 import {
-  midnightBundlesAbi,
+  midnightBundlesV2Abi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
+import {
+  getChainAddress,
+  registerCustomAddresses,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
+import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  midnightAddresses,
   midnightChainId,
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
-import { PermitKind } from "./types.js";
+
+const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
+const wNative = getChainAddress(midnightChainId, "wNative");
+const borrower = getAddress("0x00000000000000000000000000000000000b0b00");
+
+const params = {
+  chainId: midnightChainId,
+  market: midnightMarket,
+  repay: { type: "full", maxBuyerAssets: 1_010n },
+  collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+  collateralReceiver: borrower,
+  deadline: maxUint256,
+} as const;
+
+const decode = (data: `0x${string}`) =>
+  decodeFunctionData({ abi: midnightBundlesV2Abi, data });
 
 describe("midnightRepayWithdrawCollateral", () => {
-  test("default", () => {
-    const tx = midnightRepayWithdrawCollateral({
-      chainId: midnightChainId,
-      market: midnightMarket,
-      repayAssets: 1_000n,
-      withdrawCollateralAssets: 2_000n,
-      onBehalf: midnightAddresses.taker,
-      deadline: maxUint256,
-    });
-    const decoded = decodeFunctionData({
-      abi: midnightBundlesAbi,
-      data: tx.data,
-    });
+  test("behavior: does not freeze the caller's repay input", () => {
+    const repay = { type: "full", maxBuyerAssets: 1_010n } as const;
+    midnightRepayWithdrawCollateral({ ...params, repay });
 
-    expect(tx.to).toBe(midnightAddresses.midnightBundles);
-    expect(tx.action.args).toEqual({
-      market: midnightMarketId,
-      repayAssets: 1_000n,
-      collateralWithdrawals: 1,
-      onBehalf: midnightAddresses.taker,
-      collateralReceiver: midnightAddresses.taker,
-      deadline: maxUint256,
+    expect(Object.isFrozen(repay)).toBe(false);
+  });
+
+  test("default", () => {
+    const tx = midnightRepayWithdrawCollateral(params);
+    const decoded = decode(tx.data);
+
+    expect(tx.to).toBe(midnightBundlesV2);
+    expect(tx.value).toBe(0n);
+    expect(Object.isFrozen(tx)).toBe(true);
+    expect(tx.action).toEqual({
+      type: "midnightRepayWithdrawCollateral",
+      args: {
+        market: midnightMarketId,
+        repay: { type: "full", maxBuyerAssets: 1_010n },
+        collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+        collateralReceiver: borrower,
+        deadline: maxUint256,
+      },
     });
     expect(decoded.functionName).toBe(
-      "midnightBundlesV1RepayAndWithdrawCollateral",
+      "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
     );
-    expect(decoded.args[1]).toBe(1_000n);
-    expect(decoded.args?.[3]).toEqual({
-      kind: PermitKind.None,
-      data: "0x",
-    });
-    expect(decoded.args?.[6]).toBe(0n);
-    expect(decoded.args?.[7]).toBe(zeroAddress);
+    // targetUnits, maxBuyerAssets, reduceOnly, repayEnabled, offerFills, withdrawals, receiver
+    expect(decoded.args.slice(1, 8)).toEqual([
+      maxUint256,
+      1_010n,
+      true,
+      true,
+      [],
+      [{ collateralIndex: 0n, assets: maxUint256 }],
+      borrower,
+    ]);
+    expect(decoded.args.at(-1)).toBe(zeroAddress);
   });
 
-  test("behavior: repays without collateral withdrawals and appends metadata", () => {
+  test("behavior: wraps native ETH for the wNative loan-token pull", () => {
+    const nativeAmount = 500n;
     const tx = midnightRepayWithdrawCollateral({
-      chainId: midnightChainId,
-      market: midnightMarket,
-      repayAssets: 1_000n,
-      withdrawCollateralAssets: 0n,
-      onBehalf: midnightAddresses.taker,
-      deadline: maxUint256,
+      ...params,
+      market: { ...midnightMarket, loanToken: wNative },
+      nativeAmount,
+    });
+    const decoded = decode(tx.data);
+
+    expect(tx.value).toBe(nativeAmount);
+    expect(decoded.args.at(-1)).toBe(wNative);
+  });
+
+  test("behavior: assets repay encodes the assets target with minUnits = assets", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
+      repay: { type: "assets", assets: 500n },
+      collateralWithdrawals: [],
+    });
+
+    expect(decode(tx.data).functionName).toBe(
+      "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+    );
+    expect(tx.action.args.repay).toEqual({ type: "assets", assets: 500n });
+    // targetBuyerAssets, minUnits
+    expect(decode(tx.data).args.slice(1, 3)).toEqual([500n, 500n]);
+    expect(decode(tx.data).args[6]).toEqual([]);
+  });
+
+  test("behavior: withdraw-only flow encodes a zero assets target", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
+      repay: { type: "assets", assets: 0n },
+      collateralWithdrawals: [
+        { collateralIndex: 0n, assets: 2_000n },
+        { collateralIndex: 0n, assets: maxUint256 },
+      ],
+    });
+
+    expect(decode(tx.data).functionName).toBe(
+      "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+    );
+    expect(decode(tx.data).args.slice(1, 3)).toEqual([0n, 0n]);
+    expect(decode(tx.data).args[6]).toEqual([
+      { collateralIndex: 0n, assets: 2_000n },
+      { collateralIndex: 0n, assets: maxUint256 },
+    ]);
+  });
+
+  test("error: native funding exceeds a withdraw-only wNative pull", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        market: { ...midnightMarket, loanToken: wNative },
+        repay: { type: "assets", assets: 0n },
+        nativeAmount: 1n,
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({ field: "nativeAmount", value: 1n, max: 0n }),
+    );
+  });
+
+  test("behavior: appends metadata", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
       metadata: { origin: "a1b2c3d4" },
     });
-    const decoded = decodeFunctionData({
-      abi: midnightBundlesAbi,
-      data: tx.data,
-    });
 
-    expect(tx.action.args.collateralWithdrawals).toBe(0);
-    expect(decoded.args[4]).toEqual([]);
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
-  });
-
-  test("error: NegativeInputError", () => {
-    const params = {
-      chainId: midnightChainId,
-      market: midnightMarket,
-      repayAssets: 1_000n,
-      withdrawCollateralAssets: 0n,
-      onBehalf: midnightAddresses.taker,
-      deadline: maxUint256,
-    } as const;
-
-    expect(() =>
-      midnightRepayWithdrawCollateral({ ...params, repayAssets: -1n }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      midnightRepayWithdrawCollateral({
-        ...params,
-        withdrawCollateralAssets: -1n,
-      }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      midnightRepayWithdrawCollateral({ ...params, deadline: -1n }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      midnightRepayWithdrawCollateral({
-        ...params,
-        withdrawCollateralAssets: 1n,
-        collateralIndex: -1n,
-      }),
-    ).toThrow(NegativeInputError);
   });
 
   test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
-        chainId: midnightChainId,
-        market: midnightMarket,
-        repayAssets: 0n,
-        withdrawCollateralAssets: 0n,
-        onBehalf: midnightAddresses.taker,
-        deadline: maxUint256,
+        ...params,
+        repay: { type: "assets", assets: 0n },
+        collateralWithdrawals: [],
       }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        repay: { type: "full", maxBuyerAssets: 0n },
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        collateralWithdrawals: [{ collateralIndex: 0n, assets: 0n }],
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightRepayWithdrawCollateral({ ...params, deadline: 0n }),
     ).toThrow(NonPositiveInputError);
   });
 
-  test("error: UnknownCollateralIndexError for default withdrawal", () => {
+  test("error: NegativeInputError", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
-        chainId: midnightChainId,
-        market: midnightMarket,
-        repayAssets: 0n,
-        withdrawCollateralAssets: 2_000n,
-        collateralIndex: 1n,
-        onBehalf: midnightAddresses.taker,
-        deadline: maxUint256,
+        ...params,
+        repay: { type: "assets", assets: -1n },
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when the full-repay cap is unbounded", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        repay: { type: "full", maxBuyerAssets: maxUint256 },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: InputExceedsMaxError when an amount exceeds uint256", () => {
+    for (const overrides of [
+      { repay: { type: "assets", assets: maxUint256 } },
+      { repay: { type: "full", maxBuyerAssets: maxUint256 + 1n } },
+      {
+        collateralWithdrawals: [
+          { collateralIndex: 0n, assets: maxUint256 + 1n },
+        ],
+      },
+    ] as const) {
+      expect(() =>
+        midnightRepayWithdrawCollateral({ ...params, ...overrides }),
+      ).toThrow(InputExceedsMaxError);
+    }
+  });
+
+  test("error: UnknownCollateralIndexError", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        collateralWithdrawals: [{ collateralIndex: 1n, assets: 1n }],
       }),
     ).toThrow(UnknownCollateralIndexError);
   });
 
-  test("error: ChainIdMismatchError", () => {
+  test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
+    const chainId = 999_001;
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          blue: getAddress("0x0000000000000000000000000000000000000b01"),
+          adaptiveCurveIrm: getAddress(
+            "0x0000000000000000000000000000000000000b02",
+          ),
+          midnight: midnightMarket.midnight,
+        },
+      },
+    });
+
     expect(() =>
       midnightRepayWithdrawCollateral({
-        chainId: midnightChainId,
-        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
-        repayAssets: 1_000n,
-        withdrawCollateralAssets: 0n,
-        onBehalf: midnightAddresses.taker,
-        deadline: maxUint256,
+        ...params,
+        chainId,
+        market: { ...midnightMarket, chainId: BigInt(chainId) },
       }),
+    ).toThrow(UnknownAddressError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({ ...params, chainId: 1 }),
     ).toThrow(ChainIdMismatchError);
   });
 });

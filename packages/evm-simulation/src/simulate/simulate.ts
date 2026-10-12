@@ -89,7 +89,7 @@ import { runSimulation } from "./run-simulation.js";
  *   `instanceof InvalidChainIdError` tells them apart). Never bypassable.
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
- *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
+ *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV2).
  *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
  *   timeout budget or returns a malformed JSON-RPC envelope. A looked-up state

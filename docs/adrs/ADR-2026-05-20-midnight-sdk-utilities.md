@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; the `midnightBundles` address and deployment keys and the `midnightBundlesAbi` export superseded by ADR-2026-10-02-midnight-bundles-v2-sdk-actions |
 | **Date**   | 2026-05-20 |
 | **Author** | @0xbulma  |
 | **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |

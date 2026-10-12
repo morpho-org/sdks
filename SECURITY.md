@@ -156,9 +156,9 @@ When a new major is released, the previous major stops receiving fixes. The late
 
 ## Release integrity and verification
 
-Packages are developed in a private repository. Each release is published to this repository as a snapshot commit on `main`, built from an allowlist of public files and scanned for internal references and secrets before it is opened as a pull request here.
+Packages are developed in a private repository. Each release is published to this repository as a snapshot commit on `main`, built from an allowlist of public files and scanned for internal references and secrets. A dedicated GitHub App, the only actor allowed to update `main`, pushes it as GitHub-signed commits, without a pull request and never with a force push.
 
-1. A release snapshot merged to `main` runs [`release.yml`](./.github/workflows/release.yml).
+1. A release snapshot pushed to `main` runs [`release.yml`](./.github/workflows/release.yml).
 2. An unprivileged **Pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions.
 3. A privileged **Publish** job, in the `npm` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry. It then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
 4. Package git tags and GitHub releases are created only after npm accepts the publish, on the commit that set each version.

@@ -1,89 +1,114 @@
-import { type MarketInput, midnightBundlesAbi } from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import {
-  type Address,
-  encodeFunctionData,
-  maxUint256,
-  zeroAddress,
-} from "viem";
+  type MarketInput,
+  MarketUtils,
+  midnightBundlesV2Abi,
+} from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  validateDeadline,
+  validateMidnightNativeAmount,
+  validateReferralFee,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
+  type MidnightBuyTarget,
   type MidnightTakeLendAction,
-  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
+  UnboundedMidnightTakeInputError,
 } from "../../types/index.js";
-import { type MidnightTakeableOffer, PermitKind } from "./types.js";
+import type {
+  MidnightReferralFeeParams,
+  MidnightTakeableOffer,
+} from "./types.js";
 
 /** Parameters for encoding a Midnight lend take from already selected offers. */
-export interface MidnightTakeLendParams {
+export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
   readonly chainId: number;
   readonly market: MarketInput;
-  readonly assets: bigint;
-  readonly minUnits: bigint;
-  readonly taker: Address;
+  /** Loan assets paid with a unit floor, or units bought with a loan-asset cap. */
+  readonly target: MidnightBuyTarget;
+  /**
+   * Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount.
+   */
+  readonly nativeAmount?: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
-  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
+  readonly maxContinuousFee: bigint;
+  /** Bounded bundle execution deadline timestamp. */
   readonly deadline: bigint;
   readonly metadata?: Metadata;
 }
 
 /**
- * Encodes a Midnight bundle that lends loan assets by taking borrow-side offers.
+ * Encodes a `MidnightBundlesV2` buy that lends into borrow-side offers for `msg.sender`.
  *
- * Prefer `client.morpho.midnight(chainId).takeLend(...)` in app flows so
- * approval and authorization requirements are resolved first. Use this
- * low-level builder only after the Midnight API has returned takeable offers
- * and the caller has already handled prerequisites.
+ * Prefer `client.morpho.midnight(chainId).takeLend(...)` in app flows so the loan-token approval
+ * and the `MidnightBundlesV2` authorization are resolved before building the bundle.
  *
- * @param params.chainId - Chain id used to resolve `MidnightBundles`.
+ * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.market - Midnight market traded by every takeable offer.
- * @param params.assets - Loan assets the lender spends.
- * @param params.minUnits - Minimum units accepted from the bundle quote.
- * @param params.taker - Lender address executing the bundle.
+ * @param params.target - `{ type: "assets", assets, minUnits }` or `{ type: "units", units, maxBuyerAssets }`.
+ * @param params.nativeAmount - Optional native ETH sent as `value`; the bundle wraps it into the
+ *   chain's wNative and transfers it to `msg.sender` before pulling. It may cover part or all of the
+ *   maximum wNative amount this call can pull, but not more. Any wrapped native not pulled stays in
+ *   the sender's wallet as wNative. The wNative approval to `MidnightBundlesV2` is still required
+ *   for the full pulled amount.
  * @param params.takeableOffers - ABI-ready borrow-side offers returned by the Midnight API.
- * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.maxContinuousFee - Largest market continuous fee accepted, in the unit of the market's
+ *   onchain `continuousFee` (`Market.continuousFee`): a WAD-scaled per-second rate, so `317097919n`
+ *   is about 1% per year. The take reverts if the market fee is higher. Pass `maxUint256` for no cap.
+ * @param params.deadline - Bounded bundle execution deadline timestamp.
+ * @param params.referralFeePct - Optional WAD-scaled referral fee paid out of the pulled assets.
+ * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
- * @returns A deep-frozen `Transaction<MidnightTakeLendAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when `assets <= 0n`.
- * @throws {NegativeInputError} when `minUnits` or `deadline` is negative.
+ * @returns A deep-frozen `Transaction<MidnightTakeLendAction>` targeting `MidnightBundlesV2`.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
- * @throws {ChainIdMismatchError} when the market targets another chain.
- * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
+ * @throws {NonPositiveInputError} when the target amount, `minUnits`, `maxBuyerAssets` or `deadline` is not positive.
+ * @throws {NegativeInputError} when `maxContinuousFee`, `referralFeePct` or `nativeAmount` is negative.
+ * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
+ * @throws {NativeAmountOnNonWNativeAssetError} when `market.loanToken` is not wNative.
+ * @throws {InputExceedsMaxError} when `target.assets`, `target.units`, `minUnits`, `maxBuyerAssets`,
+ *   `maxContinuousFee` or `deadline` exceeds `uint256`, or `nativeAmount` exceeds the maximum
+ *   wNative amount this call can pull.
+ * @throws {UnboundedMidnightTakeInputError} when `target.units`, `target.maxBuyerAssets` or
+ *   `deadline` is `maxUint256`.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
  * @example
  * ```ts
+ * import { Time } from "@morpho-org/morpho-ts";
  * import { maxUint256 } from "viem";
  * import { midnightTakeLend } from "@morpho-org/morpho-sdk";
  *
  * const tx = midnightTakeLend({
  *   chainId: 8453,
  *   market: marketData.params,
- *   assets: 1_000_000n,
- *   minUnits: 900_000n,
- *   taker: lender,
+ *   target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
  *   takeableOffers: quote.data.takeableOffers,
- *   deadline: maxUint256,
+ *   maxContinuousFee: maxUint256,
+ *   deadline: Time.timestamp() + 600n,
  * });
  * ```
  */
 export const midnightTakeLend = (
   params: MidnightTakeLendParams,
 ): Readonly<Transaction<MidnightTakeLendAction>> => {
-  if (params.assets <= 0n) {
-    throw new NonPositiveInputError("assets", params.assets);
-  }
-  if (params.minUnits < 0n) {
-    throw new NegativeInputError("minUnits", params.minUnits);
-  }
-  if (params.deadline < 0n) {
-    throw new NegativeInputError("deadline", params.deadline);
-  }
-  // Reject markets from another chain deployment before encoding the bundle.
+  // Reject markets from another chain deployment before checking offers against them.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = validateTakeableOffers({
     market: params.market,
@@ -91,31 +116,84 @@ export const midnightTakeLend = (
     expectedBuy: false,
   });
 
-  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const { target } = params;
+  if (target.type === "assets") {
+    if (target.assets <= 0n) {
+      throw new NonPositiveInputError("target.assets", target.assets);
+    }
+    if (target.minUnits <= 0n) {
+      throw new NonPositiveInputError("target.minUnits", target.minUnits);
+    }
+    validateUint256Field("target.assets", target.assets);
+    validateUint256Field("target.minUnits", target.minUnits);
+  } else {
+    if (target.units === maxUint256) {
+      throw new UnboundedMidnightTakeInputError("target.units");
+    }
+    if (target.maxBuyerAssets === maxUint256) {
+      throw new UnboundedMidnightTakeInputError("target.maxBuyerAssets");
+    }
+    if (target.units <= 0n) {
+      throw new NonPositiveInputError("target.units", target.units);
+    }
+    if (target.maxBuyerAssets <= 0n) {
+      throw new NonPositiveInputError(
+        "target.maxBuyerAssets",
+        target.maxBuyerAssets,
+      );
+    }
+    validateUint256Field("target.units", target.units);
+    validateUint256Field("target.maxBuyerAssets", target.maxBuyerAssets);
+  }
+  validateUint256Field("maxContinuousFee", params.maxContinuousFee);
+  if (params.deadline === maxUint256) {
+    throw new UnboundedMidnightTakeInputError("deadline");
+  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  const market = MarketUtils.toStruct(params.market);
+  const nativeFunding = validateMidnightNativeAmount({
+    chainId: params.chainId,
+    nativeAmount: params.nativeAmount,
+    pulls: [
+      {
+        token: market.loanToken,
+        assets:
+          target.type === "assets" ? target.assets : target.maxBuyerAssets,
+      },
+    ],
+  });
+  const args = [
+    false, // reduceOnly
+    false, // repayEnabled
+    params.takeableOffers, // offerFills
+    [], // collateralWithdrawals
+    zeroAddress, // collateralReceiver
+    referralFeePct, // referralFeePct
+    referralFeeRecipient, // referralFeeRecipient
+    params.maxContinuousFee, // maxContinuousFee
+    params.deadline, // deadline
+    nativeFunding.wrappedNative, // wrappedNative
+  ] as const;
 
   let tx = {
-    to: midnightBundles,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: midnightBundlesAbi,
-      functionName: "midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral",
-      args: [
-        params.assets,
-        params.minUnits,
-        params.taker,
-        false,
-        { kind: PermitKind.None, data: "0x" },
-        params.takeableOffers,
-        [],
-        zeroAddress,
-        0n,
-        zeroAddress,
-        maxUint256,
-        params.deadline,
-      ],
-    }),
+    to: getChainAddress(params.chainId, "midnightBundlesV2"),
+    value: nativeFunding.value,
+    data:
+      target.type === "assets"
+        ? encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
+            args: [market, target.assets, target.minUnits, ...args],
+          })
+        : encodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            functionName:
+              "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
+            args: [market, target.units, target.maxBuyerAssets, ...args],
+          }),
   };
-
   if (params.metadata) {
     tx = addTransactionMetadata(tx, params.metadata);
   }
@@ -126,11 +204,12 @@ export const midnightTakeLend = (
       type: "midnightTakeLend",
       args: {
         market: marketId,
-        assets: params.assets,
-        minUnits: params.minUnits,
-        taker: params.taker,
+        target: { ...params.target },
         takeableOffers: params.takeableOffers.length,
+        maxContinuousFee: params.maxContinuousFee,
         deadline: params.deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
     },
   });

@@ -1,4 +1,5 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { decodeFunctionData, isAddressEqual, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -8,23 +9,25 @@ import {
 import { UnsupportedMidnightAuthorizationTargetError } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
 
+const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
+
 describe("midnightSetIsAuthorized", () => {
   test("default", () => {
     const tx = midnightSetIsAuthorized({
       chainId: midnightChainId,
-      authorized: midnightAddresses.midnightBundles,
+      authorized: midnightBundlesV2,
       onBehalf: midnightAddresses.taker,
     });
     const decoded = decodeFunctionData({ abi: midnightAbi, data: tx.data });
 
     expect(tx.to).toBe(midnightAddresses.midnight);
     expect(tx.action.args).toEqual({
-      authorized: midnightAddresses.midnightBundles,
+      authorized: midnightBundlesV2,
       isAuthorized: true,
       onBehalf: midnightAddresses.taker,
     });
     expect(decoded.functionName).toBe("setIsAuthorized");
-    expect(decoded.args[0]).toBe(midnightAddresses.midnightBundles);
+    expect(decoded.args[0]).toBe(midnightBundlesV2);
     expect(decoded.args[1]).toBe(true);
     const onBehalf = decoded.args[2];
     if (typeof onBehalf !== "string") {

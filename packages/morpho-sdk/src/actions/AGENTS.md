@@ -16,7 +16,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `BundlesPermitKind` discriminator; plus `resolveBundlesTokenRequirements`, consumed by the
   entity-layer resolver `entities/requirements/getBundlesTokenRequirements.ts`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
-- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
+- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, and Midnight authorization.
 
 ## Common builder pattern
 
@@ -24,8 +24,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
    `VaultBundlesV1` entrypoint directly. **Blue write paths**
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
-   redeem / offer cancellation) encode their target contract call directly. Vault `inKindRedeem` and
+   `MidnightBundlesV2` entrypoint call directly (see
+   [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
+   collateral supply / redeem) encode their target contract call directly. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
@@ -40,6 +41,49 @@ standalone contract wraps the value internally, so these paths do not add a toke
 Direct BlueBundlesV1 funding sends the native amount as `tx.value`; it is exclusive with an ERC-20
 token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
 position and takes no native funding.
+
+## MidnightBundlesV2 (canonical statement)
+
+Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md).
+
+- **One action per intent, not per entrypoint.** V2 has one maker entrypoint
+  (`midnightBundlesV2CancelAndMake`) and four taker entrypoints; the arguments select the intent
+  (empty lists, zero `newRoot`, `assetsToPark`, `reduceOnly`, `repayEnabled`, empty `offerFills`).
+  Each taker builder fixes its intent-selecting arguments and exposes only the inputs that vary
+  within that intent; never expose them as free inputs. Reject inputs that would make one intent
+  encode another intent's call (for example an empty collateral list on a collateral flow) with a
+  typed error. Maker intents share one pure builder, `midnightCancelAndMake`, which mirrors the
+  contract call and does not guard intents; the entity methods fill in its intent arguments and
+  enforce the per-intent rules.
+- **Every entrypoint acts for `msg.sender`.** Inputs name that account `accountAddress`; there is no
+  `taker`, `onBehalf` or `maker` distinct from it, and maker offers must have
+  `maker === accountAddress`.
+- **Requirements.** Token requirements are plain ERC-20 approvals from `accountAddress` to
+  `midnightBundlesV2`, returned when the allowance is below the pulled assets and set to an
+  unlimited allowance (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`, or
+  `approvalAmount` passed to `getRequirements()`/`getMidnightApprovalRequirements`), plus, for lend
+  makers, a likewise unlimited approval to `midnight` when the allowance is below the loan
+  reserve pulled when offers are taken (Blue-funded lend makers need none:
+  their `BlueBuyCallback` pays Midnight); V2 takes no inline permit, so never produce
+  ERC-2612 or Permit2 requirements. Every V2 action requires Midnight authorization of
+  `midnightBundlesV2`, resolved lazily at the entity layer.
+- **Encoding.** Target `getChainAddress(chainId, "midnightBundlesV2")`. Pass every positional
+  argument, labelling each with its contract parameter name in a trailing comment. Arguments of a
+  skipped step get zero values (all-zero `blueMarket` / `market` structs, `zeroHash`, `[]`, `"0x"`);
+  the contract does not read them.
+- **Group cancellations** are `{ group, maxConsumed }` lists: reject negative or above-`uint128`
+  ceilings and duplicate groups. Replacement offers must use groups not in the cancellation list.
+- **Root activation**: the pure `midnightCancelAndMake` builder accepts only the chain's registered
+  `priceRatifierV1` or `rateRatifierV1` and throws
+  `UnsupportedMidnightAuthorizationTargetError` otherwise; maker entity methods pick that ratifier
+  from the tree type. They encode all-zero root-signature fields for every maker and rely on the
+  `MidnightBundlesV2` authorization; only the pure `midnightCancelAndMake` builder accepts an
+  explicit delegated signature (see [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md)).
+- **Native funding.** V2 flows that can pull wNative accept an optional `nativeAmount`, sent as
+  `tx.value` with the chain's registered wNative as `wrappedNative`. It cannot exceed the call's
+  total wNative pull, and the wNative approval to `midnightBundlesV2` still covers the full pull.
+  An omitted or zero amount encodes `value = 0` and `wrappedNative = zeroAddress`, as do flows that
+  pull nothing, such as `midnightCancelAndMake` / `cancelOffers`.
 
 ## Shared liquidity / reallocations (canonical statement)
 

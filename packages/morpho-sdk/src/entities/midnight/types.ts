@@ -1,86 +1,132 @@
+import type { InputMarketParams as BlueMarketParams } from "@morpho-org/blue-sdk";
 import type {
   AccrualPosition,
   Market,
-  MarketInput,
   MidnightFetchParams,
+  PriceRatifierV1TreeCreateRequest,
+  RateRatifierV1TreeCreateRequest,
   Tree,
-  TreeInput,
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
-import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
+import type { MidnightMakeBorrowCollateral } from "../../actions/midnight/cancelAndMake.js";
+import type {
+  MidnightReferralFeeParams,
+  MidnightTakeableOffer,
+} from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
-  MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
+  MidnightBuyTarget,
+  MidnightCancelAndMakeAction,
+  MidnightCollateralTransfer,
+  MidnightGroupCancellation,
+  MidnightRepay,
+  MidnightSellTarget,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
-export type OfferValidationParams = Omit<TreeMempoolValidateParams, "chainId">;
+export type OfferValidationParams = Omit<
+  TreeMempoolValidateParams,
+  "chainId" | "ratification"
+>;
+
+/**
+ * Offers accepted by Midnight maker flows: a PriceRatifierV1 or RateRatifierV1 tree, or
+ * the `Tree.create` request that builds one.
+ */
+export type MidnightMakerTreeInput =
+  | PriceRatifierV1TreeCreateRequest
+  | RateRatifierV1TreeCreateRequest
+  | Tree<"priceV1">
+  | Tree<"rateV1">;
 
 /** Parameters for building and validating Midnight offer data. */
 export interface GetOffersDataParams {
   readonly accountAddress: Address;
-  readonly offers: TreeInput;
+  readonly offers: MidnightMakerTreeInput;
   readonly validation?: OfferValidationParams;
 }
 
-interface OffersDataBase {
+/** Prepared Midnight maker-offer data with the payload derived from its tree. */
+export interface OffersData {
   readonly accountAddress: Address;
   readonly groups: readonly Hex[];
-  readonly tree: Tree;
+  readonly tree: Tree<"priceV1"> | Tree<"rateV1">;
+  readonly ratifierType: "priceV1" | "rateV1";
   readonly ratifier: Address;
+  /** Encoded offer payload for `tree.root`. */
+  readonly payload: Hex;
 }
 
-/** Prepared Midnight maker-offer data discriminated by its ratifier execution path. */
-export type OffersData =
-  | (OffersDataBase & {
-      readonly ratifierType: "ecrecover";
-      readonly setterPayload?: never;
-    })
-  | (OffersDataBase & {
-      readonly ratifierType: "setter";
-      readonly setterPayload: Hex;
-    });
-
-/** Parameters shared by Midnight maker-offer flows. */
+/** Parameters shared by Midnight maker flows. */
 export interface MakeOffersParams {
+  /** Maker expected on every offer. Must send the transaction: V2 acts on `msg.sender`. */
   readonly accountAddress: Address;
-  readonly offers: TreeInput;
+  readonly offers: MidnightMakerTreeInput;
+  /** Previous offer groups to cancel atomically. Omit or pass `[]` for a new publication. */
+  readonly cancellations?: readonly MidnightGroupCancellation[];
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
   readonly validation?: OfferValidationParams;
 }
 
-/** Parameters for the Midnight make-lend maker flow. */
+/** Parameters for a Midnight lend maker flow. */
 export interface MakeLendParams extends MakeOffersParams {
   readonly loanToken: Address;
   /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
   readonly loanAssets: bigint;
-  /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. */
+  /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. Leave out groups listed in `cancellations`; this transaction cancels them. */
   readonly reservedLoanAssets?: bigint;
 }
 
-/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
-export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
-  readonly market: MarketInput;
-  /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
-  readonly collateralAssets: bigint;
-  /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
-  readonly reservedCollateralAssets?: bigint;
-  readonly collateralIndex?: bigint;
+/** Parameters for the Midnight Blue-funded lend maker flow. */
+export interface SupplyBlueMakeLendParams extends MakeOffersParams {
+  /**
+   * Morpho Blue market the parked assets are supplied to; its loan token must match every offer.
+   * The contract does not check supply share-price slippage: use only markets protected against
+   * supply-share-price inflation. Markets with no supply shares or parked amounts that mint zero
+   * shares are rejected.
+   */
+  readonly blueMarket: BlueMarketParams;
+  /** Loan assets pulled from the maker and supplied to `blueMarket` for the maker's callback. */
+  readonly assetsToPark: bigint;
+  /** Salt selecting the maker's `BlueBuyCallback`; the same salt reuses the same callback. */
+  readonly callbackSalt: Hex;
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
 }
 
-/** Signatures accepted by Midnight action-output transaction builders. */
-export type MidnightActionSignatures =
-  | MidnightOfferRootSignature
-  | readonly MidnightOfferRootSignature[];
+/** Parameters for the Midnight collateral-supplying borrow maker flow. */
+export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
+  /** Required collateral supplied before activation; every offer must target `collateral.market`. */
+  readonly collateral: MidnightMakeBorrowCollateral;
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
+}
+
+/** Options for Midnight `getRequirements()`. */
+export interface MidnightRequirementsParams {
+  /**
+   * ERC-20 allowance to set when an approval is needed. Defaults to `maxUint256` (capped per token by
+   * `MAX_TOKEN_APPROVALS`). Applies to every token the flow approves and must cover the amount each
+   * of them pulls. Flows that need no token approval ignore it.
+   */
+  readonly approvalAmount?: bigint;
+}
 
 /**
  * Lazy Midnight entity result with async requirements and sync transaction building.
  *
- * Call `getRequirements()` first to collect approvals, authorizations, or
- * signatures. Once those are handled, pass any requirement signatures to
- * `buildTx`; the transaction builder itself performs no fetching or signing.
+ * Call `getRequirements()` first and send the approval and authorization
+ * transactions it returns. `buildTx()` takes no signatures and performs no
+ * fetching or signing.
  *
  * @example
  * ```ts
@@ -101,25 +147,20 @@ export type MidnightActionSignatures =
 export type MidnightActionOutput<
   TAction extends BaseAction,
   TSignatures = undefined,
-> = ActionOutput<TAction, TSignatures, undefined>;
+> = ActionOutput<TAction, TSignatures, MidnightRequirementsParams>;
 
 /**
- * Output returned by maker-offer flows after offer-tree preparation.
+ * Output returned by Midnight maker flows after offer-tree preparation.
  *
- * Use `groups` and `root` for review UI, call `getRequirements()` to collect
- * ratifier approval or signature requirements, then call `buildTx(signatures)`
- * to publish the encoded payload to the Midnight mempool.
+ * Use `groups` and `root` for review UI, send the approval and authorization
+ * requirements from `getRequirements()`, then send `buildTx()` from the maker.
  *
  * @example
  * ```ts
- * const output = await midnight.makeLend(params);
+ * const output = await midnight.makeBorrow(params);
  * console.log(output.root, output.groups);
- * const requirements = await output.getRequirements();
- * const signatures = [];
- * for (const requirement of requirements) {
- *   if ("sign" in requirement) {
- *     signatures.push(await requirement.sign(walletClient, maker));
- *   } else {
+ * for (const requirement of await output.getRequirements()) {
+ *   if (!("sign" in requirement)) {
  *     await walletClient.sendTransaction({
  *       to: requirement.to,
  *       data: requirement.data,
@@ -127,17 +168,14 @@ export type MidnightActionOutput<
  *     });
  *   }
  * }
- * const tx = output.buildTx(signatures);
+ * await walletClient.sendTransaction(output.buildTx());
  * ```
  */
 export interface MakeOffersOutput
-  extends MidnightActionOutput<
-    MempoolSubmitOffersAction,
-    MidnightActionSignatures
-  > {
+  extends MidnightActionOutput<MidnightCancelAndMakeAction> {
   readonly groups: readonly Hex[];
   readonly root: Hex;
-  readonly ratifierType: "ecrecover" | "setter";
+  readonly ratifierType: "priceV1" | "rateV1";
 }
 
 /** Parameters shared by Midnight market action flows. */
@@ -147,27 +185,82 @@ export interface MarketActionParams {
 }
 
 /** Parameters for the Midnight take-lend taker flow. */
-export interface TakeLendParams extends MarketActionParams {
-  readonly assets: bigint;
-  readonly minUnits: bigint;
+export interface TakeLendParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets paid with a unit floor, or units bought with a loan-asset cap. */
+  readonly target: MidnightBuyTarget;
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
-  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
+  readonly maxContinuousFee: bigint;
+  /** Bounded bundle execution deadline timestamp. */
   readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight take-borrow taker flow. */
-export interface TakeBorrowParams extends MarketActionParams {
-  readonly loanAssets: bigint;
-  readonly maxUnits: bigint;
+export interface TakeBorrowParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets received with a unit cap, or units sold with a loan-asset floor. */
+  readonly target: MidnightSellTarget;
+  /** Recipient of the borrowed loan assets. Defaults to `accountAddress`. */
+  readonly receiver?: Address;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
-  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  /** Bounded bundle execution deadline timestamp. */
+  readonly deadline: bigint;
+}
+
+/** Parameters for the Midnight credit-withdrawal taker flow. */
+export interface TakeWithdrawParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets received with a credit-unit cap, or credit units sold with a loan-asset floor. */
+  readonly target: MidnightSellTarget;
+  /** Recipient of the withdrawn loan assets. Defaults to `accountAddress`. */
+  readonly receiver?: Address;
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
+  /** Bounded bundle execution deadline timestamp. */
   readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
 export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
-  readonly collateralAssets: bigint;
-  readonly collateralIndex?: bigint;
+  /** Collateral supplied before borrowing; must not be empty. */
+  readonly collateralSupplies: readonly MidnightCollateralTransfer[];
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
+}
+
+/** Parameters for the Midnight offer-based repay-and-withdraw-collateral taker flow. */
+export interface TakeRepayWithdrawCollateralParams
+  extends MarketActionParams,
+    MidnightReferralFeeParams {
+  /** Loan assets paid with a unit floor, or debt units repaid with a loan-asset cap. `units: maxUint256` targets the whole debt; `assets` and `maxBuyerAssets` bound the loan assets pulled and must be below `maxUint256`. */
+  readonly target: MidnightBuyTarget;
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
+  /** Repays the rest of the target directly to Midnight when offers do not fill it. */
+  readonly repayEnabled: boolean;
+  /** Collateral withdrawn after repaying. Defaults to none. */
+  readonly collateralWithdrawals?: readonly MidnightCollateralTransfer[];
+  /** Recipient of withdrawn collateral. Defaults to `accountAddress`. */
+  readonly collateralReceiver?: Address;
+  /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
+  readonly maxContinuousFee: bigint;
+  /** Bounded bundle execution deadline timestamp. */
+  readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight supply-collateral flow. */
@@ -189,9 +282,17 @@ export interface RedeemParams {
 
 /** Parameters for the Midnight repay-and-withdraw-collateral flow. */
 export interface RepayWithdrawCollateralParams extends MarketActionParams {
-  readonly repayAssets: bigint;
-  readonly withdrawCollateralAssets: bigint;
-  readonly collateralIndex?: bigint;
+  /** `{ type: "assets", assets }` repays exactly `assets` (`0n` only withdraws); `{ type: "full", maxBuyerAssets }` repays the whole debt at execution with a finite asset cap. */
+  readonly repay: MidnightRepay;
+  /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers
+   * it to `msg.sender` before pulling. It may cover part or all of the maximum wNative amount this
+   * call can pull, but not more. Any wrapped native not pulled stays in the sender's wallet as
+   * wNative. The wNative approval to `MidnightBundlesV2` is still required for the full pulled amount. */
+  readonly nativeAmount?: bigint;
+  /** `assets: maxUint256` withdraws the whole balance of that collateral. Defaults to none. */
+  readonly collateralWithdrawals?: readonly MidnightCollateralTransfer[];
+  /** Defaults to `accountAddress`. */
+  readonly collateralReceiver?: Address;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }

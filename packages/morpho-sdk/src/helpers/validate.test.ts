@@ -6,7 +6,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { type Address, maxUint128 } from "viem";
+import { type Address, maxUint128, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
@@ -49,6 +49,7 @@ import {
   validateAccrualPosition,
   validateChainId,
   validateMidnightMarketChainId,
+  validateMidnightNativeAmount,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
@@ -342,6 +343,115 @@ describe("validateNativeAsset", () => {
     expect(() => validateNativeAsset(ChainId.CeloMainnet, usdc)).toThrow(
       ChainWNativeMissingError,
     );
+  });
+});
+
+describe("validateMidnightNativeAmount", () => {
+  const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
+  const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
+
+  test("returns zero funding for undefined and zero amounts", () => {
+    expect(
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        pulls: [{ token: wNative, assets: 1_000n }],
+      }),
+    ).toEqual({ value: 0n, wrappedNative: zeroAddress });
+    expect(
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 0n,
+        pulls: [{ token: wNative, assets: 1_000n }],
+      }),
+    ).toEqual({ value: 0n, wrappedNative: zeroAddress });
+  });
+
+  test("rejects negative amounts", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: -1n,
+        pulls: [{ token: wNative, assets: 1_000n }],
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("rejects positive funding when no wNative is pulled", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 1n,
+        pulls: [{ token: usdc, assets: 1_000n }],
+      }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
+  });
+
+  test("rejects funding when the call has no pulls", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 1n,
+        pulls: [],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({ field: "nativeAmount", value: 1n, max: 0n }),
+    );
+  });
+
+  test("rejects funding when a wNative pull is zero", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 1n,
+        pulls: [{ token: wNative, assets: 0n }],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({ field: "nativeAmount", value: 1n, max: 0n }),
+    );
+  });
+
+  test("rejects funding above the total wNative pull", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 2_001n,
+        pulls: [{ token: wNative, assets: 2_000n }],
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("allows partial funding", () => {
+    expect(
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 1_000n,
+        pulls: [{ token: wNative, assets: 2_000n }],
+      }),
+    ).toEqual({ value: 1_000n, wrappedNative: wNative });
+  });
+
+  test("sums multiple wNative pulls", () => {
+    expect(
+      validateMidnightNativeAmount({
+        chainId: mainnet.id,
+        nativeAmount: 2_000n,
+        pulls: [
+          { token: wNative, assets: 1_000n },
+          { token: usdc, assets: 10_000n },
+          { token: wNative.toLowerCase() as Address, assets: 1_000n },
+        ],
+      }),
+    ).toEqual({ value: 2_000n, wrappedNative: wNative });
+  });
+
+  test("rejects a chain without registered wNative", () => {
+    expect(() =>
+      validateMidnightNativeAmount({
+        chainId: ChainId.CeloMainnet,
+        nativeAmount: 1n,
+        pulls: [{ token: wNative, assets: 1n }],
+      }),
+    ).toThrow(ChainWNativeMissingError);
   });
 });
 

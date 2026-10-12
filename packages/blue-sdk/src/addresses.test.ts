@@ -172,7 +172,6 @@ describe("addresses helpers", () => {
       blue,
       adaptiveCurveIrm: randomAddress(),
       midnight: randomAddress(),
-      midnightBundles: randomAddress(),
       midnightMempool: randomAddress(),
       ecrecoverRatifier: randomAddress(),
       setterRatifier: randomAddress(),

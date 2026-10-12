@@ -1,5 +1,58 @@
 # @morpho-org/midnight-sdk
 
+## 2.0.0
+
+### Major Changes
+
+- Remove the MidnightBundles (V1) contract symbols, per ADR-2026-10-02-midnight-bundles-v2-sdk-actions. `midnight-sdk` drops `midnightBundlesAbi`; `morpho-ts` drops the `midnightBundles` address and deployment-block keys, and `blue-sdk` re-exports the narrowed registries (it now peers on `morpho-ts` ^4). The `evm-simulation` bundle-retention guard restricts `midnightBundlesV2` instead of `midnightBundles` (see `docs/migrations/evm-simulation-v5-to-v6.md`). `blue-sdk-viem` and `morpho-test` widen their peer ranges to the new majors. Integrations that still use V1 stay on the previous majors.
+
+### Minor Changes
+
+- Add guarded batch offer-group cancellation through MidnightBundlesV2. `midnight-sdk` exports `midnightBundlesV2Abi` (bundles commit `07f293b3`), `morpho-ts` registers the `midnightBundlesV2` address and deployment block on Ethereum, Base, Arc, and Robinhood (`blue-sdk` now requires `morpho-ts` `^4.0.0` as a peer), and `morpho-sdk` adds `client.morpho.midnight(chainId).cancelOffers({ accountAddress, cancellations, deadline })` and the `midnightCancelAndMake` builder. Each `{ group, maxConsumed }` entry marks the group fully consumed for `msg.sender`; the whole transaction reverts with `ConsumedAboveMax` if any group's consumption exceeds its ceiling. No root is published, no assets are parked, and no collateral moves. MidnightBundlesV2 is also accepted as a Midnight authorization target. New errors: `EmptyMidnightGroupCancellationsError`, `DuplicateMidnightGroupCancellationError`.
+
+  Breaking migration: `cancelOffer` is replaced by `cancelOffers`. The new call goes through MidnightBundlesV2, so `getRequirements()` first returns a Midnight authorization of `midnightBundlesV2`, and `deadline` is required (`maxUint256` for no expiry). `maxConsumed: maxUint128` cancels the group however much of it is already filled.
+
+  ```ts
+  // before
+  midnight.cancelOffer({ group, accountAddress });
+  // after
+  midnight.cancelOffers({
+    accountAddress,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+
+  // before
+  midnightCancelOffer({ chainId, group, onBehalf, amount });
+  // after
+  midnightCancelAndMake({
+    chainId,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+  ```
+
+  `onBehalf` and the partial `amount` have no replacement: MidnightBundlesV2 always acts for `msg.sender` and marks each cancelled group fully consumed.
+
+  `cancelOffer`, `midnightCancelOffer`, `MidnightCancelOfferAction`, `MidnightCancelOfferParams`, and `MidnightAmountExceedsMaxOfferCapError` are removed.
+
+- Publish Midnight maker offers atomically through MidnightBundlesV2. `makeLend`, `makeBorrow`, and `supplyCollateralMakeBorrow` keep their names and publish atomically with optional cancellations. `makeBorrow` uses its existing offers params without collateral; `supplyCollateralMakeBorrow` requires collateral. One transaction cancels the replaced groups under `maxConsumed` guards, activates a PriceRatifierV1 or RateRatifierV1 root, and publishes the payload for `msg.sender`. The pure `midnightCancelAndMake` builder accepts an optional nested publication, including an explicit delegated root signature. The MidnightMempool and SetterRatifier maker routes, Ecrecover offer-root signatures, and their exported types and errors are removed. New errors: `MidnightOfferRatifierMismatchError`, `MidnightReplacementGroupCancelledError`, `EmptyMidnightCollateralSuppliesError`, `MidnightOfferReduceOnlyError`. The three maker methods reject `reduceOnly` offers. See `MIGRATION-v6-to-v7.md`.
+
+  The pure `midnightCancelAndMake` builder accepts only the chain's registered `priceRatifierV1` or `rateRatifierV1` and throws `UnsupportedMidnightAuthorizationTargetError` otherwise; `UnknownMidnightRatifierError` is removed.
+
+  `midnight-sdk` exports the `MidnightBundlesV2` `CollateralTransfer` and `GroupCancellation` struct types; `morpho-sdk` re-exports them from `/midnight/types` and as `MidnightCollateralTransfer`/`MidnightGroupCancellation` from `/types`.
+
+- Add `client.morpho.midnight(chainId).supplyBlueMakeLend`: one MidnightBundlesV2 transaction parks loan assets in a Morpho Blue market for the maker's `BlueBuyCallback` and publishes lend offers funded by it, optionally cancelling replaced groups. Offers must use the derived callback and `abi.encode(blueMarket)` as callback data; markets with no supply shares or parked amounts that would mint zero shares are rejected. `midnightCancelAndMake` accepts `publication.blueSupply`. New exports: `getMidnightBlueBuyCallbackAddress` (computes the maker's callback address offline), `getMidnightBlueBuyCallbackData` (encodes the market params for offer callback data), `blueBuyCallbackFactoryAbi` (`midnightBlueBuyCallbackFactoryAbi` from `@morpho-org/morpho-sdk`), `MidnightSupplyBlueMakeLendParams`, `MidnightBlueSupply`, `MidnightOfferCallbackMismatchError`, `MidnightOfferCallbackDataMismatchError`, `EmptyBlueParkingMarketError`, `ZeroBlueParkingSharesError`.
+
+### Patch Changes
+
+- Register the Tempo (chain 4217) `midnightBundlesV2` deployment from morpho-org/deployments
+  address-book.json at commit 357cdff, with its deployment block in the registry. The address is
+  sourced byte-for-byte from the canonical deployment registry and verified on-chain; the deployment
+  block is the first Tempo block with code at that address.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.0.0
+
 ## 1.8.0
 
 ### Minor Changes

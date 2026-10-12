@@ -13,7 +13,7 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * allowance.
  *
  * The spender is validated by {@link encodeErc20Approval}. Supported spenders are the chain's
- * Permit2, Midnight, MidnightBundles, VaultExitBundlesV1, VaultBundlesV1, and BlueBundlesV1
+ * Permit2, Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, and BlueBundlesV1
  * addresses when configured.
  *
  * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
@@ -28,7 +28,7 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
  *   may be `maxUint256` for reusable Permit2 or saturated-share-repay approvals).
  * @param params.args.spender - Address that will be granted the approval. Must be Permit2,
- *   Midnight, MidnightBundles, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for `chainId`.
+ *   Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.
  * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
  *   followed by the new approval. Empty when no approval is needed.

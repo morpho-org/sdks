@@ -34,7 +34,7 @@ const randomAddress = (): `0x${string}` => {
 
 const createMidnightAddresses = () => ({
   midnight: randomAddress(),
-  midnightBundles: randomAddress(),
+  midnightBundlesV2: randomAddress(),
   midnightMempool: randomAddress(),
   ecrecoverRatifier: randomAddress(),
   ecrecoverAuthorizer: randomAddress(),
@@ -57,7 +57,7 @@ const createChainAddresses = () => ({
 
 const createMidnightDeployments = () => ({
   midnight: 1n,
-  midnightBundles: 2n,
+  midnightBundlesV2: 3n,
   midnightMempool: 3n,
   ecrecoverRatifier: 4n,
   ecrecoverAuthorizer: 5n,
@@ -224,8 +224,8 @@ describe("addressesRegistry", () => {
     expect(getChainAddress(ChainId.BaseMainnet, "midnight")).toBe(
       "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
     );
-    expect(getChainAddress(ChainId.BaseMainnet, "midnightBundles")).toBe(
-      "0x091183d729BE9f808c212b475E387A12E67850A7",
+    expect(getChainAddress(ChainId.BaseMainnet, "midnightBundlesV2")).toBe(
+      "0x0bF30B530f816a619C3F28a3b9f44C441122555D",
     );
     expect(getChainAddress(ChainId.BaseMainnet, "midnightMempool")).toBe(
       "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
@@ -240,6 +240,45 @@ describe("addressesRegistry", () => {
       "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63",
     );
   });
+
+  test.each([
+    {
+      chainId: ChainId.EthMainnet,
+      address: "0x78edB268D228529715744211E11A5d50fd2BDbA4",
+      deploymentBlock: 26_133_585n,
+    },
+    {
+      chainId: ChainId.BaseMainnet,
+      address: "0x0bF30B530f816a619C3F28a3b9f44C441122555D",
+      deploymentBlock: 52_251_677n,
+    },
+    {
+      chainId: ChainId.ArcMainnet,
+      address: "0xEC9FE35d70E770De5f55392Cc0E8D3125f225f91",
+      deploymentBlock: 24_566_124n,
+    },
+    {
+      chainId: ChainId.RobinhoodMainnet,
+      address: "0xf2032F94025C921E8b31511650AfA60094ceD32b",
+      deploymentBlock: 81_659_699n,
+    },
+    {
+      chainId: ChainId.TempoMainnet,
+      address: "0xe0d040daf1C3849FFcbea782Ea1Ce80699f05BA3",
+      deploymentBlock: 42_883_338n,
+    },
+  ])(
+    "behavior: exposes MidnightBundlesV2 on chain %s",
+    ({ chainId, address, deploymentBlock }) => {
+      expect(getChainAddress(chainId, "midnightBundlesV2")).toBe(address);
+      const chainDeployments = deployments[chainId];
+      expect(
+        "midnightBundlesV2" in chainDeployments
+          ? chainDeployments.midnightBundlesV2
+          : undefined,
+      ).toBe(deploymentBlock);
+    },
+  );
 
   test.each([
     [
@@ -377,12 +416,6 @@ describe("addressesRegistry", () => {
     ],
     [
       ChainId.EthMainnet,
-      "midnightBundles",
-      "0x7c00dBB2b6b6b9B28745332e550dC8782Fcf77EC",
-      25_798_264n,
-    ],
-    [
-      ChainId.EthMainnet,
       "midnightBlueBuyCallbackFactory",
       "0x172d1FdC5f79bFe1ED46448f18541E591E5c93a7",
       25_798_272n,
@@ -425,12 +458,6 @@ describe("addressesRegistry", () => {
     ],
     [
       ChainId.ArcMainnet,
-      "midnightBundles",
-      "0x3609525024c88f794CBE09e4832810E2bd737beC",
-      20_321_988n,
-    ],
-    [
-      ChainId.ArcMainnet,
       "midnightBlueBuyCallbackFactory",
       "0x9bD11e1EC7bf3520896F8e3e63d4B70f8d6d177E",
       20_322_111n,
@@ -464,12 +491,6 @@ describe("addressesRegistry", () => {
       "midnight",
       "0x6120765Ba5336150BbdDdD0Cd9108B5bFD369632",
       65_366_296n,
-    ],
-    [
-      ChainId.RobinhoodMainnet,
-      "midnightBundles",
-      "0x71aa985ff80AbcE3b8b443845633674Ca9f7575C",
-      65_387_381n,
     ],
     [
       ChainId.RobinhoodMainnet,
@@ -1094,7 +1115,7 @@ describe("registerCustomAddresses", () => {
     });
 
     expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-    expect(() => getChainAddress(chainId, "midnightBundles")).toThrow(
+    expect(() => getChainAddress(chainId, "midnightBundlesV2")).toThrow(
       UnknownAddressError,
     );
   });
@@ -1251,7 +1272,6 @@ describe("registerCustomAddresses", () => {
 
   test("behavior: exposes Base Midnight deployment blocks", () => {
     expect(deployments[ChainId.BaseMainnet]?.midnight).toBe(48286884n);
-    expect(deployments[ChainId.BaseMainnet]?.midnightBundles).toBe(48286997n);
     expect(deployments[ChainId.BaseMainnet]?.midnightMempool).toBe(48286884n);
     expect(deployments[ChainId.BaseMainnet]?.ecrecoverRatifier).toBe(48286884n);
     expect(deployments[ChainId.BaseMainnet]?.ecrecoverAuthorizer).toBe(

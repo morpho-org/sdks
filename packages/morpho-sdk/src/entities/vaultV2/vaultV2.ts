@@ -244,7 +244,8 @@ export interface VaultV2Actions {
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
-   *   its spender, amount or deadline differ from this operation's.
+   *   its spender or deadline differ from this operation's, or its amount is outside
+   *   `[cap, cap / (1 - slippageTolerance)]`.
    * @throws {viem.BaseError} when an allowance or nonce read or transaction encoding fails.
    * @example
    * ```ts
@@ -806,6 +807,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
         const permit = selectBundlesSharesPermitSignature(signatures, {
           spender,
           amount: requiredShareAllowance,
+          maxAmount: maxShareAllowance,
           deadline,
         });
         return vaultV2Withdraw({

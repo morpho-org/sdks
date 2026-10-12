@@ -1,4 +1,5 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Chain, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
@@ -11,6 +12,8 @@ import {
   UnsupportedMidnightAuthorizationTargetError,
 } from "../../../types/index.js";
 import { getMidnightAuthorizationRequirement } from "./getMidnightAuthorizationRequirement.js";
+
+const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 
 const midnightTestChain = {
   id: midnightChainId,
@@ -33,7 +36,7 @@ describe("getMidnightAuthorizationRequirement", () => {
         viemClient: client,
         chainId: midnightChainId,
         owner: midnightAddresses.taker,
-        authorized: midnightAddresses.midnightBundles,
+        authorized: midnightBundlesV2,
       }),
     ).rejects.toThrow(ChainIdMismatchError);
   });
@@ -52,7 +55,7 @@ describe("getMidnightAuthorizationRequirement", () => {
         viemClient: handle.client,
         chainId: midnightChainId,
         owner: midnightAddresses.taker,
-        authorized: midnightAddresses.midnightBundles,
+        authorized: midnightBundlesV2,
       }),
     ).resolves.toBeNull();
   });
@@ -70,47 +73,55 @@ describe("getMidnightAuthorizationRequirement", () => {
       viemClient: handle.client,
       chainId: midnightChainId,
       owner: midnightAddresses.taker,
-      authorized: midnightAddresses.midnightBundles,
+      authorized: midnightBundlesV2,
     });
 
     expect(tx?.to).toBe(midnightAddresses.midnight);
     expect(tx?.action.type).toBe("midnightAuthorization");
-    expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
+    expect(tx?.action.args.authorized).toBe(midnightBundlesV2);
   });
+
+  test.each([midnightBundlesV2])(
+    "behavior: accepts supported target %s",
+    async (authorized) => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
+
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: handle.client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).resolves.toBeNull();
+    },
+  );
 
   test.each([
-    midnightAddresses.midnightBundles,
+    zeroAddress,
     midnightAddresses.ecrecoverRatifier,
     midnightAddresses.setterRatifier,
-  ])("behavior: accepts supported target %s", async (authorized) => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.midnight,
-      abi: midnightAbi,
-      functionName: "isAuthorized",
-      result: true,
-    });
+    getChainAddress(midnightChainId, "priceRatifierV1"),
+    getChainAddress(midnightChainId, "rateRatifierV1"),
+  ])(
+    "error: UnsupportedMidnightAuthorizationTargetError for %s",
+    async (authorized) => {
+      const { client } = createMockClient(midnightTestChain);
 
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: handle.client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized,
-      }),
-    ).resolves.toBeNull();
-  });
-
-  test("error: UnsupportedMidnightAuthorizationTargetError", async () => {
-    const { client } = createMockClient(midnightTestChain);
-
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized: zeroAddress,
-      }),
-    ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
-  });
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
+    },
+  );
 });

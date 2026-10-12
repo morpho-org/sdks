@@ -9,7 +9,7 @@ import { validateChainId, validateUserAddress } from "./validate.js";
  * `userAddress`, and returns the signature.
  *
  * Use inside requirement `sign(...)` callbacks before converting a signature
- * into protocol calldata or mempool payload bytes. The verification step keeps
+ * into protocol calldata. The verification step keeps
  * wallet/account mismatches from reaching transaction builders.
  *
  * @param params - Signing and verification parameters.
@@ -27,8 +27,8 @@ import { validateChainId, validateUserAddress } from "./validate.js";
  *
  * const signature = await signAndVerifyTypedData({
  *   client: walletClient,
- *   userAddress: maker,
- *   typedData: offerRootTypedData,
+ *   userAddress: user,
+ *   typedData: permitTypedData,
  * });
  * ```
  */

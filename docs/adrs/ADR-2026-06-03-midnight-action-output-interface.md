@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; maker mempool route, `MidnightBundlesV1` taker routes, `buildTx(MidnightActionSignatures)`, offer-root signature types, the cancel-offer action (`cancelOffer` / `midnightCancelOffer`), the exact-amount approval policy of `getMidnightApprovalRequirements` and the `MidnightBundles` authorization-target list superseded by ADR-2026-10-02-midnight-bundles-v2-sdk-actions |
 | **Date**   | 2026-06-03 |
 | **Author** | Romain / Carapulse draft |
 | **Scope**  | Package: `morpho-sdk` / Midnight SDK |

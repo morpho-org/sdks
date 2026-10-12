@@ -1,6 +1,6 @@
 name: Release
 
-# Every merge to main is a release: the repository only receives release
+# Every push to main is a release: the repository only receives release
 # snapshots. Publishing is idempotent, so a rerun only publishes, tags and
 # releases what is missing.
 #
@@ -15,11 +15,11 @@ name: Release
 #   - The `npm` environment allows deployments from `main` only and stores no
 #     secrets. Each npm trusted publisher names this repository, this file and
 #     the `npm` environment.
-#   - `main` rulesets: only the sync App may update it (signed commits, no force
-#     push or deletion), and every change needs a pull request with `ci` passing.
+#   - `main` rulesets: only the sync App may update it, with signed commits and no
+#     force push or deletion.
 #   - No workflow in this repository saves or restores an Actions cache, so code
 #     run by `pack` can't poison anything a privileged job reads.
-# The private sync refuses to open a sync PR, and pages after cutover, while
+# The private sync refuses to push to main, and pages after cutover, while
 # any of the environment and ruleset settings above is missing.
 on:
   push:
@@ -55,7 +55,7 @@ jobs:
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
@@ -67,7 +67,7 @@ jobs:
       - name: Pack publishable tarballs
         run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-tarballs
           path: ${{ runner.temp }}/tarballs
@@ -96,7 +96,7 @@ jobs:
 
       # An exact Node release fixes the bundled npm (11.19.1), which supports
       # trusted publishing. Bump it with .nvmrc's major.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.10.0
           package-manager-cache: false
@@ -104,7 +104,7 @@ jobs:
       - name: Require npm with trusted publishing
         run: node scripts/publish/require-trusted-publishing-npm.ts
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-tarballs
           path: ${{ runner.temp }}/tarballs
@@ -152,7 +152,7 @@ jobs:
           # Full history, to tag each version on the commit that set it.
           fetch-depth: 0
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
@@ -176,7 +176,7 @@ jobs:
           done 3< "$out/tags.txt"
 
       - id: release-plan
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-plan
           path: ${{ runner.temp }}/release-plan
@@ -211,7 +211,7 @@ jobs:
           fi
 
       # By id, so the job checks exactly the artifact prepare-release uploaded.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.prepare-release.outputs.release-plan-id }}
           # Extract into path itself, as a download by name does.

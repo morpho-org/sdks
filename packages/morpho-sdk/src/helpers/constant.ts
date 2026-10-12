@@ -2,6 +2,9 @@ import { ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, maxUint96 } from "viem";
 
+/** Maximum time between now and a Midnight taker-flow deadline, in seconds. */
+export const MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS = 3600n;
+
 /** Maximum slippage tolerance: 10% */
 export const MAX_SLIPPAGE_TOLERANCE = MathLib.WAD / 10n;
 

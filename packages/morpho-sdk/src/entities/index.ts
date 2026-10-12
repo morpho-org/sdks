@@ -128,20 +128,24 @@ export type {
   MakeOffersOutput as MidnightMakeOffersOutput,
   MakeOffersParams as MidnightMakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
+  MidnightMakerTreeInput,
   OffersData as MidnightOffersData,
   OfferValidationParams as MidnightOfferValidationParams,
   RedeemParams as MidnightRedeemParams,
   RepayWithdrawCollateralParams as MidnightRepayWithdrawCollateralParams,
+  SupplyBlueMakeLendParams as MidnightSupplyBlueMakeLendParams,
   SupplyCollateralMakeBorrowParams as MidnightSupplyCollateralMakeBorrowParams,
   SupplyCollateralParams as MidnightSupplyCollateralParams,
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,
   TakeBorrowParams as MidnightTakeBorrowParams,
   TakeLendParams as MidnightTakeLendParams,
+  TakeRepayWithdrawCollateralParams as MidnightTakeRepayWithdrawCollateralParams,
+  TakeWithdrawParams as MidnightTakeWithdrawParams,
 } from "./midnight/index.js";
 export {
   type MidnightActionOutput,
-  type MidnightActionSignatures,
   type MidnightActions,
+  type MidnightRequirementsParams,
   MorphoMidnight,
 } from "./midnight/index.js";
 export * from "./requirements/index.js";

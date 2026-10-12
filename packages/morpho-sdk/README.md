@@ -24,7 +24,8 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating Midnight
+maker integrations. Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
 deposit or Blue write integrations.
 
 ## Actions
@@ -41,9 +42,18 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
-| | `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow` | Midnight mempool |
-| | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood) |
+| | `supplyCollateral`, `redeem` | Direct call |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood) |
+
+`makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
+supplies it in the same transaction.
+
+`makeWithdraw` publishes reduce-only sell offers for lend limit exits. `makeRepay` publishes
+reduce-only buy offers for borrow limit exits and uses the same loan reserve inputs as `makeLend`.
+Both preserve the supplied offer tree and use `midnightCancelAndMake`; neither executes a fill
+or withdraws collateral during publication. Send their approval/authorization requirements first,
+then call `buildTx()` without a separate root signature.
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
@@ -60,7 +70,7 @@ live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directl
 RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
 prerequisites.
 
-- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
@@ -230,6 +240,8 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
 
+Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arc, and Robinhood.
+
 ```typescript
 const midnight = client.morpho.midnight(8453);
 const marketData = await midnight.getMarketData(marketId);
@@ -237,9 +249,9 @@ const marketData = await midnight.getMarketData(marketId);
 const output = midnight.takeLend({
   accountAddress: lender,
   marketData,
-  assets: 1_000_000n,
-  minUnits: 900_000n,
+  target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
   takeableOffers: quote.data.takeableOffers,
+  maxContinuousFee: maxUint256,
   deadline,
 });
 
@@ -323,10 +335,12 @@ graph LR
         MN1[MorphoMidnight]
         MN1 --> MNT[fixed-rate taker actions]
         MN1 --> MNM[maker offer submission]
-        MN1 --> MNP[position actions]
-        MNT --> MNB[MidnightBundles]
-        MNM --> MNMP[Midnight mempool]
-        MNP --> MNC[Midnight / MidnightBundles]
+        MN1 --> MNR[repayWithdrawCollateral]
+        MN1 --> MNP[collateral supply / redeem]
+        MNT --> MNB2[MidnightBundlesV2]
+        MNM --> MNB2
+        MNR --> MNB2
+        MNP --> MNC[Midnight]
     end
 
 
@@ -337,7 +351,7 @@ graph LR
     MV1 -.->|approval / permit| REQ
     MV2 -.->|approval / permit| REQ
     MM1 -.->|approval / permit / authorization| REQ
-    MN1 -.->|approval / authorization / root signature or ratification| REQ
+    MN1 -.->|approval / authorization| REQ
 
     style VBV1 fill:#e8f5e9,stroke:#4caf50
     style BBV1 fill:#e8f5e9,stroke:#4caf50

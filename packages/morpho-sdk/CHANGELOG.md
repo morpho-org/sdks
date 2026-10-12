@@ -1,5 +1,71 @@
 # @morpho-org/morpho-sdk
 
+## 7.0.0
+
+### Major Changes
+
+- Add guarded batch offer-group cancellation through MidnightBundlesV2. `midnight-sdk` exports `midnightBundlesV2Abi` (bundles commit `07f293b3`), `morpho-ts` registers the `midnightBundlesV2` address and deployment block on Ethereum, Base, Arc, and Robinhood (`blue-sdk` now requires `morpho-ts` `^4.0.0` as a peer), and `morpho-sdk` adds `client.morpho.midnight(chainId).cancelOffers({ accountAddress, cancellations, deadline })` and the `midnightCancelAndMake` builder. Each `{ group, maxConsumed }` entry marks the group fully consumed for `msg.sender`; the whole transaction reverts with `ConsumedAboveMax` if any group's consumption exceeds its ceiling. No root is published, no assets are parked, and no collateral moves. MidnightBundlesV2 is also accepted as a Midnight authorization target. New errors: `EmptyMidnightGroupCancellationsError`, `DuplicateMidnightGroupCancellationError`.
+
+  Breaking migration: `cancelOffer` is replaced by `cancelOffers`. The new call goes through MidnightBundlesV2, so `getRequirements()` first returns a Midnight authorization of `midnightBundlesV2`, and `deadline` is required (`maxUint256` for no expiry). `maxConsumed: maxUint128` cancels the group however much of it is already filled.
+
+  ```ts
+  // before
+  midnight.cancelOffer({ group, accountAddress });
+  // after
+  midnight.cancelOffers({
+    accountAddress,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+
+  // before
+  midnightCancelOffer({ chainId, group, onBehalf, amount });
+  // after
+  midnightCancelAndMake({
+    chainId,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+  ```
+
+  `onBehalf` and the partial `amount` have no replacement: MidnightBundlesV2 always acts for `msg.sender` and marks each cancelled group fully consumed.
+
+  `cancelOffer`, `midnightCancelOffer`, `MidnightCancelOfferAction`, `MidnightCancelOfferParams`, and `MidnightAmountExceedsMaxOfferCapError` are removed.
+
+- Remove MidnightBundles (V1) support: `midnightBundlesAbi` is no longer re-exported, `"midnightBundles"` is dropped from `RequirementSpenderKey` and from the approval, permit and Midnight authorization allowlists, and `UnsupportedErc20ApprovalSpenderError` loses its `midnightBundles` field, and `PermitKind` / `MidnightTokenPermit` are removed (V2 takes no inline token permits). See `MIGRATION-v6-to-v7.md`.
+- Publish Midnight maker offers atomically through MidnightBundlesV2. `makeLend`, `makeBorrow`, and `supplyCollateralMakeBorrow` keep their names and publish atomically with optional cancellations. `makeBorrow` uses its existing offers params without collateral; `supplyCollateralMakeBorrow` requires collateral. One transaction cancels the replaced groups under `maxConsumed` guards, activates a PriceRatifierV1 or RateRatifierV1 root, and publishes the payload for `msg.sender`. The pure `midnightCancelAndMake` builder accepts an optional nested publication, including an explicit delegated root signature. The MidnightMempool and SetterRatifier maker routes, Ecrecover offer-root signatures, and their exported types and errors are removed. New errors: `MidnightOfferRatifierMismatchError`, `MidnightReplacementGroupCancelledError`, `EmptyMidnightCollateralSuppliesError`, `MidnightOfferReduceOnlyError`. The three maker methods reject `reduceOnly` offers. See `MIGRATION-v6-to-v7.md`.
+
+  The pure `midnightCancelAndMake` builder accepts only the chain's registered `priceRatifierV1` or `rateRatifierV1` and throws `UnsupportedMidnightAuthorizationTargetError` otherwise; `UnknownMidnightRatifierError` is removed.
+
+  `midnight-sdk` exports the `MidnightBundlesV2` `CollateralTransfer` and `GroupCancellation` struct types; `morpho-sdk` re-exports them from `/midnight/types` and as `MidnightCollateralTransfer`/`MidnightGroupCancellation` from `/types`.
+
+- Midnight `repayWithdrawCollateral` now routes through MidnightBundlesV2 for the sender. It takes `repay: { type: "assets", assets }` (`0n` only withdraws) or `repay: { type: "full", maxBuyerAssets }` (repays the whole debt at execution, pulling the finite `maxBuyerAssets` upfront and refunding the rest, so the sender must hold the full cap; reverts with `Panic(0x11)` if the debt at execution exceeds it), a `collateralWithdrawals` list (`assets: maxUint256` withdraws the whole balance) and an optional `collateralReceiver`. `MidnightRepayWithdrawCollateralAction.args` now exposes `repay` and the withdrawal list. `repayAssets`, `withdrawCollateralAssets`, `collateralIndex` and `onBehalf` are removed. See `MIGRATION-v6-to-v7.md`.
+- Route Midnight `takeLend`, `takeBorrow` and `supplyCollateralTakeBorrow` through MidnightBundlesV2 for `msg.sender`. Each takes a `target` union that selects the assets-target or units-target entrypoint (`MidnightBuyTarget` for lends, `MidnightSellTarget` for borrows) instead of `assets`/`minUnits` or `loanAssets`/`maxUnits`; the `taker` input is removed. `takeLend` requires `maxContinuousFee`; all three accept an optional referral fee, and the borrows an optional `receiver`. `supplyCollateralTakeBorrow` takes a non-empty `collateralSupplies` list. Requirements approve tokens to and authorize MidnightBundlesV2. `MidnightCollateralSupply` is removed. See `MIGRATION-v6-to-v7.md`.
+- Midnight `getRequirements()` and `getMidnightApprovalRequirements` now return unlimited (`maxUint256`) ERC-20 approvals — capped per token by `MAX_TOKEN_APPROVALS` — instead of the exact pulled amount, because all of an account's offers and bundle calls share one allowance per token. Callers can pass `getRequirements({ approvalAmount })` (or `approvalAmount` on `getMidnightApprovalRequirements`) to set a different allowance.
+
+### Minor Changes
+
+- Add Midnight `makeWithdraw` and `makeRepay` methods for reduce-only lender and borrower limit exits through MidnightBundlesV2. Both preserve the supplied offer tree and reject offers with the wrong side or without reduceOnly. New error: `MidnightOfferNotReduceOnlyError`.
+- Add optional native ETH funding to Midnight Bundles V2 flows that pull wNative.
+- Add Midnight `takeRepayWithdrawCollateral` and the `midnightTakeRepayWithdrawCollateral` builder: a reduce-only MidnightBundlesV2 buy that repays debt through borrow-side offers, optionally repays the remainder directly (`repayEnabled`), then withdraws collateral.
+- Add Midnight `takeWithdraw` and the `midnightTakeWithdraw` builder: a reduce-only MidnightBundlesV2 sell that redeems the sender's credit first, then sells the rest of the target to lend-side offers, without opening debt.
+- Reject unsafe Midnight maker offers, non-positive taker bounds, unbounded targets and take deadlines, zero receivers, and take deadlines beyond one hour.
+- Add `client.morpho.midnight(chainId).supplyBlueMakeLend`: one MidnightBundlesV2 transaction parks loan assets in a Morpho Blue market for the maker's `BlueBuyCallback` and publishes lend offers funded by it, optionally cancelling replaced groups. Offers must use the derived callback and `abi.encode(blueMarket)` as callback data; markets with no supply shares or parked amounts that would mint zero shares are rejected. `midnightCancelAndMake` accepts `publication.blueSupply`. New exports: `getMidnightBlueBuyCallbackAddress` (computes the maker's callback address offline), `getMidnightBlueBuyCallbackData` (encodes the market params for offer callback data), `blueBuyCallbackFactoryAbi` (`midnightBlueBuyCallbackFactoryAbi` from `@morpho-org/morpho-sdk`), `MidnightSupplyBlueMakeLendParams`, `MidnightBlueSupply`, `MidnightOfferCallbackMismatchError`, `MidnightOfferCallbackDataMismatchError`, `EmptyBlueParkingMarketError`, `ZeroBlueParkingSharesError`.
+
+### Patch Changes
+
+- Register the Tempo (chain 4217) `midnightBundlesV2` deployment from morpho-org/deployments
+  address-book.json at commit 357cdff, with its deployment block in the registry. The address is
+  sourced byte-for-byte from the canonical deployment registry and verified on-chain; the deployment
+  block is the first Tempo block with code at that address.
+- Vault V1 and V2 `withdraw().buildTx()` accept a vault-share permit signed for any amount between the share cap and the cap divided by `1 - slippageTolerance`, the same range already accepted for an onchain allowance, so a permit signed against an earlier snapshot stays usable after re-preparing.
+- Bump the `zod` dev dependency from 4.4.3 to 4.6.5 to clear three low-severity advisories on 4.4.3. `zod` is only used by the package's tests, so the published package is unchanged.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.0.0
+  - @morpho-org/blue-sdk@8.0.0
+  - @morpho-org/midnight-sdk@2.0.0
+  - @morpho-org/blue-sdk-viem@6.2.1
+
 ## 6.6.0
 
 ### Minor Changes

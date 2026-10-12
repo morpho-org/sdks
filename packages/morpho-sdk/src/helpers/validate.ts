@@ -167,8 +167,7 @@ export const validateMidnightMarketChainId = (
  * the provided user address.
  *
  * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
- * backs the permit, Permit2, Blue authorization, and Midnight offer-root
- * signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
+ * backs the permit, Permit2, and Blue authorization signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
  * signer: the signing flow is
  * the only path where an account/address mismatch is a real security concern
  * (rather than just an integrator footgun).
@@ -329,6 +328,78 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
   if (!isAddressEqual(asset, wNative)) {
     throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
   }
+};
+
+/**
+ * Validates native ETH funding against the wNative tokens pulled by a MidnightBundlesV2 action.
+ *
+ * @param params.chainId - Chain used to resolve wNative.
+ * @param params.nativeAmount - Optional native ETH sent as `value`; the bundle wraps it into the
+ *   chain's wNative and transfers it to `msg.sender` before pulling. It may cover part or all of the
+ *   maximum wNative amount this call can pull, but not more. Any wrapped native not pulled stays in
+ *   the sender's wallet as wNative. The wNative approval to `MidnightBundlesV2` is still required
+ *   for the full pulled amount.
+ * @param params.pulls - Token pulls performed by the bundle action.
+ * @returns The transaction `value` and the `wrappedNative` contract argument.
+ * @throws {NegativeInputError} when `nativeAmount` is negative.
+ * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
+ * @throws {NativeAmountOnNonWNativeAssetError} when pulls are non-empty and none use wNative.
+ * @throws {InputExceedsMaxError} when `nativeAmount` exceeds the maximum wNative pull, including
+ *   when the call pulls none.
+ * @example
+ * ```ts
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
+ * import { validateMidnightNativeAmount } from "@morpho-org/morpho-sdk";
+ *
+ * const wNative = getChainAddress(8453, "wNative");
+ * const funding = validateMidnightNativeAmount({
+ *   chainId: 8453,
+ *   nativeAmount: 1_000n,
+ *   pulls: [{ token: wNative, assets: 2_000n }],
+ * });
+ * funding.value; // 1_000n
+ * funding.wrappedNative; // wNative
+ * ```
+ */
+export const validateMidnightNativeAmount = (params: {
+  readonly chainId: number;
+  readonly nativeAmount?: bigint;
+  readonly pulls: readonly {
+    readonly token: Address;
+    readonly assets: bigint;
+  }[];
+}): { value: bigint; wrappedNative: Address } => {
+  const { nativeAmount, chainId, pulls } = params;
+  if (nativeAmount === undefined || nativeAmount === 0n) {
+    return { value: 0n, wrappedNative: zeroAddress };
+  }
+  if (nativeAmount < 0n) {
+    throw new NegativeInputError("nativeAmount", nativeAmount);
+  }
+
+  const { wNative } = getChainAddresses(chainId);
+  if (!isDefined(wNative)) {
+    throw new ChainWNativeMissingError(chainId);
+  }
+
+  const wNativePulled = pulls.reduce(
+    (total, pull) =>
+      isAddressEqual(pull.token, wNative) ? total + pull.assets : total,
+    0n,
+  );
+  const firstPull = pulls[0];
+  if (firstPull && !pulls.some((pull) => isAddressEqual(pull.token, wNative))) {
+    throw new NativeAmountOnNonWNativeAssetError(firstPull.token, wNative);
+  }
+  if (nativeAmount > wNativePulled) {
+    throw new InputExceedsMaxError({
+      field: "nativeAmount",
+      value: nativeAmount,
+      max: wNativePulled,
+    });
+  }
+
+  return { value: nativeAmount, wrappedNative: wNative };
 };
 
 /** @internal Validates native funding against a vault's wrapped-native asset. */

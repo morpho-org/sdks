@@ -55,7 +55,7 @@ Biome owns formatting and linting. Run `pnpm lint` before pushing; the repositor
 
 ## How This Repository Is Released
 
-This repository holds the source of each published release. Every commit on `main` is a release: it is synced from the SDK team's development repository once that release has passed its checks, and merging it publishes the changed packages to npm with provenance, tags them and creates one GitHub Release per package.
+This repository holds the source of each published release. Every push to `main` is a release: the SDK team's development repository builds it once that release has passed its checks, and a dedicated GitHub App pushes it to `main` as GitHub-signed commits, without a pull request. That push publishes the changed packages to npm with provenance, tags them and creates one GitHub Release per package.
 
 ## Pull Request Process
 

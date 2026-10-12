@@ -1,5 +1,6 @@
 export type {
   BuildFixedRateOfferChainParams,
+  CollateralTransfer,
   DecodedEcrecoverRatifierData,
   DecodedPriceRatifierV1Data,
   DecodedRateRatifierV1Data,
@@ -19,6 +20,7 @@ export type {
   EcrecoverSignatureInput,
   FixedRateOfferChainLeg,
   GetRatifierInfoParams,
+  GroupCancellation,
   MidnightCallParameters,
   MidnightFetchParams,
   PriceRatifierV1Leaf,

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "3.2.1",
+  "version": "4.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -33,7 +33,8 @@
   },
   "files": [
     "lib",
-    "MIGRATION-v2-to-v3.md"
+    "MIGRATION-v2-to-v3.md",
+    "MIGRATION-v3-to-v4.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",

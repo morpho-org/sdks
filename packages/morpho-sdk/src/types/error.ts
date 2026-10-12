@@ -671,7 +671,8 @@ export class BundlesPermitMismatchError extends Error {
   /**
    * @param params - Permit mismatch values used to explain the rejection.
    * @param params.field - Permit field that does not match the exit.
-   * @param params.expected - Value required by the exit.
+   * @param params.expected - Value required by the exit. For `field: "amount"` on an
+   *   operation that accepts a range of permit amounts, an inclusive `"[min, max]"` range.
    * @param params.actual - Value supplied by the signature.
    * @param params.cause - Original parser failure when signature decoding is wrapped.
    */
@@ -935,8 +936,7 @@ export class MaxRepayAssetsBelowRepayAssetsError extends Error {
 export type RequirementSignatureKind =
   | "permit"
   | "permit2SignatureTransfer"
-  | "authorization"
-  | "midnightOfferRootSignature";
+  | "authorization";
 
 /**
  * Thrown when `buildTx` receives more than one requirement signature of the same kind.
@@ -1047,15 +1047,10 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
     readonly chainId: number;
     readonly permit2?: Address;
     readonly midnight?: Address;
-    readonly midnightBundles?: Address;
     readonly supportedSpenders?: readonly (Address | undefined)[];
   }) {
     const supported = (
-      params.supportedSpenders ?? [
-        params.permit2,
-        params.midnight,
-        params.midnightBundles,
-      ]
+      params.supportedSpenders ?? [params.permit2, params.midnight]
     )
       .filter((address) => address != null)
       .join('", "');
@@ -1065,7 +1060,7 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   }
 }
 
-/** Thrown when a Midnight authorization requirement targets an unsupported operator. */
+/** Thrown when a Midnight authorization target (a requirement operator, or the ratifier that `midnightCancelAndMake` activates and MidnightBundlesV2 authorizes) is not registered for the chain. */
 export class UnsupportedMidnightAuthorizationTargetError extends Error {
   constructor(params: {
     readonly authorized: Address;
@@ -1547,15 +1542,29 @@ export class ReallocationAdapterSupplySharesUnderflowError extends Error {
   }
 }
 
-/** Thrown when a Midnight amount exceeds the maximum offer-cap value accepted onchain. */
-export class MidnightAmountExceedsMaxOfferCapError extends Error {
-  constructor(params: {
-    readonly label: string;
-    readonly amount: bigint;
-    readonly maxOfferCap: bigint;
-  }) {
+/** Thrown when a Midnight batch cancellation has no offer groups. */
+export class EmptyMidnightGroupCancellationsError extends Error {
+  constructor() {
     super(
-      `Midnight ${params.label} "${params.amount}" exceeds maximum offer cap "${params.maxOfferCap}". Reduce the amount to the maximum offer cap or less.`,
+      "Midnight group cancellations cannot be empty. Pass at least one offer group to cancel.",
+    );
+  }
+}
+
+/** Thrown when a Midnight flow passes a collateral market with no collateral supplies. */
+export class EmptyMidnightCollateralSuppliesError extends Error {
+  constructor() {
+    super(
+      "Midnight collateral supplies cannot be empty. Pass at least one collateral supply, or use `makeBorrow` to publish without collateral.",
+    );
+  }
+}
+
+/** Thrown when a Midnight batch cancellation lists the same offer group twice. */
+export class DuplicateMidnightGroupCancellationError extends Error {
+  constructor(params: { readonly index: number; readonly group: Hex }) {
+    super(
+      `Midnight group cancellation "${params.index}" repeats group "${params.group}". Pass each offer group once.`,
     );
   }
 }
@@ -1582,6 +1591,15 @@ export class MidnightOfferSideMismatchError extends Error {
   }
 }
 
+/** Thrown when a Midnight maker method that is not a limit exit receives a reduce-only offer. */
+export class MidnightOfferReduceOnlyError extends Error {
+  constructor(params: { readonly index: number }) {
+    super(
+      `Midnight offer "${params.index}" is reduce-only. Rebuild the offer with reduceOnly=false; reduce-only exits need a dedicated exit flow.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight maker offer belongs to a different account than the action flow. */
 export class MidnightOfferMakerMismatchError extends Error {
   constructor(params: {
@@ -1592,6 +1610,118 @@ export class MidnightOfferMakerMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" belongs to maker "${params.actualMaker}", expected "${params.expectedMaker}". Rebuild the offer set for the active account.`,
     );
+  }
+}
+
+/** Thrown when a Midnight maker offer sets a nonzero continuous fee cap. */
+export class MidnightOfferContinuousFeeCapError extends Error {
+  /** Offer index in the maker tree. */
+  public readonly index: number;
+  /** Continuous fee cap supplied on the offer. */
+  public readonly continuousFeeCap: bigint;
+
+  /**
+   * @param params - Offer index and rejected fee cap.
+   * @param params.index - Offer index in the maker tree.
+   * @param params.continuousFeeCap - Continuous fee cap supplied on the offer.
+   */
+  public constructor(params: {
+    readonly index: number;
+    readonly continuousFeeCap: bigint;
+  }) {
+    super(
+      `Midnight offer "${params.index}" has continuous fee cap "${params.continuousFeeCap}". Maker offers must use 0n; rebuild the offer with its fee cap set to zero.`,
+    );
+    this.index = params.index;
+    this.continuousFeeCap = params.continuousFeeCap;
+    this.name = "MidnightOfferContinuousFeeCapError";
+  }
+}
+
+/** Thrown when a Midnight sell offer routes its seller proceeds to another address. */
+export class MidnightOfferSellerReceiverMismatchError extends Error {
+  /** Offer index in the maker tree. */
+  public readonly index: number;
+  /** Offer maker, which must receive seller proceeds. */
+  public readonly expectedReceiver: Address;
+  /** Seller receiver supplied on the offer. */
+  public readonly actualReceiver: Address;
+
+  /**
+   * @param params - Offer index and expected and actual seller receivers.
+   * @param params.index - Offer index in the maker tree.
+   * @param params.expectedReceiver - Offer maker, which must receive seller proceeds.
+   * @param params.actualReceiver - Seller receiver supplied on the offer.
+   */
+  public constructor(params: {
+    readonly index: number;
+    readonly expectedReceiver: Address;
+    readonly actualReceiver: Address;
+  }) {
+    super(
+      `Midnight sell offer "${params.index}" routes seller proceeds to "${params.actualReceiver}", expected its maker "${params.expectedReceiver}". Set receiverIfMakerIsSeller to the maker address.`,
+    );
+    this.index = params.index;
+    this.expectedReceiver = params.expectedReceiver;
+    this.actualReceiver = params.actualReceiver;
+    this.name = "MidnightOfferSellerReceiverMismatchError";
+  }
+}
+
+/** Thrown when a Midnight taker flow uses an unbounded target or deadline. */
+export class UnboundedMidnightTakeInputError extends Error {
+  /**
+   * @param field - Target or deadline input set to `maxUint256`.
+   */
+  public constructor(
+    public readonly field:
+      | "target.units"
+      | "target.maxBuyerAssets"
+      | "target.maxUnits"
+      | "deadline",
+  ) {
+    super(
+      `Midnight "${field}" cannot be maxUint256. Provide an explicit bounded value.`,
+    );
+    this.name = "UnboundedMidnightTakeInputError";
+  }
+}
+
+/** Thrown when a Midnight taker flow uses a zero address as its receiver. */
+export class MidnightZeroReceiverError extends Error {
+  /**
+   * @param field - Receiver field containing the zero address.
+   */
+  public constructor(public readonly field: "receiver") {
+    super(
+      `Midnight "${field}" cannot be the zero address. Provide a valid recipient.`,
+    );
+    this.name = "MidnightZeroReceiverError";
+  }
+}
+
+/** Thrown when a Midnight take deadline is more than one hour from the current time. */
+export class MidnightTakeDeadlineTooFarError extends Error {
+  /** Deadline supplied by the caller. */
+  public readonly deadline: bigint;
+  /** Accepted maximum deadline. */
+  public readonly maxDeadline: bigint;
+
+  /**
+   * @param params - Supplied deadline and accepted maximum.
+   * @param params.deadline - Deadline supplied by the caller.
+   * @param params.maxDeadline - Latest accepted deadline.
+   */
+  public constructor(params: {
+    readonly deadline: bigint;
+    readonly maxDeadline: bigint;
+  }) {
+    super(
+      `Midnight take deadline "${params.deadline}" is later than the one-hour limit "${params.maxDeadline}". Choose a deadline within the next hour.`,
+    );
+    this.deadline = params.deadline;
+    this.maxDeadline = params.maxDeadline;
+    this.name = "MidnightTakeDeadlineTooFarError";
   }
 }
 
@@ -1646,6 +1776,53 @@ export class MidnightOfferMarketLoanTokenMismatchError extends Error {
   }
 }
 
+/** Thrown when a Blue-funded Midnight lend offer does not use the maker's derived `BlueBuyCallback`. */
+export class MidnightOfferCallbackMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedCallback: Address;
+    readonly actualCallback: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses callback "${params.actualCallback}", expected the maker's BlueBuyCallback "${params.expectedCallback}". Rebuild the offer with the derived callback.`,
+    );
+  }
+}
+
+/** Thrown when a Blue-funded Midnight lend offer's callback data is not the ABI-encoded Blue market. */
+export class MidnightOfferCallbackDataMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedCallbackData: Hex;
+    readonly actualCallbackData: Hex;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses callback data "${params.actualCallbackData}", expected "${params.expectedCallbackData}". Set the callback data to the ABI-encoded Blue market the assets are parked in.`,
+    );
+  }
+}
+
+/** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
+export class EmptyBlueParkingMarketError extends Error {
+  constructor(params: { readonly marketId: MarketId }) {
+    super(
+      `Morpho Blue market "${params.marketId}" has no supply shares. Parking assets in an empty market is exposed to supply-share-price inflation; choose a market with existing supply.`,
+    );
+  }
+}
+
+/** Thrown when parked assets would mint no Morpho Blue supply shares. */
+export class ZeroBlueParkingSharesError extends Error {
+  constructor(params: {
+    readonly marketId: MarketId;
+    readonly assets: bigint;
+  }) {
+    super(
+      `Supplying "${params.assets}" assets to Morpho Blue market "${params.marketId}" mints zero supply shares at its current share price; park more assets or choose another market.`,
+    );
+  }
+}
+
 /** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
 export class MidnightTakeableOfferMarketMismatchError extends Error {
   constructor(params: {
@@ -1659,69 +1836,24 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
-export class UnknownMidnightRatifierError extends Error {
+/** Thrown when a Midnight offer's ratifier does not match its tree's ratifier route. */
+export class MidnightOfferRatifierMismatchError extends Error {
   constructor(params: {
-    ratifier: Address;
-    ecrecoverRatifier: Address;
-    setterRatifier: Address;
+    index: number;
+    expectedRatifier: Address;
+    actualRatifier: Address;
   }) {
     super(
-      `Midnight offer tree uses ratifier "${params.ratifier}", expected "${params.ecrecoverRatifier}" or "${params.setterRatifier}". Rebuild the tree with a supported ratifier.`,
+      `Midnight offer "${params.index}" uses ratifier "${params.actualRatifier}", expected "${params.expectedRatifier}" for its tree type. Rebuild the offer with the tree's ratifier.`,
     );
   }
 }
 
-/** Thrown when a Midnight Ecrecover maker flow builds the submit transaction before signing. */
-export class MissingMidnightOfferRootSignatureError extends Error {
-  constructor() {
+/** Thrown when a Midnight repost cancels a group it also publishes. */
+export class MidnightReplacementGroupCancelledError extends Error {
+  constructor(params: { readonly group: Hex }) {
     super(
-      "Midnight offer root signature is missing. Sign the offer-root requirement before building the submit transaction.",
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature does not match the prepared tree root. */
-export class MidnightOfferRootMismatchError extends Error {
-  constructor(params: { expectedRoot: string; actualRoot: string }) {
-    super(
-      `Midnight offer root mismatch: expected "${params.expectedRoot}", got "${params.actualRoot}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature was produced by another maker account. */
-export class MidnightOfferRootOwnerMismatchError extends Error {
-  constructor(params: { expectedOwner: Address; actualOwner: Address }) {
-    super(
-      `Midnight offer root owner mismatch: expected "${params.expectedOwner}", got "${params.actualOwner}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature targets another ratifier. */
-export class MidnightOfferRootRatifierMismatchError extends Error {
-  constructor(params: { expectedRatifier: Address; actualRatifier: Address }) {
-    super(
-      `Midnight offer root ratifier mismatch: expected "${params.expectedRatifier}", got "${params.actualRatifier}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature was produced for another offer count. */
-export class MidnightOfferRootOfferCountMismatchError extends Error {
-  constructor(params: { expectedOffers: number; actualOffers: number }) {
-    super(
-      `Midnight offer root offer-count mismatch: expected "${params.expectedOffers}", got "${params.actualOffers}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature carries no encoded payload. */
-export class UnpreparedMidnightOfferRootSignatureError extends Error {
-  constructor() {
-    super(
-      "Midnight offer root signature carries no encoded payload. Sign the offer-root requirement (its signature already includes the payload) before building the submit transaction.",
+      `Midnight offer group "${params.group}" is both published and cancelled. Give replacement offers a fresh group.`,
     );
   }
 }
@@ -1830,6 +1962,15 @@ export class RefinanceTokenMismatchError extends Error {
   constructor(sourceMarket: string, targetMarket: string) {
     super(
       `Refinance source market ${sourceMarket} and target market ${targetMarket} must share the same loanToken and collateralToken.`,
+    );
+  }
+}
+
+/** Thrown when a maker limit-exit offer can increase or open a position. */
+export class MidnightOfferNotReduceOnlyError extends Error {
+  constructor(params: { readonly index: number }) {
+    super(
+      `Midnight exit offer "${params.index}" must have reduceOnly=true. Rebuild the offer tree for the exit intent.`,
     );
   }
 }

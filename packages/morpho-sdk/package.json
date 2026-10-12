@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "6.6.0",
+  "version": "7.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -87,7 +87,8 @@
   ],
   "files": [
     "lib",
-    "MIGRATION-v5-to-v6.md"
+    "MIGRATION-v5-to-v6.md",
+    "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",

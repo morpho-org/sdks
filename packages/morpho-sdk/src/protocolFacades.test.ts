@@ -1,5 +1,6 @@
 import {
   blueMarketParamsAbi,
+  midnightBlueBuyCallbackFactoryAbi,
   midnightEcrecoverRatifierAbi,
   midnightPriceRatifierV1Abi,
   midnightRateRatifierV1Abi,
@@ -105,6 +106,7 @@ import {
   fetchMidnightPosition,
 } from "@morpho-org/morpho-sdk/fetch";
 import {
+  blueBuyCallbackFactoryAbi as rawMidnightBlueBuyCallbackFactoryAbi,
   ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi,
   priceRatifierV1Abi as rawMidnightPriceRatifierV1Abi,
   rateRatifierV1Abi as rawMidnightRateRatifierV1Abi,
@@ -236,6 +238,7 @@ describe("protocol facades", () => {
     [getPermit2PermitTypedData, rawGetPermit2PermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
+    [midnightBlueBuyCallbackFactoryAbi, rawMidnightBlueBuyCallbackFactoryAbi],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
     [midnightPriceRatifierV1Abi, rawMidnightPriceRatifierV1Abi],
     [midnightRateRatifierV1Abi, rawMidnightRateRatifierV1Abi],

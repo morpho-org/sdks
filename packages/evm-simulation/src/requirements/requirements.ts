@@ -204,6 +204,7 @@ export function toSimulationAuthorizations(params: {
 
     if (isRequirementSignature(requirement)) {
       const { action } = requirement;
+      const actionType: string = action.type;
       switch (action.type) {
         case "permit":
           return toErc2612Permit(action, ctx);
@@ -213,7 +214,7 @@ export function toSimulationAuthorizations(params: {
           return toBlueAuthorizationSignature(action, ctx);
         default:
           return unsupported(ctx)(
-            `Signature requirement action type "${action.type}" is not supported. Only permit, permit2SignatureTransfer, and authorization signatures are supported`,
+            `Signature requirement action type "${actionType}" is not supported. Only permit, permit2SignatureTransfer, and authorization signatures are supported`,
           );
       }
     }
