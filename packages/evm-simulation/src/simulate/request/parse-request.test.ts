@@ -17,6 +17,7 @@ const TARGET: Address = getAddress(
 const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
+const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const _MARKET_ID =
   "0x00000000000000000000000000000000000000000000000000000000000000aa";
 
@@ -246,6 +247,138 @@ describe("parseRequest", () => {
     expect(request.authorizations).toHaveLength(1);
     expect((request.authorizations[0] as { owner: Address }).owner).toBe(OWNER);
     expect(request.limits?.operations?.[0]).toMatchObject({ vault: SPENDER });
+  });
+
+  test("behavior: accepts and normalizes transaction assertions", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [
+        tx({
+          assertBefore: [
+            {
+              type: "erc20Balance",
+              token: TOKEN.toLowerCase(),
+              account: OWNER.toLowerCase(),
+              min: 5n,
+            },
+            {
+              type: "nativeBalance",
+              account: OWNER.toLowerCase(),
+              min: 0n,
+            },
+          ],
+          assertAfter: [
+            {
+              type: "maxDeposit",
+              vault: TARGET.toLowerCase(),
+              receiver: OWNER.toLowerCase(),
+              min: maxUint256,
+            },
+          ],
+        }),
+      ],
+    });
+    expect(request.transactions[0]).toMatchObject({
+      assertBefore: [
+        { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        { type: "nativeBalance", account: OWNER, min: 0n },
+      ],
+      assertAfter: [
+        {
+          type: "maxDeposit",
+          vault: TARGET,
+          receiver: OWNER,
+          min: maxUint256,
+        },
+      ],
+    });
+  });
+
+  test("behavior: empty assertion arrays are omitted", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx({ assertBefore: [], assertAfter: [] })],
+    });
+    expect(request.transactions[0]).not.toHaveProperty("assertBefore");
+    expect(request.transactions[0]).not.toHaveProperty("assertAfter");
+  });
+
+  test.each([
+    {
+      assertion: { type: "other", account: OWNER, min: 1n },
+      field: "assertBefore[0].type",
+    },
+    {
+      assertion: {
+        type: "erc20Balance",
+        token: TOKEN,
+        account: OWNER,
+        min: 1n,
+        extra: true,
+      },
+      field: "assertBefore[0].extra",
+    },
+    {
+      assertion: {
+        type: "erc20Balance",
+        token: "not-an-address",
+        account: OWNER,
+        min: 1n,
+      },
+      field: "assertBefore[0].token",
+    },
+    {
+      assertion: {
+        type: "nativeBalance",
+        account: OWNER,
+        min: -1n,
+      },
+      field: "assertBefore[0].min",
+    },
+    {
+      assertion: {
+        type: "maxDeposit",
+        vault: TARGET,
+        receiver: OWNER,
+        min: 1,
+      },
+      field: "assertBefore[0].min",
+    },
+  ])(
+    "error: rejects malformed assertion field $field",
+    ({ assertion, field }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx({ assertBefore: [assertion] })],
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.join("\n"),
+      ).toContain(`transactions[0].${field}`);
+    },
+  );
+
+  test("error: rejects a non-array assertion list", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx({ assertBefore: { type: "nativeBalance" } })],
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors?.join("\n"),
+    ).toContain("transactions[0].assertBefore: must be an array");
   });
 
   test("behavior: preview without authorizations parses", () => {

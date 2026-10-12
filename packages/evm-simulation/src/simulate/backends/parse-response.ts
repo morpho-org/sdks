@@ -7,6 +7,7 @@ import {
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
+import { evaluateAssertion } from "../assertions.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
 
@@ -100,9 +101,11 @@ const isSimulateV1Response = (
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
  *   block, on a call-count mismatch, a malformed per-call result, or on a
  *   simulated block that is neither the pinned state block nor its immediate successor.
- * @throws {SimulationRevertedError} When a preparation or user-transaction
- *   call failed; the `details` payload carries tagged user call results only.
- * @throws {MissingVerificationEvidenceError} When a planned state read fails.
+ * @throws {SimulationRevertedError} When an assertion or preparation or
+ *   user-transaction call failed; the `details` payload carries tagged user
+ *   call results only.
+ * @throws {MissingVerificationEvidenceError} When a planned state or assertion
+ *   read fails or returns no data.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -241,32 +244,75 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  // A user-transaction revert belongs to the bundle, not the boundary.
-  const failedUserCall = calls.find(
-    ({ planned, result }) => planned.type === "transaction" && !result.status,
-  );
-  if (failedUserCall && failedUserCall.planned.type === "transaction") {
-    throw new SimulationRevertedError(
-      failedUserCall.call.error?.message ?? "Simulation failed",
-      deepFreeze(
-        calls
-          .filter(
-            (
-              entry,
-            ): entry is typeof entry & {
-              planned: PlannedCall & {
-                type: "transaction";
-                transactionIndex: number;
-              };
-            } => entry.planned.type === "transaction",
-          )
-          .map(({ planned, result }) => ({
-            transactionIndex: planned.transactionIndex,
-            result,
-          })),
-      ),
-      "UNKNOWN_REVERT",
-    );
+  for (const [
+    transactionIndex,
+    transaction,
+  ] of plan.request.transactions.entries()) {
+    for (const [phase, assertions] of [
+      ["before", transaction.assertBefore],
+      ["after", transaction.assertAfter],
+    ] as const) {
+      if (phase === "after") {
+        const userCall = calls.find(
+          ({ planned }) =>
+            planned.type === "transaction" &&
+            planned.transactionIndex === transactionIndex,
+        );
+        if (
+          userCall?.planned.type === "transaction" &&
+          !userCall.result.status
+        ) {
+          throw new SimulationRevertedError(
+            userCall.call.error?.message ?? "Simulation failed",
+            deepFreeze(
+              calls
+                .filter(
+                  (
+                    entry,
+                  ): entry is typeof entry & {
+                    planned: PlannedCall & {
+                      type: "transaction";
+                      transactionIndex: number;
+                    };
+                  } => entry.planned.type === "transaction",
+                )
+                .map(({ planned, result }) => ({
+                  transactionIndex: planned.transactionIndex,
+                  result,
+                })),
+            ),
+            "UNKNOWN_REVERT",
+          );
+        }
+      }
+
+      assertions?.forEach((assertion, assertionIndex) => {
+        const executedAssertion = calls.find(
+          ({ planned }) =>
+            planned.type === "assertion" &&
+            planned.transactionIndex === transactionIndex &&
+            planned.phase === phase &&
+            planned.assertionIndex === assertionIndex,
+        );
+        if (executedAssertion?.planned.type !== "assertion") {
+          throw new InvalidSimulationResponseError(
+            `eth_simulateV1 plan is missing assertion result ${transactionIndex}:${phase}:${assertionIndex}.`,
+            { context: errorContext },
+          );
+        }
+        evaluateAssertion({
+          assertion,
+          returnData: executedAssertion.result.returnData,
+          status: executedAssertion.result.status,
+          transactionIndex,
+          phase,
+          assertionIndex,
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: params.stateBlockNumber,
+        });
+      });
+    }
   }
 
   const stateReads: ExecutedStateRead[] = [];

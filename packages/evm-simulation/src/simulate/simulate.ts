@@ -10,15 +10,15 @@ import { runSimulation } from "./run-simulation.js";
  * Parses and normalizes the request → resolves a single pinned block (skipped
  * when `params.block` is supplied) → resolves quoted-asset metadata → plans
  * state reads and the execution → executes once through `eth_simulateV1` under
- * the full timeout budget (simulation with in-block state reads → response
- * parsing) → derives ERC20/WETH9 transfers and net asset changes from the
- * user calls only → decodes quoted balances/positions → runs slippage checks
+ * the full timeout budget (in-block state reads and transaction assertions →
+ * response parsing) → derives ERC20/WETH9 transfers and net asset changes from
+ * the user calls only → decodes quoted balances/positions → runs slippage checks
  * → asserts no funds are retained by standalone `bundles` periphery contracts
  * → returns the result. The caller reads whichever fields they need:
  *
- * - `simulationTxs` → exactly the caller's ordered transactions, normalized
- *   (checksummed addresses, `value` defaulted to `0n`). Internal state reads are
- *   never exposed.
+ * - `simulationTxs` → the caller's ordered `from`/`to`/`data`/`value` fields,
+ *   normalized (checksummed addresses, `value` defaulted to `0n`). Internal
+ *   reads and assertion declarations are never exposed.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`,
  *   `gasUsed`), aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe
  *   gas limit; consumers deriving one must add their own headroom.
@@ -48,7 +48,11 @@ import { runSimulation } from "./run-simulation.js";
  *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
  *   there is no separate `eth_chainId` lookup.
  * @param params.transactions - The bundle's transactions, in execution order.
- *   All must share the same `from`.
+ *   All must share the same `from`. Each transaction may include caller-supplied
+ *   `assertBefore` and `assertAfter` arrays; their ERC-20 balance, native
+ *   balance, or vault `maxDeposit` reads run immediately before or after that
+ *   transaction in the same `eth_simulateV1` call. Assertions are not inferred
+ *   from calldata.
  * @param params.mode - `"final"` (default) or `"preview"`.
  * @param params.authorizations - Preview-only typed authorization descriptors.
  * @param params.limits - Optional quotes and percentage tolerances; unquoted amounts require no reads.
@@ -61,8 +65,8 @@ import { runSimulation } from "./run-simulation.js";
  *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
  *   combined with `blockNumber`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
- *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
+ *   addresses, empty transactions, malformed assertions or authorizations,
+ *   final-mode authorizations, malformed limits, unknown fields, a `"pending"` block tag,
  *   a malformed `block` or one combined with `blockNumber`, a
  *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
  *   that is not a boolean, or share quotes for
@@ -72,17 +76,20 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured, or limits/preview authorizations require a Morpho
  *   Blue address absent from blue-sdk's `getChainAddresses`.
- * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
+ * @throws {SimulationRevertedError} when a preparation or user transaction
+ *   reverts, or an assertion fails (`INSUFFICIENT_BALANCE` for balance
+ *   assertions; `CAP_EXCEEDED` for `maxDeposit`).
  * @throws {MissingVerificationEvidenceError} when a planned state read fails
- *   or returns empty data, native outgoing traces do not cover value
- *   sent, or required metadata reverts or returns empty/invalid data.
+ *   or returns empty data, native outgoing traces do not cover value sent, an
+ *   assertion read fails or returns empty data, or required metadata reverts
+ *   or returns empty/invalid data.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
- *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded).
+ *   malformed per-call result, or a quoted balance/position or assertion read
+ *   whose non-empty return data cannot be decoded).
  * @throws {InvalidChainIdError} when the node rejects the request `chainId`
  *   because the endpoint serves another chain (a subclass of
  *   `InvalidSimulationResponseError` sharing its `name`/`code`;

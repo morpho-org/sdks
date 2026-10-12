@@ -15,6 +15,7 @@ export type {
 } from "./authorizations.js";
 export type {
   RetainedAsset,
+  SimulationAssertionContext,
   SimulationErrorCode,
   SimulationErrorContext,
   SimulationExecutionContext,
@@ -79,6 +80,7 @@ export { simulate } from "./simulate/index.js";
 // Types
 export type {
   AccountAssetChanges,
+  Assertion,
   AssetChange,
   ChainSimulationConfig,
   RawLog,

@@ -29,6 +29,7 @@ import {
   type SimulationMode,
   type StateBlock,
 } from "../../params.js";
+import type { Assertion } from "../../types.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
@@ -39,6 +40,8 @@ export interface ParsedTransaction {
   readonly to: Address;
   readonly data: Hex;
   readonly value: bigint;
+  readonly assertBefore?: readonly Assertion[];
+  readonly assertAfter?: readonly Assertion[];
 }
 
 /** The output of {@link parseRequest}: the caller's input validated, checksummed and defaulted.
@@ -114,6 +117,8 @@ interface FieldChecks {
     value: unknown,
     args: { readonly allow: readonly string[]; readonly path: string },
   ): void;
+  assertion(value: unknown, path: string): Assertion | undefined;
+  assertions(value: unknown, path: string): readonly Assertion[] | undefined;
   domain(value: unknown, path: string): Eip712Domain | undefined;
   fields(args: {
     readonly actual: unknown;
@@ -144,7 +149,24 @@ const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
 const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
-const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
+const ASSERTION_TYPES = [
+  "erc20Balance",
+  "nativeBalance",
+  "maxDeposit",
+] as const;
+const ASSERTION_KEYS = {
+  erc20Balance: ["type", "token", "account", "min"],
+  nativeBalance: ["type", "account", "min"],
+  maxDeposit: ["type", "vault", "receiver", "min"],
+} as const;
+const TRANSACTION_KEYS = [
+  "from",
+  "to",
+  "data",
+  "value",
+  "assertBefore",
+  "assertAfter",
+] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
 const LIMITS_KEYS = ["operations"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -226,6 +248,85 @@ const createChecks = (): FieldChecks => {
       for (const key of Object.keys(value)) {
         if (!allow.includes(key)) errors.push(`${path}.${key}: unknown field`);
       }
+    },
+
+    assertion: (value, path) => {
+      if (!isRecord(value)) {
+        errors.push(`${path}: must be an object`);
+        return undefined;
+      }
+      const rawType = readField(value, "type");
+      const type =
+        typeof rawType === "string"
+          ? ASSERTION_TYPES.find((candidate) => candidate === rawType)
+          : undefined;
+      if (type === undefined) {
+        errors.push(
+          `${path}.type: must be one of ${ASSERTION_TYPES.map((item) => `"${item}"`).join(", ")}`,
+        );
+        check.keys(value, { allow: ["type"], path });
+        return undefined;
+      }
+      check.keys(value, { allow: ASSERTION_KEYS[type], path });
+      const min = check.uint256(readField(value, "min"), `${path}.min`);
+      switch (type) {
+        case "erc20Balance": {
+          const token = check.address(
+            readField(value, "token"),
+            `${path}.token`,
+          );
+          const account = check.address(
+            readField(value, "account"),
+            `${path}.account`,
+          );
+          return token === undefined ||
+            account === undefined ||
+            min === undefined
+            ? undefined
+            : { type, token, account, min };
+        }
+        case "nativeBalance": {
+          const account = check.address(
+            readField(value, "account"),
+            `${path}.account`,
+          );
+          return account === undefined || min === undefined
+            ? undefined
+            : { type, account, min };
+        }
+        case "maxDeposit": {
+          const vault = check.address(
+            readField(value, "vault"),
+            `${path}.vault`,
+          );
+          const receiver = check.address(
+            readField(value, "receiver"),
+            `${path}.receiver`,
+          );
+          return vault === undefined ||
+            receiver === undefined ||
+            min === undefined
+            ? undefined
+            : { type, vault, receiver, min };
+        }
+        default: {
+          const _exhaustive: never = type;
+          return _exhaustive;
+        }
+      }
+    },
+
+    assertions: (value, path) => {
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: must be an array`);
+        return undefined;
+      }
+      if (value.length === 0) return undefined;
+      return value
+        .map((assertion, index) =>
+          check.assertion(assertion, `${path}[${index}]`),
+        )
+        .filter((assertion): assertion is Assertion => assertion !== undefined);
     },
 
     domain: (domain, path) => {
@@ -869,8 +970,25 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       const rawValue = readField(tx, "value");
       const value =
         rawValue === undefined ? 0n : check.uint256(rawValue, `${path}.value`);
+      const rawAssertBefore = readField(tx, "assertBefore");
+      const assertBefore =
+        rawAssertBefore === undefined
+          ? undefined
+          : check.assertions(rawAssertBefore, `${path}.assertBefore`);
+      const rawAssertAfter = readField(tx, "assertAfter");
+      const assertAfter =
+        rawAssertAfter === undefined
+          ? undefined
+          : check.assertions(rawAssertAfter, `${path}.assertAfter`);
       if (from !== undefined && to !== undefined && data !== undefined) {
-        transactions.push({ from, to, data, value: value ?? 0n });
+        transactions.push({
+          from,
+          to,
+          data,
+          value: value ?? 0n,
+          ...(assertBefore !== undefined ? { assertBefore } : {}),
+          ...(assertAfter !== undefined ? { assertAfter } : {}),
+        });
         transactionIndices.push(i);
       }
     }

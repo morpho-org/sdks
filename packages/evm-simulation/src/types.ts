@@ -43,6 +43,38 @@ export interface SimulationConfig {
 // Shapes the caller passes per-call or receives back.
 
 /**
+ * A caller-supplied assertion about simulated state immediately before or
+ * after a transaction, evaluated inside the same `eth_simulateV1` call.
+ *
+ * @example
+ * ```ts
+ * simulate(config, { chainId: 1, transactions: [{ from: user, to: bundler, data,
+ *   assertBefore: [
+ *     { type: "erc20Balance", token: USDC, account: user, min: 1000_000000n },
+ *     { type: "maxDeposit", vault, receiver: user, min: 1000_000000n },
+ *   ] }] });
+ * ```
+ */
+export type Assertion =
+  | {
+      readonly type: "erc20Balance";
+      readonly token: Address;
+      readonly account: Address;
+      readonly min: bigint;
+    }
+  | {
+      readonly type: "nativeBalance";
+      readonly account: Address;
+      readonly min: bigint;
+    }
+  | {
+      readonly type: "maxDeposit";
+      readonly vault: Address;
+      readonly receiver: Address;
+      readonly min: bigint;
+    };
+
+/**
  * A single EVM call to simulate. `from` must be identical across all transactions
  * in a bundle — the orchestrator rejects mixed senders with `SimulationValidationError`.
  */
@@ -51,6 +83,18 @@ export interface SimulationTransaction {
   readonly to: Address;
   readonly data: Hex;
   readonly value?: bigint;
+  /**
+   * Caller-supplied assertions checked on simulated state immediately before
+   * this transaction, inside the same `eth_simulateV1` call. Nothing is inferred
+   * from calldata; failure throws `SimulationRevertedError`.
+   */
+  readonly assertBefore?: readonly Assertion[];
+  /**
+   * Caller-supplied assertions checked on simulated state immediately after
+   * this transaction, inside the same `eth_simulateV1` call. Nothing is inferred
+   * from calldata; failure throws `SimulationRevertedError`.
+   */
+  readonly assertAfter?: readonly Assertion[];
 }
 
 /**
@@ -101,8 +145,9 @@ export interface Transfer {
 /**
  * Happy-path return of `simulate`. All failures throw typed errors.
  *
- * - `simulationTxs` are exactly the caller's ordered transactions, normalized
- *   (checksummed `from`/`to`, `value` defaulted to `0n`).
+ * - `simulationTxs` contain the caller's ordered `from`/`to`/`data`/`value`
+ *   fields, normalized (checksummed addresses, `value` defaulted to `0n`);
+ *   assertion declarations are not included.
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the net per-asset balance change over the whole bundle,
@@ -111,8 +156,10 @@ export interface Transfer {
  *   transfer to its emitting user transaction.
  */
 export interface SimulationResult {
-  /** Exactly the caller's ordered transactions, normalized. */
-  readonly simulationTxs: readonly Readonly<SimulationTransaction>[];
+  /** Caller transaction fields in order, normalized; assertion declarations are omitted. */
+  readonly simulationTxs: readonly Readonly<
+    Pick<SimulationTransaction, "from" | "to" | "data" | "value">
+  >[];
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
    * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas used.

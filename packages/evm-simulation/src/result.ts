@@ -55,7 +55,7 @@ export interface SimulationVerification {
   readonly authorizations: readonly AuthorizationPreparation[];
 }
 
-/** `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
+/** `simulationTxs` contains caller transaction fields; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }

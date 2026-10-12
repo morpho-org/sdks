@@ -7,6 +7,7 @@ import {
 } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import { SIMULATION_MODES } from "./params.js";
+import type { Assertion } from "./types.js";
 
 /** Stable error codes thrown by this package, part of the public API. */
 export const SIMULATION_ERROR_CODES = [
@@ -107,6 +108,26 @@ export type SimulationPreparationContext = SimulationContextBase & {
   readonly preparationCallIndex?: number;
 };
 
+/** Context of a failed per-transaction assertion. */
+export type SimulationAssertionContext = SimulationContextBase & {
+  readonly stage: "execution";
+  /** Index into `transactions`. */
+  readonly transactionIndex: number;
+  /** Whether the assertion ran before or after its transaction. */
+  readonly phase: "before" | "after";
+  /** Index into the matching assertion array. */
+  readonly assertionIndex: number;
+  readonly assertion: Assertion["type"];
+  /** Checked account, or receiver for `maxDeposit`. */
+  readonly account: Address;
+  /** Checked token; native balance assertions use viem's `ethAddress`. */
+  readonly token?: Address;
+  /** Checked vault for `maxDeposit`. */
+  readonly vault?: Address;
+  readonly expected: bigint;
+  readonly observed: bigint;
+};
+
 /**
  * Reserved execution-stage context; `SimulationRevertedError` carries none for
  * caller-transaction or node reverts (see `details[].transactionIndex`).
@@ -129,16 +150,17 @@ export type SimulationVerificationContext = SimulationCheckContext &
  * from decoded calldata; unbound ones carry only a `field` string naming the
  * failed state read (`balance:<token>:<account>` or
  * `position:<marketId>:<account>`).
- * `"execution"` stays in the union, but `SimulationRevertedError` carries no
- * `context` for caller-transaction or node reverts — the failing
- * `transactionIndex` is reported on the error's `details`. Never contains
- * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause`
- * stays on the error).
+ * Assertion failures carry `SimulationAssertionContext`. Other
+ * `SimulationRevertedError`s for caller-transaction or node reverts carry no
+ * execution `context` — the failing `transactionIndex` is reported on the
+ * error's `details`. Never contains signatures, RPC URLs, credentials, raw
+ * calldata or raw causes (`cause` stays on the error).
  */
 export type SimulationErrorContext =
   | SimulationValidationContext
   | SimulationTransportContext
   | SimulationPreparationContext
+  | SimulationAssertionContext
   | SimulationExecutionContext
   | SimulationVerificationContext
   // Verification checks not bound to one operation name the failed state
@@ -179,7 +201,8 @@ export class SimulationRevertedError extends SimulationPackageError {
   readonly code = "SIMULATION_REVERTED";
   declare readonly context?:
     | SimulationPreparationContext
-    | SimulationExecutionContext;
+    | SimulationExecutionContext
+    | SimulationAssertionContext;
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
   constructor(
@@ -189,7 +212,10 @@ export class SimulationRevertedError extends SimulationPackageError {
     /** Machine-readable cause; `UNKNOWN_REVERT` when the revert maps to no known Morpho condition. */
     public readonly reasonCode: SimulationExecutionReason = "UNKNOWN_REVERT",
     /** Which transaction/authorization reverted and the operation it belonged to. */
-    context?: SimulationPreparationContext | SimulationExecutionContext,
+    context?:
+      | SimulationPreparationContext
+      | SimulationExecutionContext
+      | SimulationAssertionContext,
   ) {
     super(
       reason ?? "Transaction simulation reverted",

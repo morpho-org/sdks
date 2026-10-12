@@ -142,10 +142,11 @@ export const rpc = async <T>(
  *   because it serves another chain (a subclass of
  *   `InvalidSimulationResponseError` sharing its `name`/`code`;
  *   `instanceof InvalidChainIdError` tells them apart).
- * @throws {MissingVerificationEvidenceError} When a planned state read fails.
- * @throws {SimulationRevertedError} When a preparation or user transaction
- *   reverts or the node reports a bundle-level revert (code 3 / insufficient
- *   funds).
+ * @throws {MissingVerificationEvidenceError} When a planned state or assertion
+ *   read fails or returns no data.
+ * @throws {SimulationRevertedError} When an assertion, preparation, or user
+ *   transaction fails, or the node reports a bundle-level revert (code 3 /
+ *   insufficient funds).
  * @internal
  */
 export async function executePlan(params: {

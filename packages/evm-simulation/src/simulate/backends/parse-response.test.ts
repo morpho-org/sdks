@@ -13,6 +13,7 @@ import {
   SimulationRevertedError,
 } from "../../errors.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
+import type { SimulationTransaction } from "../../types.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { parseSimulationResponse } from "./parse-response.js";
@@ -53,6 +54,22 @@ const allowanceHex = (value: bigint): `0x${string}` =>
     functionName: "allowance",
     result: value,
   });
+
+const balanceHex = (value: bigint): `0x${string}` =>
+  encodeFunctionResult({
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    result: value,
+  });
+
+const assertionPlan = (transactions: readonly SimulationTransaction[]) =>
+  makePlan(
+    [],
+    parseRequest({
+      chainId: 1,
+      transactions,
+    }),
+  );
 
 const buildBlocks = (
   plan: ReturnType<typeof makePlan>,
@@ -141,6 +158,179 @@ describe("parseSimulationResponse", () => {
     expect(() =>
       parse(plan, buildBlocks(plan, { [txIndex]: { status: "failure" } })),
     ).toThrow(SimulationRevertedError);
+  });
+
+  test("error: failing assertBefore takes precedence over its transaction revert", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [
+          { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        ],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+          [transactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      reasonCode: "INSUFFICIENT_BALANCE",
+      context: {
+        transactionIndex: 0,
+        phase: "before",
+        assertionIndex: 0,
+      },
+    });
+  });
+
+  test("error: passing assertBefore preserves the transaction UNKNOWN_REVERT", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [
+          { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        ],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(5n) },
+          [transactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ reasonCode: "UNKNOWN_REVERT" });
+  });
+
+  test("error: failing assertAfter is reported for its transaction", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertAfter: [
+          { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        ],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      reasonCode: "INSUFFICIENT_BALANCE",
+      context: { transactionIndex: 0, phase: "after" },
+    });
+  });
+
+  test("error: an earlier transaction revert precedes later assertBefore", () => {
+    const plan = assertionPlan([
+      { from: OWNER, to: TARGET, data: "0x12345678" },
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [
+          { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        ],
+      },
+    ]);
+    const laterAssertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const firstTransactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 0,
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [laterAssertionIndex]: { data: balanceHex(4n) },
+          [firstTransactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ reasonCode: "UNKNOWN_REVERT" });
+  });
+
+  test("error: reverted assertion read reports missing verification evidence", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [
+          { type: "erc20Balance", token: TOKEN, account: OWNER, min: 5n },
+        ],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toMatchObject({
+      context: {
+        stage: "verification",
+        field: "transactions[0].assertBefore[0]",
+      },
+    });
   });
 
   test("error: SimulationRevertedError on preparation revert", () => {
