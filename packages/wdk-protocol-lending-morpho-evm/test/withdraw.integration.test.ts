@@ -24,7 +24,7 @@ const VAULT = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ASSETS = 1_000_000n;
 
-describe.skipIf(!process.env.MAINNET_RPC_URL)(
+describe.skipIf(!process.env.ERPC_SECRET)(
   "prepared withdrawal quotes on a mainnet fork",
   () => {
     test.for(["approval", "oversizedApproval", "permit"] as const)(

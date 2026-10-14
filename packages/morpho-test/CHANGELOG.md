@@ -1,5 +1,27 @@
 # @morpho-org/morpho-test
 
+## 4.1.0-next.0
+
+### Minor Changes
+
+- Add a fork-installed WETH9 asset for chains without registered wNative, with the `getE2eAsset`,
+  `E2E_ASSET`, `E2E_ASSET_BYTECODE`, and `E2E_ASSET_STORAGE` exports. Tempo is omitted from default
+  E2E runs (its fork block is kept) and reported as skipped when selected, until Anvil can mine its
+  Blue createMarket transaction.
+- Add registry-driven E2E eligibility helpers. `getE2eEligibility`, `getE2eMatrix` and `getE2eRuns` decide which chains an E2E scenario runs on from the labels it requires in the canonical address registry (e.g. `bundles.vaultBundlesV1`, `midnight`), so registering a deployment enables the matching scenarios on that chain without editing tests. Each target forks at the highest of `E2E_FORK_BLOCKS[chainId]` and the required labels' deployment blocks, using the Morpho eRPC (`getErpcForkUrl` from `@morpho-org/test`, which this release requires at `^2.11.0`) when `ERPC_SECRET` is set. Required deployments with no registered block are listed in `undatedDeployments` for the harness to check onchain. `E2E_CHAINS` restricts the run to some chains and throws `E2eUnknownChainError` on an unknown entry and `E2eErpcSecretUnsetError` when a selected chain has no `ERPC_SECRET`; without a secret, unselected eligible chains are skipped. A registered scenario without a fork block throws `E2eForkBlockMissingError`.
+
+### Patch Changes
+
+- Return Tempo to the E2E matrix, superseding the Tempo omission in `e2e-fallback-asset`.
+  `createViemTest` from `@morpho-org/test/vitest` now funds the test account's pathUSD fee-token
+  balance on Tempo and throws `AnvilFeeTokenFundingError` if the write does not produce the expected
+  balance.
+  `@morpho-org/morpho-test` now requires `@morpho-org/test` `^2.11.0`.
+- Updated dependencies
+  - @morpho-org/test@2.11.0-next.0
+  - @morpho-org/morpho-ts@4.1.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.0
+
 ## 4.0.5
 
 ### Patch Changes

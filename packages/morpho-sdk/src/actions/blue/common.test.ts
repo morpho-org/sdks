@@ -391,7 +391,7 @@ describe("getBlueBundlesV1TokenPermit", () => {
           });
         },
       ),
-      { numRuns: 50, seed: 20_260_902 },
+      { numRuns: 50 },
     );
   });
 });

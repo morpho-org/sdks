@@ -269,7 +269,11 @@ const cloneAccrualVault = (
 const cloneAdapter = (
   adapter: IAccrualVaultV2Adapter,
   markets: Record<MarketId, Market | undefined>,
-) => {
+): IAccrualVaultV2Adapter => {
+  // BluePublicAllocator never moves Midnight liquidity, and reallocation never mutates a Midnight
+  // adapter, so its read-only snapshot is shared as-is.
+  if (adapter.type === "VaultV2MidnightAdapter") return adapter;
+
   const base = {
     address: adapter.address,
     parentVault: adapter.parentVault,
@@ -358,8 +362,9 @@ const cloneVault = (
 /**
  * Immutable-by-convention state container for Vault V2 BluePublicAllocator simulations.
  *
- * Constructor inputs are cloned. Every simulated reallocation returns a new
- * instance. Planning keeps the transaction-scoped `firstTotalAssets`
+ * Constructor inputs are cloned, except Midnight adapter snapshots: those are
+ * shared by reference and must be treated as read-only. Every simulated
+ * reallocation returns a new instance. Planning keeps the transaction-scoped `firstTotalAssets`
  * denominator outside the durable snapshot while applying reallocations in
  * contract order. Penalty donations update simulated vault accounting but are
  * excluded from same-plan idle liquidity so round-up dust cannot create
@@ -555,7 +560,8 @@ export class VaultV2BlueReallocationData
   /**
    * Clones the complete simulation snapshot.
    *
-   * @returns A deep clone of this simulation state.
+   * @returns A deep clone of this simulation state. Midnight adapter snapshots are
+   *   shared by reference and must be treated as read-only.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";

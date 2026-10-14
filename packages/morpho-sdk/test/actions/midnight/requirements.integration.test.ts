@@ -10,7 +10,7 @@ import {
   Tree,
 } from "@morpho-org/midnight-sdk";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -36,9 +36,8 @@ import {
 } from "../../../src/index.js";
 
 const test = createViemTest(base, {
-  forkUrl: process.env.BASE_RPC_URL,
+  forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   forkBlockNumber: 52_252_000n,
-  hardfork: "Karst",
   stepsTracing: false,
 });
 

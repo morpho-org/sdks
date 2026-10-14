@@ -1,4 +1,4 @@
-import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
+import type { Address, Hex } from "viem";
 import {
   type Market,
   MarketParams,
@@ -11,6 +11,7 @@ import type {
   IVaultV2Adapter,
 } from "./VaultV2Adapter.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
+import { VaultV2Utils } from "./VaultV2Utils.js";
 
 /** Plain input shape for a Vault V2 Morpho Blue market adapter using market ids. */
 export interface IVaultV2MorphoMarketV1AdapterV2
@@ -35,16 +36,15 @@ export class VaultV2MorphoMarketV1AdapterV2
    * @returns The adapter-wide allocation-cap id.
    * @example
    * ```ts
-   * const id = VaultV2MorphoMarketV1AdapterV2.adapterCapId(adapter);
+   * import { VaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+   *
+   * const id = VaultV2MorphoMarketV1AdapterV2.adapterCapId(
+   *   "0x0000000000000000000000000000000000000001",
+   * );
    * ```
    */
   static adapterCapId(address: Address) {
-    return keccak256(
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["this", address],
-      ),
-    );
+    return VaultV2Utils.adapterCapId(address);
   }
 
   /**
@@ -54,16 +54,15 @@ export class VaultV2MorphoMarketV1AdapterV2
    * @returns The collateral-wide allocation-cap id.
    * @example
    * ```ts
-   * const id = VaultV2MorphoMarketV1AdapterV2.collateralCapId(collateral);
+   * import { VaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+   *
+   * const id = VaultV2MorphoMarketV1AdapterV2.collateralCapId(
+   *   "0x0000000000000000000000000000000000000002",
+   * );
    * ```
    */
   static collateralCapId(address: Address) {
-    return keccak256(
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["collateralToken", address],
-      ),
-    );
+    return VaultV2Utils.collateralCapId(address);
   }
 
   /**
@@ -74,19 +73,26 @@ export class VaultV2MorphoMarketV1AdapterV2
    * @returns The adapter-market allocation-cap id.
    * @example
    * ```ts
+   * import { MarketParams, VaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+   *
    * const id = VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
-   *   adapter,
-   *   marketParams,
+   *   "0x0000000000000000000000000000000000000001",
+   *   new MarketParams({
+   *     loanToken: "0x0000000000000000000000000000000000000002",
+   *     collateralToken: "0x0000000000000000000000000000000000000003",
+   *     oracle: "0x0000000000000000000000000000000000000004",
+   *     irm: "0x0000000000000000000000000000000000000005",
+   *     lltv: 860000000000000000n,
+   *   }),
    * );
    * ```
    */
   static adapterMarketCapId(address: Address, params: MarketParams) {
-    return keccak256(
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }, marketParamsAbi],
-        ["this/marketParams", address, params],
-      ),
-    );
+    return VaultV2Utils.capId({
+      tag: "this/marketParams",
+      params: [{ type: "address" }, marketParamsAbi],
+      values: [address, params],
+    });
   }
 
   public marketIds: MarketId[];

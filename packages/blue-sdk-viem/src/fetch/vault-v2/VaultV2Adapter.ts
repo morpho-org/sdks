@@ -5,11 +5,16 @@ import {
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
+  midnightAdapterFactoryAbi,
   morphoMarketV1AdapterFactoryAbi,
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis.js";
 import type { DeploylessFetchParameters } from "../../types.js";
+import {
+  fetchAccrualVaultV2MidnightAdapter,
+  fetchVaultV2MidnightAdapter,
+} from "./VaultV2MidnightAdapter.js";
 import {
   fetchAccrualVaultV2MorphoMarketV1Adapter,
   fetchVaultV2MorphoMarketV1Adapter,
@@ -26,8 +31,7 @@ import {
 /**
  * Fetches a VaultV2 adapter by detecting its adapter factory type.
  *
- * Reads the configured MorphoVaultV1Adapter, MorphoMarketV1Adapter, and
- * MorphoMarketV1AdapterV2 factories, then delegates to the matching adapter fetcher.
+ * Reads the configured Vault V2 adapter factories, then delegates to the matching adapter fetcher.
  *
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -39,6 +43,8 @@ import {
  * @returns The hydrated supported VaultV2 adapter entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
+ * @throws {UnresolvedBlockNumberError} when a Midnight adapter's direct-read path
+ *   (`deployless: false` or fallback) resolves a pending block.
  * @example
  * ```ts
  * import type { IVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -64,12 +70,14 @@ export async function fetchVaultV2Adapter(
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
+    midnightAdapterFactory,
   } = getChainAddresses(await getChainId(client));
 
   const [
     isMorphoVaultV1Adapter,
     isMorphoMarketV1Adapter,
     isMorphoMarketV1AdapterV2,
+    isMidnightAdapter,
   ] = await Promise.all([
     morphoVaultV1AdapterFactory
       ? readContract(client, {
@@ -104,6 +112,15 @@ export async function fetchVaultV2Adapter(
           // Factory may not have been deployed at requested block tag.
           .catch(() => false)
       : false,
+    midnightAdapterFactory
+      ? readContract(client, {
+          ...parameters,
+          address: midnightAdapterFactory,
+          abi: midnightAdapterFactoryAbi,
+          functionName: "isMidnightAdapter",
+          args: [address],
+        }).catch(() => false)
+      : false,
   ]);
 
   if (isMorphoVaultV1Adapter)
@@ -114,6 +131,9 @@ export async function fetchVaultV2Adapter(
 
   if (isMorphoMarketV1AdapterV2)
     return fetchVaultV2MorphoMarketV1AdapterV2(address, client, parameters);
+
+  if (isMidnightAdapter)
+    return fetchVaultV2MidnightAdapter(address, client, parameters);
 
   throw new UnsupportedVaultV2AdapterError(address);
 }
@@ -133,6 +153,8 @@ export async function fetchVaultV2Adapter(
  * @returns The hydrated supported VaultV2 accrual adapter entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
+ * @throws {UnresolvedBlockNumberError} when a Midnight adapter's direct-read path
+ *   (`deployless: false` or fallback) resolves a pending block.
  * @example
  * ```ts
  * import type { IAccrualVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -161,12 +183,14 @@ export async function fetchAccrualVaultV2Adapter(
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
+    midnightAdapterFactory,
   } = getChainAddresses(await getChainId(client));
 
   const [
     isMorphoVaultV1Adapter,
     isMorphoMarketV1Adapter,
     isMorphoMarketV1AdapterV2,
+    isMidnightAdapter,
   ] = await Promise.all([
     morphoVaultV1AdapterFactory
       ? readContract(client, {
@@ -201,6 +225,15 @@ export async function fetchAccrualVaultV2Adapter(
           // Factory may not have been deployed at requested block tag.
           .catch(() => false)
       : false,
+    midnightAdapterFactory
+      ? readContract(client, {
+          ...parameters,
+          address: midnightAdapterFactory,
+          abi: midnightAdapterFactoryAbi,
+          functionName: "isMidnightAdapter",
+          args: [address],
+        }).catch(() => false)
+      : false,
   ]);
 
   if (isMorphoVaultV1Adapter)
@@ -219,6 +252,9 @@ export async function fetchAccrualVaultV2Adapter(
       client,
       parameters,
     );
+
+  if (isMidnightAdapter)
+    return fetchAccrualVaultV2MidnightAdapter(address, client, parameters);
 
   throw new UnsupportedVaultV2AdapterError(address);
 }

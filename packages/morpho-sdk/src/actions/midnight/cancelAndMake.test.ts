@@ -617,7 +617,6 @@ describe("midnightCancelAndMake without publication", () => {
           expect(args[15]).toBe(deadline);
         },
       ),
-      { seed: 42 },
     );
   });
 });

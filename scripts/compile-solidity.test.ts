@@ -14,17 +14,19 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 describe("compile-solidity", () => {
-  test("behavior: cleanup preserves handwritten TypeScript files", () => {
+  test("behavior: skips ABI-less libraries and preserves handwritten TypeScript files", () => {
     const root = mkdtempSync(join(tmpdir(), "compile-solidity-"));
     try {
       const scripts = join(root, "scripts");
-      const contracts = join(
-        root,
-        "packages/blue-sdk-viem/contracts/interfaces",
-      );
+      const packageContracts = join(root, "packages/blue-sdk-viem/contracts");
+      const contracts = join(packageContracts, "interfaces");
       const queries = join(root, "packages/blue-sdk-viem/src/queries");
       mkdirSync(scripts, { recursive: true });
       mkdirSync(contracts, { recursive: true });
+      writeFileSync(
+        join(packageContracts, "InternalOnly.sol"),
+        "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\nlibrary InternalOnly { function twice(uint256 value) internal pure returns (uint256) { return value * 2; } }\n",
+      );
       mkdirSync(join(queries, "nested"), { recursive: true });
       writeFileSync(join(root, "package.json"), '{"type":"module"}');
       symlinkSync(
@@ -62,6 +64,7 @@ describe("compile-solidity", () => {
       for (const [name, content] of Object.entries(handwritten)) {
         expect(readFileSync(join(queries, name), "utf8")).toBe(content);
       }
+      expect(existsSync(join(queries, "InternalOnly.ts"))).toBe(false);
       expect(existsSync(staleArtifact)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -1744,8 +1744,11 @@ export class MorphoMidnight {
    * `maxConsumed` ceiling, so fills landing before execution never leave a partial cancel.
    *
    * @param params - Maker account, groups with consumption ceilings, and deadline.
-   * @param params.accountAddress - Maker that must send the transaction; V2 cancels for `msg.sender`,
-   *   so sending from another account cancels that account's groups instead.
+   * @param params.accountAddress - Maker that must send the transaction. It is used only to check
+   *   the maker's Midnight authorization of `MidnightBundlesV2`; the bundle cancels the groups of
+   *   `msg.sender`. A transaction sent from another account that has also authorized
+   *   `MidnightBundlesV2` does not revert: it cancels that account's groups and leaves the maker's
+   *   offers fillable.
    * @param params.cancellations - Offer groups and the largest consumption accepted for each.
    *   To cancel unconditionally, set `maxConsumed` to `maxUint128`; the contract treats
    *   `type(uint128).max` as no limit.

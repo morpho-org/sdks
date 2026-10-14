@@ -2,6 +2,7 @@
 
 - Keep this package framework-free and dependency-light (`@noble/hashes`, providing `keccak_256` for EIP-55 checksumming at the same range as blue-sdk, is the one allowed runtime dependency); export generic helpers plus cross-protocol SDK primitives that Blue and Midnight both need, including shared math, typed errors, constants, address/hex/call descriptor types, shared ABI literals, and address/deployment registries.
 - `marketParamsAbi` is canonically defined in the `abis/marketParams` leaf subpath and re-exported from `abis`; protocol packages may re-export it for compatibility but must not redefine it.
+- `midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi` and `midnightCoreReadAbi` are canonically defined in the `abis/midnight` leaf subpath and re-exported from `abis`; protocol packages may re-export them but must not redefine them, with `midnight-sdk`'s `src/abis.ts` (`midnightAbi`, its ratifier ABIs and `midnightBundlesV2Abi`) the known exception that still inlines these structs pending migration to `abis/midnight` after the stack's `morpho-ts` peer-range decision. `midnightAbi` still inlines `position` and `marketState`, with parity guarded by the ABI-entry equality test in blue-sdk-viem's `VaultV2MidnightAdapter.test.ts`.
 - Preserve nullability through helpers, e.g. `transformValue(value, fn)` returns nullish input unchanged.
 - Helpers should preserve input type shape unless their name explicitly signals formatting or conversion.
 - Use type guards for filtering, e.g. `array.filter(isDefined)`.

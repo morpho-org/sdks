@@ -5,6 +5,7 @@ import {IVaultV2, Caps} from "./interfaces/IVaultV2.sol";
 import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFactory.sol";
 import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 import {IVaultV2Factory} from "./interfaces/IVaultV2Factory.sol";
+import {IMidnightAdapterFactory} from "./interfaces/IMidnightAdapterFactory.sol";
 error UnknownOfFactory(address factory, address vault);
 error UnsupportedVaultV2Adapter(address adapter);
 import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
@@ -51,7 +52,8 @@ contract GetVaultV2 {
         IVaultV2 vault,
         IVaultV2Factory vaultV2Factory,
         IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
-        IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory
+        IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
+        IMidnightAdapterFactory midnightAdapterFactory
     ) external view returns (VaultV2Response memory res) {
         if (!vaultV2Factory.isVaultV2(address(vault))) {
             revert UnknownOfFactory(address(vaultV2Factory), address(vault));
@@ -86,12 +88,16 @@ contract GetVaultV2 {
             && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter);
         bool isMorphoMarketV1AdapterV2 = address(morphoMarketV1AdapterV2Factory) != address(0)
             && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter);
+        bool isMidnightAdapter = address(midnightAdapterFactory) != address(0)
+            && address(midnightAdapterFactory).code.length > 0
+            && midnightAdapterFactory.isMidnightAdapter(res.liquidityAdapter);
 
         if (isMorphoVaultV1Adapter && res.liquidityData.length > 0) {
             revert UnsupportedVaultV2Adapter(res.liquidityAdapter);
         }
 
-        res.isLiquidityAdapterKnown = isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2;
+        res.isLiquidityAdapterKnown =
+            isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2 || isMidnightAdapter;
 
         if (isMorphoVaultV1Adapter) {
             res.liquidityAllocations = new VaultV2Allocation[](1);
@@ -110,6 +116,14 @@ contract GetVaultV2 {
                 res.liquidityAllocations[i] =
                     VaultV2Allocation({id: ids[i], absoluteCap: 0, relativeCap: 0, allocation: 0});
             }
+        } else if (isMidnightAdapter) {
+            res.liquidityAllocations = new VaultV2Allocation[](1);
+            res.liquidityAllocations[0] = VaultV2Allocation({
+                id: keccak256(abi.encode("this", res.liquidityAdapter)),
+                absoluteCap: 0,
+                relativeCap: 0,
+                allocation: 0
+            });
         }
 
         uint256 liquidityAllocationsLength = res.liquidityAllocations.length;

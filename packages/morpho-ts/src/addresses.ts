@@ -80,6 +80,12 @@ export interface ChainAddresses {
   wstEth?: `0x${string}`;
   /** Midnight core contract for fixed-maturity credit/debt markets, offers, collateral, and liquidations. */
   midnight?: `0x${string}`;
+  /** VaultV2 Midnight adapter factory that creates and indexes Midnight market adapters. */
+  readonly midnightAdapterFactory?: `0x${string}`;
+  /** Rate Ratifier V1 contract used by VaultV2 Midnight adapter offers. */
+  readonly midnightAdapterRateRatifierV1?: `0x${string}`;
+  /** Price Ratifier V1 contract used by VaultV2 Midnight adapter offers. */
+  readonly midnightAdapterPriceRatifierV1?: `0x${string}`;
   /** MidnightBundlesV2 periphery contract for maker cancel-and-make and taker flows acting on `msg.sender`. */
   midnightBundlesV2?: `0x${string}`;
   /** BlueBuyCallback factory for parking Midnight buy-offer funds in Morpho Blue markets. */
@@ -227,6 +233,10 @@ const _addressesRegistry = {
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
 
     midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
+    midnightAdapterFactory: "0x797f6E11e55Fb115fE548Faa8F07152BA587bbd7",
+    midnightAdapterRateRatifierV1: "0x39c01afA4B3f827a0bfAa39cDC4610111f80BABc",
+    midnightAdapterPriceRatifierV1:
+      "0x8e38421bC293339798e9bD0c0a51690675D2f94b",
     midnightBundlesV2: "0x0bF30B530f816a619C3F28a3b9f44C441122555D",
     midnightBlueBuyCallbackFactory:
       "0x7337f119Eca028bD39E0e543cEf71631D2333425",
@@ -1018,6 +1028,9 @@ const _deployments = {
     preLiquidationFactory: 23779056n,
 
     midnight: 48286884n,
+    midnightAdapterFactory: 52_510_848n,
+    midnightAdapterRateRatifierV1: 52_510_850n,
+    midnightAdapterPriceRatifierV1: 52_510_852n,
     midnightBundlesV2: 52_251_677n,
     midnightBlueBuyCallbackFactory: 49_544_552n,
     midnightMempool: 48286884n,

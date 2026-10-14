@@ -72,6 +72,16 @@ export function listPublicPackages(root: string): PublicPackage[] {
 }
 
 /**
+ * Tells a SemVer prerelease (`1.2.0-next.0`) from a stable `x.y.z` version.
+ *
+ * @param version - Package version.
+ * @returns Whether the version is `x.y.z-<prerelease>`, without build metadata.
+ */
+export function isPrerelease(version: string): boolean {
+  return /^\d+\.\d+\.\d+-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/.test(version);
+}
+
+/**
  * Formats the git tag of a package release.
  *
  * @param pkg - The package.
@@ -130,19 +140,24 @@ export function tarballName(pkg: Pick<PublicPackage, "name" | "version">) {
 
 /**
  * `pack.ts --out <dir>` packs every public package into `<dir>` and writes
- * `<dir>/SHA256SUMS`; `pack.ts --tags` prints, tab-separated,
- * the release tag of every public package at its current version and the commit
- * that set that version.
+ * `<dir>/SHA256SUMS`; `pack.ts --tags [--prereleases]` prints, tab-separated,
+ * the release tag of every public package at its current version (only prerelease
+ * versions with `--prereleases`) and the commit that set that version.
  *
  * @param argv - Command-line arguments.
  */
 function main(argv: readonly string[] = process.argv.slice(2)): void {
   const { values } = parseArgs({
     args: [...argv],
-    options: { out: { type: "string" }, tags: { type: "boolean" } },
+    options: {
+      out: { type: "string" },
+      tags: { type: "boolean" },
+      prereleases: { type: "boolean" },
+    },
   });
   if (values.tags) {
     for (const pkg of listPublicPackages(".")) {
+      if (values.prereleases && !isPrerelease(pkg.version)) continue;
       writeStdout(`${releaseTag(pkg)}\t${releaseCommit(".", pkg)}\n`);
     }
   } else if (values.out) {
@@ -167,7 +182,9 @@ function main(argv: readonly string[] = process.argv.slice(2)): void {
       });
     writeFileSync(join(out, "SHA256SUMS"), sums.join(""));
   } else {
-    throw new Error("Usage: node scripts/publish/pack.ts --out <dir> | --tags");
+    throw new Error(
+      "Usage: node scripts/publish/pack.ts --out <dir> | --tags [--prereleases]",
+    );
   }
 }
 

@@ -1,6 +1,6 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -16,7 +16,7 @@ import { SimulationRevertedError, simulate } from "../../src/index.js";
 // Pinned with the bundles deployments the verified pipeline routes through —
 // the shared 24_593_903 pin in `test/setup.ts` predates them.
 const test = createViemTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 25_832_676n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({

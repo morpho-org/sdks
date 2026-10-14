@@ -12,6 +12,7 @@ export {
   VaultUtils,
   VaultV2BlueMarketPublicAllocatorConfigUtils,
   VaultV2BluePublicAllocatorConfigUtils,
+  VaultV2MidnightAdapterUtils,
   VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 export {
@@ -79,6 +80,7 @@ export {
   isNotNull,
   isNotUndefined,
   keys,
+  MidnightPositionLib,
   mergeEntries,
   retryPromiseLinearBackoff,
   Time,

@@ -8,6 +8,8 @@ import {
   type DeployContractParameters,
   erc20Abi,
   erc4626Abi,
+  type GetTxpoolContentReturnType,
+  type Hash,
   type HDAccount,
   type HttpTransport,
   maxUint256,
@@ -136,7 +138,9 @@ export type DepositParameters<
  *
  * `waitForTransactionReceipt` called with only `hash` and `timeout` polls
  * `eth_getTransactionReceipt` until the receipt exists or `timeout` (default
- * 180 s) expires; any other option falls back to viem's implementation. Under
+ * 180 s) expires; any other option falls back to viem's implementation. A
+ * receipt lookup for a transaction still in Anvil's pool returns null without
+ * reaching Anvil, which would forward it to the fork RPC. Under
  * automine, `sendTransaction`, `sendRawTransaction` and `writeContract` wait
  * for the receipt before returning the hash.
  *
@@ -164,7 +168,33 @@ export const createAnvilTestClient = <chain extends Chain>(
     chain,
     mode: "anvil",
     account: testAccount(),
-    transport: traced(transport),
+    // Anvil forwards a receipt lookup it can't answer to the fork RPC, which can
+    // take seconds to return null for a hash only Anvil knows. `txpool_content` is
+    // answered locally, so answer null for a pooled transaction without asking
+    // Anvil. This also covers viem-tracer's receipt check after each send.
+    transport: traced((parameters) => {
+      const { request, ...rest } = transport(parameters);
+
+      return {
+        ...rest,
+        request: async (args, options) => {
+          if (args.method === "eth_getTransactionReceipt") {
+            const [hash] = args.params as [Hash];
+            const { pending, queued } = (await request({
+              method: "txpool_content",
+            })) as GetTxpoolContentReturnType;
+            const isPooled = [pending, queued].some((pool) =>
+              Object.values(pool).some((txs) =>
+                Object.values(txs).some((tx) => tx.hash === hash),
+              ),
+            );
+            if (isPooled) return null;
+          }
+
+          return request(args, options);
+        },
+      } as ReturnType<HttpTransport>;
+    }),
     cacheTime: Number.POSITIVE_INFINITY,
     pollingInterval: 50,
   })

@@ -1,3 +1,4 @@
+import { getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -8,7 +9,7 @@ const marketId =
   "0x05959752fdeff325962b9d263edb421efc6e2186a49360dba6c32e86ebf6c84c";
 
 const test = createViemTest(base, {
-  forkUrl: process.env.BASE_RPC_URL,
+  forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   forkBlockNumber,
   stepsTracing: false,
 });

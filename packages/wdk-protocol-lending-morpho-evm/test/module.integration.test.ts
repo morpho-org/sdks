@@ -23,7 +23,7 @@ const USDT_WHALE: Address = "0x28C6c06298d514Db089934071355E5743bf21d60";
 const VAULT: Address = "0x23f5E9c35820f4baB695Ac1F19c203cC3f8e1e11";
 const DEPOSIT_AMOUNT = 1_000_000n;
 
-const maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip;
+const maybeDescribe = process.env.ERPC_SECRET ? describe : describe.skip;
 
 maybeDescribe("MorphoProtocolEvm fork e2e", () => {
   test.for(["approval", "permit2", "permit"] as const)(

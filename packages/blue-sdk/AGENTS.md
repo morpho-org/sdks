@@ -1,6 +1,6 @@
 # blue-sdk Conventions
 
-- Keep this package framework-agnostic; do not import `viem`, `wagmi`, React, or test helpers in `src`.
+- Keep this package framework-agnostic: do not use viem clients, transports, or RPC in `src`. Pure viem utilities and types are allowed (e.g. `decodeAbiParameters`, `formatEther`, `formatUnits`, `isAddressEqual`, `parseEther`, and `zeroAddress`). Vault V2 cap-id ABI encoding and hashing are implemented only in `VaultV2Utils`; other modules must use its helpers rather than import viem encoders for cap ids.
 - Model protocol state as `I*` interfaces plus classes, e.g. `interface IMarket` and `class Market`.
 - Constructors accept plain inputs and normalize nested classes, e.g. `new MarketParams(params)`.
 - Use getters for derived state, e.g. `get utilization()`, and methods for parameterized math.
@@ -13,6 +13,7 @@
 - Protocol entity folders (`market/`, `vault/`, `token/`, `position/`, `holding/`, `user/`) own their classes and folder barrels.
 - Getters may throw typed `Unknown*Error`; nullable lookup paths should use `_try` or `tryGet*`-style helpers deliberately.
 - Vault V2 absolute/relative allocation-cap math is canonical in `VaultV2Utils.allocationHeadroom`; consumers such as `AccrualVaultV2.maxDeposit` and shared-liquidity simulation delegate to it.
+- Vault V2 cap-id ABI encoding and hashing (viem `encodeAbiParameters`/`keccak256`) live only in `VaultV2Utils` (internal `capId` plus typed public helpers); adapters and other modules compute cap ids through those helpers and must not import viem encoders for them.
 - Vault V2 BluePublicAllocator configs are hydrated classes with plain-object-compatible `I*` inputs and math delegated to dedicated `*Utils` namespaces. Vault-wide config computes penalties; market config computes max-in capacity from its absolute cap and effective allocation. The allocator is canonical per chain and comes from the address registry; adapter activation is normalized separately as a vault-keyed set of adapter addresses.
 - `marketParamsAbi` is owned by `@morpho-org/morpho-ts/abis/marketParams`, re-exported from `@morpho-org/morpho-ts/abis`, and re-exported from `MarketParams.ts` for backward compatibility; do not define a second copy in this package.
 

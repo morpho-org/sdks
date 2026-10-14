@@ -139,6 +139,34 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - A stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
 
+## Midnight API
+
+`midnight-sdk`'s `MidnightApi` client trusts the Midnight API endpoint the integrator configures, and the `morpho-sdk` Midnight take flows trust the quotes built from it. The API chooses which offers to return, in what order, and how many units of each it says are still takeable. Like an RPC, it can keep a forged view consistent across calls.
+
+The API cannot change an offer's terms. When the take executes, Midnight checks that the maker authorized the offer's ratifier and that the ratifier accepts the offer, then applies the offer's own expiry, price and cap. A forged quote can make one offer fill less or fail, but cannot fill an offer beyond its terms. What bounds the taker's result onchain is the target bound the caller passes to the Midnight Bundles V2 call (`minUnits`, `maxUnits`, `maxBuyerAssets` or `minSellerAssets`), not the quote.
+
+### What the SDK checks
+
+- Book market params must hash to their returned ids; single-book requests also match the requested id, and book-list results satisfy requested filters. Each returned offer's market id is checked against its embedded market. Book quotes and book takeable-offer responses are bound to the requested market and side, and the general takeable-offer route enforces requested maker, market and group filters; mismatches raise `InvalidMidnightApiResponseError`.
+- Each takeable offer must be executable: `receiverIfMakerIsSeller` is an address, and its caps pass `OfferUtils.validateOfferCaps`.
+- A takeable offer's `units` cannot exceed the offer's own `maxUnits` when the offer is capped in units.
+- When `fetchBookQuote` is given `averageWorstPrice` or `slippage`, it recomputes the average price of the returned offers from the offers' own ticks and rejects a quote outside the guard. With an explicit `averageWorstPrice`, the returned `averageWorstPrice` is the caller's guard, so a bound derived from it is the one the SDK checked.
+
+### Accepted gaps
+
+The SDK could check these without trusting the API, but does not yet:
+
+- For an offer capped in assets (`maxAssets`), the units implied by that cap are not compared with the returned `units`.
+
+### Out of our threat model
+
+Each item below requires the API to lie. Checking it would need a source the API does not control, such as an RPC read of each offer's consumed amount or an independent copy of the book.
+
+- The API claims more units than remain on an offer, because part of it was already consumed onchain. The quote then looks deeper than it is. The bundle takes only what remains on that offer and moves on to the next one, so the fill can come from worse offers, but it stays within the caller's target bound or the call reverts.
+- The API omits better offers or returns them out of order. The SDK cannot see the full book, so the quote can be worse than the best available, but never worse than the caller's guard.
+- In `slippage` mode, the API sets both the reference price and the guard. Callers that need a guard the API does not set pass `averageWorstPrice` instead.
+- `averageBestPrice`, `availableAssets` and `availableUnits` are returned as the API reports them. Size target bounds from the caller's own target and guard, not from these fields.
+
 ## Integrator inputs and the address registry
 
 The SDK trusts the inputs its integrator passes in and the configuration it registers. It does not

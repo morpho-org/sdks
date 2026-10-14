@@ -9,6 +9,9 @@ import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1Adapt
 import {IMorphoVaultV1Adapter} from "./interfaces/IMorphoVaultV1Adapter.sol";
 import {IMorphoMarketV1Adapter} from "./interfaces/IMorphoMarketV1Adapter.sol";
 import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
+import {IMidnightAdapter} from "./interfaces/IMidnightAdapter.sol";
+import {IMidnightAdapterFactory} from "./interfaces/IMidnightAdapterFactory.sol";
+import {VaultV2MidnightAdapterQuery, VaultV2MidnightAdapterResponse} from "./VaultV2MidnightAdapterQuery.sol";
 import {IMorpho, Id, MarketParams, Market, Position} from "../interfaces/IMorpho.sol";
 import {IMetaMorpho, MarketConfig, PendingUint192, PendingAddress} from "../interfaces/IMetaMorpho.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
@@ -24,7 +27,8 @@ enum AdapterType {
     Unknown,
     MorphoVaultV1,
     MorphoMarketV1,
-    MorphoMarketV1AdapterV2
+    MorphoMarketV1AdapterV2,
+    Midnight
 }
 
 struct Token {
@@ -127,6 +131,8 @@ struct AdapterResponse {
     // AdapterType.MorphoMarketV1AdapterV2
     address adaptiveCurveIrm;
     MarketV1V2Allocation[] marketV1V2Allocations;
+    // AdapterType.Midnight
+    VaultV2MidnightAdapterResponse midnightAdapter;
 }
 
 struct AccrualVaultV2Response {
@@ -163,6 +169,7 @@ contract GetAccrualVaultV2 {
         IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
         IMorphoMarketV1AdapterFactory morphoMarketV1AdapterFactory,
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
+        IMidnightAdapterFactory midnightAdapterFactory,
         IMorpho morpho,
         IAdaptiveCurveIrm adaptiveCurveIrm
     ) external view returns (AccrualVaultV2Response memory res) {
@@ -191,20 +198,33 @@ contract GetAccrualVaultV2 {
         res.assetBalance = IERC20(res.asset).balanceOf(address(vault));
 
         _queryLiquidityAllocations(
-            res, vault, morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory
+            res,
+            vault,
+            morphoVaultV1AdapterFactory,
+            morphoMarketV1AdapterV2Factory,
+            midnightAdapterFactory
         );
 
         if (res.liquidityAdapter != address(0)) {
             res.hasLiquidityAdapter = true;
-            res.liquidityAdapterInfo = _queryAdapter(
-                vault,
-                res.liquidityAdapter,
-                morphoVaultV1AdapterFactory,
-                morphoMarketV1AdapterFactory,
-                morphoMarketV1AdapterV2Factory,
-                morpho,
-                adaptiveCurveIrm
-            );
+            if (
+                vault.isAdapter(res.liquidityAdapter)
+                    && _isMidnightAdapter(midnightAdapterFactory, res.liquidityAdapter)
+            ) {
+                res.liquidityAdapterInfo.adapter = res.liquidityAdapter;
+                res.liquidityAdapterInfo.adapterType = uint8(AdapterType.Midnight);
+            } else {
+                res.liquidityAdapterInfo = _queryAdapter(
+                    vault,
+                    res.liquidityAdapter,
+                    morphoVaultV1AdapterFactory,
+                    morphoMarketV1AdapterFactory,
+                    morphoMarketV1AdapterV2Factory,
+                    midnightAdapterFactory,
+                    morpho,
+                    adaptiveCurveIrm
+                );
+            }
         }
 
         uint256 adaptersLength = vault.adaptersLength();
@@ -216,6 +236,7 @@ contract GetAccrualVaultV2 {
                 morphoVaultV1AdapterFactory,
                 morphoMarketV1AdapterFactory,
                 morphoMarketV1AdapterV2Factory,
+                midnightAdapterFactory,
                 morpho,
                 adaptiveCurveIrm
             );
@@ -227,18 +248,21 @@ contract GetAccrualVaultV2 {
         AccrualVaultV2Response memory res,
         IVaultV2 vault,
         IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
-        IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory
+        IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
+        IMidnightAdapterFactory midnightAdapterFactory
     ) private view {
         bool isMorphoVaultV1Adapter = address(morphoVaultV1AdapterFactory) != address(0)
             && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter);
         bool isMorphoMarketV1AdapterV2 = address(morphoMarketV1AdapterV2Factory) != address(0)
             && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter);
+        bool isMidnightAdapter = _isMidnightAdapter(midnightAdapterFactory, res.liquidityAdapter);
 
         if (isMorphoVaultV1Adapter && res.liquidityData.length > 0) {
             revert UnsupportedVaultV2Adapter(res.liquidityAdapter);
         }
 
-        res.isLiquidityAdapterKnown = isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2;
+        res.isLiquidityAdapterKnown =
+            isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2 || isMidnightAdapter;
 
         if (isMorphoVaultV1Adapter) {
             res.liquidityAllocations = new VaultV2Allocation[](1);
@@ -257,6 +281,14 @@ contract GetAccrualVaultV2 {
                 res.liquidityAllocations[i] =
                     VaultV2Allocation({id: ids[i], absoluteCap: 0, relativeCap: 0, allocation: 0});
             }
+        } else if (isMidnightAdapter) {
+            res.liquidityAllocations = new VaultV2Allocation[](1);
+            res.liquidityAllocations[0] = VaultV2Allocation({
+                id: keccak256(abi.encode("this", res.liquidityAdapter)),
+                absoluteCap: 0,
+                relativeCap: 0,
+                allocation: 0
+            });
         }
 
         uint256 liquidityAllocationsLength = res.liquidityAllocations.length;
@@ -276,6 +308,7 @@ contract GetAccrualVaultV2 {
         IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
         IMorphoMarketV1AdapterFactory morphoMarketV1AdapterFactory,
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
+        IMidnightAdapterFactory midnightAdapterFactory,
         IMorpho morpho,
         IAdaptiveCurveIrm adaptiveCurveIrm
     ) private view returns (AdapterResponse memory res) {
@@ -340,9 +373,25 @@ contract GetAccrualVaultV2 {
                 res.marketV1V2Allocations[i].supplyShares = typed.supplyShares(marketId);
                 res.marketV1V2Allocations[i].market = _queryMarket(morpho, Id.wrap(marketId), adaptiveCurveIrm);
             }
+        } else if (
+            _isMidnightAdapter(midnightAdapterFactory, adapter)
+        ) {
+            res.adapterType = uint8(AdapterType.Midnight);
+            res.midnightAdapter = VaultV2MidnightAdapterQuery.query(IMidnightAdapter(adapter));
+            res.parentVault = res.midnightAdapter.parentVault;
+            res.skimRecipient = res.midnightAdapter.skimRecipient;
         } else {
             revert UnsupportedVaultV2Adapter(adapter);
         }
+    }
+
+    function _isMidnightAdapter(
+        IMidnightAdapterFactory factory,
+        address adapter
+    ) private view returns (bool) {
+        return address(factory) != address(0)
+            && address(factory).code.length > 0
+            && factory.isMidnightAdapter(adapter);
     }
 
     /// @dev Reads a MetaMorpho V1 vault's governance, accounting, and queue state.

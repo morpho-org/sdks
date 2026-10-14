@@ -16,7 +16,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual } from "viem";
-import { multicall } from "viem/actions";
+import { readContract } from "viem/actions";
 import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
@@ -369,7 +369,7 @@ export interface VaultV1Actions {
    *   assigning more than the vault owns in a repeated market.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
-   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC contract read fails.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {VaultIsBlueFeeRecipientError} from `getRequirements()` when Morpho Blue accrues protocol fees to the vault.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
@@ -880,40 +880,37 @@ export class MorphoVaultV1 implements VaultV1Actions {
           throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
         }
         const [allowance, nonce, blueBalance, morpho, blueFeeRecipient] =
-          await multicall(this.client.viemClient, {
-            allowFailure: false,
-            contracts: [
-              {
-                address: this.vault,
-                abi: erc20Abi,
-                functionName: "allowance",
-                args: [userAddress, vaultExitBundlesV1],
-              },
-              {
-                address: this.vault,
-                abi: erc2612Abi,
-                functionName: "nonces",
-                args: [userAddress],
-              },
-              {
-                address: vaultData.asset,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [blue],
-              },
-              {
-                address: this.vault,
-                abi: metaMorphoAbi,
-                functionName: "MORPHO",
-              },
-              // feeRecipient() is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
-              {
-                address: blue,
-                abi: blueAbi,
-                functionName: "feeRecipient",
-              },
-            ],
-          });
+          await Promise.all([
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [userAddress, vaultExitBundlesV1],
+            }),
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: erc2612Abi,
+              functionName: "nonces",
+              args: [userAddress],
+            }),
+            readContract(this.client.viemClient, {
+              address: vaultData.asset,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [blue],
+            }),
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: metaMorphoAbi,
+              functionName: "MORPHO",
+            }),
+            // feeRecipient() is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
+            readContract(this.client.viemClient, {
+              address: blue,
+              abi: blueAbi,
+              functionName: "feeRecipient",
+            }),
+          ]);
 
         if (!isAddressEqual(morpho, blue)) {
           throw new VaultMorphoMismatchError({

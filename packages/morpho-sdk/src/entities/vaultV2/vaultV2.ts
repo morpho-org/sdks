@@ -9,7 +9,7 @@ import {
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { _try, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
-import { multicall } from "viem/actions";
+import { readContract } from "viem/actions";
 import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
@@ -90,6 +90,13 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
 /**
+ * Midnight adapters revert vault-initiated `allocate` and `deallocate` (`SelfAllocationOnly`), so a
+ * vault routing liquidity through one accepts no deposit and serves exits from idle assets only.
+ */
+const isMidnightLiquidityAdapter = (vaultData: AccrualVaultV2) =>
+  vaultData.accrualLiquidityAdapter?.type === "VaultV2MidnightAdapter";
+
+/**
  * Action surface for Vault V2 reads and writes; writes route through VaultBundlesV1 and
  * VaultExitBundlesV1, except `forceRedeem`, which uses the vault's native multicall.
  */
@@ -151,8 +158,9 @@ export interface VaultV2Actions {
    *   owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
    *   explicit Permit2 nonce is consumed.
-   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
-   *   `getRequirements()` when the Permit2 nonce exceeds uint256.
+   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, when the vault's
+   *   liquidity adapter is a Midnight adapter (it cannot receive vault allocations, so no deposit
+   *   fits and `max` is `0n`), or from `getRequirements()` when the Permit2 nonce exceeds uint256.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -233,7 +241,9 @@ export interface VaultV2Actions {
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   at any `getRequirements()` call.
-   * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
+   * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation,
+   *   or when the vault's liquidity adapter is a Midnight adapter and `amount` exceeds the vault's
+   *   idle assets.
    * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
@@ -298,13 +308,30 @@ export interface VaultV2Actions {
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
-   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256, or from
+   *   `getRequirements()` when the vault's liquidity adapter is a Midnight adapter and `shares`
+   *   are worth more than the vault's idle assets.
+   * @throws {UnknownBlueFactory} from `getRequirements()` when the configured chain has no VaultV2 factory.
+   * @throws {UnknownBlueOfFactory} from `getRequirements()` when the vault is not a VaultV2 from the
+   *   configured factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} from `getRequirements()` when the vault or one of its
+   *   adapters uses an unsupported adapter class.
+   * @throws {UnsupportedBlueMarketIrmError} from `getRequirements()` when the vault's liquidity adapter
+   *   is a Midnight adapter and accrual projects an underlying market with positive debt that uses an
+   *   unsupported IRM.
+   * @throws {UnknownBlueMarketAllocationError} from `getRequirements()` when the vault's liquidity
+   *   adapter is a Midnight adapter and accrual meets a nested Vault V1 withdraw queue market without
+   *   allocation data.
+   * @throws {InvalidMidnightPositionLossFactorError} from `getRequirements()` when the vault's liquidity
+   *   adapter is a Midnight adapter and accrual meets a market loss factor below a position's.
+   * @throws {InvalidMidnightPositionAccrualStateError} from `getRequirements()` when the vault's
+   *   liquidity adapter is a Midnight adapter and accrual meets invalid Midnight position inputs.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance or nonce read fails.
+   * @throws {viem.BaseError} from `getRequirements()` when a vault-state, allowance or nonce read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -378,13 +405,15 @@ export interface VaultV2Actions {
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
-   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have one adapter.
+   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have one adapter, including
+   *   a vault that mixes Blue and Midnight adapters.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
-   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
+   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2,
+   *   including a Midnight adapter.
    * @throws {InKindRedeemCoverageError} when the deduplicated list cannot cover the exit.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
-   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC contract read fails.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
@@ -505,9 +534,11 @@ export interface VaultV2Actions {
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
-   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have exactly one adapter.
+   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have exactly one adapter,
+   *   including a vault that mixes Blue and Midnight adapters.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
-   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
+   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2,
+   *   including a Midnight adapter.
    * @throws {VaultV2UnsupportedLiquidityAdapterError} when the vault routes liquidity through
    *   another adapter.
    * @throws {VaultV2UndecodableLiquidityDataError} when the vault's `liquidityData` does not decode
@@ -524,7 +555,7 @@ export interface VaultV2Actions {
    * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
-   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC contract read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
@@ -669,6 +700,13 @@ export class MorphoVaultV2 implements VaultV2Actions {
       // The native path must target the chain's registered wrapped-native asset.
       validateNativeVaultAsset(this.chainId, vaultAsset);
     }
+    if (isMidnightLiquidityAdapter(vaultData)) {
+      throw new InputExceedsMaxError({
+        field: funding.value > 0n ? "nativeAmount" : "amount",
+        value: funding.assets,
+        max: 0n,
+      });
+    }
     const referralFeeAssets = getBundlesReferralFeeAssets(
       funding.assets,
       common.referralFeePct,
@@ -759,6 +797,16 @@ export class MorphoVaultV2 implements VaultV2Actions {
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
     // Reject values outside the ABI range before resolving any requirements.
     validateUint256Field("amount", amount);
+    if (
+      isMidnightLiquidityAdapter(vaultData) &&
+      amount > vaultData.assetBalance
+    ) {
+      throw new InputExceedsMaxError({
+        field: "amount",
+        value: amount,
+        max: vaultData.assetBalance,
+      });
+    }
     const createdAt = Time.timestamp();
     const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
     if (deadline <= createdAt)
@@ -851,8 +899,20 @@ export class MorphoVaultV2 implements VaultV2Actions {
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        const vaultData = await this.getData();
+        if (isMidnightLiquidityAdapter(vaultData)) {
+          // Onchain redeem accrues interest before converting shares to assets.
+          const { vault: accrued } = vaultData.accrueInterest(now);
+          if (accrued.toAssets(shares) > accrued.assetBalance) {
+            throw new InputExceedsMaxError({
+              field: "shares",
+              value: shares,
+              max: accrued.toShares(accrued.assetBalance),
+            });
+          }
+        }
         return getVaultBundlesSharesRequirements(this.client.viemClient, {
-          vaultData: await this.getData(),
+          vaultData,
           version: "vaultV2",
           owner: userAddress,
           chainId: this.chainId,
@@ -1039,32 +1099,26 @@ export class MorphoVaultV2 implements VaultV2Actions {
         // after intermediate penalty share burns, so one standalone read is not execution-equivalent
         // either. Simulate the finalized transaction after authorization when gate compatibility
         // must be checked before submission.
-        const [allowance, nonce, blueBalance] = await multicall(
-          this.client.viemClient,
-          {
-            allowFailure: false,
-            contracts: [
-              {
-                address: this.vault,
-                abi: erc20Abi,
-                functionName: "allowance",
-                args: [userAddress, vaultExitBundlesV1],
-              },
-              {
-                address: this.vault,
-                abi: erc2612Abi,
-                functionName: "nonces",
-                args: [userAddress],
-              },
-              {
-                address: vaultData.asset,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [blue],
-              },
-            ],
-          },
-        );
+        const [allowance, nonce, blueBalance] = await Promise.all([
+          readContract(this.client.viemClient, {
+            address: this.vault,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [userAddress, vaultExitBundlesV1],
+          }),
+          readContract(this.client.viemClient, {
+            address: this.vault,
+            abi: erc2612Abi,
+            functionName: "nonces",
+            args: [userAddress],
+          }),
+          readContract(this.client.viemClient, {
+            address: vaultData.asset,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [blue],
+          }),
+        ]);
 
         if (blueBalance < peak) {
           throw new InsufficientBlueBalanceForInKindRedeemError({
@@ -1382,23 +1436,20 @@ export class MorphoVaultV2 implements VaultV2Actions {
         // external code re-evaluated after each intermediate penalty burn, so neither is
         // execution-equivalent from a standalone read. Unlike in-kind redemption, this exit never
         // supplies into Morpho Blue, so no Blue token-balance check is needed.
-        const [allowance, nonce] = await multicall(this.client.viemClient, {
-          allowFailure: false,
-          contracts: [
-            {
-              address: this.vault,
-              abi: erc20Abi,
-              functionName: "allowance",
-              args: [userAddress, vaultExitBundlesV1],
-            },
-            {
-              address: this.vault,
-              abi: erc2612Abi,
-              functionName: "nonces",
-              args: [userAddress],
-            },
-          ],
-        });
+        const [allowance, nonce] = await Promise.all([
+          readContract(this.client.viemClient, {
+            address: this.vault,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [userAddress, vaultExitBundlesV1],
+          }),
+          readContract(this.client.viemClient, {
+            address: this.vault,
+            abi: erc2612Abi,
+            functionName: "nonces",
+            args: [userAddress],
+          }),
+        ]);
 
         if (allowance >= requiredShareAllowance) return [];
         if (this.client.options.supportSignature) {

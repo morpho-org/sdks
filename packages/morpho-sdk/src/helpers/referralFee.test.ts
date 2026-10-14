@@ -30,7 +30,7 @@ describe("grossFromNetAssets", () => {
           expect(gross - fee).toBe(netAssets);
         },
       ),
-      { numRuns: 200, seed: 20_260_908 },
+      { numRuns: 200 },
     );
   });
 

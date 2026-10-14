@@ -1,4 +1,4 @@
-import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
+import type { Address, Hex } from "viem";
 import type { BigIntish, Hash } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
 import type { AccrualVault } from "../Vault.js";
@@ -7,6 +7,7 @@ import type {
   IVaultV2Adapter,
 } from "./VaultV2Adapter.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
+import { VaultV2Utils } from "./VaultV2Utils.js";
 
 /** Plain input shape for a Vault V2 adapter investing in a MetaMorpho V1 vault. */
 export interface IVaultV2MorphoVaultV1Adapter
@@ -43,12 +44,7 @@ export class VaultV2MorphoVaultV1Adapter
    * ```
    */
   static adapterCapId(address: Address) {
-    return keccak256(
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["this", address],
-      ),
-    );
+    return VaultV2Utils.adapterCapId(address);
   }
 
   public readonly morphoVaultV1: Address;

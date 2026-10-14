@@ -57,4 +57,30 @@ describe("VaultV2Utils.allocationHeadroom", () => {
       limiter: CapacityLimitReason.vaultV2_absoluteCap,
     });
   });
+
+  test("default: accepts inline literals with and without id", () => {
+    expect(
+      VaultV2Utils.allocationHeadroom(
+        {
+          id: `0x${"02".repeat(32)}`,
+          absoluteCap: 1_000n,
+          relativeCap: MathLib.WAD,
+          allocation: 250n,
+        },
+        1_000n,
+      ),
+    ).toStrictEqual({
+      value: 750n,
+      limiter: CapacityLimitReason.vaultV2_absoluteCap,
+    });
+    expect(
+      VaultV2Utils.allocationHeadroom(
+        { absoluteCap: 1_000n, relativeCap: MathLib.WAD, allocation: 250n },
+        1_000n,
+      ),
+    ).toStrictEqual({
+      value: 750n,
+      limiter: CapacityLimitReason.vaultV2_absoluteCap,
+    });
+  });
 });

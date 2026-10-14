@@ -6,9 +6,6 @@ export {
   InvalidMidnightApiResponseError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
-  InvalidPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError,
-  InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
@@ -27,3 +24,8 @@ export {
   TickOutOfRangeError,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
+export {
+  InvalidPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError,
+  InvalidPositionLossFactorError,
+} from "@morpho-org/morpho-ts";

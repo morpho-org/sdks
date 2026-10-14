@@ -1,3 +1,5 @@
+import type { Address } from "viem";
+
 /**
  * Error thrown when Anvil exits or fails before its RPC server starts listening.
  *
@@ -80,6 +82,44 @@ export class AnvilCleanupError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "AnvilCleanupError";
+  }
+}
+
+/**
+ * Error thrown when writing Tempo's pathUSD fee-token balance does not produce the expected balance.
+ *
+ * @example
+ * ```ts
+ * import { AnvilFeeTokenFundingError } from "@morpho-org/test";
+ *
+ * const reportFixtureFailure = (error: unknown) => {
+ *   if (error instanceof AnvilFeeTokenFundingError)
+ *     console.error(error.message);
+ * };
+ * ```
+ */
+export class AnvilFeeTokenFundingError extends Error {
+  /**
+   * Creates an Anvil fee-token funding error.
+   *
+   * @param params Fee token, account, observed and expected balances, and the balances mapping slot.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(
+    params: {
+      readonly token: Address;
+      readonly account: Address;
+      readonly actual: bigint;
+      readonly expected: bigint;
+      readonly balancesSlot: bigint;
+    },
+    options?: ErrorOptions,
+  ) {
+    super(
+      `Tempo fee token "${params.token}" balance of "${params.account}" is "${params.actual}" after writing "${params.expected}" to balances slot "${params.balancesSlot}". The TIP-20 storage layout may have changed: find the new balances slot and update TEMPO_FEE_TOKEN_BALANCES_SLOT.`,
+      options,
+    );
+    this.name = "AnvilFeeTokenFundingError";
   }
 }
 

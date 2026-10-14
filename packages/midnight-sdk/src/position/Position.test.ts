@@ -1,4 +1,9 @@
-import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
+import {
+  ChainId,
+  getChainAddress,
+  MathLib,
+  InvalidPositionAccrualTimestampError as SharedPositionAccrualTimestampError,
+} from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
 import { addresses, createFixtures } from "../__test__/fixtures.js";
@@ -212,5 +217,21 @@ describe("PositionUtils.accrueInterest", () => {
       },
       accruedFee: 50n,
     });
+  });
+
+  test("throws the shared morpho-ts accrual error", () => {
+    let thrown: unknown;
+    try {
+      PositionUtils.accrueInterest({
+        position: basePositionInput({ lastAccrual: 2_000n }),
+        market: baseMarketInput(),
+        timestamp: 1_500n,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(InvalidPositionAccrualTimestampError);
+    expect(thrown).toBeInstanceOf(SharedPositionAccrualTimestampError);
   });
 });

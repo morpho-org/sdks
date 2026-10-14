@@ -1,17 +1,21 @@
-import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import {
+  addressesRegistry,
+  getChainAddress,
+  MarketParams,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { createMockClient } from "@morpho-org/test/mock";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256, serializeSignature } from "viem";
-import { mainnet } from "viem/chains";
+import { arc, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  encodeReadResult,
+  IN_KIND_ASSET,
   IN_KIND_BUNDLER,
   IN_KIND_USER,
   IN_KIND_VAULT,
   inKindMarketParams,
   inKindVaultV1Data,
-  mockMulticallResults,
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
 import {
@@ -46,35 +50,43 @@ const mockV1Requirements = (
     blueBalance?: bigint;
     morpho?: Address;
     blueFeeRecipient?: Address;
+    vault?: Address;
+    asset?: Address;
+    blue?: Address;
   },
 ) => {
-  mockMulticallResults(handle, [
-    encodeReadResult({
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: params.allowance,
-    }),
-    encodeReadResult({
-      abi: erc2612Abi,
-      functionName: "nonces",
-      result: 7n,
-    }),
-    encodeReadResult({
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      result: params.blueBalance ?? 1_000n,
-    }),
-    encodeReadResult({
-      abi: metaMorphoAbi,
-      functionName: "MORPHO",
-      result: params.morpho ?? blue,
-    }),
-    encodeReadResult({
-      abi: blueAbi,
-      functionName: "feeRecipient",
-      result: params.blueFeeRecipient ?? IN_KIND_USER,
-    }),
-  ]);
+  const vault = params.vault ?? IN_KIND_VAULT;
+  const blueAddress = params.blue ?? blue;
+  mockRead(handle, {
+    address: vault,
+    abi: erc20Abi,
+    functionName: "allowance",
+    result: params.allowance,
+  });
+  mockRead(handle, {
+    address: vault,
+    abi: erc2612Abi,
+    functionName: "nonces",
+    result: 7n,
+  });
+  mockRead(handle, {
+    address: params.asset ?? IN_KIND_ASSET,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    result: params.blueBalance ?? 1_000n,
+  });
+  mockRead(handle, {
+    address: vault,
+    abi: metaMorphoAbi,
+    functionName: "MORPHO",
+    result: params.morpho ?? blueAddress,
+  });
+  mockRead(handle, {
+    address: blueAddress,
+    abi: blueAbi,
+    functionName: "feeRecipient",
+    result: params.blueFeeRecipient ?? IN_KIND_USER,
+  });
 };
 
 describe("MorphoVaultV1.inKindRedeem", () => {
@@ -376,6 +388,30 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     expect(approval?.action).toEqual({
       type: "erc20Approval",
       args: { spender: IN_KIND_BUNDLER, amount: 501n },
+    });
+  });
+
+  test("behavior: resolves requirements on a chain without viem multicall3 (Arc)", async () => {
+    expect(arc.contracts?.multicall3).toBeUndefined();
+    const arcBlue = getChainAddress(arc.id, "blue");
+    const arcBundler = getChainAddress(arc.id, "bundles.vaultExitBundlesV1");
+    const handle = createMockClient(arc);
+    mockV1Requirements(handle, { allowance: 0n, blue: arcBlue });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(IN_KIND_VAULT, arc.id);
+    const [approval] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: arcBundler, amount: 501n },
     });
   });
 

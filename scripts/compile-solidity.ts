@@ -123,7 +123,7 @@ interface SolcError {
 }
 
 interface SolcContractArtifact {
-  abi: unknown;
+  abi: readonly unknown[];
   evm: {
     bytecode: {
       object: string;
@@ -158,6 +158,9 @@ for (const [sourceName, contracts] of Object.entries(output.contracts)) {
   if (!artifact) {
     throw new Error(`Missing compiled artifact for ${sourceName}`);
   }
+
+  // Internal libraries have no external ABI and cannot be deployless queries.
+  if (artifact.abi.length === 0) continue;
 
   mkdirSync(dirname(outputPath), { recursive: true });
 

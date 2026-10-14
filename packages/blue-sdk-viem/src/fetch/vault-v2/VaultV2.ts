@@ -20,6 +20,7 @@ import {
   VaultConfig,
   VaultMarketConfig,
   VaultV2,
+  VaultV2MidnightAdapter,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -35,6 +36,7 @@ import {
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
+  midnightAdapterFactoryAbi,
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
@@ -55,6 +57,10 @@ import type {
 } from "../../types.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import {
+  toAccrualVaultV2MidnightAdapter,
+  toVaultV2MidnightAdapter,
+} from "./VaultV2MidnightAdapter.js";
 
 /**
  * Fetches VaultV2 state and liquidity-cap data.
@@ -64,11 +70,12 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * supported liquidity adapters. Uses the deployless `GetVaultV2` query by default and falls back
  * to multicall when allowed.
  *
- * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher only loads
- * liquidity allocations for `MorphoVaultV1Adapter` and `MorphoMarketV1AdapterV2`; when a vault
- * configures the non-V2 market adapter as `liquidityAdapter`, the returned `VaultV2` preserves the
- * adapter address and liquidity data but leaves `liquidityAllocations` undefined. Fetch
- * `MorphoMarketV1Adapter` through `fetchVaultV2Adapter` when it is used as a regular adapter.
+ * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher loads
+ * liquidity allocations for `MorphoVaultV1Adapter`, `MorphoMarketV1AdapterV2`, and
+ * `VaultV2MidnightAdapter`; when a vault configures the non-V2 market adapter as
+ * `liquidityAdapter`, the returned `VaultV2` preserves the adapter address and liquidity data but
+ * leaves `liquidityAllocations` undefined. Fetch `MorphoMarketV1Adapter` through
+ * `fetchVaultV2Adapter` when it is used as a regular adapter.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -106,6 +113,7 @@ export async function fetchVaultV2(
   const {
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
+    midnightAdapterFactory,
     vaultV2Factory,
   } = getChainAddresses(await getChainId(client));
 
@@ -127,6 +135,7 @@ export async function fetchVaultV2(
             vaultV2Factory,
             morphoVaultV1AdapterFactory ?? zeroAddress,
             morphoMarketV1AdapterV2Factory ?? zeroAddress,
+            midnightAdapterFactory ?? zeroAddress,
           ],
         });
 
@@ -287,6 +296,7 @@ export async function fetchVaultV2(
   const [
     hasMorphoVaultV1LiquidityAdapter,
     hasMorphoMarketV1AdapterV2LiquidityAdapter,
+    hasMidnightLiquidityAdapter,
     ...adapters
   ] = await Promise.all([
     morphoVaultV1AdapterFactory != null && liquidityAdapter !== zeroAddress
@@ -307,6 +317,15 @@ export async function fetchVaultV2(
           ...parameters,
         })
       : undefined,
+    midnightAdapterFactory != null && liquidityAdapter !== zeroAddress
+      ? readContract(client, {
+          address: midnightAdapterFactory,
+          abi: midnightAdapterFactoryAbi,
+          functionName: "isMidnightAdapter",
+          args: [liquidityAdapter],
+          ...parameters,
+        }).catch(() => false)
+      : false,
     ...Array.from({ length: Number(adaptersLength) }, (_, i) =>
       readContract(client, {
         ...parameters,
@@ -339,6 +358,10 @@ export async function fetchVaultV2(
       ),
     ];
   }
+  if (hasMidnightLiquidityAdapter)
+    liquidityAdapterIds = [
+      VaultV2MidnightAdapter.adapterCapId(liquidityAdapter),
+    ];
 
   let liquidityAllocations: IVaultV2Allocation[] | undefined;
   if (liquidityAdapterIds != null)
@@ -402,16 +425,18 @@ export async function fetchVaultV2(
  * Fetches VaultV2 state with accrual data for capacity calculations.
  *
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
- * configured liquidity adapter and regular adapters, and force-deallocate penalties. By default it
- * reads the entire tree in a single deployless call and only falls back to sequential multicall
- * reads after a retryable failure; pass `deployless: "force"` to require the single call, or
- * `deployless: false` to use multicall reads directly.
+ * configured liquidity adapter and every vault adapter (including `VaultV2MidnightAdapter`), and
+ * force-deallocate penalties. By default it reads the entire tree in a single deployless call and
+ * only falls back to sequential multicall reads after a retryable failure; pass
+ * `deployless: "force"` to require the single call, or `deployless: false` to use multicall reads
+ * directly.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
  * that adapter as an accrual adapter, but liquidity cap allocations remain undefined because
- * `fetchVaultV2` only loads allocations for `MorphoVaultV1Adapter` and
- * `MorphoMarketV1AdapterV2`. Calling `maxDeposit` on the returned `AccrualVaultV2` therefore throws
- * `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2 market adapter liquidity adapter.
+ * `fetchVaultV2` only loads allocations for `MorphoVaultV1Adapter`,
+ * `MorphoMarketV1AdapterV2` and `VaultV2MidnightAdapter`. Calling `maxDeposit` on the returned
+ * `AccrualVaultV2` therefore throws `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2
+ * market adapter liquidity adapter.
  * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
  * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
  * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
@@ -430,6 +455,8 @@ export async function fetchVaultV2(
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
  *   unsupported adapter class.
+ * @throws {UnresolvedBlockNumberError} when a sequential Midnight-adapter read resolves a pending
+ *   block.
  * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`,
  *   `deployless: false`, or a failed sequential fallback).
  * @example
@@ -539,6 +566,7 @@ const AdapterType = {
   MorphoVaultV1: 1,
   MorphoMarketV1: 2,
   MorphoMarketV1AdapterV2: 3,
+  Midnight: 4,
 } as const;
 
 /** @internal Rebuilds a `Market` from a deployless `GetAccrualVaultV2` market response. */
@@ -700,6 +728,17 @@ function toAccrualAdapter(
       );
     }
 
+    case AdapterType.Midnight: {
+      const midnightAdapter = adapter.midnightAdapter;
+      return toAccrualVaultV2MidnightAdapter(
+        toVaultV2MidnightAdapter(adapter.adapter, midnightAdapter),
+        {
+          markets: midnightAdapter.markets,
+          lastUpdate: midnightAdapter.timestamp,
+        },
+      );
+    }
+
     default:
       throw new UnsupportedVaultV2AdapterError(adapter.adapter);
   }
@@ -722,6 +761,7 @@ async function fetchAccrualVaultV2WithQuery(
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
+    midnightAdapterFactory,
   } = getChainAddresses(chainId);
 
   if (!vaultV2Factory) {
@@ -741,6 +781,7 @@ async function fetchAccrualVaultV2WithQuery(
         morphoVaultV1AdapterFactory ?? zeroAddress,
         morphoMarketV1AdapterFactory ?? zeroAddress,
         morphoMarketV1AdapterV2Factory ?? zeroAddress,
+        midnightAdapterFactory ?? zeroAddress,
         blue,
         adaptiveCurveIrm,
       ],
@@ -781,9 +822,21 @@ async function fetchAccrualVaultV2WithQuery(
       response.managementFeeRecipientCanReceiveShares,
   });
 
-  const accrualLiquidityAdapter = response.hasLiquidityAdapter
-    ? toAccrualAdapter(response.liquidityAdapterInfo, adaptiveCurveIrm)
-    : undefined;
+  let accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined;
+  if (response.hasLiquidityAdapter) {
+    const { liquidityAdapterInfo } = response;
+    // Members use `response.adapters`; non-members use full `liquidityAdapterInfo`.
+    const liquidityAdapter =
+      liquidityAdapterInfo.adapterType === AdapterType.Midnight
+        ? (response.adapters.find(({ adapter }) =>
+            isAddressEqual(adapter, liquidityAdapterInfo.adapter),
+          ) ?? liquidityAdapterInfo)
+        : liquidityAdapterInfo;
+    accrualLiquidityAdapter = toAccrualAdapter(
+      liquidityAdapter,
+      adaptiveCurveIrm,
+    );
+  }
 
   const accrualAdapters = response.adapters.map((adapter) =>
     toAccrualAdapter(adapter, adaptiveCurveIrm),

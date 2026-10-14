@@ -29,6 +29,10 @@ import {
   zeroHash,
 } from "viem";
 import { describe, expect, test, vi } from "vitest";
+import {
+  MIDNIGHT_ADAPTER,
+  withMidnightAdapter,
+} from "../../test/fixtures/vaultV2Midnight.js";
 import { blueBundlesV1Abi } from "../abis.js";
 import { blueSupplyCollateralBorrow } from "../actions/index.js";
 import {
@@ -3928,5 +3932,55 @@ describe("VaultV2BlueReallocationData liquidity metrics", () => {
         maxPenalty: -1n,
       }),
     ).toThrow(NegativeInputError);
+  });
+});
+
+describe("VaultV2BlueReallocationData with a Midnight adapter", () => {
+  const withMidnight = (data: VaultV2BlueReallocationData) =>
+    new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: withMidnightAdapter(data.getVault(VAULT) as AccrualVaultV2, {
+          credit: 500n,
+        }),
+      },
+      allocations: data.allocations,
+      publicAllocatorConfigs: data.publicAllocatorConfigs,
+      activeAdapters: data.activeAdapters,
+      marketPublicAllocatorConfigs: data.marketPublicAllocatorConfigs,
+    });
+
+  test("behavior: clone shares the Midnight adapter snapshot", () => {
+    const input = withMidnight(makeFixture().data);
+    const midnight = input
+      .getVault(VAULT)
+      .accrualAdapters.find(({ address }) => address === MIDNIGHT_ADAPTER);
+
+    const cloned = input.clone().getVault(VAULT);
+
+    expect(midnight?.type).toBe("VaultV2MidnightAdapter");
+    expect(
+      cloned.accrualAdapters.find(
+        ({ address }) => address === MIDNIGHT_ADAPTER,
+      ),
+    ).toBe(midnight);
+  });
+
+  test("behavior: Blue reallocations on a Blue + Midnight vault equal the Blue-only plan", () => {
+    const { data } = makeFixture();
+
+    const blueOnly = data.computeVaultV2BlueReallocations(targetParams.id);
+    const mixed = withMidnight(data).computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(blueOnly.reallocations).not.toHaveLength(0);
+    expect(mixed.reallocations).toEqual(blueOnly.reallocations);
+    expect(
+      mixed.reallocations.flatMap(({ from, to }) =>
+        from.type === "market" ? [from.adapter, to.adapter] : [to.adapter],
+      ),
+    ).not.toContain(MIDNIGHT_ADAPTER);
   });
 });

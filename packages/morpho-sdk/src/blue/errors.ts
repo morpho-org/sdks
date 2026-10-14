@@ -5,6 +5,9 @@ export {
   InvalidAddressError,
   InvalidBitLengthError,
   InvalidMarketParamsError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionLossFactorError,
+  InvalidVaultV2MidnightAdapterMarketsError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnknownDataError,
@@ -32,5 +35,6 @@ export {
   NonTupleReturnValueError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
+  UnresolvedBlockNumberError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";

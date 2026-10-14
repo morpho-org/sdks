@@ -11,11 +11,24 @@ import {
   NonTupleReturnValueError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
+  UnresolvedBlockNumberError,
   UnsupportedPermitDomainExtensionsError,
 } from "./error.js";
 
 const TOKEN: Address = "0x1111111111111111111111111111111111111111";
 const ADAPTER: Address = "0x2222222222222222222222222222222222222222";
+
+describe("UnresolvedBlockNumberError", () => {
+  test("preserves the requested block tag and provides guidance", () => {
+    const error = new UnresolvedBlockNumberError("pending");
+
+    expect(error.blockTag).toBe("pending");
+    expect(error.name).toBe("UnresolvedBlockNumberError");
+    expect(error.message).toBe(
+      'Block "pending" has no block number yet (pending). Pass a mined blockNumber or a blockTag such as "latest", "safe" or "finalized".',
+    );
+  });
+});
 
 describe("MarketParamsIdMismatchError", () => {
   test("preserves both market ids and sets its name", () => {

@@ -6,6 +6,9 @@ import {
   IncompleteChainRegistryError,
   InvalidAddressError,
   InvalidBitLengthError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError,
+  InvalidPositionLossFactorError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
@@ -174,5 +177,39 @@ describe("InvalidAddressError", () => {
     expect(error.address).toBe("0x1234");
     expect(error.message).toContain("0x1234");
     expect(error.message).toContain("EIP-55");
+  });
+});
+
+describe("InvalidPositionAccrualTimestampError", () => {
+  test("default", () => {
+    const error = new InvalidPositionAccrualTimestampError(99n, 100n);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("InvalidPositionAccrualTimestampError");
+    expect(error.message).toContain('"99"');
+    expect(error.message).toContain('"100"');
+  });
+});
+
+describe("InvalidPositionLossFactorError", () => {
+  test("default", () => {
+    const error = new InvalidPositionLossFactorError(1n, 2n);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("InvalidPositionLossFactorError");
+    expect(error.message).toContain('"1"');
+    expect(error.message).toContain('"2"');
+  });
+});
+
+describe("InvalidPositionAccrualStateError", () => {
+  test("default", () => {
+    const error = new InvalidPositionAccrualStateError("Some reason.");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("InvalidPositionAccrualStateError");
+    expect(error.message).toBe(
+      "Invalid Midnight position accrual state. Some reason.",
+    );
   });
 });

@@ -2,6 +2,7 @@ export {
   BlueErrors,
   IncompleteChainRegistryError,
   InvalidMarketParamsError as InvalidBlueMarketParamsError,
+  InvalidVaultV2MidnightAdapterMarketsError as InvalidBlueVaultV2MidnightAdapterMarketsError,
   UnknownAddressError,
   UnknownDataError as UnknownBlueDataError,
   UnknownFactory as UnknownBlueFactory,
@@ -28,6 +29,7 @@ export {
   NonTupleReturnValueError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
+  UnresolvedBlockNumberError as BlueUnresolvedBlockNumberError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {
@@ -38,9 +40,6 @@ export {
   InvalidMidnightApiResponseError,
   InvalidOfferGroupError as InvalidMidnightOfferGroupError,
   InvalidOfferParameterError as InvalidMidnightOfferParameterError,
-  InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
-  InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
   InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
   InvalidRateRatifierV1TickError as InvalidMidnightRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
@@ -65,6 +64,12 @@ export {
   DivisionByZeroError,
   InvalidAddressError,
   InvalidBitLengthError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError,
+  InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
+  InvalidPositionLossFactorError,
+  InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
 } from "@morpho-org/morpho-ts";

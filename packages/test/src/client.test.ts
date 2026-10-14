@@ -36,7 +36,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Reply = { result: unknown } | { error: { code: number; message: string } };
 
-const startNode = async (reply: (method: string) => Promise<Reply>) => {
+const startNode = async (
+  reply: (method: string) => Promise<Reply>,
+  { replyToTxpool = false } = {},
+) => {
   const methods: string[] = [];
   const server = createServer((req, res) => {
     let body = "";
@@ -46,7 +49,10 @@ const startNode = async (reply: (method: string) => Promise<Reply>) => {
     req.on("end", async () => {
       const { id, method } = JSON.parse(body);
       methods.push(method);
-      const response = await reply(method);
+      const response =
+        method === "txpool_content" && !replyToTxpool
+          ? { result: { pending: {}, queued: {} } }
+          : await reply(method);
       if (res.destroyed) return;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ jsonrpc: "2.0", id, ...response }));
@@ -152,6 +158,46 @@ describe("createAnvilTestClient", () => {
     }
   });
 
+  test.each(["pending", "queued"] as const)(
+    "skips the receipt lookup while the transaction is %s",
+    async (pool) => {
+      let pooled = true;
+      setTimeout(() => {
+        pooled = false;
+      }, 200);
+
+      const node = await startNode(
+        async (method) => {
+          if (method === "txpool_content")
+            return {
+              result: {
+                pending: {},
+                queued: {},
+                ...(pooled && { [pool]: { [zeroAddress]: { "0": { hash } } } }),
+              },
+            };
+          if (method === "eth_getTransactionReceipt")
+            return { result: receipt };
+          return { result: null };
+        },
+        { replyToTxpool: true },
+      );
+      try {
+        await expect(
+          node.client.waitForTransactionReceipt({ hash, timeout: 3_000 }),
+        ).resolves.toMatchObject({ transactionHash: hash });
+        expect(node.methods.length).toBeGreaterThan(2);
+        expect(
+          node.methods.filter(
+            (method) => method === "eth_getTransactionReceipt",
+          ),
+        ).toEqual(["eth_getTransactionReceipt"]);
+      } finally {
+        node.close();
+      }
+    },
+  );
+
   test("rethrows RPC errors without polling again", async () => {
     const node = await startNode(async () => ({
       error: { code: InternalRpcError.code, message: "boom" },
@@ -161,7 +207,10 @@ describe("createAnvilTestClient", () => {
         node.client.waitForTransactionReceipt({ hash, timeout: 3_000 }),
       ).rejects.toBeInstanceOf(InternalRpcError);
       await sleep(200);
-      expect(node.methods).toEqual(["eth_getTransactionReceipt"]);
+      expect(node.methods).toEqual([
+        "txpool_content",
+        "eth_getTransactionReceipt",
+      ]);
     } finally {
       node.close();
     }

@@ -5,13 +5,15 @@ export {
   IncompleteChainRegistryError,
   InvalidAddressError,
   InvalidBitLengthError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionLossFactorError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
 
 import { formatUnits, type Hex } from "viem";
-import type { Address, MarketId } from "./types.js";
+import type { Address, Hash, MarketId } from "./types.js";
 
 /** Thrown when interest projection is requested for an unsupported nonzero IRM. */
 export class UnsupportedMarketIrmError extends Error {
@@ -92,6 +94,16 @@ export class UnsupportedPreLiquidationParamsError extends Error {
 export class UnsupportedVaultV2AdapterError extends Error {
   constructor(public readonly address: Address) {
     super(`vault v2 adapter "${address}" is not supported`);
+  }
+}
+
+/** Error thrown when Midnight adapter market ids, data, and positions do not correspond one-to-one. */
+export class InvalidVaultV2MidnightAdapterMarketsError extends Error {
+  constructor(public readonly marketId: Hash) {
+    super(
+      `Midnight adapter market "${marketId}" must appear exactly once in marketIds, marketData and markets. Provide one position entry per held market id.`,
+    );
+    this.name = "InvalidVaultV2MidnightAdapterMarketsError";
   }
 }
 
@@ -192,6 +204,23 @@ export namespace VaultV2Errors {
       super(
         `invalid interest accrual on vault ${vault}: accrual timestamp ${timestamp} can't be prior to last update ${lastUpdate}`,
       );
+    }
+  }
+
+  /** Thrown when a Midnight adapter duration-bucket count is not an integer in `[0, durations.length]`. */
+  export class InvalidMidnightDurationsLength extends Error {
+    /**
+     * @param length - Requested number of duration buckets.
+     * @param durationsLength - Number of available durations.
+     */
+    constructor(
+      public readonly length: number,
+      public readonly durationsLength: number,
+    ) {
+      super(
+        `Duration bucket length "${length}" must be an integer between 0 and "${durationsLength}". Pass the adapter's durations length or a smaller non-negative integer.`,
+      );
+      this.name = "InvalidMidnightDurationsLength";
     }
   }
 

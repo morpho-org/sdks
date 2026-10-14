@@ -1,5 +1,24 @@
 # @morpho-org/test
 
+## 2.11.0-next.0
+
+### Minor Changes
+
+- Return Tempo to the E2E matrix, superseding the Tempo omission in `e2e-fallback-asset`.
+  `createViemTest` from `@morpho-org/test/vitest` now funds the test account's pathUSD fee-token
+  balance on Tempo and throws `AnvilFeeTokenFundingError` if the write does not produce the expected
+  balance.
+  `@morpho-org/morpho-test` now requires `@morpho-org/test` `^2.11.0`.
+- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+- Add `getErpcForkUrl` for authenticated Morpho eRPC fork URLs.
+
+### Patch Changes
+
+- `spawnAnvil` no longer fails to start when the fork RPC is slow or fails on Anvil's `anvil_nodeInfo` startup probe. Through the Morpho eRPC, that probe averages 21 s on HyperEVM and the CDN answers HTTP 504. Alchemy rejects it with error -32600, which Anvil 1.8 doesn't accept either. Anvil now reaches an `http(s)` `forkUrl` through a local proxy on 127.0.0.1, closed when Anvil stops. The proxy answers the probe with -32601, alone or in a batch, and forwards every other request unchanged. Anvil names its fork disk cache after the fork URL, so it gets `http://fork-<hash of the fork URL>.invalid` and reaches the proxy through `HTTP_PROXY`: each fork URL keeps the same cache file across runs and processes. A trailing `@<block>` on `forkUrl` and `forkHeader` keep working. The proxy never puts the fork URL in errors. When `HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY` is set, Anvil forks directly through that proxy as before, because the local proxy can't reach the fork RPC through it.
+- `createAnvilTestClient` answers `eth_getTransactionReceipt` with null while the transaction is still in Anvil's pool (checked with `txpool_content`, which Anvil answers locally), without sending the lookup to Anvil. Anvil forwards a receipt lookup it can't answer to the fork RPC, and a caching RPC such as the Morpho eRPC can take seconds to return null for a hash only Anvil knows, which made heavy fork tests time out. This covers every receipt lookup made through the client, including viem-tracer's check after each send.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.1.0-next.0
+
 ## 2.10.1
 
 ### Patch Changes

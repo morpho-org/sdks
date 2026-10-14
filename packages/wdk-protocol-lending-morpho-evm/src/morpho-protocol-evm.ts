@@ -919,7 +919,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * const account = new WalletAccountReadOnlyEvm(
    *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
-   *   { provider: process.env.MAINNET_RPC_URL! },
+   *   { provider: "https://<your-mainnet-rpc>" },
    * );
    * const morpho = new MorphoProtocolEvm(account, {
    *   presets: { earn: "sky-money-usdt-savings", borrow: "wsteth" },
@@ -2394,7 +2394,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * const account = new WalletAccountReadOnlyEvm(
    *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
-   *   { provider: process.env.MAINNET_RPC_URL! },
+   *   { provider: "https://<your-mainnet-rpc>" },
    * );
    * const morpho = new MorphoProtocolEvm(account, {
    *   presets: { earn: "sky-money-usdt-savings" },
@@ -2451,7 +2451,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * const account = new WalletAccountReadOnlyEvm(
    *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
-   *   { provider: process.env.MAINNET_RPC_URL! },
+   *   { provider: "https://<your-mainnet-rpc>" },
    * );
    * const morpho = new MorphoProtocolEvm(account, {
    *   presets: { borrow: "wsteth" },
@@ -2503,7 +2503,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * const account = new WalletAccountReadOnlyEvm(
    *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
-   *   { provider: process.env.MAINNET_RPC_URL! },
+   *   { provider: "https://<your-mainnet-rpc>" },
    * );
    * const morpho = new MorphoProtocolEvm(account, {
    *   presets: { earn: "sky-money-usdt-savings", borrow: "wsteth" },

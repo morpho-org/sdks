@@ -93,8 +93,6 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 
 - [@Foulks-Plb](https://github.com/Foulks-Plb) ([Twitter](https://x.com/FoulkPlb))
 - [@0xbulma](https://github.com/0xbulma)
-- [@oumar-fall](https://github.com/oumar-fall)
-- [@julien-devatom](https://github.com/julien-devatom)
 - [@jinsuk](https://github.com/jinsuk)
 
 ## License

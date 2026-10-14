@@ -1060,6 +1060,25 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
+  test("error: InvalidMidnightApiResponseError for take units above offer maxUnits", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          units: (BigInt(apiOffer.max_units) + 1n).toString(),
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchBookTakeableOffers({
+        marketId: MARKET_ID,
+        side: "asks",
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: [apiTakeableOffer],
@@ -1146,6 +1165,29 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/bids/quote`);
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
+  });
+
+  test("behavior: returns the API averageWorstPrice in slippage mode", async () => {
+    const apiGuard = "1010000000000000000";
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: apiGuard,
+        available_assets: "0",
+        available_units: "0",
+        takeable_offers: [],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      assets: 1n,
+      slippage: "0.5",
+      fetch,
+    });
+
+    expect(result.data.averageWorstPrice).toBe(apiGuard);
   });
 
   test("behavior: clamps guard checks to requested units", async () => {
@@ -1235,6 +1277,94 @@ describe("MidnightApi.fetchBookQuote", () => {
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("behavior: returns the caller averageWorstPrice when provided", async () => {
+    const callerGuard = TickLib.tickToPrice(apiOffer.tick);
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: (callerGuard + 1n).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: apiTakeableOffer.units,
+      averageWorstPrice: callerGuard,
+      fetch,
+    });
+
+    expect(result.data.averageWorstPrice).toBe(callerGuard.toString());
+  });
+
+  test("behavior: returns a hex averageWorstPrice as a decimal string", async () => {
+    const callerGuard = TickLib.tickToPrice(apiOffer.tick);
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: (callerGuard + 1n).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: apiTakeableOffer.units,
+      averageWorstPrice: `0x${callerGuard.toString(16)}`,
+      fetch,
+    });
+
+    expect(result.data.averageWorstPrice).toBe(callerGuard.toString());
+  });
+
+  test("error: InvalidMidnightApiResponseError for take units above offer maxUnits", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        units: (BigInt(apiOffer.max_units) + 1n).toString(),
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: 1n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("behavior: does not compare units with an asset cap", async () => {
+    const units = "1000000000000000000000000000000";
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        units,
+        offer: {
+          ...apiOffer,
+          max_units: "0",
+          max_assets: "1",
+        },
+      },
+    ]);
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: 1n,
+      fetch,
+    });
+
+    expect(result.data.takeableOffers[0]?.units).toBe(BigInt(units));
   });
 
   test("error: asset-targeted quote guards check aggregate price", async () => {
@@ -1621,6 +1751,21 @@ describe("MidnightApi.fetchTakeableOffers", () => {
         {
           ...apiTakeableOffer,
           offer: { ...apiOffer, max_units: "0", max_assets: "0" },
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for take units above offer maxUnits", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          units: (BigInt(apiOffer.max_units) + 1n).toString(),
         },
       ],
     });

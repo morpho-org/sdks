@@ -9,7 +9,7 @@ This monorepo contains the TypeScript SDK packages used to interact with the Mor
 - Node.js `>=26 <27`
 - pnpm `11`, declared by the root `packageManager` field
 - Git
-- An Ethereum mainnet RPC URL for fork-backed tests
+- Optional: a Morpho eRPC key (`ERPC_SECRET`); without it, hand-written fork suites use the chain's public RPC and registry E2E suites are skipped
 
 Enable pnpm through Corepack if needed:
 
@@ -34,11 +34,24 @@ pnpm lint
 pnpm test
 ```
 
-Tests that fork mainnet require `MAINNET_RPC_URL`:
+Fork suites need Foundry's Anvil v1.8.5, the version CI pins (`foundryup -i v1.8.5`). On older Anvil versions, the Base Midnight fork tests fail.
+
+Hand-written Anvil fork suites fall back to the chain's public RPC when `ERPC_SECRET` is unset. Registry-driven E2E suites require the Morpho eRPC and skip eligible chains without the secret; WDK integration suites are skipped without it. Outside contributors can run tests that do not require those fork suites:
 
 ```bash
-export MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/<your-key>"
 pnpm test
+```
+
+Registry-driven E2E suites run every scenario on each chain whose address registry has the
+scenario's deployments, forked at a pinned block through the Morpho eRPC. `E2E_CHAINS` selects
+chains by id or `ChainId` name; selecting a chain without `ERPC_SECRET` throws
+`E2eErpcSecretUnsetError`. Public contributors can run hand-written fork suites against the chain's
+public RPC, but registry-driven E2E forks and WDK integration suites are skipped without an eRPC key:
+
+```bash
+pnpm test:e2e                                    # every eligible chain when ERPC_SECRET is set
+E2E_CHAINS=BaseMainnet pnpm test:e2e             # one chain (or E2E_CHAINS=8453)
+pnpm test:e2e -t e2e/vaultV2                     # one scenario family
 ```
 
 Other useful commands:

@@ -367,7 +367,7 @@ describe("vaultV1InKindRedeem", () => {
           });
         },
       ),
-      { numRuns: 50, seed: 20_260_804 },
+      { numRuns: 50 },
     );
   });
 

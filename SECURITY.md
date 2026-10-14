@@ -156,9 +156,9 @@ When a new major is released, the previous major stops receiving fixes. The late
 
 ## Release integrity and verification
 
-Packages are developed in a private repository. Each release is published to this repository as a snapshot commit on `main`, built from an allowlist of public files and scanned for internal references and secrets. A dedicated GitHub App, the only actor allowed to update `main`, pushes it as GitHub-signed commits, without a pull request and never with a force push.
+Packages are developed in a private repository. Each release is published to this repository as a snapshot commit on `main`, or on `next` for prereleases, built from an allowlist of public files and scanned for internal references and secrets. A dedicated GitHub App, the only actor allowed to create or update `main` and `next`, pushes it as GitHub-signed commits, without a pull request and never with a force push.
 
-1. A release snapshot pushed to `main` runs [`release.yml`](./.github/workflows/release.yml).
+1. A release snapshot pushed to `main` or `next` runs [`release.yml`](./.github/workflows/release.yml). On `next`, it publishes only prereleases, under the `next` dist-tag.
 2. An unprivileged **Pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions.
 3. A privileged **Publish** job, in the `npm` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry. It then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
 4. Package git tags and GitHub releases are created only after npm accepts the publish, on the commit that set each version.
@@ -178,7 +178,7 @@ curl -s "$(npm view "@morpho-org/morpho-sdk@$VERSION" dist.attestations.url)" \
   | base64 -d | jq '.predicate.buildDefinition.externalParameters.workflow'
 ```
 
-For a version published by this pipeline, the output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`. Versions published before this repository became release-only were built from the same repository by `.github/workflows/push.yml`, on `refs/heads/main`, or `refs/heads/next` for prereleases. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from any other repository or workflow, as suspect and report it.
+For a version published by this pipeline, the output should show `"repository": "https://github.com/morpho-org/sdks"` and `"path": ".github/workflows/release.yml"`, on `refs/heads/main`, or on `refs/heads/next` for prereleases under the `next` dist-tag. Versions published before this repository became release-only were built from the same repository by `.github/workflows/push.yml`, on `refs/heads/main`, or `refs/heads/next` for prereleases. This command only decodes the attestation: it does not verify the Sigstore signature or check that the attestation belongs to the published tarball. For an authenticated check, use `npm audit signatures` on an npm-installed tree or the "Provenance" panel on the package's npmjs.com page, which shows the same information after npm has verified it. Treat a version without provenance, or with provenance from any other repository or workflow, as suspect and report it.
 
 ## Dependency policy
 

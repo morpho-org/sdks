@@ -209,7 +209,6 @@ describe("Midnight calldata encoders", () => {
         });
         expect(collateralSupply.args[2]).toBe(assets);
       }),
-      { seed: 42 },
     );
   });
 
@@ -361,7 +360,6 @@ describe("Midnight calldata encoders", () => {
         ]);
         expect(repay.args.slice(10, 12)).toEqual([bound, deadline]);
       }),
-      { seed: 42 },
     );
   });
 
@@ -417,7 +415,6 @@ describe("Midnight calldata encoders", () => {
           expect(decoded.args[15]).toBe(deadline);
         },
       ),
-      { seed: 42 },
     );
   });
 });

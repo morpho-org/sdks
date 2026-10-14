@@ -187,7 +187,7 @@ describe("resolveBundlesTokenRequirements", () => {
           }
         },
       ),
-      { numRuns: 100, seed: 20_260_910 },
+      { numRuns: 100 },
     );
   });
 
@@ -277,7 +277,7 @@ describe("resolveBundlesTokenRequirements", () => {
           args: { nonce: BigInt(nonce) },
         });
       }),
-      { numRuns: 100, seed: 20_260_911 },
+      { numRuns: 100 },
     );
   });
 

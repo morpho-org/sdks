@@ -283,6 +283,12 @@ goes through MidnightBundlesV2, so call `getRequirements()` first: it returns th
 authorization of `MidnightBundlesV2` when it is missing. The bundle also needs a `deadline`, and
 `maxConsumed` only caps how much of the group may already be consumed when the cancellation runs.
 
+Send the transaction from `accountAddress`. v6 reverted unless the sender was the maker or an
+account the maker authorized on Midnight. v7 does not: MidnightBundlesV2 cancels the groups of
+whichever account sends the transaction, so a transaction from another account that has also
+authorized MidnightBundlesV2 succeeds and leaves the maker's offers fillable. `accountAddress` is
+only used to check the maker's authorization.
+
 Removed: `cancelOffer`, `midnightCancelOffer`, `MidnightCancelOfferParams`, `MidnightCancelOfferAction` and
 `MidnightAmountExceedsMaxOfferCapError`.
 

@@ -174,7 +174,7 @@ describe("vaultV2Deposit", () => {
           });
         },
       ),
-      { numRuns: 50, seed: 20_260_902 },
+      { numRuns: 50 },
     );
   });
 

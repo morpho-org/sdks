@@ -241,6 +241,23 @@ describe("addressesRegistry", () => {
     );
   });
 
+  test("behavior: exposes Base Midnight adapter deployment addresses", () => {
+    expect(getChainAddress(ChainId.BaseMainnet, "midnightAdapterFactory")).toBe(
+      "0x797f6E11e55Fb115fE548Faa8F07152BA587bbd7",
+    );
+    expect(
+      getChainAddress(ChainId.BaseMainnet, "midnightAdapterRateRatifierV1"),
+    ).toBe("0x39c01afA4B3f827a0bfAa39cDC4610111f80BABc");
+    expect(
+      getChainAddress(ChainId.BaseMainnet, "midnightAdapterPriceRatifierV1"),
+    ).toBe("0x8e38421bC293339798e9bD0c0a51690675D2f94b");
+    expect(deployments[ChainId.BaseMainnet]).toMatchObject({
+      midnightAdapterFactory: 52_510_848n,
+      midnightAdapterRateRatifierV1: 52_510_850n,
+      midnightAdapterPriceRatifierV1: 52_510_852n,
+    });
+  });
+
   test.each([
     {
       chainId: ChainId.EthMainnet,

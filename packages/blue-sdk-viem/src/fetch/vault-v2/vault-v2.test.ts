@@ -1,5 +1,6 @@
 import {
   AccrualVaultV2,
+  AccrualVaultV2MidnightAdapter,
   type AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
@@ -13,6 +14,7 @@ import {
   UnknownOfFactory,
   UnsupportedVaultV2AdapterError,
   VaultV2,
+  VaultV2MidnightAdapter,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -26,7 +28,7 @@ import {
   RawContractError,
   zeroAddress,
 } from "viem";
-import { mainnet } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
@@ -38,6 +40,7 @@ import {
   blueAbi,
   erc5267Abi,
   metaMorphoAbi,
+  midnightAdapterFactoryAbi,
   morphoMarketV1AdapterAbi,
   morphoMarketV1AdapterFactoryAbi,
   morphoMarketV1AdapterV2Abi,
@@ -68,6 +71,7 @@ import {
 
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
+const BASE_ADDRESSES = addressesRegistry[ChainId.BaseMainnet];
 const VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID = 9_101_002;
 const VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN = {
   ...mainnet,
@@ -81,6 +85,21 @@ const ADAPTER_2: Address = "0x4444444444444444444444444444444444444444";
 const RECIPIENT: Address = "0x5555555555555555555555555555555555555555";
 const ORACLE: Address = "0x6666666666666666666666666666666666666666";
 const COLLATERAL: Address = "0x7777777777777777777777777777777777777777";
+
+const emptyMidnightAdapterResponse = {
+  parentVault: zeroAddress,
+  asset: zeroAddress,
+  skimRecipient: zeroAddress,
+  midnight: zeroAddress,
+  maxTtm: 0n,
+  minRate: 0n,
+  noSalesWithShortfall: false,
+  noSalesBelowFaceValue: false,
+  durations: [],
+  durationAllocations: [],
+  markets: [],
+  timestamp: 0n,
+};
 
 if (
   (addressesRegistry as Record<number, unknown>)[
@@ -198,15 +217,17 @@ function mockVaultV2BaseReads(
     performanceFee = 5n,
     managementFee = 6n,
     canReceiveShares = false,
+    factoryAddress = ADDRESSES.vaultV2Factory,
   }: {
     performanceFee?: bigint;
     managementFee?: bigint;
     canReceiveShares?: boolean;
+    factoryAddress?: Address;
   } = {},
 ) {
   mockTokenReads(handle);
   mockRead(handle, {
-    address: ADDRESSES.vaultV2Factory,
+    address: factoryAddress,
     abi: vaultV2FactoryAbi,
     functionName: "isVaultV2",
     result: true,
@@ -393,6 +414,39 @@ describe("fetchVaultV2", () => {
     expect(vault.liquidityAllocations).toBeUndefined();
   });
 
+  test("uses the Midnight adapter cap id for fallback liquidity allocations", async () => {
+    const handle = createMockClient(base);
+    mockVaultV2BaseReads(handle, {
+      factoryAddress: BASE_ADDRESSES.vaultV2Factory!,
+    });
+    mockRead(handle, {
+      address: BASE_ADDRESSES.morphoVaultV1AdapterFactory!,
+      abi: morphoVaultV1AdapterFactoryAbi,
+      functionName: "isMorphoVaultV1Adapter",
+      result: false,
+    });
+    mockRead(handle, {
+      address: BASE_ADDRESSES.morphoMarketV1AdapterV2Factory!,
+      abi: morphoMarketV1AdapterV2FactoryAbi,
+      functionName: "isMorphoMarketV1AdapterV2",
+      result: false,
+    });
+    mockRead(handle, {
+      address: BASE_ADDRESSES.midnightAdapterFactory!,
+      abi: midnightAdapterFactoryAbi,
+      functionName: "isMidnightAdapter",
+      result: true,
+    });
+    const adapterCapId = VaultV2MidnightAdapter.adapterCapId(ADAPTER);
+    mockVaultV2AllocationReads(handle, [adapterCapId]);
+
+    const vault = await fetchVaultV2(VAULT, handle.client, {
+      deployless: false,
+    });
+
+    expect(vault.liquidityAllocations?.[0]?.id).toBe(adapterCapId);
+  });
+
   test.each([
     {
       scenario: "both",
@@ -562,6 +616,9 @@ describe("fetchVaultV2", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
   });
 
   test("propagates deployless UnknownOfFactory reverts", async () => {
@@ -856,6 +913,9 @@ describe("individual adapter fetchers", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
   });
 
   test("fetchVaultV2MorphoVaultV1Adapter propagates deployless UnknownOfFactory reverts", async () => {
@@ -1041,6 +1101,9 @@ describe("individual adapter fetchers", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
   });
 
   test("fetchVaultV2MorphoMarketV1Adapter propagates deployless UnknownOfFactory reverts", async () => {
@@ -1212,6 +1275,9 @@ describe("individual adapter fetchers", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
   });
 
   test("fetchVaultV2MorphoMarketV1AdapterV2 propagates deployless UnknownOfFactory reverts", async () => {
@@ -1677,8 +1743,6 @@ describe("fetchAccrualVaultV2 deployless path", () => {
 
   test("does not fall back when the single deployless call is forced", async () => {
     const handle = createMockClient(mainnet);
-    // Only the failing single-call query is mocked; a multicall fallback would need more responses,
-    // so a thrown error proves the forced path never falls back.
     mockDeploylessReads(handle, ["0x"]);
 
     await expect(
@@ -1686,6 +1750,16 @@ describe("fetchAccrualVaultV2 deployless path", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+
+    const fallbackCalls = handle.request.mock.calls.filter(([call]) => {
+      if (call.method !== "eth_call") return false;
+      const [tx] = (call.params ?? []) as [{ to?: Address }];
+      return tx?.to != null;
+    });
+    expect(fallbackCalls).toHaveLength(0);
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
   });
 
   test("rethrows a deterministic UnknownOfFactory revert without falling back", async () => {
@@ -1763,6 +1837,7 @@ function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
     marketV1V2Allocations: [
       { marketId: ID, supplyShares, market: marketQueryResult },
     ],
+    midnightAdapter: emptyMidnightAdapterResponse,
   };
 }
 
@@ -1801,6 +1876,7 @@ function marketV1AdapterUncreatedQueryResult(adapter: Address) {
     ],
     adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
     marketV1V2Allocations: [],
+    midnightAdapter: emptyMidnightAdapterResponse,
   };
 }
 
@@ -1875,6 +1951,118 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     expect(marketAdapter.markets[0]?.id).toBe(ID);
   });
 
+  test("decodes Midnight accrual adapters in deployless responses", async () => {
+    const handle = createMockClient(mainnet);
+    const timestamp = 100n;
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapterInfo: {
+        ...marketV1V2AdapterQueryResult(ADAPTER, 0n),
+        adapterType: 4,
+        midnightAdapter: emptyMidnightAdapterResponse,
+      },
+      adapters: [
+        {
+          ...marketV1V2AdapterQueryResult(ADAPTER, 0n),
+          adapterType: 4,
+          midnightAdapter: {
+            ...emptyMidnightAdapterResponse,
+            parentVault: VAULT,
+            asset: ASSET,
+            skimRecipient: RECIPIENT,
+            markets: [
+              {
+                id: ID,
+                marketData: {
+                  netCredit: 100n,
+                  rate: 0n,
+                  maturity: timestamp,
+                  index: 0n,
+                  forceSellable: false,
+                },
+                position: {
+                  credit: 100n,
+                  pendingFee: 0n,
+                  lastLossFactor: 0n,
+                  lastAccrual: timestamp,
+                },
+                lossFactor: 0n,
+              },
+            ],
+            timestamp,
+          },
+        },
+      ],
+    });
+
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client);
+    const [adapter] = vault.accrualAdapters;
+
+    expect(adapter).toBeInstanceOf(AccrualVaultV2MidnightAdapter);
+    if (!(adapter instanceof AccrualVaultV2MidnightAdapter))
+      throw new Error("Expected a Midnight accrual adapter");
+    expect(adapter.marketIds).toEqual([ID]);
+    expect(adapter.lastUpdate).toBe(timestamp);
+    expect(adapter.realAssets(timestamp)).toBe(100n);
+
+    const liquidityAdapter = vault.accrualLiquidityAdapter;
+    expect(liquidityAdapter).toBeInstanceOf(AccrualVaultV2MidnightAdapter);
+    if (!(liquidityAdapter instanceof AccrualVaultV2MidnightAdapter))
+      throw new Error("Expected a Midnight accrual liquidity adapter");
+    expect(liquidityAdapter.address).toBe(ADAPTER);
+    expect(liquidityAdapter.marketIds).toEqual([ID]);
+    expect(liquidityAdapter.realAssets(timestamp)).toBe(100n);
+  });
+
+  test("hydrates a non-member Midnight liquidity adapter from its full response", async () => {
+    const handle = createMockClient(mainnet);
+    const timestamp = 100n;
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapterInfo: {
+        ...marketV1V2AdapterQueryResult(ADAPTER, 0n),
+        adapterType: 4,
+        midnightAdapter: {
+          ...emptyMidnightAdapterResponse,
+          parentVault: VAULT,
+          asset: ASSET,
+          skimRecipient: RECIPIENT,
+          markets: [
+            {
+              id: ID,
+              marketData: {
+                netCredit: 100n,
+                rate: 0n,
+                maturity: timestamp,
+                index: 0n,
+                forceSellable: false,
+              },
+              position: {
+                credit: 100n,
+                pendingFee: 0n,
+                lastLossFactor: 0n,
+                lastAccrual: timestamp,
+              },
+              lossFactor: 0n,
+            },
+          ],
+          timestamp,
+        },
+      },
+    });
+
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client);
+    const liquidityAdapter = vault.accrualLiquidityAdapter;
+
+    expect(liquidityAdapter).toBeInstanceOf(AccrualVaultV2MidnightAdapter);
+    if (!(liquidityAdapter instanceof AccrualVaultV2MidnightAdapter))
+      throw new Error("Expected a Midnight accrual liquidity adapter");
+    expect(liquidityAdapter.address).toBe(ADAPTER);
+    expect(liquidityAdapter.marketIds).toEqual([ID]);
+    expect(liquidityAdapter.lastUpdate).toBe(timestamp);
+    expect(liquidityAdapter.realAssets(timestamp)).toBeGreaterThan(0n);
+  });
+
   test("behavior: detects the adaptive IRM case-insensitively", async () => {
     const lowercaseIrmChainId = 9_101_003;
     registerCustomAddresses({
@@ -1922,6 +2110,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
           marketV1Positions: [],
           adaptiveCurveIrm: zeroAddress,
           marketV1V2Allocations: [],
+          midnightAdapter: emptyMidnightAdapterResponse,
         },
       ],
     });
@@ -2042,6 +2231,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
           marketV1Positions: [],
           adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
           marketV1V2Allocations: [],
+          midnightAdapter: emptyMidnightAdapterResponse,
         },
       ],
     });

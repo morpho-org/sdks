@@ -11,3 +11,4 @@
 - Public encoders return neutral `{ to, data }` descriptors and never sign, submit, or mutate state.
 - Every exported symbol needs JSDoc and an explicit export from the appropriate public barrel: `src/index.ts` for the root package API or `src/api/index.ts` for the public `./api` subpath.
 - Shared primitives and Midnight deployment address helpers live in `@morpho-org/morpho-ts`. Do not re-export them from this package; import them directly from `morpho-ts` in source and tests. If a reusable non-protocol symbol is missing from `morpho-ts`, add it there before Midnight consumes it.
+  - Exception: `src/errors.ts` re-exports `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` from `morpho-ts` as deprecated aliases so existing imports and `instanceof` checks keep working. Remove them in the next midnight-sdk major.

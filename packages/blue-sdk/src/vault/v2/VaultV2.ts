@@ -324,6 +324,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    *   market without matching allocation state.
    * @throws {UnsupportedMarketIrmError} when forward projection of an underlying market with positive
    *   debt requires an unsupported IRM.
+   * @throws {InvalidPositionLossFactorError} when a Midnight adapter market loss factor is below its
+   *   position loss factor.
+   * @throws {InvalidPositionAccrualStateError} when Midnight adapter position accrual inputs violate
+   *   accounting invariants.
    * @example
    * ```ts
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";

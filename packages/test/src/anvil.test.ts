@@ -1,7 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
@@ -55,6 +55,21 @@ const createFakeAnvilProcess = (options: { closeOnSignal?: boolean } = {}) => {
   return subprocess;
 };
 
+const EGRESS_PROXY_VARIABLES = [
+  "HTTP_PROXY",
+  "http_proxy",
+  "HTTPS_PROXY",
+  "https_proxy",
+  "ALL_PROXY",
+  "all_proxy",
+];
+
+// spawnAnvil forks directly behind an egress proxy, so a proxied host must not
+// change which branch these tests take.
+beforeEach(() => {
+  for (const name of EGRESS_PROXY_VARIABLES) vi.stubEnv(name, "");
+});
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -75,7 +90,7 @@ describe.sequential("spawnAnvil", () => {
       forkUrl: "https://rpc.example",
     });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    expect(spawnMock).toHaveBeenCalledWith("custom-anvil", expect.any(Array));
+    expect(spawnMock.mock.calls[0]?.[0]).toBe("custom-anvil");
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain(
       "--compute-units-per-second",
     );
@@ -202,7 +217,7 @@ describe.sequential("spawnAnvil", () => {
       });
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
       const spawnedArgs = spawnMock.mock.calls[0]?.[1];
-      expect(spawnedArgs).toContain(forkUrl);
+      expect(spawnedArgs).not.toContain(forkUrl);
       subprocess.stdout.write("Listening on 127.0.0.1:31015\n");
       const spawned = await spawnedPromise;
 
@@ -228,6 +243,124 @@ describe.sequential("spawnAnvil", () => {
       warning.mockRestore();
     }
   });
+
+  test("behavior: forks through a local proxy that closes with Anvil", async () => {
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl: "https://rpc.example/v1/project-id@123",
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    const [, spawnedArgs, { env }] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ];
+    expect(spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1]).toMatch(
+      /^http:\/\/fork-[0-9a-f]{16}\.invalid@123$/,
+    );
+    const proxyUrl = env.HTTP_PROXY ?? "";
+    expect(proxyUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    // Field by field: a failing object match would print the whole environment.
+    expect(env.http_proxy).toBe(proxyUrl);
+    expect(env.NO_PROXY).toBe("");
+    expect(env.no_proxy).toBe("");
+    subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+    const spawned = await spawnedPromise;
+
+    const nodeInfo = () =>
+      fetch(proxyUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "anvil_nodeInfo",
+        }),
+      });
+    await expect((await nodeInfo()).json()).resolves.toMatchObject({
+      error: { code: -32601 },
+    });
+    await spawned.stopAndWait();
+    await expect(nodeInfo()).rejects.toThrow();
+  });
+
+  test("behavior: gives each upstream its own stable fork URL", async () => {
+    const forkUrlFor = async (forkUrl: string) => {
+      spawnMock.mockClear();
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
+      const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      const spawnedArgs: string[] = spawnMock.mock.calls[0]?.[1];
+      subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+      await (await spawnedPromise).stopAndWait();
+      return spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1];
+    };
+
+    const first = await forkUrlFor("https://rpc.example/v1/a");
+    expect(await forkUrlFor("https://rpc.example/v1/a")).toBe(first);
+    expect(await forkUrlFor("https://rpc.example/v1/b")).not.toBe(first);
+  });
+
+  test("behavior: passes a non-http fork URL to Anvil without a proxy", async () => {
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl: "wss://rpc.example/v1/key@123",
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    const spawnedArgs: string[] = spawnMock.mock.calls[0]?.[1];
+    expect(spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1]).toBe(
+      "wss://rpc.example/v1/key@123",
+    );
+    expect(spawnedArgs.join(" ")).not.toContain("127.0.0.1");
+    subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+    await (await spawnedPromise).stopAndWait();
+  });
+
+  test.each(EGRESS_PROXY_VARIABLES)(
+    "behavior: forks directly when %s is set",
+    async (name) => {
+      vi.stubEnv(name, "http://egress.example:3128");
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
+
+      try {
+        const spawnedPromise = spawnAnvil({
+          chainId: 1,
+          forkUrl: "https://rpc.example/v1/key@123",
+        });
+        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+        const [, spawnedArgs, { env }] = spawnMock.mock.calls[0] as [
+          string,
+          string[],
+          { env: NodeJS.ProcessEnv },
+        ];
+        expect(spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1]).toBe(
+          "https://rpc.example/v1/key@123",
+        );
+        // Not an object match: a failure would print the whole environment.
+        expect(env === process.env).toBe(true);
+        subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+        await (await spawnedPromise).stopAndWait();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 
   test("behavior: bounds redacted stderr without a newline", async () => {
     vi.stubEnv("CI", "true");
@@ -352,6 +485,19 @@ describe.sequential("spawnAnvil", () => {
     await expect(spawnedPromise).rejects.toBeInstanceOf(AnvilStartupError);
     expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
     expect(subprocess.unref).toHaveBeenCalledOnce();
+  });
+
+  test("error: AnvilStartupError closes the fork proxy when spawn throws", async () => {
+    spawnMock.mockImplementation(() => {
+      throw new Error("spawn failed");
+    });
+
+    await expect(
+      spawnAnvil({ chainId: 1, forkUrl: "https://rpc.example/v1/project-id" }),
+    ).rejects.toBeInstanceOf(AnvilStartupError);
+    const proxyUrl: string = spawnMock.mock.calls[0]?.[2].env.HTTP_PROXY;
+    expect(proxyUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    await expect(fetch(proxyUrl, { method: "POST" })).rejects.toThrow();
   });
 
   test("error: AnvilStartupError survives a nonzero close after a subprocess error", async () => {

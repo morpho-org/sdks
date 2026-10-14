@@ -1,5 +1,15 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.3-next.0
+
+### Patch Changes
+
+- `RequirementSignature`, which this package re-exports from `@morpho-org/morpho-sdk`, no longer includes `MidnightOfferRootSignature` now that this package depends on morpho-sdk 7. This release stays a patch because this package never builds Midnight actions, so none of its methods could return that variant. If your code names `MidnightOfferRootSignature` through this package's `RequirementSignature`, for example as a case in an exhaustive `switch`, delete that branch.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@7.1.0-next.0
+  - @morpho-org/blue-sdk-viem@6.3.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.0
+
 ## 2.0.2
 
 ### Patch Changes

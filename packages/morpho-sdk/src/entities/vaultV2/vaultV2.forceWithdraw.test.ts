@@ -1,25 +1,28 @@
-import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
+import {
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  getChainAddress,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { createMockClient } from "@morpho-org/test/mock";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  type Chain,
   erc20Abi,
   maxUint256,
   serializeSignature,
   toHex,
   zeroAddress,
 } from "viem";
-import { mainnet } from "viem/chains";
+import { arc, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  encodeReadResult,
   IN_KIND_ADAPTER,
   IN_KIND_BUNDLER,
   IN_KIND_FOREIGN_ADAPTER,
   IN_KIND_USER,
   IN_KIND_VAULT,
-  mockMulticallResults,
   inKindVaultV2Data as vaultV2ExitData,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
@@ -61,29 +64,30 @@ const TWO_PERCENT = 20_000_000_000_000_000n;
 
 const mockRequirements = (
   handle: ReturnType<typeof createMockClient>,
-  params: { allowance?: bigint; nonce?: bigint } = {},
+  params: { allowance?: bigint; nonce?: bigint; vault?: Address } = {},
 ) => {
-  mockMulticallResults(handle, [
-    encodeReadResult({
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: params.allowance ?? 0n,
-    }),
-    encodeReadResult({
-      abi: erc2612Abi,
-      functionName: "nonces",
-      result: params.nonce ?? 9n,
-    }),
-  ]);
+  const vault = params.vault ?? IN_KIND_VAULT;
+  mockRead(handle, {
+    address: vault,
+    abi: erc20Abi,
+    functionName: "allowance",
+    result: params.allowance ?? 0n,
+  });
+  mockRead(handle, {
+    address: vault,
+    abi: erc2612Abi,
+    functionName: "nonces",
+    result: params.nonce ?? 9n,
+  });
 };
 
 const vaultFor = (
   handle: ReturnType<typeof createMockClient>,
-  options?: { supportSignature?: boolean },
+  options?: { supportSignature?: boolean; chain?: Chain },
 ) =>
   handle.client
     .extend(morphoViemExtension(options))
-    .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    .morpho.vaultV2(IN_KIND_VAULT, (options?.chain ?? mainnet).id);
 
 /** Recomputes the entity's expected share bound from the same pure helpers. */
 const expectedSharesBurnt = (params: {
@@ -609,6 +613,38 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         type: "erc20Approval",
         args: {
           spender: IN_KIND_BUNDLER,
+          amount: priceFloorCeiling({
+            exitAssets: 51n,
+            minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+          }),
+        },
+      });
+    });
+
+    test("behavior: resolves requirements on a chain without viem multicall3 (Arc)", async () => {
+      expect(arc.contracts?.multicall3).toBeUndefined();
+      const arcBundler = getChainAddress(arc.id, "bundles.vaultExitBundlesV1");
+      const now = 1_800_000_000n;
+      const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+      const handle = createMockClient(arc);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false, chain: arc }).forceWithdraw(
+          {
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          },
+        ),
+      );
+      const [approval] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+
+      expect(approval?.action).toEqual({
+        type: "erc20Approval",
+        args: {
+          spender: arcBundler,
           amount: priceFloorCeiling({
             exitAssets: 51n,
             minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,

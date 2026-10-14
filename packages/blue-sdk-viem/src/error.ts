@@ -10,6 +10,16 @@ export class InvalidNumberError extends Error {
   }
 }
 
+/** Thrown when a block tag resolves to a pending block without a block number. */
+export class UnresolvedBlockNumberError extends Error {
+  constructor(public readonly blockTag: string) {
+    super(
+      `Block "${blockTag}" has no block number yet (pending). Pass a mined blockNumber or a blockTag such as "latest", "safe" or "finalized".`,
+    );
+    this.name = "UnresolvedBlockNumberError";
+  }
+}
+
 /** Thrown when fetched Morpho Blue market params do not hash to the requested market id; the RPC returned another market's params. */
 export class MarketParamsIdMismatchError extends Error {
   /**

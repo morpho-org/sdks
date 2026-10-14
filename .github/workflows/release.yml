@@ -1,8 +1,9 @@
 name: Release
 
-# Every push to main is a release: the repository only receives release
-# snapshots. Publishing is idempotent, so a rerun only publishes, tags and
-# releases what is missing.
+# Every push to main or next is a release: the repository only receives release
+# snapshots. main publishes stable versions under the `latest` dist-tag; next
+# publishes only its prerelease versions, under `next`. Publishing is
+# idempotent, so a rerun only publishes, tags and releases what is missing.
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
@@ -12,20 +13,24 @@ name: Release
 #
 # Repository settings this workflow relies on (a workflow file can't enforce them,
 # since a pull request could edit it):
-#   - The `npm` environment allows deployments from `main` only and stores no
-#     secrets. Each npm trusted publisher names this repository, this file and
-#     the `npm` environment.
-#   - `main` rulesets: only the sync App may update it, with signed commits and no
-#     force push or deletion.
+#   - The `npm` environment allows deployments from `main` and `next` only and
+#     stores no secrets. Each npm trusted publisher names this repository, this
+#     file and the `npm` environment.
+#   - `main` and `next` rulesets: only the sync App may create or update them,
+#     with signed commits and no force push or deletion.
 #   - No workflow in this repository saves or restores an Actions cache, so code
 #     run by `pack` can't poison anything a privileged job reads.
-# The private sync refuses to push to main, and pages after cutover, while
+# The private sync refuses to push to main or next, and pages after cutover, while
 # any of the environment and ruleset settings above is missing.
 on:
   push:
-    branches: [main]
+    branches: [main, next]
 
 permissions: {}
+
+env:
+  # npm dist-tag of this run: only next publishes prereleases.
+  RELEASE_CHANNEL: ${{ github.ref_name == 'next' && 'next' || 'latest' }}
 
 # Queue every push and never cancel a running release: a replaced run would skip
 # the versions it alone declares. `queue` is newer than actionlint's schema.
@@ -112,13 +117,14 @@ jobs:
       # Checksums, layout, collisions, the identity npm reads and publishConfig,
       # against the packages declared at this commit. A tampered pack job can't
       # make this job publish anything else.
+      # On next, keeps only the prereleases: main publishes the stable versions.
       - name: Verify tarballs
-        run: node scripts/publish/verify-release-set.ts "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
+        run: node scripts/publish/verify-release-set.ts --channel "$RELEASE_CHANNEL" "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
 
       # Skips versions already on npm and fails on any that npm would refuse or
-      # that would move `latest` back, before anything is uploaded.
+      # that would move the run's dist-tag back, before anything is uploaded.
       - name: Plan publish
-        run: node scripts/publish/plan-npm-publish.ts "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
+        run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
 
       - name: Publish packages
         shell: bash
@@ -129,7 +135,7 @@ jobs:
             npm publish "$tgz" \
               --provenance \
               --access public \
-              --tag latest \
+              --tag "$RELEASE_CHANNEL" \
               --ignore-scripts \
               --registry https://registry.npmjs.org
           done 3< "$RUNNER_TEMP/to-publish.tsv"
@@ -166,10 +172,19 @@ jobs:
           out="$RUNNER_TEMP/release-plan"
           mkdir -p "$out/notes"
           # Not process substitution: a failing command must fail the step.
-          node scripts/publish/pack.ts --tags > "$out/tags.txt"
+          # On next, only prereleases: main tags and releases the stable versions.
+          if [ "$RELEASE_CHANNEL" = "next" ]; then
+            node scripts/publish/pack.ts --tags --prereleases > "$out/tags.txt"
+          else
+            node scripts/publish/pack.ts --tags > "$out/tags.txt"
+          fi
           if [ ! -s "$out/tags.txt" ]; then
-            echo "::error::No package tags found."
-            exit 1
+            if [ "$RELEASE_CHANNEL" = "next" ]; then
+              echo "No prerelease version on next: nothing to tag."
+            else
+              echo "::error::No package tags found."
+              exit 1
+            fi
           fi
           while IFS=$'\t' read -r -u 3 tag _commit; do
             node scripts/publish/github-release-body.ts "$tag" "$out/notes/${tag//\//__}.md"
@@ -285,5 +300,10 @@ jobs:
                 exit 1
               fi
             fi
-            /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$plan/notes/${tag//\//__}.md" --verify-tag
+            # A prerelease version never becomes the repository's latest Release.
+            prerelease=()
+            if [[ "$tag" =~ -v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+              prerelease=(--prerelease --latest=false)
+            fi
+            /usr/bin/gh release create "$tag" --title "$tag" --notes-file "$plan/notes/${tag//\//__}.md" --verify-tag "${prerelease[@]}"
           done 3< "$plan/tags.txt"

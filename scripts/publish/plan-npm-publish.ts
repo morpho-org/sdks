@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 import type { TarballIdentity } from "./read-tarball-identity.ts";
+import type { ReleaseChannel } from "./verify-release-set.ts";
 
 const REGISTRY = "https://registry.npmjs.org";
 
@@ -14,6 +15,8 @@ export interface RegistryState {
   readonly everPublished: readonly string[];
   /** The `latest` dist-tag, when set. */
   readonly latest?: string;
+  /** The `next` dist-tag, when set. */
+  readonly next?: string;
 }
 
 /** Fetches the full packument, so `time` lists every version ever published. */
@@ -65,17 +68,30 @@ export function compareVersions(a: string, b: string): number {
 
 /**
  * Decides whether release.yml publishes a tarball. A version already on npm is skipped, so
- * reruns are idempotent. A version npm would refuse, or one that would move `latest` back
- * (a rerun of an older release after a newer one shipped), fails the job before any upload.
+ * reruns are idempotent. A version npm would refuse, or one that would move the dist-tag it
+ * publishes under back (a rerun of an older release after a newer one shipped), fails the
+ * job before any upload.
  *
- * @param tarball - Identity read from the tarball.
+ * @param tarball - Identity read from the tarball, and the dist-tag it publishes under
+ *   (`latest` by default).
  * @param state - Registry state, or `undefined` for a package npm has never seen.
  * @returns `true` to publish, `false` to skip.
+ * @throws If a package without a `latest` version on npm would publish under `next`: npm
+ *   would also point `latest` at that prerelease.
  */
 export function shouldPublish(
-  { name, version }: TarballIdentity,
+  {
+    name,
+    version,
+    tag = "latest",
+  }: TarballIdentity & { readonly tag?: ReleaseChannel },
   state: RegistryState | undefined,
 ): boolean {
+  if (tag === "next" && state?.latest == null) {
+    throw new Error(
+      `${name}@${version} would be ${name}'s only version on npm, and npm points latest at it whatever --tag says. Publish a stable version from main first.`,
+    );
+  }
   if (state == null) return true;
   if (state.versions.includes(version)) return false;
   if (state.everPublished.includes(version)) {
@@ -83,9 +99,10 @@ export function shouldPublish(
       `${name}@${version} was published and then removed; npm refuses to reuse it. Release a new version.`,
     );
   }
-  if (state.latest != null && compareVersions(version, state.latest) <= 0) {
+  const current = state[tag];
+  if (current != null && compareVersions(version, current) <= 0) {
     throw new Error(
-      `${name}@${version} is not newer than latest ${state.latest}; publishing it would move latest back. Release a new version.`,
+      `${name}@${version} is not newer than ${tag} ${current}; publishing it would move ${tag} back. Release a new version.`,
     );
   }
   return true;
@@ -155,9 +172,12 @@ export async function fetchRegistryState(
   if (versions == null || time == null || distTags == null) {
     throw new Error("Unreachable.");
   }
-  const { latest } = distTags;
+  const { latest, next } = distTags;
   if (latest != null && typeof latest !== "string") {
     throw new Error(`Packument of ${name} has a non-string latest tag.`);
+  }
+  if (next != null && typeof next !== "string") {
+    throw new Error(`Packument of ${name} has a non-string next tag.`);
   }
   if (latest == null && Object.keys(versions).length > 0) {
     throw new Error(`Packument of ${name} has versions but no latest tag.`);
@@ -168,12 +188,14 @@ export async function fetchRegistryState(
       (key) => key !== "created" && key !== "modified",
     ),
     ...(latest == null ? {} : { latest }),
+    ...(next == null ? {} : { next }),
   };
 }
 
 /**
- * `plan-npm-publish.ts <release-set.tsv>` reads the `<name>\t<version>\t<file>` rows that
- * verify-release-set.ts printed and prints the rows to publish, in the same format.
+ * `plan-npm-publish.ts [--tag latest|next] <release-set.tsv>` reads the
+ * `<name>\t<version>\t<file>` rows that verify-release-set.ts printed and prints the rows
+ * to publish under that dist-tag (default `latest`), in the same format.
  *
  * Skipped rows are reported on stderr.
  *
@@ -193,14 +215,20 @@ export async function main(
     stdout = writeStdout,
     stderr = (text) => process.stderr.write(text),
   } = io;
-  const { positionals } = parseArgs({
+  const { positionals, values } = parseArgs({
     args: [...argv],
     allowPositionals: true,
+    options: { tag: { type: "string", default: "latest" } },
   });
   const [file] = positionals;
-  if (!file || positionals.length !== 1) {
+  const { tag } = values;
+  if (
+    !file ||
+    positionals.length !== 1 ||
+    (tag !== "latest" && tag !== "next")
+  ) {
     throw new Error(
-      "Usage: node scripts/publish/plan-npm-publish.ts <release-set.tsv>",
+      "Usage: node scripts/publish/plan-npm-publish.ts [--tag latest|next] <release-set.tsv>",
     );
   }
   const rows: string[] = [];
@@ -211,7 +239,10 @@ export async function main(
       throw new Error(`Invalid release-set row ${JSON.stringify(line)}.`);
     }
     if (
-      shouldPublish({ name, version }, await fetchRegistryState(name, fetchFn))
+      shouldPublish(
+        { name, version, tag },
+        await fetchRegistryState(name, fetchFn),
+      )
     ) {
       rows.push(`${line}\n`);
     } else {

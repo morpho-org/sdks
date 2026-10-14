@@ -6,7 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueBundlesV1Abi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -31,7 +31,7 @@ import {
  * `test/setup.ts` predates them and predates this pipeline's supported routes.
  */
 const test = createViemTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 25_832_676n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({

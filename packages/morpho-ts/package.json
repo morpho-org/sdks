@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "4.0.0",
+  "version": "4.1.0-next.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -19,7 +19,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./abis": "./src/abis.ts",
-    "./abis/marketParams": "./src/abis/marketParams.ts"
+    "./abis/marketParams": "./src/abis/marketParams.ts",
+    "./abis/midnight": "./src/abis/midnight.ts"
   },
   "typesVersions": {
     "*": {
@@ -28,6 +29,9 @@
       ],
       "abis/marketParams": [
         "src/abis/marketParams.ts"
+      ],
+      "abis/midnight": [
+        "src/abis/midnight.ts"
       ]
     }
   },
@@ -63,6 +67,11 @@
         "types": "./lib/esm/abis/marketParams.d.ts",
         "import": "./lib/esm/abis/marketParams.js",
         "require": "./lib/cjs/abis/marketParams.js"
+      },
+      "./abis/midnight": {
+        "types": "./lib/esm/abis/midnight.d.ts",
+        "import": "./lib/esm/abis/midnight.js",
+        "require": "./lib/cjs/abis/midnight.js"
       }
     },
     "main": "./lib/cjs/index.js",
@@ -74,6 +83,9 @@
         ],
         "abis/marketParams": [
           "lib/esm/abis/marketParams.d.ts"
+        ],
+        "abis/midnight": [
+          "lib/esm/abis/midnight.d.ts"
         ]
       }
     }

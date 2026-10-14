@@ -1,3 +1,8 @@
+import {
+  InvalidPositionAccrualStateError as SharedInvalidPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError as SharedInvalidPositionAccrualTimestampError,
+  InvalidPositionLossFactorError as SharedInvalidPositionLossFactorError,
+} from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import type { MempoolPayloadValidationIssue } from "./api/types.js";
 
@@ -95,60 +100,39 @@ export class SettlementFeeExceedsPriceError extends Error {
   }
 }
 
+// Temporary compatibility exception for these shared morpho-ts errors.
 /**
  * Thrown when a local position accrual is requested for an impossible timestamp.
  *
- * @example
- * ```ts
- * import { InvalidPositionAccrualTimestampError } from "@morpho-org/midnight-sdk";
- *
- * throw new InvalidPositionAccrualTimestampError(1n, 2n);
- * ```
+ * @deprecated Import `InvalidPositionAccrualTimestampError` from `@morpho-org/morpho-ts`. Removed in the next major.
  */
-export class InvalidPositionAccrualTimestampError extends Error {
-  public constructor(timestamp: bigint, lastAccrual: bigint) {
-    super(
-      `Position accrual timestamp "${timestamp}" is before last accrual "${lastAccrual}". Use a timestamp greater than or equal to last accrual.`,
-    );
-    this.name = "InvalidPositionAccrualTimestampError";
-  }
-}
+export const InvalidPositionAccrualTimestampError =
+  SharedInvalidPositionAccrualTimestampError;
+/** @deprecated Import `InvalidPositionAccrualTimestampError` from `@morpho-org/morpho-ts`. Removed in the next major. */
+export type InvalidPositionAccrualTimestampError =
+  SharedInvalidPositionAccrualTimestampError;
 
 /**
  * Thrown when a local position accrual sees a market loss factor older than the position.
  *
- * @example
- * ```ts
- * import { InvalidPositionLossFactorError } from "@morpho-org/midnight-sdk";
- *
- * throw new InvalidPositionLossFactorError(1n, 2n);
- * ```
+ * @deprecated Import `InvalidPositionLossFactorError` from `@morpho-org/morpho-ts`. Removed in the next major.
  */
-export class InvalidPositionLossFactorError extends Error {
-  public constructor(marketLossFactor: bigint, positionLossFactor: bigint) {
-    super(
-      `Market loss factor "${marketLossFactor}" is below position loss factor "${positionLossFactor}". Fetch a consistent market and position at the same block.`,
-    );
-    this.name = "InvalidPositionLossFactorError";
-  }
-}
+export const InvalidPositionLossFactorError =
+  SharedInvalidPositionLossFactorError;
+/** @deprecated Import `InvalidPositionLossFactorError` from `@morpho-org/morpho-ts`. Removed in the next major. */
+export type InvalidPositionLossFactorError =
+  SharedInvalidPositionLossFactorError;
 
 /**
  * Thrown when local position accrual inputs violate Midnight accounting invariants.
  *
- * @example
- * ```ts
- * import { InvalidPositionAccrualStateError } from "@morpho-org/midnight-sdk";
- *
- * throw new InvalidPositionAccrualStateError("Pending fee exceeds credit.");
- * ```
+ * @deprecated Import `InvalidPositionAccrualStateError` from `@morpho-org/morpho-ts`. Removed in the next major.
  */
-export class InvalidPositionAccrualStateError extends Error {
-  public constructor(reason: string) {
-    super(`Invalid Midnight position accrual state. ${reason}`);
-    this.name = "InvalidPositionAccrualStateError";
-  }
-}
+export const InvalidPositionAccrualStateError =
+  SharedInvalidPositionAccrualStateError;
+/** @deprecated Import `InvalidPositionAccrualStateError` from `@morpho-org/morpho-ts`. Removed in the next major. */
+export type InvalidPositionAccrualStateError =
+  SharedInvalidPositionAccrualStateError;
 
 /**
  * Thrown when a market parameter cannot satisfy Midnight protocol rules.

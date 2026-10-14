@@ -67,6 +67,32 @@ describe("shouldPublish", () => {
     ).toThrow("would move latest back");
   });
 
+  test("under next, compares with the next tag only", () => {
+    const pre = { ...pkg, version: "7.3.0-next.1", tag: "next" as const };
+    expect(shouldPublish(pre, state())).toBe(true);
+    expect(shouldPublish(pre, state({ next: "7.3.0-next.0" }))).toBe(true);
+    expect(
+      shouldPublish(pre, state({ latest: "7.4.0", versions: ["7.4.0"] })),
+    ).toBe(true);
+    expect(() => shouldPublish(pre, state({ next: "7.3.0-next.2" }))).toThrow(
+      "is not newer than next 7.3.0-next.2; publishing it would move next back",
+    );
+  });
+
+  test("refuses a package's first publish under next", () => {
+    const pre = { ...pkg, version: "7.3.0-next.1", tag: "next" as const };
+    expect(shouldPublish(pkg, undefined)).toBe(true);
+    expect(() => shouldPublish(pre, undefined)).toThrow(
+      "Publish a stable version from main first.",
+    );
+    expect(() =>
+      shouldPublish(
+        pre,
+        state({ versions: [], everPublished: ["1.0.0"], latest: undefined }),
+      ),
+    ).toThrow("Publish a stable version from main first.");
+  });
+
   test("publishes when no latest tag is set", () => {
     expect(shouldPublish(pkg, state({ latest: undefined }))).toBe(true);
   });
@@ -170,6 +196,10 @@ describe("fetchRegistryState", () => {
       "non-string latest",
     ],
     [
+      { versions: {}, time: {}, "dist-tags": { latest: "7.3.0", next: 1 } },
+      "non-string next",
+    ],
+    [
       { versions: { "7.2.0": {} }, time: {}, "dist-tags": {} },
       "versions but no latest",
     ],
@@ -241,6 +271,36 @@ describe("main", () => {
       ),
     ).rejects.toThrow();
     expect(out).toEqual([]);
+  });
+
+  test("--tag next checks the next dist-tag", async () => {
+    const fetchFn = async () =>
+      Response.json({
+        "dist-tags": { latest: "7.3.0", next: "7.4.0-next.1" },
+        versions: { "7.3.0": {}, "7.4.0-next.1": {} },
+        time: { "7.3.0": "x", "7.4.0-next.1": "x" },
+      });
+    const out: string[] = [];
+    await main(
+      ["--tag", "next", tsv("@morpho-org/blue-sdk\t7.4.0-next.2\ta.tgz\n")],
+      {
+        fetchFn,
+        stdout: (text) => out.push(text),
+      },
+    );
+    expect(out.join("")).toBe("@morpho-org/blue-sdk\t7.4.0-next.2\ta.tgz\n");
+    await expect(
+      main(
+        ["--tag", "next", tsv("@morpho-org/blue-sdk\t7.4.0-next.0\ta.tgz\n")],
+        {
+          fetchFn,
+          stdout: () => {},
+        },
+      ),
+    ).rejects.toThrow("would move next back");
+    await expect(main(["--tag", "beta", tsv("")], { fetchFn })).rejects.toThrow(
+      "Usage:",
+    );
   });
 
   test("prints only new versions and reports skipped ones on stderr", async () => {

@@ -1,6 +1,18 @@
 import { marketParamsAbi } from "./abis/marketParams.js";
+import {
+  midnightCollateralParamsAbi,
+  midnightCoreReadAbi,
+  midnightMarketAbi,
+  midnightOfferAbi,
+} from "./abis/midnight.js";
 
-export { marketParamsAbi };
+export {
+  marketParamsAbi,
+  midnightCollateralParamsAbi,
+  midnightCoreReadAbi,
+  midnightMarketAbi,
+  midnightOfferAbi,
+};
 
 /** ERC-2612 permit ABI fragment used for nonce reads and permit calldata. */
 export const erc2612Abi = [
@@ -10201,5 +10213,2373 @@ export const morphoMarketV1AdapterV2FactoryAbi = [
     outputs: [{ internalType: "address", name: "", type: "address" }],
     stateMutability: "view",
     type: "function",
+  },
+] as const;
+
+// Generated from morpho-org/vault-v2@6476e9d via `forge inspect <Contract> abi`; do not edit by hand.
+// Market, CollateralParams, and Offer tuple components are hoisted to ./abis/midnight.ts; re-hoist them on regeneration.
+
+/** MidnightAdapter ABI used to read Vault V2 adapter state and encode adapter calls (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+export const midnightAdapterAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "_parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_midnight",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_durations",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "MAX_MARKETS",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "abdicate",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "abdicated",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "adapterId",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "allocate",
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "caller",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+      {
+        name: "",
+        type: "int256",
+        internalType: "int256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "asset",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "deallocate",
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "messageSig",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "caller",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+      {
+        name: "",
+        type: "int256",
+        internalType: "int256",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "decreaseTimelock",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "durationAllocations",
+    inputs: [
+      {
+        name: "length",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "allocations",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "durations",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "durationsLength",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "executableAt",
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "ids",
+    inputs: [
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: midnightMarketAbi.components,
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "increaseTimelock",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isRatified",
+    inputs: [
+      {
+        name: "offer",
+        type: "tuple",
+        internalType: "struct Offer",
+        components: midnightOfferAbi.components,
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isSubRatifier",
+    inputs: [
+      {
+        name: "subRatifier",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "marketData",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "netCredit",
+        type: "uint128",
+        internalType: "uint128",
+      },
+      {
+        name: "rate",
+        type: "uint64",
+        internalType: "uint64",
+      },
+      {
+        name: "maturity",
+        type: "uint48",
+        internalType: "uint48",
+      },
+      {
+        name: "index",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "forceSellable",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "marketIds",
+    inputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "marketIdsLength",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "maxTtm",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint32",
+        internalType: "uint32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "midnight",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "minRate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "noSalesBelowFaceValue",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "noSalesWithShortfall",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "onBuy",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: midnightMarketAbi.components,
+      },
+      {
+        name: "paidAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "boughtCredit",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "buyPendingFeeIncrease",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "buyer",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "callbackData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "onSell",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: midnightMarketAbi.components,
+      },
+      {
+        name: "sellerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "soldCredit",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "sellPendingFeeDecrease",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "seller",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "callbackData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "packedDurations",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "parentVault",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "realAssets",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "revoke",
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setConsumed",
+    inputs: [
+      {
+        name: "group",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "amount",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setForceSellable",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setIsSubRatifier",
+    inputs: [
+      {
+        name: "subRatifier",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "newIsSubRatifier",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setMaxTtm",
+    inputs: [
+      {
+        name: "newMaxTtm",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setMinRate",
+    inputs: [
+      {
+        name: "newMinRate",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setNoSalesBelowFaceValue",
+    inputs: [
+      {
+        name: "newNoSalesBelowFaceValue",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setNoSalesWithShortfall",
+    inputs: [
+      {
+        name: "newNoSalesWithShortfall",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setSkimRecipient",
+    inputs: [
+      {
+        name: "newSkimRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "skim",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "skimRecipient",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "submit",
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "take",
+    inputs: [
+      {
+        name: "offer",
+        type: "tuple",
+        internalType: "struct Offer",
+        components: midnightOfferAbi.components,
+      },
+      {
+        name: "ratifierData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "units",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "takerCallbackData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "timelock",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "unsetForceSellable",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "withdrawToVault",
+    inputs: [
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: midnightMarketAbi.components,
+      },
+      {
+        name: "withdrawnAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "Abdicate",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Accept",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Buy",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "paidAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "boughtNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newRate",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "DecreaseTimelock",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ForceDeallocate",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "IncreaseTimelock",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Revoke",
+    inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Sell",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "sellerAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "soldNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newRate",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetConsumed",
+    inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "group",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetForceSellable",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetIsSubRatifier",
+    inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "subRatifier",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newIsSubRatifier",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetMaxTtm",
+    inputs: [
+      {
+        name: "newMaxTtm",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetMinRate",
+    inputs: [
+      {
+        name: "newMinRate",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetNoSalesBelowFaceValue",
+    inputs: [
+      {
+        name: "newNoSalesBelowFaceValue",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetNoSalesWithShortfall",
+    inputs: [
+      {
+        name: "newNoSalesWithShortfall",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetSkimRecipient",
+    inputs: [
+      {
+        name: "newSkimRecipient",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Skim",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Submit",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        indexed: true,
+        internalType: "bytes4",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+      {
+        name: "executableAt",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "UnsetForceSellable",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "WithdrawToVault",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "withdrawnAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newNetCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "Abdicated",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ApproveReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ApproveReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AutomaticallyTimelocked",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BuyAtLoss",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BuyPostMaturity",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BuyRateTooLow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "BuyTtmTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CastOverflow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DataAlreadyPending",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DataNotTimelocked",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DurationAbsoluteCapExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DurationRelativeCapExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DurationTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DurationsNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "IncorrectCallbackAddress",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "IncorrectMaker",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "IncorrectOffer",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "IncorrectReceiver",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidLength",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "LoanAssetMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NoCode",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NonEmptyCallbackData",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotAuthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotMidnight",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotSelf",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OtherSellInProgress",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SaleBelowFaceValue",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SelfAllocationOnly",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SellInProgress",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ShortfallTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SubRatifierFailed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotDecreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TooManyDurations",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TooManyMarkets",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferFromReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferFromReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnauthorizedBuy",
+    inputs: [],
+  },
+] as const;
+
+/** MidnightAdapterFactory ABI used to deploy and look up Vault V2 Midnight adapters (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+export const midnightAdapterFactoryAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "_midnight",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_durations",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "createMidnightAdapter",
+    inputs: [
+      {
+        name: "parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "durations",
+    inputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "durationsLength",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isMidnightAdapter",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "midnight",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "midnightAdapter",
+    inputs: [
+      {
+        name: "parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "CreateMidnightAdapter",
+    inputs: [
+      {
+        name: "parentVault",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "midnightAdapter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "CreateMidnightAdapterFactory",
+    inputs: [
+      {
+        name: "midnight",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "durations",
+        type: "uint256[]",
+        indexed: false,
+        internalType: "uint256[]",
+      },
+    ],
+    anonymous: false,
+  },
+] as const;
+
+/** MidnightAdapterRateRatifierV1 ABI used to manage parent-vault-ratified rate roots and verify rate offers (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+export const midnightAdapterRateRatifierV1Abi = [
+  {
+    type: "function",
+    name: "DOMAIN_SEPARATOR",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isRatified",
+    inputs: [
+      {
+        name: "offer",
+        type: "tuple",
+        internalType: "struct Offer",
+        components: midnightOfferAbi.components,
+      },
+      {
+        name: "ratifierData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isRootRatified",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "ratification",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "isRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "rootNonce",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "rootNonce",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setIsRootRatified",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setIsRootRatifiedWithSig",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "height",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "nonce",
+        type: "uint128",
+        internalType: "uint128",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "v",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "r",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "s",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "SetIsRootRatified",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "maker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetIsRootRatifiedWithSig",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "signer",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "maker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "height",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "signatureNonce",
+        type: "uint128",
+        indexed: false,
+        internalType: "uint128",
+      },
+      {
+        name: "previousNonce",
+        type: "uint128",
+        indexed: false,
+        internalType: "uint128",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "DeadlineExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidNonce",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidProof",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSignature",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "LeafIndexOutOfRange",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotRatified",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RatifiedStatusChanged",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TickOutOfRange",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TreeTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Unauthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnauthorizedTaker",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "WorsePrice",
+    inputs: [],
+  },
+] as const;
+
+/** MidnightAdapterPriceRatifierV1 ABI used to manage parent-vault-ratified offer roots and verify offer proofs (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+export const midnightAdapterPriceRatifierV1Abi = [
+  {
+    type: "function",
+    name: "DOMAIN_SEPARATOR",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isRatified",
+    inputs: [
+      {
+        name: "offer",
+        type: "tuple",
+        internalType: "struct Offer",
+        components: midnightOfferAbi.components,
+      },
+      {
+        name: "ratifierData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isRootRatified",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "ratification",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "isRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "rootNonce",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "rootNonce",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setIsRootRatified",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setIsRootRatifiedWithSig",
+    inputs: [
+      {
+        name: "maker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "height",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "nonce",
+        type: "uint128",
+        internalType: "uint128",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "v",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "r",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "s",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "SetIsRootRatified",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "maker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetIsRootRatifiedWithSig",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "signer",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "maker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "root",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "height",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newIsRootRatified",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "signatureNonce",
+        type: "uint128",
+        indexed: false,
+        internalType: "uint128",
+      },
+      {
+        name: "previousNonce",
+        type: "uint128",
+        indexed: false,
+        internalType: "uint128",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "DeadlineExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidNonce",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidProof",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSignature",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "LeafIndexOutOfRange",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotRatified",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RatifiedStatusChanged",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TreeTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Unauthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnauthorizedTaker",
+    inputs: [],
   },
 ] as const;

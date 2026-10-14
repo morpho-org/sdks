@@ -1,10 +1,9 @@
-import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
-
 import {
-  InvalidPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError,
-  InvalidPositionLossFactorError,
-} from "../errors.js";
+  type BigIntish,
+  MathLib,
+  MidnightPositionLib,
+} from "@morpho-org/morpho-ts";
+
 import type {
   CollateralParams,
   IMarket,
@@ -158,66 +157,17 @@ export namespace PositionUtils {
     readonly accruedFee: bigint;
   } {
     const timestamp = BigInt(params.timestamp);
-    const credit = BigInt(params.position.credit);
-    const pendingFee = BigInt(params.position.pendingFee);
-    const lastLossFactor = BigInt(params.position.lastLossFactor);
-    const lastAccrual = BigInt(params.position.lastAccrual);
     const marketLossFactor = BigInt(params.market.lossFactor);
-
-    if (timestamp < lastAccrual) {
-      throw new InvalidPositionAccrualTimestampError(timestamp, lastAccrual);
-    }
-    if (marketLossFactor < lastLossFactor) {
-      throw new InvalidPositionLossFactorError(
-        marketLossFactor,
-        lastLossFactor,
-      );
-    }
-    if (pendingFee > credit) {
-      throw new InvalidPositionAccrualStateError(
-        "Pending fee must be less than or equal to credit.",
-      );
-    }
-
-    const postSlashCredit =
-      lastLossFactor < MathLib.MAX_UINT_128
-        ? MathLib.mulDivDown(
-            credit,
-            MathLib.MAX_UINT_128 - marketLossFactor,
-            MathLib.MAX_UINT_128 - lastLossFactor,
-          )
-        : 0n;
-    if (postSlashCredit > credit) {
-      throw new InvalidPositionAccrualStateError(
-        "Post-slash credit cannot exceed stored credit.",
-      );
-    }
-
-    const creditDecrease = credit - postSlashCredit;
-    const pendingFeeDecrease =
-      credit > 0n ? MathLib.mulDivUp(pendingFee, creditDecrease, credit) : 0n;
-    if (pendingFeeDecrease > pendingFee) {
-      throw new InvalidPositionAccrualStateError(
-        "Pending-fee decrease cannot exceed pending fee.",
-      );
-    }
-
-    const postSlashPendingFee = pendingFee - pendingFeeDecrease;
     const maturity = BigInt(params.market.params.maturity);
-    const accrualEnd = timestamp < maturity ? timestamp : maturity;
-    const accruedFee =
-      lastAccrual < maturity
-        ? MathLib.mulDivDown(
-            postSlashPendingFee,
-            accrualEnd - lastAccrual,
-            maturity - lastAccrual,
-          )
-        : 0n;
-    if (accruedFee > postSlashCredit || accruedFee > postSlashPendingFee) {
-      throw new InvalidPositionAccrualStateError(
-        "Accrued fee cannot exceed post-slash credit or pending fee.",
-      );
-    }
+    const { credit, pendingFee, accruedFee } = MidnightPositionLib.accrue({
+      credit: params.position.credit,
+      pendingFee: params.position.pendingFee,
+      lastLossFactor: params.position.lastLossFactor,
+      lastAccrual: params.position.lastAccrual,
+      marketLossFactor,
+      maturity,
+      timestamp,
+    });
 
     const collateral = params.position.collateral.map((assets) =>
       BigInt(assets),
@@ -255,8 +205,8 @@ export namespace PositionUtils {
       position: {
         user: params.position.user,
         marketId: params.position.marketId,
-        credit: postSlashCredit - accruedFee,
-        pendingFee: postSlashPendingFee - accruedFee,
+        credit,
+        pendingFee,
         lastLossFactor: marketLossFactor,
         lastAccrual: timestamp,
         debt: BigInt(params.position.debt),

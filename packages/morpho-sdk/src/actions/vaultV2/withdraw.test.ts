@@ -68,7 +68,7 @@ describe("vaultV2Withdraw", () => {
         expect(decoded.args?.[2]).toBe(0n);
         expect(decoded.args?.[6]).toBe(deadline);
       }),
-      { numRuns: 50, seed: 20_260_905 },
+      { numRuns: 50 },
     );
   });
 

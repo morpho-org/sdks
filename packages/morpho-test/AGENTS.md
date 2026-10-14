@@ -2,6 +2,7 @@
 
 - Keep fixtures framework-agnostic; test runners should consume them, not live here.
 - Export fixture groups from `src/fixtures/index.ts` through `src/index.ts`.
+- Registry-driven E2E helpers live in `src/e2e/` and are exported through `src/index.ts` beside the fixtures. They stay pure: they read the address registry and an injected `env`, and test runners build suites from their output.
 - Fixture files are static protocol data grouped by entity type: markets, tokens, and vaults.
 - Use concrete chain keys, e.g. `markets[ChainId.EthMainnet]`.
 - Keep fixture data typed with `blue-sdk` models and IDs.

@@ -22,7 +22,7 @@ import {
 
 const config: SimulationConfig = {
   chains: new Map([
-    [1, { simulateV1Url: process.env.MAINNET_RPC_URL! }],
+    [1, { simulateV1Url: "https://<your-mainnet-rpc>" }],
   ]),
   timeoutMs: 5000,
 };

@@ -1,28 +1,66 @@
 import {
   AccrualVaultV2,
+  AccrualVaultV2MidnightAdapter,
   addressesRegistry,
   CapacityLimitReason,
   MarketParams,
   MathLib,
+  VaultV2MidnightAdapter,
+  VaultV2MidnightAdapterUtils,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
-import type { AnvilTestClient } from "@morpho-org/test";
 import {
+  MarketUtils,
+  MarketParams as MidnightMarketParams,
+  midnightAbi,
+  Offer,
+  OfferUtils,
+  SetterRatifierUtils,
+  setterRatifierAbi,
+  Tree,
+} from "@morpho-org/midnight-sdk";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
+  createVaultV2MidnightAdapterFixture,
+  takeVaultV2MidnightAdapterOffer,
+  testAccount,
+} from "@morpho-org/test/fixtures";
+import { createViemTest } from "@morpho-org/test/vitest";
+import {
+  concatHex,
+  deploylessCallViaBytecodeBytecode,
   encodeAbiParameters,
+  encodeDeployData,
   encodeFunctionData,
+  erc20Abi,
+  padHex,
+  parseAbi,
   parseEther,
   parseUnits,
+  toHex,
   zeroAddress,
 } from "viem";
 import { readContract } from "viem/actions";
+import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   fetchAccrualVaultV2,
+  fetchAccrualVaultV2Adapter,
+  fetchAccrualVaultV2MidnightAdapter,
+  fetchVaultV2,
   fetchVaultV2Adapter,
+  fetchVaultV2MidnightAdapter,
+  midnightAdapterAbi,
   vaultV2Abi,
 } from "../src/index.js";
+import {
+  abi as midnightAdapterQueryAbi,
+  code as midnightAdapterQueryCode,
+} from "../src/queries/vault-v2/GetVaultV2MidnightAdapter.js";
 import { vaultV2Test } from "./setup.js";
 import { deployMorphoMarketV1Adapter, deployVaultV2 } from "./utils.js";
 
@@ -32,6 +70,11 @@ const vaultV2AdapterVaultV1Address =
   "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
 const allocator = "0xc0267A5Fa9aaaf1694283c013CBFA925BCdb5dE8";
 const curator = "0xc0267A5Fa9aaaf1694283c013CBFA925BCdb5dE8";
+const midnightAdapterTest = createViemTest(base, {
+  forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
+  forkBlockNumber: BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
+  redactForkUrl: true,
+});
 
 // VaultV2 with liquidity adapter marketV1
 const vaultV2ClearstarEurc = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
@@ -200,6 +243,407 @@ describe("VaultV2Adapter", () => {
       );
     });
   });
+});
+
+describe("VaultV2 Midnight adapter", () => {
+  vaultV2Test(
+    "loads a Blue vault before the Midnight adapter factory is deployed",
+    async ({ client }) => {
+      const factory = getChainAddress(
+        ChainId.BaseMainnet,
+        "midnightAdapterFactory",
+      );
+      const factoryCode = await client.getCode({ address: factory });
+      expect(factoryCode === undefined || factoryCode === "0x").toBe(true);
+
+      const vault = await fetchVaultV2(vaultV2Address, client, {
+        deployless: false,
+      });
+      expect(vault.address).toBe(vaultV2Address);
+      expect(
+        await fetchVaultV2(vaultV2Address, client, {
+          deployless: "force",
+        }),
+      ).toEqual(vault);
+    },
+  );
+
+  midnightAdapterTest(
+    "matches deployless and fallback fetches and dispatches generically",
+    async ({ client }) => {
+      const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
+      const wNative = getChainAddress(ChainId.BaseMainnet, "wNative");
+      const midnight = getChainAddress(ChainId.BaseMainnet, "midnight");
+      const setterRatifier = getChainAddress(
+        ChainId.BaseMainnet,
+        "setterRatifier",
+      );
+      const oracle = "0x0000000000000000000000000000000000080000";
+      const offerMaker = testAccount(1);
+      const units = parseUnits("1", 6);
+      const market = new MidnightMarketParams({
+        chainId: base.id,
+        midnight,
+        loanToken: usdc,
+        collateralParams: [
+          {
+            token: wNative,
+            lltv: 770000000000000000n,
+            liquidationCursor: 300000000000000000n,
+            oracle,
+          },
+        ],
+        maturity: 2_000_000_000n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      });
+      const { adapters } = await createVaultV2MidnightAdapterFixture({
+        client,
+        asset: usdc,
+        salts: [padHex(toHex(13n), { size: 32 })],
+        markets: [market],
+      });
+      const address = adapters[0]?.address;
+      if (address === undefined) throw new Error("Expected a Midnight adapter");
+      const factory = getChainAddress(
+        ChainId.BaseMainnet,
+        "midnightAdapterFactory",
+      );
+      const traceDeploylessGas = async () => {
+        const data = encodeDeployData({
+          abi: parseAbi(["constructor(bytes, bytes)"]),
+          bytecode: deploylessCallViaBytecodeBytecode,
+          args: [
+            midnightAdapterQueryCode,
+            encodeFunctionData({
+              abi: midnightAdapterQueryAbi,
+              functionName: "query",
+              args: [address, factory],
+            }),
+          ],
+        });
+        return client.estimateGas({
+          account: client.account.address,
+          data,
+        });
+      };
+      const emptyQueryGas = await traceDeploylessGas();
+      const collateralAssets = parseEther("10");
+      await client.setBalance({
+        address: offerMaker.address,
+        value: parseEther("1"),
+      });
+      await client.deal({
+        erc20: wNative,
+        account: offerMaker.address,
+        amount: collateralAssets,
+      });
+      await client.writeContract({
+        account: offerMaker,
+        address: wNative,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [midnight, collateralAssets],
+      });
+      await client.setCode({
+        address: oracle,
+        bytecode: concatHex([
+          "0x7f",
+          padHex(toHex(10n ** 36n), { size: 32 }),
+          "0x60005260206000f3",
+        ]),
+      });
+      await client.writeContract({
+        account: offerMaker,
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "supplyCollateral",
+        args: [
+          MarketUtils.toStruct(market),
+          0n,
+          collateralAssets,
+          offerMaker.address,
+        ],
+      });
+      await client.writeContract({
+        account: offerMaker,
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "setIsAuthorized",
+        args: [setterRatifier, true, offerMaker.address],
+      });
+      const tree = Tree.create([
+        Offer.create({
+          market,
+          buy: false,
+          maker: offerMaker.address,
+          expiry: market.maturity,
+          tick: 5_000n,
+          ratifier: setterRatifier,
+          maxUnits: units,
+        }),
+      ]);
+      await client.writeContract({
+        account: offerMaker,
+        address: setterRatifier,
+        abi: setterRatifierAbi,
+        functionName: "setIsRootRatified",
+        args: [offerMaker.address, tree.root, true],
+      });
+      const item = SetterRatifierUtils.ratify({ tree })[0];
+      if (item === undefined) throw new Error("Expected a ratified offer");
+      const vault = await client.readContract({
+        address,
+        abi: midnightAdapterAbi,
+        functionName: "parentVault",
+      });
+      const depositedAssets = parseUnits("2", 6);
+      await client.deal({ erc20: usdc, amount: depositedAssets });
+      await client.approve({
+        address: usdc,
+        args: [vault, depositedAssets],
+      });
+      await client.writeContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "deposit",
+        args: [depositedAssets, client.account.address],
+      });
+      await takeVaultV2MidnightAdapterOffer({
+        client,
+        adapter: address,
+        args: [
+          OfferUtils.toStruct({ offer: item.offer }),
+          item.ratifierData,
+          units,
+          "0x",
+        ],
+      });
+      const oneMarketQueryGas = await traceDeploylessGas();
+      const estimated250MarketGas =
+        emptyQueryGas + (oneMarketQueryGas - emptyQueryGas) * 250n;
+      expect(oneMarketQueryGas).toBeGreaterThan(emptyQueryGas);
+      expect(estimated250MarketGas).toBeLessThan(30_000_000n);
+
+      const [deployless, fallback, force] = await Promise.all([
+        fetchVaultV2MidnightAdapter(address, client),
+        fetchVaultV2MidnightAdapter(address, client, { deployless: false }),
+        fetchVaultV2MidnightAdapter(address, client, { deployless: "force" }),
+      ]);
+
+      expect(deployless).toBeInstanceOf(VaultV2MidnightAdapter);
+      expect(fallback).toStrictEqual(deployless);
+      expect(force).toStrictEqual(deployless);
+      expect(deployless.parentVault).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "parentVault",
+        }),
+      );
+      expect(deployless.adapterId).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "adapterId",
+        }),
+      );
+      expect(deployless.asset).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "asset",
+        }),
+      );
+      expect(deployless.skimRecipient).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "skimRecipient",
+        }),
+      );
+      expect(deployless.midnight).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "midnight",
+        }),
+      );
+      expect(deployless.durations).toStrictEqual(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "durations",
+        }),
+      );
+      expect(deployless.durationAllocations).toStrictEqual(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "durationAllocations",
+          args: [BigInt(deployless.durations.length)],
+        }),
+      );
+
+      const marketId = MarketUtils.toId(market);
+      const [netCredit, rate, maturity, index, forceSellable] =
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "marketData",
+          args: [marketId],
+        });
+      expect(deployless.marketData[marketId]).toStrictEqual({
+        netCredit,
+        rate,
+        maturity: BigInt(maturity),
+        index: BigInt(index),
+        forceSellable,
+      });
+      const [credit, pendingFee, lastLossFactor, lastAccrual] =
+        await client.readContract({
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "position",
+          args: [marketId, address],
+        });
+      const [, lossFactor] = await client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "marketState",
+        args: [marketId],
+      });
+      const accruedSnapshot = await fetchAccrualVaultV2MidnightAdapter(
+        address,
+        client,
+      );
+      expect(accruedSnapshot.markets[0]).toStrictEqual({
+        id: marketId,
+        position: { credit, pendingFee, lastLossFactor, lastAccrual },
+        market: { lossFactor },
+      });
+      expect(accruedSnapshot.marketData[marketId]).toMatchObject({
+        rate,
+        maturity: BigInt(maturity),
+        forceSellable,
+      });
+      const allocationTimestamp = await client.timestamp();
+      const durationsLength = BigInt(deployless.durations.length);
+      for (let length = 0n; length <= durationsLength; length++) {
+        const expectedAllocations =
+          VaultV2MidnightAdapterUtils.durationAllocations({
+            marketData: deployless.marketData,
+            durations: deployless.durations,
+            length: Number(length),
+            timestamp: allocationTimestamp,
+          });
+        const onchainAllocations = await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "durationAllocations",
+          args: [length],
+        });
+        expect(expectedAllocations).toStrictEqual(onchainAllocations);
+      }
+
+      const [accrued, accruedFallback, accruedForced] = await Promise.all([
+        fetchAccrualVaultV2MidnightAdapter(address, client),
+        fetchAccrualVaultV2MidnightAdapter(address, client, {
+          deployless: false,
+        }),
+        fetchAccrualVaultV2MidnightAdapter(address, client, {
+          deployless: "force",
+        }),
+      ]);
+      expect(accrued).toBeInstanceOf(AccrualVaultV2MidnightAdapter);
+      expect(accruedForced).toStrictEqual(accruedFallback);
+      expect(accrued.realAssets((await client.getBlock()).timestamp)).toBe(
+        await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "realAssets",
+        }),
+      );
+      expect(
+        accruedFallback.realAssets((await client.getBlock()).timestamp),
+      ).toBe(accrued.realAssets((await client.getBlock()).timestamp));
+      const assertAccruedAssetsMatch = async () => {
+        const block = await client.getBlock();
+        const snapshot = await fetchAccrualVaultV2MidnightAdapter(
+          address,
+          client,
+          { blockNumber: block.number },
+        );
+        expect(snapshot.realAssets(block.timestamp)).toBe(
+          await client.readContract({
+            address,
+            abi: midnightAdapterAbi,
+            functionName: "realAssets",
+          }),
+        );
+      };
+      await assertAccruedAssetsMatch();
+      const timestampBeforeMaturity = await client.timestamp();
+      expect(timestampBeforeMaturity).toBeLessThan(market.maturity);
+      const timestampAtMidlife =
+        timestampBeforeMaturity +
+        (market.maturity - timestampBeforeMaturity) / 2n;
+      await client.setNextBlockTimestamp({ timestamp: timestampAtMidlife });
+      await client.mine({
+        blocks: 1,
+      });
+      await assertAccruedAssetsMatch();
+      const timestampAfterMidlife = await client.timestamp();
+      expect(timestampAfterMidlife).toBeLessThan(market.maturity);
+      const timestampAfterMaturity = market.maturity + 86_400n;
+      await client.setNextBlockTimestamp({
+        timestamp: timestampAfterMaturity,
+      });
+      await client.mine({
+        blocks: 1,
+      });
+      expect(await client.timestamp()).toBeGreaterThan(market.maturity);
+      await assertAccruedAssetsMatch();
+      expect(await fetchVaultV2Adapter(address, client)).toBeInstanceOf(
+        VaultV2MidnightAdapter,
+      );
+      expect(await fetchAccrualVaultV2Adapter(address, client)).toBeInstanceOf(
+        AccrualVaultV2MidnightAdapter,
+      );
+      await client.writeContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "setLiquidityAdapterAndData",
+        args: [address, "0x"],
+      });
+      const fallbackLiquidityVault = await fetchVaultV2(vault, client, {
+        deployless: false,
+      });
+      expect(fallbackLiquidityVault.adapters).toContain(address);
+      expect(fallbackLiquidityVault.liquidityAllocations?.[0]?.id).toBe(
+        VaultV2MidnightAdapter.adapterCapId(address),
+      );
+      expect(
+        await fetchVaultV2Adapter(address, client, { deployless: "force" }),
+      ).toBeInstanceOf(VaultV2MidnightAdapter);
+      const [accrualAdapter, accrualAdapterFallback] = await Promise.all([
+        fetchAccrualVaultV2Adapter(address, client, { deployless: "force" }),
+        fetchAccrualVaultV2Adapter(address, client, { deployless: false }),
+      ]);
+      expect(accrualAdapter).toBeInstanceOf(AccrualVaultV2MidnightAdapter);
+      expect(accrualAdapter).toStrictEqual(accrualAdapterFallback);
+
+      const [deploylessVault, fallbackVault] = await Promise.all([
+        fetchVaultV2(vault, client, { deployless: "force" }),
+        fetchVaultV2(vault, client, { deployless: false }),
+      ]);
+      expect(deploylessVault).toEqual(fallbackVault);
+      expect(deploylessVault.liquidityAllocations?.[0]?.id).toBe(
+        VaultV2MidnightAdapter.adapterCapId(address),
+      );
+    },
+  );
 });
 
 describe("LiquidityAdapter vaultV1", () => {
