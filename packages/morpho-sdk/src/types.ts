@@ -22,6 +22,7 @@ export type {
   Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs as PermitTypedDataArgs,
+  TokenMetadataField,
 } from "@morpho-org/blue-sdk-viem";
 export type {
   BuildFixedRateOfferChainParams as MidnightBuildFixedRateOfferChainParams,

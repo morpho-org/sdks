@@ -10,19 +10,7 @@ import {
   marketParamsAbi,
 } from "@morpho-org/blue-sdk";
 import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { type MockClientHandle, mockRead } from "@morpho-org/test/mock";
-import {
-  type Abi,
-  type AbiStateMutability,
-  type Address,
-  type ContractFunctionName,
-  type ContractFunctionReturnType,
-  type EncodeFunctionResultParameters,
-  encodeAbiParameters,
-  encodeFunctionResult,
-  type Hex,
-  multicall3Abi,
-} from "viem";
+import { type Address, encodeAbiParameters, type Hex } from "viem";
 import { mainnet } from "viem/chains";
 
 export const IN_KIND_VAULT =
@@ -169,6 +157,8 @@ export const inKindVaultV2Data = (params?: {
    * withdraw leg's `toShares(_, "Up")` rounds up independently.
    */
   readonly totalSupply?: bigint;
+  /** Vault V2 virtual shares, `10 ** max(0, 18 - asset decimals)` onchain. Defaults to `0n`. */
+  readonly virtualShares?: bigint;
   readonly marketTotalAssets?: bigint;
   readonly marketTotalBorrowAssets?: bigint;
   readonly marketTotalSupplyShares?: bigint;
@@ -291,7 +281,7 @@ export const inKindVaultV2Data = (params?: {
       asset: IN_KIND_ASSET,
       _totalAssets: totalAssets,
       totalSupply: params?.totalSupply ?? totalAssets,
-      virtualShares: 0n,
+      virtualShares: params?.virtualShares ?? 0n,
       maxRate: params?.maxRate ?? 0n,
       lastUpdate: snapshotTimestamp(),
       liquidityAdapter,
@@ -309,35 +299,4 @@ export const inKindVaultV2Data = (params?: {
     params?.assetBalance ?? 0n,
     { [IN_KIND_ADAPTER]: params?.penalty ?? 0n },
   );
-};
-
-export const encodeReadResult = <
-  const abi extends Abi,
-  functionName extends ContractFunctionName<abi, "view" | "pure">,
->(params: {
-  readonly abi: abi;
-  readonly functionName: functionName;
-  readonly result: ContractFunctionReturnType<
-    abi,
-    AbiStateMutability,
-    functionName
-  >;
-}): Hex =>
-  encodeFunctionResult({
-    abi: params.abi,
-    functionName: params.functionName,
-    result: params.result,
-  } as EncodeFunctionResultParameters<abi, functionName>);
-
-export const mockMulticallResults = (
-  handle: MockClientHandle,
-  returnData: readonly Hex[],
-) => {
-  const multicallAddress = mainnet.contracts.multicall3.address;
-  mockRead(handle, {
-    address: multicallAddress,
-    abi: multicall3Abi,
-    functionName: "aggregate3",
-    result: returnData.map((data) => ({ success: true, returnData: data })),
-  });
 };

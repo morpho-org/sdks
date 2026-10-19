@@ -1,13 +1,12 @@
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
-import { env } from "./env.js";
 
 /**
  * This test will run on `mainnet`
  */
 export const test = createViemTest(mainnet, {
-  forkUrl: env().MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 24_593_903n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({

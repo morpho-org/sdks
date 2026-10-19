@@ -62,7 +62,7 @@ describe("resolveBundlesFunding", () => {
           });
         },
       ),
-      { numRuns: 100, seed: 20_260_909 },
+      { numRuns: 100 },
     );
   });
 
@@ -257,7 +257,7 @@ describe("getBundlesSharesPermit", () => {
           });
         },
       ),
-      { numRuns: 50, seed: 20_260_727 },
+      { numRuns: 50 },
     );
   });
 });

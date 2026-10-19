@@ -1,10 +1,11 @@
-import { type Address, getAddress, type Hex } from "viem";
+import { type Address, BaseError, getAddress, type Hex } from "viem";
 import { vi } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
 import {
-  ExternalServiceError,
+  RpcTransportError,
   SimulationRevertedError,
   SimulationValidationError,
+  UnexpectedSimulationError,
   UnsupportedChainError,
 } from "../errors.js";
 import type { SimulateParams } from "../params.js";
@@ -154,14 +155,53 @@ describe.sequential("simulate — error propagation", () => {
     );
   });
 
-  it("propagates ExternalServiceError", async () => {
-    mockRunSimulation.mockRejectedValueOnce(
-      new ExternalServiceError("RPC down"),
+  it.each([
+    new RpcTransportError("RPC failed"),
+    new SimulationRevertedError("reverted", "0xdeadbeef"),
+    new UnsupportedChainError(999999),
+  ])(
+    "preserves $name and never returns a transaction on failure",
+    async (error) => {
+      mockRunSimulation.mockRejectedValueOnce(error);
+      const returnTransaction = vi.fn();
+      await expect(
+        simulate(makeConfig(), makeParams()).then(returnTransaction),
+      ).rejects.toBe(error);
+      expect(returnTransaction).not.toHaveBeenCalled();
+      expect(mockRunSimulation).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("wraps local viem errors with UnexpectedSimulationError, not RpcTransportError", async () => {
+    const cause = new BaseError("Address is invalid.");
+    mockRunSimulation.mockRejectedValueOnce(cause);
+    const error = await simulate(makeConfig(), makeParams()).catch(
+      (value: unknown) => value,
     );
-    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
-      ExternalServiceError,
-    );
+    expect(error).toBeInstanceOf(UnexpectedSimulationError);
+    expect((error as UnexpectedSimulationError).cause).toBe(cause);
   });
+
+  it.each([
+    new Error("private diagnostic"),
+    "private diagnostic",
+    null,
+    undefined,
+  ])(
+    "wraps unexpected failures and preserves the original cause",
+    async (cause) => {
+      mockRunSimulation.mockRejectedValueOnce(cause);
+      const error = await simulate(makeConfig(), makeParams()).catch(
+        (value: unknown) => value,
+      );
+      expect(error).toBeInstanceOf(UnexpectedSimulationError);
+      expect((error as UnexpectedSimulationError).cause).toBe(cause);
+      expect((error as UnexpectedSimulationError).message).toBe(
+        "Simulation failed unexpectedly.",
+      );
+      expect(mockRunSimulation).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("propagates UnsupportedChainError", async () => {
     mockRunSimulation.mockRejectedValueOnce(new UnsupportedChainError(999999));

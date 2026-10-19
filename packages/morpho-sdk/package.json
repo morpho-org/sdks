@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "7.0.0",
+  "version": "8.1.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -88,7 +88,8 @@
   "files": [
     "lib",
     "MIGRATION-v5-to-v6.md",
-    "MIGRATION-v6-to-v7.md"
+    "MIGRATION-v6-to-v7.md",
+    "MIGRATION-v7-to-v8.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -107,13 +108,12 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "dotenv": "^17.4.2",
     "fast-check": "catalog:",
     "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "catalog:",
-    "zod": "^4.6.5"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {

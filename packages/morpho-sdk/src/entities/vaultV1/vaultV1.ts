@@ -14,9 +14,14 @@ import {
   fetchAccrualVault,
   metaMorphoAbi,
 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import {
+  type AddressLabel,
+  getChainAddress,
+  getChainAddresses,
+  Time,
+} from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual } from "viem";
-import { multicall } from "viem/actions";
+import { readContract } from "viem/actions";
 import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
@@ -33,6 +38,7 @@ import {
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "../../actions/index.js";
+import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
@@ -71,6 +77,7 @@ import {
   type VaultV1RedeemAction,
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
+import { assertRegistryTargetsHaveCode } from "../requirements/assertContractCode.js";
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
@@ -83,10 +90,15 @@ export interface VaultV1Actions {
    *
    * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
    * @returns The hydrated `AccrualVault` snapshot.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {ChainIdMismatchError} when the connected client declares another chain or none, or its RPC reports another chain via `eth_chainId`.
+   * @throws {viem.BaseError} when the `eth_chainId` request or a state read fails.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownBlueFactory} when the configured chain has no MetaMorpho factory.
    * @throws {UnknownBlueOfFactory} when the vault is not a MetaMorpho vault from the configured factory.
+   * @throws {UnknownTokenError} when the vault's share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    */
   getData: (
     parameters?: FetchParameters,
@@ -115,7 +127,8 @@ export interface VaultV1Actions {
    *   two hours from handle creation.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
@@ -143,7 +156,14 @@ export interface VaultV1Actions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when signature metadata is malformed.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, token metadata
+   *   read, or `eth_chainId` request fails.
    * @example
    * ```ts
    * import { vaults } from "@morpho-org/morpho-test";
@@ -208,7 +228,8 @@ export interface VaultV1Actions {
    * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
    *   under the live allowance, so execute every requirement returned by the latest
    *   `getRequirements()` — including the oversized-allowance reset — before submitting.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   at any `getRequirements()` call.
@@ -225,7 +246,13 @@ export interface VaultV1Actions {
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
    *   its spender or deadline differ from this operation's, or its amount is outside
    *   `[cap, cap / (1 - slippageTolerance)]`.
-   * @throws {viem.BaseError} when an allowance or nonce read or transaction encoding fails.
+   * @throws {MissingPermitDomainNameError} from `getRequirements()` when signatures are enabled,
+   *   the share allowance is insufficient, and the supplied `vaultData` share token exposes
+   *   neither `name()` nor an EIP-5267 domain.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, permit-nonce, or
+   *   `eth_chainId` read fails, or transaction encoding fails.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
@@ -275,7 +302,8 @@ export interface VaultV1Actions {
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
    *   to two hours from handle creation.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
@@ -284,7 +312,17 @@ export interface VaultV1Actions {
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance or permit-nonce read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the vault share token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingPermitDomainNameError} from `getRequirements()` when signatures are enabled,
+   *   the share allowance is insufficient, and the share token fetched by `getData()` exposes
+   *   neither `name()` nor an EIP-5267 domain.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, permit-nonce, or
+   *   `eth_chainId` read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permit signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -357,7 +395,8 @@ export interface VaultV1Actions {
    * @param params.userAddress - Account that signs and submits the exit.
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
-   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
@@ -369,7 +408,12 @@ export interface VaultV1Actions {
    *   assigning more than the vault owns in a repeated market.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
-   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
+   * @throws {MissingPermitDomainNameError} from `getRequirements()` when signatures are enabled,
+   *   the share allowance is insufficient, and the supplied `vaultData` share token exposes
+   *   neither `name()` nor an EIP-5267 domain.
+   * @throws {viem.BaseError} from `getRequirements()` when the `eth_chainId` request or an
+   *   RPC contract read fails.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol contract has no code at its registered address.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {VaultIsBlueFeeRecipientError} from `getRequirements()` when Morpho Blue accrues protocol fees to the vault.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
@@ -444,7 +488,8 @@ export interface VaultV1Actions {
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
    * @throws {UnknownBlueMarketAllocationError} when a source withdraw-queue market has no allocation snapshot.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and destination vault assets differ.
@@ -459,7 +504,11 @@ export interface VaultV1Actions {
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance or permit-nonce read fails.
+   * @throws {MissingPermitDomainNameError} from `getRequirements()` when a Vault V1 share permit needs a domain name but the supplied vault data has neither one nor an EIP-5267 domain.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, permit-nonce, or
+   *   `eth_chainId` read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permit signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -531,12 +580,48 @@ export class MorphoVaultV1 implements VaultV1Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    await validateClientChainId(this.client.viemClient, this.chainId);
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
       deployless: this.client.options.supportDeployless,
     });
+  }
+
+  /**
+   * Asserts that every registry contract this flow's transaction targets or names as
+   * spender/authorized operator holds code, with one `eth_getCode` per distinct address
+   * before any other requirement read. This VaultV1 `inKindRedeem` path validates the client chain
+   * before this code check.
+   *
+   * @param roles - Registry labels to resolve and check; `permit2` is skipped when the
+   *   chain registers none.
+   */
+  private async assertWriteTargets(
+    roles: readonly [
+      "bundles.vaultBundlesV1" | "bundles.vaultExitBundlesV1" | "blue",
+      ...(
+        | "bundles.vaultBundlesV1"
+        | "bundles.vaultExitBundlesV1"
+        | "blue"
+        | "permit2"
+      )[],
+    ],
+  ): Promise<void> {
+    const targets: { role: AddressLabel; address: Address }[] = [];
+    for (const role of roles) {
+      const address =
+        role === "permit2"
+          ? getChainAddresses(this.chainId).permit2
+          : getChainAddress(this.chainId, role);
+      if (address == null) continue;
+      targets.push({ role, address });
+    }
+    await assertRegistryTargetsHaveCode(
+      this.client.viemClient,
+      this.chainId,
+      targets,
+    );
   }
 
   /** {@inheritDoc VaultV1Actions.deposit} */
@@ -596,9 +681,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
         if (pendingRequirements != null) return await pendingRequirements;
         // Memoize the in-flight promise so concurrent callers share one round of
         // allowance/nonce reads.
-        const pending =
-          funding.value > 0n
-            ? Promise.resolve<readonly ActionRequirement[]>([])
+        const pending = (async (): Promise<readonly ActionRequirement[]> => {
+          await this.assertWriteTargets(
+            funding.value === 0n && this.client.options.supportSignature
+              ? ["bundles.vaultBundlesV1", "permit2"]
+              : ["bundles.vaultBundlesV1"],
+          );
+          return funding.value > 0n
+            ? []
             : getBundlesTokenRequirements(this.client.viemClient, {
                 token: vaultAsset,
                 spender,
@@ -610,7 +700,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
                 supportDeployless: this.client.options.supportDeployless,
                 useSimplePermit: requirementOptions?.useSimplePermit,
                 permit2Nonce: requirementOptions?.permit2Nonce,
+                now,
               });
+        })();
         pendingRequirements = pending;
         try {
           return await pending;
@@ -693,6 +785,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        await this.assertWriteTargets(["bundles.vaultBundlesV1"]);
         // Re-read the live share allowance on every call instead of caching the resolved
         // requirements: the allowance is the sole cap on the burn, so a caller that executed the
         // returned approval must see it satisfied on the next call, and an allowance revoked or
@@ -707,6 +800,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
+          now,
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -757,6 +851,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        await this.assertWriteTargets(["bundles.vaultBundlesV1"]);
         return getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData: await this.getData(),
           version: "vaultV1",
@@ -765,6 +860,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           requiredShareAllowance: shares,
           deadline,
           supportSignature: this.client.options.supportSignature,
+          now,
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -879,41 +975,40 @@ export class MorphoVaultV1 implements VaultV1Actions {
         if (deadline <= requirementsTimestamp) {
           throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
         }
+        await validateClientChainId(this.client.viemClient, this.chainId);
+        await this.assertWriteTargets(["bundles.vaultExitBundlesV1", "blue"]);
         const [allowance, nonce, blueBalance, morpho, blueFeeRecipient] =
-          await multicall(this.client.viemClient, {
-            allowFailure: false,
-            contracts: [
-              {
-                address: this.vault,
-                abi: erc20Abi,
-                functionName: "allowance",
-                args: [userAddress, vaultExitBundlesV1],
-              },
-              {
-                address: this.vault,
-                abi: erc2612Abi,
-                functionName: "nonces",
-                args: [userAddress],
-              },
-              {
-                address: vaultData.asset,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [blue],
-              },
-              {
-                address: this.vault,
-                abi: metaMorphoAbi,
-                functionName: "MORPHO",
-              },
-              // feeRecipient() is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
-              {
-                address: blue,
-                abi: blueAbi,
-                functionName: "feeRecipient",
-              },
-            ],
-          });
+          await Promise.all([
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [userAddress, vaultExitBundlesV1],
+            }),
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: erc2612Abi,
+              functionName: "nonces",
+              args: [userAddress],
+            }),
+            readContract(this.client.viemClient, {
+              address: vaultData.asset,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [blue],
+            }),
+            readContract(this.client.viemClient, {
+              address: this.vault,
+              abi: metaMorphoAbi,
+              functionName: "MORPHO",
+            }),
+            // feeRecipient() is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
+            readContract(this.client.viemClient, {
+              address: blue,
+              abi: blueAbi,
+              functionName: "feeRecipient",
+            }),
+          ]);
 
         if (!isAddressEqual(morpho, blue)) {
           throw new VaultMorphoMismatchError({
@@ -1099,6 +1194,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        await this.assertWriteTargets(["bundles.vaultBundlesV1"]);
         // Re-read the live share allowance on every call instead of caching the resolved
         // requirements: in assets mode the calldata carries no share limit, so the allowance is
         // the sole cap on the burn. A caller that executed the returned approval must see it
@@ -1114,6 +1210,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
+          now,
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {

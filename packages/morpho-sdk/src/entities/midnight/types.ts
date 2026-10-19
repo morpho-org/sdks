@@ -45,7 +45,12 @@ export type MidnightMakerTreeInput =
 export interface GetOffersDataParams {
   readonly accountAddress: Address;
   readonly offers: MidnightMakerTreeInput;
-  readonly validation?: OfferValidationParams;
+  /**
+   * Midnight mempool API request controls; omit or pass an object to validate the tree against the
+   * API; pass `false` to skip the API call (no HTTP request), e.g. for P2P offers on markets the
+   * router does not admit or on chains without a Midnight router. Local maker checks still run.
+   */
+  readonly validation?: OfferValidationParams | false;
 }
 
 /** Prepared Midnight maker-offer data with the payload derived from its tree. */
@@ -68,7 +73,12 @@ export interface MakeOffersParams {
   readonly cancellations?: readonly MidnightGroupCancellation[];
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
-  readonly validation?: OfferValidationParams;
+  /**
+   * Midnight mempool API request controls; omit or pass an object to validate the tree against the
+   * API; pass `false` to skip the API call (no HTTP request), e.g. for P2P offers on markets the
+   * router does not admit or on chains without a Midnight router. Local maker checks still run.
+   */
+  readonly validation?: OfferValidationParams | false;
 }
 
 /** Parameters for a Midnight lend maker flow. */
@@ -184,6 +194,18 @@ export interface MarketActionParams {
   readonly marketData: Market;
 }
 
+/** Caller-supplied position snapshot and collateral prices for Midnight health checks. */
+export interface MidnightPositionHealthParams {
+  /** Owner-bound snapshot returned by `getPositionData`. */
+  readonly positionData: AccrualPosition;
+  /** Values from `price()` on each `marketData.params.collateralParams[i].oracle`,
+   * indexed like `positionData.collateral` and scaled by `ORACLE_PRICE_SCALE`. An empty array is
+   * safe only when the SDK's conservative post-operation debt is zero, such as after a `full` repay,
+   * a repayment units target covering `positionData.debt`, or `minUnits`/`repay.assets` covering it.
+   */
+  readonly collateralPrices: readonly bigint[];
+}
+
 /** Parameters for the Midnight take-lend taker flow. */
 export interface TakeLendParams
   extends MarketActionParams,
@@ -205,6 +227,7 @@ export interface TakeLendParams
 /** Parameters for the Midnight take-borrow taker flow. */
 export interface TakeBorrowParams
   extends MarketActionParams,
+    MidnightPositionHealthParams,
     MidnightReferralFeeParams {
   /** Loan assets received with a unit cap, or units sold with a loan-asset floor. */
   readonly target: MidnightSellTarget;
@@ -242,6 +265,7 @@ export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
 /** Parameters for the Midnight offer-based repay-and-withdraw-collateral taker flow. */
 export interface TakeRepayWithdrawCollateralParams
   extends MarketActionParams,
+    MidnightPositionHealthParams,
     MidnightReferralFeeParams {
   /** Loan assets paid with a unit floor, or debt units repaid with a loan-asset cap. `units: maxUint256` targets the whole debt; `assets` and `maxBuyerAssets` bound the loan assets pulled and must be below `maxUint256`. */
   readonly target: MidnightBuyTarget;
@@ -281,7 +305,9 @@ export interface RedeemParams {
 }
 
 /** Parameters for the Midnight repay-and-withdraw-collateral flow. */
-export interface RepayWithdrawCollateralParams extends MarketActionParams {
+export interface RepayWithdrawCollateralParams
+  extends MarketActionParams,
+    MidnightPositionHealthParams {
   /** `{ type: "assets", assets }` repays exactly `assets` (`0n` only withdraws); `{ type: "full", maxBuyerAssets }` repays the whole debt at execution with a finite asset cap. */
   readonly repay: MidnightRepay;
   /** Optional native ETH sent as `value`; the bundle wraps it into the chain's wNative and transfers

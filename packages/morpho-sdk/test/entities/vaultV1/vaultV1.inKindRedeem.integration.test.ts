@@ -1,5 +1,6 @@
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
+import { getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -16,7 +17,7 @@ import { withChainTimestamp } from "../../helpers/time.js";
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
 // remains pinned to the historical state expected by the existing Morpho SDK integration suite.
 const test = createViemTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 25_720_868n,
 });

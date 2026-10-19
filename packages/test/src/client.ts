@@ -8,6 +8,8 @@ import {
   type DeployContractParameters,
   erc20Abi,
   erc4626Abi,
+  type GetTxpoolContentReturnType,
+  type Hash,
   type HDAccount,
   type HttpTransport,
   maxUint256,
@@ -136,9 +138,12 @@ export type DepositParameters<
  *
  * `waitForTransactionReceipt` called with only `hash` and `timeout` polls
  * `eth_getTransactionReceipt` until the receipt exists or `timeout` (default
- * 180 s) expires; any other option falls back to viem's implementation. Under
+ * 180 s) expires; any other option falls back to viem's implementation. A
+ * receipt lookup for a transaction still in Anvil's pool returns null without
+ * reaching Anvil, which would forward it to the fork RPC. Under
  * automine, `sendTransaction`, `sendRawTransaction` and `writeContract` wait
- * for the receipt before returning the hash.
+ * for the local block to advance, then for the receipt, before returning the
+ * hash.
  *
  * @param transport - HTTP transport to the Anvil node.
  * @param chain - The chain the node forks.
@@ -164,7 +169,33 @@ export const createAnvilTestClient = <chain extends Chain>(
     chain,
     mode: "anvil",
     account: testAccount(),
-    transport: traced(transport),
+    // Anvil forwards a receipt lookup it can't answer to the fork RPC, which can
+    // take seconds to return null for a hash only Anvil knows. `txpool_content` is
+    // answered locally, so answer null for a pooled transaction without asking
+    // Anvil. This also covers viem-tracer's receipt check after each send.
+    transport: traced((parameters) => {
+      const { request, ...rest } = transport(parameters);
+
+      return {
+        ...rest,
+        request: async (args, options) => {
+          if (args.method === "eth_getTransactionReceipt") {
+            const [hash] = args.params as [Hash];
+            const { pending, queued } = (await request({
+              method: "txpool_content",
+            })) as GetTxpoolContentReturnType;
+            const isPooled = [pending, queued].some((pool) =>
+              Object.values(pool).some((txs) =>
+                Object.values(txs).some((tx) => tx.hash === hash),
+              ),
+            );
+            if (isPooled) return null;
+          }
+
+          return request(args, options);
+        },
+      } as ReturnType<HttpTransport>;
+    }),
     cacheTime: Number.POSITIVE_INFINITY,
     pollingInterval: 50,
   })
@@ -179,8 +210,11 @@ export const createAnvilTestClient = <chain extends Chain>(
       // dedupes that fetch into one already in flight. When Anvil mines during
       // that request, automine produces no later block and the wait hangs, so
       // poll the receipt directly unless the caller needs viem's other options.
+      // With `afterBlockNumber`, first wait for the local block to pass it:
+      // Anvil forwards a lookup that races automining to the fork RPC.
       const waitForTransactionReceipt = async (
         args: WaitForTransactionReceiptParameters<chain>,
+        afterBlockNumber?: bigint,
       ) => {
         const { hash, timeout = 180_000, ...options } = args;
         if (Object.values(options).some((option) => option !== undefined))
@@ -190,6 +224,18 @@ export const createAnvilTestClient = <chain extends Chain>(
         let timedOut = false;
 
         const poll = async () => {
+          if (afterBlockNumber !== undefined)
+            while (
+              (await client.getBlockNumber({ cacheTime: 0 })) <=
+              afterBlockNumber
+            ) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, client.pollingInterval),
+              );
+              if (timedOut)
+                throw new WaitForTransactionReceiptTimeoutError({ hash });
+            }
+
           while (true) {
             try {
               return await viem_getTransactionReceipt(client, { hash });
@@ -221,8 +267,22 @@ export const createAnvilTestClient = <chain extends Chain>(
         }
       };
 
+      const sendAndWait = async (send: () => Promise<Hash>) => {
+        const previousBlockNumber = (automine ??= await client.getAutomine())
+          ? await client.getBlockNumber({ cacheTime: 0 })
+          : undefined;
+        const hash = await send();
+
+        if (previousBlockNumber !== undefined)
+          await waitForTransactionReceipt({ hash }, previousBlockNumber);
+
+        return hash;
+      };
+
       return {
-        waitForTransactionReceipt,
+        waitForTransactionReceipt: (
+          args: WaitForTransactionReceiptParameters<chain>,
+        ) => waitForTransactionReceipt(args),
 
         async timestamp() {
           const latestBlock = await client.getBlock();
@@ -375,12 +435,7 @@ export const createAnvilTestClient = <chain extends Chain>(
             chainOverride
           >,
         ) {
-          const hash = await viem_writeContract(client, args);
-
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
-
-          return hash;
+          return sendAndWait(() => viem_writeContract(client, args));
         },
         async sendTransaction<
           const request extends SendTransactionRequest<chain, chainOverride>,
@@ -393,20 +448,10 @@ export const createAnvilTestClient = <chain extends Chain>(
             request
           >,
         ) {
-          const hash = await viem_sendTransaction(client, args);
-
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
-
-          return hash;
+          return sendAndWait(() => viem_sendTransaction(client, args));
         },
         async sendRawTransaction(args: SendRawTransactionParameters) {
-          const hash = await viem_sendRawTransaction(client, args);
-
-          if ((automine ??= await client.getAutomine()))
-            await waitForTransactionReceipt({ hash });
-
-          return hash;
+          return sendAndWait(() => viem_sendRawTransaction(client, args));
         },
 
         getFunctionCalls<

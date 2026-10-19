@@ -23,7 +23,7 @@
 
 ## Overview
 
-Framework-agnostic extension of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports test fixtures useful for E2E tests on forks.
+Framework-agnostic extension of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports test fixtures useful for E2E tests on forks, and registry-driven helpers (`getE2eRuns`, `getE2eMatrix`) that decide which chains an E2E scenario runs on from the deployments it requires.
 
 ## Installation
 

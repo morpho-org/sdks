@@ -1,3 +1,7 @@
+import {
+  isSimulationPackageError,
+  UnexpectedSimulationError,
+} from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
@@ -8,17 +12,18 @@ import { runSimulation } from "./run-simulation.js";
  * Simulate a bundle of EVM transactions.
  *
  * Parses and normalizes the request → resolves a single pinned block (skipped
- * when `params.block` is supplied) → resolves quoted-asset metadata → plans
+ * when `params.block` is supplied) → asserts every calldata target holds
+ * contract code at the pinned block → resolves quoted-asset metadata → plans
  * state reads and the execution → executes once through `eth_simulateV1` under
- * the full timeout budget (simulation with in-block state reads → response
- * parsing) → derives ERC20/WETH9 transfers and net asset changes from the
- * user calls only → decodes quoted balances/positions → runs slippage checks
+ * the full timeout budget (in-block state reads and transaction assertions →
+ * response parsing) → derives ERC20/WETH9 transfers and net asset changes from
+ * the user calls only → decodes quoted balances/positions → runs slippage checks
  * → asserts no funds are retained by standalone `bundles` periphery contracts
  * → returns the result. The caller reads whichever fields they need:
  *
- * - `simulationTxs` → exactly the caller's ordered transactions, normalized
- *   (checksummed addresses, `value` defaulted to `0n`). Internal state reads are
- *   never exposed.
+ * - `simulationTxs` → the caller's ordered `from`/`to`/`data`/`value` fields,
+ *   normalized (checksummed addresses, `value` defaulted to `0n`). Internal
+ *   reads and assertion declarations are never exposed.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`,
  *   `gasUsed`), aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe
  *   gas limit; consumers deriving one must add their own headroom.
@@ -26,6 +31,9 @@ import { runSimulation } from "./run-simulation.js";
  *   transfer's `txIdx` indexes into `simulationTxs`.
  * - `assetChanges` → net per-asset balance changes grouped by account (sender
  *   and counterparties) over the whole bundle.
+ *
+ * Services requiring simulation must return transactions only after this promise
+ * resolves. Every rejection blocks transaction return, including RPC failures.
  *
  * **Modes.** `mode` defaults to `"final"`, which executes the signed calldata
  * against actual permissions and accepts no `authorizations`. `mode:
@@ -41,14 +49,21 @@ import { runSimulation } from "./run-simulation.js";
  * simulations send `true`; its simulated block charges no gas either way.
  *
  * @param config - Required per-chain `eth_simulateV1` URL, optional per-chain
- *   `blockOverrides.gasLimit` and `parentHashCheck`, optional logger, and the
- *   overall timeout budget.
+ *   `blockOverrides.gasLimit`, `callGasLimit` and `parentHashCheck`, optional
+ *   logger, and the overall timeout budget.
  * @param params - Per-call simulation input.
  * @param params.chainId - Chain id the bundle targets. Sent on every call inside
- *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint;
- *   there is no separate `eth_chainId` lookup.
+ *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint. A
+ *   successful simulation sends no `eth_chainId`; one probe follows an
+ *   `RpcTransportError`, a `SlippageCheckUnavailableError` from
+ *   quoted-asset resolution or a failed planned state read, or a code-less
+ *   calldata target (`SimulationValidationError`).
  * @param params.transactions - The bundle's transactions, in execution order.
- *   All must share the same `from`.
+ *   All must share the same `from`. Each transaction may include caller-supplied
+ *   `assertBefore` and `assertAfter` arrays. Each assertion is a caller-supplied
+ *   view call (`to`/`data`) whose return data is passed to `check`.
+ *   `erc20BalanceAssertion`, `nativeBalanceAssertion`, and `maxDepositAssertion`
+ *   are optional helpers for common checks.
  * @param params.mode - `"final"` (default) or `"preview"`.
  * @param params.authorizations - Preview-only typed authorization descriptors.
  * @param params.limits - Optional quotes and percentage tolerances; unquoted amounts require no reads.
@@ -58,42 +73,73 @@ import { runSimulation } from "./run-simulation.js";
  *   final), resolved exactly once.
  * @param params.block - Optional caller-supplied state block (`number`,
  *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
- *   asset metadata reads makes a single `eth_simulateV1` request. Cannot be
- *   combined with `blockNumber`.
+ *   asset metadata reads makes a single `eth_simulateV1` request plus one
+ *   `eth_getCode` per distinct calldata target. Cannot be combined with
+ *   `blockNumber`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
- *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits, unknown fields, a `"pending"` block tag,
+ *   addresses, empty transactions, malformed assertions or authorizations,
+ *   final-mode authorizations, malformed limits, unknown fields, a `"pending"` block tag,
  *   a malformed `block` or one combined with `blockNumber`, a
- *   `blockOverrides.gasLimit` that is not a positive bigint, a `parentHashCheck`
- *   that is not a boolean, or share quotes for
- *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
+ *   `blockOverrides.gasLimit` or `callGasLimit` that is not a positive bigint,
+ *   a `parentHashCheck` that is not a boolean, or share quotes for
+ *   `blueSupplyCollateral` / `blueWithdrawCollateral`), or a transaction
+ *   whose calldata target holds no contract code at the state block.
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured, or limits/preview authorizations require a Morpho
  *   Blue address absent from blue-sdk's `getChainAddresses`.
- * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a planned state read fails
- *   or returns empty data, native outgoing traces do not cover value
- *   sent, or required metadata reverts or returns empty/invalid data.
+ * @throws {SimulationRevertedError} when a preparation or user transaction
+ *   reverts, or the node reports a bundle-level revert (code 3 or an
+ *   `execution reverted` / `VM execution error` message, or insufficient funds).
+ * @throws {SimulationAssertError} when an assertion fails; the error reports
+ *   its transaction, phase, assertion index, a copy of the caller's assertion
+ *   (`to`, `data`, and `check`), and return data.
+ *   A check exception is preserved as the error's cause.
+ * @throws {SlippageCheckUnavailableError} when a planned state read fails
+ *   or returns empty data, native outgoing traces do not cover value sent, a
+ *   required metadata read reverts or returns empty/invalid data, a quoted
+ *   force exit has no vault `Withdraw` for the account, or a
+ *   `ForceDeallocate` cannot be paired with a Blue `Withdraw` while
+ *   `deallocations` is quoted (for example a non-Blue adapter), or when a
+ *   `ForceDeallocate` charges a penalty to another account. Missing
+ *   evidence from quoted-asset resolution or a failed planned state read
+ *   detected by `executePlan`'s response parsing triggers an `eth_chainId`
+ *   probe; this error remains when that probe fails or reports the requested
+ *   chain.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
  *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded).
+ *   non-empty return data cannot be decoded, a matching force-exit
+ *   `ForceDeallocate`/`Withdraw` event log fails to decode, or a 2xx reply
+ *   from the block lookup or `eth_getCode` whose body is not JSON or is the
+ *   JSON value `null`, or an `eth_simulateV1` reply whose body is not JSON or
+ *   not a JSON-RPC object.
  * @throws {InvalidChainIdError} when the node rejects the request `chainId`
- *   because the endpoint serves another chain (a subclass of
+ *   because the endpoint serves another chain, or when an RPC failure, missing
+ *   evidence from quoted-asset resolution or a failed planned state read, or a
+ *   code-less calldata target (`SimulationValidationError`) is followed by an
+ *   `eth_chainId` answer for another chain (a subclass of
  *   `InvalidSimulationResponseError` sharing its `name`/`code`;
- *   `instanceof InvalidChainIdError` tells them apart). Never bypassable.
+ *   `instanceof InvalidChainIdError` tells them apart).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV2).
- *   Never bypassable.
- * @throws {ExternalServiceError} when the RPC is unavailable within the
- *   timeout budget or returns a malformed JSON-RPC envelope. A looked-up state
- *   block without number/hash is reported as `InvalidSimulationResponseError`.
+ * @throws {RpcTransportError} when the RPC is unavailable within the
+ *   timeout budget, answers with an HTTP error status or a JSON-RPC error,
+ *   and the endpoint does not report another chain; the original error is
+ *   `cause`. A non-JSON 2xx body from the block lookup,
+ *   `eth_getCode` or `eth_simulateV1`, a JSON `null` from the block lookup or
+ *   `eth_getCode`, or a non-JSON-RPC JSON body from `eth_simulateV1` is reported
+ *   as `InvalidSimulationResponseError`. Other JSON block responses without
+ *   an RPC result remain missing-block `RpcTransportError`s; a code response
+ *   without a result is treated as no code and fails calldata targets with
+ *   `SimulationValidationError`. A looked-up state block without
+ *   number/hash is reported as `InvalidSimulationResponseError`.
+ * @throws {UnexpectedSimulationError} For unexpected failures; the original value is `cause`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
  *   stamped with `txIdx`), per-account net `assetChanges`, and per-operation
@@ -134,5 +180,13 @@ export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,
 ): Promise<VerifiedSimulationResult> {
-  return runSimulation({ config, request: parseRequest(params) });
+  try {
+    return await runSimulation({ config, request: parseRequest(params) });
+  } catch (cause) {
+    // RPC calls already wrap their failures; anything else here is local.
+    if (isSimulationPackageError(cause)) throw cause;
+    throw new UnexpectedSimulationError("Simulation failed unexpectedly.", {
+      cause,
+    });
+  }
 }

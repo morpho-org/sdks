@@ -14,6 +14,7 @@ import {
   ExpiredDeadlineError,
   type Requirement,
 } from "../../../types/index.js";
+import { validateClientChainId } from "../validateClientChainId.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams {
@@ -26,6 +27,8 @@ interface EncodeErc20PermitParams {
   nonce: bigint;
   supportDeployless?: boolean;
   deadline?: bigint;
+  /** Timestamp the deadline is validated against; defaults to the current time. */
+  now?: bigint;
 }
 
 /**
@@ -49,16 +52,25 @@ interface EncodeErc20PermitParams {
  * @param params.nonce - The owner's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @param params.deadline - Signature expiration timestamp. Defaults to two hours from now.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` produces the deep-frozen signature.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`, or when the RPC
+ *   reports another chain via `eth_chainId` (checked after the deadline, before the metadata read).
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not VaultBundlesV1 or
  *   BlueBundlesV1 for `chainId`.
  * @throws {NonPositiveInputError} when an explicit `deadline` is not positive.
  * @throws {InputExceedsMaxError} when an explicit `deadline` exceeds `uint256`.
  * @throws {ExpiredDeadlineError} when an explicit `deadline` is positive but not in the future.
- * @throws {viem.BaseError} when the token metadata read fails with no fallback left.
+ * @throws {UnknownTokenError} when `decimals()` reverts, has no code, returns undecodable data, or is out of range.
+ * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+ *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+ *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+ * @throws {MissingPermitDomainNameError} when the token exposes neither `name()` nor
+ *   `eip712Domain()`, so its permit domain is unknown.
+ * @throws {viem.BaseError} when the `eth_chainId` request or a token metadata read fails at the
+ *   transport.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
  *   client account differs from `userAddress`.
@@ -99,18 +111,19 @@ export const encodeErc20Permit = async (
     allowed: ["vaultBundlesV1", "blueBundlesV1"],
   });
 
-  const now = Time.timestamp();
+  const timestamp = params.now ?? Time.timestamp();
   // Validate an explicit deadline before the token-metadata read: this exported encoder can be
   // called independently of the BlueBundlesV1 resolver, and an out-of-range or already-expired
   // deadline otherwise surfaces only as a downstream wallet typed-data error or an on-chain revert.
   if (params.deadline != null) {
     validateDeadline(params.deadline);
-    if (params.deadline <= now) {
-      throw new ExpiredDeadlineError(params.deadline, now);
+    if (params.deadline <= timestamp) {
+      throw new ExpiredDeadlineError(params.deadline, timestamp);
     }
   }
-  const deadline = params.deadline ?? now + Time.s.from.h(2n);
+  const deadline = params.deadline ?? Time.timestamp() + Time.s.from.h(2n);
 
+  await validateClientChainId(viemClient, chainId);
   const tokenData = await fetchToken(token, viemClient, {
     deployless: supportDeployless,
   });

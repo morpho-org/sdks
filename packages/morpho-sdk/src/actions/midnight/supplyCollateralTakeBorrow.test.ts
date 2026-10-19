@@ -3,7 +3,13 @@ import {
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
+import {
+  decodeFunctionData,
+  getAddress,
+  maxUint128,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -18,16 +24,28 @@ import {
   EmptyMidnightCollateralSuppliesError,
   EmptyMidnightTakeableOffersError,
   InputExceedsMaxError,
+  MidnightContractReceiverError,
   MidnightOfferSideMismatchError,
+  MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeTargetUnreachableError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 const wNative = getChainAddress(midnightChainId, "wNative");
+const wNativeCollateralMarket = {
+  ...midnightMarket,
+  collateralParams: midnightMarket.collateralParams.map((collateral) => ({
+    ...collateral,
+    token: wNative,
+  })),
+};
 
 const params = {
   chainId: midnightChainId,
@@ -68,13 +86,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
   });
 
   test("behavior: wraps native ETH for the wNative collateral pull", () => {
-    const market = {
-      ...midnightMarket,
-      collateralParams: midnightMarket.collateralParams.map((collateral) => ({
-        ...collateral,
-        token: wNative,
-      })),
-    };
+    const market = wNativeCollateralMarket;
     const nativeAmount = 500n;
     const tx = midnightSupplyCollateralTakeBorrow({
       ...params,
@@ -89,6 +101,78 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
 
     expect(tx.value).toBe(nativeAmount);
     expect(decoded.args.at(-1)).toBe(wNative);
+  });
+
+  test("error: native funding exceeds the summed wNative collateral pull", () => {
+    const market = wNativeCollateralMarket;
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        market,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 2_000n },
+          { collateralIndex: 0n, assets: 3_000n },
+        ],
+        nativeAmount: 5_001n,
+        takeableOffers: [midnightApiTake({ market, buy: true })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 5_001n,
+        max: 5_000n,
+      }),
+    );
+  });
+
+  test("behavior: funds the summed wNative collateral pull natively", () => {
+    const market = wNativeCollateralMarket;
+    const tx = midnightSupplyCollateralTakeBorrow({
+      ...params,
+      market,
+      collateralSupplies: [
+        { collateralIndex: 0n, assets: 2_000n },
+        { collateralIndex: 0n, assets: 3_000n },
+      ],
+      nativeAmount: 5_000n,
+      takeableOffers: [midnightApiTake({ market, buy: true })],
+    });
+
+    expect(tx.value).toBe(5_000n);
+  });
+
+  test("error: native funding sums only wNative collateral pulls", () => {
+    const market = {
+      ...midnightMarket,
+      collateralParams: [
+        { ...midnightMarket.collateralParams[0]! },
+        { ...midnightMarket.collateralParams[0]!, token: wNative },
+      ],
+    };
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        market,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 2_000n },
+          { collateralIndex: 1n, assets: 3_000n },
+        ],
+        nativeAmount: 3_001n,
+        takeableOffers: [midnightApiTake({ market, buy: true })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 3_001n,
+        max: 3_000n,
+      }),
+    );
+  });
+
+  test("error: NativeAmountOnNonWNativeAssetError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, nativeAmount: 1n }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
   test("behavior: appends metadata", () => {
@@ -328,5 +412,103 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
       }),
     ).toThrow(ChainIdMismatchError);
+  });
+
+  test("error: MidnightTakeTargetUnreachableError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: 1_000n, maxUnits: 999n },
+      }),
+    ).toThrow(MidnightTakeTargetUnreachableError);
+  });
+
+  test("error: MidnightContractReceiverError for protocol receivers", () => {
+    for (const receiver of [midnightAddresses.midnight, midnightBundlesV2]) {
+      const call = () =>
+        midnightSupplyCollateralTakeBorrow({ ...params, receiver });
+
+      expect(call).toThrow(MidnightContractReceiverError);
+      expect(call).toThrow(
+        expect.objectContaining({ field: "receiver", receiver }),
+      );
+    }
+  });
+
+  test("error: MidnightContractReceiverError for a contract referralFeeRecipient", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 16n,
+        referralFeeRecipient: midnightBundlesV2,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightContractReceiverError",
+        field: "referralFeeRecipient",
+      }),
+    );
+  });
+
+  test("behavior: a contract referralFeeRecipient builds with a zero referral fee", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        referralFeeRecipient: midnightBundlesV2,
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: collateral aggregate, target, and offer uint128 bounds", () => {
+    let collateralSumError: unknown;
+    try {
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: maxUint128 },
+          { collateralIndex: 0n, assets: 1n },
+        ],
+      });
+    } catch (reason) {
+      collateralSumError = reason;
+    }
+    expect(collateralSumError).toBeInstanceOf(InputExceedsMaxError);
+    expect(collateralSumError).toMatchObject({
+      field: "collateralSupplies(collateralIndex=0)",
+    });
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: maxUint128 + 1n, maxUnits: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    const offer = midnightApiTake({ buy: true });
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        takeableOffers: [
+          { ...offer, offer: { ...offer.offer, maxUnits: maxUint128 + 1n } },
+        ],
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: MidnightReferralFeePctExceededError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 17n + 1n,
+        referralFeeRecipient: midnightAddresses.maker,
+      }),
+    ).toThrow(MidnightReferralFeePctExceededError);
+  });
+
+  test("error: ReferralFeePctExceededError at WAD", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 18n,
+      }),
+    ).toThrow(ReferralFeePctExceededError);
   });
 });

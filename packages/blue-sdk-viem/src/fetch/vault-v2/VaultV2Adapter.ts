@@ -10,6 +10,7 @@ import {
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis.js";
 import type { DeploylessFetchParameters } from "../../types.js";
+import { catchRevertOnly } from "../../utils.js";
 import {
   fetchAccrualVaultV2MorphoMarketV1Adapter,
   fetchVaultV2MorphoMarketV1Adapter,
@@ -39,6 +40,9 @@ import {
  * @returns The hydrated supported VaultV2 adapter entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { IVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -80,7 +84,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -91,7 +95,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -102,7 +106,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
   ]);
 
@@ -133,6 +137,9 @@ export async function fetchVaultV2Adapter(
  * @returns The hydrated supported VaultV2 accrual adapter entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { IAccrualVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -177,7 +184,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -188,7 +195,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -199,7 +206,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
   ]);
 

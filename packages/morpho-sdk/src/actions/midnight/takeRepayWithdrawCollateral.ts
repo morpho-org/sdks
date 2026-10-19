@@ -12,10 +12,15 @@ import {
   validateReferralFee,
   validateUint256Field,
 } from "../../helpers/validate.js";
+import {
+  validateMidnightReferralFeeCap,
+  validateMidnightTakeableOfferBounds,
+  validateMidnightUint128Field,
+} from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
-  InputExceedsMaxError,
   type Metadata,
   type MidnightBuyTarget,
   type MidnightCollateralTransfer,
@@ -48,6 +53,7 @@ export interface MidnightTakeRepayWithdrawCollateralParams
   readonly repayEnabled: boolean;
   /** Collateral withdrawn after repaying; `maxUint256` assets withdraws the whole balance. */
   readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+  /** Must be non-zero when withdrawals are provided; unused otherwise. */
   readonly collateralReceiver: Address;
   /** Largest market continuous fee accepted when taking offers. Pass `maxUint256` explicitly for no cap. */
   readonly maxContinuousFee: bigint;
@@ -64,6 +70,11 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * `client.morpho.midnight(chainId).takeRepayWithdrawCollateral(...)` in app flows so the
  * loan-token approval and the `MidnightBundlesV2` authorization are resolved first.
  *
+ * This builder reads no position or prices, so it applies no `DEFAULT_LLTV_BUFFER` health check:
+ * keeping the position inside the buffer is the caller's responsibility. The entity method checks
+ * it from `positionData` and `collateralPrices`; onchain, Midnight still rejects a position above
+ * LLTV.
+ *
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.market - Midnight market traded by every takeable offer.
  * @param params.target - `{ type: "assets", assets, minUnits }` or `{ type: "units", units, maxBuyerAssets }`; `units: maxUint256` targets the sender's whole debt, capped by `maxBuyerAssets` (must be finite; `units: maxUint256` already selects the whole debt).
@@ -75,11 +86,13 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * @param params.takeableOffers - ABI-ready borrow-side offers returned by the Midnight API; must not be empty.
  * @param params.repayEnabled - Whether the unfilled remainder is repaid directly to Midnight.
  * @param params.collateralWithdrawals - Collateral index and assets per withdrawal; may be empty.
- * @param params.collateralReceiver - Recipient of withdrawn collateral.
+ * @param params.collateralReceiver - Recipient of withdrawn collateral; must be non-zero and not
+ *   a Midnight protocol or market token contract when `collateralWithdrawals` is non-empty, and
+ *   is unused otherwise.
  * @param params.maxContinuousFee - Largest market continuous fee accepted, in the unit of the market's
  *   onchain `continuousFee` (`Market.continuousFee`): a WAD-scaled per-second rate, so `317097919n`
  *   is about 1% per year. The take reverts if the market fee is higher. Pass `maxUint256` for no cap.
- * @param params.deadline - Bounded bundle execution deadline timestamp.
+ * @param params.deadline - Bounded bundle execution deadline timestamp. Not checked against the clock; validate freshness before building.
  * @param params.referralFeePct - Optional WAD-scaled referral fee paid out of the pulled assets.
  * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
@@ -94,16 +107,23 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * @throws {UnknownCollateralIndexError} when a withdrawal targets a collateral index not configured on the market.
  * @throws {NonPositiveInputError} when the target amount, `minUnits`, `maxBuyerAssets`, a
  *   withdrawal amount or `deadline` is not positive.
- * @throws {NegativeInputError} when `maxContinuousFee`, `referralFeePct` or `nativeAmount` is negative.
+ * @throws {NegativeInputError} when a takeable offer cap, `maxContinuousFee`, `referralFeePct`
+ *   or `nativeAmount` is negative.
  * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
  * @throws {NativeAmountOnNonWNativeAssetError} when `market.loanToken` is not wNative.
- * @throws {InputExceedsMaxError} when `target.assets` or `target.maxBuyerAssets` is at
- *   least `maxUint256`, or a `collateralWithdrawals[].assets` amount, `target.units`,
- *   `minUnits`, `maxBuyerAssets`, `maxContinuousFee` or `deadline` exceeds `uint256`, or
- *   `nativeAmount` exceeds the maximum wNative amount this call can pull.
+ * @throws {InputExceedsMaxError} when a finite target or collateral withdrawal amount, or an
+ *   offer cap, exceeds `uint128`; when `target.maxBuyerAssets` exceeds `uint128` (an SDK cap: the
+ *   bundle accepts `uint256`, but a higher ceiling gives no slippage protection); when
+ *   `maxContinuousFee` or `deadline` exceeds `uint256`; or when `nativeAmount` exceeds the maximum
+ *   wNative amount this call can pull.
  * @throws {UnboundedMidnightTakeInputError} when `deadline` is `maxUint256`.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+ * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+ * @throws {MidnightZeroReceiverError} when collateral is withdrawn to the zero address.
+ * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
+ *   contract or a market token contract, or when `referralFeeRecipient` is either with a positive
+ *   referral fee.
  * @example
  * ```ts
  * import { Time } from "@morpho-org/morpho-ts";
@@ -141,31 +161,38 @@ export const midnightTakeRepayWithdrawCollateral = (
         assets,
       );
     }
-    validateUint256Field(`collateralWithdrawals[${index}].assets`, assets);
+    if (assets !== maxUint256) {
+      validateMidnightUint128Field(
+        `collateralWithdrawals[${index}].assets`,
+        assets,
+      );
+    }
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+  }
+  if (params.collateralWithdrawals.length > 0) {
+    // Rejects receivers that would strand the withdrawn collateral in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "collateralReceiver",
+      receiver: params.collateralReceiver,
+    });
   }
   const marketId = validateTakeableOffers({
     market: params.market,
     takeableOffers: params.takeableOffers,
     expectedBuy: false,
   });
+  validateMidnightTakeableOfferBounds(params.takeableOffers);
 
   const { target } = params;
   if (target.type === "assets") {
-    // `assets` bounds the loan assets pulled; it stays finite since there is no
-    // "whole debt" sentinel for an assets target.
-    if (target.assets >= maxUint256) {
-      throw new InputExceedsMaxError({
-        field: "target.assets",
-        value: target.assets,
-        max: maxUint256 - 1n,
-      });
-    }
     if (target.minUnits <= 0n) {
       throw new NonPositiveInputError("target.minUnits", target.minUnits);
     }
-    validateUint256Field("target.minUnits", target.minUnits);
+    validateMidnightUint128Field("target.assets", target.assets);
+    validateMidnightUint128Field("target.minUnits", target.minUnits);
   } else {
     if (target.units <= 0n) {
       throw new NonPositiveInputError("target.units", target.units);
@@ -176,16 +203,13 @@ export const midnightTakeRepayWithdrawCollateral = (
         target.maxBuyerAssets,
       );
     }
-    // `maxBuyerAssets` bounds the loan assets pulled; it stays finite since
-    // `units: maxUint256` already selects the whole debt.
-    if (target.maxBuyerAssets >= maxUint256) {
-      throw new InputExceedsMaxError({
-        field: "target.maxBuyerAssets",
-        value: target.maxBuyerAssets,
-        max: maxUint256 - 1n,
-      });
+    if (target.units !== maxUint256) {
+      validateMidnightUint128Field("target.units", target.units);
     }
-    validateUint256Field("target.units", target.units);
+    validateMidnightUint128Field(
+      "target.maxBuyerAssets",
+      target.maxBuyerAssets,
+    );
   }
   validateUint256Field("maxContinuousFee", params.maxContinuousFee);
   if (params.deadline === maxUint256) {
@@ -193,6 +217,16 @@ export const midnightTakeRepayWithdrawCollateral = (
   }
   validateDeadline(params.deadline);
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  validateMidnightReferralFeeCap(referralFeePct);
+  if (referralFeePct > 0n) {
+    // Rejects fee recipients that would strand the fee in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "referralFeeRecipient",
+      receiver: referralFeeRecipient,
+    });
+  }
   const market = MarketUtils.toStruct(params.market);
   const nativeFunding = validateMidnightNativeAmount({
     chainId: params.chainId,

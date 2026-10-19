@@ -10,6 +10,7 @@ import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
 import { NativeFundingAmountMismatchError } from "../../../src/types/index.js";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../fixtures/blue.js";
+import { blueBundlesV1Test } from "../../helpers/blueBundlesV1.js";
 import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
@@ -74,144 +75,149 @@ function makeWethPosition(
 }
 
 describe("MorphoBlue validation", () => {
-  test("withdraw getRequirements includes Blue authorization when missing", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(
-        morphoViemExtension({
-          supportSignature: false,
+  blueBundlesV1Test(
+    "withdraw getRequirements includes Blue authorization when missing",
+    async ({ client }) => {
+      const market = client
+        .extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        )
+        .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+
+      const requirements = await market
+        .withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition({ supplyShares: 10n ** 18n }),
+          deadline: maxUint256,
+        })
+        .getRequirements();
+
+      expect(requirements).toHaveLength(1);
+    },
+  );
+
+  blueBundlesV1Test(
+    "repayWithdrawCollateral getRequirements includes Blue authorization when missing",
+    async ({ client }) => {
+      const market = client
+        .extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        )
+        .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+
+      const requirements = await market
+        .repayWithdrawCollateral({
+          repayAssets: parseUnits("1", 6),
+          collateralAssets: 1n,
+          userAddress: USER,
+          positionData: makePosition(),
+          deadline: maxUint256,
+        })
+        .getRequirements();
+
+      expect(requirements).toHaveLength(2);
+    },
+  );
+
+  blueBundlesV1Test(
+    "repay native: shares mode uses exclusive native funding",
+    async ({ client }) => {
+      const market = client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(WstethWethBlue, mainnet.id);
+      const positionData = makeWethPosition();
+      const now = 1_800_000_000n;
+      const deadline = now + 3_600n;
+      const borrowAssets = positionData
+        .accrueInterest(deadline)
+        .market.toBorrowAssets(positionData.borrowShares, "Up");
+
+      const repay = withChainTimestamp(now, () =>
+        market.repay({
+          repayShares: positionData.borrowShares,
+          nativeAmount: borrowAssets,
+          userAddress: USER,
+          positionData,
+          deadline,
         }),
-      )
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+      );
 
-    const requirements = await market
-      .withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-        deadline: maxUint256,
-      })
-      .getRequirements();
+      const tx = repay.buildTx();
+      expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
+      expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
+      expect(tx.action.args.nativeAmount).toBe(borrowAssets);
+      expect(tx.value).toBe(borrowAssets);
+      expect(
+        await withChainTimestamp(now, () => repay.getRequirements()),
+      ).toEqual([]);
+    },
+  );
 
-    expect(requirements).toHaveLength(1);
-  });
+  blueBundlesV1Test(
+    "repayWithdrawCollateral native: a fully native repay emits no ERC-20 requirement",
+    async ({ client }) => {
+      const market = client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(WstethWethBlue, mainnet.id);
+      const nativeAmount = parseUnits("0.5", 18);
 
-  test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(
-        morphoViemExtension({
-          supportSignature: false,
+      const requirements = await market
+        .repayWithdrawCollateral({
+          repayAssets: nativeAmount,
+          nativeAmount,
+          collateralAssets: parseUnits("1", 18),
+          userAddress: USER,
+          positionData: makeWethPosition(),
+          deadline: maxUint256,
+        })
+        .getRequirements();
+
+      // Fully-native repay pulls no ERC-20 → only the Morpho authorization remains.
+      expect(requirements).toHaveLength(1);
+    },
+  );
+
+  blueBundlesV1Test(
+    "repayWithdrawCollateral native: shares mode funded entirely by native emits no ERC-20 requirement",
+    async ({ client }) => {
+      const market = client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(WstethWethBlue, mainnet.id);
+      const positionData = makeWethPosition();
+      const now = 1_800_000_000n;
+      const deadline = now + 3_600n;
+
+      const borrowAssets = positionData
+        .accrueInterest(deadline)
+        .market.toBorrowAssets(positionData.borrowShares, "Up");
+
+      const action = withChainTimestamp(now, () =>
+        market.repayWithdrawCollateral({
+          repayShares: positionData.borrowShares,
+          nativeAmount: borrowAssets,
+          collateralAssets: positionData.collateral,
+          userAddress: USER,
+          positionData,
+          deadline,
         }),
-      )
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+      );
 
-    const requirements = await market
-      .repayWithdrawCollateral({
-        repayAssets: parseUnits("1", 6),
-        collateralAssets: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-        deadline: maxUint256,
-      })
-      .getRequirements();
+      const tx = action.buildTx();
+      expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
+      expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
+      expect(tx.action.args.nativeAmount).toBe(borrowAssets);
+      expect(tx.value).toBe(borrowAssets);
 
-    expect(requirements).toHaveLength(2);
-  });
-
-  test("repay native: shares mode uses exclusive native funding", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const positionData = makeWethPosition();
-    const now = 1_800_000_000n;
-    const deadline = now + 3_600n;
-    const borrowAssets = positionData
-      .accrueInterest(deadline)
-      .market.toBorrowAssets(positionData.borrowShares, "Up");
-
-    const repay = withChainTimestamp(now, () =>
-      market.repay({
-        repayShares: positionData.borrowShares,
-        nativeAmount: borrowAssets,
-        userAddress: USER,
-        positionData,
-        deadline,
-      }),
-    );
-
-    const tx = repay.buildTx();
-    expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
-    expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
-    expect(tx.action.args.nativeAmount).toBe(borrowAssets);
-    expect(tx.value).toBe(borrowAssets);
-    expect(
-      await withChainTimestamp(now, () => repay.getRequirements()),
-    ).toEqual([]);
-  });
-
-  test("repayWithdrawCollateral native: a fully native repay emits no ERC-20 requirement", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const nativeAmount = parseUnits("0.5", 18);
-
-    const requirements = await market
-      .repayWithdrawCollateral({
-        repayAssets: nativeAmount,
-        nativeAmount,
-        collateralAssets: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-        deadline: maxUint256,
-      })
-      .getRequirements();
-
-    // Fully-native repay pulls no ERC-20 → only the Morpho authorization remains.
-    expect(requirements).toHaveLength(1);
-  });
-
-  test("repayWithdrawCollateral native: shares mode funded entirely by native emits no ERC-20 requirement", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const positionData = makeWethPosition();
-    const now = 1_800_000_000n;
-    const deadline = now + 3_600n;
-
-    const borrowAssets = positionData
-      .accrueInterest(deadline)
-      .market.toBorrowAssets(positionData.borrowShares, "Up");
-
-    const action = withChainTimestamp(now, () =>
-      market.repayWithdrawCollateral({
-        repayShares: positionData.borrowShares,
-        nativeAmount: borrowAssets,
-        collateralAssets: positionData.collateral,
-        userAddress: USER,
-        positionData,
-        deadline,
-      }),
-    );
-
-    const tx = action.buildTx();
-    expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
-    expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
-    expect(tx.action.args.nativeAmount).toBe(borrowAssets);
-    expect(tx.value).toBe(borrowAssets);
-
-    expect(
-      await withChainTimestamp(now, () => action.getRequirements()),
-    ).toHaveLength(1);
-  });
+      expect(
+        await withChainTimestamp(now, () => action.getRequirements()),
+      ).toHaveLength(1);
+    },
+  );
 
   test("repayWithdrawCollateral native: rejects partial native funding", ({
     client,

@@ -154,7 +154,7 @@ describe("blueWithdraw", () => {
           expect(Object.isFrozen(transaction.action.args)).toBe(true);
         },
       ),
-      { numRuns: 50, seed: 20_260_828 },
+      { numRuns: 50 },
     );
   });
 

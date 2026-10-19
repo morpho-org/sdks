@@ -13,9 +13,11 @@ import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
+import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
 import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
+import { toServedChainError } from "./backends/served-chain.js";
 import type { CheckContext } from "./context.js";
 import { parseTransfers } from "./parsing/index.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
@@ -50,6 +52,17 @@ export async function runSimulation(params: {
   const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const client = createSimulationClient(chain.simulateV1Url, signal);
 
+  // An honest endpoint on another chain can fail as an RPC or missing-data error; one
+  // `eth_chainId` probe after such a failure turns it into InvalidChainIdError.
+  const onServedChain = <T>(call: Promise<T>): Promise<T> =>
+    call.catch(async (error: unknown) => {
+      throw await toServedChainError({
+        client,
+        chainId: request.chainId,
+        error,
+      });
+    });
+
   const limits = { operations: request.limits?.operations ?? [] };
   const preview = request.mode === "preview";
   const owner = request.transactions[0]!.from;
@@ -70,23 +83,38 @@ export async function runSimulation(params: {
   const monad = request.chainId === ChainId.MonadMainnet;
   const pinnedBlock =
     request.block ??
-    (await resolvePinnedBlock({
+    (await onServedChain(
+      resolvePinnedBlock({
+        client,
+        blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
+        signal,
+      }),
+    ));
+
+  // A code-less `to` with calldata would simulate as a silent success; reject it
+  // before `eth_simulateV1` is sent. A wrong-chain endpoint also
+  // reports no code at every target, so a validation failure probes `eth_chainId`
+  // once — a served chain mismatch outranks MissingCode.
+  await onServedChain(
+    assertTransactionTargetsHaveCode({
       client,
-      blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
-      signal,
-    }));
+      transactions: request.transactions,
+      chainId: request.chainId,
+      blockNumber: pinnedBlock.number,
+    }),
+  );
 
   // With no calldata decoding, the caller's declared `limits.operations`
   // entries are the operations: subjects for state reads and per-operation
   // checks come straight from the limit list.
-  const resolved = await resolveAssets({
-    client,
-    morpho,
-    operations: limits.operations,
-    chainId: request.chainId,
-    mode: request.mode,
-    blockNumber: pinnedBlock.number,
-  });
+  const resolved = await onServedChain(
+    resolveAssets({
+      client,
+      morpho,
+      operations: limits.operations,
+      blockNumber: pinnedBlock.number,
+    }),
+  );
   const observations = planStateReads({ operations: resolved, owner, morpho });
 
   const preparations = preview
@@ -105,15 +133,18 @@ export async function runSimulation(params: {
   });
 
   // Execute against the block resolved once above.
-  const execution = await executePlan({
-    client,
-    plan,
-    stateBlock: pinnedBlock,
-    validation: monad,
-    blockGasLimit: chain.blockOverrides?.gasLimit,
-    parentHashCheck:
-      chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
-  });
+  const execution = await onServedChain(
+    executePlan({
+      client,
+      plan,
+      stateBlock: pinnedBlock,
+      validation: monad,
+      blockGasLimit: chain.blockOverrides?.gasLimit,
+      callGasLimit: chain.callGasLimit,
+      parentHashCheck:
+        chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
+    }),
+  );
 
   const userCalls = execution.calls
     .filter((call) => call.planned.type === "transaction")
@@ -131,11 +162,7 @@ export async function runSimulation(params: {
           (read) =>
             [
               read.read.id,
-              decodeStateRead(read.read, read.returnData, {
-                chainId: request.chainId,
-                mode: request.mode,
-                blockNumber: pinnedBlock.number,
-              }),
+              decodeStateRead(read.read, read.returnData),
             ] as const,
         ),
     );
@@ -178,6 +205,8 @@ export async function runSimulation(params: {
     before: decodePhase("before"),
     after: decodePhase("after"),
     transfers,
+    logs: userCalls.map((call) => call.logs),
+    morpho,
     requestTransactions: request.transactions,
   });
 

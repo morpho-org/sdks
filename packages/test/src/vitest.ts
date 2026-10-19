@@ -1,7 +1,13 @@
 import { setTimeout } from "node:timers/promises";
 import {
+  type Address,
   type Chain,
+  encodeAbiParameters,
+  erc20Abi,
   http,
+  keccak256,
+  maxUint128,
+  numberToHex,
   type SendTransactionParameters,
   zeroAddress,
 } from "viem";
@@ -10,10 +16,15 @@ import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import {
   AnvilCleanupError,
+  AnvilFeeTokenFundingError,
   AnvilProcessError,
   AnvilStartupError,
   createAnvilFailureCleanupError,
 } from "./errors.js";
+
+const TEMPO_CHAIN_ID = 4217;
+const TEMPO_FEE_TOKEN: Address = "0x20C0000000000000000000000000000000000000";
+const TEMPO_FEE_TOKEN_BALANCES_SLOT = 9n;
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
@@ -37,13 +48,15 @@ export interface ViemTestContext<chain extends Chain = Chain> {
  * @throws {AnvilStartupError} When the fixture cannot start Anvil.
  * @throws {AnvilProcessError} When Anvil exits unexpectedly.
  * @throws {AnvilCleanupError} When fixture or process cleanup fails.
+ * @throws {AnvilFeeTokenFundingError} When the Tempo pathUSD fee-token balance write does not produce
+ * the expected balance for the test account.
  * @example
  * ```ts
  * import { createViemTest } from "@morpho-org/test/vitest";
  * import { mainnet } from "viem/chains";
  *
  * export const test = createViemTest(mainnet, {
- *   forkUrl: process.env.MAINNET_RPC_URL,
+ *   forkUrl: "https://<your-mainnet-rpc>",
  *   forkBlockNumber: 19_530_000,
  * });
  * ```
@@ -125,6 +138,37 @@ export const createViemTest = <chain extends Chain>(
 
           // Make block timestamp 100% predictable.
           await client.setBlockTimestampInterval({ interval: 1 });
+
+          if (chain.id === TEMPO_CHAIN_ID) {
+            // Tempo gas is paid in the fee token; Anvil drops (1.8.0) or rejects (1.8.5) underfunded txs.
+            const expected = maxUint128;
+            const index = keccak256(
+              encodeAbiParameters(
+                [{ type: "address" }, { type: "uint256" }],
+                [client.account.address, TEMPO_FEE_TOKEN_BALANCES_SLOT],
+              ),
+            );
+            await client.setStorageAt({
+              address: TEMPO_FEE_TOKEN,
+              index,
+              value: numberToHex(expected, { size: 32 }),
+            });
+            const actual = await client.readContract({
+              address: TEMPO_FEE_TOKEN,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [client.account.address],
+            });
+
+            if (actual !== expected)
+              throw new AnvilFeeTokenFundingError({
+                token: TEMPO_FEE_TOKEN,
+                account: client.account.address,
+                actual,
+                expected,
+                balancesSlot: TEMPO_FEE_TOKEN_BALANCES_SLOT,
+              });
+          }
 
           // Remove code from contract
           // cf. https://eips.ethereum.org/EIPS/eip-7702

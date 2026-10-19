@@ -172,10 +172,104 @@ describe("release issues", () => {
       expect(requests.every(({ init }) => init?.redirect === "error")).toBe(
         true,
       );
+      expect(
+        requests
+          .filter(
+            ({ url, init }) =>
+              url.startsWith("https://api.github.com/") &&
+              init?.method !== "POST",
+          )
+          .map(({ url }) => new URL(url).pathname),
+      ).toEqual(["/repos/morpho-org/sdks/issues"]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  test("deduplicates issues that still exist only in the legacy repository", async () => {
+    const name = "@morpho-org/blue-sdk";
+    const title = releaseIssueTitle(name, "1.2.3");
+    const cwd = createRepository([{ directory: "blue-sdk", name }]);
+    const issuePaths: string[] = [];
+    let postCount = 0;
+    try {
+      await main({
+        cwd,
+        nowMs: NOW_MS,
+        env: {
+          ...ENV,
+          GITHUB_REPOSITORY: "morpho-org/release-source",
+        },
+        fetchImpl: async (input, init) => {
+          const url = String(input);
+          if (url.startsWith("https://registry.npmjs.org/")) {
+            return url.endsWith(name.replaceAll("/", "%2f"))
+              ? jsonResponse(releasePackument(NOW_MS))
+              : new Response("Not Found", { status: 404 });
+          }
+          if (init?.method === "POST") {
+            postCount += 1;
+            return jsonResponse({ number: 1 }, 201);
+          }
+          const issuePath = new URL(url).pathname;
+          issuePaths.push(issuePath);
+          return issuePath === "/repos/morpho-org/sdks/issues"
+            ? jsonResponse([{ title }])
+            : jsonResponse([]);
+        },
+      });
+      expect(issuePaths).toEqual([
+        "/repos/morpho-org/release-source/issues",
+        "/repos/morpho-org/sdks/issues",
+      ]);
+      expect(postCount).toBe(0);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["morpho-org/release-source", "morpho-org/sdks"])(
+    "fails closed when listing issues in %s fails",
+    async (failingRepository) => {
+      const name = "@morpho-org/blue-sdk";
+      const cwd = createRepository([{ directory: "blue-sdk", name }]);
+      const issuePaths: string[] = [];
+      let postCount = 0;
+      try {
+        await expect(
+          main({
+            cwd,
+            nowMs: NOW_MS,
+            env: {
+              ...ENV,
+              GITHUB_REPOSITORY: "morpho-org/release-source",
+            },
+            fetchImpl: async (input, init) => {
+              const url = String(input);
+              if (url.startsWith("https://registry.npmjs.org/")) {
+                return url.endsWith(name.replaceAll("/", "%2f"))
+                  ? jsonResponse(releasePackument(NOW_MS))
+                  : new Response("Not Found", { status: 404 });
+              }
+              if (init?.method === "POST") {
+                postCount += 1;
+                return jsonResponse({ number: 1 }, 201);
+              }
+              const issuePath = new URL(url).pathname;
+              issuePaths.push(issuePath);
+              return issuePath === `/repos/${failingRepository}/issues`
+                ? new Response("Unavailable", { status: 500 })
+                : jsonResponse([]);
+            },
+          }),
+        ).rejects.toThrow("GitHub issue listing failed (500)");
+        expect(issuePaths).toContain(`/repos/${failingRepository}/issues`);
+        expect(postCount).toBe(0);
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("watches retired packages absent from the workspace", async () => {
     const retired = "@morpho-org/bundler-sdk-viem";

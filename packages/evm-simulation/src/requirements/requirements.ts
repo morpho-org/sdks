@@ -23,14 +23,10 @@ import {
   AuthorizationRequestMismatchError,
   UnsupportedOperationError,
 } from "../errors.js";
-import type { SimulationMode } from "../params.js";
 
 type Fail = (message: string, options?: ErrorOptions) => never;
 
 interface Ctx {
-  readonly chainId: number;
-  readonly mode: SimulationMode;
-  readonly blockNumber: bigint;
   readonly owner: Address;
   readonly index: number;
 }
@@ -39,33 +35,18 @@ const mismatch =
   (ctx: Ctx): Fail =>
   (message, options) => {
     throw new AuthorizationRequestMismatchError(
-      `${message}. Rebuild the wallet request from getRequirements()`,
-      {
-        context: {
-          stage: "preparation",
-          chainId: ctx.chainId,
-          mode: ctx.mode,
-          blockNumber: ctx.blockNumber,
-          authorizationIndex: ctx.index,
-        },
-        ...options,
-      },
+      `Authorization ${ctx.index}: ${message}. Rebuild the wallet request from getRequirements()`,
+      options,
     );
   };
 
 const unsupported =
   (ctx: Ctx): Fail =>
   (message, options) => {
-    throw new UnsupportedOperationError(message, {
-      context: {
-        stage: "preparation",
-        chainId: ctx.chainId,
-        mode: ctx.mode,
-        blockNumber: ctx.blockNumber,
-        authorizationIndex: ctx.index,
-      },
-      ...options,
-    });
+    throw new UnsupportedOperationError(
+      `Authorization ${ctx.index}: ${message}`,
+      options,
+    );
   };
 
 const toErc2612Permit = (
@@ -143,9 +124,6 @@ const toBlueAuthorization = (
  * The function is pure and synchronous: no RPC reads, no clock, no signing.
  *
  * @param params - Mapping parameters.
- * @param params.chainId - The chain the requirements were resolved on; carried into error contexts.
- * @param params.mode - Simulation mode carried into error contexts (`"preview"` or `"final"`).
- * @param params.blockNumber - Pinned block the simulation is verified against; carried into error contexts.
  * @param params.owner - The account the requirements were resolved for (transaction sender).
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
@@ -160,7 +138,7 @@ const toBlueAuthorization = (
  * import { createPublicClient, http, type Address } from "viem";
  * import { mainnet } from "viem/chains";
  *
- * async function prepare(userAddress: Address, blockNumber: bigint) {
+ * async function prepare(userAddress: Address) {
  *   const client = createPublicClient({ chain: mainnet, transport: http() })
  *     .extend(morphoViemExtension());
  *   const vault = client.morpho.vaultV1(
@@ -172,9 +150,6 @@ const toBlueAuthorization = (
  *     .deposit({ amount: 1_000_000n, userAddress, vaultData })
  *     .getRequirements();
  *   const authorizations = toSimulationAuthorizations({
- *     chainId: mainnet.id,
- *     mode: "final",
- *     blockNumber,
  *     owner: userAddress,
  *     requirements,
  *   });
@@ -183,16 +158,13 @@ const toBlueAuthorization = (
  * ```
  */
 export function toSimulationAuthorizations(params: {
-  readonly chainId: number;
-  readonly mode: SimulationMode;
-  readonly blockNumber: bigint;
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];
 }): readonly SimulationAuthorization[] {
-  const { chainId, mode, blockNumber, owner, requirements } = params;
+  const { owner, requirements } = params;
 
   return requirements.map((requirement, index) => {
-    const ctx: Ctx = { chainId, mode, blockNumber, owner, index };
+    const ctx: Ctx = { owner, index };
 
     if (isRequirementApproval(requirement)) {
       return toErc20Approval(requirement, ctx);

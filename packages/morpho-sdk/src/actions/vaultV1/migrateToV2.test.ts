@@ -105,7 +105,7 @@ describe("vaultV1MigrateToV2", () => {
           }
         },
       ),
-      { numRuns: 50, seed: 20_260_907 },
+      { numRuns: 50 },
     );
   });
 

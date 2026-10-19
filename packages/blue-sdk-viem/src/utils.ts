@@ -1,17 +1,34 @@
 import {
   type Abi,
+  AbiDecodingDataSizeInvalidError,
+  AbiDecodingDataSizeTooSmallError,
+  AbiDecodingZeroDataError,
   type AbiItemArgs,
   type AbiItemName,
+  BaseError,
   type Chain,
   type Client,
   type ContractFunctionArgs,
   type ContractFunctionName,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  ExecutionRevertedError,
   type ExtractAbiFunctionForArgs,
   type GetAbiItemParameters,
   getAbiItem,
   getAddress,
+  HttpRequestError,
+  IntegerOutOfRangeError,
+  InvalidAbiDecodingTypeError,
+  InvalidBytesBooleanError,
+  LimitExceededRpcError,
   type ReadContractParameters,
+  RpcRequestError,
+  SliceOffsetOutOfBoundsError,
+  SocketClosedError,
+  TimeoutError,
   type Transport,
+  WebSocketRequestError,
 } from "viem";
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
@@ -21,6 +38,152 @@ import {
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
 } from "./error.js";
+
+/**
+ * Checks whether a viem `BaseError` cause chain contains a contract revert.
+ * Causes behind a non-viem `Error` wrapper are not inspected.
+ *
+ * @param error - Error thrown by a contract read.
+ * @returns Whether the error contains a `ContractFunctionRevertedError`,
+ * `ContractFunctionZeroDataError`, or node-reported `ExecutionRevertedError` other than a
+ * gas-cap rejection.
+ * @example
+ * ```ts
+ * import { isContractRevertError } from "@morpho-org/blue-sdk-viem";
+ * import { ContractFunctionZeroDataError } from "viem";
+ *
+ * const error = new ContractFunctionZeroDataError({ functionName: "read" });
+ * const isRevert: boolean = isContractRevertError(error);
+ * // isRevert === true
+ * ```
+ */
+export const isContractRevertError = (error: unknown): boolean => {
+  return (
+    error instanceof BaseError &&
+    error.walk((cause) => {
+      if (
+        cause instanceof ContractFunctionRevertedError ||
+        cause instanceof ContractFunctionZeroDataError
+      )
+        return true;
+      if (!(cause instanceof ExecutionRevertedError)) return false;
+      if (
+        cause.walk(
+          (nested) =>
+            nested instanceof RpcRequestError &&
+            nested.code === ExecutionRevertedError.code,
+        ) !== null
+      )
+        return true;
+
+      return !/gas required exceeds allowance/i.test(
+        `${cause.details} ${cause.shortMessage}`,
+      );
+    }) !== null
+  );
+};
+
+/**
+ * Checks whether an error or one of its causes is a failed ABI decode of returned data.
+ *
+ * A contract answered the call, but its return data cannot decode to the expected type —
+ * for example a bytes32 `symbol()` read as `string`, or an integer result that
+ * exceeds JavaScript's safe-number range.
+ *
+ * @param error - Error thrown by a contract read.
+ * @returns Whether the error is a viem ABI decoding error.
+ * @example
+ * ```ts
+ * import { isUndecodableResultError } from "@morpho-org/blue-sdk-viem";
+ * import { erc20Abi } from "viem";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { readContract } from "viem/actions";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const symbol = await readContract(client, {
+ *   address: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+ *   abi: erc20Abi,
+ *   functionName: "symbol",
+ * }).catch((error: unknown) =>
+ *   // MKR's symbol() returns bytes32, which does not decode as `string`.
+ *   isUndecodableResultError(error) ? "MKR" : Promise.reject(error),
+ * );
+ * ```
+ */
+export const isUndecodableResultError = (error: unknown): boolean =>
+  error instanceof BaseError &&
+  error.walk(
+    (cause) =>
+      cause instanceof AbiDecodingZeroDataError ||
+      cause instanceof AbiDecodingDataSizeTooSmallError ||
+      cause instanceof AbiDecodingDataSizeInvalidError ||
+      cause instanceof InvalidAbiDecodingTypeError ||
+      cause instanceof InvalidBytesBooleanError ||
+      cause instanceof IntegerOutOfRangeError ||
+      cause instanceof SliceOffsetOutOfBoundsError ||
+      // viem's `PositionOutOfBoundsError` is not exported from the package
+      // root, so it is matched by name.
+      (cause instanceof BaseError && cause.name === "PositionOutOfBoundsError"),
+  ) !== null;
+
+/**
+ * Returns a rejection handler that substitutes a fallback only for non-transport contract reverts.
+ * Transport errors are rethrown even when their cause chain also contains a revert.
+ *
+ * @param fallback - Value returned when the error represents a non-transport contract revert.
+ * @returns A handler that rethrows all other errors unchanged.
+ * @example
+ * ```ts
+ * import { catchRevertOnly } from "@morpho-org/blue-sdk-viem";
+ * import { ContractFunctionZeroDataError } from "viem";
+ *
+ * const error = new ContractFunctionZeroDataError({ functionName: "read" });
+ * const result = catchRevertOnly(0n)(error);
+ * // result === 0n
+ * ```
+ */
+export const catchRevertOnly =
+  <T>(fallback: T) =>
+  (error: unknown): T => {
+    if (isTransportError(error)) throw error;
+    if (isContractRevertError(error)) return fallback;
+    throw error;
+  };
+
+/**
+ * Checks whether a viem `BaseError` cause chain contains an RPC transport failure.
+ * Causes behind a non-viem `Error` wrapper are not inspected.
+ *
+ * @param error - Error thrown by an RPC request.
+ * @returns Whether the error represents a timeout, rate limit, socket failure, or retryable HTTP response.
+ * @example
+ * ```ts
+ * import { isTransportError } from "@morpho-org/blue-sdk-viem";
+ * import { HttpRequestError } from "viem";
+ *
+ * const error = new HttpRequestError({ status: 429, url: "https://rpc.example" });
+ * const isTransport: boolean = isTransportError(error);
+ * // isTransport === true
+ * ```
+ */
+export const isTransportError = (error: unknown): boolean => {
+  return (
+    error instanceof BaseError &&
+    error.walk(
+      (cause) =>
+        cause instanceof TimeoutError ||
+        cause instanceof LimitExceededRpcError ||
+        cause instanceof SocketClosedError ||
+        cause instanceof WebSocketRequestError ||
+        (cause instanceof HttpRequestError &&
+          (cause.status === undefined ||
+            cause.status === 408 ||
+            cause.status === 429 ||
+            cause.status >= 500)),
+    ) !== null
+  );
+};
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>

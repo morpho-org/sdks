@@ -11,7 +11,7 @@ import {
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -41,7 +41,7 @@ const setupMarkets = [CbbtcUsdcBlue, WbtcUsdcSourceMarket] as const;
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
 // remains pinned to the historical state expected by the existing Morpho SDK integration suite.
 const test = createViemTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 25_720_868n,
 });

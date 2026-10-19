@@ -1,14 +1,15 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Hex, isAddress, isHex } from "viem";
-import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
   SimulationRevertedError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
+import { evaluateAssertion } from "../assertions.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
+import { formatRevert } from "./decode-revert.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
@@ -60,7 +61,7 @@ interface RawCallResult {
   readonly returnData: Hex;
   readonly gasUsed: string;
   readonly logs?: readonly RawLog[];
-  readonly error?: { readonly message?: string };
+  readonly error?: { readonly message?: string; readonly data?: unknown };
 }
 
 interface RawBlockResult {
@@ -100,9 +101,11 @@ const isSimulateV1Response = (
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
  *   block, on a call-count mismatch, a malformed per-call result, or on a
  *   simulated block that is neither the pinned state block nor its immediate successor.
+ * @throws {SimulationAssertError} When an assertion fails or its check throws;
+ *   a thrown check error is preserved as `cause`.
  * @throws {SimulationRevertedError} When a preparation or user-transaction
- *   call failed; the `details` payload carries tagged user call results only.
- * @throws {MissingVerificationEvidenceError} When a planned state read fails.
+ *   call failed; the error preserves the failing call's original revert bytes.
+ * @throws {SlippageCheckUnavailableError} When a planned state read fails.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -114,17 +117,10 @@ export function parseSimulationResponse(params: {
   readonly parentHashCheck: boolean;
 }): SimulationExecution {
   const { plan, blocks } = params;
-  const errorContext: SimulationErrorContext = {
-    stage: "transport",
-    chainId: plan.request.chainId,
-    mode: plan.request.mode,
-    blockNumber: params.stateBlockNumber,
-  };
 
   if (!isSimulateV1Response(blocks)) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
-      { context: errorContext },
     );
   }
 
@@ -137,7 +133,6 @@ export function parseSimulationResponse(params: {
   ) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block ${blockNumber} but the pinned state block is ${params.stateBlockNumber}; the node did not honor the pinned block.`,
-      { context: errorContext },
     );
   }
   // Anvil re-hashes the pinned block, so only the geth-style successor can be
@@ -151,20 +146,17 @@ export function parseSimulationResponse(params: {
   ) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block ${blockNumber} whose parent ${String(block.parentHash)} is not the pinned state block hash ${params.stateBlockHash}; the node did not simulate on top of the pinned block.`,
-      { context: errorContext },
     );
   }
   if (blockTimestamp < params.stateBlockTimestamp) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block timestamp ${blockTimestamp}, behind the pinned state block timestamp ${params.stateBlockTimestamp}. Check that the endpoint executes on top of the requested block.`,
-      { context: errorContext },
     );
   }
 
   if (block.calls.length !== plan.calls.length) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 returned ${block.calls.length} call result(s) for ${plan.calls.length} planned call(s). Refusing to map the response with mismatched lengths.`,
-      { context: errorContext },
     );
   }
 
@@ -181,19 +173,19 @@ export function parseSimulationResponse(params: {
       )
         throw new InvalidSimulationResponseError(
           `eth_simulateV1 returned a malformed call result at position ${index}.`,
-          { context: errorContext },
         );
       result = {
         logs: (call.logs ?? []).map((log): RawLog => {
           if (
             !isAddress(log.address) ||
             !Array.isArray(log.topics) ||
-            log.topics.some((topic: unknown) => !isHex(topic)) ||
+            log.topics.some(
+              (topic: unknown) => !isHex(topic) || topic.length !== 66,
+            ) ||
             (log.data !== undefined && !isHex(log.data))
           )
             throw new InvalidSimulationResponseError(
               `eth_simulateV1 returned a malformed log at call position ${index}.`,
-              { context: errorContext },
             );
           return {
             address: log.address,
@@ -209,10 +201,15 @@ export function parseSimulationResponse(params: {
       if (cause instanceof InvalidSimulationResponseError) throw cause;
       throw new InvalidSimulationResponseError(
         `eth_simulateV1 returned a malformed call result at position ${index}.`,
-        { context: errorContext, cause },
+        { cause },
       );
     }
-    return { planned, result, call };
+    // geth and Anvil return revert data in `error.data`, with `returnData` empty.
+    const revertData =
+      isHex(call.error?.data) && call.error.data !== "0x"
+        ? call.error.data
+        : call.returnData;
+    return { planned, result, call, revertData };
   });
 
   // A preparation call that reverted did not produce its promised state —
@@ -225,66 +222,80 @@ export function parseSimulationResponse(params: {
     } => entry.planned.type === "preparation" && !entry.result.status,
   );
   if (failedPreparation) {
-    const message = failedPreparation.call.error?.message;
+    const { planned, revertData } = failedPreparation;
+    const message = formatRevert(revertData) ?? "Revert reason unavailable";
     throw new SimulationRevertedError(
-      `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
-      undefined,
-      "UNKNOWN_REVERT",
-      {
-        stage: "preparation",
-        chainId: plan.request.chainId,
-        mode: plan.request.mode,
-        blockNumber: params.stateBlockNumber,
-        authorizationIndex: failedPreparation.planned.authorizationIndex,
-        preparationCallIndex: failedPreparation.planned.callIndex,
-      },
+      `Authorization ${planned.authorizationIndex} preparation call ${planned.callIndex} reverted: ${message}`,
+      revertData,
+      { cause: failedPreparation.call.error },
     );
   }
 
-  // A user-transaction revert belongs to the bundle, not the boundary.
-  const failedUserCall = calls.find(
-    ({ planned, result }) => planned.type === "transaction" && !result.status,
-  );
-  if (failedUserCall && failedUserCall.planned.type === "transaction") {
-    throw new SimulationRevertedError(
-      failedUserCall.call.error?.message ?? "Simulation failed",
-      deepFreeze(
-        calls
-          .filter(
-            (
-              entry,
-            ): entry is typeof entry & {
-              planned: PlannedCall & {
-                type: "transaction";
-                transactionIndex: number;
-              };
-            } => entry.planned.type === "transaction",
-          )
-          .map(({ planned, result }) => ({
-            transactionIndex: planned.transactionIndex,
-            result,
-          })),
-      ),
-      "UNKNOWN_REVERT",
-    );
+  for (const [
+    transactionIndex,
+    transaction,
+  ] of plan.request.transactions.entries()) {
+    for (const [phase, assertions] of [
+      ["before", transaction.assertBefore],
+      ["after", transaction.assertAfter],
+    ] as const) {
+      if (phase === "after") {
+        const userCall = calls.find(
+          ({ planned }) =>
+            planned.type === "transaction" &&
+            planned.transactionIndex === transactionIndex,
+        );
+        if (
+          userCall?.planned.type === "transaction" &&
+          !userCall.result.status
+        ) {
+          const message =
+            formatRevert(userCall.revertData) ?? "Revert reason unavailable";
+          throw new SimulationRevertedError(
+            `Transaction ${transactionIndex} reverted: ${message}`,
+            userCall.revertData,
+            {
+              cause: userCall.call.error,
+              transactionIndex,
+            },
+          );
+        }
+      }
+
+      for (const [assertionIndex, assertion] of (assertions ?? []).entries()) {
+        const executedAssertion = calls.find(
+          ({ planned }) =>
+            planned.type === "assertion" &&
+            planned.transactionIndex === transactionIndex &&
+            planned.phase === phase &&
+            planned.assertionIndex === assertionIndex,
+        );
+        if (executedAssertion?.planned.type !== "assertion") {
+          throw new InvalidSimulationResponseError(
+            `eth_simulateV1 plan is missing assertion result ${transactionIndex}:${phase}:${assertionIndex}.`,
+          );
+        }
+        evaluateAssertion({
+          assertion,
+          returnData: executedAssertion.result.returnData,
+          status: executedAssertion.result.status,
+          revertData: executedAssertion.revertData,
+          cause: executedAssertion.call.error,
+          transactionIndex,
+          phase,
+          assertionIndex,
+        });
+      }
+    }
   }
 
   const stateReads: ExecutedStateRead[] = [];
   for (const { planned, result, call } of calls) {
     if (planned.type !== "stateRead") continue;
     if (!result.status) {
-      const message = call.error?.message;
-      throw new MissingVerificationEvidenceError(
-        `State read "${planned.read.id}" failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
-        {
-          context: {
-            stage: "verification",
-            chainId: plan.request.chainId,
-            mode: plan.request.mode,
-            blockNumber: params.stateBlockNumber,
-            field: planned.read.id,
-          },
-        },
+      throw new SlippageCheckUnavailableError(
+        `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
+        { cause: call.error },
       );
     }
     stateReads.push({

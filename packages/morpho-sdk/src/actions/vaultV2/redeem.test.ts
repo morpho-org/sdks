@@ -51,7 +51,7 @@ describe("vaultV2Redeem", () => {
         expect(decoded.args?.[2]).toBe(shares);
         expect(decoded.args?.[6]).toBe(deadline);
       }),
-      { numRuns: 50, seed: 20_260_906 },
+      { numRuns: 50 },
     );
   });
 

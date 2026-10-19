@@ -358,7 +358,7 @@ export interface TakeableOfferContext {
   readonly groups?: readonly Hash[];
 }
 
-/** @internal Maps, validates, and best-price-sorts API takeable offers. */
+/** @internal Maps, validates offer caps and units, and best-price-sorts API takeable offers. */
 export function mapBoundTakeableOffers(
   takeableOffers: readonly ApiTakeableOfferResponse[],
   context: TakeableOfferContext,
@@ -402,6 +402,11 @@ export function mapBoundTakeableOffers(
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
         { cause },
+      );
+    }
+    if (maxUnits > 0n && take.units > maxUnits) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer for market_id "${take.marketId}" reports units "${take.units}" above offer maxUnits "${maxUnits}".`,
       );
     }
     if (

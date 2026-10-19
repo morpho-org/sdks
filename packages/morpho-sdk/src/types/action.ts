@@ -927,6 +927,50 @@ export interface ActionOutput<
   ) => Promise<readonly ActionRequirement[]>;
 }
 
+/**
+ * Narrows an action requirement to an ERC-20 approval transaction.
+ *
+ * @param requirement - The requirement returned by `getRequirements()` to test.
+ * @returns `true` when `requirement.action.type` is `"erc20Approval"`.
+ * @example
+ * ```ts
+ * import { vaults } from "@morpho-org/morpho-test";
+ * import {
+ *   isRequirementApproval,
+ *   morphoViemExtension,
+ * } from "@morpho-org/morpho-sdk";
+ * import { createWalletClient, http, publicActions, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: zeroAddress,
+ * })
+ *   .extend(publicActions)
+ *   .extend(morphoViemExtension());
+ *
+ * const vault = client.morpho.vaultV1(
+ *   vaults[mainnet.id].steakUsdc.address,
+ *   mainnet.id,
+ * );
+ * const vaultData = await vault.getData();
+ * const handle = vault.deposit({
+ *   amount: 1_000_000n,
+ *   userAddress: zeroAddress,
+ *   vaultData,
+ * });
+ *
+ * for (const requirement of await handle.getRequirements()) {
+ *   if (!isRequirementApproval(requirement)) continue;
+ *
+ *   const { amount, spender } = requirement.action.args;
+ *   const hash = await client.sendTransaction(requirement);
+ *   console.log({ amount, spender, hash });
+ *   await client.waitForTransactionReceipt({ hash });
+ * }
+ * ```
+ */
 export function isRequirementApproval(
   requirement: unknown,
 ): requirement is Transaction<ERC20ApprovalAction> {
@@ -944,7 +988,54 @@ export function isRequirementApproval(
   );
 }
 
-/** Checks whether an action requirement is a Blue authorization call. */
+/**
+ * Narrows an action requirement to a Blue authorization call.
+ *
+ * @param requirement - The requirement returned by `getRequirements()` to test.
+ * @returns `true` when the requirement is a call whose `action.type` is `"blueAuthorization"`.
+ * @example
+ * ```ts
+ * import { AccrualPosition } from "@morpho-org/blue-sdk";
+ * import { markets } from "@morpho-org/morpho-test";
+ * import { Time } from "@morpho-org/morpho-ts";
+ * import { createWalletClient, http, publicActions, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import {
+ *   isRequirementBlueAuthorization,
+ *   morphoViemExtension,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: zeroAddress,
+ * })
+ *   .extend(publicActions)
+ *   .extend(morphoViemExtension());
+ *
+ * const blue = client.morpho.blue(
+ *   markets[mainnet.id].usdc_wbtc,
+ *   mainnet.id,
+ * );
+ * const positionData = new AccrualPosition(
+ *   { user: zeroAddress, supplyShares: 0n, borrowShares: 0n, collateral: 10n ** 8n },
+ *   await blue.getMarketData(),
+ * );
+ * const handle = blue.borrow({
+ *   userAddress: zeroAddress,
+ *   borrowAssets: 1_000_000n,
+ *   positionData,
+ *   deadline: Time.timestamp() + 600n,
+ * });
+ *
+ * for (const requirement of await handle.getRequirements()) {
+ *   if (!isRequirementBlueAuthorization(requirement)) continue;
+ *
+ *   const hash = await client.sendTransaction(requirement);
+ *   await client.waitForTransactionReceipt({ hash });
+ * }
+ * ```
+ */
 export function isRequirementBlueAuthorization(
   requirement: unknown,
 ): requirement is Transaction<BlueAuthorizationAction> {
@@ -1053,6 +1144,16 @@ export function isPermit2SignatureTransferSignature(
  *
  * @param signature - The signed requirement to test.
  * @returns `true` when `signature.action.type` is `"authorization"`.
+ * @example
+ * ```ts
+ * import {
+ *   isAuthorizationSignature,
+ *   type RequirementSignature,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const getAuthorizationNonce = (signature: RequirementSignature): bigint | undefined =>
+ *   isAuthorizationSignature(signature) ? signature.args.nonce : undefined;
+ * ```
  */
 export function isAuthorizationSignature(
   signature: RequirementSignature,

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 
 import {
+  isPrerelease,
   listPublicPackages,
   publicIdentity,
   releaseCommit,
@@ -168,3 +169,15 @@ function historyRepo() {
   };
   return { root, git, commit };
 }
+
+test.each([
+  ["1.2.0", false],
+  ["10.0.1", false],
+  ["1.2.0-next.0", true],
+  ["1.2.0-beta", true],
+  ["1.2.3+build.1", false],
+  ["1.2.3-next.0+build.1", false],
+  ["1.2", false],
+])("isPrerelease(%s) is %s", (version, expected) => {
+  expect(isPrerelease(version)).toBe(expected);
+});

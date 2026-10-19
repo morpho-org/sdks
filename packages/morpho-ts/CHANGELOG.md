@@ -1,5 +1,15 @@
 # @morpho-org/morpho-ts
 
+## 4.0.1
+
+### Patch Changes
+
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
+
 ## 4.0.0
 
 ### Major Changes

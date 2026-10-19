@@ -1,17 +1,20 @@
 import {
+  MarketUtils,
   midnightAbi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, maxUint128 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
   midnightChainId,
   midnightMarket,
   midnightMarketId,
+  midnightTwoCollateralMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  InputExceedsMaxError,
   NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
@@ -33,20 +36,30 @@ describe("midnightSupplyCollateral", () => {
       assets: 2_000n,
       onBehalf: midnightAddresses.taker,
     });
-    expect(decoded.functionName).toBe("supplyCollateral");
+    expect(decoded).toEqual({
+      functionName: "supplyCollateral",
+      args: [
+        MarketUtils.toStruct(midnightMarket),
+        0n,
+        2_000n,
+        midnightAddresses.taker,
+      ],
+    });
   });
 
   test("behavior: uses explicit collateral index and appends metadata", () => {
     const tx = midnightSupplyCollateral({
       chainId: midnightChainId,
-      market: midnightMarket,
-      collateralIndex: 0n,
+      market: midnightTwoCollateralMarket,
+      collateralIndex: 1n,
       assets: 2_000n,
       onBehalf: midnightAddresses.taker,
       metadata: { origin: "a1b2c3d4" },
     });
+    const decoded = decodeFunctionData({ abi: midnightAbi, data: tx.data });
 
-    expect(tx.action.args.collateralIndex).toBe(0n);
+    expect(tx.action.args.collateralIndex).toBe(1n);
+    expect(decoded.args[1]).toBe(1n);
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
@@ -59,6 +72,17 @@ describe("midnightSupplyCollateral", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: assets above the uint128 collateral balance", () => {
+    expect(() =>
+      midnightSupplyCollateral({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        assets: maxUint128 + 1n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: UnknownCollateralIndexError", () => {

@@ -1,6 +1,6 @@
 import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
+import { decodeFunctionData, maxUint128, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -14,16 +14,21 @@ import {
   ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   InputExceedsMaxError,
+  MidnightContractReceiverError,
   MidnightOfferSideMismatchError,
+  MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { midnightTakeLend } from "./takeLend.js";
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 const wNative = getChainAddress(midnightChainId, "wNative");
+const wNativeLoanMarket = { ...midnightMarket, loanToken: wNative };
 
 const params = {
   chainId: midnightChainId,
@@ -73,8 +78,36 @@ describe("midnightTakeLend", () => {
     ]);
   });
 
+  test("behavior: preserves takeable offer fill order", () => {
+    const offers = [
+      midnightApiTake({
+        maker: midnightAddresses.maker,
+        tick: 5_003n,
+      }),
+      midnightApiTake({
+        maker: midnightAddresses.taker,
+        tick: 5_001n,
+      }),
+      midnightApiTake({
+        maker: midnightAddresses.loanToken,
+        tick: 5_002n,
+      }),
+    ];
+    const expectedFills = offers.map(({ offer, units, ratifierData }) => ({
+      offer,
+      units,
+      ratifierData,
+    }));
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: midnightTakeLend({ ...params, takeableOffers: offers }).data,
+    });
+
+    expect(decoded.args[5]).toEqual(expectedFills);
+  });
+
   test("behavior: wraps native ETH for the wNative loan-token pull", () => {
-    const market = { ...midnightMarket, loanToken: wNative };
+    const market = wNativeLoanMarket;
     const nativeAmount = 500n;
     const tx = midnightTakeLend({
       ...params,
@@ -89,6 +122,62 @@ describe("midnightTakeLend", () => {
 
     expect(tx.value).toBe(nativeAmount);
     expect(decoded.args.at(-1)).toBe(wNative);
+  });
+
+  test("error: native funding exceeds the assets-target pull", () => {
+    const market = wNativeLoanMarket;
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        market,
+        nativeAmount: 1_001n,
+        takeableOffers: [midnightApiTake({ market })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 1_001n,
+        max: 1_000n,
+      }),
+    );
+  });
+
+  test("error: native funding exceeds the units-target maxBuyerAssets pull", () => {
+    const market = wNativeLoanMarket;
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        market,
+        target: { type: "units", units: 500n, maxBuyerAssets: 450n },
+        nativeAmount: 451n,
+        takeableOffers: [midnightApiTake({ market })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 451n,
+        max: 450n,
+      }),
+    );
+  });
+
+  test("behavior: funds the full units-target maxBuyerAssets pull natively", () => {
+    const market = wNativeLoanMarket;
+    const tx = midnightTakeLend({
+      ...params,
+      market,
+      target: { type: "units", units: 500n, maxBuyerAssets: 450n },
+      nativeAmount: 450n,
+      takeableOffers: [midnightApiTake({ market })],
+    });
+
+    expect(tx.value).toBe(450n);
+  });
+
+  test("error: NativeAmountOnNonWNativeAssetError", () => {
+    expect(() => midnightTakeLend({ ...params, nativeAmount: 1n })).toThrow(
+      NativeAmountOnNonWNativeAssetError,
+    );
   });
 
   test("behavior: units target selects the units-target entrypoint", () => {
@@ -273,20 +362,92 @@ describe("midnightTakeLend", () => {
   });
 
   test("error: MidnightOfferSideMismatchError", () => {
-    expect(() =>
+    const build = () =>
       midnightTakeLend({
         ...params,
-        takeableOffers: [midnightApiTake({ buy: true })],
-      }),
-    ).toThrow(MidnightOfferSideMismatchError);
+        takeableOffers: [
+          midnightApiTake(),
+          midnightApiTake({ tick: 5_001n }),
+          midnightApiTake({ buy: true, tick: 5_002n }),
+        ],
+      });
+
+    expect(build).toThrow(MidnightOfferSideMismatchError);
+    expect(build).toThrow(/offer "2"/);
   });
 
   test("error: MidnightTakeableOfferMarketMismatchError", () => {
+    const build = () =>
+      midnightTakeLend({
+        ...params,
+        takeableOffers: [
+          midnightApiTake(),
+          midnightApiTake({ tick: 5_001n }),
+          midnightApiTake({ market: midnightOtherMarket, tick: 5_002n }),
+        ],
+      });
+
+    expect(build).toThrow(MidnightTakeableOfferMarketMismatchError);
+    expect(build).toThrow(/offer "2"/);
+  });
+
+  test("error: MidnightContractReceiverError for a contract referralFeeRecipient", () => {
+    const call = () =>
+      midnightTakeLend({
+        ...params,
+        referralFeePct: 10n ** 16n,
+        referralFeeRecipient: midnightBundlesV2,
+      });
+
+    expect(call).toThrow(MidnightContractReceiverError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        field: "referralFeeRecipient",
+        receiver: midnightBundlesV2,
+      }),
+    );
+  });
+
+  test("behavior: a contract referralFeeRecipient builds with a zero referral fee", () => {
     expect(() =>
       midnightTakeLend({
         ...params,
-        takeableOffers: [midnightApiTake({ market: midnightOtherMarket })],
+        referralFeeRecipient: midnightBundlesV2,
       }),
-    ).toThrow(MidnightTakeableOfferMarketMismatchError);
+    ).not.toThrow();
+  });
+
+  test("error: uint128 target and offer bounds", () => {
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        target: { type: "assets", assets: maxUint128 + 1n, minUnits: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    const offer = midnightApiTake();
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        takeableOffers: [
+          { ...offer, offer: { ...offer.offer, maxUnits: maxUint128 + 1n } },
+        ],
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: MidnightReferralFeePctExceededError", () => {
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        referralFeePct: 10n ** 17n + 1n,
+        referralFeeRecipient: midnightAddresses.maker,
+      }),
+    ).toThrow(MidnightReferralFeePctExceededError);
+  });
+
+  test("error: ReferralFeePctExceededError at WAD", () => {
+    expect(() =>
+      midnightTakeLend({ ...params, referralFeePct: 10n ** 18n }),
+    ).toThrow(ReferralFeePctExceededError);
   });
 });

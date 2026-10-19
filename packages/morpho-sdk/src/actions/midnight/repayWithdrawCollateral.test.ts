@@ -10,13 +10,17 @@ import {
 import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  midnightAddresses,
   midnightChainId,
   midnightMarket,
   midnightMarketId,
+  midnightTwoCollateralMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
   InputExceedsMaxError,
+  MidnightContractReceiverError,
+  MidnightZeroReceiverError,
   NegativeInputError,
   NonPositiveInputError,
 } from "../../types/index.js";
@@ -24,7 +28,7 @@ import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 const wNative = getChainAddress(midnightChainId, "wNative");
-const borrower = getAddress("0x00000000000000000000000000000000000b0b00");
+const borrower = getAddress("0x00000000000000000000000000000000000B0b00");
 
 const params = {
   chainId: midnightChainId,
@@ -39,6 +43,30 @@ const decode = (data: `0x${string}`) =>
   decodeFunctionData({ abi: midnightBundlesV2Abi, data });
 
 describe("midnightRepayWithdrawCollateral", () => {
+  test("error: MidnightZeroReceiverError", () => {
+    const build = () =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        collateralReceiver: zeroAddress,
+      });
+
+    expect(build).toThrow(MidnightZeroReceiverError);
+    expect(build).toThrow(
+      expect.objectContaining({ field: "collateralReceiver" }),
+    );
+  });
+
+  test("behavior: accepts zero collateralReceiver without withdrawals", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
+      repay: { type: "assets", assets: 500n },
+      collateralWithdrawals: [],
+      collateralReceiver: zeroAddress,
+    });
+
+    expect(decode(tx.data).args[7]).toBe(zeroAddress);
+  });
+
   test("behavior: does not freeze the caller's repay input", () => {
     const repay = { type: "full", maxBuyerAssets: 1_010n } as const;
     midnightRepayWithdrawCollateral({ ...params, repay });
@@ -77,6 +105,15 @@ describe("midnightRepayWithdrawCollateral", () => {
       borrower,
     ]);
     expect(decoded.args.at(-1)).toBe(zeroAddress);
+  });
+
+  test("behavior: accepts deadline = maxUint256 because no offers are taken", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
+      deadline: maxUint256,
+    });
+
+    expect(decode(tx.data).args.at(-2)).toBe(maxUint256);
   });
 
   test("behavior: wraps native ETH for the wNative loan-token pull", () => {
@@ -125,6 +162,18 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(decode(tx.data).args[6]).toEqual([
       { collateralIndex: 0n, assets: 2_000n },
       { collateralIndex: 0n, assets: maxUint256 },
+    ]);
+  });
+
+  test("behavior: encodes collateral withdrawal at index 1", () => {
+    const tx = midnightRepayWithdrawCollateral({
+      ...params,
+      market: midnightTwoCollateralMarket,
+      collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
+    });
+
+    expect(decode(tx.data).args[6]).toEqual([
+      { collateralIndex: 1n, assets: 2_000n },
     ]);
   });
 
@@ -223,9 +272,9 @@ describe("midnightRepayWithdrawCollateral", () => {
     registerCustomAddresses({
       addresses: {
         [chainId]: {
-          blue: getAddress("0x0000000000000000000000000000000000000b01"),
+          blue: getAddress("0x0000000000000000000000000000000000000B01"),
           adaptiveCurveIrm: getAddress(
-            "0x0000000000000000000000000000000000000b02",
+            "0x0000000000000000000000000000000000000B02",
           ),
           midnight: midnightMarket.midnight,
         },
@@ -245,5 +294,33 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({ ...params, chainId: 1 }),
     ).toThrow(ChainIdMismatchError);
+  });
+
+  test("error: MidnightContractReceiverError for protocol collateral receivers", () => {
+    for (const collateralReceiver of [
+      midnightAddresses.midnight,
+      midnightBundlesV2,
+    ]) {
+      const call = () =>
+        midnightRepayWithdrawCollateral({ ...params, collateralReceiver });
+
+      expect(call).toThrow(MidnightContractReceiverError);
+      expect(call).toThrow(
+        expect.objectContaining({
+          field: "collateralReceiver",
+          receiver: collateralReceiver,
+        }),
+      );
+    }
+  });
+
+  test("behavior: a contract collateralReceiver builds with no withdrawals", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        collateralWithdrawals: [],
+        collateralReceiver: midnightBundlesV2,
+      }),
+    ).not.toThrow();
   });
 });

@@ -8,6 +8,7 @@ import { isAddressEqual, type TypedDataDefinition } from "viem";
 import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  MissingPermitDomainNameError,
   UnsupportedPermitDomainExtensionsError,
 } from "../error.js";
 
@@ -39,6 +40,7 @@ const permitTypes = {
  * @param args The permit message fields and ERC20 token metadata.
  * @param chainId The expected chain ID for the permit domain.
  * @returns Typed data ready to pass to a wallet for signing.
+ * @throws MissingPermitDomainNameError when the token exposes neither `name()` nor `eip712Domain()`, so its permit domain is unknown.
  * @throws InvalidPermitDomainChainIdError when fetched EIP-5267 metadata targets another chain or omits `chainId`.
  * @throws InvalidPermitDomainVerifyingContractError when fetched EIP-5267 metadata targets another token or omits `verifyingContract`.
  * @throws UnsupportedPermitDomainExtensionsError when fetched EIP-5267 metadata advertises extension fields unsupported by this helper.
@@ -93,6 +95,10 @@ export const getPermitTypedData = (
         domain.verifyingContract,
       );
     }
+  }
+
+  if (domain == null && erc20.name == null) {
+    throw new MissingPermitDomainNameError(erc20.address);
   }
 
   const isCirclePermitV2Token =

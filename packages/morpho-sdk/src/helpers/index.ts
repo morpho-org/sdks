@@ -35,6 +35,7 @@ export {
   computeVaultMaxSharePrice,
 } from "./slippage.js";
 export {
+  getMidnightMaxSafeDebt,
   validateAccrualPosition,
   validateChainId,
   validateMidnightMarketChainId,

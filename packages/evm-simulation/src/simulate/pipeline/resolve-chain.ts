@@ -10,10 +10,10 @@ import type { ChainSimulationConfig, SimulationConfig } from "../../types.js";
  * Looks up the per-chain `ChainSimulationConfig`. Throws `UnsupportedChainError`
  * when the chain is absent from the map or has no `simulateV1Url` (defensive —
  * the type already requires it at construction). Throws
- * `SimulationValidationError` when `blockOverrides.gasLimit` is set but is
- * not a positive bigint, or `parentHashCheck` is set but is not a boolean, so a
- * misconfiguration never surfaces as a bypassable
- * `ExternalServiceError`.
+ * `SimulationValidationError` when `blockOverrides.gasLimit` or
+ * `callGasLimit` is set but is not a positive bigint, or `parentHashCheck` is
+ * set but is not a boolean, so configuration failures are reported before
+ * attempting RPC execution.
  */
 export function resolveChain(
   config: SimulationConfig,
@@ -29,6 +29,15 @@ export function resolveChain(
     throw new SimulationValidationError(
       `Chain ${chainId} blockOverrides.gasLimit must be a positive bigint, got "${String(gasLimit)}" (${typeof gasLimit}). Pass a bigint greater than 0n or omit gasLimit.`,
       ["blockOverrides.gasLimit: must be a positive bigint"],
+    );
+  const callGasLimit: unknown = entry.callGasLimit;
+  if (
+    callGasLimit !== undefined &&
+    (typeof callGasLimit !== "bigint" || callGasLimit <= 0n)
+  )
+    throw new SimulationValidationError(
+      `Chain ${chainId} callGasLimit must be a positive bigint, got "${String(callGasLimit)}" (${typeof callGasLimit}). Pass a bigint greater than 0n or omit callGasLimit.`,
+      ["callGasLimit: must be a positive bigint"],
     );
   const parentHashCheck: unknown = entry.parentHashCheck;
   if (parentHashCheck !== undefined && typeof parentHashCheck !== "boolean")

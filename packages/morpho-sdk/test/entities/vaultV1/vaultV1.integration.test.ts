@@ -1,6 +1,12 @@
 import { ChainId } from "@morpho-org/blue-sdk";
 import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { type Address, createPublicClient, http, parseUnits } from "viem";
+import {
+  type Address,
+  createPublicClient,
+  http,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { celo, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
@@ -21,6 +27,7 @@ import {
   SteakhouseUsdcVaultV1,
 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
+import { vaultBundlesV1Test } from "../../helpers/vaultBundlesV1.js";
 import { test } from "../../setup.js";
 
 describe("MorphoVaultV1 entity tests", () => {
@@ -250,35 +257,36 @@ describe("MorphoVaultV1 entity tests", () => {
   });
 
   describe("getRequirements with supportSignature: false", () => {
-    test("should return classic approval requirements when supportSignature is false", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: false,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
+    vaultBundlesV1Test(
+      "should return classic approval requirements when supportSignature is false",
+      async ({ client }) => {
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
+        const vault = morphoClient.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
 
-      const vaultData = await vault.getData();
-      const { getRequirements } = vault.deposit({
-        amount: parseUnits("100", 6),
-        userAddress: client.account.address,
-        vaultData,
-      });
+        const vaultData = await vault.getData();
+        const { getRequirements } = vault.deposit({
+          amount: parseUnits("100", 6),
+          userAddress: client.account.address,
+          vaultData,
+        });
 
-      const requirements = await getRequirements();
+        const requirements = await getRequirements();
 
-      expect(requirements).toHaveLength(1);
+        expect(requirements).toHaveLength(1);
 
-      const approval = requirements[0];
-      if (!isRequirementApproval(approval)) {
-        throw new Error("Requirement is not an approval transaction");
-      }
-    });
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Requirement is not an approval transaction");
+        }
+      },
+    );
   });
 
   describe("migrateToV2", () => {
@@ -305,7 +313,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(ChainIdMismatchError);
     });
 
-    test("should throw VaultAddressMismatchError when source vault data differs", async ({
+    test("should throw VaultAddressMismatchError when source vault data differs", ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -317,25 +325,21 @@ describe("MorphoVaultV1 entity tests", () => {
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
       );
-      const sourceVault = await morphoClient
-        .vaultV1(GauntletWethVaultV1.address, mainnet.id)
-        .getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const sourceVault = {
+        address: GauntletWethVaultV1.address,
+      } as never;
 
       expect(() =>
         vault.migrateToV2({
           userAddress: client.account.address,
           sourceVault,
-          targetVault,
+          targetVault: {} as never,
           shares: 1n,
         }),
       ).toThrow(VaultAddressMismatchError);
     });
 
-    test("should throw NonPositiveInputError when shares is zero", async ({
+    test("should throw NonPositiveInputError when shares is zero", ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -347,11 +351,14 @@ describe("MorphoVaultV1 entity tests", () => {
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
       );
-      const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const sourceVault = {
+        address: SteakhouseUsdcVaultV1.address,
+        asset: zeroAddress,
+      } as never;
+      const targetVault = {
+        address: KeyrockUsdcVaultV2.address,
+        asset: zeroAddress,
+      } as never;
 
       expect(() =>
         vault.migrateToV2({
@@ -582,84 +589,86 @@ describe("MorphoVaultV1 entity tests", () => {
       expect(tx.data).toBeDefined();
     });
 
-    test("should return classic approval requirement for V1 shares when supportSignature is false", async ({
-      client,
-    }) => {
-      const shares = parseUnits("1000", 18);
-      await client.deal({
-        erc20: SteakhouseUsdcVaultV1.address,
-        amount: shares,
-      });
+    vaultBundlesV1Test(
+      "should return classic approval requirement for V1 shares when supportSignature is false",
+      async ({ client }) => {
+        const shares = parseUnits("1000", 18);
+        await client.deal({
+          erc20: SteakhouseUsdcVaultV1.address,
+          amount: shares,
+        });
 
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: false,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
+        const vault = morphoClient.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
 
-      const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+        const sourceVault = await vault.getData();
+        const targetVault = await fetchAccrualVaultV2(
+          KeyrockUsdcVaultV2.address,
+          client,
+        );
 
-      const { getRequirements } = vault.migrateToV2({
-        userAddress: client.account.address,
-        sourceVault,
-        targetVault,
-        shares,
-      });
+        const { getRequirements } = vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares,
+        });
 
-      const requirements = await getRequirements();
+        const requirements = await getRequirements();
 
-      expect(requirements).toHaveLength(1);
+        expect(requirements).toHaveLength(1);
 
-      const approval = requirements[0];
-      if (!isRequirementApproval(approval)) {
-        throw new Error("Requirement is not an approval transaction");
-      }
-    });
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Requirement is not an approval transaction");
+        }
+      },
+    );
 
-    test("should return requirement for V1 shares when supportSignature is true", async ({
-      client,
-    }) => {
-      const shares = parseUnits("1000", 18);
-      await client.deal({
-        erc20: SteakhouseUsdcVaultV1.address,
-        amount: shares,
-      });
+    vaultBundlesV1Test(
+      "should return requirement for V1 shares when supportSignature is true",
+      async ({ client }) => {
+        const shares = parseUnits("1000", 18);
+        await client.deal({
+          erc20: SteakhouseUsdcVaultV1.address,
+          amount: shares,
+        });
 
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: true,
+          }),
+        ).morpho;
+        const vault = morphoClient.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
 
-      const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+        const sourceVault = await vault.getData();
+        const targetVault = await fetchAccrualVaultV2(
+          KeyrockUsdcVaultV2.address,
+          client,
+        );
 
-      const { getRequirements } = vault.migrateToV2({
-        userAddress: client.account.address,
-        sourceVault,
-        targetVault,
-        shares,
-      });
+        const { getRequirements } = vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares,
+        });
 
-      const requirements = await getRequirements();
+        const requirements = await getRequirements();
 
-      expect(requirements.length).toBeGreaterThanOrEqual(1);
-    });
+        expect(requirements.length).toBeGreaterThanOrEqual(1);
+      },
+    );
   });
 
   describe("migrateToV2 submitter independence", () => {

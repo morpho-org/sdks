@@ -11,7 +11,7 @@ import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis.js";
 import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
-import { readContractRestructured } from "../utils.js";
+import { catchRevertOnly, readContractRestructured } from "../utils.js";
 import { fetchMarket } from "./Market.js";
 
 /**
@@ -136,6 +136,9 @@ export async function fetchPreLiquidationParams(
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualPosition` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or
+ * viem.WebSocketRequestError (detect with isTransportError).
  * @example
  * ```ts
  * import type { AccrualPosition, MarketId } from "@morpho-org/blue-sdk";
@@ -184,6 +187,9 @@ export async function fetchAccrualPosition(
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `PreLiquidationPosition` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or
+ * viem.WebSocketRequestError (detect with isTransportError).
  * @example
  * ```ts
  * import type { MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
@@ -224,7 +230,7 @@ export async function fetchPreLiquidationPosition(
     address: preLiquidationParams.preLiquidationOracle,
     abi: blueOracleAbi,
     functionName: "price",
-  }).catch(() => undefined);
+  }).catch(catchRevertOnly(undefined));
 
   return new PreLiquidationPosition(
     {

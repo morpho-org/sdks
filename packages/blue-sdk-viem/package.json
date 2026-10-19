@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
   "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
-  "version": "6.2.1",
+  "version": "7.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -37,7 +37,8 @@
   ],
   "files": [
     "lib",
-    "MIGRATION-v5-to-v6.md"
+    "MIGRATION-v5-to-v6.md",
+    "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",

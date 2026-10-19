@@ -17,6 +17,7 @@ import {
   validateUint256Field,
 } from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import {
   InputExceedsMaxError,
   type Metadata,
@@ -41,8 +42,12 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly nativeAmount?: bigint;
   /** `assets: maxUint256` withdraws the sender's whole balance of that collateral at execution. */
   readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+  /** Must be non-zero when withdrawals are provided; unused otherwise. */
   readonly collateralReceiver: Address;
-  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  /**
+   * Bundle execution deadline timestamp. Unlike taker builders, `maxUint256` is accepted because
+   * no offers are filled; the pull remains bounded by `repay.assets` or `repay.maxBuyerAssets`.
+   */
   readonly deadline: bigint;
   readonly metadata?: Metadata;
 }
@@ -52,6 +57,11 @@ export interface MidnightRepayWithdrawCollateralParams {
  * directly, then collateral is withdrawn to `collateralReceiver`. An `assets` repay uses the
  * assets-target entrypoint with `minUnits = assets` (a direct repay counts one unit per asset); a
  * `full` repay uses the units-target entrypoint with `targetUnits = maxUint256`.
+ *
+ * This builder reads no position or prices, so it checks neither the debt nor the collateral
+ * withdrawn against the position, and applies no `DEFAULT_LLTV_BUFFER` health check. The entity
+ * method checks both from `positionData` and `collateralPrices`; onchain, Midnight still rejects a
+ * withdrawal that leaves the position above LLTV.
  *
  * Prefer `client.morpho.midnight(chainId).repayWithdrawCollateral(...)` in app flows so the
  * loan-token approval and Midnight authorization requirements are resolved first.
@@ -65,8 +75,12 @@ export interface MidnightRepayWithdrawCollateralParams {
  *   the sender's wallet as wNative. The wNative approval to `MidnightBundlesV2` is still required
  *   for the full pulled amount.
  * @param params.collateralWithdrawals - Collateral withdrawals; `assets: maxUint256` withdraws the full balance.
- * @param params.collateralReceiver - Recipient of the withdrawn collateral.
- * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.collateralReceiver - Recipient of withdrawn collateral; must be non-zero and not
+ *   a Midnight protocol or market token contract when `collateralWithdrawals` is non-empty, and is
+ *   unused otherwise.
+ * @param params.deadline - Bundle execution deadline timestamp. Unlike taker builders, `maxUint256`
+ *   is accepted because no offers are filled; the pull remains bounded by `repay.assets` or
+ *   `repay.maxBuyerAssets`. Not checked against the clock; validate freshness before building.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundlesV2`.
  * @throws {NegativeInputError} when `repay.assets` or `nativeAmount` is negative.
@@ -78,6 +92,9 @@ export interface MidnightRepayWithdrawCollateralParams {
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
+ * @throws {MidnightZeroReceiverError} when collateral is withdrawn to the zero address.
+ * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
+ *   contract or a market token contract.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -136,6 +153,16 @@ export const midnightRepayWithdrawCollateral = (
     validateUint256Field(`collateralWithdrawals[${index}].assets`, assets);
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
+  }
+
+  if (params.collateralWithdrawals.length > 0) {
+    // Rejects receivers that would strand the withdrawn collateral in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "collateralReceiver",
+      receiver: params.collateralReceiver,
+    });
   }
 
   if (repay.type === "assets") {

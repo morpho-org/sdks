@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/evm-simulation",
   "description": "EVM simulation engine for Morpho transactions.",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -37,6 +37,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "fast-check": "catalog:",
     "typescript": "catalog:",

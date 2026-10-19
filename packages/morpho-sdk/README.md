@@ -24,9 +24,14 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating Midnight
-maker integrations. Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
-deposit or Blue write integrations.
+Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating
+Midnight maker integrations. Upgrading from v7? Read the
+[v7 → v8 migration guide](./MIGRATION-v7-to-v8.md) before relying on fail-closed token metadata or
+permit requirement errors. The guide also covers wrong-chain RPC checks (`eth_chainId`)
+on entity reads and requirement resolvers. It also covers missing-contract checks. Upgrading from
+v5? Read the
+[v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault deposit or Blue write
+integrations.
 
 ## Actions
 
@@ -42,9 +47,9 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood) |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `redeem` | Direct call |
-| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood) |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.
@@ -240,7 +245,7 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
 
-Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arc, and Robinhood.
+Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arc, Robinhood, and Tempo.
 
 ```typescript
 const midnight = client.morpho.midnight(8453);

@@ -27,6 +27,13 @@ export type PlannedCall = {
       readonly phase: ReadPhase;
       readonly read: StateRead;
     }
+  | {
+      /** A caller-supplied transaction assertion read. */
+      readonly type: "assertion";
+      readonly transactionIndex: number;
+      readonly phase: "before" | "after";
+      readonly assertionIndex: number;
+    }
 );
 
 /** The ordered call plan for one simulation. @internal */
@@ -38,11 +45,12 @@ export interface ExecutionPlan {
 /**
  * Plan the execution of a request as ordered `eth_simulateV1` calls.
  *
- * Sequence (design §plan order): every `before` state read → preparation
- * calls → every user transaction → every `after` state read.
+ * Sequence: every `before` state read → preparation calls → each transaction's
+ * `assertBefore` reads, transaction, and `assertAfter` reads → every `after`
+ * state read.
  *
- * Preparation calls run `from` the owner; state reads run `from`
- * `zeroAddress` and never receive a public `txIdx`.
+ * Preparation calls run `from` the owner; state reads and assertion reads run
+ * `from` `zeroAddress` and never receive a public `txIdx`.
  *
  * @param request - The parsed request.
  * @param owner - The bundle owner; sender of preparation calls.
@@ -93,6 +101,20 @@ export function planExecution(params: {
   }
 
   request.transactions.forEach((transaction, i) => {
+    transaction.assertBefore?.forEach((assertion, assertionIndex) => {
+      calls.push({
+        type: "assertion",
+        transactionIndex: i,
+        phase: "before",
+        assertionIndex,
+        transaction: {
+          from: zeroAddress,
+          to: assertion.to,
+          data: assertion.data,
+          value: 0n,
+        },
+      });
+    });
     calls.push({
       type: "transaction",
       transactionIndex: i,
@@ -102,6 +124,20 @@ export function planExecution(params: {
         data: transaction.data,
         value: transaction.value ?? 0n,
       },
+    });
+    transaction.assertAfter?.forEach((assertion, assertionIndex) => {
+      calls.push({
+        type: "assertion",
+        transactionIndex: i,
+        phase: "after",
+        assertionIndex,
+        transaction: {
+          from: zeroAddress,
+          to: assertion.to,
+          data: assertion.data,
+          value: 0n,
+        },
+      });
     });
   });
 

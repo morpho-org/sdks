@@ -13,6 +13,7 @@ import { afterAll, describe, expect, test } from "vitest";
 
 import { loadBundledPacote } from "./read-tarball-identity.ts";
 import {
+  selectChannelTarballs,
   verifyChecksums,
   verifyReleaseMatch,
   verifyReleaseSet,
@@ -115,9 +116,32 @@ describe("verifyReleaseMatch", () => {
   });
 });
 
-test("rejects a prerelease, which would publish under latest", () => {
-  const pre = { file: "a.tgz", name: "@x/a", version: "1.0.0-next.0" };
-  expect(() => verifyReleaseMatch([pre], [pre])).toThrow("not a stable");
+describe("selectChannelTarballs", () => {
+  const stable = { file: "a.tgz", name: "@x/a", version: "1.0.0" };
+  const pre = { file: "b.tgz", name: "@x/b", version: "1.1.0-next.0" };
+
+  test("latest publishes every stable version and rejects a prerelease", () => {
+    expect(selectChannelTarballs([stable], "latest")).toEqual([stable]);
+    expect(() => selectChannelTarballs([stable, pre], "latest")).toThrow(
+      "@x/b@1.1.0-next.0 is not a stable x.y.z version",
+    );
+  });
+
+  test("next publishes only prereleases, leaving stable versions to main", () => {
+    expect(selectChannelTarballs([stable, pre], "next")).toEqual([pre]);
+    expect(selectChannelTarballs([stable], "next")).toEqual([]);
+  });
+
+  test.each(["latest", "next"] as const)(
+    "%s rejects a version that is neither x.y.z nor a prerelease",
+    (channel) => {
+      for (const version of ["1.2.3+build.1", "1.2.3-next.0+build.1", "1.2"]) {
+        expect(() =>
+          selectChannelTarballs([{ ...stable, version }], channel),
+        ).toThrow(`@x/a@${version} is neither a stable x.y.z version`);
+      }
+    },
+  );
 });
 
 describe("verifyChecksums", () => {

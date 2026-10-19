@@ -14,6 +14,7 @@ import {
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { getPermitTypedData } from "@morpho-org/morpho-sdk/blue/utils";
 import { getChainAddress } from "@morpho-org/morpho-ts";
+import { expectFailClosed } from "@morpho-org/test/chaos";
 import * as fc from "fast-check";
 import {
   type Address,
@@ -30,7 +31,6 @@ import {
 import { toSimulationAuthorizations } from "./requirements.js";
 
 const CHAIN_ID = 1;
-const BLOCK_NUMBER = 23_000_000n;
 const OWNER = getAddress("0x1000000000000000000000000000000000000001");
 const OTHER = getAddress("0x2000000000000000000000000000000000000002");
 const TOKEN = getAddress("0x3000000000000000000000000000000000000003");
@@ -125,9 +125,6 @@ describe("toSimulationAuthorizations", () => {
   test("default", () => {
     expect(
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [permitRequirement({})],
       }),
@@ -166,9 +163,6 @@ describe("toSimulationAuthorizations", () => {
   test("default: empty input", () => {
     expect(
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [],
       }),
@@ -185,9 +179,6 @@ describe("toSimulationAuthorizations", () => {
 
     expect(
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [approval],
       }),
@@ -205,9 +196,6 @@ describe("toSimulationAuthorizations", () => {
   test("behavior: blueAuthorization call requirement maps from decoded calldata", () => {
     expect(
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [blueAuthorizationCall({ authorized: blueBundlesV1 })],
       }),
@@ -232,17 +220,11 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const [authorization] = toSimulationAuthorizations({
-      chainId: CHAIN_ID,
-      mode: "final",
-      blockNumber: BLOCK_NUMBER,
       owner: OWNER,
       requirements: [requirement],
     });
 
     const [permitAuthorization] = toSimulationAuthorizations({
-      chainId: CHAIN_ID,
-      mode: "final",
-      blockNumber: BLOCK_NUMBER,
       owner: OWNER,
       requirements: [permitRequirement({})],
     });
@@ -276,9 +258,6 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const [authorization] = toSimulationAuthorizations({
-      chainId: CHAIN_ID,
-      mode: "final",
-      blockNumber: BLOCK_NUMBER,
       owner: OWNER,
       requirements: [requirement],
     });
@@ -314,9 +293,6 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const authorizations = toSimulationAuthorizations({
-      chainId: CHAIN_ID,
-      mode: "final",
-      blockNumber: BLOCK_NUMBER,
       owner: OWNER,
       requirements: [reset, grant, permitRequirement({})],
     });
@@ -347,9 +323,6 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const authorizations = toSimulationAuthorizations({
-      chainId: CHAIN_ID,
-      mode: "final",
-      blockNumber: BLOCK_NUMBER,
       owner: OWNER,
       requirements: [approval, transfer],
     });
@@ -382,9 +355,6 @@ describe("toSimulationAuthorizations", () => {
 
     expect(() =>
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [midnightSignature],
       }),
@@ -409,9 +379,6 @@ describe("toSimulationAuthorizations", () => {
         ),
         ([owner, token, _spender, amount, nonce, deadline]) => {
           const authorizations = toSimulationAuthorizations({
-            chainId: CHAIN_ID,
-            mode: "final",
-            blockNumber: BLOCK_NUMBER,
             owner,
             requirements: [
               permitRequirement({
@@ -461,9 +428,6 @@ describe("toSimulationAuthorizations", () => {
     };
     expect(
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [requirement],
       })[0]?.type,
@@ -476,9 +440,6 @@ describe("toSimulationAuthorizations", () => {
     const tampered = { ...requirement, action } as ActionRequirement;
     expect(() =>
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [tampered],
       }),
@@ -498,9 +459,6 @@ describe("toSimulationAuthorizations", () => {
     const tampered = { ...requirement, action } as ActionRequirement;
     expect(() =>
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [tampered],
       }),
@@ -513,9 +471,6 @@ describe("toSimulationAuthorizations", () => {
     const tampered = { ...requirement, action } as ActionRequirement;
     expect(() =>
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [tampered],
       }),
@@ -531,40 +486,45 @@ describe("toSimulationAuthorizations", () => {
     } as unknown as ActionRequirement;
     expect(() =>
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [unsupportedCall],
       }),
     ).toThrowError(UnsupportedOperationError);
   });
 
-  test("error: authorization context carries the failing requirement index", () => {
+  test("error: authorization message carries the failing requirement index", () => {
     const noTypedData = permitRequirement({});
     const { typedData: _typedData, ...action } = noTypedData.action;
     const tampered = { ...noTypedData, action } as ActionRequirement;
     try {
       toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [permitRequirement({}), tampered],
       });
     } catch (caught) {
       expect(caught).toBeInstanceOf(AuthorizationRequestMismatchError);
-      expect(
-        (caught as AuthorizationRequestMismatchError).context,
-      ).toMatchObject({
-        stage: "preparation",
-        mode: "final",
-        chainId: CHAIN_ID,
-        blockNumber: BLOCK_NUMBER,
-        authorizationIndex: 1,
-      });
+      expect((caught as Error).message).toContain("Authorization 1:");
       return;
     }
     throw new Error("expected toSimulationAuthorizations to throw");
+  });
+});
+
+describe("chaos: S11 invalid authorization", () => {
+  test("preview: a signature requirement without typed data yields no authorization", async () => {
+    const requirement = permitRequirement({});
+    const { typedData: _typedData, ...action } = requirement.action;
+    let authorizations: unknown;
+    const error = await expectFailClosed(
+      Promise.resolve().then(() => {
+        authorizations = toSimulationAuthorizations({
+          owner: OWNER,
+          requirements: [{ ...requirement, action } as ActionRequirement],
+        });
+      }),
+      "auth",
+    );
+    expect(error).toBeInstanceOf(AuthorizationRequestMismatchError);
+    expect(authorizations).toBeUndefined();
   });
 });

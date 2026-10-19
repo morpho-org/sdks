@@ -59,6 +59,9 @@ const createClient = (): UnitClient => {
       ["symbol", symbol],
     ] as const)
       mockRead(handle, { address, abi: erc20Abi, functionName, result });
+    // eip712Domain() is absent on these tokens: return `0x` so the read fails
+    // with ContractFunctionZeroDataError and stays optional.
+    handle.dispatch.set(`${address.toLowerCase()}|0x84b0196e`, "0x");
   }
 
   return createWalletClient({

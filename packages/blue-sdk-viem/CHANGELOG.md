@@ -1,5 +1,23 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.0.0
+
+### Major Changes
+
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
+
+### Minor Changes
+
+- Export `isContractRevertError`, `catchRevertOnly`, and `isTransportError` from `blue-sdk-viem`, and re-export them from the `morpho-sdk` `/blue/utils` and `/utils` subpaths.
+
+  Fetchers that previously returned partial entities when RPC infrastructure failed now reject with the original viem error. For transport failures, its cause chain contains `HttpRequestError`, `TimeoutError`, `LimitExceededRpcError`, `SocketClosedError`, or `WebSocketRequestError`; use `isTransportError` to detect them. Deployless reads no longer fall back after transport errors.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.0.1
+  - @morpho-org/blue-sdk@8.0.1
+
 ## 6.2.1
 
 ### Patch Changes

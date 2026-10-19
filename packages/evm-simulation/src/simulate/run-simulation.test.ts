@@ -1,10 +1,13 @@
 import { ChainId } from "@morpho-org/blue-sdk";
+import { expectFailClosed } from "@morpho-org/test/chaos";
 import { type Address, type Hex, numberToHex } from "viem";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  ExternalServiceError,
+  InvalidChainIdError,
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
+  RpcTransportError,
+  SimulationValidationError,
+  SlippageCheckUnavailableError,
   UnsupportedChainError,
 } from "../errors.js";
 import type { StateBlock } from "../params.js";
@@ -84,11 +87,21 @@ function pinnedBlockParam(fetch: ReturnType<typeof stubFetch>["fetch"]) {
     .find(({ method }) => method === "eth_getBlockByNumber")?.params[0];
 }
 
-function stubFetch(calls: readonly unknown[]) {
+// biome-ignore lint/complexity/useMaxParams: positional fixture builder
+function stubFetch(
+  calls: readonly unknown[],
+  code: Hex = "0x6000",
+  servedChainId?: number | "fail",
+) {
   const methods: string[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
     const { method } = JSON.parse(String(init?.body)) as { method: string };
     methods.push(method);
+    if (method === "eth_chainId") {
+      if (servedChainId === "fail") throw new TypeError("fetch failed");
+      return rpc(numberToHex(servedChainId ?? CHAIN_ID));
+    }
+    if (method === "eth_getCode") return rpc(code);
     if (method === "eth_getBlockByNumber")
       return rpc({
         number: numberToHex(STATE_BLOCK),
@@ -180,10 +193,15 @@ describe.sequential("runSimulation", () => {
     });
     expect(result.calls).toHaveLength(1);
     expect(mockExecutePlan).toHaveBeenCalledOnce();
-    expect(methods).toEqual(["eth_getBlockByNumber", "eth_simulateV1"]);
+    expect(methods).toEqual([
+      "eth_getBlockByNumber",
+      "eth_getCode",
+      "eth_simulateV1",
+    ]);
     expect(pinnedBlockParam(fetch)).toBe("latest");
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(false);
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
+    expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
   });
 
@@ -204,6 +222,19 @@ describe.sequential("runSimulation", () => {
       { chainId: CHAIN_ID, transactions: [TRANSACTION] },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBe(16_777_216n);
+  });
+
+  test("behavior: a configured call gas limit is forwarded to execution", async () => {
+    stubFetch([]);
+    await simulate(
+      {
+        chains: new Map([
+          [CHAIN_ID, { simulateV1Url: RPC_URL, callGasLimit: 30_000_000n }],
+        ]),
+      },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+    );
+    expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBe(30_000_000n);
   });
 
   test("behavior: Stable turns the parentHash check off by default", async () => {
@@ -281,7 +312,7 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].validation).toBe(true);
   });
 
-  test("behavior: a supplied block sends only eth_simulateV1", async () => {
+  test("behavior: a supplied block skips the block lookup only", async () => {
     const actual = await vi.importActual<typeof import("./backends/index.js")>(
       "./backends/index.js",
     );
@@ -299,8 +330,8 @@ describe.sequential("runSimulation", () => {
       },
     });
     expect(result.calls).toHaveLength(1);
-    expect(methods).toEqual(["eth_simulateV1"]);
-    const request = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as {
+    expect(methods).toEqual(["eth_getCode", "eth_simulateV1"]);
+    const request = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)) as {
       params: unknown[];
     };
     expect(request.params[1]).toBe(numberToHex(STATE_BLOCK));
@@ -340,10 +371,10 @@ describe.sequential("runSimulation", () => {
       },
     });
     expect(result.calls).toHaveLength(1);
-    expect(methods).toEqual(["eth_simulateV1"]);
+    expect(methods).toEqual(["eth_getCode", "eth_simulateV1"]);
   });
 
-  test("error: block lookup transport failures do not expose the RPC URL", async () => {
+  test("error: block lookup transport failures omit viem diagnostics", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -354,11 +385,44 @@ describe.sequential("runSimulation", () => {
       chainId: CHAIN_ID,
       transactions: [TRANSACTION],
     }).catch((cause: unknown) => cause);
-    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect(error).toBeInstanceOf(RpcTransportError);
     expect((error as Error).message).not.toContain(RPC_URL);
   });
 
-  test("error: MissingVerificationEvidenceError carries context for an empty state read", async () => {
+  test.each([
+    { label: "different", served: 1, mismatch: true },
+    { label: "matching", served: CHAIN_ID, mismatch: false },
+  ])(
+    "error: execution service failure probes the served chain ($label)",
+    async ({ served, mismatch }) => {
+      const { fetch } = stubFetch([]);
+      const original = new RpcTransportError("execution failed");
+      mockExecutePlan.mockRejectedValueOnce(original);
+      fetch.mockImplementation(async (_input, init) => {
+        const { method } = JSON.parse(String(init?.body)) as { method: string };
+        if (method === "eth_getBlockByNumber")
+          return rpc({
+            number: numberToHex(STATE_BLOCK),
+            hash: STATE_BLOCK_HASH,
+            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+          });
+        if (method === "eth_getCode") return rpc("0x6000");
+        if (method === "eth_chainId") return rpc(numberToHex(served));
+        throw new Error(`Unexpected RPC method ${method}`);
+      });
+      const error = await simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+      }).catch((cause: unknown) => cause);
+      if (mismatch) {
+        expect(error).toBeInstanceOf(InvalidChainIdError);
+      } else {
+        expect(error).toBe(original);
+      }
+    },
+  );
+
+  test("error: SlippageCheckUnavailableError carries context for an empty state read", async () => {
     stubFetch([]);
     let plannedReadId: string | undefined;
     mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => ({
@@ -394,16 +458,8 @@ describe.sequential("runSimulation", () => {
         },
       },
     ).catch((cause: unknown) => cause);
-    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
-    expect(error).toMatchObject({
-      context: {
-        stage: "verification",
-        chainId: 1,
-        mode: "final",
-        blockNumber: STATE_BLOCK,
-        field: plannedReadId,
-      },
-    });
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect((error as Error).message).toContain(plannedReadId);
   });
 
   test("error: a user-call count mismatch is an invalid response", async () => {
@@ -415,6 +471,50 @@ describe.sequential("runSimulation", () => {
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
-    expect(methods).toEqual(["eth_getBlockByNumber"]);
+    expect(methods).toEqual(["eth_getBlockByNumber", "eth_getCode"]);
+  });
+
+  test("error: a code-less calldata target fails before eth_simulateV1", async () => {
+    const { methods } = stubFetch([], "0x");
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+      }),
+    ).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(methods).not.toContain("eth_simulateV1");
+  });
+
+  test("error: a code-less target on a wrong-chain endpoint reports InvalidChainIdError", async () => {
+    const { methods } = stubFetch([], "0x", 8453);
+    const promise = simulate(config, {
+      chainId: CHAIN_ID,
+      transactions: [TRANSACTION],
+    });
+    await expectFailClosed(promise, "chain");
+    await expect(promise).rejects.toBeInstanceOf(InvalidChainIdError);
+    expect(methods).not.toContain("eth_simulateV1");
+    expect(methods).toContain("eth_chainId");
+  });
+
+  test("error: a code-less target on the right chain keeps SimulationValidationError", async () => {
+    const { methods } = stubFetch([], "0x", CHAIN_ID);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+      }),
+    ).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(methods).not.toContain("eth_simulateV1");
+  });
+
+  test("error: a failed eth_chainId probe keeps SimulationValidationError", async () => {
+    stubFetch([], "0x", "fail");
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+      }),
+    ).rejects.toBeInstanceOf(SimulationValidationError);
   });
 });

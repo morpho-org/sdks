@@ -355,7 +355,9 @@ When an offer is taken, the callback withdraws the bought assets from Blue and p
   `MidnightOfferContinuousFeeCapError` (maker offer has a nonzero `continuousFeeCap`),
   `MidnightOfferSellerReceiverMismatchError` (a sell offer routes proceeds to another address),
   `UnboundedMidnightTakeInputError` (an unbounded take target or deadline),
-  `MidnightZeroReceiverError` (zero taker receiver), and `MidnightTakeDeadlineTooFarError`.
+  `MidnightZeroReceiverError` (zero taker `receiver`, or zero `collateralReceiver` when
+  `repayWithdrawCollateral` or `takeRepayWithdrawCollateral` withdraws collateral; `field` is
+  `"receiver" | "collateralReceiver"`), and `MidnightTakeDeadlineTooFarError`.
 - `MidnightActionOutput` binds `MidnightRequirementsParams` to `ActionOutput`'s third type
   parameter, so `getRequirements(params?: MidnightRequirementsParams)` accepts
   `approvalAmount?: bigint`. `GetMidnightApprovalRequirementsParams` adds optional
@@ -463,10 +465,13 @@ quote and offer selection, or any `evm-simulation` change beyond the bundle-rete
   `maxUnits`; the other three take builders reject their unbounded target fields. The
   `takeRepayWithdrawCollateral` units target still accepts `units: maxUint256` for whole debt,
   capped by finite `maxBuyerAssets`. All five require positive minimum bounds where those fields
-  apply; `takeBorrow` and `supplyCollateralTakeBorrow` reject a zero receiver with
-  `MidnightZeroReceiverError`. Their entity methods accept only future deadlines no more than
+  apply, and their entity methods accept only future deadlines no more than
   `MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS` (`3600n`) ahead, throwing `ExpiredDeadlineError` when
-  expired and `MidnightTakeDeadlineTooFarError` beyond the window → typed-error unit tests.
+  expired and `MidnightTakeDeadlineTooFarError` beyond the window. `takeBorrow` and
+  `supplyCollateralTakeBorrow` reject a zero receiver with `MidnightZeroReceiverError`, and
+  `repayWithdrawCollateral` and `takeRepayWithdrawCollateral` reject a zero `collateralReceiver`
+  with it whenever `collateralWithdrawals` is non-empty (a zero receiver with no withdrawals stays
+  accepted) → typed-error unit tests.
 - Maker offer trees reject nonzero `continuousFeeCap` and sell offers whose
   `receiverIfMakerIsSeller` differs from the maker → typed-error unit tests.
 - When a V2 flow supplies `nativeAmount`, it is nonnegative and no greater than the total wNative

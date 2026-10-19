@@ -231,7 +231,7 @@ describe("computeVaultMaxSharePrice", () => {
           );
         },
       ),
-      { numRuns: 100, seed: 20_260_912 },
+      { numRuns: 100 },
     );
   });
 
@@ -353,7 +353,7 @@ describe("computeVaultMaxShareAllowance", () => {
           expect((cap - 1n) * priceFloor).toBeLessThan(shares * MathLib.WAD);
         },
       ),
-      { numRuns: 100, seed: 20_260_907 },
+      { numRuns: 100 },
     );
   });
 });

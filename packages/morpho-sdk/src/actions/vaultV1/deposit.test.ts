@@ -189,7 +189,7 @@ describe("vaultV1Deposit", () => {
           ]);
         },
       ),
-      { numRuns: 50, seed: 20_260_901 },
+      { numRuns: 50 },
     );
   });
 

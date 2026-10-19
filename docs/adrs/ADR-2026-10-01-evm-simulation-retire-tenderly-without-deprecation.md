@@ -2,7 +2,7 @@
 
 | Field      | Value                                |
 | ---------- | ------------------------------------ |
-| **Status** | accepted                             |
+| **Status** | accepted; `ExternalServiceError` on failed requests superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation |
 | **Date**   | 2026-10-01                           |
 | **Author** | @jinmel                              |
 | **Scope**  | `evm-simulation` 5.0.0               |

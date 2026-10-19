@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@fast-check/vitest':
+      specifier: ^0.5.0
+      version: 0.5.0
     fast-check:
       specifier: ^4.9.0
       version: 4.9.0
@@ -44,6 +47,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: 21.2.0
         version: 21.2.0
+      '@fast-check/vitest':
+        specifier: 'catalog:'
+        version: 0.5.0(vitest@4.1.11)
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -56,6 +62,9 @@ importers:
       dotenv-cli:
         specifier: ^11.0.0
         version: 11.0.0
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.9.0
       happy-dom:
         specifier: ^20.11.1
         version: 20.11.1
@@ -82,7 +91,7 @@ importers:
         version: 8.11.2
       viem:
         specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vite:
         specifier: 8.2.0
         version: 8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -107,7 +116,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -131,7 +140,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -148,6 +157,9 @@ importers:
         specifier: workspace:^
         version: link:../morpho-ts
     devDependencies:
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
@@ -159,7 +171,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -171,10 +183,10 @@ importers:
         version: 6.7.0(@morpho-org/morpho-ts@2.11.1)
       '@morpho-org/blue-sdk-viem':
         specifier: npm:@morpho-org/blue-sdk-viem@5.5.0
-        version: 5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
+        version: 5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
       '@morpho-org/morpho-sdk':
         specifier: npm:@morpho-org/morpho-sdk@5.9.0
-        version: 5.9.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
+        version: 5.9.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
       '@morpho-org/morpho-ts':
         specifier: npm:@morpho-org/morpho-ts@2.11.1
         version: 2.11.1
@@ -220,7 +232,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -241,7 +253,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -261,12 +273,12 @@ importers:
         specifier: workspace:^
         version: link:../morpho-ts
     devDependencies:
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
       fast-check:
         specifier: 'catalog:'
         version: 4.9.0
@@ -275,13 +287,10 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
 
   packages/morpho-test:
     devDependencies:
@@ -299,7 +308,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
 
   packages/morpho-ts:
     dependencies:
@@ -324,10 +333,10 @@ importers:
         version: 4.1.1
       viem-deal:
         specifier: ^2.0.4
-        version: 2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
+        version: 2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
       viem-tracer:
         specifier: ^1.8.0
-        version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
+        version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
     devDependencies:
       '@playwright/test':
         specifier: ^1.62.1
@@ -340,7 +349,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -377,7 +386,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+        version: 2.55.10(typescript@7.0.2)(zod@4.6.6)
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -700,6 +709,11 @@ packages:
   '@envelop/types@5.2.1':
     resolution: {integrity: sha512-CsFmA3u3c2QoLDTfEpGr4t25fjMU31nyvse7IzWTvb0ZycuPjMjb0fjlheh+PbhBYb9YLugnT2uY6Mwcg1o+Zg==}
     engines: {node: '>=18.0.0'}
+
+  '@fast-check/vitest@0.5.0':
+    resolution: {integrity: sha512-Kgbj2smuq1P4OhGKuPATs5i2fAxNmGbJ/zSmTrzWhQSLUrHREbKWgv9WGbNUOXcx77q6joLVMmTygyXuwP2Bog==}
+    peerDependencies:
+      vitest: ^4.1.0 || ^5.0.0
 
   '@fastify/busboy@3.2.2':
     resolution: {integrity: sha512-yXSS27qPExaXeuLvMRMXOLtpipzfQYNjG3FkunDWKGfMYjKuhFXko9CVzqxm8jcF+lmtS9Fd89QNdh9XDjnbNg==}
@@ -3811,8 +3825,8 @@ packages:
     resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
     engines: {node: '>=18'}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
@@ -4278,6 +4292,11 @@ snapshots:
     dependencies:
       '@whatwg-node/promise-helpers': 1.3.2
       tslib: 2.8.1
+
+  '@fast-check/vitest@0.5.0(vitest@4.1.11)':
+    dependencies:
+      fast-check: 4.9.0
+      vitest: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.1))
 
   '@fastify/busboy@3.2.2': {}
 
@@ -4894,30 +4913,30 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
-  '@morpho-org/blue-sdk-viem@5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))':
+  '@morpho-org/blue-sdk-viem@5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))':
     dependencies:
       '@morpho-org/blue-sdk': 6.7.0(@morpho-org/morpho-ts@2.11.1)
       '@morpho-org/morpho-ts': 2.11.1
-      viem: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.6.6)
 
   '@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1)':
     dependencies:
       '@morpho-org/morpho-ts': 2.11.1
       '@noble/hashes': 2.4.0
 
-  '@morpho-org/midnight-sdk@1.3.1(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))':
+  '@morpho-org/midnight-sdk@1.3.1(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))':
     dependencies:
       '@morpho-org/morpho-ts': 2.11.1
-      viem: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.6.6)
 
-  '@morpho-org/morpho-sdk@5.9.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))':
+  '@morpho-org/morpho-sdk@5.9.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))':
     dependencies:
       '@morpho-org/blue-sdk': 6.7.0(@morpho-org/morpho-ts@2.11.1)
-      '@morpho-org/blue-sdk-viem': 5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
-      '@morpho-org/midnight-sdk': 1.3.1(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.5))
+      '@morpho-org/blue-sdk-viem': 5.5.0(@morpho-org/blue-sdk@6.7.0(@morpho-org/morpho-ts@2.11.1))(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
+      '@morpho-org/midnight-sdk': 1.3.1(@morpho-org/morpho-ts@2.11.1)(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
       '@morpho-org/morpho-ts': 2.11.1
-      viem: 2.55.10(typescript@7.0.2)(zod@4.6.5)
-      zod: 4.6.5
+      viem: 2.55.10(typescript@7.0.2)(zod@4.6.6)
+      zod: 4.6.6
 
   '@morpho-org/morpho-ts@2.11.1': {}
 
@@ -5451,10 +5470,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  abitype@1.2.3(typescript@7.0.2)(zod@4.6.5):
+  abitype@1.2.3(typescript@7.0.2)(zod@4.6.6):
     optionalDependencies:
       typescript: 7.0.2
-      zod: 4.6.5
+      zod: 4.6.6
 
   abstractionkit@0.4.0:
     dependencies:
@@ -6716,7 +6735,7 @@ snapshots:
       tinyglobby: 0.2.17
       unbash: 4.0.11
       yaml: 2.9.1
-      zod: 4.6.5
+      zod: 4.6.6
 
   lightningcss-android-arm64@1.33.0:
     optional: true
@@ -6925,7 +6944,7 @@ snapshots:
 
   outvariant@1.4.3: {}
 
-  ox@0.14.33(typescript@7.0.2)(zod@4.6.5):
+  ox@0.14.33(typescript@7.0.2)(zod@4.6.6):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -6933,7 +6952,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@7.0.2)(zod@4.6.5)
+      abitype: 1.2.3(typescript@7.0.2)(zod@4.6.6)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 7.0.2
@@ -7438,24 +7457,24 @@ snapshots:
 
   urlpattern-polyfill@10.1.0: {}
 
-  viem-deal@2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.6.5)):
+  viem-deal@2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.6.6)):
     dependencies:
-      viem: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.6.6)
 
-  viem-tracer@1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.5)):
+  viem-tracer@1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.6)):
     dependencies:
       colors: 1.4.0
-      viem: 2.55.10(typescript@7.0.2)(zod@4.6.5)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.6.6)
 
-  viem@2.55.10(typescript@7.0.2)(zod@4.6.5):
+  viem@2.55.10(typescript@7.0.2)(zod@4.6.6):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@7.0.2)(zod@4.6.5)
+      abitype: 1.2.3(typescript@7.0.2)(zod@4.6.6)
       isows: 1.0.7(ws@8.21.3)
-      ox: 0.14.33(typescript@7.0.2)(zod@4.6.5)
+      ox: 0.14.33(typescript@7.0.2)(zod@4.6.6)
       ws: 8.21.3
     optionalDependencies:
       typescript: 7.0.2
@@ -7567,4 +7586,4 @@ snapshots:
 
   yoctocolors@2.2.0: {}
 
-  zod@4.6.5: {}
+  zod@4.6.6: {}

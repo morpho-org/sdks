@@ -4,7 +4,13 @@ import {
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
+import {
+  decodeFunctionData,
+  getAddress,
+  maxUint128,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -13,13 +19,18 @@ import {
   midnightMarket,
   midnightMarketId,
   midnightOtherMarket,
+  midnightTwoCollateralMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   InputExceedsMaxError,
+  MidnightContractReceiverError,
   MidnightOfferSideMismatchError,
+  MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightZeroReceiverError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
   ReferralFeePctExceededError,
@@ -30,6 +41,7 @@ import { midnightTakeRepayWithdrawCollateral } from "./takeRepayWithdrawCollater
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 const wNative = getChainAddress(midnightChainId, "wNative");
+const wNativeLoanMarket = { ...midnightMarket, loanToken: wNative };
 const borrower = getAddress("0x00000000000000000000000000000000000B0b00");
 
 const params = {
@@ -45,6 +57,33 @@ const params = {
 } as const;
 
 describe("midnightTakeRepayWithdrawCollateral", () => {
+  test("error: MidnightZeroReceiverError", () => {
+    const build = () =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        collateralReceiver: zeroAddress,
+      });
+
+    expect(build).toThrow(MidnightZeroReceiverError);
+    expect(build).toThrow(
+      expect.objectContaining({ field: "collateralReceiver" }),
+    );
+  });
+
+  test("behavior: accepts zero collateralReceiver without withdrawals", () => {
+    const tx = midnightTakeRepayWithdrawCollateral({
+      ...params,
+      collateralWithdrawals: [],
+      collateralReceiver: zeroAddress,
+    });
+
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+    expect(decoded.args[7]).toBe(zeroAddress);
+  });
+
   test("default", () => {
     const tx = midnightTakeRepayWithdrawCollateral(params);
     const decoded = decodeFunctionData({
@@ -91,7 +130,7 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
   });
 
   test("behavior: wraps native ETH for the wNative loan-token pull", () => {
-    const market = { ...midnightMarket, loanToken: wNative };
+    const market = wNativeLoanMarket;
     const nativeAmount = 500n;
     const tx = midnightTakeRepayWithdrawCollateral({
       ...params,
@@ -106,6 +145,61 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
 
     expect(tx.value).toBe(nativeAmount);
     expect(decoded.args.at(-1)).toBe(wNative);
+  });
+
+  test("error: native funding exceeds the units-target maxBuyerAssets pull", () => {
+    const market = wNativeLoanMarket;
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        market,
+        nativeAmount: 991n,
+        takeableOffers: [midnightApiTake({ market })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 991n,
+        max: 990n,
+      }),
+    );
+  });
+
+  test("behavior: funds the full units-target maxBuyerAssets pull natively", () => {
+    const market = wNativeLoanMarket;
+    const tx = midnightTakeRepayWithdrawCollateral({
+      ...params,
+      market,
+      nativeAmount: 990n,
+      takeableOffers: [midnightApiTake({ market })],
+    });
+
+    expect(tx.value).toBe(990n);
+  });
+
+  test("error: native funding exceeds the assets-target pull", () => {
+    const market = wNativeLoanMarket;
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        market,
+        target: { type: "assets", assets: 500n, minUnits: 450n },
+        nativeAmount: 501n,
+        takeableOffers: [midnightApiTake({ market })],
+      }),
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "nativeAmount",
+        value: 501n,
+        max: 500n,
+      }),
+    );
+  });
+
+  test("error: NativeAmountOnNonWNativeAssetError", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({ ...params, nativeAmount: 1n }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
   test("behavior: encodes the referral fee", () => {
@@ -147,6 +241,23 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
       [expect.objectContaining({ units: 100n })],
       [],
     ]);
+  });
+
+  test("behavior: encodes collateral withdrawal at index 1", () => {
+    const tx = midnightTakeRepayWithdrawCollateral({
+      ...params,
+      market: midnightTwoCollateralMarket,
+      takeableOffers: [
+        midnightApiTake({ market: midnightTwoCollateralMarket }),
+      ],
+      collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
+    });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args[6]).toEqual([{ collateralIndex: 1n, assets: 2_000n }]);
   });
 
   test("behavior: units max sentinel uses a finite pull cap", () => {
@@ -208,6 +319,15 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
       midnightTakeRepayWithdrawCollateral({
         ...params,
         collateralWithdrawals: [{ collateralIndex: 0n, assets: 0n }],
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: zero assets target", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        target: { type: "assets", assets: 0n, minUnits: 1n },
       }),
     ).toThrow(NonPositiveInputError);
   });
@@ -274,13 +394,19 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
     expect(() =>
       midnightTakeRepayWithdrawCollateral({
         ...params,
-        target: { type: "assets", assets: maxUint256, minUnits: 0n },
+        target: { type: "assets", assets: maxUint256, minUnits: 1n },
       }),
-    ).toThrow(InputExceedsMaxError);
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "target.assets",
+        value: maxUint256,
+        max: maxUint128,
+      }),
+    );
     expect(() =>
       midnightTakeRepayWithdrawCollateral({
         ...params,
-        target: { type: "assets", assets: maxUint256 + 1n, minUnits: 0n },
+        target: { type: "assets", assets: maxUint256 + 1n, minUnits: 1n },
       }),
     ).toThrow(InputExceedsMaxError);
     expect(() =>
@@ -309,7 +435,7 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
         },
       }),
     ).toThrow(InputExceedsMaxError);
-    // `units: maxUint256` already selects the whole debt; the pull cap stays finite.
+    // `units: maxUint256` selects the whole debt and requires a finite pull cap.
     expect(() =>
       midnightTakeRepayWithdrawCollateral({
         ...params,
@@ -319,7 +445,13 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
           maxBuyerAssets: maxUint256,
         },
       }),
-    ).toThrow(InputExceedsMaxError);
+    ).toThrow(
+      new InputExceedsMaxError({
+        field: "target.maxBuyerAssets",
+        value: maxUint256,
+        max: maxUint128,
+      }),
+    );
     expect(() =>
       midnightTakeRepayWithdrawCollateral({
         ...params,
@@ -388,5 +520,86 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
     expect(() =>
       midnightTakeRepayWithdrawCollateral({ ...params, referralFeePct: 1n }),
     ).toThrow(ReferralFeeRecipientMissingError);
+  });
+
+  test("error: MidnightContractReceiverError for protocol collateral receivers", () => {
+    for (const collateralReceiver of [
+      midnightAddresses.midnight,
+      midnightBundlesV2,
+    ]) {
+      const call = () =>
+        midnightTakeRepayWithdrawCollateral({ ...params, collateralReceiver });
+
+      expect(call).toThrow(MidnightContractReceiverError);
+      expect(call).toThrow(
+        expect.objectContaining({
+          field: "collateralReceiver",
+          receiver: collateralReceiver,
+        }),
+      );
+    }
+  });
+
+  test("behavior: a contract collateralReceiver builds with no withdrawals", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        collateralWithdrawals: [],
+        collateralReceiver: midnightBundlesV2,
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: MidnightContractReceiverError for a contract referralFeeRecipient", () => {
+    const call = () =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        referralFeePct: 10n ** 16n,
+        referralFeeRecipient: midnightBundlesV2,
+      });
+
+    expect(call).toThrow(MidnightContractReceiverError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        field: "referralFeeRecipient",
+        receiver: midnightBundlesV2,
+      }),
+    );
+  });
+
+  test("error: uint128 target, withdrawal, and offer bounds", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        target: { type: "units", units: maxUint128 + 1n, maxBuyerAssets: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        collateralWithdrawals: [
+          { collateralIndex: 0n, assets: maxUint128 + 1n },
+        ],
+      }),
+    ).toThrow(InputExceedsMaxError);
+    const offer = midnightApiTake();
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        takeableOffers: [
+          { ...offer, offer: { ...offer.offer, maxAssets: maxUint128 + 1n } },
+        ],
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: Midnight referral fee cap", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        referralFeePct: 10n ** 17n + 1n,
+        referralFeeRecipient: midnightAddresses.maker,
+      }),
+    ).toThrow(MidnightReferralFeePctExceededError);
   });
 });

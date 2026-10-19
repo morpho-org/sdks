@@ -11,23 +11,31 @@ import {
 } from "viem";
 import {
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
-import type { OperationLimit, SlippageQuote } from "../../limits.js";
-import type { SimulationMode } from "../../params.js";
+import type { OperationLimit } from "../../limits.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
-import { operationMeasurementPlan } from "../measurement-plan.js";
+import {
+  operationMeasurementPlan,
+  positionBoundsMarketId,
+} from "../measurement-plan.js";
 import type { StateRead } from "./contract.js";
 
 /** One quoted amount's observation source. @internal */
 type SlippageMeasurement = {
-  readonly field: keyof SlippageQuote;
+  readonly field:
+    | "assetsReceived"
+    | "sharesMinted"
+    | "assetsPaid"
+    | "sharesBurned"
+    | "positions";
 } & (
   | { readonly type: "native"; readonly account: Address }
   | { readonly type: "balance"; readonly readId: string }
   | {
       readonly type: "position";
       readonly readId: string;
+      readonly marketId: MarketId;
       readonly shares: "supplyShares" | "borrowShares";
     }
 );
@@ -36,12 +44,18 @@ type SlippageMeasurement = {
 export interface SlippageOperationReads {
   readonly limit: OperationLimit;
   readonly measurements: readonly SlippageMeasurement[];
+  /** Read id of the `position` bound's after-value position read, when set. */
+  readonly positionBoundsReadId?: string;
 }
 
-/** Scalar balance or the two share counts returned by Morpho.position. @internal */
+/** Scalar balance or the supply shares, borrow shares and collateral returned by Morpho.position. @internal */
 export type StateValue =
   | bigint
-  | { readonly supplyShares: bigint; readonly borrowShares: bigint };
+  | {
+      readonly supplyShares: bigint;
+      readonly borrowShares: bigint;
+      readonly collateral: bigint;
+    };
 
 function planBalanceRead(params: {
   readonly reads: Map<string, StateRead>;
@@ -126,6 +140,7 @@ export function planStateReads(params: {
             measurements.push({
               field,
               type: "position",
+              marketId: source.marketId,
               readId: planPositionRead({
                 reads,
                 morpho: params.morpho,
@@ -165,7 +180,38 @@ export function planStateReads(params: {
           readId: planBalanceRead({ reads, token, account: holder }),
         });
       }
-      return { limit, measurements };
+      // In-kind redemption deliveries land on the asset receiver (the
+      // transaction sender by default), not on the share `account`.
+      for (const quoted of limit.quote.positions ?? []) {
+        measurements.push({
+          field: "positions",
+          type: "position",
+          marketId: quoted.marketId,
+          readId: planPositionRead({
+            reads,
+            morpho: params.morpho,
+            marketId: quoted.marketId,
+            account: limit.receiver ?? params.owner,
+          }),
+          shares: "supplyShares",
+        });
+      }
+      // `position` bounds read the subject's absolute after-state in the
+      // operation's Blue market (the refinance target, where the debt lands).
+      const boundsMarketId =
+        limit.position === undefined
+          ? undefined
+          : positionBoundsMarketId(limit);
+      const positionBoundsReadId =
+        boundsMarketId === undefined
+          ? undefined
+          : planPositionRead({
+              reads,
+              morpho: params.morpho,
+              marketId: boundsMarketId,
+              account,
+            });
+      return { limit, measurements, positionBoundsReadId };
     },
   );
   return { reads: [...reads.values()], operations };
@@ -175,26 +221,15 @@ export function planStateReads(params: {
  * Decode one requested balance or position without reconstructing protocol entities.
  * @param read - Planned view call.
  * @param data - Return data from its simulated execution.
- * @param context - Request chain, mode and pinned block, attached to thrown errors.
- * @returns Raw balance or supply/borrow share counts.
- * @throws {MissingVerificationEvidenceError} When the selected subject returned no data.
+ * @returns Raw balance or supply shares, borrow shares and collateral.
+ * @throws {SlippageCheckUnavailableError} When the selected subject returned no data.
  * @throws {InvalidSimulationResponseError} When non-empty return data cannot be decoded.
  * @internal
  */
-// biome-ignore lint/complexity/useMaxParams: the call mirrors the failure context it attaches
-export function decodeStateRead(
-  read: StateRead,
-  data: Hex,
-  context: {
-    readonly chainId: number;
-    readonly mode: SimulationMode;
-    readonly blockNumber: bigint;
-  },
-): StateValue {
+export function decodeStateRead(read: StateRead, data: Hex): StateValue {
   if (data === "0x") {
-    throw new MissingVerificationEvidenceError(
+    throw new SlippageCheckUnavailableError(
       `Cannot observe slippage read "${read.id}": the selected subject returned no data (likely not a contract).`,
-      { context: { stage: "verification", ...context, field: read.id } },
     );
   }
   try {
@@ -204,12 +239,12 @@ export function decodeStateRead(
         functionName: "balanceOf",
         data,
       });
-    const [supplyShares, borrowShares] = decodeFunctionResult({
+    const [supplyShares, borrowShares, collateral] = decodeFunctionResult({
       abi: blueAbi,
       functionName: "position",
       data,
     });
-    return { supplyShares, borrowShares };
+    return { supplyShares, borrowShares, collateral };
   } catch (cause) {
     throw new InvalidSimulationResponseError(
       `Cannot decode slippage observation "${read.id}". Check the selected contract and RPC response.`,

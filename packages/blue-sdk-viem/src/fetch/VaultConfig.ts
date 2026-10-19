@@ -10,6 +10,11 @@ import { fetchToken } from "./Token.js";
  *
  * Reads token metadata through `fetchToken`, plus `asset()` and `DECIMALS_OFFSET()` from the vault.
  *
+ * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
+ * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
+ * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
+ * `MalformedTokenMetadataError`, and transport errors propagate.
+ *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
@@ -19,6 +24,14 @@ import { fetchToken } from "./Token.js";
  * @param parameters.deployless - Optional deployless read mode forwarded to token metadata reads.
  * @returns The hydrated `VaultConfig` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ * @throws {UnknownTokenError} when the vault share token's `decimals()` reverts, has no code,
+ *   returns undecodable data, or is out of range.
+ * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+ *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+ *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { VaultConfig } from "@morpho-org/blue-sdk";

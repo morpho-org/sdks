@@ -4,6 +4,7 @@ import {
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
+import { getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { encodeFunctionData, parseEther } from "viem";
 import { base } from "viem/chains";
@@ -13,7 +14,7 @@ import { fetchAccrualVaultV2 } from "../src/fetch/vault-v2/VaultV2.js";
 import { fetchVaultV2BluePublicAllocatorData } from "../src/fetch/vault-v2/VaultV2BluePublicAllocatorConfig.js";
 
 const vaultV2BluePublicAllocatorTest = createViemTest(base, {
-  forkUrl: process.env.BASE_RPC_URL,
+  forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   forkBlockNumber: 50_063_965, // BluePublicAllocator deployment block.
   stepsTracing: false,
 });

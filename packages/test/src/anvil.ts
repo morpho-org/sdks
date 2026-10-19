@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import _kebabCase from "lodash.kebabcase";
 import {
   AnvilCleanupError,
@@ -6,6 +7,17 @@ import {
   AnvilStartupError,
   createAnvilFailureCleanupError,
 } from "./errors.js";
+import { type ForkProxy, startForkProxy } from "./forkProxy.js";
+
+// The fork proxy's fetch ignores these, so Anvil forks directly when one is set.
+const EGRESS_PROXY_VARIABLES = [
+  "HTTP_PROXY",
+  "http_proxy",
+  "HTTPS_PROXY",
+  "https_proxy",
+  "ALL_PROXY",
+  "all_proxy",
+];
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
 const ANVIL_DIAGNOSTICS_MAX_LENGTH = 4_096;
@@ -92,6 +104,10 @@ export interface AnvilArgs {
    * If you want to fetch state from a specific block number, add a block number like `http://localhost:8545@1400000`
    * or use the `forkBlockNumber` option.
    * Anvil can repeat this URL in stderr, which may expose it in test logs.
+   * Anvil reaches an `http(s)` URL through a local proxy that answers Anvil's `anvil_nodeInfo`
+   * startup probe with "Method not found", so a slow fork RPC can't block startup. Anvil's fork disk
+   * cache still works across runs. If `HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY` is set, Anvil
+   * forks the URL directly through that proxy instead, without this protection.
    */
   forkUrl?: string | undefined;
   /**
@@ -471,9 +487,47 @@ export const spawnAnvil = async (
         (args.forkRetryBackoff ?? ANVIL_FORK_RETRY_BACKOFF_MS) * retries +
         ANVIL_STARTUP_GRACE_MS);
   let port = args.port ?? 0;
+  let forkProxy: ForkProxy | undefined;
 
   try {
-    const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
+    // Keep a trailing `@<block>` on the URL passed to Anvil, which parses it.
+    const forkUrlParts = anvilArgs.forkUrl?.match(
+      /^(https?:\/\/.*?)(@[^@:./]+)?$/i,
+    );
+    const upstreamUrl = forkUrlParts?.[1];
+    if (
+      upstreamUrl !== undefined &&
+      !EGRESS_PROXY_VARIABLES.some((name) => process.env[name])
+    )
+      forkProxy = await startForkProxy(upstreamUrl);
+    const subprocess = spawn(
+      binary,
+      toArgs({
+        ...anvilArgs,
+        forkUrl:
+          forkProxy === undefined
+            ? anvilArgs.forkUrl
+            : // Anvil names its fork disk cache after the fork URL. Behind the proxy, which it reaches
+              // as its HTTP proxy, it gets a URL derived from the upstream, not from the proxy's port.
+              `http://fork-${createHash("sha256")
+                .update(upstreamUrl ?? "")
+                .digest("hex")
+                .slice(0, 16)}.invalid${forkUrlParts?.[2] ?? ""}`,
+        port,
+      }),
+      {
+        env:
+          forkProxy === undefined
+            ? process.env
+            : {
+                ...process.env,
+                HTTP_PROXY: forkProxy.url,
+                http_proxy: forkProxy.url,
+                NO_PROXY: "",
+                no_proxy: "",
+              },
+      },
+    );
     subprocess.stderr.setEncoding("utf8");
     let stopInitiated = false;
     let stopRequested = false;
@@ -491,6 +545,7 @@ export const spawnAnvil = async (
       reject: rejectProcessClosed,
     } = Promise.withResolvers<void>();
     const processClosed = processCloseResult.finally(() => {
+      forkProxy?.close();
       subprocess.stdin.destroy();
       subprocess.stdout.destroy();
       subprocess.stderr.destroy();
@@ -770,6 +825,7 @@ export const spawnAnvil = async (
       stopAndWait,
     };
   } catch (error) {
+    forkProxy?.close();
     const failure =
       error instanceof AnvilStartupError || error instanceof AnvilCleanupError
         ? error

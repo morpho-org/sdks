@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { isMain, reportCliError, writeStdout } from "../workflow.ts";
-import { listPublicPackages } from "./pack.ts";
+import { isPrerelease, listPublicPackages } from "./pack.ts";
 import {
   loadBundledPacote,
   type ManifestReader,
@@ -29,6 +29,44 @@ import {
 /** A tarball cleared for publishing. */
 export interface ReleaseTarball extends TarballIdentity {
   readonly file: string;
+}
+
+/** npm dist-tag a release publishes under: `latest` from public `main`, `next` from `next`. */
+export type ReleaseChannel = "latest" | "next";
+
+/**
+ * Picks the verified tarballs a channel publishes. `latest` publishes every one and
+ * refuses a prerelease; `next` publishes only prereleases, since public `main` publishes
+ * the stable versions `next` still carries.
+ *
+ * @param tarballs - Output of {@link verifyReleaseSet}.
+ * @param channel - Dist-tag the release publishes under.
+ * @returns The tarballs to publish.
+ * @throws If a version is neither `x.y.z` nor `x.y.z-<prerelease>`.
+ * @throws If `latest` gets a prerelease.
+ */
+export function selectChannelTarballs(
+  tarballs: readonly ReleaseTarball[],
+  channel: ReleaseChannel,
+): ReleaseTarball[] {
+  for (const { name, version } of tarballs) {
+    if (!/^\d+\.\d+\.\d+$/.test(version) && !isPrerelease(version)) {
+      throw new Error(
+        `${name}@${version} is neither a stable x.y.z version nor an x.y.z-<prerelease> one. Release a plain SemVer version.`,
+      );
+    }
+  }
+  if (channel === "next") {
+    return tarballs.filter(({ version }) => isPrerelease(version));
+  }
+  for (const { name, version } of tarballs) {
+    if (isPrerelease(version)) {
+      throw new Error(
+        `${name}@${version} is not a stable x.y.z version, so it can't publish under latest. Release prereleases from the next branch.`,
+      );
+    }
+  }
+  return [...tarballs];
 }
 
 /**
@@ -96,12 +134,6 @@ export function verifyReleaseMatch(
     byName.set(tarball.name, tarball);
   }
   for (const { name, version } of expected) {
-    // release.yml publishes under the `latest` dist-tag, so prereleases must not reach it.
-    if (!/^\d+\.\d+\.\d+$/.test(version)) {
-      throw new Error(
-        `${name}@${version} is not a stable x.y.z version. Publish prereleases from the development repository instead.`,
-      );
-    }
     const got = byName.get(name)?.version;
     if (got !== version) {
       throw new Error(
@@ -218,21 +250,30 @@ export async function verifyReleaseSet(options: {
 }
 
 /**
- * `verify-release-set.ts <dir>` checks the tarballs against the packages declared
- * in the current directory and prints `<name>\t<version>\t<file>` per tarball.
+ * `verify-release-set.ts [--channel latest|next] <dir>` checks the tarballs against the
+ * packages declared in the current directory and prints `<name>\t<version>\t<file>` per
+ * tarball the channel (default `latest`) publishes; see {@link selectChannelTarballs}.
  *
  * @param argv - Command-line arguments.
  */
 async function main(
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<void> {
-  const { positionals } = parseArgs({
+  const { positionals, values } = parseArgs({
     args: [...argv],
     allowPositionals: true,
+    options: { channel: { type: "string", default: "latest" } },
   });
   const [dir] = positionals;
-  if (!dir || positionals.length !== 1) {
-    throw new Error("Usage: node scripts/publish/verify-release-set.ts <dir>");
+  const { channel } = values;
+  if (
+    !dir ||
+    positionals.length !== 1 ||
+    (channel !== "latest" && channel !== "next")
+  ) {
+    throw new Error(
+      "Usage: node scripts/publish/verify-release-set.ts [--channel latest|next] <dir>",
+    );
   }
   const npmRoot = execFileSync("npm", ["root", "-g"], {
     encoding: "utf8",
@@ -243,7 +284,15 @@ async function main(
     tar: loadBundledTar(npmRoot),
     pacote: loadBundledPacote(npmRoot),
   });
-  for (const { name, version, file } of tarballs) {
+  const selected = selectChannelTarballs(tarballs, channel);
+  for (const { name, version } of tarballs) {
+    if (!selected.some((tarball) => tarball.name === name)) {
+      process.stderr.write(
+        `Skipping ${name}@${version}: stable versions publish from public main.\n`,
+      );
+    }
+  }
+  for (const { name, version, file } of selected) {
     writeStdout(`${name}\t${version}\t${file}\n`);
   }
 }

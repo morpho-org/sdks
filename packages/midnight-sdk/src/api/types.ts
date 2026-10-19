@@ -460,7 +460,7 @@ export interface MidnightApiBookPriceLevelsResult {
 export interface MidnightApiQuote {
   /** Weighted average price for the requested size before any guard. */
   readonly averageBestPrice: string;
-  /** Effective weighted average-price guard for the returned instructions. */
+  /** Equals the caller's `averageWorstPrice` when provided, otherwise the API's guard. */
   readonly averageWorstPrice: string;
   /** Maximum assets available from the returned take caps. */
   readonly availableAssets: string;

@@ -14,6 +14,7 @@ const forkTestConfig = {
 
 export default defineConfig({
   test: {
+    setupFiles: ["./vitest.fast-check.setup.ts"],
     coverage: {
       reporter: ["text-summary", "lcov"],
       include: [
@@ -59,7 +60,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "scripts",
-          include: ["scripts/**/*.test.ts"],
+          include: ["scripts/**/*.test.ts", "vitest.fast-check.setup.test.ts"],
           environment: "node",
         },
       },

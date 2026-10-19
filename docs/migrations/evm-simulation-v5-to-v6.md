@@ -1,5 +1,23 @@
 # EVM simulation v5 → v6
 
+## Version 6.1.0: fail-closed RPC response handling
+
+`simulate()` classifies node-level reverts reported as `-32000 "execution reverted"` or
+Nethermind's `VM execution error` as `SimulationRevertedError`, like a code `3` revert. A
+non-JSON body on a 2xx reply from block lookup, `eth_getCode`, or `eth_simulateV1` throws
+`InvalidSimulationResponseError`; a JSON `null` from block lookup or `eth_getCode` does too,
+as does a JSON body that is not a JSON-RPC object from `eth_simulateV1`. Other JSON block
+responses without an RPC result remain missing-block `ExternalServiceError`s, while a code
+response without a result is treated as no code and causes `SimulationValidationError` for
+calldata targets. An HTTP error status remains `ExternalServiceError` unless the body is a
+well-formed JSON-RPC error, in which case it is classified by its code and message,
+regardless of status. Plain-text bodies do not become `SimulationRevertedError`.
+
+An empty 2xx block-lookup body without a JSON `Content-Type` is parsed by viem
+as `{}` and treated as a missing block; it remains `ExternalServiceError`. With
+`Content-Type: application/json`, an empty 2xx body fails JSON parsing and
+becomes `InvalidSimulationResponseError`.
+
 ## Restricted bundle address moved to MidnightBundlesV2
 
 The standalone-bundle retention guard now restricts the registered

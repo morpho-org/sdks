@@ -8,6 +8,7 @@ import {
 import { validateUint256Field } from "../../../helpers/validate.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { validateClientChainId } from "../validateClientChainId.js";
 
 /** Parameters for {@link getMidnightApprovalRequirements}. */
 export interface GetMidnightApprovalRequirementsParams {
@@ -44,7 +45,9 @@ export interface GetMidnightApprovalRequirementsParams {
  * @param params.amount - Minimum allowance the spender needs.
  * @param params.approvalAmount - Allowance to approve when one is needed; defaults to `maxUint256` and must be at least `amount`.
  * @returns Approval transactions required for `spender` to pull `amount`.
- * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
+ *   another chain than `params.chainId`.
+ * @throws {viem.BaseError} when the `eth_chainId` request or allowance read fails.
  * @throws {NegativeInputError} when `amount` or `approvalAmount` is negative.
  * @throws {InputExceedsMaxError} when `amount` or `approvalAmount` exceeds `maxUint256`.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount < amount`.
@@ -86,6 +89,7 @@ export const getMidnightApprovalRequirements = async (
     allowed: ["midnight", "midnightBundlesV2"],
   });
   if (params.amount === 0n) return [];
+  await validateClientChainId(params.viemClient, params.chainId);
 
   const allowance = await readContract(params.viemClient, {
     address: params.token,

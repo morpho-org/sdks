@@ -23,6 +23,12 @@ import { getMidnightApprovalRequirements } from "./getMidnightApprovalRequiremen
 
 const midnightBundlesV2 = getChainAddress(midnightChainId, "midnightBundlesV2");
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId")
+      return `0x${(midnightChainId + 1).toString(16)}`;
+    throw new Error(`unexpected ${method}`);
+  });
 const midnightTestChain = {
   id: midnightChainId,
   name: "Midnight Test",
@@ -315,5 +321,22 @@ describe("getMidnightApprovalRequirements", () => {
         amount: 1_000n,
       }),
     ).resolves.toEqual([]);
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(midnightTestChain);
+    answerWrongChain(handle);
+    await expect(
+      getMidnightApprovalRequirements({
+        viemClient: handle.client,
+        chainId: midnightChainId,
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightBundlesV2,
+        amount: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

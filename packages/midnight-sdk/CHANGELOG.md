@@ -1,5 +1,22 @@
 # @morpho-org/midnight-sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- Adds `OfferUtils.onchainHash`, `OfferUtils.onchainHashStruct`, and `Offer#onchainHash`: the `keccak256(abi.encode(offer))` hash Midnight emits in `Take` and uses to identify offers on-chain, distinct from `OfferUtils.hash`.
+
+### Patch Changes
+
+- Return the caller's average price guard when provided and reject takeable offers whose units exceed their offer `maxUnits`.
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.0.1
+
 ## 2.0.0
 
 ### Major Changes

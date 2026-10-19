@@ -2,6 +2,7 @@ import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Client, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
+import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import { NoUnusedPermit2NonceError } from "../../types/index.js";
@@ -35,12 +36,13 @@ const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
  * @param params.chainId - Target chain id; must match the client chain.
  * @param params.startNonce - Lowest nonce to consider; defaults to 0.
  * @returns The lowest unused Permit2 nonce at or after `startNonce`.
- * @throws {ChainIdMismatchError} when the connected client targets another chain.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
+ * another chain than `params.chainId`.
  * @throws {NegativeInputError} when `startNonce` is negative.
  * @throws {InputExceedsMaxError} when `startNonce` exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no registered canonical Permit2 deployment.
- * @throws {viem.BaseError} when a Permit2 nonce-bitmap RPC read fails.
+ * @throws {viem.BaseError} when a Permit2 nonce-bitmap or `eth_chainId` RPC read fails.
  * @throws {NoUnusedPermit2NonceError} when every nonce at or after `startNonce` is consumed.
  * @example
  * ```ts
@@ -63,6 +65,7 @@ export const getUnusedPermit2Nonce = async (
   validateChainId(viemClient.chain?.id, params.chainId);
   const startNonce = params.startNonce ?? 0n;
   validateUint256Field("startNonce", startNonce);
+  await validateClientChainId(viemClient, params.chainId);
   const permit2 = getChainAddress(params.chainId, "permit2");
 
   const startWord = startNonce >> 8n;

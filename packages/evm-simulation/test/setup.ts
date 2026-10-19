@@ -1,18 +1,16 @@
-import type { AnvilTestClient } from "@morpho-org/test";
+import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
 
 /**
  * Fork-test fixture pinned to a known `mainnet` block.
  *
- * `MAINNET_RPC_URL` is read directly (matching every other fork suite in the
- * repo) rather than validated at module load: forking only happens when a fork
- * spec actually runs, so the default offline `vitest` collection can import
- * this module without a live RPC. The opt-in `evm-simulation-fork` project /
- * `test:fork` script supply the URL.
+ * `ERPC_SECRET` is read without validation at module load: forking only happens
+ * when a fork spec actually runs, so offline test collection can import this
+ * module without a key. Without it, Anvil uses mainnet's public RPC.
  */
 export const test = createViemTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
+  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 24_593_903n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({

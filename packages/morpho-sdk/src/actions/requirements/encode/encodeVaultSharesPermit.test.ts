@@ -1,4 +1,5 @@
 import { Eip5267Domain, getChainAddress, Token } from "@morpho-org/blue-sdk";
+import { MissingPermitDomainNameError } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -175,6 +176,21 @@ describe("encodeVaultSharesPermit", () => {
         signature: externalSignature,
       }),
     ).resolves.toBe(true);
+  });
+
+  test("error: MissingPermitDomainNameError", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault }),
+        version: "vaultV1",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline,
+      }),
+    ).toThrow(MissingPermitDomainNameError);
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {
@@ -359,6 +375,23 @@ describe("encodeVaultSharesPermit", () => {
         deadline: 1n,
       }),
     ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("behavior: a deadline that has passed on the wall clock is accepted with an earlier now", () => {
+    const passed = Time.timestamp() - Time.s.from.h(1n);
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 0n,
+      amount,
+      deadline: passed,
+      now: passed - 1n,
+    });
+
+    expect(requirement.action.typedData.message.deadline).toBe(passed);
   });
 
   test("error: NonPositiveInputError when deadline is not positive", () => {

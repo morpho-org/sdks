@@ -27,6 +27,8 @@ export interface EncodeErc20Permit2SignatureTransferParams {
   readonly nonce: bigint;
   /** Signature expiration timestamp in seconds. */
   readonly deadline: bigint;
+  /** Timestamp the deadline is validated against; defaults to the current time. */
+  readonly now?: bigint;
 }
 
 /**
@@ -43,6 +45,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @param params.chainId - Target chain id.
  * @param params.nonce - Unused Permit2 unordered nonce.
  * @param params.deadline - Signature expiration timestamp in seconds.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` returns a deep-frozen signature result.
  * @throws {NegativeInputError} when `amount` or `nonce` is negative.
@@ -97,7 +100,7 @@ export const encodeErc20Permit2SignatureTransfer = (
   // Reject an already-expired deadline before signing so a direct caller is never walked through a
   // wallet EIP-712 prompt for a SignatureTransfer that Permit2 would revert with `SignatureExpired`.
   // The sibling encodeErc20Permit and the token-requirement resolver enforce the same guard.
-  const timestamp = Time.timestamp();
+  const timestamp = params.now ?? Time.timestamp();
   if (deadline <= timestamp) {
     throw new ExpiredDeadlineError(deadline, timestamp);
   }

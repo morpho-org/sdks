@@ -5,21 +5,15 @@
  * client with `morphoViemExtension()` to expose the `client.morpho` namespace.
  */
 
-import dotenv from "dotenv";
 import { type Address, createWalletClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { morphoViemExtension } from "../src/client/index.js";
-import { env } from "../test/env.js";
-
-// Load environment variables
-dotenv.config();
 
 // Example vault address
 const VAULT_ADDRESS: Address = "0xbeeff2C5bF38f90e3482a8b19F12E5a6D2FCa757"; // Example vault address
 const USER_ADDRESS: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Example user address
 
 async function main() {
-  const { MAINNET_RPC_URL } = env();
   if (!VAULT_ADDRESS) {
     throw new Error("VAULT_ADDRESS is required");
   }
@@ -30,7 +24,7 @@ async function main() {
   // Create wallet client
   const walletClient = createWalletClient({
     chain: mainnet,
-    transport: http(MAINNET_RPC_URL),
+    transport: http(),
   });
 
   // Extend the viem client with the Morpho namespace

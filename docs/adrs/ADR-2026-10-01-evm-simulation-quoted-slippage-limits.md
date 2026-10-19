@@ -2,7 +2,7 @@
 
 | Field      | Value                       |
 | ---------- | --------------------------- |
-| **Status** | accepted                    |
+| **Status** | accepted; error context, revert-error surface and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation; in-kind position and quoted-penalty scope superseded by ADR-2026-10-13-evm-simulation-execution-time-values |
 | **Date**   | 2026-10-01                  |
 | **Author** | @jinmel                     |
 | **Scope**  | `evm-simulation` 5.0.0      |

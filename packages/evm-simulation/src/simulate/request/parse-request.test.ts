@@ -17,6 +17,7 @@ const TARGET: Address = getAddress(
 const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
+const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const _MARKET_ID =
   "0x00000000000000000000000000000000000000000000000000000000000000aa";
 
@@ -199,6 +200,608 @@ describe("parseRequest", () => {
       ).toBe(true);
     },
   );
+  test.each(["blueSupply", "vaultV2Redeem", "vaultV2ForceRedeem"] as const)(
+    "error: SimulationValidationError for positions on %s",
+    (type) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  vault: TARGET,
+                  quote: {
+                    positions: [{ marketId: _MARKET_ID, supplyShares: 1n }],
+                  },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes("quote.positions"),
+        ),
+      ).toBe(true);
+    },
+  );
+  test.each([
+    ["an empty array", { positions: [] }],
+    ["a non-array", { positions: "0x00" }],
+    [
+      "a duplicate marketId",
+      {
+        positions: [
+          { marketId: _MARKET_ID, supplyShares: 1n },
+          { marketId: _MARKET_ID, supplyShares: 2n },
+        ],
+      },
+    ],
+    [
+      "a negative supplyShares",
+      {
+        positions: [{ marketId: _MARKET_ID, supplyShares: -1n }],
+      },
+    ],
+    [
+      "an unknown entry field",
+      {
+        positions: [
+          { marketId: _MARKET_ID, supplyShares: 1n, borrowShares: 0n },
+        ],
+      },
+    ],
+    [
+      "a malformed marketId",
+      {
+        positions: [{ marketId: "0x00", supplyShares: 1n }],
+      },
+    ],
+    [
+      "a non-object entry",
+      {
+        positions: [1n],
+      },
+    ],
+    [
+      "a duplicate marketId differing only in hex case",
+      {
+        positions: [
+          { marketId: _MARKET_ID, supplyShares: 1n },
+          {
+            marketId: _MARKET_ID.toUpperCase().replace("0X", "0x"),
+            supplyShares: 2n,
+          },
+        ],
+      },
+    ],
+  ])(
+    "error: SimulationValidationError for positions with %s",
+    (_name, positions) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "vaultV1InKindRedeem",
+                vault: TARGET,
+                quote: positions,
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+  test.each(["blueSupply", "vaultV2Redeem", "vaultV1InKindRedeem"] as const)(
+    "error: SimulationValidationError for penalty/deallocations on %s",
+    (type) => {
+      for (const quote of [
+        { penalty: 1n },
+        { deallocations: [{ marketId: _MARKET_ID, assets: 1n }] },
+      ]) {
+        const error = (() => {
+          try {
+            parse({
+              chainId: 1,
+              transactions: [tx()],
+              limits: {
+                operations: [
+                  {
+                    type,
+                    marketId: _MARKET_ID,
+                    vault: TARGET,
+                    quote,
+                    slippageTolerance: 0n,
+                  },
+                ],
+              },
+            });
+          } catch (caught) {
+            return caught;
+          }
+        })();
+        expect(error).toBeInstanceOf(SimulationValidationError);
+      }
+    },
+  );
+  test.each([
+    ["an empty array", { deallocations: [] }],
+    ["a non-array", { deallocations: "0x00" }],
+    [
+      "a duplicate marketId",
+      {
+        deallocations: [
+          { marketId: _MARKET_ID, assets: 1n },
+          { marketId: _MARKET_ID, assets: 2n },
+        ],
+      },
+    ],
+    [
+      "a negative assets",
+      {
+        deallocations: [{ marketId: _MARKET_ID, assets: -1n }],
+      },
+    ],
+    [
+      "an unknown entry field",
+      {
+        deallocations: [{ marketId: _MARKET_ID, assets: 1n, shares: 0n }],
+      },
+    ],
+    [
+      "a non-object entry",
+      {
+        deallocations: [1n],
+      },
+    ],
+    [
+      "a duplicate marketId differing only in hex case",
+      {
+        deallocations: [
+          { marketId: _MARKET_ID, assets: 1n },
+          {
+            marketId: _MARKET_ID.toUpperCase().replace("0X", "0x"),
+            assets: 2n,
+          },
+        ],
+      },
+    ],
+  ])(
+    "error: SimulationValidationError for deallocations with %s",
+    (_name, quote) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2ForceRedeem",
+                vault: TARGET,
+                quote,
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+  test.each(["vaultV2ForceWithdraw", "vaultV2ForceRedeem"] as const)(
+    "behavior: penalty and deallocations quotes on %s count as non-empty",
+    (type) => {
+      for (const quote of [
+        { penalty: 1n },
+        { deallocations: [{ marketId: _MARKET_ID, assets: 1n }] },
+      ]) {
+        const parsed = parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type,
+                vault: TARGET,
+                quote,
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+        });
+        expect(parsed.limits?.operations?.[0]?.quote).toEqual(quote);
+      }
+    },
+  );
+  test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
+    "behavior: a positions-only quote on %s counts as non-empty",
+    (type) => {
+      const operation = {
+        type,
+        vault: TARGET,
+        quote: {
+          positions: [
+            { marketId: _MARKET_ID, supplyShares: 1n },
+            {
+              marketId:
+                "0x00000000000000000000000000000000000000000000000000000000000000bb",
+              supplyShares: 0n,
+            },
+          ],
+        },
+        slippageTolerance: 0n,
+      };
+      expect(
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { operations: [operation] },
+        }).limits?.operations,
+      ).toEqual([operation]);
+    },
+  );
+
+  test.each([
+    [
+      "a non-object",
+      { sharePrice: "0x00", quote: { assetsPaid: 1n, sharesMinted: 1n } },
+    ],
+    [
+      "an unknown key",
+      {
+        sharePrice: { expected: 1n, tolerance: 0n, minPrice: 1n },
+        quote: { assetsPaid: 1n, sharesMinted: 1n },
+      },
+    ],
+    [
+      "a zero expected",
+      {
+        sharePrice: { expected: 0n, tolerance: 0n },
+        quote: { assetsPaid: 1n, sharesMinted: 1n },
+      },
+    ],
+    [
+      "a negative tolerance",
+      {
+        sharePrice: { expected: 1n, tolerance: -1n },
+        quote: { assetsPaid: 1n, sharesMinted: 1n },
+      },
+    ],
+    [
+      "a tolerance above 100%",
+      {
+        sharePrice: { expected: 1n, tolerance: 10n ** 18n + 1n },
+        quote: { assetsPaid: 1n, sharesMinted: 1n },
+      },
+    ],
+  ])(
+    "error: SimulationValidationError for sharePrice with %s",
+    (_name, fields) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: TARGET,
+                slippageTolerance: 0n,
+                ...fields,
+              },
+            ],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+  test.each([
+    {
+      type: "vaultV2Deposit" as const,
+      quote: { assetsPaid: 1n },
+      missing: "quote.sharesMinted",
+    },
+    {
+      type: "vaultV2Deposit" as const,
+      quote: { sharesMinted: 1n },
+      missing: "quote.assetsPaid",
+    },
+    {
+      type: "blueWithdraw" as const,
+      quote: { sharesBurned: 1n },
+      missing: "quote.assetsReceived",
+    },
+    {
+      type: "blueRepay" as const,
+      quote: { assetsPaid: 1n },
+      missing: "quote.sharesBurned",
+    },
+  ])(
+    "error: SimulationValidationError for sharePrice on $type missing $missing",
+    ({ type, quote, missing }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  vault: TARGET,
+                  quote,
+                  slippageTolerance: 0n,
+                  sharePrice: { expected: 1n, tolerance: 0n },
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes(missing),
+        ),
+      ).toBe(true);
+    },
+  );
+  test.each([
+    "blueSupplyCollateral",
+    "blueWithdrawCollateral",
+    "blueRefinance",
+    "vaultV1InKindRedeem",
+    "vaultV2InKindRedeem",
+    "vaultV1MigrateToV2",
+  ] as const)(
+    "error: SimulationValidationError for sharePrice on %s",
+    (type) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  sourceMarketId: _MARKET_ID,
+                  targetMarketId: _MARKET_ID,
+                  vault: TARGET,
+                  sourceVault: TARGET,
+                  targetVault: TARGET,
+                  quote: {
+                    assetsPaid: 1n,
+                    sharesBurned: 1n,
+                    sharesMinted: 1n,
+                    assetsReceived: 1n,
+                  },
+                  slippageTolerance: 0n,
+                  sharePrice: { expected: 1n, tolerance: 0n },
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes("sharePrice: cannot be measured"),
+        ),
+      ).toBe(true);
+    },
+  );
+  test("behavior: a valid sharePrice bound is preserved", () => {
+    const operation = {
+      type: "vaultV2Redeem",
+      vault: TARGET,
+      quote: { assetsReceived: 1n, sharesBurned: 1n },
+      slippageTolerance: 0n,
+      sharePrice: { expected: 10n ** 27n, tolerance: 10_000000000000000n },
+    };
+    expect(
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: { operations: [operation] },
+      }).limits?.operations,
+    ).toEqual([operation]);
+  });
+
+  test.each([
+    {
+      name: "a non-object",
+      fields: { position: 1n, quote: { assetsPaid: 1n } },
+    },
+    {
+      name: "an unknown key",
+      fields: {
+        position: { maxBorrowShares: 1n, maxSupplyShares: 1n },
+        quote: { assetsPaid: 1n },
+      },
+    },
+    {
+      name: "an empty object",
+      fields: { position: {}, quote: { assetsPaid: 1n } },
+    },
+    {
+      name: "a non-uint256 bound",
+      fields: { position: { minCollateral: "1" }, quote: { assetsPaid: 1n } },
+    },
+    {
+      name: "a negative bound",
+      fields: { position: { minCollateral: -1n }, quote: { assetsPaid: 1n } },
+    },
+  ])(
+    "error: SimulationValidationError for position with $name",
+    ({ fields }) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "blueSupply",
+                marketId: _MARKET_ID,
+                slippageTolerance: 0n,
+                ...fields,
+              },
+            ],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+  test.each([
+    "vaultV1Deposit",
+    "vaultV2Withdraw",
+    "vaultV2ForceRedeem",
+    "vaultV1InKindRedeem",
+    "vaultV2InKindRedeem",
+    "vaultV1MigrateToV2",
+  ] as const)("error: SimulationValidationError for position on %s", (type) => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type,
+                vault: TARGET,
+                sourceVault: TARGET,
+                targetVault: TARGET,
+                quote: { assetsPaid: 1n },
+                slippageTolerance: 0n,
+                position: { maxBorrowShares: 1n },
+              },
+            ],
+          },
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors?.some((message) =>
+        message.includes("position: cannot be measured"),
+      ),
+    ).toBe(true);
+  });
+  test("error: malformed Blue market id does not make position unmeasurable", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "blueSupply",
+                marketId: "0x12",
+                quote: { assetsPaid: 1n },
+                slippageTolerance: 0n,
+                position: { maxBorrowShares: 1n },
+              },
+            ],
+          },
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    const fieldErrors = (error as SimulationValidationError).fieldErrors ?? [];
+    expect(fieldErrors.some((message) => message.includes("marketId"))).toBe(
+      true,
+    );
+    expect(
+      fieldErrors.some((message) =>
+        message.includes("position: cannot be measured"),
+      ),
+    ).toBe(false);
+  });
+  test("error: invalid position bound does not add empty-bounds error", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "blueSupply",
+                marketId: _MARKET_ID,
+                quote: { assetsPaid: 1n },
+                slippageTolerance: 0n,
+                position: { minCollateral: "1" },
+              },
+            ],
+          },
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    const fieldErrors = (error as SimulationValidationError).fieldErrors ?? [];
+    expect(
+      fieldErrors.some((message) => message.includes("position.minCollateral")),
+    ).toBe(true);
+    expect(
+      fieldErrors.some((message) =>
+        message.includes("supply at least one bound"),
+      ),
+    ).toBe(false);
+  });
+  test.each(["blueSupply", "blueRefinance"] as const)(
+    "behavior: valid position bounds are preserved on %s",
+    (type) => {
+      const shared = {
+        quote: { assetsPaid: 1n },
+        slippageTolerance: 0n,
+        position: { maxBorrowShares: 10n, minCollateral: 5n },
+      };
+      const operation =
+        type === "blueRefinance"
+          ? {
+              type,
+              sourceMarketId: _MARKET_ID,
+              targetMarketId: _MARKET_ID,
+              ...shared,
+            }
+          : { type, marketId: _MARKET_ID, ...shared };
+      expect(
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { operations: [operation] },
+        }).limits?.operations,
+      ).toEqual([operation]);
+    },
+  );
 
   test("default", () => {
     const request = parse({
@@ -246,6 +849,101 @@ describe("parseRequest", () => {
     expect(request.authorizations).toHaveLength(1);
     expect((request.authorizations[0] as { owner: Address }).owner).toBe(OWNER);
     expect(request.limits?.operations?.[0]).toMatchObject({ vault: SPENDER });
+  });
+
+  test("behavior: copies the caller's assertion without checksumming its address", () => {
+    const callerAssertion = {
+      to: TOKEN.toLowerCase(),
+      data: "0x12345678",
+      check: () => undefined,
+    };
+    const request = parse({
+      chainId: 1,
+      transactions: [tx({ assertBefore: [callerAssertion] })],
+    });
+    const parsedAssertion = request.transactions[0]?.assertBefore?.[0];
+    expect(parsedAssertion).toEqual(callerAssertion);
+    expect(parsedAssertion).not.toBe(callerAssertion);
+    expect(Object.isFrozen(callerAssertion)).toBe(false);
+    expect(parsedAssertion?.to).toBe(callerAssertion.to);
+  });
+
+  test("behavior: empty assertion arrays are omitted", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx({ assertBefore: [], assertAfter: [] })],
+    });
+    expect(request.transactions[0]).not.toHaveProperty("assertBefore");
+    expect(request.transactions[0]).not.toHaveProperty("assertAfter");
+  });
+
+  test.each([
+    {
+      assertion: { to: "not-an-address", data: "0x", check: () => undefined },
+      field: "to",
+    },
+    {
+      assertion: { to: TARGET, data: "not-hex", check: () => undefined },
+      field: "data",
+    },
+    { assertion: { to: TARGET, data: "0x", check: null }, field: "check" },
+    {
+      assertion: {
+        to: TARGET,
+        data: "0x",
+        check: () => undefined,
+        extra: true,
+      },
+      field: "extra",
+    },
+    { assertion: null, field: "" },
+  ])(
+    "error: rejects invalid assertion field $field",
+    ({ assertion, field }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx({ assertBefore: [assertion] })],
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      const message =
+        (error as SimulationValidationError).fieldErrors?.join("\n") ?? "";
+      expect(message).toContain(
+        field === ""
+          ? "transactions[0].assertBefore[0]: must be an object"
+          : `transactions[0].assertBefore[0].${field}`,
+      );
+    },
+  );
+
+  test("error: rejects a non-array assertion list", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [
+            tx({
+              assertBefore: {
+                to: TOKEN,
+                data: "0x",
+                check: () => undefined,
+              },
+            }),
+          ],
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors?.join("\n"),
+    ).toContain("transactions[0].assertBefore: must be an array");
   });
 
   test("behavior: preview without authorizations parses", () => {

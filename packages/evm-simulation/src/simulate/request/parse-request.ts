@@ -18,6 +18,8 @@ import type {
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type {
+  ForceExitDeallocationQuote,
+  InKindPositionQuote,
   OperationLimit,
   OperationType,
   SimulationLimits,
@@ -29,7 +31,12 @@ import {
   type SimulationMode,
   type StateBlock,
 } from "../../params.js";
-import { operationMeasurementPlan } from "../measurement-plan.js";
+import type { Assertion } from "../../types.js";
+import {
+  operationMeasurementPlan,
+  positionBoundsMarketField,
+  sharePriceMeasurement,
+} from "../measurement-plan.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
  * @internal
@@ -39,6 +46,8 @@ export interface ParsedTransaction {
   readonly to: Address;
   readonly data: Hex;
   readonly value: bigint;
+  readonly assertBefore?: readonly Assertion[];
+  readonly assertAfter?: readonly Assertion[];
 }
 
 /** The output of {@link parseRequest}: the caller's input validated, checksummed and defaulted.
@@ -114,6 +123,8 @@ interface FieldChecks {
     value: unknown,
     args: { readonly allow: readonly string[]; readonly path: string },
   ): void;
+  assertion(value: unknown, path: string): Assertion | undefined;
+  assertions(value: unknown, path: string): readonly Assertion[] | undefined;
   domain(value: unknown, path: string): Eip712Domain | undefined;
   fields(args: {
     readonly actual: unknown;
@@ -144,7 +155,19 @@ const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
 const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
   (field) => field.name,
 );
-const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
+const TRANSACTION_KEYS = [
+  "from",
+  "to",
+  "data",
+  "value",
+  "assertBefore",
+  "assertAfter",
+] as const;
+const POSITION_BOUNDS_FIELDS = [
+  "maxBorrowShares",
+  "minSupplyShares",
+  "minCollateral",
+] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
 const LIMITS_KEYS = ["operations"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -226,6 +249,42 @@ const createChecks = (): FieldChecks => {
       for (const key of Object.keys(value)) {
         if (!allow.includes(key)) errors.push(`${path}.${key}: unknown field`);
       }
+    },
+
+    assertion: (value, path) => {
+      if (!isRecord(value)) {
+        errors.push(`${path}: must be an object`);
+        return undefined;
+      }
+      check.keys(value, { allow: ["to", "data", "check"], path });
+      const rawTo = readField(value, "to");
+      const to = check.address(rawTo, `${path}.to`);
+      const data = check.hex(readField(value, "data"), `${path}.data`);
+      const assertionCheck = readField(value, "check");
+      if (typeof assertionCheck !== "function")
+        errors.push(`${path}.check: must be a function`);
+      return to === undefined ||
+        data === undefined ||
+        typeof assertionCheck !== "function"
+        ? undefined
+        : {
+            to: rawTo as Address,
+            data,
+            check: assertionCheck as Assertion["check"],
+          };
+    },
+
+    assertions: (value, path) => {
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: must be an array`);
+        return undefined;
+      }
+      if (value.length === 0) return undefined;
+      return value
+        .map((assertion, index) =>
+          check.assertion(assertion, `${path}[${index}]`),
+        )
+        .filter((assertion): assertion is Assertion => assertion !== undefined);
     },
 
     domain: (domain, path) => {
@@ -601,6 +660,8 @@ const createChecks = (): FieldChecks => {
           ...spec.addresses,
           "quote",
           "slippageTolerance",
+          "sharePrice",
+          "position",
         ],
         path,
       });
@@ -629,20 +690,132 @@ const createChecks = (): FieldChecks => {
         Reflect.set(out, "slippageTolerance", tolerance);
       }
       const quote = readField(operation, "quote");
+      let normalizedQuote: Record<string, bigint> | undefined;
       if (!isRecord(quote)) {
         errors.push(
           `${path}.quote: must be an object containing at least one quoted amount`,
         );
       } else {
-        check.keys(quote, { allow: QUOTE_FIELDS, path: `${path}.quote` });
-        const normalizedQuote: Record<string, bigint> = {};
+        check.keys(quote, {
+          allow: [...QUOTE_FIELDS, "positions", "deallocations"],
+          path: `${path}.quote`,
+        });
+        normalizedQuote = {};
         for (const field of QUOTE_FIELDS) {
           const raw = readField(quote, field);
           if (raw === undefined) continue;
           const value = check.uint256(raw, `${path}.quote.${field}`);
           if (value !== undefined) normalizedQuote[field] = value;
         }
-        if (Object.keys(normalizedQuote).length === 0)
+        const rawPositions = readField(quote, "positions");
+        let positions: InKindPositionQuote[] | undefined;
+        if (rawPositions !== undefined) {
+          if (type !== "vaultV1InKindRedeem" && type !== "vaultV2InKindRedeem")
+            errors.push(
+              `${path}.quote.positions: cannot be measured for "${type}"`,
+            );
+          else if (!Array.isArray(rawPositions))
+            errors.push(
+              `${path}.quote.positions: must be an array of { marketId, supplyShares }`,
+            );
+          else {
+            positions = [];
+            if (rawPositions.length === 0)
+              errors.push(`${path}.quote.positions: must be a non-empty array`);
+            const seen = new Set<string>();
+            for (const [i, entry] of rawPositions.entries()) {
+              const entryPath = `${path}.quote.positions[${i}]`;
+              if (!isRecord(entry)) {
+                errors.push(`${entryPath}: must be an object`);
+                continue;
+              }
+              check.keys(entry, {
+                allow: ["marketId", "supplyShares"],
+                path: entryPath,
+              });
+              const entryMarketId = check.marketId(
+                readField(entry, "marketId"),
+                `${entryPath}.marketId`,
+              );
+              const supplyShares = check.uint256(
+                readField(entry, "supplyShares"),
+                `${entryPath}.supplyShares`,
+              );
+              if (entryMarketId !== undefined) {
+                const key = entryMarketId.toLowerCase();
+                if (seen.has(key))
+                  errors.push(
+                    `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
+                  );
+                else seen.add(key);
+              }
+              if (entryMarketId !== undefined && supplyShares !== undefined)
+                positions.push({ marketId: entryMarketId, supplyShares });
+            }
+          }
+        }
+        if (
+          normalizedQuote.penalty !== undefined &&
+          type !== "vaultV2ForceWithdraw" &&
+          type !== "vaultV2ForceRedeem"
+        )
+          errors.push(
+            `${path}.quote.penalty: cannot be measured for "${type}"`,
+          );
+        const rawDeallocations = readField(quote, "deallocations");
+        let deallocations: ForceExitDeallocationQuote[] | undefined;
+        if (rawDeallocations !== undefined) {
+          if (type !== "vaultV2ForceWithdraw" && type !== "vaultV2ForceRedeem")
+            errors.push(
+              `${path}.quote.deallocations: cannot be measured for "${type}"`,
+            );
+          else if (!Array.isArray(rawDeallocations))
+            errors.push(
+              `${path}.quote.deallocations: must be an array of { marketId, assets }`,
+            );
+          else {
+            deallocations = [];
+            if (rawDeallocations.length === 0)
+              errors.push(
+                `${path}.quote.deallocations: must be a non-empty array`,
+              );
+            const seen = new Set<string>();
+            for (const [i, entry] of rawDeallocations.entries()) {
+              const entryPath = `${path}.quote.deallocations[${i}]`;
+              if (!isRecord(entry)) {
+                errors.push(`${entryPath}: must be an object`);
+                continue;
+              }
+              check.keys(entry, {
+                allow: ["marketId", "assets"],
+                path: entryPath,
+              });
+              const entryMarketId = check.marketId(
+                readField(entry, "marketId"),
+                `${entryPath}.marketId`,
+              );
+              const assets = check.uint256(
+                readField(entry, "assets"),
+                `${entryPath}.assets`,
+              );
+              if (entryMarketId !== undefined) {
+                const key = entryMarketId.toLowerCase();
+                if (seen.has(key))
+                  errors.push(
+                    `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
+                  );
+                else seen.add(key);
+              }
+              if (entryMarketId !== undefined && assets !== undefined)
+                deallocations.push({ marketId: entryMarketId, assets });
+            }
+          }
+        }
+        if (
+          Object.keys(normalizedQuote).length === 0 &&
+          positions === undefined &&
+          deallocations === undefined
+        )
           errors.push(`${path}.quote: supply at least one quoted amount`);
         const measurement = operationMeasurementPlan(out);
         for (const field of ["sharesMinted", "sharesBurned"] as const) {
@@ -654,7 +827,76 @@ const createChecks = (): FieldChecks => {
               `${path}.quote.${field}: cannot be measured for "${type}"`,
             );
         }
-        Reflect.set(out, "quote", normalizedQuote);
+        Reflect.set(out, "quote", {
+          ...normalizedQuote,
+          ...(positions === undefined ? {} : { positions }),
+          ...(deallocations === undefined ? {} : { deallocations }),
+        });
+      }
+      const rawSharePrice = readField(operation, "sharePrice");
+      if (rawSharePrice !== undefined) {
+        if (!isRecord(rawSharePrice)) {
+          errors.push(`${path}.sharePrice: must be an object`);
+        } else {
+          check.keys(rawSharePrice, {
+            allow: ["expected", "tolerance"],
+            path: `${path}.sharePrice`,
+          });
+          const expected = check.uint256(
+            readField(rawSharePrice, "expected"),
+            `${path}.sharePrice.expected`,
+          );
+          const priceTolerance = check.uint256(
+            readField(rawSharePrice, "tolerance"),
+            `${path}.sharePrice.tolerance`,
+          );
+          if (expected !== undefined && expected <= 0n)
+            errors.push(`${path}.sharePrice.expected: must be positive`);
+          if (priceTolerance !== undefined && priceTolerance > MathLib.WAD)
+            errors.push(
+              `${path}.sharePrice.tolerance: must not exceed 100% (1e18)`,
+            );
+          const pair = sharePriceMeasurement(type as OperationType);
+          if (pair === undefined) {
+            errors.push(`${path}.sharePrice: cannot be measured for "${type}"`);
+          } else {
+            for (const field of [pair.assets, pair.shares] as const) {
+              if (normalizedQuote?.[field] === undefined)
+                errors.push(`${path}.sharePrice: requires quote.${field}`);
+            }
+          }
+          if (expected !== undefined && priceTolerance !== undefined)
+            Reflect.set(out, "sharePrice", {
+              expected,
+              tolerance: priceTolerance,
+            });
+        }
+      }
+      const rawPosition = readField(operation, "position");
+      if (rawPosition !== undefined) {
+        if (!isRecord(rawPosition)) {
+          errors.push(`${path}.position: must be an object`);
+        } else {
+          check.keys(rawPosition, {
+            allow: POSITION_BOUNDS_FIELDS,
+            path: `${path}.position`,
+          });
+          const bounds: Record<string, bigint> = {};
+          let hasPositionBound = false;
+          for (const field of POSITION_BOUNDS_FIELDS) {
+            const raw = readField(rawPosition, field);
+            if (raw === undefined) continue;
+            hasPositionBound = true;
+            const value = check.uint256(raw, `${path}.position.${field}`);
+            if (value !== undefined) bounds[field] = value;
+          }
+          if (positionBoundsMarketField(type as OperationType) === undefined)
+            errors.push(`${path}.position: cannot be measured for "${type}"`);
+          if (!hasPositionBound)
+            errors.push(`${path}.position: supply at least one bound`);
+          if (Object.keys(bounds).length > 0)
+            Reflect.set(out, "position", bounds);
+        }
       }
       return errors.length === errorsBefore ? out : undefined;
     },
@@ -724,6 +966,7 @@ const QUOTE_FIELDS = [
   "sharesMinted",
   "assetsPaid",
   "sharesBurned",
+  "penalty",
 ] as const satisfies readonly (keyof SlippageQuote)[];
 const MARKET_SUBJECT = {
   markets: ["marketId"],
@@ -869,8 +1112,25 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       const rawValue = readField(tx, "value");
       const value =
         rawValue === undefined ? 0n : check.uint256(rawValue, `${path}.value`);
+      const rawAssertBefore = readField(tx, "assertBefore");
+      const assertBefore =
+        rawAssertBefore === undefined
+          ? undefined
+          : check.assertions(rawAssertBefore, `${path}.assertBefore`);
+      const rawAssertAfter = readField(tx, "assertAfter");
+      const assertAfter =
+        rawAssertAfter === undefined
+          ? undefined
+          : check.assertions(rawAssertAfter, `${path}.assertAfter`);
       if (from !== undefined && to !== undefined && data !== undefined) {
-        transactions.push({ from, to, data, value: value ?? 0n });
+        transactions.push({
+          from,
+          to,
+          data,
+          value: value ?? 0n,
+          ...(assertBefore !== undefined ? { assertBefore } : {}),
+          ...(assertAfter !== undefined ? { assertAfter } : {}),
+        });
         transactionIndices.push(i);
       }
     }

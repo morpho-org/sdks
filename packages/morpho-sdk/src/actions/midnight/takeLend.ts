@@ -12,7 +12,13 @@ import {
   validateReferralFee,
   validateUint256Field,
 } from "../../helpers/validate.js";
+import {
+  validateMidnightReferralFeeCap,
+  validateMidnightTakeableOfferBounds,
+  validateMidnightUint128Field,
+} from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
@@ -66,7 +72,7 @@ export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
  * @param params.maxContinuousFee - Largest market continuous fee accepted, in the unit of the market's
  *   onchain `continuousFee` (`Market.continuousFee`): a WAD-scaled per-second rate, so `317097919n`
  *   is about 1% per year. The take reverts if the market fee is higher. Pass `maxUint256` for no cap.
- * @param params.deadline - Bounded bundle execution deadline timestamp.
+ * @param params.deadline - Bounded bundle execution deadline timestamp. Not checked against the clock; validate freshness before building.
  * @param params.referralFeePct - Optional WAD-scaled referral fee paid out of the pulled assets.
  * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
@@ -79,15 +85,20 @@ export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
  * @throws {NonPositiveInputError} when the target amount, `minUnits`, `maxBuyerAssets` or `deadline` is not positive.
- * @throws {NegativeInputError} when `maxContinuousFee`, `referralFeePct` or `nativeAmount` is negative.
+ * @throws {NegativeInputError} when a takeable offer cap, `maxContinuousFee`,
+ *   `referralFeePct` or `nativeAmount` is negative.
  * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
  * @throws {NativeAmountOnNonWNativeAssetError} when `market.loanToken` is not wNative.
- * @throws {InputExceedsMaxError} when `target.assets`, `target.units`, `minUnits`, `maxBuyerAssets`,
- *   `maxContinuousFee` or `deadline` exceeds `uint256`, or `nativeAmount` exceeds the maximum
- *   wNative amount this call can pull.
+ * @throws {InputExceedsMaxError} when a target amount or offer cap exceeds `uint128`; when
+ *   `target.maxBuyerAssets` exceeds `uint128` (an SDK cap: the bundle accepts `uint256`, but a
+ *   higher ceiling gives no slippage protection); when `maxContinuousFee` or `deadline` exceeds
+ *   `uint256`; or when `nativeAmount` exceeds the maximum wNative amount this call can pull.
  * @throws {UnboundedMidnightTakeInputError} when `target.units`, `target.maxBuyerAssets` or
  *   `deadline` is `maxUint256`.
+ * @throws {MidnightContractReceiverError} when `referralFeeRecipient` is a Midnight protocol
+ *   contract or a market token contract with a positive referral fee.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+ * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
  * @example
  * ```ts
@@ -115,6 +126,7 @@ export const midnightTakeLend = (
     takeableOffers: params.takeableOffers,
     expectedBuy: false,
   });
+  validateMidnightTakeableOfferBounds(params.takeableOffers);
 
   const { target } = params;
   if (target.type === "assets") {
@@ -124,8 +136,8 @@ export const midnightTakeLend = (
     if (target.minUnits <= 0n) {
       throw new NonPositiveInputError("target.minUnits", target.minUnits);
     }
-    validateUint256Field("target.assets", target.assets);
-    validateUint256Field("target.minUnits", target.minUnits);
+    validateMidnightUint128Field("target.assets", target.assets);
+    validateMidnightUint128Field("target.minUnits", target.minUnits);
   } else {
     if (target.units === maxUint256) {
       throw new UnboundedMidnightTakeInputError("target.units");
@@ -142,8 +154,11 @@ export const midnightTakeLend = (
         target.maxBuyerAssets,
       );
     }
-    validateUint256Field("target.units", target.units);
-    validateUint256Field("target.maxBuyerAssets", target.maxBuyerAssets);
+    validateMidnightUint128Field("target.units", target.units);
+    validateMidnightUint128Field(
+      "target.maxBuyerAssets",
+      target.maxBuyerAssets,
+    );
   }
   validateUint256Field("maxContinuousFee", params.maxContinuousFee);
   if (params.deadline === maxUint256) {
@@ -151,6 +166,16 @@ export const midnightTakeLend = (
   }
   validateDeadline(params.deadline);
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  validateMidnightReferralFeeCap(referralFeePct);
+  if (referralFeePct > 0n) {
+    // Rejects fee recipients that would strand the fee in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "referralFeeRecipient",
+      receiver: referralFeeRecipient,
+    });
+  }
   const market = MarketUtils.toStruct(params.market);
   const nativeFunding = validateMidnightNativeAmount({
     chainId: params.chainId,

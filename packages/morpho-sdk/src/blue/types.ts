@@ -22,4 +22,5 @@ export type {
   Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs,
+  TokenMetadataField,
 } from "@morpho-org/blue-sdk-viem";

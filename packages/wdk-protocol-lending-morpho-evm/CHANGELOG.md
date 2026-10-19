@@ -1,5 +1,35 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 3.0.0
+
+### Major Changes
+
+- Fail closed on missing contract code: Blue, VaultV1 and VaultV2 `getRequirements()` now throw `MissingContractCodeError` when a registered bundles or protocol target holds no code, and `simulate()` rejects calldata transactions to code-less addresses with `SimulationValidationError` before `eth_simulateV1`. `@morpho-org/test` classifies the new error as `config`, `classifyError` now maps `BlacklistViolationError` to `config` and `ConsumerLimitViolationError` to `revert` where both were previously `unknown`, and `createMockClient` now answers `eth_getCode` with non-empty bytecode by default. `getBundlesTokenRequirements`, `getVaultBundlesSharesRequirements` and `getBlueAuthorizationRequirement` accept an optional `now` timestamp override for their deadline checks and pass it through to the signature encoders; `resolveBundlesTokenRequirements`, `encodeErc20Permit`, `encodeErc20Permit2SignatureTransfer`, `encodeVaultSharesPermit` and `encodeBlueSignatureAuthorization` accept the same optional `now` (additive). Migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
+
+### Minor Changes
+
+- Normalize WDK provider transport failures, reconcile failover rejections that may follow an earlier accepted broadcast, and expose typed errors for uncertain EOA broadcasts (including gateway errors) and malformed transaction hashes, classifying invalid hashes as integrity failures.
+
+  Provider errors follow viem's own retry rules. Network and timeout failures, JSON-RPC codes -32005 and -32603, HTTP 429, and retryable HTTP statuses are still retried; other JSON-RPC codes, such as -32000 ("header not found"), now fail immediately instead of after viem retries. See MIGRATION.md under "Migrating to 3.0" for the provider and submission error changes.
+
+### Patch Changes
+
+- An RPC endpoint connected to the wrong chain now fails closed instead of serving another chain's state.
+
+  - `@morpho-org/morpho-sdk`: entity reads (`getMarketData`, `getPositionData`, `getVaultV2BlueReallocationData`, `getData`, `supplyBlueMakeLend`) and requirement resolvers (`getRequirements()`, `getBundlesTokenRequirements`, `getUnusedPermit2Nonce`, `getBlueAuthorizationRequirement`, the Midnight requirement resolvers and the exported `encodeErc20Permit`) each send their own uncached `eth_chainId` request (a `getRequirements()` that runs several of these resolvers sends one request per resolver) and throw `ChainIdMismatchError(observed, expected)` before any state read when the endpoint serves another chain. Previously only `client.chain?.id` was compared. The new `validateClientChainId(client, chainId)` performs both checks and is available from the `morpho-sdk/utils` subpath. Synchronous builders (`buildTx`) still compare only the declared chain. Breaking: these calls can now throw `ChainIdMismatchError` for the RPC's chain and viem errors from `eth_chainId`; migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+  - `@morpho-org/evm-simulation`: after an `RpcTransportError` from the block lookup, metadata reads or `eth_simulateV1`, or a `SlippageCheckUnavailableError` from quoted-asset resolution or a failed planned state read parsed by `executePlan`, `simulate()` probes `eth_chainId` once and throws `InvalidChainIdError` when the endpoint serves another chain (for example a `blockNumber` or `block` above that chain's head). A successful simulation still sends no `eth_chainId` request.
+
+- Export `isContractRevertError`, `catchRevertOnly`, and `isTransportError` from `blue-sdk-viem`, and re-export them from the `morpho-sdk` `/blue/utils` and `/utils` subpaths.
+
+  Fetchers that previously returned partial entities when RPC infrastructure failed now reject with the original viem error. For transport failures, its cause chain contains `HttpRequestError`, `TimeoutError`, `LimitExceededRpcError`, `SocketClosedError`, or `WebSocketRequestError`; use `isTransportError` to detect them. Deployless reads no longer fall back after transport errors.
+
+- `RequirementSignature`, which this package re-exports from `@morpho-org/morpho-sdk`, no longer includes `MidnightOfferRootSignature` now that this package depends on morpho-sdk 7. This release stays a patch because this package never builds Midnight actions, so none of its methods could return that variant. If your code names `MidnightOfferRootSignature` through this package's `RequirementSignature`, for example as a case in an exhaustive `switch`, delete that branch.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@8.0.0
+  - @morpho-org/blue-sdk-viem@7.0.0
+  - @morpho-org/blue-sdk@8.0.1
+
 ## 2.0.2
 
 ### Patch Changes

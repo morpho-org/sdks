@@ -53,6 +53,7 @@ import type {
   DeploylessFetchParameters,
   FetchParameters,
 } from "../../types.js";
+import { isTransportError } from "../../utils.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -70,6 +71,11 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * adapter address and liquidity data but leaves `liquidityAllocations` undefined. Fetch
  * `MorphoMarketV1Adapter` through `fetchVaultV2Adapter` when it is used as a regular adapter.
  *
+ * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
+ * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
+ * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
+ * `MalformedTokenMetadataError`, and transport errors propagate.
+ *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
@@ -82,8 +88,16 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
+ * @throws {UnknownTokenError} when the vault share token's `decimals()` reverts, has no code,
+ *   returns undecodable data, or is out of range.
+ * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+ *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+ *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
  * @throws {UnsupportedVaultV2AdapterError} when a recognized liquidity adapter is configured with
  *   unsupported liquidity data.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { VaultV2 } from "@morpho-org/blue-sdk";
@@ -140,11 +154,14 @@ export async function fetchVaultV2(
           : undefined,
       });
     } catch (error) {
+      if (isTransportError(error)) throw error;
+
       const unsupportedAdapter = getUnsupportedVaultV2Adapter(error);
       if (unsupportedAdapter != null)
         throw new UnsupportedVaultV2AdapterError(unsupportedAdapter);
 
       if (deployless === "force") throw error;
+
       if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
@@ -403,9 +420,10 @@ export async function fetchVaultV2(
  *
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
  * configured liquidity adapter and regular adapters, and force-deallocate penalties. By default it
- * reads the entire tree in a single deployless call and only falls back to sequential multicall
- * reads after a retryable failure; pass `deployless: "force"` to require the single call, or
- * `deployless: false` to use multicall reads directly.
+ * reads the entire tree in a single deployless call and falls back to sequential multicall reads
+ * only for non-transport failures other than deterministic factory or adapter errors; pass
+ * `deployless: "force"` to require the single call, or `deployless: false` to use multicall reads
+ * directly.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
  * that adapter as an accrual adapter, but liquidity cap allocations remain undefined because
@@ -415,6 +433,11 @@ export async function fetchVaultV2(
  * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
  * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
  * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
+ *
+ * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
+ * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
+ * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
+ * `MalformedTokenMetadataError`, and transport errors propagate.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -428,10 +451,18 @@ export async function fetchVaultV2(
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
+ * @throws {UnknownTokenError} when the vault share token's `decimals()` reverts, has no code,
+ *   returns undecodable data, or is out of range.
+ * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+ *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+ *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
  *   unsupported adapter class.
  * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`,
  *   `deployless: false`, or a failed sequential fallback).
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
@@ -458,7 +489,7 @@ export async function fetchAccrualVaultV2(
       // The RPC is trusted: accounting and adapter data are not cross-checked. See THREAT_MODEL.md, RPC.
       return await fetchAccrualVaultV2WithQuery(address, client, parameters);
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (deployless === "force" || isTransportError(error)) throw error;
       // Deterministic errors would be raised identically by the multicall path — do not retry.
       if (
         error instanceof UnknownFactory ||
@@ -466,7 +497,7 @@ export async function fetchAccrualVaultV2(
         error instanceof UnsupportedVaultV2AdapterError
       )
         throw error;
-      // Otherwise fall back to sequential multicall reads on transient deployless failures.
+      // Remaining non-transport deployless failures can fall back to sequential reads.
     }
   }
 
@@ -746,6 +777,8 @@ async function fetchAccrualVaultV2WithQuery(
       ],
     });
   } catch (error) {
+    if (isTransportError(error)) throw error;
+
     const unsupportedAdapter = getUnsupportedVaultV2Adapter(error);
     if (unsupportedAdapter != null)
       throw new UnsupportedVaultV2AdapterError(unsupportedAdapter);
