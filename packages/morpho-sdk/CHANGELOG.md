@@ -1,5 +1,47 @@
 # @morpho-org/morpho-sdk
 
+## 8.2.0-next.0
+
+### Minor Changes
+
+- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
+
+  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+- Add shared Midnight position accrual helpers and errors.
+- Midnight take flows now reject, before building, takes that `MidnightBundlesV2` would always revert:
+
+  - `takeLend`, `takeBorrow`, `takeWithdraw`, `supplyCollateralTakeBorrow` and `takeRepayWithdrawCollateral` throw `MidnightTakeableOffersNotFillableError` when every offer is expired, cannot start before the deadline, was made by `accountAddress`, has a `continuousFeeCap` below the market fee, has zero units, has a tick outside `[0, MAX_TICK]`, is a buy offer with a non-zero `receiverIfMakerIsSeller`, or would open debt after maturity with no credit left to sell, and the flow has no withdraw or repay fallback, or every offer is dropped as described below (assets targets on buys, any target on sells), even when a withdraw or repay fallback exists. They throw `MidnightTakeTargetUnreachableError` when the offers plus that fallback cannot hold the target's units or a buy assets target's `minUnits`, or a buy units target's `maxBuyerAssets` cannot pay the cheapest fill plus the referral fee.
+  - `takeLend` and `takeRepayWithdrawCollateral` throw `MidnightContinuousFeeAboveMaxError` when `maxContinuousFee` is below `marketData.continuousFee`, and on an assets target drop sell offers whose tick is outside `[0, MAX_TICK]` or whose buyer price is zero or above one, which used to revert the whole bundle with `Panic(0x12)` or `PriceGreaterThanOne()`.
+  - `takeBorrow`, `takeWithdraw` and `supplyCollateralTakeBorrow` drop buy offers whose tick is outside `[0, MAX_TICK]`, whose price is zero, or whose price stays below the settlement fee until the deadline (at or below it on an assets target), which used to revert the whole bundle with `Panic(0x12)` or an arithmetic underflow.
+  - `takeRepayWithdrawCollateral` and `repayWithdrawCollateral` throw `MidnightRepayExceedsDebtError` when the repay target exceeds `positionData.debt`; a full `repayWithdrawCollateral` throws `MidnightTakeTargetUnreachableError` when `maxBuyerAssets` is below the debt.
+  - The `midnightTakeBorrow`, `midnightTakeWithdraw` and `midnightSupplyCollateralTakeBorrow` builders throw `MidnightTakeTargetUnreachableError` when `minSellerAssets` exceeds `units` minus the referral fee, or `maxUnits` is below `assets` plus the referral fee.
+
+  Each check uses only the inputs, the market and position snapshots, and the current time; offers that are dead while another offer can fill are still passed through.
+
+- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
+- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), and `withdraw` and `redeem` (from `getRequirements()`) throw it when the exit exceeds the vault's idle assets, before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
+- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
+
+  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+### Patch Changes
+
+- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
+
+  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
+
+- Operation reallocation plans now treat idle legs that together take (nearly) all of a source vault's idle, within `allocatorCapHeadroom`, as liquidity-bound like a leg filling an allocator cap. A borrow or withdrawal without shortfall whose plan draws only on such idle no longer plans it. When other vaults' legs stay unbound, the reduced plan can still take that idle.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.2.0-next.0
+  - @morpho-org/blue-sdk-viem@7.1.0-next.0
+  - @morpho-org/morpho-ts@4.1.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.0
+
 ## 8.1.0
 
 ### Minor Changes

@@ -1,5 +1,16 @@
 # @morpho-org/test
 
+## 2.12.0-next.0
+
+### Minor Changes
+
+- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.1.0-next.0
+
 ## 2.11.0
 
 ### Minor Changes

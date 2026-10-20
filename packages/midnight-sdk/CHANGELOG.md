@@ -1,5 +1,18 @@
 # @morpho-org/midnight-sdk
 
+## 2.2.0-next.0
+
+### Minor Changes
+
+- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
+
+  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.1.0-next.0
+
 ## 2.1.0
 
 ### Minor Changes
