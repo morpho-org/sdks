@@ -2,6 +2,7 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import {
   ChainId,
+  Time,
   UnknownAddressError,
   UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
@@ -158,6 +159,20 @@ describe("encodeBlueSignatureAuthorization", () => {
         deadline: 1n,
       }),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+  });
+
+  test("behavior: a deadline that has passed on the wall clock is accepted with an earlier now", async () => {
+    const deadline = Time.timestamp() - Time.s.from.h(1n);
+    const requirement = await encodeBlueSignatureAuthorization(walletClient(), {
+      owner: account.address,
+      authorized: blueBundlesV1,
+      chainId: mainnet.id,
+      nonce: 0n,
+      deadline,
+      now: deadline - 1n,
+    });
+
+    expect(requirement.action.type).toBe("authorization");
   });
 
   test("behavior: supports revocation via isAuthorized=false", async () => {

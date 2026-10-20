@@ -1,5 +1,26 @@
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
+import {
+  AbiDecodingZeroDataError,
+  BaseError,
+  BytesSizeMismatchError,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  decodeAbiParameters,
+  ExecutionRevertedError,
+  encodeErrorResult,
+  erc20Abi,
+  HttpRequestError,
+  IntegerOutOfRangeError,
+  InvalidAddressError,
+  LimitExceededRpcError,
+  parseAbi,
+  parseAbiParameters,
+  parseUnits,
+  RpcRequestError,
+  SocketClosedError,
+  TimeoutError,
+  WebSocketRequestError,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -9,12 +30,176 @@ import {
   UnnamedAbiOutputsError,
 } from "./error.js";
 import {
+  catchRevertOnly,
+  isContractRevertError,
+  isTransportError,
+  isUndecodableResultError,
   readContractRestructured,
   restructure,
   safeGetAddress,
   safeParseNumber,
   safeParseUnits,
 } from "./utils.js";
+
+describe("error classification", () => {
+  const revert = new ContractFunctionRevertedError({
+    abi: [],
+    data: "0x",
+    functionName: "read",
+  });
+  const zeroData = new ContractFunctionZeroDataError({
+    functionName: "read",
+  });
+  const executionReverted = new ExecutionRevertedError({
+    cause: new RpcRequestError({
+      body: { method: "eth_call", params: [] },
+      error: { code: -32000, message: "execution reverted" },
+      url: "http://rpc.test",
+    }),
+  });
+  const gasAllowanceExecutionReverted = new ExecutionRevertedError({
+    cause: new RpcRequestError({
+      body: { method: "eth_call", params: [] },
+      error: { code: -32000, message: "gas required exceeds allowance" },
+      url: "http://rpc.test",
+    }),
+    message: "gas required exceeds allowance",
+  });
+
+  test("detects contract reverts through nested viem causes", () => {
+    const error = new BaseError("outer", {
+      cause: new BaseError("inner", { cause: zeroData }),
+    });
+
+    expect(isContractRevertError(revert)).toBe(true);
+    expect(isContractRevertError(error)).toBe(true);
+    expect(isContractRevertError(executionReverted)).toBe(true);
+    expect(isTransportError(executionReverted)).toBe(false);
+    expect(isContractRevertError(new Error("unavailable"))).toBe(false);
+  });
+
+  test("does not classify gas allowance errors as contract reverts or transport errors", () => {
+    expect(isContractRevertError(gasAllowanceExecutionReverted)).toBe(false);
+    expect(isTransportError(gasAllowanceExecutionReverted)).toBe(false);
+  });
+
+  test("uses catchRevertOnly fallbacks only for contract reverts", () => {
+    const recover = catchRevertOnly("fallback");
+    const transportError = new HttpRequestError({
+      status: 429,
+      url: "http://rpc.test",
+    });
+    let thrown: unknown;
+
+    expect(recover(revert)).toBe("fallback");
+    try {
+      recover(transportError);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(transportError);
+  });
+
+  test("rethrows transport errors even when their cause chain contains a revert", () => {
+    const abi = parseAbi(["error ReadFailed()"]);
+    const transportError = new HttpRequestError({
+      status: 429,
+      url: "http://rpc.test",
+      cause: new ContractFunctionRevertedError({
+        abi,
+        data: encodeErrorResult({ abi, errorName: "ReadFailed" }),
+        functionName: "read",
+      }),
+    });
+    let thrown: unknown;
+
+    try {
+      catchRevertOnly(0n)(transportError);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(transportError);
+  });
+
+  test("detects undecodable results through nested viem causes", () => {
+    const undecodable = new AbiDecodingZeroDataError();
+    const wrapped = new BaseError("outer", { cause: undecodable });
+    const integerDecodeError = (() => {
+      try {
+        decodeAbiParameters(
+          parseAbiParameters("uint8"),
+          `0x${(1n << 200n).toString(16).padStart(64, "0")}`,
+        );
+      } catch (error) {
+        return error;
+      }
+    })();
+    const encodeOnlyBytesSize = new BytesSizeMismatchError({
+      expectedSize: 32,
+      givenSize: 31,
+    });
+
+    expect(isUndecodableResultError(undecodable)).toBe(true);
+    expect(isUndecodableResultError(wrapped)).toBe(true);
+    expect(integerDecodeError).toBeInstanceOf(IntegerOutOfRangeError);
+    expect(isUndecodableResultError(integerDecodeError)).toBe(true);
+    expect(isUndecodableResultError(encodeOnlyBytesSize)).toBe(false);
+    expect(isUndecodableResultError(revert)).toBe(false);
+    expect(isUndecodableResultError(new Error("unavailable"))).toBe(false);
+  });
+
+  test("detects PositionOutOfBoundsError by name, only on viem BaseError causes", () => {
+    const boundsError = (() => {
+      try {
+        // 32 bytes is too short for the eip712Domain tuple.
+        decodeAbiParameters(
+          parseAbiParameters(
+            "bytes1, string, string, uint256, address, bytes32, uint256[]",
+          ),
+          `0x${"12".repeat(32)}`,
+        );
+      } catch (error) {
+        return error;
+      }
+    })();
+    const impostor = Object.assign(new Error("impostor"), {
+      name: "PositionOutOfBoundsError",
+    });
+
+    expect(boundsError).toBeInstanceOf(BaseError);
+    expect((boundsError as BaseError).name).toBe("PositionOutOfBoundsError");
+    expect(isUndecodableResultError(boundsError)).toBe(true);
+    expect(isUndecodableResultError(impostor)).toBe(false);
+  });
+
+  test("recognizes transport errors and only retryable HTTP statuses", () => {
+    const retryable = [
+      new TimeoutError({ body: {}, url: "http://rpc.test" }),
+      new LimitExceededRpcError(new Error("limit")),
+      new SocketClosedError({ url: "ws://rpc.test" }),
+      new WebSocketRequestError({ url: "ws://rpc.test" }),
+      new HttpRequestError({ url: "http://rpc.test" }),
+      new HttpRequestError({ status: 408, url: "http://rpc.test" }),
+      new HttpRequestError({ status: 429, url: "http://rpc.test" }),
+      new HttpRequestError({ status: 503, url: "http://rpc.test" }),
+    ];
+    const nonRetryable = [
+      new HttpRequestError({ status: 400, url: "http://rpc.test" }),
+      new HttpRequestError({ status: 413, url: "http://rpc.test" }),
+      new Error("unavailable"),
+      new Error("x", {
+        cause: new HttpRequestError({
+          status: 429,
+          url: "http://rpc.test",
+        }),
+      }),
+    ];
+
+    for (const error of retryable) expect(isTransportError(error)).toBe(true);
+    for (const error of nonRetryable)
+      expect(isTransportError(error)).toBe(false);
+  });
+});
 
 describe("safeParseNumber", () => {
   test("parses an integer", () => {

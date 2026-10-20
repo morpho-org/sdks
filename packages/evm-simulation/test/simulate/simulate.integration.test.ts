@@ -1,12 +1,17 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+import { metaMorphoAbi } from "@morpho-org/morpho-ts/abis";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
+  decodeErrorResult,
+  encodeErrorResult,
+  encodeFunctionData,
   erc20Abi,
   ethAddress,
   maxUint256,
+  parseAbi,
   parseUnits,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -99,7 +104,12 @@ describe.sequential("simulate — real revert propagation", () => {
           },
         ],
       }),
-    ).rejects.toBeInstanceOf(SimulationRevertedError);
+    ).rejects.toMatchObject({
+      // USDC reverts with a plain Error(string); bytes and text are preserved.
+      name: "SimulationRevertedError",
+      message: expect.stringContaining("Error("),
+      revertData: expect.stringMatching(/^0x08c379a0/),
+    });
   }, 60_000);
 });
 
@@ -126,19 +136,24 @@ describe.sequential("simulate — real native funding", () => {
     expect(tx.value).toBe(assets);
 
     await client.setBalance({ address: client.account.address, value: 0n });
-    await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
-        transactions: [
-          {
-            from: client.account.address,
-            to: tx.to,
-            data: tx.data,
-            value: tx.value,
-          },
-        ],
-      }),
-    ).rejects.toBeInstanceOf(SimulationRevertedError);
+    const error = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      transactions: [
+        {
+          from: client.account.address,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+        },
+      ],
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      message:
+        "Sender native balance cannot fund transaction value. Fund the sender or reduce value.",
+      revertData: undefined,
+      cause: expect.any(Error),
+    });
   }, 60_000);
 
   test("behavior: succeeds when the real balance funds the value", async ({
@@ -267,4 +282,139 @@ describe.sequential("simulate — sequential state and stable indices", () => {
       })),
     );
   }, 120_000);
+});
+
+const BLUE: Address = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
+const STEAKHOUSE_USDC: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+// Re7 WETH: every cap is reached at the pinned block (maxDeposit = 0).
+const RE7_WETH: Address = "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0";
+const OTHER: Address = "0x00000000000000000000000000000000DeaDBeef";
+
+const blueAbi = parseAbi([
+  "struct MarketParams { address loanToken; address collateralToken; address oracle; address irm; uint256 lltv; }",
+  "function borrow(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver)",
+]);
+const vaultAbi = parseAbi([
+  "function deposit(uint256 assets, address receiver) returns (uint256)",
+  "function transfer(address to, uint256 shares) returns (bool)",
+  "function transferFrom(address from, address to, uint256 shares) returns (bool)",
+]);
+
+describe.sequential("simulate — named revert errors", () => {
+  const borrow = (onBehalf: Address, receiver: Address) =>
+    encodeFunctionData({
+      abi: blueAbi,
+      functionName: "borrow",
+      args: [CbbtcUsdcBlue, 1n, 0n, onBehalf, receiver],
+    });
+
+  const cases = [
+    [
+      "Blue borrow without collateral",
+      BLUE,
+      (a: Address) => borrow(a, a),
+      // Blue returns the standard reason string.
+      "Error",
+    ],
+    [
+      "MetaMorpho share transfer above balance",
+      STEAKHOUSE_USDC,
+      () =>
+        encodeFunctionData({
+          abi: vaultAbi,
+          functionName: "transfer",
+          args: [OTHER, 1n],
+        }),
+      "ERC20InsufficientBalance",
+    ],
+    [
+      "MetaMorpho share transferFrom without allowance",
+      STEAKHOUSE_USDC,
+      (a: Address) =>
+        encodeFunctionData({
+          abi: vaultAbi,
+          functionName: "transferFrom",
+          args: [OTHER, a, 1n],
+        }),
+      "ERC20InsufficientAllowance",
+    ],
+  ] as const;
+  for (const [name, to, data, errorName] of cases) {
+    test(`error: ${name} preserves all revert arguments`, async ({
+      client,
+    }) => {
+      const error = await simulate(configFor(client), {
+        chainId: mainnet.id,
+        transactions: [
+          {
+            from: client.account.address,
+            to,
+            data: data(client.account.address),
+          },
+        ],
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SimulationRevertedError);
+      if (!(error instanceof SimulationRevertedError) || !error.revertData)
+        throw error;
+      const decoded = decodeErrorResult({
+        abi: metaMorphoAbi,
+        data: error.revertData,
+      });
+      expect(decoded.errorName).toBe(errorName);
+      expect(error.message).toContain(errorName);
+      if (
+        decoded.errorName === "ERC20InsufficientBalance" ||
+        decoded.errorName === "ERC20InsufficientAllowance"
+      ) {
+        expect(decoded.args).toEqual([client.account.address, 0n, 1n]);
+        expect(error.message).toContain("needed=1");
+        expect(error.message).toContain(
+          decoded.errorName === "ERC20InsufficientBalance"
+            ? "balance=0"
+            : "allowance=0",
+        );
+      } else {
+        expect(decoded.args).toEqual(["insufficient collateral"]);
+        expect(error.message).toContain("insufficient collateral");
+      }
+    }, 60_000);
+  }
+
+  test("error: funded deposit into a MetaMorpho vault with maxDeposit = 0 → AllCapsReached", async ({
+    client,
+  }) => {
+    const assets = 10n ** 18n;
+    await client.deal({ erc20: WETH, amount: assets });
+    await client.writeContract({
+      account: client.account,
+      chain: mainnet,
+      address: WETH,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [RE7_WETH, assets],
+    });
+    await expect(
+      simulate(configFor(client), {
+        chainId: mainnet.id,
+        transactions: [
+          {
+            from: client.account.address,
+            to: RE7_WETH,
+            data: encodeFunctionData({
+              abi: vaultAbi,
+              functionName: "deposit",
+              args: [assets, client.account.address],
+            }),
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      name: "SimulationRevertedError",
+      revertData: encodeErrorResult({
+        abi: metaMorphoAbi,
+        errorName: "AllCapsReached",
+      }),
+      message: "Transaction 0 reverted: AllCapsReached()",
+    });
+  }, 60_000);
 });

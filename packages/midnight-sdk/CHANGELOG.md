@@ -1,18 +1,21 @@
 # @morpho-org/midnight-sdk
 
-## 2.1.0-next.0
+## 2.1.0
 
 ### Minor Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
-
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
+- Adds `OfferUtils.onchainHash`, `OfferUtils.onchainHashStruct`, and `Offer#onchainHash`: the `keccak256(abi.encode(offer))` hash Midnight emits in `Take` and uses to identify offers on-chain, distinct from `OfferUtils.hash`.
 
 ### Patch Changes
 
 - Return the caller's average price guard when provided and reject takeable offers whose units exceed their offer `maxUnits`.
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
 - Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
+  - @morpho-org/morpho-ts@4.0.1
 
 ## 2.0.0
 

@@ -11,6 +11,7 @@ import {
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis.js";
 import type { DeploylessFetchParameters } from "../../types.js";
+import { catchRevertOnly } from "../../utils.js";
 import {
   fetchAccrualVaultV2MidnightAdapter,
   fetchVaultV2MidnightAdapter,
@@ -45,6 +46,9 @@ import {
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
  * @throws {UnresolvedBlockNumberError} when a Midnight adapter's direct-read path
  *   (`deployless: false` or fallback) resolves a pending block.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { IVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -88,7 +92,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -99,7 +103,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -110,7 +114,7 @@ export async function fetchVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     midnightAdapterFactory
       ? readContract(client, {
@@ -119,7 +123,7 @@ export async function fetchVaultV2Adapter(
           abi: midnightAdapterFactoryAbi,
           functionName: "isMidnightAdapter",
           args: [address],
-        }).catch(() => false)
+        }).catch(catchRevertOnly(false))
       : false,
   ]);
 
@@ -155,6 +159,9 @@ export async function fetchVaultV2Adapter(
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
  * @throws {UnresolvedBlockNumberError} when a Midnight adapter's direct-read path
  *   (`deployless: false` or fallback) resolves a pending block.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { IAccrualVaultV2Adapter } from "@morpho-org/blue-sdk";
@@ -201,7 +208,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -212,7 +219,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -223,7 +230,7 @@ export async function fetchAccrualVaultV2Adapter(
           args: [address],
         })
           // Factory may not have been deployed at requested block tag.
-          .catch(() => false)
+          .catch(catchRevertOnly(false))
       : false,
     midnightAdapterFactory
       ? readContract(client, {
@@ -232,7 +239,7 @@ export async function fetchAccrualVaultV2Adapter(
           abi: midnightAdapterFactoryAbi,
           functionName: "isMidnightAdapter",
           args: [address],
-        }).catch(() => false)
+        }).catch(catchRevertOnly(false))
       : false,
   ]);
 

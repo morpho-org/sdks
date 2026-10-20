@@ -807,7 +807,14 @@ const _addressesRegistry = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xB83d2D5CAE5Fc64a408cA82447445442Fe249fe3",
 
+    midnight: "0x31Ff800b0FA4AA42071d4ae9D0392e84f256D83D",
     midnightBundlesV2: "0xe0d040daf1C3849FFcbea782Ea1Ce80699f05BA3",
+    midnightBlueBuyCallbackFactory:
+      "0x0b92694fA046303dB9371FD0A5722e0f3dC2C323",
+    midnightMempool: "0x947F74a8809a45edc03B6101bD40ACdFBE97553a",
+    ecrecoverAuthorizer: "0xD05f2BdEd597053bdAfe14f75365eCA4bb2f9f3D",
+    priceRatifierV1: "0xBea71461665fe20f74d1265f3B82707407dEb6A8",
+    rateRatifierV1: "0x1eAC83708c7413a697F686bcAF7B5aa2D13eA61f",
   },
   [ChainId.EdenMainnet]: {
     blue: "0xF050a2BB0468FF23cF2964AC182196C94D6815C3",
@@ -1452,7 +1459,13 @@ const _deployments = {
     /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 2375010n,
 
+    midnight: 42_413_205n,
     midnightBundlesV2: 42_883_338n,
+    midnightBlueBuyCallbackFactory: 42_413_255n,
+    midnightMempool: 42_413_247n,
+    ecrecoverAuthorizer: 42_413_214n,
+    priceRatifierV1: 42_413_230n,
+    rateRatifierV1: 42_413_221n,
   },
   [ChainId.EdenMainnet]: {
     blue: 53363569n,

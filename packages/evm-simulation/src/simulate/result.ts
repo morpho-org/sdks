@@ -16,7 +16,7 @@ import type { ParsedRequest } from "./request/parse-request.js";
 /**
  * Assemble the public result from the checked pipeline. Only user
  * transactions appear in `simulationTxs`/`calls`/`transfers` — preparation
- * calls and state reads never get a public `txIdx`.
+ * calls, state reads, and assertion calls never get a public `txIdx`.
  * @internal
  */
 export function assembleResult(params: {
@@ -49,7 +49,12 @@ export function assembleResult(params: {
   };
 
   return deepFreeze({
-    simulationTxs: request.transactions,
+    simulationTxs: request.transactions.map(({ from, to, data, value }) => ({
+      from,
+      to,
+      data,
+      value,
+    })),
     calls: userCalls,
     transfers,
     assetChanges,

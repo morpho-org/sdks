@@ -60,6 +60,12 @@ import {
   VaultV2UnsupportedLiquidityAdapterError,
 } from "../../types/index.js";
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    throw new Error(`unexpected ${method}`);
+  });
+
 const TWO_PERCENT = 20_000_000_000_000_000n;
 
 const mockRequirements = (
@@ -651,6 +657,12 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           }),
         },
       });
+      expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
+        "eth_chainId",
+        "eth_getCode",
+        "eth_call",
+        "eth_call",
+      ]);
     });
 
     test("behavior: signature path emits a bounded V2 permit", async () => {
@@ -1974,5 +1986,25 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         ).not.toThrow();
       }
     });
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    const exit = vaultFor(handle).forceWithdraw({
+      exitAssets: 51n,
+      vaultData: vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        assetBalance: 1_000n,
+        totalAssets: 1_000n,
+        totalSupply: 100_000_000_000_000_000n,
+      }),
+      userAddress: IN_KIND_USER,
+    });
+    answerWrongChain(handle);
+    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

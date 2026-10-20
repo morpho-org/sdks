@@ -1,8 +1,12 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { OperationLimit } from "../limits.js";
-import { operationMeasurementPlan } from "./measurement-plan.js";
+import { OPERATION_TYPES, type OperationLimit } from "../limits.js";
+import {
+  operationMeasurementPlan,
+  positionBoundsMarketField,
+  sharePriceMeasurement,
+} from "./measurement-plan.js";
 
 const loan = "0x0000000000000000000000000000000000000001";
 const collateral = "0x0000000000000000000000000000000000000002";
@@ -175,4 +179,73 @@ describe("operationMeasurementPlan", () => {
       expect(operationMeasurementPlan(limitFor(type))).toEqual(expected);
     },
   );
+});
+describe("positionBoundsMarketField", () => {
+  test.each([
+    ["blueSupply", "marketId"],
+    ["blueRefinance", "targetMarketId"],
+    ["vaultV1Deposit", undefined],
+    ["vaultV1MigrateToV2", undefined],
+  ] as const)(
+    "behavior: position bounds for %s use %s",
+    (type, expectedField) => {
+      expect(positionBoundsMarketField(type)).toBe(expectedField);
+    },
+  );
+});
+
+describe("sharePriceMeasurement", () => {
+  const payPerMinted = {
+    assets: "assetsPaid",
+    shares: "sharesMinted",
+    higherIsAdverse: true,
+  };
+  const receivePerBurned = {
+    assets: "assetsReceived",
+    shares: "sharesBurned",
+    higherIsAdverse: false,
+  };
+  const receivePerMinted = {
+    assets: "assetsReceived",
+    shares: "sharesMinted",
+    higherIsAdverse: false,
+  };
+  const payPerBurned = {
+    assets: "assetsPaid",
+    shares: "sharesBurned",
+    higherIsAdverse: true,
+  };
+  const sharePriceCases = [
+    { type: "blueSupply", expected: payPerMinted },
+    { type: "blueWithdraw", expected: receivePerBurned },
+    { type: "blueSupplyCollateral", expected: undefined },
+    { type: "blueBorrow", expected: receivePerMinted },
+    { type: "blueSupplyCollateralBorrow", expected: receivePerMinted },
+    { type: "blueRepay", expected: payPerBurned },
+    { type: "blueWithdrawCollateral", expected: undefined },
+    { type: "blueRepayWithdrawCollateral", expected: payPerBurned },
+    { type: "blueRefinance", expected: undefined },
+    { type: "vaultV1Deposit", expected: payPerMinted },
+    { type: "vaultV2Deposit", expected: payPerMinted },
+    { type: "vaultV1Withdraw", expected: receivePerBurned },
+    { type: "vaultV2Withdraw", expected: receivePerBurned },
+    { type: "vaultV1Redeem", expected: receivePerBurned },
+    { type: "vaultV2Redeem", expected: receivePerBurned },
+    { type: "vaultV2ForceWithdraw", expected: receivePerBurned },
+    { type: "vaultV2ForceRedeem", expected: receivePerBurned },
+    { type: "vaultV1InKindRedeem", expected: undefined },
+    { type: "vaultV2InKindRedeem", expected: undefined },
+    { type: "vaultV1MigrateToV2", expected: undefined },
+  ] as const;
+  test.each(sharePriceCases)(
+    "behavior: %s prices $expected",
+    ({ type, expected }) => {
+      expect(sharePriceMeasurement(type)).toEqual(expected);
+    },
+  );
+  test("coverage: every OperationType is listed", () => {
+    expect(sharePriceCases.map(({ type }) => type).sort()).toEqual(
+      [...OPERATION_TYPES].sort(),
+    );
+  });
 });

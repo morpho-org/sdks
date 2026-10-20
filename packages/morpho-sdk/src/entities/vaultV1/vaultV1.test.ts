@@ -1,4 +1,5 @@
 import { MathLib } from "@morpho-org/blue-sdk";
+import { createMockClient } from "@morpho-org/test/mock";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -25,6 +26,22 @@ describe("MorphoVaultV1 chain validation", () => {
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
 
     await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
+  });
+
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x2105";
+      throw new Error(`unexpected ${method}`);
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+    await expect(vault.getData()).rejects.toBeInstanceOf(ChainIdMismatchError);
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 
   test("error: ChainIdMismatchError when the client has no chain", async () => {

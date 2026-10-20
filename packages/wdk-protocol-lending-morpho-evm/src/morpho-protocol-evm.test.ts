@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import * as morphoSdk from "@morpho-org/morpho-sdk";
 import {
   AddressMismatchError,
@@ -12,13 +13,16 @@ import {
   VaultAssetMismatchError,
   type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+import { classifyError, expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient } from "@morpho-org/test/mock";
 import * as viem from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InvalidTransactionHashError,
   MissingWalletProviderError,
+  UnconfirmedBroadcastError,
 } from "./errors.js";
 import type {
   AuthorizationOrSignatureRequirement,
@@ -35,6 +39,10 @@ import type {
 const SEED =
   "cook voyage document eight skate token alien guide drink uncle term abuse";
 const ADDRESS = "0x405005C7c4422390F4B334F64Cf20E0b767131d0";
+const MOCK_TRANSACTION_HASH =
+  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const MOCK_USER_OPERATION_HASH =
+  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const TOKEN = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const COLLATERAL = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const VAULT = "0x23f5E9c35820f4baB695Ac1F19c203cC3f8e1e11";
@@ -196,9 +204,7 @@ const prepareTransactionRequestMock = vi.fn().mockResolvedValue({
   maxFeePerGas: 12_345n,
   maxPriorityFeePerGas: 1n,
 });
-const sendRawTransactionMock = vi
-  .fn()
-  .mockResolvedValue("dummy-transaction-hash");
+const sendRawTransactionMock = vi.fn().mockResolvedValue(MOCK_TRANSACTION_HASH);
 const extendMock = vi.fn().mockReturnValue({
   account: { address: ADDRESS },
   chain: { id: 1 },
@@ -256,9 +262,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       maxFeePerGas: 12_345n,
       maxPriorityFeePerGas: 1n,
     });
-    sendRawTransactionMock
-      .mockReset()
-      .mockResolvedValue("dummy-transaction-hash");
+    sendRawTransactionMock.mockReset().mockResolvedValue(MOCK_TRANSACTION_HASH);
 
     account = new WalletAccountEvm(SEED, "0'/0/0", {
       provider: "https://dummy-rpc-url.com",
@@ -384,88 +388,1124 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
 
-    test("uses real viem transport actions for legacy EOA preparation and broadcast", async () => {
-      const handle = createMockClient(mainnet);
-      const hash =
-        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-      handle.request.mockImplementation(async ({ method }) => {
-        if (method === "eth_chainId") return "0x1";
-        if (method === "eth_fillTransaction") {
-          return {
-            tx: {
-              chainId: "0x1",
-              from: ADDRESS,
-              to: SUPPLY_TX.to,
-              input: SUPPLY_TX.data,
-              value: "0x0",
-              gas: "0x5208",
-              gasPrice: "0x3",
-              nonce: "0x0",
-              type: "0x0",
-            },
-          };
-        }
-        if (method === "eth_sendRawTransaction") return hash;
-        throw new Error(`Unhandled RPC ${method}`);
-      });
-      const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
-        provider: {
-          request: ({ method, params }) =>
-            handle.request({
-              method,
-              params: Array.isArray(params) ? params : undefined,
-            }),
-        },
-      });
-      transportAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      transportAccount.quoteSendTransaction = vi
-        .fn()
-        .mockResolvedValue({ fee: 12_345n });
-      const signTransaction = vi.spyOn(transportAccount, "signTransaction");
-      const transportProtocol = new MorphoProtocolEvm(transportAccount, {
-        chainId: 1,
-        earnVaultAddress: VAULT,
-        borrowMarketParams: MARKET_PARAMS,
-      });
+    test.each([
+      {
+        hash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        expected: "valid",
+      },
+      { hash: "0x1234", expected: "invalid" },
+      { hash: "not-hex", expected: "invalid" },
+      { hash: `0x${"a".repeat(63)}`, expected: "invalid" },
+      { hash: { toString: null }, expected: "invalid" },
+    ] as const)(
+      "uses real viem transport actions for legacy EOA submission ($expected)",
+      async ({ hash, expected }) => {
+        const handle = createMockClient(mainnet);
+        handle.request.mockImplementation(async ({ method }) => {
+          if (method === "eth_chainId") return "0x1";
+          if (method === "eth_fillTransaction") {
+            return {
+              tx: {
+                chainId: "0x1",
+                from: ADDRESS,
+                to: SUPPLY_TX.to,
+                input: SUPPLY_TX.data,
+                value: "0x0",
+                gas: "0x5208",
+                gasPrice: "0x3",
+                nonce: "0x0",
+                type: "0x0",
+              },
+            };
+          }
+          if (method === "eth_sendRawTransaction") return hash;
+          throw new Error(`Unhandled RPC ${method}`);
+        });
+        const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+          provider: {
+            request: ({ method, params }) =>
+              handle.request({
+                method,
+                params: Array.isArray(params) ? params : undefined,
+              }),
+          },
+        });
+        transportAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        transportAccount.quoteSendTransaction = vi
+          .fn()
+          .mockResolvedValue({ fee: 12_345n });
+        const signTransaction = vi.spyOn(transportAccount, "signTransaction");
+        const transportProtocol = new MorphoProtocolEvm(transportAccount, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+          borrowMarketParams: MARKET_PARAMS,
+        });
 
-      await createClientMock.withImplementation(
-        (parameters) =>
-          viem.createClient(
-            parameters as Parameters<typeof viem.createClient>[0],
-          ),
-        () =>
-          morphoViemExtensionMock.withImplementation(
-            () => () => ({ morpho: morphoNamespaceMock }),
-            async () => {
-              await expect(
-                transportProtocol.supply({
+        await createClientMock.withImplementation(
+          (parameters) =>
+            viem.createClient(
+              parameters as Parameters<typeof viem.createClient>[0],
+            ),
+          () =>
+            morphoViemExtensionMock.withImplementation(
+              () => () => ({ morpho: morphoNamespaceMock }),
+              async () => {
+                const submission = transportProtocol.supply({
                   token: TOKEN,
                   amount: 100_000n,
+                });
+                if (expected === "valid") {
+                  await expect(submission).resolves.toEqual({
+                    hash,
+                    fee: 12_345n,
+                  });
+                } else {
+                  const error = await submission.catch(
+                    (caught: unknown) => caught,
+                  );
+                  assert(error instanceof InvalidTransactionHashError);
+                  expect(classifyError(error)).toBe("integrity");
+                  assert(error.eoa !== undefined);
+                  expect(error.eoa.localHash).toBe(
+                    viem.keccak256(error.eoa.serializedTransaction),
+                  );
+                  expect(error.eoa.serializedTransaction).toBe(
+                    await signTransaction.mock.results[0]?.value,
+                  );
+                  expect(error.message).toContain(
+                    `look up "${error.eoa.localHash}" before retrying the operation.`,
+                  );
+                }
+              },
+            ),
+        );
+
+        expect(signTransaction).toHaveBeenCalledWith({
+          ...SUPPLY_TX,
+          chainId: 1,
+          gasLimit: 21_000n,
+          gasPrice: 3n,
+          nonce: 0,
+        });
+        expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual(
+          expect.arrayContaining([
+            "eth_chainId",
+            "eth_fillTransaction",
+            "eth_sendRawTransaction",
+          ]),
+        );
+      },
+    );
+
+    describe("ethers provider error normalization", () => {
+      const submitWithProviderError = async (
+        providerError: unknown,
+        options: {
+          providerType?: "send" | "request";
+          transactionLookup?: (
+            serializedTransaction: `0x${string}` | undefined,
+          ) => Promise<unknown>;
+          failoverProviderErrors?: readonly Error[];
+          simulateFailoverRetry?: boolean;
+          retries?: number;
+        } = {},
+      ) => {
+        const {
+          providerType = "send",
+          transactionLookup = async () => null,
+          failoverProviderErrors,
+          simulateFailoverRetry = false,
+          retries,
+        } = options;
+        let serializedTransaction: `0x${string}` | undefined;
+        let requestedTransactionHash: unknown;
+        const failoverCalls: string[] = [];
+        const handle = createMockClient(mainnet);
+        handle.request.mockImplementation(async ({ method, params }) => {
+          if (method === "eth_chainId") return "0x1";
+          if (method === "eth_fillTransaction") {
+            return {
+              tx: {
+                chainId: "0x1",
+                from: ADDRESS,
+                to: SUPPLY_TX.to,
+                input: SUPPLY_TX.data,
+                value: "0x0",
+                gas: "0x5208",
+                gasPrice: "0x3",
+                nonce: "0x0",
+                type: "0x0",
+              },
+            };
+          }
+          if (method === "eth_getTransactionByHash") {
+            requestedTransactionHash = Array.isArray(params)
+              ? params[0]
+              : undefined;
+            return transactionLookup(serializedTransaction);
+          }
+          throw new Error(`Unhandled RPC ${method}`);
+        });
+        const forwardRequest = async (
+          {
+            method,
+            params,
+          }: {
+            method: string;
+            params: readonly unknown[] | object;
+          },
+          error: unknown,
+        ) => {
+          if (method === "eth_sendRawTransaction") {
+            const candidate = Array.isArray(params) ? params[0] : undefined;
+            if (typeof candidate === "string") {
+              serializedTransaction = candidate as `0x${string}`;
+            }
+            throw error;
+          }
+          return handle.request({
+            method,
+            params: Array.isArray(params) ? params : undefined,
+          });
+        };
+        const singleProvider = {
+          request: ({
+            method,
+            params,
+          }: {
+            method: string;
+            params?: readonly unknown[] | object;
+          }) => forwardRequest({ method, params: params ?? [] }, providerError),
+        };
+        const provider =
+          failoverProviderErrors !== undefined
+            ? failoverProviderErrors.map((error, index) => ({
+                request: ({
+                  method,
+                  params,
+                }: {
+                  method: string;
+                  params?: readonly unknown[] | object;
+                }) => {
+                  if (
+                    method === "eth_sendRawTransaction" ||
+                    method === "eth_getTransactionByHash"
+                  ) {
+                    failoverCalls.push(`${index === 0 ? "A" : "B"}:${method}`);
+                  }
+                  return forwardRequest(
+                    { method, params: params ?? [] },
+                    error,
+                  );
+                },
+              }))
+            : simulateFailoverRetry
+              ? [singleProvider]
+              : singleProvider;
+        const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+          provider,
+          ...(retries === undefined ? {} : { retries }),
+        });
+        transportAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        transportAccount.quoteSendTransaction = vi
+          .fn()
+          .mockResolvedValue({ fee: 12_345n });
+        if (failoverProviderErrors === undefined) {
+          Reflect.set(transportAccount, "_provider", {
+            ...(providerType === "send"
+              ? {
+                  send: (method: string, params: readonly unknown[] | object) =>
+                    forwardRequest({ method, params }, providerError),
+                }
+              : {
+                  request: async ({
+                    method,
+                    params,
+                  }: {
+                    method: string;
+                    params?: readonly unknown[] | object;
+                  }) =>
+                    forwardRequest(
+                      { method, params: params ?? [] },
+                      providerError,
+                    ),
                 }),
-              ).resolves.toEqual({ hash, fee: 12_345n });
+          });
+        }
+        const transportProtocol = new MorphoProtocolEvm(transportAccount, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+          borrowMarketParams: MARKET_PARAMS,
+        });
+        let submissionError: unknown;
+        let submissionResult:
+          | Awaited<ReturnType<typeof transportProtocol.supply>>
+          | undefined;
+        await createClientMock.withImplementation(
+          (parameters) =>
+            viem.createClient(
+              parameters as Parameters<typeof viem.createClient>[0],
+            ),
+          () =>
+            morphoViemExtensionMock.withImplementation(
+              () => () => ({ morpho: morphoNamespaceMock }),
+              async () => {
+                try {
+                  submissionResult = await transportProtocol.supply({
+                    token: TOKEN,
+                    amount: 100_000n,
+                  });
+                } catch (caught) {
+                  submissionError = caught;
+                }
+              },
+            ),
+        );
+        return {
+          error: submissionError,
+          failoverCalls,
+          requestedTransactionHash,
+          result: submissionResult,
+          serializedTransaction,
+        };
+      };
+
+      test("preserves unrelated errors without classifying them as infrastructure", async () => {
+        const providerError = new Error("boom");
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error } = await submitWithProviderError(providerError, {
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof viem.UnknownRpcError);
+        expect(error).not.toBeInstanceOf(viem.HttpRequestError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(lookup).not.toHaveBeenCalled();
+        expect(classifyError(error)).not.toBe("infra");
+      });
+
+      test("does not reconcile primitive provider errors", async () => {
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error } = await submitWithProviderError("boom", {
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof viem.UnknownRpcError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(lookup).not.toHaveBeenCalled();
+      });
+
+      test("maps an ethers JSON-RPC payload to its concrete viem error", async () => {
+        const providerError = Object.assign(
+          new Error("could not coalesce error"),
+          {
+            code: "UNKNOWN_ERROR",
+            error: { code: -32000, message: "nonce too low" },
+          },
+        );
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof viem.InvalidInputRpcError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+      });
+
+      test("preserves data from a nested JSON-RPC error", async () => {
+        const providerError = Object.assign(
+          new Error("could not coalesce error"),
+          {
+            error: {
+              code: 3,
+              message: "execution reverted",
+              data: "0x08c379a0",
             },
-          ),
+          },
+        );
+        const { error } = await submitWithProviderError(providerError);
+
+        assert(error instanceof viem.BaseError);
+        const rpcError = error.walk(
+          (cause) => cause instanceof viem.RpcRequestError,
+        );
+        assert(rpcError instanceof viem.RpcRequestError);
+        expect(rpcError.code).toBe(3);
+        expect(rpcError.data).toBe("0x08c379a0");
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+      });
+
+      test("returns the local hash when a JSON-RPC rejection reconciles to a transaction", async () => {
+        const providerError = Object.assign(new Error("already known"), {
+          code: -32000,
+        });
+        const lookup = vi.fn(
+          async (signedTransaction: `0x${string}` | undefined) => {
+            assert(signedTransaction !== undefined);
+            return {
+              blockHash: `0x${"b".repeat(64)}`,
+              blockNumber: "0x1",
+              from: ADDRESS,
+              gas: "0x5208",
+              gasPrice: "0x3",
+              hash: viem.keccak256(signedTransaction),
+              input: SUPPLY_TX.data,
+              nonce: "0x0",
+              to: SUPPLY_TX.to,
+              transactionIndex: "0x0",
+              type: "0x0",
+              value: "0x0",
+            };
+          },
+        );
+        const {
+          error,
+          requestedTransactionHash,
+          result,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          transactionLookup: lookup,
+        });
+
+        expect(error).toBeUndefined();
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        assert(result !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(result.hash).toBe(viem.keccak256(serializedTransaction));
+      });
+
+      test("request provider reconciles a plain JSON-RPC object like RpcRequestError", async () => {
+        const lookup = vi.fn(
+          async (signedTransaction: `0x${string}` | undefined) => {
+            assert(signedTransaction !== undefined);
+            return {
+              blockHash: `0x${"b".repeat(64)}`,
+              blockNumber: "0x1",
+              from: ADDRESS,
+              gas: "0x5208",
+              gasPrice: "0x3",
+              hash: viem.keccak256(signedTransaction),
+              input: SUPPLY_TX.data,
+              nonce: "0x0",
+              to: SUPPLY_TX.to,
+              transactionIndex: "0x0",
+              type: "0x0",
+              value: "0x0",
+            };
+          },
+        );
+        const plainObject = await submitWithProviderError(
+          { code: -32000, message: "already known" },
+          {
+            providerType: "request",
+            transactionLookup: lookup,
+          },
+        );
+        const rpcRequestError = new viem.RpcRequestError({
+          body: {
+            method: "eth_sendRawTransaction",
+            params: [],
+          },
+          error: { code: -32000, message: "already known" },
+          url: "wdk-account-provider",
+        });
+        const viemError = await submitWithProviderError(rpcRequestError, {
+          providerType: "request",
+          transactionLookup: lookup,
+        });
+
+        expect(lookup).toHaveBeenCalledTimes(2);
+        expect(plainObject.error).toBeUndefined();
+        expect(viemError.error).toBeUndefined();
+        expect(plainObject.result?.hash).toBe(viemError.result?.hash);
+        expect(plainObject.requestedTransactionHash).toBe(
+          viemError.requestedTransactionHash,
+        );
+      });
+
+      test("request provider reconciles a plain JSON-RPC object and rethrows it when not found", async () => {
+        const providerError = { code: -32000, message: "already known" };
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            providerType: "request",
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof viem.BaseError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(
+          error.walk((cause) => cause instanceof viem.RpcRequestError),
+        ).toBeInstanceOf(viem.RpcRequestError);
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+      });
+
+      test.each([
+        {
+          name: "network code",
+          providerError: { code: "ECONNRESET" },
+          causeClass: viem.HttpRequestError,
+        },
+        {
+          name: "ethers timeout code",
+          providerError: { code: "TIMEOUT" },
+          causeClass: viem.TimeoutError,
+        },
+        {
+          name: "gateway status",
+          providerError: { response: { statusCode: 504 } },
+          causeClass: viem.HttpRequestError,
+        },
+      ])(
+        "wraps a plain-object $name rejection and preserves its cause",
+        async ({ providerError, causeClass }) => {
+          const lookup = vi.fn().mockResolvedValue(null);
+          const { error } = await submitWithProviderError(providerError, {
+            providerType: "request",
+            transactionLookup: lookup,
+          });
+
+          assert(error instanceof UnconfirmedBroadcastError);
+          assert(error.cause instanceof viem.BaseError);
+          expect(
+            error.cause.walk((cause) => cause instanceof causeClass),
+          ).toBeInstanceOf(causeClass);
+          expect(error.cause.walk((cause) => cause === providerError)).toBe(
+            providerError,
+          );
+          expect(lookup).not.toHaveBeenCalled();
+        },
       );
 
-      expect(signTransaction).toHaveBeenCalledWith({
-        ...SUPPLY_TX,
-        chainId: 1,
-        gasLimit: 21_000n,
-        gasPrice: 3n,
-        nonce: 0,
+      test("marks an already-known response uncertain when reconciliation fails", async () => {
+        const providerError = Object.assign(new Error("already known"), {
+          code: -32000,
+        });
+        const lookupError = new viem.HttpRequestError({
+          body: { method: "eth_getTransactionByHash", params: [] },
+          details: "lookup failed",
+          url: "wdk-account-provider",
+        });
+        const lookup = vi.fn().mockRejectedValue(lookupError);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        expect(classifyError(error)).toBe("infra");
+        expect(lookup).toHaveBeenCalled();
+        assert(serializedTransaction !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        assert(error.cause instanceof AggregateError);
+        const sendError = error.cause.errors[0];
+        assert(sendError instanceof viem.InvalidInputRpcError);
+        expect(sendError.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(error.cause.errors[1]).toBe(lookupError);
+        expect(error.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(error.serializedTransaction).toBe(serializedTransaction);
       });
-      expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual(
-        expect.arrayContaining([
-          "eth_chainId",
-          "eth_fillTransaction",
-          "eth_sendRawTransaction",
-        ]),
+
+      test("marks a real WDK failover JSON-RPC rejection uncertain when lookup is not found", async () => {
+        const firstError = Object.assign(new Error("socket hang up"), {
+          code: "ECONNRESET",
+        });
+        const providerError = Object.assign(new Error("rate limited"), {
+          code: -32005,
+        });
+        const lookup = vi.fn().mockResolvedValue(null);
+        const {
+          error,
+          failoverCalls,
+          requestedTransactionHash,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          failoverProviderErrors: [firstError, providerError],
+          retries: 1,
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        assert(serializedTransaction !== undefined);
+        expect(lookup).toHaveBeenCalledOnce();
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(error.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(error.serializedTransaction).toBe(serializedTransaction);
+        expect(failoverCalls).toEqual([
+          "A:eth_sendRawTransaction",
+          "B:eth_sendRawTransaction",
+          "B:eth_getTransactionByHash",
+        ]);
+      });
+
+      test("uses WDK's default retries to mark a failover send uncertain", async () => {
+        const firstError = Object.assign(new Error("socket hang up"), {
+          code: "ECONNRESET",
+        });
+        const providerError = Object.assign(new Error("rate limited"), {
+          code: -32005,
+        });
+        const lookup = vi.fn().mockResolvedValue(null);
+        const {
+          error,
+          failoverCalls,
+          requestedTransactionHash,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          failoverProviderErrors: [firstError, providerError],
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        assert(serializedTransaction !== undefined);
+        expect(lookup).toHaveBeenCalledOnce();
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(error.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(failoverCalls.slice(0, 2)).toEqual([
+          "A:eth_sendRawTransaction",
+          "B:eth_sendRawTransaction",
+        ]);
+        expect(failoverCalls).toContain("B:eth_getTransactionByHash");
+      });
+
+      test("marks an unknown BrowserProvider failover error uncertain when lookup is not found", async () => {
+        const firstError = Object.assign(new Error("socket hang up"), {
+          code: "ECONNRESET",
+        });
+        const providerError = Object.assign(
+          new Error("server response 503 Service Unavailable"),
+          { statusCode: 503 },
+        );
+        const lookup = vi.fn().mockResolvedValue(null);
+        const {
+          error,
+          failoverCalls,
+          requestedTransactionHash,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          failoverProviderErrors: [firstError, providerError],
+          retries: 1,
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        expect(classifyError(error)).toBe("infra");
+        assert(error.cause instanceof viem.UnknownRpcError);
+        assert(serializedTransaction !== undefined);
+        expect(lookup).toHaveBeenCalledOnce();
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(error.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(error.serializedTransaction).toBe(serializedTransaction);
+        expect(failoverCalls).toEqual([
+          "A:eth_sendRawTransaction",
+          "B:eth_sendRawTransaction",
+          "B:eth_getTransactionByHash",
+        ]);
+      });
+
+      test("returns the local hash when a failover plain error reconciles to a transaction", async () => {
+        const firstError = Object.assign(new Error("socket hang up"), {
+          code: "ECONNRESET",
+        });
+        const providerError = new Error("boom");
+        const lookup = vi.fn(
+          async (signedTransaction: `0x${string}` | undefined) => {
+            assert(signedTransaction !== undefined);
+            return {
+              blockHash: `0x${"b".repeat(64)}`,
+              blockNumber: "0x1",
+              from: ADDRESS,
+              gas: "0x5208",
+              gasPrice: "0x3",
+              hash: viem.keccak256(signedTransaction),
+              input: SUPPLY_TX.data,
+              nonce: "0x0",
+              to: SUPPLY_TX.to,
+              transactionIndex: "0x0",
+              type: "0x0",
+              value: "0x0",
+            };
+          },
+        );
+        const {
+          error,
+          failoverCalls,
+          requestedTransactionHash,
+          result,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          failoverProviderErrors: [firstError, providerError],
+          retries: 1,
+          transactionLookup: lookup,
+        });
+
+        expect(error).toBeUndefined();
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        assert(result !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(result.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(failoverCalls).toEqual([
+          "A:eth_sendRawTransaction",
+          "B:eth_sendRawTransaction",
+          "B:eth_getTransactionByHash",
+        ]);
+      });
+
+      test("marks a simulated WDK failover HTTP 503 uncertain when lookup is not found", async () => {
+        const providerError = Object.assign(new Error("service unavailable"), {
+          statusCode: 503,
+        });
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            simulateFailoverRetry: true,
+            retries: 1,
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        assert(error.cause instanceof viem.HttpRequestError);
+        expect(error.cause.status).toBe(503);
+        assert(serializedTransaction !== undefined);
+        expect(lookup).toHaveBeenCalledOnce();
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(error.hash).toBe(viem.keccak256(serializedTransaction));
+        expect(error.serializedTransaction).toBe(serializedTransaction);
+      });
+
+      test("returns the local hash when a single-provider HTTP 503 reconciles to a transaction", async () => {
+        const providerError = Object.assign(new Error("service unavailable"), {
+          statusCode: 503,
+        });
+        const lookup = vi.fn(
+          async (signedTransaction: `0x${string}` | undefined) => {
+            assert(signedTransaction !== undefined);
+            return {
+              blockHash: `0x${"b".repeat(64)}`,
+              blockNumber: "0x1",
+              from: ADDRESS,
+              gas: "0x5208",
+              gasPrice: "0x3",
+              hash: viem.keccak256(signedTransaction),
+              input: SUPPLY_TX.data,
+              nonce: "0x0",
+              to: SUPPLY_TX.to,
+              transactionIndex: "0x0",
+              type: "0x0",
+              value: "0x0",
+            };
+          },
+        );
+        const {
+          error,
+          requestedTransactionHash,
+          result,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          transactionLookup: lookup,
+        });
+
+        expect(error).toBeUndefined();
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        assert(result !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(result.hash).toBe(viem.keccak256(serializedTransaction));
+      });
+
+      test("keeps a retries-zero WDK failover RPC rejection definite when lookup is not found", async () => {
+        const providerError = Object.assign(new Error("already known"), {
+          code: -32000,
+        });
+        const lookup = vi.fn().mockResolvedValue(null);
+        const {
+          error,
+          failoverCalls,
+          requestedTransactionHash,
+          serializedTransaction,
+        } = await submitWithProviderError(providerError, {
+          failoverProviderErrors: [providerError],
+          retries: 0,
+          transactionLookup: lookup,
+        });
+
+        assert(error instanceof viem.InvalidInputRpcError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        assert(serializedTransaction !== undefined);
+        expect(lookup).toHaveBeenCalledOnce();
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+        expect(failoverCalls).toEqual([
+          "A:eth_sendRawTransaction",
+          "A:eth_getTransactionByHash",
+        ]);
+      });
+
+      test("maps an ethers info.error JSON-RPC payload to its concrete viem error", async () => {
+        const providerError = Object.assign(
+          new Error("could not coalesce error"),
+          {
+            info: { error: { code: -32000, message: "nonce too low" } },
+          },
+        );
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof viem.InvalidInputRpcError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+      });
+
+      test("maps a top-level JSON-RPC error code to its concrete viem error", async () => {
+        const providerError = Object.assign(new Error("nonce too low"), {
+          code: -32000,
+        });
+        const lookup = vi.fn().mockResolvedValue(null);
+        const { error, requestedTransactionHash, serializedTransaction } =
+          await submitWithProviderError(providerError, {
+            transactionLookup: lookup,
+          });
+
+        assert(error instanceof viem.InvalidInputRpcError);
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(lookup).toHaveBeenCalledOnce();
+        assert(serializedTransaction !== undefined);
+        expect(requestedTransactionHash).toBe(
+          viem.keccak256(serializedTransaction),
+        );
+      });
+
+      test("preserves data from a top-level JSON-RPC error", async () => {
+        const providerError = Object.assign(new Error("execution reverted"), {
+          code: 3,
+          data: "0x08c379a0",
+        });
+        const { error } = await submitWithProviderError(providerError);
+
+        assert(error instanceof viem.BaseError);
+        const rpcError = error.walk(
+          (cause) => cause instanceof viem.RpcRequestError,
+        );
+        assert(rpcError instanceof viem.RpcRequestError);
+        expect(rpcError.code).toBe(3);
+        expect(rpcError.data).toBe("0x08c379a0");
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+      });
+
+      test.each([
+        {
+          name: "ECONNRESET",
+          providerError: Object.assign(new Error("socket hang up"), {
+            code: "ECONNRESET",
+          }),
+          causeClass: viem.HttpRequestError,
+        },
+        {
+          name: "TIMEOUT",
+          providerError: Object.assign(new Error("request timed out"), {
+            code: "TIMEOUT",
+          }),
+          causeClass: viem.TimeoutError,
+        },
+        {
+          name: "DOMException TimeoutError",
+          providerError: new DOMException("timed out", "TimeoutError"),
+          causeClass: viem.TimeoutError,
+        },
+        {
+          name: "DOMException AbortError",
+          providerError: new DOMException("aborted", "AbortError"),
+          causeClass: viem.TimeoutError,
+        },
+        {
+          name: "nested UND_ERR_SOCKET",
+          providerError: Object.assign(new TypeError("fetch failed"), {
+            cause: { code: "UND_ERR_SOCKET" },
+          }),
+          causeClass: viem.HttpRequestError,
+        },
+        {
+          name: "NETWORK_ERROR",
+          providerError: Object.assign(new Error("network error"), {
+            code: "NETWORK_ERROR",
+          }),
+          causeClass: viem.HttpRequestError,
+        },
+      ] as const)(
+        "preserves uncertain broadcasts for $name",
+        async ({ providerError, causeClass }) => {
+          const { error } = await submitWithProviderError(providerError);
+
+          assert(error instanceof UnconfirmedBroadcastError);
+          assert(error.cause instanceof viem.BaseError);
+          expect(error.cause).toBeInstanceOf(causeClass);
+          expect(error.cause.walk((cause) => cause === providerError)).toBe(
+            providerError,
+          );
+          expect(error.hash).toBe(viem.keccak256(error.serializedTransaction));
+          expect(
+            viem.isHex(error.serializedTransaction, {
+              strict: true,
+            }),
+          ).toBe(true);
+        },
       );
+
+      test("normalizes ECONNRESET when DOMException is unavailable", async () => {
+        const originalDOMException = globalThis.DOMException;
+        try {
+          Reflect.deleteProperty(globalThis, "DOMException");
+          const { error } = await submitWithProviderError(
+            Object.assign(new Error("socket hang up"), {
+              code: "ECONNRESET",
+            }),
+          );
+          assert(error instanceof UnconfirmedBroadcastError);
+          expect(classifyError(error)).toBe("infra");
+        } finally {
+          globalThis.DOMException = originalDOMException;
+        }
+      });
+
+      test("does not classify a NetworkError DOMException as an uncertain broadcast", async () => {
+        const providerError = new DOMException("x", "NetworkError");
+        const { error } = await submitWithProviderError(providerError);
+
+        assert(error instanceof viem.BaseError);
+        expect(error.walk((cause) => cause === providerError)).toBe(
+          providerError,
+        );
+        expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+        expect(classifyError(error)).not.toBe("infra");
+      });
+
+      test.each([
+        {
+          name: "HTTP 504 status",
+          providerError: Object.assign(new Error("gateway timeout"), {
+            status: 504,
+          }),
+          status: 504,
+        },
+        {
+          name: "HTTP 504 response statusCode",
+          providerError: Object.assign(new Error("gateway timeout"), {
+            response: { statusCode: 504 },
+          }),
+          status: 504,
+        },
+        {
+          name: "HTTP 502 response status",
+          providerError: Object.assign(new Error("bad gateway"), {
+            response: { status: 502 },
+          }),
+          status: 502,
+        },
+        {
+          name: "HTTP 524 status",
+          providerError: Object.assign(new Error("a timeout occurred"), {
+            statusCode: 524,
+          }),
+          status: 524,
+        },
+      ] as const)(
+        "marks $name as an uncertain broadcast",
+        async ({ providerError, status }) => {
+          const { error } = await submitWithProviderError(providerError);
+
+          assert(error instanceof UnconfirmedBroadcastError);
+          assert(error.cause instanceof viem.HttpRequestError);
+          expect(error.cause.status).toBe(status);
+          expect(error.hash).toBe(viem.keccak256(error.serializedTransaction));
+        },
+      );
+
+      test("normalizes network errors from an EIP-1193 request-only provider", async () => {
+        const { error } = await submitWithProviderError(
+          Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+          { providerType: "request" },
+        );
+
+        assert(error instanceof UnconfirmedBroadcastError);
+        expect(error.cause).toBeInstanceOf(viem.HttpRequestError);
+        expect(error.hash).toBe(viem.keccak256(error.serializedTransaction));
+      });
+
+      test.each([
+        {
+          name: "status",
+          providerError: Object.assign(new Error("service unavailable"), {
+            status: 503,
+          }),
+          status: 503,
+        },
+        {
+          name: "statusCode",
+          providerError: Object.assign(new Error("service unavailable"), {
+            statusCode: 503,
+          }),
+          status: 503,
+        },
+        {
+          name: "response statusCode",
+          providerError: Object.assign(new Error("service unavailable"), {
+            response: { statusCode: 503 },
+          }),
+          status: 503,
+        },
+        {
+          name: "status 429",
+          providerError: Object.assign(new Error("too many requests"), {
+            status: 429,
+          }),
+          status: 429,
+        },
+      ] as const)(
+        "preserves HTTP $name without marking it uncertain",
+        async ({ providerError, status }) => {
+          const lookup = vi.fn().mockResolvedValue(null);
+          const { error, requestedTransactionHash, serializedTransaction } =
+            await submitWithProviderError(providerError, {
+              transactionLookup: lookup,
+            });
+
+          assert(error instanceof viem.HttpRequestError);
+          expect(error.status).toBe(status);
+          expect(error).not.toBeInstanceOf(UnconfirmedBroadcastError);
+          expect(lookup).toHaveBeenCalledOnce();
+          assert(serializedTransaction !== undefined);
+          expect(requestedTransactionHash).toBe(
+            viem.keccak256(serializedTransaction),
+          );
+        },
+      );
+    });
+
+    describe("chaos: S5 wrong chain", () => {
+      test("error: ChainIdMismatchError when the provider switches to Base between quote and broadcast", async () => {
+        const handle = createMockClient(mainnet);
+        let servedChain = "0x1";
+        handle.request.mockImplementation(async ({ method }) => {
+          if (method === "eth_chainId") return servedChain;
+          throw new Error(`Unhandled RPC ${method}`);
+        });
+        const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+          provider: {
+            request: ({ method, params }) =>
+              handle.request({
+                method,
+                params: Array.isArray(params) ? params : undefined,
+              }),
+          },
+        });
+        transportAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        transportAccount.quoteSendTransaction = vi
+          .fn()
+          .mockResolvedValue({ fee: 12_345n });
+        const signTransaction = vi.spyOn(transportAccount, "signTransaction");
+        const transportProtocol = new MorphoProtocolEvm(transportAccount, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+          borrowMarketParams: MARKET_PARAMS,
+        });
+
+        await createClientMock.withImplementation(
+          (parameters) =>
+            viem.createClient(
+              parameters as Parameters<typeof viem.createClient>[0],
+            ),
+          () =>
+            morphoViemExtensionMock.withImplementation(
+              () => () => ({ morpho: morphoNamespaceMock }),
+              async () => {
+                const prepared = await transportProtocol.prepareSupply({
+                  token: TOKEN,
+                  amount: 100_000n,
+                });
+                await expect(prepared.quote()).resolves.toEqual({
+                  fee: 12_345n,
+                });
+                const quoteCalls = handle.request.mock.calls.length;
+                servedChain = "0x2105";
+
+                const error = await expectFailClosed(
+                  prepared.submit(),
+                  "chain",
+                );
+                expect(error).toBeInstanceOf(ChainIdMismatchError);
+                expect(
+                  handle.request.mock.calls
+                    .slice(quoteCalls)
+                    .map(([call]) => call.method),
+                ).toEqual(["eth_chainId"]);
+              },
+            ),
+        );
+
+        expect(signTransaction).not.toHaveBeenCalled();
+        expect(
+          handle.request.mock.calls.map(([call]) => call.method),
+        ).not.toContain("eth_sendRawTransaction");
+      });
     });
 
     test("should return supply requirements from morpho-sdk", async () => {
@@ -586,7 +1626,7 @@ describe.sequential("MorphoProtocolEvm", () => {
             ...POPULATED_TRANSACTION,
           });
           expect(result).toEqual({
-            hash: "dummy-transaction-hash",
+            hash: MOCK_TRANSACTION_HASH,
             fee: 123n,
           });
         } else {
@@ -951,7 +1991,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1020,7 +2060,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1109,7 +2149,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1420,7 +2460,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1600,7 +2640,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1659,7 +2699,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
     });
@@ -1793,7 +2833,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       account.signTransaction = vi.fn().mockResolvedValue(signed);
       account.sendTransaction = vi
         .fn()
-        .mockResolvedValue({ hash: "dummy-user-operation-hash", fee: 99_999n });
+        .mockResolvedValue({ hash: MOCK_USER_OPERATION_HASH, fee: 99_999n });
 
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
@@ -1847,10 +2887,9 @@ describe.sequential("MorphoProtocolEvm", () => {
         operationConfig,
       );
       expect(result).toEqual({
-        hash: "dummy-user-operation-hash",
+        hash: MOCK_USER_OPERATION_HASH,
         fee: 99_999n,
       });
-
       const quoteConfig = { useNativeCoins: true as const };
       await expect(
         protocol.quoteBorrow({ token: TOKEN, amount: 100_000n }, quoteConfig),
@@ -1862,6 +2901,115 @@ describe.sequential("MorphoProtocolEvm", () => {
         quoteConfig,
       );
       expect(forwardedQuoteConfig).not.toBe(quoteConfig);
+    });
+
+    test.each([
+      { name: "short", hash: "0x1234" },
+      { name: "63-nibble", hash: `0x${"a".repeat(63)}` },
+    ] as const)(
+      "rejects a malformed ERC-4337 transaction hash ($name)",
+      async ({ hash }) => {
+        // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
+        const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+          chainId: 1,
+          provider: { request: async () => "0x1" },
+          bundlerUrl: "https://dummy-bundler-url.com",
+          safeModulesVersion: "0.3.0",
+          isSponsored: false,
+          useNativeCoins: true,
+        });
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        account.sendTransaction = vi.fn().mockResolvedValue({
+          hash,
+          fee: 99_999n,
+        });
+
+        // biome-ignore lint/suspicious/noShadow: test-local protocol for the ERC-4337 account above
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+          borrowMarketParams: MARKET_PARAMS,
+        });
+        readContractMock.mockResolvedValue(100_000n);
+
+        const prepared = await protocol.prepareSupply({
+          token: TOKEN,
+          amount: 100_000n,
+        });
+        const error = await prepared
+          .submit()
+          .catch((caught: unknown) => caught);
+
+        assert(error instanceof InvalidTransactionHashError);
+        expect(error.eoa).toBeUndefined();
+        expect(error.message).toContain(
+          "The user operation may already be in flight (e.g. with `nonceKey` or `parallel`); look it up with the bundler or check the account nonce before retrying the operation.",
+        );
+        expect(classifyError(error)).toBe("integrity");
+      },
+    );
+
+    test("reports bundler transport failures without returning a result", async () => {
+      // biome-ignore lint/suspicious/noShadow: test-local account using the real WDK bundler transport
+      const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+        chainId: 1,
+        provider: { request: async () => "0x1" },
+        bundlerUrl: "https://dummy-bundler-url.com",
+        safeModulesVersion: "0.3.0",
+        isSponsored: false,
+        useNativeCoins: true,
+      });
+      account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      Reflect.set(
+        account,
+        "_prepareForSend",
+        vi.fn().mockResolvedValue({
+          fee: 0n,
+          userOp: {},
+          smartAccount: { entrypointAddress: VAULT },
+          chainId: 1n,
+        }),
+      );
+      Reflect.set(
+        account,
+        "_signUserOperation",
+        vi.fn().mockResolvedValue({
+          userOp: {},
+          smartAccount: { entrypointAddress: VAULT },
+          chainId: 1n,
+        }),
+      );
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockRejectedValue(new TypeError("fetch failed"));
+      vi.stubGlobal("fetch", fetchMock);
+
+      // biome-ignore lint/suspicious/noShadow: test-local protocol for the ERC-4337 account above
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+      });
+      readContractMock.mockResolvedValue(100_000n);
+
+      try {
+        const prepared = await protocol.prepareSupply({
+          token: TOKEN,
+          amount: 100_000n,
+        });
+        const error = await prepared
+          .submit()
+          .catch((caught: unknown) => caught);
+
+        expect(fetchMock).toHaveBeenCalled();
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).constructor.name).toBe("AbstractionKitError");
+        expect(classifyError(error)).toBe("unknown");
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     test("binds WDK's signing chain without splitting atomic dispatch", async () => {
@@ -1885,7 +3033,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           "_getChainId",
         ) as () => Promise<bigint>;
         signingChainId = await getChainId.call(this);
-        return { hash: "dummy-user-operation-hash", fee: 777n };
+        return { hash: MOCK_USER_OPERATION_HASH, fee: 777n };
       });
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
@@ -1898,7 +3046,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           { token: TOKEN, amount: 100_000n },
           { paymasterToken: { address: TOKEN } },
         ),
-      ).resolves.toEqual({ hash: "dummy-user-operation-hash", fee: 777n });
+      ).resolves.toEqual({ hash: MOCK_USER_OPERATION_HASH, fee: 777n });
 
       expect(signingChainId).toBe(1n);
       expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, {
@@ -1956,7 +3104,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           mode: "native",
         });
       vi.spyOn(internals, "_sendUserOperation").mockResolvedValue(
-        "dummy-user-operation-hash",
+        MOCK_USER_OPERATION_HASH,
       );
       const sendTransaction = vi.spyOn(erc4337Account, "sendTransaction");
       const erc4337Protocol = new MorphoProtocolEvm(erc4337Account, {
@@ -1976,7 +3124,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           { transactionMaxFee: 1_000n },
         ),
       ).resolves.toEqual({
-        hash: "dummy-user-operation-hash",
+        hash: MOCK_USER_OPERATION_HASH,
         fee: 720n,
       });
 
@@ -2010,7 +3158,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
         readContractMock.mockResolvedValue(100_000n);
         account.sendTransaction = vi.fn().mockResolvedValue({
-          hash: "dummy-user-operation-hash",
+          hash: MOCK_USER_OPERATION_HASH,
           fee: 99_999n,
         });
         // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
@@ -2098,6 +3246,70 @@ describe.sequential("MorphoProtocolEvm", () => {
         "B:eth_chainId",
       ]);
     });
+
+    test.each([
+      {
+        name: "-32000",
+        code: -32000,
+        message: "header not found",
+        errorClass: viem.InvalidInputRpcError,
+        expectedCalls: 1,
+      },
+      {
+        name: "-32005",
+        code: -32005,
+        message: "limit exceeded",
+        errorClass: viem.LimitExceededRpcError,
+        expectedCalls: 4,
+      },
+    ] as const)(
+      "uses viem retry rules for read-side provider error $name",
+      async ({ code, message, errorClass, expectedCalls }) => {
+        const providerError = Object.assign(new Error(message), { code });
+        const providerSend = vi.fn(async (method: string) => {
+          if (method === "eth_chainId") return "0x1";
+          if (method === "eth_blockNumber") throw providerError;
+          throw new Error(`Unhandled RPC ${method}`);
+        });
+        // biome-ignore lint/suspicious/noShadow: test-local account for the custom send path
+        const account = new WalletAccountReadOnlyEvm(ADDRESS, {
+          provider: "https://dummy-rpc-url.com",
+        });
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        Reflect.set(account, "_provider", { send: providerSend });
+        // biome-ignore lint/suspicious/noShadow: test-local protocol for the custom send path
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          borrowMarketParams: MARKET_PARAMS,
+        });
+
+        await createClientMock.withImplementation(
+          (parameters) =>
+            viem.createClient(
+              parameters as Parameters<typeof viem.createClient>[0],
+            ),
+          () =>
+            morphoViemExtensionMock.withImplementation(
+              () => () => ({ morpho: morphoNamespaceMock }),
+              async () => {
+                await protocol.getMarketPosition();
+                const clientCache = Reflect.get(protocol, "_viemClient") as {
+                  value: { getBlockNumber: () => Promise<bigint> };
+                };
+
+                await expect(
+                  clientCache.value.getBlockNumber(),
+                ).rejects.toBeInstanceOf(errorClass);
+                expect(
+                  providerSend.mock.calls.filter(
+                    ([method]) => method === "eth_blockNumber",
+                  ),
+                ).toHaveLength(expectedCalls);
+              },
+            ),
+        );
+      },
+    );
 
     test("should return vault position data", async () => {
       const result = await protocol.getVaultPosition();

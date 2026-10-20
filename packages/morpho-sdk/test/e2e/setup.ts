@@ -91,6 +91,28 @@ const E2E_ORACLE: Address = "0xE2E0000000000000000000000000000000000001";
 const E2E_LLTV = parseUnits("0.86", 18);
 
 /**
+ * Installs the E2E test asset code and storage at `address`.
+ *
+ * @param client - Anvil client used to install the asset.
+ * @param address - Address where the E2E asset should be installed.
+ */
+export const installE2eAsset = async (
+  client: AnvilTestClient<Chain>,
+  address: Address,
+) => {
+  await client.setCode({
+    address,
+    bytecode: E2E_ASSET_BYTECODE,
+  });
+  for (const { slot, value } of E2E_ASSET_STORAGE)
+    await client.setStorageAt({
+      address,
+      index: slot,
+      value,
+    });
+};
+
+/**
  * Creates a fresh Blue market with the registered wNative or a fork-installed test asset and a
  * fixed 1:1 oracle price, so every chain starts from the same empty market regardless of live state.
  */
@@ -101,16 +123,7 @@ export const createE2eMarket = async (
   const { blue, adaptiveCurveIrm } = getChainAddresses(chainId);
   const asset = getE2eAsset(chainId);
   if (asset.requiresInstall) {
-    await client.setCode({
-      address: asset.address,
-      bytecode: E2E_ASSET_BYTECODE,
-    });
-    for (const { slot, value } of E2E_ASSET_STORAGE)
-      await client.setStorageAt({
-        address: asset.address,
-        index: slot,
-        value,
-      });
+    await installE2eAsset(client, asset.address);
     expect(
       await client.readContract({
         address: asset.address,

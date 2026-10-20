@@ -167,6 +167,8 @@ export class Offer {
 
   private cachedHash: Hash | undefined;
 
+  private cachedOnchainHash: Hash | undefined;
+
   /**
    * Whether the group id was supplied at construction rather than derived.
    *
@@ -388,6 +390,59 @@ export class Offer {
   public get hash(): Hash {
     this.cachedHash ??= OfferUtils.hash(this);
     return this.cachedHash;
+  }
+
+  /**
+   * Returns the on-chain offer identifier emitted by Midnight's `Take` event.
+   *
+   * This `keccak256(abi.encode(offer))` hash identifies offers on-chain and is
+   * distinct from `hash`, the typehash-prefixed ratifier hash.
+   * It matches a `Take` event only for the offer exactly as published. For
+   * RateRatifierV1 and PriceRatifierV1, hash the offers in the descriptor's
+   * `offers`: `buildDescriptor` replaces both the default group and a
+   * `Group.create` group.
+   *
+   * @returns The cached on-chain offer hash.
+   * @throws {viem.InvalidAddressError} when an address has an invalid mixed-case checksum.
+   * @throws {viem.IntegerOutOfRangeError} when a uint field overflows its ABI size.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   group: "0x1111111111111111111111111111111111111111111111111111111111111111",
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const offerHash = offer.onchainHash;
+   * console.log(offerHash);
+   * ```
+   */
+  public get onchainHash(): Hash {
+    this.cachedOnchainHash ??= OfferUtils.onchainHash(this);
+    return this.cachedOnchainHash;
   }
 
   /**

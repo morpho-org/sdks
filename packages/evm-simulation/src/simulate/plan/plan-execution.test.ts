@@ -8,6 +8,14 @@ const TARGET: Address = getAddress(
   "0x2222222222222222222222222222222222222222",
 );
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+const ASSERTIONS = [
+  {
+    to: TOKEN.toLowerCase() as Address,
+    data: "0x1234",
+    check: () => undefined,
+  },
+  { to: TARGET, data: "0xabcd", check: () => undefined },
+] as const;
 
 const makeRequest = (count: number) =>
   parseRequest({
@@ -47,7 +55,9 @@ describe("planExecution", () => {
         ? `tx${c.transactionIndex}`
         : c.type === "preparation"
           ? "prep"
-          : `read:${c.phase}`,
+          : c.type === "assertion"
+            ? `assert:${c.phase}:${c.transactionIndex}:${c.assertionIndex}`
+            : `read:${c.phase}`,
     );
 
     const prepIndex = types.indexOf("prep");
@@ -88,5 +98,67 @@ describe("planExecution", () => {
       true,
     );
     expect(prep?.transaction.from).toBe(OWNER);
+  });
+
+  test("order: transaction assertions bracket each transaction between reads and preparations", () => {
+    const request = parseRequest({
+      chainId: 1,
+      transactions: [
+        {
+          from: OWNER,
+          to: TARGET,
+          data: "0x12345678",
+          assertBefore: [ASSERTIONS[0]],
+          assertAfter: [ASSERTIONS[1]],
+        },
+        {
+          from: OWNER,
+          to: TARGET,
+          data: "0x12345678",
+          assertBefore: [ASSERTIONS[1]],
+          assertAfter: [ASSERTIONS[0]],
+        },
+      ],
+    });
+    const calls = planExecution({
+      request,
+      owner: OWNER,
+      preparations: [
+        {
+          authorizationIndex: 0,
+          calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+        },
+      ],
+      reads,
+    }).calls;
+    const order = calls.map((call) =>
+      call.type === "stateRead"
+        ? `read:${call.phase}`
+        : call.type === "preparation"
+          ? "prep"
+          : call.type === "transaction"
+            ? `tx${call.transactionIndex}`
+            : `assert:${call.phase}:${call.transactionIndex}`,
+    );
+    expect(order).toEqual([
+      "read:before",
+      "prep",
+      "assert:before:0",
+      "tx0",
+      "assert:after:0",
+      "assert:before:1",
+      "tx1",
+      "assert:after:1",
+      "read:after",
+    ]);
+    expect(
+      calls
+        .filter((call) => call.type === "assertion")
+        .map((call) => call.transaction),
+    ).toEqual(
+      [ASSERTIONS[0], ASSERTIONS[1], ASSERTIONS[1], ASSERTIONS[0]].map(
+        ({ to, data }) => ({ from: zeroAddress, to, data, value: 0n }),
+      ),
+    );
   });
 });

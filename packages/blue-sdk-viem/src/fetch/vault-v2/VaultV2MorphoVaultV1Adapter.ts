@@ -17,6 +17,7 @@ import {
   code,
 } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
 import type { DeploylessFetchParameters } from "../../types.js";
+import { catchRevertOnly, isTransportError } from "../../utils.js";
 import { fetchAccrualVault } from "../Vault.js";
 
 /**
@@ -36,6 +37,9 @@ import { fetchAccrualVault } from "../Vault.js";
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
@@ -77,7 +81,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 
       return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (deployless === "force" || isTransportError(error)) throw error;
       if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
@@ -97,7 +101,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
       functionName: "isMorphoVaultV1Adapter",
       args: [address],
     }) // Factory may not have been deployed at requested block tag.
-      .catch(() => false),
+      .catch(catchRevertOnly(false)),
     readContract(client, {
       ...parameters,
       address,
@@ -159,6 +163,9 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { AccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";

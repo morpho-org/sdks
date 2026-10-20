@@ -141,6 +141,7 @@ export type {
   MakeOffersParams as MidnightMakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
   MidnightMakerTreeInput,
+  MidnightPositionHealthParams,
   OffersData as MidnightOffersData,
   OfferValidationParams as MidnightOfferValidationParams,
   RedeemParams as MidnightRedeemParams,

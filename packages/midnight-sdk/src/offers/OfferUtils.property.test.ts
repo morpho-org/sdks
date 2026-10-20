@@ -1,8 +1,15 @@
 import { fc, test } from "@fast-check/vitest";
 import { MathLib } from "@morpho-org/morpho-ts";
-import { zeroAddress } from "viem";
+import {
+  bytesToHex,
+  decodeAbiParameters,
+  encodeAbiParameters,
+  getAbiItem,
+  zeroAddress,
+} from "viem";
 import { describe, expect } from "vitest";
 
+import { midnightAbi } from "../abis.js";
 import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import type { IMarket, SettlementFeeCbps } from "../market/Market.js";
 import { MarketUtils } from "../market/MarketUtils.js";
@@ -10,8 +17,10 @@ import { MarketUtils } from "../market/MarketUtils.js";
 // exact-port property test in ../math/TickLib.property.test.ts.
 import { TickLib } from "../math/TickLib.js";
 import type { IOffer } from "./Offer.js";
+import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 
+const takeOfferParam = getAbiItem({ abi: midnightAbi, name: "take" }).inputs[0];
 const WAD = MathLib.WAD;
 
 // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
@@ -126,6 +135,47 @@ const offerFor = (
   | "maxAssets"
   | "continuousFeeCap"
 > => ({ market, ...fields });
+
+describe("OfferUtils.onchainHash", () => {
+  test.prop([
+    fc.record({
+      market: marketArb,
+      buy: fc.boolean(),
+      tick: tickArb.map((tick) => tick - (tick % 4n)),
+      maxUnits: capArb,
+      group: fc.uint8Array({ minLength: 32, maxLength: 32 }).map(bytesToHex),
+    }),
+  ])(
+    "behavior: grouped offers match their ABI structs and round-trip encoding",
+    ({ market, buy, tick, maxUnits, group }) => {
+      const offer = Offer.create({
+        market: market.params,
+        buy,
+        maker: zeroAddress,
+        start: 0n,
+        expiry: 1_000_000n,
+        tick,
+        group,
+        ratifier: zeroAddress,
+        maxUnits,
+        maxAssets: 0n,
+      });
+      const offerStruct = OfferUtils.toStruct({ offer });
+      const encoded = encodeAbiParameters([takeOfferParam], [offerStruct]);
+      const [decodedOfferStruct] = decodeAbiParameters(
+        [takeOfferParam],
+        encoded,
+      );
+
+      expect(OfferUtils.onchainHash(offer)).toBe(
+        OfferUtils.onchainHashStruct(offerStruct),
+      );
+      expect(OfferUtils.onchainHashStruct(decodedOfferStruct)).toBe(
+        OfferUtils.onchainHashStruct(offerStruct),
+      );
+    },
+  );
+});
 
 // Midnight src/periphery/libraries/ConsumableUnitsLib.sol consumableUnits
 describe("OfferUtils.getConsumableUnits", () => {

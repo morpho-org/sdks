@@ -6,7 +6,9 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import {
   type Metadata,
   type MidnightRedeemAction,
@@ -30,18 +32,25 @@ export interface MidnightRedeemParams {
  * Use this low-level builder after the caller has fetched and checked position
  * credit and market withdrawable liquidity. App flows should usually call
  * `client.morpho.midnight(chainId).redeem(...)`, which performs those checks
- * from the supplied `positionData` snapshot before exposing `buildTx`.
+ * from the supplied `positionData` snapshot, after applying realized losses and accrued continuous
+ * fees, before exposing `buildTx`. This builder bounds `units` by neither credit nor liquidity; a
+ * redemption above the credit Midnight computes onchain reverts.
  *
  * @param params.chainId - Chain id used to resolve `Midnight`.
  * @param params.market - Midnight market whose credit is redeemed.
  * @param params.units - Credit units to withdraw.
  * @param params.onBehalf - Account whose credit balance is reduced.
  * @param params.receiver - Optional receiver for withdrawn loan assets; defaults to `onBehalf`.
+ *   Midnight protocol and market token contracts are rejected.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
  * @throws {NonPositiveInputError} when `units <= 0n`.
+ * @throws {InputExceedsMaxError} when `units` exceeds `uint128`.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
+ * @throws {MidnightZeroReceiverError} when `receiver` resolves to the zero address.
+ * @throws {MidnightContractReceiverError} when `receiver` is a Midnight protocol contract or a
+ *   market token contract.
  * @example
  * ```ts
  * import { midnightRedeem } from "@morpho-org/morpho-sdk";
@@ -60,12 +69,20 @@ export const midnightRedeem = (
   if (params.units <= 0n) {
     throw new NonPositiveInputError("units", params.units);
   }
+  validateMidnightUint128Field("units", params.units);
 
   // Reject markets from another chain deployment before encoding the call.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = MarketUtils.toId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const receiver = params.receiver ?? params.onBehalf;
+  // Rejects receivers that would strand the redeemed assets in a contract.
+  validateMidnightReceiver({
+    chainId: params.chainId,
+    market: params.market,
+    field: "receiver",
+    receiver,
+  });
 
   let tx = {
     to: midnight,

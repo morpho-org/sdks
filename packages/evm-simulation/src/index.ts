@@ -1,3 +1,5 @@
+export type { SimulationErrorResponse } from "./error-response.js";
+export { toSimulationErrorResponse } from "./error-response.js";
 // Public fns (via feature-folder barrels)
 
 export type {
@@ -16,29 +18,22 @@ export type {
 export type {
   RetainedAsset,
   SimulationErrorCode,
-  SimulationErrorContext,
-  SimulationExecutionContext,
-  SimulationExecutionReason,
-  SimulationPreparationContext,
-  SimulationStage,
-  SimulationTransportContext,
-  SimulationValidationContext,
-  SimulationVerificationContext,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
-  ExternalServiceError,
   InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MissingVerificationEvidenceError,
+  RpcTransportError,
   SIMULATION_ERROR_CODES,
+  SimulationAssertError,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
+  SlippageCheckUnavailableError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
@@ -46,9 +41,13 @@ export {
 export type {
   BlueMarketOperationSubject,
   BlueMarketOperationType,
+  BluePositionBounds,
   BlueRefinanceSubject,
+  ForceExitDeallocationQuote,
+  InKindPositionQuote,
   OperationLimit,
   OperationType,
+  SharePriceLimit,
   SimulationLimits,
   SimulationOperationSubject,
   SlippageLimits,
@@ -75,10 +74,17 @@ export type {
   SimulationVerification,
   VerifiedSimulationResult,
 } from "./result.js";
+export type { AssertionBounds } from "./simulate/assertions.js";
+export {
+  erc20BalanceAssertion,
+  maxDepositAssertion,
+  nativeBalanceAssertion,
+} from "./simulate/assertions.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
   AccountAssetChanges,
+  Assertion,
   AssetChange,
   ChainSimulationConfig,
   RawLog,

@@ -10,7 +10,12 @@ import {
   fetchMarket,
   fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import {
+  type AddressLabel,
+  getChainAddress,
+  getChainAddresses,
+  Time,
+} from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, maxUint256 } from "viem";
 import {
   getBlueBundlesV1PenaltyAssets,
@@ -32,6 +37,7 @@ import {
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
 } from "../../actions/index.js";
+import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -73,6 +79,7 @@ import {
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { assertRegistryTargetsHaveCode } from "../requirements/assertContractCode.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
@@ -106,7 +113,8 @@ export interface BlueActions {
    *
    * @param parameters - Optional fetch parameters (block number, state overrides).
    * @returns Market state including total supply/borrow assets and shares.
-   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {ChainIdMismatchError} when the connected client declares another chain or none, or its RPC reports another chain via `eth_chainId`.
+   * @throws {viem.BaseError} when the `eth_chainId` request or a state read fails.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -128,7 +136,8 @@ export interface BlueActions {
    * @param userAddress - The user whose position to fetch.
    * @param parameters - Optional fetch parameters (block number, state overrides).
    * @returns Accrual position with health metrics (maxBorrowAssets, ltv, isHealthy).
-   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {ChainIdMismatchError} when the connected client declares another chain or none, or its RPC reports another chain via `eth_chainId`.
+   * @throws {viem.BaseError} when the `eth_chainId` request or a state read fails.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -161,7 +170,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {NonPositiveInputError} when `collateralAssets` is not positive.
    * @throws {NegativeInputError} when collateral, native funding, or the referral fee is negative.
@@ -181,7 +191,14 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata
+   *   read or `eth_chainId` request fails.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -217,9 +234,11 @@ export interface BlueActions {
   /**
    * Prepares a direct BlueBundlesV1 loan-asset supply.
    *
-   * `getRequirements()` reads only the loan-token allowance and selected ERC-2612 or Permit2
-   * nonce state. Direct approvals and ERC-2612 name BlueBundlesV1 as spender; Permit2 keeps its
-   * ERC-20 approval on canonical Permit2. Native funding is exclusive and skips token requirements.
+   * `getRequirements()` first checks that BlueBundlesV1, Blue and, for ERC-20 funding with
+   * signatures enabled, Permit2 hold code at their registered addresses, then reads the loan-token
+   * allowance and selected ERC-2612 or Permit2 nonce state. Direct approvals and ERC-2612 name
+   * BlueBundlesV1 as spender; Permit2 keeps its ERC-20 approval on canonical Permit2. Native
+   * funding is exclusive and skips token requirements (the code check still runs).
    * The referral fee is deducted from the gross `assets` supplied. This route exposes no
    * share-price bound or `slippageTolerance`.
    *
@@ -230,7 +249,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy prerequisite resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is not in the future at creation or requirement resolution.
    * @throws {NonPositiveInputError} when `assets` is not positive.
    * @throws {NegativeInputError} when native funding or the referral fee is negative, or from `getRequirements()` when an explicit `permit2Nonce` is negative.
@@ -251,7 +271,14 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, or token metadata read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, or token
+   *   metadata read or `eth_chainId` request fails.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -303,7 +330,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -327,7 +355,10 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an authorization read or
+   *   `eth_chainId` request fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -385,7 +416,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
@@ -409,7 +441,10 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an authorization read or
+   *   `eth_chainId` request fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -466,7 +501,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
@@ -496,7 +532,14 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, token metadata,
+   *   or `eth_chainId` read fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -555,7 +598,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
@@ -574,7 +618,10 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an authorization read or
+   *   `eth_chainId` request fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -637,7 +684,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -670,7 +718,14 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token
+   *   metadata, authorization, or `eth_chainId` read fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -738,7 +793,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when a borrow has no position snapshot.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -771,7 +827,14 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
+   * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token
+   *   metadata, authorization, or `eth_chainId` read fails.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -832,7 +895,8 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive source or destination debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
    * @throws {MarketIdMismatchError} when a position snapshot belongs to another market.
@@ -858,7 +922,10 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
+   * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
+   *   contract has no code at its registered address.
+   * @throws {viem.BaseError} from `getRequirements()` when an authorization read or
+   *   `eth_chainId` request fails.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/blue-sdk";
@@ -920,13 +987,19 @@ export interface BlueActions {
    * @param params.block.number - Block number used for every RPC read.
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {ChainIdMismatchError} when the client declares another chain or its RPC reports another
+   *   chain via `eth_chainId`.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
    * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
    * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
    * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
-   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
+   * @throws {UnknownTokenError} when a vault's share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {viem.BaseError} when the `eth_chainId` request fails or a later RPC or contract read
+   *   fails with no fallback left.
    */
   getVaultV2BlueReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -988,10 +1061,9 @@ export class MorphoBlue implements BlueActions {
     private readonly chainId: number,
   ) {}
 
-  private validateDeadline(deadline: bigint): void {
-    const timestamp = Time.timestamp();
-    if (deadline <= timestamp) {
-      throw new ExpiredDeadlineError(deadline, timestamp);
+  private validateDeadline(deadline: bigint, now = Time.timestamp()): void {
+    if (deadline <= now) {
+      throw new ExpiredDeadlineError(deadline, now);
     }
   }
 
@@ -1016,6 +1088,36 @@ export class MorphoBlue implements BlueActions {
     });
   }
 
+  /**
+   * Asserts that every registry contract this flow's transaction targets or names as
+   * spender/authorized operator holds code, with one `eth_getCode` per distinct address
+   * before any other requirement read. Blue write flows probe `eth_chainId` only after a target
+   * has no code and report a chain mismatch when the RPC serves another chain.
+   *
+   * @param params.erc20Funding - Whether the flow resolves an ERC-20 funding leg, which
+   *   may name canonical Permit2 when signatures are supported.
+   */
+  private async assertWriteTargets(params?: {
+    readonly erc20Funding?: boolean;
+  }): Promise<void> {
+    const targets: { role: AddressLabel; address: Address }[] = [
+      {
+        role: "bundles.blueBundlesV1",
+        address: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
+      },
+      { role: "blue", address: getChainAddress(this.chainId, "blue") },
+    ];
+    if (params?.erc20Funding && this.client.options.supportSignature) {
+      const permit2 = getChainAddresses(this.chainId).permit2;
+      if (permit2 != null) targets.push({ role: "permit2", address: permit2 });
+    }
+    await assertRegistryTargetsHaveCode(
+      this.client.viemClient,
+      this.chainId,
+      targets,
+    );
+  }
+
   private getMaxLtv(marketParams: MarketParams = this.marketParams): bigint {
     return MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER);
   }
@@ -1032,8 +1134,9 @@ export class MorphoBlue implements BlueActions {
     useSimplePermit?: boolean;
     permit2Nonce?: bigint;
     approvalAmount?: bigint;
+    now?: bigint;
   }): Promise<readonly ActionRequirement[]> {
-    this.validateDeadline(params.deadline);
+    this.validateDeadline(params.deadline, params.now);
     return getBundlesTokenRequirements(this.client.viemClient, {
       token: params.token,
       spender: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
@@ -1046,14 +1149,16 @@ export class MorphoBlue implements BlueActions {
       useSimplePermit: params.useSimplePermit,
       permit2Nonce: params.permit2Nonce,
       approvalAmount: params.approvalAmount,
+      now: params.now,
     });
   }
 
   private async getAuthorizationRequirements(params: {
     userAddress: Address;
     deadline: bigint;
+    now?: bigint;
   }): Promise<readonly ActionRequirement[]> {
-    this.validateDeadline(params.deadline);
+    this.validateDeadline(params.deadline, params.now);
     const requirement = await getBlueAuthorizationRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
@@ -1061,12 +1166,13 @@ export class MorphoBlue implements BlueActions {
       supportSignature: this.client.options.supportSignature,
       authorized: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
       deadline: params.deadline,
+      now: params.now,
     });
     return requirement == null ? [] : [requirement];
   }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    await validateClientChainId(this.client.viemClient, this.chainId);
 
     return fetchMarket(this.marketParams.id, this.client.viemClient, {
       ...parameters,
@@ -1078,7 +1184,7 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address,
     parameters?: FetchParameters,
   ): Promise<AccrualPosition> {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    await validateClientChainId(this.client.viemClient, this.chainId);
 
     return fetchAccrualPosition(
       userAddress,
@@ -1118,17 +1224,25 @@ export class MorphoBlue implements BlueActions {
     });
 
     return {
-      getRequirements: (requirementsParams?: BlueTokenRequirementsParams) => {
-        this.validateDeadline(deadline);
-        if (nativeValue > 0n) return Promise.resolve([]);
-        return this.getTokenRequirements({
-          token: this.marketParams.loanToken,
-          amount: assets,
-          userAddress,
-          deadline,
-          useSimplePermit: requirementsParams?.useSimplePermit,
-          permit2Nonce: requirementsParams?.permit2Nonce,
-          approvalAmount: requirementsParams?.approvalAmount,
+      getRequirements: (
+        requirementsParams?: BlueTokenRequirementsParams,
+      ): Promise<readonly ActionRequirement[]> => {
+        const now = Time.timestamp();
+        this.validateDeadline(deadline, now);
+        return this.assertWriteTargets({
+          erc20Funding: nativeValue === 0n,
+        }).then(() => {
+          if (nativeValue > 0n) return [];
+          return this.getTokenRequirements({
+            token: this.marketParams.loanToken,
+            amount: assets,
+            userAddress,
+            deadline,
+            now,
+            useSimplePermit: requirementsParams?.useSimplePermit,
+            permit2Nonce: requirementsParams?.permit2Nonce,
+            approvalAmount: requirementsParams?.approvalAmount,
+          });
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1221,8 +1335,16 @@ export class MorphoBlue implements BlueActions {
     }
 
     return {
-      getRequirements: () =>
-        this.getAuthorizationRequirements({ userAddress, deadline }),
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        this.validateDeadline(deadline, now);
+        await this.assertWriteTargets();
+        return this.getAuthorizationRequirements({
+          userAddress,
+          deadline,
+          now,
+        });
+      },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const { authorization } = selectBlueBundlesV1RequirementSignatures(
           signatures,
@@ -1595,7 +1717,11 @@ export class MorphoBlue implements BlueActions {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        this.validateDeadline(deadline);
+        const now = Time.timestamp();
+        this.validateDeadline(deadline, now);
+        await this.assertWriteTargets({
+          erc20Funding: hasRepay && nativeValue === 0n,
+        });
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             hasRepay && nativeValue === 0n
@@ -1605,12 +1731,17 @@ export class MorphoBlue implements BlueActions {
                   approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
+                  now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
                   permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             collateralAssets > 0n
-              ? this.getAuthorizationRequirements({ userAddress, deadline })
+              ? this.getAuthorizationRequirements({
+                  userAddress,
+                  deadline,
+                  now,
+                })
               : Promise.resolve([]),
           ]);
         return [...tokenRequirements, ...authorizationRequirements];
@@ -1733,7 +1864,11 @@ export class MorphoBlue implements BlueActions {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        this.validateDeadline(deadline);
+        const now = Time.timestamp();
+        this.validateDeadline(deadline, now);
+        await this.assertWriteTargets({
+          erc20Funding: collateralAssets > 0n && nativeValue === 0n,
+        });
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             collateralAssets > 0n && nativeValue === 0n
@@ -1743,12 +1878,17 @@ export class MorphoBlue implements BlueActions {
                   approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
+                  now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
                   permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             borrowAssets > 0n
-              ? this.getAuthorizationRequirements({ userAddress, deadline })
+              ? this.getAuthorizationRequirements({
+                  userAddress,
+                  deadline,
+                  now,
+                })
               : Promise.resolve([]),
           ]);
         return [...tokenRequirements, ...authorizationRequirements];
@@ -1874,8 +2014,16 @@ export class MorphoBlue implements BlueActions {
     });
 
     return {
-      getRequirements: () =>
-        this.getAuthorizationRequirements({ userAddress, deadline }),
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        this.validateDeadline(deadline, now);
+        await this.assertWriteTargets();
+        return this.getAuthorizationRequirements({
+          userAddress,
+          deadline,
+          now,
+        });
+      },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const { authorization } = selectBlueBundlesV1RequirementSignatures(
           signatures,
@@ -1914,13 +2062,19 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.number - Block number used for every RPC read.
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {ChainIdMismatchError} when the client declares another chain or its RPC reports another
+   *   chain via `eth_chainId`.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
    * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
    * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
    * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
-   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
+   * @throws {UnknownTokenError} when a vault's share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {viem.BaseError} when the `eth_chainId` request fails or a later RPC or contract read
+   *   fails with no fallback left.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1951,7 +2105,7 @@ export class MorphoBlue implements BlueActions {
       readonly timestamp: bigint;
     };
   }): Promise<VaultV2BlueReallocationData> {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    await validateClientChainId(this.client.viemClient, this.chainId);
 
     const client = this.client.viemClient;
     const fetchParams = {

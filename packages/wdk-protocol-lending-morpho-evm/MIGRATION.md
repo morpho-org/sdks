@@ -1,3 +1,77 @@
+# Migrating to 3.0
+
+Version 3 follows `@morpho-org/blue-sdk-viem` v7 and `@morpho-org/morpho-sdk` v8: token
+metadata reads now fail closed. Requirement resolution (`getRequirements` on prepared
+handles and the `get*Requirements` methods) that reads ERC-20 metadata can now reject
+with `UnknownTokenError` when a token's `decimals()` reverts, has no code, returns
+undecodable data, or is out of range — previously the read silently defaulted to 0.
+The same reads can also reject with `MalformedTokenMetadataError` when a token answers
+`eip712Domain()` or a `bytes32` `name`/`symbol` retry with non-empty data that does not
+decode; `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code.
+Unless `supportDeployless` is `false` — left unset, WDK reads use the SDK's
+default deployless query — a query that reports malformed
+`name()`/`symbol()`/`eip712Domain()` returndata throws `MalformedTokenMetadataError`
+instead of falling back to direct reads: the query validates returndata more strictly
+than viem's decoding (for example, it requires the `0x20` string offset).
+When an ERC-20 funding permit is requested, requirement resolution falls back to
+Permit2 or a classic approval if the token has neither `name()` nor an EIP-5267
+domain.
+Only direct `encodeErc20Permit`/`getPermitTypedData` callers see
+`MissingPermitDomainNameError`. `UnknownTokenError`,
+`MissingPermitDomainNameError` and `MalformedTokenMetadataError` are all
+re-exported by `@morpho-org/wdk-protocol-lending-morpho-evm`. Transport and RPC errors (HTTP 429/503,
+timeouts, JSON-RPC errors that are not revert-shaped) now propagate unchanged instead of returning
+degraded metadata; a revert-shaped RPC error still reads as missing metadata.
+With `useSimplePermit`, transport and RPC errors from the ERC-2612 `nonces()` probe now
+propagate instead of falling back; only recognized contract reverts or undecodable
+return data fall back to Permit2 or a classic approval.
+
+Vault data reads performed by `supply`, `quoteSupply`, `prepareSupply`, `withdraw`,
+`quoteWithdraw`, `prepareWithdraw`, `getVaultPosition`, and `getAccountData` can also
+reject with `UnknownTokenError` when the vault share token's `decimals()` is unusable,
+and with `MalformedTokenMetadataError` when its `eip712Domain()` or `bytes32`
+`name`/`symbol` retry returns non-empty data that does not decode — including, unless
+`supportDeployless` is `false`, when the deployless query reports malformed returndata,
+in which case the read throws without falling back to direct reads.
+Transport and RPC errors that are not revert-shaped from these reads also propagate
+unchanged; a revert-shaped RPC error still reads as missing metadata.
+
+Prepared `getRequirements()` calls and the WDK `get*Requirements()` methods can reject
+with the re-exported `MissingContractCodeError` when a fixed bundles or protocol
+contract has no code at its registered address. It also surfaces from `withdraw`
+and `quoteWithdraw`, which resolve requirements internally. A prepared Vault V2
+withdrawal's `submit()` and `quote()` do too when no share permit signature is supplied.
+
+Recognized WDK provider failures now arrive as typed viem errors: `RpcError` subclasses such as
+`InvalidInputRpcError` and `LimitExceededRpcError` (with the original `RpcRequestError` in the
+cause chain), plus `HttpRequestError` and `TimeoutError`, instead of `UnknownRpcError`. They follow
+viem's retry rules.
+Provider `AbortError` and `TimeoutError` DOMExceptions surface as viem `TimeoutError` with the
+original exception in `cause`. Only when one of these rejects the EOA
+`client.sendRawTransaction()` call during an operation method or `prepared.submit()` is it wrapped
+as `UnconfirmedBroadcastError`.
+During an EOA send, `UnconfirmedBroadcastError` means delivery may have succeeded after a status-less
+network error such as `ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EPIPE`, `ENOTFOUND` or
+`EAI_AGAIN`, `UND_ERR_*`, ethers `NETWORK_ERROR` or `TIMEOUT`, a provider `AbortError`/`TimeoutError`
+DOMException, gateway status 502/504/524, or a failed reconciliation lookup. JSON-RPC and
+HTTP-status send rejections are reconciled for every provider: if lookup finds the transaction, the
+send resolves with the local hash; if the lookup fails, it throws `UnconfirmedBroadcastError`.
+Other send errors are also reconciled when a failover provider is configured with retries enabled;
+when `retries` is unset, WDK uses its default retry count of 3. A single provider or a failover
+provider configured with `retries: 0` does not enable this path, so those other send errors are
+re-thrown. If lookup succeeds but finds no transaction, a failover provider with retries enabled
+produces `UnconfirmedBroadcastError`; otherwise WDK rethrows the original send error. Before
+retrying after `UnconfirmedBroadcastError`,
+look up its `hash` or rebroadcast its `serializedTransaction`. Handle `InvalidTransactionHashError`
+when a wallet returns a malformed hash; for EOA sends its `eoa` field carries the local `localHash`
+and `serializedTransaction` to look up before retrying.
+Both errors extend `Error`, not viem `BaseError`, so `instanceof BaseError` checks on send failures
+no longer match.
+
+No input shapes changed; update error handling around requirement resolution
+(`getRequirements` and `get*Requirements`), vault supply, withdrawal, and position reads, and
+submissions (operation methods and `prepared.submit()`).
+
 # Migrating to 2.0
 
 Version 2 routes Morpho Blue writes through `BlueBundlesV1` and migrates vault deposits and withdrawals through `VaultBundlesV1`.

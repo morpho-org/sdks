@@ -14,6 +14,9 @@ const REGISTRY_URL = "https://registry.npmjs.org";
 const GITHUB_API_URL = "https://api.github.com";
 const LOOKBACK_MS = 48 * 60 * 60 * 1000;
 const DEDUP_WINDOW_MS = LOOKBACK_MS + 24 * 60 * 60 * 1000;
+// Legacy issues were opened here before the watcher moved; drop this after they age out of
+// DEDUP_WINDOW_MS (after 2026-10-18).
+const LEGACY_ISSUE_REPOSITORY = "morpho-org/sdks";
 
 /** Former packages/* names of this repository, watched in case one is published again. */
 const RETIRED_PACKAGES = [
@@ -181,30 +184,39 @@ export async function main(
   let existingTitles: Set<string> | null = new Set();
   if (candidates.length > 0) {
     try {
-      for (let page = 1; ; page += 1) {
-        const url = new URL(`${GITHUB_API_URL}/repos/${repository}/issues`);
-        url.search = new URLSearchParams({
-          state: "all",
-          creator: "github-actions[bot]",
-          since: new Date(nowMs - DEDUP_WINDOW_MS).toISOString(),
-          per_page: "100",
-          page: String(page),
-        }).toString();
-        const response = await fetchImpl(url, {
-          headers: githubHeaders,
-          redirect: "error",
-        });
-        if (!response.ok) {
-          throw new Error(`GitHub issue listing failed (${response.status}).`);
+      for (const issueRepository of new Set([
+        repository,
+        LEGACY_ISSUE_REPOSITORY,
+      ])) {
+        for (let page = 1; ; page += 1) {
+          const url = new URL(
+            `${GITHUB_API_URL}/repos/${issueRepository}/issues`,
+          );
+          url.search = new URLSearchParams({
+            state: "all",
+            creator: "github-actions[bot]",
+            since: new Date(nowMs - DEDUP_WINDOW_MS).toISOString(),
+            per_page: "100",
+            page: String(page),
+          }).toString();
+          const response = await fetchImpl(url, {
+            headers: githubHeaders,
+            redirect: "error",
+          });
+          if (!response.ok) {
+            throw new Error(
+              `GitHub issue listing failed (${response.status}).`,
+            );
+          }
+          const issues = (await response.json()) as {
+            title?: string;
+            pull_request?: unknown;
+          }[];
+          for (const issue of issues)
+            if (issue.pull_request == null && typeof issue.title === "string")
+              existingTitles.add(issue.title);
+          if (issues.length < 100) break;
         }
-        const issues = (await response.json()) as {
-          title?: string;
-          pull_request?: unknown;
-        }[];
-        for (const issue of issues)
-          if (issue.pull_request == null && typeof issue.title === "string")
-            existingTitles.add(issue.title);
-        if (issues.length < 100) break;
       }
     } catch (error) {
       errors.push(`GitHub issue listing: ${getErrorMessage(error)}`);

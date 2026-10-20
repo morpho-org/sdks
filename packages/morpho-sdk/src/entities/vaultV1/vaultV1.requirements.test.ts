@@ -19,6 +19,7 @@ import {
   IN_KIND_ASSET,
   IN_KIND_USER,
   IN_KIND_VAULT,
+  inKindMarketParams,
   inKindVaultV1Data,
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
@@ -337,6 +338,34 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
     expect(deposit.buildTx([requirementSignature]).action.type).toBe(
       "vaultV1Deposit",
     );
+  });
+
+  test("error: an expired deadline rejects before any RPC request", async () => {
+    vi.useFakeTimers();
+    try {
+      const handle = createMockClient(mainnet);
+      const { ExpiredDeadlineError } = await import("../../types/index.js");
+      const deadline = Time.timestamp() + 60n;
+      const deposit = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+        .deposit({
+          amount,
+          userAddress: IN_KIND_USER,
+          vaultData: inKindVaultV1Data(),
+          deadline,
+        });
+      // Valid at handle creation, expired by requirement resolution.
+      vi.setSystemTime((Number(deadline) + 60) * 1000);
+      await expect(deposit.getRequirements()).rejects.toBeInstanceOf(
+        ExpiredDeadlineError,
+      );
+      // The deadline is validated synchronously, ahead of the contract-code
+      // check's eth_getCode and every requirement helper's reads.
+      expect(handle.request.mock.calls).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -1207,5 +1236,189 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
     expect(migrationB.buildTx([signature])).toEqual(
       migrationA.buildTx([signature]),
     );
+  });
+});
+
+describe("MorphoVaultV1 missing contract code", () => {
+  test("error: deposit fails closed on a code-less target before any downstream read", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${method}`);
+    });
+    const { expectFailClosed } = await import("@morpho-org/test/chaos");
+    const { MissingContractCodeError } = await import("../../types/index.js");
+    const promise = prepareDeposit(handle).getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("error: a wrong-chain RPC surfaces ChainIdMismatchError, not missing code", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x2105";
+      if (method === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${method}`);
+    });
+    const { expectFailClosed } = await import("@morpho-org/test/chaos");
+    const { ChainIdMismatchError, MissingContractCodeError } = await import(
+      "../../types/index.js"
+    );
+    const promise = prepareDeposit(handle).getRequirements();
+    await expectFailClosed(promise, "chain");
+    await expect(promise).rejects.toBeInstanceOf(ChainIdMismatchError);
+    await expect(promise).rejects.not.toBeInstanceOf(MissingContractCodeError);
+  });
+
+  test.each(["withdraw", "redeem"] as const)(
+    "error: %s fails closed on a code-less target before any downstream read",
+    async (method) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockImplementation(async ({ method: rpcMethod }) => {
+        if (rpcMethod === "eth_chainId") return "0x1";
+        if (rpcMethod === "eth_getCode") return "0x";
+        throw new Error(`unhandled RPC ${rpcMethod}`);
+      });
+      const { expectFailClosed } = await import("@morpho-org/test/chaos");
+      const { MissingContractCodeError } = await import("../../types/index.js");
+      const vault = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      const action =
+        method === "withdraw"
+          ? vault.withdraw({
+              amount,
+              userAddress: IN_KIND_USER,
+              vaultData: inKindVaultV1Data(),
+            })
+          : vault.redeem({ shares: amount, userAddress: IN_KIND_USER });
+      const promise = action.getRequirements();
+      await expectFailClosed(promise, "config");
+      await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+      await expect(promise).rejects.toMatchObject({
+        role: "bundles.vaultBundlesV1",
+      });
+      expect(
+        handle.request.mock.calls.filter(
+          ([call]) => call.method === "eth_call",
+        ),
+      ).toHaveLength(0);
+    },
+  );
+
+  test("error: a natively funded deposit fails closed on a code-less target", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method: rpcMethod }) => {
+      if (rpcMethod === "eth_chainId") return "0x1";
+      if (rpcMethod === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${rpcMethod}`);
+    });
+    const { expectFailClosed } = await import("@morpho-org/test/chaos");
+    const { MissingContractCodeError } = await import("../../types/index.js");
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = inKindVaultV1Data();
+    expect(
+      Reflect.set(vaultData, "asset", getChainAddress(mainnet.id, "wNative")),
+    ).toBe(true);
+    const promise = vault
+      .deposit({
+        nativeAmount: amount,
+        userAddress: IN_KIND_USER,
+        vaultData,
+      })
+      .getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    await expect(promise).rejects.toMatchObject({
+      role: "bundles.vaultBundlesV1",
+    });
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("error: migrateToV2 fails closed on a code-less target before any downstream read", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method: rpcMethod }) => {
+      if (rpcMethod === "eth_chainId") return "0x1";
+      if (rpcMethod === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${rpcMethod}`);
+    });
+    const { expectFailClosed } = await import("@morpho-org/test/chaos");
+    const { MissingContractCodeError } = await import("../../types/index.js");
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const sourceVault = inKindVaultV1Data();
+    const promise = vault
+      .migrateToV2({
+        userAddress: IN_KIND_USER,
+        sourceVault,
+        targetVault: inKindVaultV2Data({
+          address: "0x1111111111111111111111111111111111111111",
+        }),
+        shares: sourceVault.totalSupply,
+        deadline: Time.timestamp() + Time.s.from.h(1n),
+        slippageTolerance: 0n,
+      })
+      .getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    await expect(promise).rejects.toMatchObject({
+      role: "bundles.vaultBundlesV1",
+    });
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("error: the exit flow reports a code-less blue", async () => {
+    const handle = createMockClient(mainnet);
+    const defaultImpl = handle.request.getMockImplementation();
+    const blue = getChainAddress(mainnet.id, "blue");
+    handle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_getCode") return params?.[0] === blue ? "0x" : "0x01";
+      if (method === "eth_chainId") return "0x1";
+      return defaultImpl?.({ method, params });
+    });
+    const { expectFailClosed } = await import("@morpho-org/test/chaos");
+    const { MissingContractCodeError } = await import("../../types/index.js");
+    const promise = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .inKindRedeem({
+        amount,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    await expect(promise).rejects.toMatchObject({ role: "blue" });
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("behavior: a code-full deposit sends exactly one eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    const defaultImpl = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_call") return `0x${"0".repeat(64)}`;
+      return defaultImpl?.({ method, params });
+    });
+    await prepareDeposit(handle).getRequirements();
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_chainId",
+      ),
+    ).toHaveLength(1);
   });
 });

@@ -19,6 +19,7 @@ import {
   Token,
   UnknownFactory,
   UnknownOfFactory,
+  UnknownTokenError,
   User,
   Vault,
   VaultConfig,
@@ -485,7 +486,7 @@ describe("fetchToken", () => {
     );
   });
 
-  test("returns undefined metadata when every optional ERC20 read fails", async () => {
+  test("rejects with UnknownTokenError when every ERC20 read fails", async () => {
     const handle = createMockClient(mainnet);
     for (const abi of [erc20Abi, erc20Abi_bytes32]) {
       mockReadFailure(handle, { address: TOKEN, abi, functionName: "symbol" });
@@ -502,11 +503,36 @@ describe("fetchToken", () => {
       functionName: "eip712Domain",
     });
 
+    await expect(
+      fetchToken(TOKEN, handle.client, {
+        deployless: false,
+      }),
+    ).rejects.toBeInstanceOf(UnknownTokenError);
+  });
+
+  test("returns undefined optional metadata when only name, symbol and eip712Domain fail", async () => {
+    const handle = createMockClient(mainnet);
+    for (const abi of [erc20Abi, erc20Abi_bytes32]) {
+      mockReadFailure(handle, { address: TOKEN, abi, functionName: "symbol" });
+      mockReadFailure(handle, { address: TOKEN, abi, functionName: "name" });
+    }
+    mockRead(handle, {
+      address: TOKEN,
+      abi: erc20Abi,
+      functionName: "decimals",
+      result: 18,
+    });
+    mockReadFailure(handle, {
+      address: TOKEN,
+      abi: erc5267Abi,
+      functionName: "eip712Domain",
+    });
+
     const token = await fetchToken(TOKEN, handle.client, {
       deployless: false,
     });
 
-    expect(token.decimals).toBe(0);
+    expect(token.decimals).toBe(18);
     expect(token.symbol).toBeUndefined();
     expect(token.name).toBeUndefined();
   });
@@ -530,17 +556,18 @@ describe("fetchToken", () => {
   });
 
   test("falls through when the chain has no wstETH unwrap token", async () => {
-    const { client } = createMockClient({
+    const handle = createMockClient({
       ...mainnet,
       id: ChainId.ZeroGMainnet,
     });
+    mockTokenReads(handle, TOKEN);
 
-    const token = await fetchToken(undefined as unknown as Address, client, {
+    const token = await fetchToken(TOKEN, handle.client, {
       deployless: false,
     });
 
     expect(token).toBeInstanceOf(Token);
-    expect(token.address).toBeUndefined();
+    expect(token.address).toBe(TOKEN);
   });
 
   test("falls back from a failing deployless read to multicall", async () => {

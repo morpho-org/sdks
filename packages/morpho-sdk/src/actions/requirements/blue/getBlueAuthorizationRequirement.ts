@@ -8,17 +8,20 @@ import {
   isAddressEqual,
   publicActions,
 } from "viem";
-import { validateDeadline } from "../../../helpers/validate.js";
+import {
+  validateChainId,
+  validateDeadline,
+} from "../../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
-  ChainIdMismatchError,
   ExpiredDeadlineError,
   type Requirement,
   type Transaction,
   UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
+import { validateClientChainId } from "../validateClientChainId.js";
 
 /**
  * Resolves whether a supported operator needs Blue authorization for the given user, and returns
@@ -37,12 +40,14 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @param params.authorized - Operator to authorize. Defaults to the chain's registered
  *   BlueBundlesV1 deployment and must match it.
  * @param params.deadline - Optional signature deadline forwarded to the authorization encoder.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
  *   transaction so the destination route can consume the signed authorization.
  * @returns A deep-frozen `Transaction<BlueAuthorizationAction>`, a signable authorization
  *   `Requirement` (when `supportSignature` is `true`), or `null` when authorization is already in
  *   place.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`, a
+ *   chain other than `params.chainId`.
  * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is not the chain's
  *   BlueBundlesV1 operator.
  * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
@@ -50,7 +55,8 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
- * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
+ * @throws {viem.BaseError} when the `eth_chainId` request or an authorization or nonce RPC read
+ *   fails.
  * @example
  * ```ts
  * import { createPublicClient, http, zeroAddress } from "viem";
@@ -79,6 +85,7 @@ export const getBlueAuthorizationRequirement = async (params: {
   readonly supportSignature?: boolean;
   readonly authorized?: Address;
   readonly deadline?: bigint;
+  readonly now?: bigint;
 }): Promise<
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>
@@ -86,9 +93,7 @@ export const getBlueAuthorizationRequirement = async (params: {
 > => {
   const { viemClient, chainId, userAddress, supportSignature } = params;
 
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
-  }
+  validateChainId(viemClient.chain?.id, chainId);
 
   const { blue: morpho } = getChainAddresses(chainId);
 
@@ -108,11 +113,12 @@ export const getBlueAuthorizationRequirement = async (params: {
     // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
     if (params.deadline != null) {
       validateDeadline(params.deadline);
-      const timestamp = Time.timestamp();
+      const timestamp = params.now ?? Time.timestamp();
       if (params.deadline <= timestamp) {
         throw new ExpiredDeadlineError(params.deadline, timestamp);
       }
     }
+    await validateClientChainId(viemClient, chainId);
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of
@@ -142,9 +148,11 @@ export const getBlueAuthorizationRequirement = async (params: {
       chainId,
       nonce,
       deadline: params.deadline,
+      now: params.now,
     });
   }
 
+  await validateClientChainId(viemClient, chainId);
   const isAuthorized = await pc.readContract({
     address: morpho,
     abi: blueAbi,

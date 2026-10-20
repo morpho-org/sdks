@@ -50,6 +50,7 @@ export type BundlesTokenRequirementsState =
  * @param params.amount - Exact pull amount in the token's smallest unit; zero returns no requirements.
  * @param params.deadline - Signature expiration as a Unix timestamp in seconds; in the
  *   SignatureTransfer branch it must be positive, within uint256, and in the future.
+ * @param params.now - Timestamp the SignatureTransfer deadline is validated against; defaults to the current time.
  * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
  * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
  * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
@@ -94,6 +95,7 @@ export const resolveBundlesTokenRequirements = (params: {
   readonly chainId: number;
   readonly amount: bigint;
   readonly deadline: bigint;
+  readonly now?: bigint;
   readonly state: BundlesTokenRequirementsState;
 }): readonly (
   | Readonly<Transaction<ERC20ApprovalAction>>
@@ -161,6 +163,7 @@ export const resolveBundlesTokenRequirements = (params: {
       chainId: params.chainId,
       nonce: params.state.permit2Nonce,
       deadline: params.deadline,
+      now: params.now,
     }),
   ];
 };

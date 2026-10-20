@@ -63,6 +63,33 @@ export class InvalidPermitDomainVerifyingContractError extends Error {
   }
 }
 
+/** Thrown when a token exposes neither `name()` nor `eip712Domain()`, so its EIP-2612 permit domain name is unknown; consumers should use an approval or Permit2 instead. */
+export class MissingPermitDomainNameError extends Error {
+  constructor(public readonly token: Address) {
+    super(
+      `Token "${token}" exposes neither name() nor eip712Domain(), so its EIP-2612 permit domain is unknown. Use an approval or Permit2 instead.`,
+    );
+  }
+}
+
+/** Optional token metadata fields that can answer with malformed data. */
+export type TokenMetadataField = "name" | "symbol" | "eip712Domain";
+
+/** Thrown when a token answers `name()`, `symbol()` or `eip712Domain()` with non-empty data that does not decode; consumers should not trust or sign against this token's metadata. */
+export class MalformedTokenMetadataError extends Error {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+  constructor(
+    public readonly token: Address,
+    public readonly field: TokenMetadataField,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `Token "${token}" returned malformed ${field}() data, so its metadata cannot be trusted. Do not sign a permit for this token; verify the token address.`,
+      options,
+    );
+  }
+}
+
 /** Thrown when a permit domain advertises unsupported EIP-5267 extensions. */
 export class UnsupportedPermitDomainExtensionsError extends Error {
   public readonly extensions: readonly bigint[];

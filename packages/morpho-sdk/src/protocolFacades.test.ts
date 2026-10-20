@@ -49,7 +49,9 @@ import {
   InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
   InvalidPositionAccrualStateError as RawBlueInvalidPositionAccrualStateError,
   InvalidPositionLossFactorError as RawBlueInvalidPositionLossFactorError,
+  MalformedTokenMetadataError as RawBlueMalformedTokenMetadataError,
   MarketParamsIdMismatchError as RawBlueMarketParamsIdMismatchError,
+  MissingPermitDomainNameError as RawBlueMissingPermitDomainNameError,
   NonTupleReturnValueError as RawBlueNonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownAbiFunctionError as RawBlueUnknownAbiFunctionError,
@@ -86,8 +88,12 @@ import {
   MetaMorphoAction as RawBlueMetaMorphoAction,
   VaultV2MidnightAdapterUtils as RawVaultV2MidnightAdapterUtils,
   defaultPreLiquidationParamsRegistry as rawBlueDefaultPreLiquidationParamsRegistry,
+  catchRevertOnly as rawCatchRevertOnly,
   getDefaultPreLiquidationParams as rawGetBlueDefaultPreLiquidationParams,
   getPermit2PermitTypedData as rawGetPermit2PermitTypedData,
+  isContractRevertError as rawIsContractRevertError,
+  isTransportError as rawIsTransportError,
+  isUndecodableResultError as rawIsUndecodableResultError,
 } from "@morpho-org/morpho-sdk/blue/utils";
 import {
   BLUE_LIQUIDATION_CURSOR,
@@ -139,8 +145,10 @@ import {
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
   isBlueUnknownOfFactoryError,
+  MalformedTokenMetadataError,
   MidnightRateRatifierV1BoundOverflowError,
   MidnightRatifierV1TakerNotAllowedError,
+  MissingPermitDomainNameError,
   NegativeValueError,
   NonTupleReturnValueError,
   RegistryValueAlreadyRegisteredError,
@@ -223,8 +231,12 @@ import {
   BlueMarketUtils,
   BlueMetaMorphoAction,
   blueDefaultPreLiquidationParamsRegistry,
+  catchRevertOnly,
   getBlueDefaultPreLiquidationParams,
   getPermit2PermitTypedData,
+  isContractRevertError,
+  isTransportError,
+  isUndecodableResultError,
   MidnightEcrecoverRatifier,
   MidnightEcrecoverRatifierUtils,
   MidnightMarketUtils,
@@ -238,6 +250,7 @@ import {
   MidnightSetterRatifier,
   MidnightSetterRatifierUtils,
   VaultV2MidnightAdapterUtils,
+  validateClientChainId,
 } from "@morpho-org/morpho-sdk/utils";
 import {
   InvalidPositionAccrualStateError as RawInvalidPositionAccrualStateError,
@@ -247,6 +260,7 @@ import {
   NegativeValueError as RawNegativeValueError,
 } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
+import { validateClientChainId as rawValidateClientChainId } from "./actions/requirements/validateClientChainId.js";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -257,6 +271,11 @@ type Equal<Left, Right> =
 
 describe("protocol facades", () => {
   test.each([
+    [catchRevertOnly, rawCatchRevertOnly],
+    [isContractRevertError, rawIsContractRevertError],
+    [isTransportError, rawIsTransportError],
+    [isUndecodableResultError, rawIsUndecodableResultError],
+    [validateClientChainId, rawValidateClientChainId],
     [blueMarketParamsAbi, rawBlueMarketParamsAbi],
     [addresses, rawBlueAddresses],
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
@@ -285,6 +304,8 @@ describe("protocol facades", () => {
     [RawBlueInvalidPositionLossFactorError, RawInvalidPositionLossFactorError],
     [BlueMarketParamsIdMismatchError, RawBlueMarketParamsIdMismatchError],
     [BlueUnresolvedBlockNumberError, RawBlueUnresolvedBlockNumberError],
+    [MalformedTokenMetadataError, RawBlueMalformedTokenMetadataError],
+    [MissingPermitDomainNameError, RawBlueMissingPermitDomainNameError],
     [UnknownAbiFunctionError, RawBlueUnknownAbiFunctionError],
     [NonTupleReturnValueError, RawBlueNonTupleReturnValueError],
     [UnnamedAbiOutputsError, RawBlueUnnamedAbiOutputsError],

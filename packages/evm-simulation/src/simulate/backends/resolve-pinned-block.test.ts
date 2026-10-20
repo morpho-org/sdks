@@ -1,8 +1,8 @@
 import { numberToHex } from "viem";
 import { vi } from "vitest";
 import {
-  ExternalServiceError,
   InvalidSimulationResponseError,
+  RpcTransportError,
 } from "../../errors.js";
 import { createSimulationClient } from "./client.js";
 import { resolvePinnedBlock } from "./resolve-pinned-block.js";
@@ -68,22 +68,84 @@ describe.sequential("resolvePinnedBlock", () => {
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
   });
 
-  test("error: ExternalServiceError does not expose the RPC URL", async () => {
+  test("error: InvalidSimulationResponseError for a non-JSON 2xx reply", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("<html>ok</html>"));
+    const error = await resolvePinnedBlock({ client: client() }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(error).not.toBeInstanceOf(RpcTransportError);
+  });
+
+  test("error: InvalidSimulationResponseError for a JSON null 2xx reply", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response("null", { headers: { "Content-Type": "application/json" } }),
+    );
+    const error = await resolvePinnedBlock({ client: client() }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(error).not.toBeInstanceOf(RpcTransportError);
+  });
+
+  test.each([42, true, "ok", [], {}])(
+    "error: RpcTransportError for a JSON 2xx body without an RPC result (%j)",
+    async (body) => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify(body), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      const error = await resolvePinnedBlock({ client: client() }).catch(
+        (cause: unknown) => cause,
+      );
+      expect(error).toBeInstanceOf(RpcTransportError);
+      expect(error).not.toBeInstanceOf(InvalidSimulationResponseError);
+    },
+  );
+
+  test("error: RpcTransportError for an empty 2xx block reply", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const error = await resolvePinnedBlock({ client: client() }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(RpcTransportError);
+    expect(error).not.toBeInstanceOf(InvalidSimulationResponseError);
+  });
+
+  test("error: InvalidSimulationResponseError for an empty JSON 2xx block reply", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(null, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const error = await resolvePinnedBlock({ client: client() }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(error).not.toBeInstanceOf(RpcTransportError);
+  });
+
+  test("error: RpcTransportError omits viem diagnostics", async () => {
     fetchMock.mockRejectedValueOnce(
       new Error("request failed: https://rpc.example"),
     );
     const error = await resolvePinnedBlock({ client: client() }).catch(
       (cause: unknown) => cause,
     );
-    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect(error).toBeInstanceOf(RpcTransportError);
     expect((error as Error).message).not.toContain("https://rpc.example");
   });
 
-  test("error: ExternalServiceError on abort", async () => {
+  test("error: preserves the abort reason", async () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
       resolvePinnedBlock({ client: client(), signal: controller.signal }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toMatchObject({
+      cause: controller.signal.reason,
+      code: "RPC_TRANSPORT_ERROR",
+    });
   });
 });

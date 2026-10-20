@@ -20,6 +20,8 @@ export const midnightAddresses = {
   loanToken: "0x0000000000000000000000000000000000006000" as Address,
   dai: "0x0000000000000000000000000000000000006100" as Address,
   collateralToken: "0x0000000000000000000000000000000000007000" as Address,
+  secondCollateralToken:
+    "0x0000000000000000000000000000000000007100" as Address,
   oracle: "0x0000000000000000000000000000000000008000" as Address,
   maker: "0x0000000000000000000000000000000000009000" as Address,
   taker: "0x000000000000000000000000000000000000A000" as Address,
@@ -41,6 +43,19 @@ export const midnightMarket = new MarketParams({
   rcfThreshold: 0n,
   enterGate: zeroAddress,
   liquidatorGate: zeroAddress,
+});
+
+export const midnightTwoCollateralMarket = new MarketParams({
+  ...midnightMarket,
+  collateralParams: [
+    midnightMarket.collateralParams[0]!,
+    {
+      token: midnightAddresses.secondCollateralToken,
+      lltv: 770000000000000000n,
+      liquidationCursor: midnightLiquidationCursor,
+      oracle: midnightAddresses.oracle,
+    },
+  ],
 });
 
 export const midnightOtherMarket = new MarketParams({

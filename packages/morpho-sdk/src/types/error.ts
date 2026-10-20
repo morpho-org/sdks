@@ -1,5 +1,8 @@
 import { type MarketId, MathLib, UnknownDataError } from "@morpho-org/blue-sdk";
+import { Payload } from "@morpho-org/midnight-sdk";
+import type { AddressLabel } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
+import { MIDNIGHT_MAX_REFERRAL_FEE_PCT } from "../helpers/constant.js";
 
 /**
  * Thrown when a morpho-sdk input that must be non-negative is negative.
@@ -836,6 +839,27 @@ export class ReferralFeePctExceededError extends InputExceedsMaxError {
     });
     this.message = `Referral fee percentage "${referralFeePct}" must be below WAD. Reduce referralFeePct or disable the referral fee.`;
     this.name = "ReferralFeePctExceededError";
+  }
+}
+
+/**
+ * Thrown when the SDK's 10% (`WAD / 10n`) Midnight referral-fee cap is exceeded;
+ * the contract itself only requires `referralFeePct < WAD`.
+ */
+export class MidnightReferralFeePctExceededError extends InputExceedsMaxError {
+  /**
+   * @param referralFeePct - WAD-scaled referral fee percentage supplied by the caller.
+   *   The SDK cap is 10% (`WAD / 10n`); the contract itself only requires
+   *   `referralFeePct < WAD`.
+   */
+  public constructor(public readonly referralFeePct: bigint) {
+    super({
+      field: "referralFeePct",
+      value: referralFeePct,
+      max: MIDNIGHT_MAX_REFERRAL_FEE_PCT,
+    });
+    this.message = `Referral fee "${referralFeePct}" exceeds the SDK's 10% Midnight referral-fee cap "${MIDNIGHT_MAX_REFERRAL_FEE_PCT}". Reduce referralFeePct.`;
+    this.name = "MidnightReferralFeePctExceededError";
   }
 }
 
@@ -1687,16 +1711,235 @@ export class UnboundedMidnightTakeInputError extends Error {
   }
 }
 
-/** Thrown when a Midnight taker flow uses a zero address as its receiver. */
+/**
+ * Thrown when none of a Midnight take's offers can fill and the flow has no other source of units,
+ * so `MidnightBundlesV2` would revert with `OutOfOffers()`, or when every offer would abort the
+ * bundle before its take (`Panic(0x12)`, `PriceGreaterThanOne()` or an underflow), whatever the
+ * fallback.
+ */
+export class MidnightTakeableOffersNotFillableError extends Error {
+  /** Every supplied offer with the reason it cannot fill. */
+  public readonly offers: readonly {
+    /** Offer index in the supplied `takeableOffers`. */
+    readonly index: number;
+    /** Why the offer cannot fill. */
+    readonly reason:
+      | "expired"
+      | "notStarted"
+      | "selfTake"
+      | "continuousFeeCapBelowMarketFee"
+      | "zeroUnits"
+      | "receiverIfMakerIsSellerNotZero"
+      | "marketMatured"
+      | "zeroBuyerPrice"
+      | "buyerPriceAboveOne"
+      | "priceBelowSettlementFee"
+      | "tickOutOfRange";
+  }[];
+
+  /**
+   * @param offers - Every supplied offer with the reason it cannot fill.
+   */
+  public constructor(offers: MidnightTakeableOffersNotFillableError["offers"]) {
+    super(
+      `No Midnight takeable offer can fill: ${offers
+        .map(({ index, reason }) => `offer "${index}" is "${reason}"`)
+        .join(", ")}. Refresh the quote and try again.`,
+    );
+    this.offers = offers;
+    this.name = "MidnightTakeableOffersNotFillableError";
+  }
+}
+
+/**
+ * Thrown when a Midnight take target can never be met, so `MidnightBundlesV2` would revert
+ * (`OutOfOffers()`, `SellerAssetsTooLow()`, `UnitsTooHigh()` or a loan-token transfer error).
+ */
+export class MidnightTakeTargetUnreachableError extends Error {
+  /** Target bound that cannot be met, or `takeableOffers` when the offers lack capacity. */
+  public readonly field:
+    | "target.minSellerAssets"
+    | "target.maxUnits"
+    | "target.maxBuyerAssets"
+    | "repay.maxBuyerAssets"
+    | "takeableOffers";
+  /** Supplied bound, or the fillable units for `takeableOffers`. */
+  public readonly value: bigint;
+  /** Bound the target needs. */
+  public readonly limit: bigint;
+
+  /**
+   * @param params - Unreachable bound, supplied value and required limit.
+   * @param params.field - Target bound that cannot be met, or `takeableOffers`.
+   * @param params.value - Supplied bound, or the fillable units for `takeableOffers`.
+   * @param params.limit - Bound the target needs.
+   */
+  public constructor(params: {
+    readonly field: MidnightTakeTargetUnreachableError["field"];
+    readonly value: bigint;
+    readonly limit: bigint;
+  }) {
+    super(
+      {
+        "target.minSellerAssets": `Midnight "target.minSellerAssets" "${params.value}" exceeds the most the seller can receive, "${params.limit}", since each unit sells for at most one asset and the referral fee is deducted. Lower minSellerAssets or raise target.units.`,
+        "target.maxUnits": `Midnight "target.maxUnits" "${params.value}" is below the "${params.limit}" units needed, since each unit sells for at most one asset and the referral fee is added. Raise maxUnits or lower target.assets.`,
+        "target.maxBuyerAssets": `Midnight "target.maxBuyerAssets" "${params.value}" is below the minimum cost "${params.limit}" of the target units at the cheapest fillable price, including the referral fee. Raise maxBuyerAssets or lower target.units.`,
+        "repay.maxBuyerAssets": `Midnight "repay.maxBuyerAssets" "${params.value}" is below the position debt "${params.limit}", which a full repay pays at par. Raise maxBuyerAssets to cover the debt.`,
+        takeableOffers: `Midnight takeable offers can fill at most "${params.value}" units, below the "${params.limit}" units the target needs. Request a larger quote or lower the target.`,
+      }[params.field],
+    );
+    this.field = params.field;
+    this.value = params.value;
+    this.limit = params.limit;
+    this.name = "MidnightTakeTargetUnreachableError";
+  }
+}
+
+/**
+ * Thrown when a Midnight buy's `maxContinuousFee` is below the market's continuous fee, so
+ * `MidnightBundlesV2` would revert with `ContinuousFeeAboveMax()`.
+ */
+export class MidnightContinuousFeeAboveMaxError extends Error {
+  /** Largest continuous fee the caller accepts. */
+  public readonly maxContinuousFee: bigint;
+  /** Market continuous fee from the market snapshot. */
+  public readonly continuousFee: bigint;
+
+  /**
+   * @param params - Caller cap and market fee.
+   * @param params.maxContinuousFee - Largest continuous fee the caller accepts.
+   * @param params.continuousFee - Market continuous fee from the market snapshot.
+   */
+  public constructor(params: {
+    readonly maxContinuousFee: bigint;
+    readonly continuousFee: bigint;
+  }) {
+    super(
+      `Midnight market continuous fee "${params.continuousFee}" exceeds maxContinuousFee "${params.maxContinuousFee}". Raise maxContinuousFee or refresh the market data.`,
+    );
+    this.maxContinuousFee = params.maxContinuousFee;
+    this.continuousFee = params.continuousFee;
+    this.name = "MidnightContinuousFeeAboveMaxError";
+  }
+}
+
+/**
+ * Thrown when a Midnight reduce-only repay targets more than the position's debt, so
+ * `MidnightBundlesV2` would revert with `NotReduceOnly()` or `OutOfOffers()`.
+ */
+export class MidnightRepayExceedsDebtError extends Error {
+  /** Repay input that exceeds the debt. */
+  public readonly field:
+    | "target.units"
+    | "target.minUnits"
+    | "target.assets"
+    | "repay.assets";
+  /** Supplied repay amount; for `target.assets`, net of the referral fee. */
+  public readonly value: bigint;
+  /** Debt from the position snapshot. */
+  public readonly debt: bigint;
+
+  /**
+   * @param params - Repay input, amount and debt.
+   * @param params.field - Repay input that exceeds the debt.
+   * @param params.value - Supplied repay amount; for `target.assets`, net of the referral fee.
+   * @param params.debt - Debt from the position snapshot.
+   */
+  public constructor(params: {
+    readonly field:
+      | "target.units"
+      | "target.minUnits"
+      | "target.assets"
+      | "repay.assets";
+    readonly value: bigint;
+    readonly debt: bigint;
+  }) {
+    super(
+      `Midnight "${params.field}" "${params.value}" exceeds the position debt "${params.debt}". Lower the repay amount or use a full repay.`,
+    );
+    this.field = params.field;
+    this.value = params.value;
+    this.debt = params.debt;
+    this.name = "MidnightRepayExceedsDebtError";
+  }
+}
+
+/**
+ * Thrown when a Midnight flow uses a zero receiver or a zero collateral receiver with withdrawals.
+ */
 export class MidnightZeroReceiverError extends Error {
   /**
-   * @param field - Receiver field containing the zero address.
+   * @param field - Receiver field or collateral receiver field containing the zero address.
    */
-  public constructor(public readonly field: "receiver") {
+  public constructor(public readonly field: "receiver" | "collateralReceiver") {
     super(
       `Midnight "${field}" cannot be the zero address. Provide a valid recipient.`,
     );
     this.name = "MidnightZeroReceiverError";
+  }
+}
+
+/**
+ * Thrown when a Midnight receiver is a Midnight protocol or market token contract that cannot
+ * forward received assets.
+ */
+export class MidnightContractReceiverError extends Error {
+  /** Receiver field supplied with the contract address. */
+  public readonly field:
+    | "receiver"
+    | "collateralReceiver"
+    | "referralFeeRecipient";
+  /** Contract address supplied as the receiver. */
+  public readonly receiver: Address;
+  /** Midnight registry key (`"midnight"`, `"midnightBundlesV2"`,
+   * `"midnightBlueBuyCallbackFactory"`, `"midnightMempool"`, `"ecrecoverRatifier"`,
+   * `"ecrecoverAuthorizer"`, `"setterRatifier"`, `"priceRatifierV1"`,
+   * `"rateRatifierV1"`) or market token label (`"loanToken"`, `"collateralToken[i]"`)
+   * identifying the matched contract. */
+  public readonly contract:
+    | "midnight"
+    | "midnightBundlesV2"
+    | "midnightBlueBuyCallbackFactory"
+    | "midnightMempool"
+    | "ecrecoverRatifier"
+    | "ecrecoverAuthorizer"
+    | "setterRatifier"
+    | "priceRatifierV1"
+    | "rateRatifierV1"
+    | "loanToken"
+    | `collateralToken[${number}]`;
+
+  /**
+   * @param params - Matched receiver field, contract address, and contract label.
+   * @param params.field - Receiver field supplied with the contract address.
+   * @param params.receiver - Contract address supplied as the receiver.
+   * @param params.contract - Midnight registry key (for example `"midnightBundlesV2"`) or
+   *   market token label (`"loanToken"`, `"collateralToken[i]"`) identifying the matched
+   *   contract.
+   */
+  public constructor(params: {
+    readonly field: "receiver" | "collateralReceiver" | "referralFeeRecipient";
+    readonly receiver: Address;
+    readonly contract:
+      | "midnight"
+      | "midnightBundlesV2"
+      | "midnightBlueBuyCallbackFactory"
+      | "midnightMempool"
+      | "ecrecoverRatifier"
+      | "ecrecoverAuthorizer"
+      | "setterRatifier"
+      | "priceRatifierV1"
+      | "rateRatifierV1"
+      | "loanToken"
+      | `collateralToken[${number}]`;
+  }) {
+    super(
+      `Midnight "${params.field}" "${params.receiver}" is the ${params.contract} contract, which cannot forward received assets. Provide an account address that can receive them.`,
+    );
+    this.name = "MidnightContractReceiverError";
+    this.field = params.field;
+    this.receiver = params.receiver;
+    this.contract = params.contract;
   }
 }
 
@@ -1883,6 +2126,74 @@ export class InsufficientMidnightWithdrawableLiquidityError extends Error {
   }
 }
 
+/**
+ * Thrown when a Midnight root, publication or cancellation group, Blue callback salt,
+ * root-signature `r`/`s`, or payload is not valid bounded hex input.
+ */
+export class InvalidMidnightHexInputError extends Error {
+  /**
+   * @param params - Invalid hex field details.
+   * @param params.field - Midnight input field containing the invalid value.
+   * @param params.value - Supplied hex value.
+   * @param params.reason - Why the supplied value is invalid.
+   */
+  public constructor(params: {
+    readonly field: string;
+    readonly value: string;
+    readonly reason: "notHex" | "oddLength" | "wrongSize" | "tooLong";
+  }) {
+    const { expectation, remedy } = {
+      notHex: {
+        expectation: "strict 0x-prefixed hex",
+        remedy: "Re-encode the value as 0x-prefixed hex.",
+      },
+      oddLength: {
+        expectation: "even-length hex",
+        remedy: "Re-encode the value as 0x-prefixed hex.",
+      },
+      wrongSize: {
+        expectation: "exactly 32 bytes",
+        remedy: "Pass exactly 32 bytes of hex.",
+      },
+      tooLong: {
+        expectation: `no more than ${Payload.MAX_PAYLOAD_BYTES.toLocaleString("en-US")} bytes`,
+        remedy:
+          "Split the offers across smaller trees so the encoded payload fits.",
+      },
+    }[params.reason];
+    const raw = String(params.value);
+    const value =
+      raw.length > 80 ? `${raw.slice(0, 40)}…${raw.slice(-8)}` : raw;
+    super(
+      `Midnight "${params.field}" must be ${expectation}, got "${value}". ${remedy}`,
+    );
+    this.field = params.field;
+    this.value = raw;
+    this.reason = params.reason;
+    this.name = "InvalidMidnightHexInputError";
+  }
+
+  /** Midnight input field containing the invalid value. */
+  public readonly field: string;
+  /** Supplied hex value. */
+  public readonly value: string;
+  /** Why the supplied value is invalid. */
+  public readonly reason: "notHex" | "oddLength" | "wrongSize" | "tooLong";
+}
+
+/** Thrown when a Midnight entity account is malformed or the zero address. */
+export class MidnightInvalidAccountAddressError extends Error {
+  /**
+   * @param value - Account address supplied by the caller.
+   */
+  public constructor(public readonly value: string) {
+    super(
+      `Midnight accountAddress must be a valid non-zero address, got "${value}". Provide a valid account address.`,
+    );
+    this.name = "MidnightInvalidAccountAddressError";
+  }
+}
+
 /** Thrown when a loan-asset withdraw specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveWithdrawAmountsError extends Error {
   constructor(market: string) {
@@ -1965,12 +2276,52 @@ export class RefinanceTokenMismatchError extends Error {
     );
   }
 }
-
 /** Thrown when a maker limit-exit offer can increase or open a position. */
 export class MidnightOfferNotReduceOnlyError extends Error {
   constructor(params: { readonly index: number }) {
     super(
       `Midnight exit offer "${params.index}" must have reduceOnly=true. Rebuild the offer tree for the exit intent.`,
     );
+  }
+}
+
+/**
+ * Thrown when a configured registry address holds no contract code.
+ *
+ * A call to a code-less address succeeds on-chain as a no-op, so entity
+ * `getRequirements()` checks each registry target with one `eth_getCode`
+ * before returning requirements. Use {@link MissingContractCodeError.address}
+ * and {@link MissingContractCodeError.role} to find the misconfigured registry
+ * entry.
+ *
+ * @example
+ * ```ts
+ * import { MissingContractCodeError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   await deposit.getRequirements();
+ * } catch (error) {
+ *   if (error instanceof MissingContractCodeError) {
+ *     console.error(error.address, error.chainId, error.role);
+ *   }
+ * }
+ * ```
+ */
+export class MissingContractCodeError extends Error {
+  /**
+   * @param address - Registry-configured address without deployed code.
+   * @param chainId - Chain id the flow targets.
+   * @param role - Registry label naming the address's role in the flow.
+   */
+  // biome-ignore lint/complexity/useMaxParams: mirrors the registry-address failure shape
+  public constructor(
+    public readonly address: Address,
+    public readonly chainId: number,
+    public readonly role: AddressLabel,
+  ) {
+    super(
+      `No contract code at ${role} address ${address} on chain ${chainId}. Check the address registry and that the client's RPC serves chain ${chainId}.`,
+    );
+    this.name = "MissingContractCodeError";
   }
 }

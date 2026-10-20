@@ -1,13 +1,73 @@
 # @morpho-org/evm-simulation
 
-## 6.0.1-next.0
+## 7.0.0
+
+### Major Changes
+
+- Simplify simulation errors to stable SDK codes and standard Error fields. Remove
+  `SimulationPackageError.context` and its exported stage/context types. Replace
+  `SimulationRevertedError.reason`, `reasonCode`, and untyped `details` with
+  `message` and optional `revertData`, and remove `SimulationExecutionReason`.
+  The revert constructor is now `(message, revertData?, options?)`; other context
+  constructor arguments become standard `ErrorOptions`.
+
+  Revert messages include every decoded custom-error argument, Solidity reason
+  string, and panic code. Original bytes are preserved even for unknown/malformed
+  payloads; original node exceptions remain `cause`. Consumers branch on SDK
+  class/code or decode `revertData` with their ABI, never on message text.
+
+  Remove the unused `chainId`, `mode`, and `blockNumber` inputs from
+  `toSimulationAuthorizations`; it now takes `{ owner, requirements }`. Decode
+  custom errors from every pinned ABI exported by `@morpho-org/morpho-sdk/abis`.
+
+  See `docs/migrations/evm-simulation-v6-to-v7.md` for the constructor and Actions
+  API forwarding migration. No workspace runtime/peer dependents require a bump.
+
+  Rename `ExternalServiceError` / `EXTERNAL_SERVICE_ERROR` to `RpcTransportError` /
+  `RPC_TRANSPORT_ERROR`. RPC failures preserve original viem errors as `cause`. Other unexpected failures from `simulate`, including local viem errors, are wrapped in
+  `UnexpectedSimulationError` with their original cause. Add
+  `toSimulationErrorResponse` and `SimulationErrorResponse` for JSON-safe public
+  failure fields, with generic responses for infrastructure/unexpected failures.
+  Slippage error messages start with the failing `limits.operations` entry, e.g. `Limit operation 1 (vaultV2Deposit): …`.
+  Rename `MissingVerificationEvidenceError` / `MISSING_VERIFICATION_EVIDENCE` to `SlippageCheckUnavailableError` / `SLIPPAGE_CHECK_UNAVAILABLE`; it is thrown when a slippage limit cannot be checked.
+  Document mandatory simulation handling for services returning transactions.
+
+  Revert messages use decoded contract data, an SDK funding message for node
+  insufficient-funds rejections (viem `InsufficientFundsError` or JSON-RPC
+  `-38014`) whose revert bytes are absent or undecodable, or a generic fallback, never provider message
+  text. Preserve per-call provider diagnostics as `cause`. Add optional
+  `transactionIndex` to `SimulationRevertedError` and its JSON response, using the
+  zero-based caller transaction index and omitting it for preparation/node reverts.
+  Supply it through the revert constructor's options alongside `cause`.
+
+### Minor Changes
+
+- Add optional `ChainSimulationConfig.callGasLimit`, sent to `eth_simulateV1` as `gas` on every simulated call. Without it, requests are unchanged; a value that is not a positive bigint throws `SimulationValidationError`.
+- Fail closed on missing contract code: Blue, VaultV1 and VaultV2 `getRequirements()` now throw `MissingContractCodeError` when a registered bundles or protocol target holds no code, and `simulate()` rejects calldata transactions to code-less addresses with `SimulationValidationError` before `eth_simulateV1`. `@morpho-org/test` classifies the new error as `config`, `classifyError` now maps `BlacklistViolationError` to `config` and `ConsumerLimitViolationError` to `revert` where both were previously `unknown`, and `createMockClient` now answers `eth_getCode` with non-empty bytecode by default. `getBundlesTokenRequirements`, `getVaultBundlesSharesRequirements` and `getBlueAuthorizationRequirement` accept an optional `now` timestamp override for their deadline checks and pass it through to the signature encoders; `resolveBundlesTokenRequirements`, `encodeErc20Permit`, `encodeErc20Permit2SignatureTransfer`, `encodeVaultSharesPermit` and `encodeBlueSignatureAuthorization` accept the same optional `now` (additive). Migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+- Add caller-supplied per-transaction assertions (`to`, `data`, `check`) with `erc20BalanceAssertion`, `nativeBalanceAssertion`, and `maxDepositAssertion` helpers. Bounds are inclusive `min`/`max`. Failure throws `SimulationAssertError` (`SIMULATION_ASSERT_FAILED`) with `transactionIndex`, `phase`, `assertionIndex`, `assertion`, and `returnData`.
+- Verify in-kind redeem position deliveries: `vaultV1InKindRedeem` and `vaultV2InKindRedeem` limits accept a `positions` quote of expected Blue supply shares delivered to the receiver per market, checked as a minimum under the operation's slippage tolerance.
+- Bound the realized share price: operation limits accept a `sharePrice` quote `{ expected, tolerance }` (RAY-scaled assets per share and a WAD fraction) checked against the realized conversion rate from the operation's priced asset/share pair, and returned in `checkedLimits`.
+- Vault V2 force exits can now quote the realized `penalty` and per-market `deallocations`, checked from the vault's `ForceDeallocate` and Morpho `Withdraw` events in the simulated calls' logs.
+- Add `position` bounds on operation limits: callers may bound the subject's absolute Blue position after the bundle (max borrow shares, min supply shares, min collateral).
 
 ### Patch Changes
 
+- An RPC endpoint connected to the wrong chain now fails closed instead of serving another chain's state.
+
+  - `@morpho-org/morpho-sdk`: entity reads (`getMarketData`, `getPositionData`, `getVaultV2BlueReallocationData`, `getData`, `supplyBlueMakeLend`) and requirement resolvers (`getRequirements()`, `getBundlesTokenRequirements`, `getUnusedPermit2Nonce`, `getBlueAuthorizationRequirement`, the Midnight requirement resolvers and the exported `encodeErc20Permit`) each send their own uncached `eth_chainId` request (a `getRequirements()` that runs several of these resolvers sends one request per resolver) and throw `ChainIdMismatchError(observed, expected)` before any state read when the endpoint serves another chain. Previously only `client.chain?.id` was compared. The new `validateClientChainId(client, chainId)` performs both checks and is available from the `morpho-sdk/utils` subpath. Synchronous builders (`buildTx`) still compare only the declared chain. Breaking: these calls can now throw `ChainIdMismatchError` for the RPC's chain and viem errors from `eth_chainId`; migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+  - `@morpho-org/evm-simulation`: after an `RpcTransportError` from the block lookup, metadata reads or `eth_simulateV1`, or a `SlippageCheckUnavailableError` from quoted-asset resolution or a failed planned state read parsed by `executePlan`, `simulate()` probes `eth_chainId` once and throws `InvalidChainIdError` when the endpoint serves another chain (for example a `blockNumber` or `block` above that chain's head). A successful simulation still sends no `eth_chainId` request.
+
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
+- `simulate()` no longer reports two failures as an RPC transport failure. A node-level revert reported as `-32000 "execution reverted"` (geth, Erigon) or Nethermind's `VM execution error` now throws `SimulationRevertedError`, like a code `3` revert. A non-JSON 2xx response from block lookup (`eth_getBlock*`), `eth_getCode` or `eth_simulateV1` throws `InvalidSimulationResponseError`; a JSON `null` from block lookup or `eth_getCode` does too, as does JSON that is not a JSON-RPC object from `eth_simulateV1`. Quoted-asset metadata reads in `resolveAssets` still throw `RpcTransportError` on a non-JSON 2xx response. Other JSON block responses without an RPC result remain missing-block `RpcTransportError`s, while a code response without a result is treated as no code and causes `SimulationValidationError` for calldata targets. An HTTP error status stays `RpcTransportError`, even when its body is typed as JSON but cannot be parsed; a well-formed JSON-RPC error body is classified by its code and message whatever the status. A plain-text body never becomes `SimulationRevertedError`, whatever its wording: it stays `RpcTransportError` (`InvalidSimulationResponseError` under a 2xx), unless it reads as a chain-ID rejection, which is `InvalidChainIdError`. When several `eth_getCode` reads fail, a non-transport failure wins over an outage.
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
 - Updated dependencies
-  - @morpho-org/morpho-sdk@7.1.0-next.0
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/morpho-sdk@8.0.0
+  - @morpho-org/morpho-ts@4.0.1
+  - @morpho-org/blue-sdk@8.0.1
 
 ## 6.0.0
 

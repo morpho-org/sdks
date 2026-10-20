@@ -49,6 +49,7 @@ import {
 } from "@tetherto/wdk-wallet-evm-erc-4337";
 import {
   type Address,
+  BaseError,
   type Chain,
   type Client,
   createClient,
@@ -56,19 +57,28 @@ import {
   erc20Abi,
   erc4626Abi,
   getAddress,
+  type Hash,
+  HttpRequestError,
   isAddress,
   isAddressEqual,
+  isHex,
+  keccak256,
   maxUint256,
   type PublicActions,
   parseTransaction,
   publicActions,
+  RpcRequestError,
+  TimeoutError,
+  TransactionNotFoundError,
   type Transport,
   zeroAddress,
 } from "viem";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InvalidTransactionHashError,
   MissingWalletProviderError,
+  UnconfirmedBroadcastError,
 } from "./errors.js";
 import {
   type MarketPresetKey,
@@ -107,6 +117,22 @@ type WdkProvider = {
 
 type ViemPublicClient = Client<Transport, Chain> &
   PublicActions<Transport, Chain>;
+
+const WDK_ACCOUNT_PROVIDER_URL = "wdk-account-provider";
+
+const NETWORK_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+]);
+
+const GATEWAY_UNCERTAIN_STATUSES = new Set([502, 504, 524]);
+
+/** Mirrors the default `retries` of WDK's `FailoverProvider` (@tetherto/wdk-wallet-evm). */
+const DEFAULT_RETRIES = 3;
 
 /** Optional ERC-4337 (account abstraction) transaction configuration overrides per call. */
 export type Erc4337TransactionConfig = Partial<
@@ -293,6 +319,14 @@ export interface PreparedMorphoSupply {
    * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
    * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
+   * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
+   *   undecodable data, or is out of range.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless
+   *   `supportDeployless` is `false`, when the deployless query reports malformed
+   *   `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when a required chain, allowance, nonce, or token metadata read fails.
    * @example
    * ```ts
@@ -334,6 +368,12 @@ export interface PreparedMorphoSupply {
    * @throws {viem.BaseError} when a required provider read or transaction encoding fails.
    * @throws {Error} when the WDK account is read-only, the ERC-20 balance is insufficient,
    *   or the wallet rejects or fails to submit the transaction.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -425,6 +465,8 @@ export interface PreparedMorphoWithdraw {
    *   transaction or ERC-2612 request whose signed result can be passed directly to `submit` or `quote`.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the deadline.
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
    * @example
    * ```ts
@@ -463,10 +505,18 @@ export interface PreparedMorphoWithdraw {
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
    *   share allowance is outside the prepared cap's accepted range `[cap, cap / (1 - slippageTolerance)]`.
+   * @throws {MissingContractCodeError} when no signature is given and a fixed bundles or protocol
+   *   contract has no code during requirement resolution.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read or encoding fails.
    * @throws {Error} when the account is read-only or the wallet rejects or fails to submit.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @example
    * ```ts
    * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -512,6 +562,8 @@ export interface PreparedMorphoWithdraw {
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the share
    *   allowance is outside `[cap, cap / (1 - slippageTolerance)]`. Satisfy this handle's requirements before quoting again.
+   * @throws {MissingContractCodeError} when no signature is given and a fixed bundles or protocol
+   *   contract has no code during requirement resolution.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
@@ -621,7 +673,7 @@ export interface MorphoProtocolOptions {
   slippageTolerance?: bigint;
   /** Enable Morpho SDK permit/permit2 requirements (default: false). */
   supportSignature?: boolean;
-  /** Enable Morpho SDK deployless reads (default: false). */
+  /** Use Morpho SDK deployless reads. When unset, the SDK's deployless default applies; set `false` for direct reads only. */
   supportDeployless?: boolean;
   /** Optional Morpho SDK metadata propagated to action encoders. */
   metadata?: Metadata;
@@ -879,6 +931,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   private readonly _evmAccount: MorphoEvmAccount;
   private readonly _options: NormalizedMorphoProtocolOptions;
   private readonly _provider: Eip1193Provider;
+  private readonly _sendMayRetry: boolean;
   private readonly _accountConfiguredChainId: number | undefined;
   private _chainContext: ChainContext | undefined = undefined;
   private _latestChainObservation: Promise<ChainContext> | undefined =
@@ -946,6 +999,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         : {};
     const provider: unknown =
       "provider" in config ? config.provider : undefined;
+    const retries: unknown = "retries" in config ? config.retries : undefined;
 
     if (!provider || (Array.isArray(provider) && provider.length === 0)) {
       throw new MissingWalletProviderError();
@@ -956,22 +1010,179 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._validateOptions(normalizedOptions);
 
     this._options = normalizedOptions;
+    this._sendMayRetry =
+      Array.isArray(provider) &&
+      (typeof retries === "number" ? retries : DEFAULT_RETRIES) > 0;
     const accountProvider = Reflect.get(account, "_provider") as WdkProvider;
     this._provider = {
-      request: (args) => {
-        const currentRequest = accountProvider.request;
-        if (currentRequest !== undefined) {
-          return currentRequest.call(accountProvider, args);
-        }
+      request: async (args) => {
+        const body = { method: args.method, params: args.params ?? [] };
+        try {
+          const currentRequest = accountProvider.request;
+          if (currentRequest !== undefined) {
+            return await currentRequest.call(accountProvider, args);
+          }
 
-        const currentSend = accountProvider.send as NonNullable<
-          WdkProvider["send"]
-        >;
-        return currentSend.call(
-          accountProvider,
-          args.method,
-          args.params ?? [],
-        );
+          const currentSend = accountProvider.send as NonNullable<
+            WdkProvider["send"]
+          >;
+          return await currentSend.call(
+            accountProvider,
+            args.method,
+            args.params ?? [],
+          );
+        } catch (error) {
+          if (error instanceof BaseError) {
+            throw error;
+          }
+          if (typeof error !== "object" || error === null) {
+            throw error;
+          }
+          const errorMessage: unknown = Reflect.get(error, "message");
+          const providerError =
+            error instanceof Error
+              ? error
+              : Object.assign(
+                  new Error(
+                    typeof errorMessage === "string"
+                      ? errorMessage
+                      : "WDK account provider rejection",
+                  ),
+                  { cause: error },
+                );
+          const errorCode: unknown = Reflect.get(error, "code");
+          const isDomException =
+            typeof DOMException !== "undefined" &&
+            error instanceof DOMException;
+          const isTimeout =
+            (isDomException &&
+              (error.name === "TimeoutError" || error.name === "AbortError")) ||
+            errorCode === "TIMEOUT";
+          if (isTimeout) {
+            const timeoutError = new TimeoutError({
+              body,
+              url: WDK_ACCOUNT_PROVIDER_URL,
+            });
+            Object.defineProperty(timeoutError, "cause", {
+              value: providerError,
+              configurable: true,
+              writable: true,
+            });
+            throw timeoutError;
+          }
+          if (isDomException) throw error;
+
+          const info: unknown = Reflect.get(error, "info");
+          const infoError: unknown =
+            typeof info === "object" && info !== null
+              ? Reflect.get(info, "error")
+              : undefined;
+          const nestedError: unknown = Reflect.get(error, "error") ?? infoError;
+          const nestedCode: unknown =
+            typeof nestedError === "object" && nestedError !== null
+              ? Reflect.get(nestedError, "code")
+              : undefined;
+          const nestedMessage: unknown =
+            typeof nestedError === "object" && nestedError !== null
+              ? Reflect.get(nestedError, "message")
+              : undefined;
+          const providerErrorCandidates = [
+            {
+              source: nestedError,
+              code: nestedCode,
+              message: nestedMessage,
+            },
+            {
+              source: error,
+              code: errorCode,
+              message: errorMessage,
+            },
+          ];
+          for (const candidate of providerErrorCandidates) {
+            if (
+              typeof candidate.source !== "object" ||
+              candidate.source === null ||
+              typeof candidate.code !== "number" ||
+              !Number.isInteger(candidate.code) ||
+              typeof candidate.message !== "string"
+            ) {
+              continue;
+            }
+
+            const data: unknown = Reflect.get(candidate.source, "data");
+            const rpcError = new RpcRequestError({
+              body,
+              error: {
+                code: candidate.code,
+                message: candidate.message,
+                ...(data === undefined ? {} : { data }),
+              },
+              url: WDK_ACCOUNT_PROVIDER_URL,
+            });
+            // viem's RpcRequestError/TimeoutError constructors don't accept a `cause`.
+            Object.defineProperty(rpcError, "cause", {
+              value: providerError,
+              configurable: true,
+              writable: true,
+            });
+            throw rpcError;
+          }
+
+          const cause: unknown = Reflect.get(error, "cause");
+          const causeCode: unknown =
+            typeof cause === "object" && cause !== null
+              ? Reflect.get(cause, "code")
+              : undefined;
+          const errorName: unknown = Reflect.get(error, "name");
+          const details =
+            typeof errorCode === "string"
+              ? `WDK account provider error (${errorCode})`
+              : `WDK account provider error (${typeof errorName === "string" ? errorName : "unknown"})`;
+          if (
+            errorCode === "NETWORK_ERROR" ||
+            [errorCode, causeCode].some(
+              (code) =>
+                typeof code === "string" &&
+                (NETWORK_ERROR_CODES.has(code) || code.startsWith("UND_ERR_")),
+            )
+          ) {
+            throw new HttpRequestError({
+              body,
+              cause: providerError,
+              details,
+              url: WDK_ACCOUNT_PROVIDER_URL,
+            });
+          }
+
+          const response: unknown = Reflect.get(error, "response");
+          const responseStatus: unknown =
+            typeof response === "object" && response !== null
+              ? Reflect.get(response, "status")
+              : undefined;
+          const responseStatusCode: unknown =
+            typeof response === "object" && response !== null
+              ? Reflect.get(response, "statusCode")
+              : undefined;
+          const errorStatus: unknown = Reflect.get(error, "status");
+          const errorStatusCode: unknown = Reflect.get(error, "statusCode");
+          const status = [
+            errorStatus,
+            errorStatusCode,
+            responseStatus,
+            responseStatusCode,
+          ].find((value): value is number => typeof value === "number");
+          if (status !== undefined) {
+            throw new HttpRequestError({
+              body,
+              cause: providerError,
+              details,
+              status,
+              url: WDK_ACCOUNT_PROVIDER_URL,
+            });
+          }
+
+          throw error;
+        }
       },
     };
 
@@ -1000,8 +1211,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when configuration, the wallet balance, or submission is invalid.
    * @example
    * ```ts
@@ -1042,6 +1263,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {Error} when configuration or quoting fails.
@@ -1080,6 +1305,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NegativeInputError} when the selected funding amount is negative.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {VaultAssetMismatchError} when the token differs from the configured vault asset.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {Error} when the token, amount, vault, or account configuration is invalid.
    * @example
    * ```ts
@@ -1264,8 +1493,20 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The withdraw result.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is not already
    *   within `[cap, cap / (1 - slippageTolerance)]`, so the withdrawal must go through {@link prepareWithdraw}.
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address during requirement resolution.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
    * @example
    * ```ts
@@ -1308,6 +1549,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is outside
    *   `[cap, cap / (1 - slippageTolerance)]`.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless
+   *   `supportDeployless` is `false`, when the deployless query reports malformed
+   *   `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address during requirement resolution.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
    * @throws {Error} when the withdrawal options or account configuration are invalid, or quoting fails.
    * @example
@@ -1369,6 +1617,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
    * @throws {Error} when an address, token, or account configuration is invalid.
    * @example
@@ -1489,6 +1741,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -1536,6 +1794,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when a market, position, or authorization read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
@@ -1688,6 +1948,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1757,6 +2023,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   funded amount.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
+   * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
+   *   undecodable data, or is out of range.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless
+   *   `supportDeployless` is `false`, when the deployless query reports malformed
+   *   `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
@@ -1932,6 +2206,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -2005,6 +2285,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
    *   funded amount.
+   * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
+   *   undecodable data, or is out of range.
+   * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless
+   *   `supportDeployless` is `false`, when the deployless query reports malformed
+   *   `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
@@ -2174,6 +2462,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
+   *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
+   *   also when a reconciliation lookup fails or a retrying failover provider's
+   *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
+   * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
+   *   include a hint when the user operation may already be in flight.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -2230,6 +2524,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
+   * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
+   *   at its registered address.
    * @throws {viem.BaseError} when a position or authorization read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
@@ -2387,6 +2683,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The vault position.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -2496,6 +2796,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The account data.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @throws {UnknownTokenError} when the vault share token has unusable decimals.
+   * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
+   *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
+   *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -2988,10 +3292,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         },
       });
 
-      return await chainBoundAccount.sendTransaction(
+      const result = await chainBoundAccount.sendTransaction(
         prepared.transaction,
         operationConfig,
       );
+      if (!(isHex(result.hash, { strict: true }) && result.hash.length === 66))
+        throw new InvalidTransactionHashError(result.hash);
+      return result;
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
       const { fee } = await this._evmAccount.quoteSendTransaction(
@@ -3024,10 +3331,78 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       if (signedChainId !== prepared.context.chainId) {
         throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
       }
-      // The returned hash is not checked against the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
-      const hash = await client.sendRawTransaction({
-        serializedTransaction,
-      });
+      let hash: Hash;
+      try {
+        // The returned hash is shape-checked but not compared with the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
+        hash = await client.sendRawTransaction({
+          serializedTransaction,
+        });
+      } catch (error) {
+        if (
+          error instanceof BaseError &&
+          error.walk(
+            (cause) =>
+              cause instanceof TimeoutError ||
+              (cause instanceof HttpRequestError &&
+                (cause.status === undefined ||
+                  GATEWAY_UNCERTAIN_STATUSES.has(cause.status))),
+          )
+        ) {
+          throw new UnconfirmedBroadcastError(
+            keccak256(serializedTransaction),
+            serializedTransaction,
+            error,
+          );
+        }
+        const isReconciliationError =
+          error instanceof BaseError &&
+          error.walk(
+            (cause) =>
+              cause instanceof RpcRequestError ||
+              (cause instanceof HttpRequestError && cause.status !== undefined),
+          );
+        // When a failover provider (array `provider` with retries) rejects or fails a send
+        // that an earlier endpoint may have accepted, reconcile even unrecognized errors.
+        if (!this._sendMayRetry && !isReconciliationError) {
+          throw error;
+        }
+        const localHash = keccak256(serializedTransaction);
+        let transactionFound = false;
+        try {
+          const foundTransaction = await client.getTransaction({
+            hash: localHash,
+          });
+          transactionFound = foundTransaction !== null;
+        } catch (lookupError) {
+          if (!(lookupError instanceof TransactionNotFoundError)) {
+            throw new UnconfirmedBroadcastError(
+              localHash,
+              serializedTransaction,
+              new AggregateError(
+                [error, lookupError],
+                "Broadcast and reconciliation lookup both failed",
+              ),
+            );
+          }
+        }
+        if (!transactionFound) {
+          if (this._sendMayRetry) {
+            throw new UnconfirmedBroadcastError(
+              localHash,
+              serializedTransaction,
+              error,
+            );
+          }
+          throw error;
+        }
+        hash = localHash;
+      }
+      if (!(isHex(hash, { strict: true }) && hash.length === 66)) {
+        throw new InvalidTransactionHashError(hash, {
+          localHash: keccak256(serializedTransaction),
+          serializedTransaction,
+        });
+      }
 
       return { hash, fee };
     }

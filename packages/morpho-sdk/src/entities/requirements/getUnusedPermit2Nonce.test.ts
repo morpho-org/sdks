@@ -19,6 +19,12 @@ import {
 } from "../../types/index.js";
 import { getUnusedPermit2Nonce } from "./getUnusedPermit2Nonce.js";
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    throw new Error(`unexpected ${method}`);
+  });
+
 const permit2 = addressesRegistry[mainnet.id].permit2;
 if (permit2 == null) throw new Error("Permit2 is not registered on mainnet");
 const owner = zeroAddress;
@@ -77,6 +83,7 @@ describe("getUnusedPermit2Nonce", () => {
         startNonce: -1n,
       }),
     ).rejects.toBeInstanceOf(NegativeInputError);
+    expect(handle.request).not.toHaveBeenCalled();
   });
 
   test("behavior: rolls over to the next word when the first is fully consumed", async () => {
@@ -126,5 +133,15 @@ describe("getUnusedPermit2Nonce", () => {
         startNonce: maxUint256,
       }),
     ).rejects.toBeInstanceOf(NoUnusedPermit2NonceError);
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    answerWrongChain(handle);
+    await expect(
+      getUnusedPermit2Nonce(handle.client, { owner, chainId: mainnet.id }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

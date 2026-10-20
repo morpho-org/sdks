@@ -1,16 +1,14 @@
 # @morpho-org/morpho-ts
 
-## 4.1.0-next.0
+## 4.0.1
 
-### Minor Changes
+### Patch Changes
 
-- Add shared Midnight position accrual helpers and errors.
-- Add the shared Midnight core position and market-state ABI fragment.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7 / `@morpho-org/morpho-ts` 3 should pin `@morpho-org/blue-sdk-viem@~6.2`.
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
 
 ## 4.0.0
 

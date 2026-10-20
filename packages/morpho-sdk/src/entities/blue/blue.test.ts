@@ -1,16 +1,18 @@
 import {
   AccrualPosition,
+  getChainAddresses,
   Market,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   signerAddress,
   signerWalletClient,
@@ -33,6 +35,7 @@ import {
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
+  MissingContractCodeError,
   NegativeInputError,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
@@ -427,11 +430,12 @@ describe("MorphoBlue write surface", () => {
       deadline: maxUint256,
     });
 
-    // The native branch short-circuits before any on-chain read: it emits no
-    // token approval/permit (and no Morpho authorization), rides the funded
-    // amount as `tx.value`, and leaves the encoded token permit empty. A
-    // regression that dropped the branch would demand a token requirement or
-    // omit the value, and would revert on-chain rather than fail here.
+    // The native branch emits no token approval/permit (and no Morpho
+    // authorization) after the contract-code guard's `eth_getCode` reads: it
+    // rides the funded amount as `tx.value`, and leaves the encoded token
+    // permit empty. A regression that dropped the branch would demand a token
+    // requirement or omit the value, and would revert on-chain rather than
+    // fail here.
     expect(await action.getRequirements()).toEqual([]);
     const tx = action.buildTx();
     expect(tx.value).toBe(assets);
@@ -518,18 +522,132 @@ describe("MorphoBlue common write validation", () => {
     }
   });
 
-  test("error: ExpiredDeadlineError when a deadline expires before requirements", () => {
+  test("error: ExpiredDeadlineError when a deadline expires before requirements", async () => {
     const now = 1_800_000_000n;
-    const action = withChainTimestamp(now, () =>
-      makeEntity().supply({
-        userAddress,
-        assets: 1n,
-        deadline: now + 1n,
-      }),
+    const positionData = makePosition(marketParams);
+    const destinationPositionData = makePosition(destinationMarketParams, {
+      borrowShares: 0n,
+      collateral: 0n,
+    });
+    const makeBlue = () => {
+      const handle = createMockClient(mainnet);
+      const entity = handle.client
+        .extend(morphoViemExtension())
+        .morpho.blue(marketParams, mainnet.id);
+      return { handle, entity };
+    };
+
+    // supply validated its deadline synchronously before the contract-code check
+    // and keeps that behaviour.
+    const { handle: supplyHandle, entity: supplyEntity } = makeBlue();
+    const supply = withChainTimestamp(now, () =>
+      supplyEntity.supply({ userAddress, assets: 1n, deadline: now + 1n }),
     );
     expect(() =>
-      withChainTimestamp(now + 1n, () => action.getRequirements()),
+      withChainTimestamp(now + 1n, () => supply.getRequirements()),
     ).toThrow(ExpiredDeadlineError);
+    expect(supplyHandle.request.mock.calls, "supply").toHaveLength(0);
+
+    // withdraw and refinance return a rejected promise, as they did before the
+    // deadline was moved ahead of the contract-code check.
+    const cases = [
+      [
+        "withdraw",
+        (entity: ReturnType<typeof makeEntity>) =>
+          entity.withdraw({
+            userAddress,
+            positionData: makePosition(marketParams, {
+              borrowShares: 0n,
+              supplyShares: 10n,
+            }),
+            assets: 1n,
+            deadline: now + 1n,
+          }),
+      ],
+      [
+        "refinance",
+        (entity: ReturnType<typeof makeEntity>) =>
+          entity.refinance({
+            userAddress,
+            positionData,
+            destination: {
+              marketParams: destinationMarketParams,
+              positionData: destinationPositionData,
+            },
+            deadline: now + 1n,
+          }),
+      ],
+    ] as const;
+    for (const [method, call] of cases) {
+      const { handle, entity } = makeBlue();
+      const action = withChainTimestamp(now, () => call(entity));
+      const promise = withChainTimestamp(now + 1n, () =>
+        action.getRequirements(),
+      );
+      await expect(promise, method).rejects.toBeInstanceOf(
+        ExpiredDeadlineError,
+      );
+      expect(handle.request.mock.calls, method).toHaveLength(0);
+    }
+  });
+
+  test("supply, repay, and supplyCollateral validate against one requirement timestamp", async () => {
+    const now = 1_800_000_000n;
+    const deadline = now + 1n;
+    const positionData = makePosition(marketParams);
+    const cases = [
+      {
+        method: "supply",
+        token: marketParams.loanToken,
+        createAction: (entity: ReturnType<typeof makeEntity>) =>
+          entity.supply({ userAddress, assets: 1n, deadline }),
+      },
+      {
+        method: "repay",
+        token: marketParams.loanToken,
+        createAction: (entity: ReturnType<typeof makeEntity>) =>
+          entity.repay({
+            userAddress,
+            positionData,
+            repayAssets: 1n,
+            deadline,
+          }),
+      },
+      {
+        method: "supplyCollateral",
+        token: marketParams.collateralToken,
+        createAction: (entity: ReturnType<typeof makeEntity>) =>
+          entity.supplyCollateral({
+            userAddress,
+            collateralAssets: 1n,
+            deadline,
+          }),
+      },
+    ];
+
+    for (const { method, token, createAction } of cases) {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: token,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      const entity = handle.client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(marketParams, mainnet.id);
+      const action = withChainTimestamp(now, () => createAction(entity));
+      const timestamp = vi
+        .spyOn(Time, "timestamp")
+        .mockReturnValueOnce(now)
+        .mockReturnValueOnce(deadline);
+
+      try {
+        await expect(action.getRequirements(), method).resolves.toBeDefined();
+      } finally {
+        timestamp.mockRestore();
+      }
+    }
   });
 
   test("error: referral controls across all direct entrypoint paths", () => {
@@ -556,6 +674,44 @@ describe("MorphoBlue common write validation", () => {
       // bundles normalizer must not break integrators pattern-matching it.
       expect(call, method).toThrow(InputExceedsMaxError);
     }
+  });
+});
+
+describe("MorphoBlue observed chain guards", () => {
+  test("getMarketData rejects before making any other RPC request", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x2105";
+      throw new Error(`unexpected ${method}`);
+    });
+    const blue = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+
+    await expect(blue.getMarketData()).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
+  });
+
+  test("getPositionData rejects before making any other RPC request", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x2105";
+      throw new Error(`unexpected ${method}`);
+    });
+    const blue = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+
+    await expect(blue.getPositionData(userAddress)).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });
 
@@ -1253,5 +1409,169 @@ describe("MorphoBlue position validation", () => {
       type: "erc20Approval",
       args: { amount: maxUint256 },
     });
+  });
+});
+
+describe("MorphoBlue missing contract code", () => {
+  test("error: supply fails closed on a code-less target before any downstream read", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${method}`);
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    const promise = entity
+      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("error: a natively funded supply fails closed on a code-less target", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${method}`);
+    });
+    const nativeMarketParams = new MarketParams({
+      loanToken: getChainAddress(mainnet.id, "wNative"),
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(nativeMarketParams, mainnet.id);
+    const promise = entity
+      .supply({
+        userAddress,
+        assets: 1n,
+        nativeAmount: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    await expectFailClosed(promise, "config");
+    await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+    await expect(promise).rejects.toMatchObject({
+      role: "bundles.blueBundlesV1",
+    });
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(0);
+  });
+
+  test("error: a wrong-chain RPC surfaces ChainIdMismatchError, not missing code", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x2105";
+      if (method === "eth_getCode") return "0x";
+      throw new Error(`unhandled RPC ${method}`);
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    const promise = entity
+      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .getRequirements();
+    await expectFailClosed(promise, "chain");
+    await expect(promise).rejects.toBeInstanceOf(ChainIdMismatchError);
+    await expect(promise).rejects.not.toBeInstanceOf(MissingContractCodeError);
+  });
+
+  test.each([
+    "withdraw",
+    "repayWithdrawCollateral",
+    "supplyCollateralBorrow",
+    "refinance",
+  ] as const)(
+    "error: %s fails closed on a code-less target before any downstream read",
+    async (method) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockImplementation(async ({ method: rpcMethod }) => {
+        if (rpcMethod === "eth_chainId") return "0x1";
+        if (rpcMethod === "eth_getCode") return "0x";
+        throw new Error(`unhandled RPC ${rpcMethod}`);
+      });
+      const entity = handle.client
+        .extend(morphoViemExtension())
+        .morpho.blue(marketParams, mainnet.id);
+      const call = getCommonWriteCalls(entity).find(
+        ([name]) => name === method,
+      )?.[1];
+      if (call == null) throw new Error(`unknown flow ${method}`);
+      const promise = call().getRequirements();
+      await expectFailClosed(promise, "config");
+      await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
+      await expect(promise).rejects.toMatchObject({
+        role: "bundles.blueBundlesV1",
+      });
+      expect(
+        handle.request.mock.calls.filter(
+          ([rpcCall]) => rpcCall.method === "eth_call",
+        ),
+      ).toHaveLength(0);
+    },
+  );
+
+  test("behavior: a code-less Permit2 is not checked without an ERC-20 funding leg", async () => {
+    const handle = createMockClient(mainnet);
+    const permit2 = getChainAddresses(mainnet.id).permit2;
+    const defaultImpl = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_getCode")
+        return params?.[0] === permit2 ? "0x" : "0x6000";
+      if (method === "eth_call") return `0x${"0".repeat(64)}`;
+      return defaultImpl?.({ method, params });
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    // Withdraw has no ERC-20 funding leg, so Permit2 is never a write target.
+    await entity
+      .withdraw({
+        userAddress,
+        positionData: makePosition(marketParams, {
+          borrowShares: 0n,
+          supplyShares: 10n,
+        }),
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) =>
+          call.method === "eth_getCode" && call.params?.[0] === permit2,
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("behavior: a code-full supply sends exactly one eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    const defaultImpl = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params }) => {
+      // Zero-decode every contract read (allowance 0, authorization false, …).
+      if (method === "eth_call") return `0x${"0".repeat(64)}`;
+      return defaultImpl?.({ method, params });
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+    await entity
+      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .getRequirements();
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_chainId",
+      ),
+    ).toHaveLength(1);
   });
 });

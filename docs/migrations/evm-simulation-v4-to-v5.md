@@ -61,6 +61,11 @@ must map each chain to a matching URL. A mid-flight reorg of the pinned block
 is no longer checked, so that failure no longer occurs and six hard failures
 remain.
 
+Later v6 releases add a conditional `eth_chainId` probe after selected RPC
+boundary failures. If the endpoint reports a different chain, the simulation
+throws `InvalidChainIdError`; successful simulations still send no extra probe.
+This later behavior does not change the v5.2.0 behavior described above.
+
 `simulationTxs`, `calls`, `transfers`, and `assetChanges` retain their shapes in
 this step. Native transfers, including internal transfers such as WETH refunds,
 come from `traceTransfers`; they are counted once in net balance changes.

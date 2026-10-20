@@ -59,6 +59,27 @@ describe("createMockClient", () => {
     ).rejects.toThrow(/unhandled RPC eth_call/);
   });
 
+  test("eth_getCode answers non-empty bytecode by default and is overridable", async () => {
+    const handle = createMockClient(mainnet);
+    await expect(
+      handle.client.request({
+        method: "eth_getCode",
+        params: [TOKEN, "latest"],
+      }),
+    ).resolves.toBe("0x01");
+
+    const defaultImpl = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params }) =>
+      method === "eth_getCode" ? "0x" : defaultImpl?.({ method, params }),
+    );
+    await expect(
+      handle.client.request({
+        method: "eth_getCode",
+        params: [TOKEN, "latest"],
+      }),
+    ).resolves.toBe("0x");
+  });
+
   test("the request fn is observable (call history)", async () => {
     const { client, request } = createMockClient(mainnet);
     await client.request({ method: "eth_chainId" });

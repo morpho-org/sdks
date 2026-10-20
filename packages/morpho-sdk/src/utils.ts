@@ -16,11 +16,15 @@ export {
   VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 export {
+  catchRevertOnly,
   decodeBytes32String,
   getAuthorizationTypedData as getBlueAuthorizationTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
+  isContractRevertError,
+  isTransportError,
+  isUndecodableResultError,
   MetaMorphoAction as BlueMetaMorphoAction,
   optionalBoolean,
   readContractRestructured,
@@ -87,6 +91,7 @@ export {
   transformValue,
   values,
 } from "@morpho-org/morpho-ts";
+export { validateClientChainId } from "./actions/requirements/validateClientChainId.js";
 export { addTransactionMetadata } from "./helpers/metadata.js";
 export {
   type PreviewVaultV2ForceWithdrawParams,

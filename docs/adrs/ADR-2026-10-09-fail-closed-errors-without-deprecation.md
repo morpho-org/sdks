@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Status** | accepted                                                                                                                                                     |
+| **Status** | accepted; `morpho-sdk` 7.0.0 target superseded by ADR-2026-10-13-malformed-token-metadata-error                                                                                                                                                     |
 | **Date**   | 2026-10-09                                                                                                                                                   |
 | **Author** | @Foulks-Plb                                                                                                                                                  |
 | **Scope**  | `blue-sdk-viem` 7.0.0, `morpho-sdk` 7.0.0, `wdk-protocol-lending-morpho-evm` 3.0.0, and the next major of maintained dependents such as `liquidity-sdk-viem` |

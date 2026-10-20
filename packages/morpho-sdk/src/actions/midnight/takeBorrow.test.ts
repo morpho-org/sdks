@@ -1,6 +1,6 @@
 import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
+import { decodeFunctionData, maxUint128, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -14,10 +14,14 @@ import {
   ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   InputExceedsMaxError,
+  MidnightContractReceiverError,
   MidnightOfferSideMismatchError,
+  MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeTargetUnreachableError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
@@ -119,6 +123,15 @@ describe("midnightTakeBorrow", () => {
     ).toThrow(ChainIdMismatchError);
   });
 
+  test("error: MidnightTakeTargetUnreachableError", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: 1_000n, maxUnits: 999n },
+      }),
+    ).toThrow(MidnightTakeTargetUnreachableError);
+  });
+
   test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightTakeBorrow({
@@ -187,6 +200,15 @@ describe("midnightTakeBorrow", () => {
         field: "deadline",
       }),
     );
+  });
+
+  test("error: NonPositiveInputError when assets target has an unbounded maxUnits", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: 0n, maxUnits: maxUint256 },
+      }),
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: MidnightZeroReceiverError", () => {
@@ -274,5 +296,74 @@ describe("midnightTakeBorrow", () => {
         ],
       }),
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
+  });
+
+  test("error: MidnightContractReceiverError for protocol receivers", () => {
+    for (const receiver of [midnightAddresses.midnight, midnightBundlesV2]) {
+      const call = () => midnightTakeBorrow({ ...params, receiver });
+
+      expect(call).toThrow(MidnightContractReceiverError);
+      expect(call).toThrow(
+        expect.objectContaining({ field: "receiver", receiver }),
+      );
+    }
+  });
+
+  test("error: MidnightContractReceiverError for a contract referralFeeRecipient", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 16n,
+        referralFeeRecipient: midnightBundlesV2,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightContractReceiverError",
+        field: "referralFeeRecipient",
+      }),
+    );
+  });
+
+  test("behavior: a contract referralFeeRecipient builds with a zero referral fee", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        referralFeeRecipient: midnightBundlesV2,
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: uint128 target and offer bounds", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        target: { type: "assets", assets: maxUint128 + 1n, maxUnits: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    const offer = midnightApiTake({ buy: true });
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        takeableOffers: [
+          { ...offer, offer: { ...offer.offer, maxAssets: maxUint128 + 1n } },
+        ],
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: MidnightReferralFeePctExceededError", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        ...params,
+        referralFeePct: 10n ** 17n + 1n,
+        referralFeeRecipient: midnightAddresses.maker,
+      }),
+    ).toThrow(MidnightReferralFeePctExceededError);
+  });
+
+  test("error: ReferralFeePctExceededError at WAD", () => {
+    expect(() =>
+      midnightTakeBorrow({ ...params, referralFeePct: 10n ** 18n }),
+    ).toThrow(ReferralFeePctExceededError);
   });
 });

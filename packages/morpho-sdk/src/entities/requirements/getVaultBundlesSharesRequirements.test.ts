@@ -12,6 +12,12 @@ import {
 } from "../../types/index.js";
 import { getVaultBundlesSharesRequirements } from "./getVaultBundlesSharesRequirements.js";
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    throw new Error(`unexpected ${method}`);
+  });
+
 const owner = "0x0000000000000000000000000000000000000001" as const;
 const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 // Only `address` and `name` are read on this path; the full accrual snapshot would hide them.
@@ -68,6 +74,25 @@ describe("getVaultBundlesSharesRequirements", () => {
     mockAllowance(handle, requiredShareAllowance);
 
     await expect(resolve(handle, false)).resolves.toEqual([]);
+  });
+
+  test("error: an overridden now rejects a live deadline before any RPC request", async () => {
+    const handle = createMockClient(mainnet);
+    // Live on the wall clock but already past the supplied `now`.
+    const deadline = Time.timestamp() + Time.s.from.h(1n);
+    await expect(
+      getVaultBundlesSharesRequirements(handle.client, {
+        vaultData,
+        version: "vaultV1",
+        owner,
+        chainId: mainnet.id,
+        requiredShareAllowance,
+        deadline,
+        now: deadline,
+        supportSignature: false,
+      }),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+    expect(handle.request).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -161,6 +186,36 @@ describe("getVaultBundlesSharesRequirements", () => {
     });
   });
 
+  test("behavior: an overridden now lets a signature path outlive the wall clock", async () => {
+    const handle = createMockClient(mainnet);
+    mockAllowance(handle, requiredShareAllowance - 1n);
+    mockRead(handle, {
+      address: vaultData.address,
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: 7n,
+    });
+
+    // Expired on the wall clock but live at the supplied `now`: the permit
+    // encoder must honour the same override as the resolver's deadline check.
+    const deadline = Time.timestamp() - Time.s.from.h(1n);
+    const [permit] = await getVaultBundlesSharesRequirements(handle.client, {
+      vaultData,
+      version: "vaultV1",
+      owner,
+      chainId: mainnet.id,
+      requiredShareAllowance,
+      deadline,
+      now: deadline - Time.s.from.h(1n),
+      supportSignature: true,
+    });
+
+    expect(permit?.action).toMatchObject({
+      type: "permit",
+      args: { spender, amount: requiredShareAllowance, nonce: 7n },
+    });
+  });
+
   test("error: ExpiredDeadlineError before reading an allowance", async () => {
     const handle = createMockClient(mainnet);
 
@@ -175,6 +230,7 @@ describe("getVaultBundlesSharesRequirements", () => {
         supportSignature: false,
       }),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+    expect(handle.request).not.toHaveBeenCalled();
   });
 
   test("[INV-05] error: ChainIdMismatchError before reading an allowance", async () => {
@@ -194,5 +250,23 @@ describe("getVaultBundlesSharesRequirements", () => {
         supportSignature: false,
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    answerWrongChain(handle);
+    await expect(
+      getVaultBundlesSharesRequirements(handle.client, {
+        vaultData,
+        version: "vaultV1",
+        owner,
+        chainId: mainnet.id,
+        requiredShareAllowance,
+        deadline: 2n ** 64n,
+        supportSignature: false,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

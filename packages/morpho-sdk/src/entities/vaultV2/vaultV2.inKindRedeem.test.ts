@@ -45,6 +45,12 @@ import {
   VaultV2UnsupportedExitAdapterError,
 } from "../../types/index.js";
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    throw new Error(`unexpected ${method}`);
+  });
+
 const mockV2Requirements = (
   handle: ReturnType<typeof createMockClient>,
   params: {
@@ -503,6 +509,14 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       type: "erc20Approval",
       args: { spender: arcBundler, amount: 501n },
     });
+    expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
+      "eth_chainId",
+      "eth_getCode",
+      "eth_getCode",
+      "eth_call",
+      "eth_call",
+      "eth_call",
+    ]);
   });
 
   test("behavior: oversized allowance is replaced by an exact approval", async () => {
@@ -834,5 +848,24 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       .getRequirements();
 
     expect(requirements).toEqual([]);
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    const exit = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id)
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+      });
+    answerWrongChain(handle);
+    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

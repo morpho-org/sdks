@@ -5,6 +5,12 @@ import { type Address, maxUint96 } from "viem";
 /** Maximum time between now and a Midnight taker-flow deadline, in seconds. */
 export const MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS = 3600n;
 
+/**
+ * Matches MAX_SLIPPAGE_TOLERANCE, the SDK's other ceiling on a WAD share of user funds; higher fees are rejected as likely unit mistakes.
+ * @internal
+ */
+export const MIDNIGHT_MAX_REFERRAL_FEE_PCT = MathLib.WAD / 10n;
+
 /** Maximum slippage tolerance: 10% */
 export const MAX_SLIPPAGE_TOLERANCE = MathLib.WAD / 10n;
 

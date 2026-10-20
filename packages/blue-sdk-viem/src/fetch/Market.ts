@@ -11,7 +11,11 @@ import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
 import { MarketParamsIdMismatchError } from "../error.js";
 import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
-import { readContractRestructured } from "../utils.js";
+import {
+  catchRevertOnly,
+  isTransportError,
+  readContractRestructured,
+} from "../utils.js";
 import { validateMarketParamsId } from "./marketParamsId.js";
 
 /**
@@ -31,6 +35,9 @@ import { validateMarketParamsId } from "./marketParamsId.js";
  * @returns The hydrated `Market` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {MarketParamsIdMismatchError} when fetched params hash to another market id.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { Market, MarketId } from "@morpho-org/blue-sdk";
@@ -99,10 +106,11 @@ export async function fetchMarket(
     } catch (error) {
       if (
         deployless === "force" ||
+        isTransportError(error) ||
         error instanceof MarketParamsIdMismatchError
       )
         throw error;
-      // Fallback to multicall if deployless call fails.
+      // Non-transport deployless failures other than an ID mismatch fall back to multicall.
     }
   }
 
@@ -133,7 +141,7 @@ export async function fetchMarket(
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
-        }).catch(() => undefined)
+        }).catch(catchRevertOnly(undefined))
       : undefined,
     isAddressEqual(params.irm, adaptiveCurveIrm)
       ? readContract(client, {

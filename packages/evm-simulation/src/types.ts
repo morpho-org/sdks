@@ -16,6 +16,19 @@ export interface ChainSimulationConfig {
     readonly gasLimit?: bigint;
   };
   /**
+   * Gas limit sent as `gas` on every simulated call (state reads, preparations,
+   * `assertBefore`/`assertAfter` assertions and user transactions). Omitted: no
+   * per-call `gas` is sent and the node applies its default (150M per call on
+   * Monad, regardless of `blockOverrides.gasLimit`).
+   *
+   * A call that needs more gas than this runs out of gas and is reported as a
+   * revert or a read/assertion failure, not as a configuration error, so set it
+   * above the heaviest expected call. On geth-style nodes it must also fit in
+   * the gas left in the simulated block (the block gas limit minus the gas used
+   * by earlier calls); otherwise the node rejects the whole request.
+   */
+  readonly callGasLimit?: bigint;
+  /**
    * Whether a simulated successor block's `parentHash` must equal the pinned
    * state block hash. Block number and timestamp checks always run.
    * Omitted: on everywhere except Stable (988), whose nodes report a
@@ -43,6 +56,26 @@ export interface SimulationConfig {
 // Shapes the caller passes per-call or receives back.
 
 /**
+ * A caller-supplied view call checked on simulated state immediately before or
+ * after a transaction, inside the same `eth_simulateV1` call.
+ *
+ * @example
+ * ```ts
+ * assertBefore: [
+ *   erc20BalanceAssertion({ token: USDC, account: user, min: 1_000_000n }),
+ * ]
+ * ```
+ */
+export interface Assertion {
+  /** Contract to call. Must be a view call: it runs as an ordinary call, so any state it writes is seen by later calls. */
+  readonly to: Address;
+  /** Encoded call data. */
+  readonly data: Hex;
+  /** Receives the call's return data; returns a failure message, or `undefined` when the assertion holds. A thrown error becomes `SimulationAssertError` with the error as `cause`. */
+  readonly check: (returnData: Hex) => string | undefined;
+}
+
+/**
  * A single EVM call to simulate. `from` must be identical across all transactions
  * in a bundle — the orchestrator rejects mixed senders with `SimulationValidationError`.
  */
@@ -51,6 +84,22 @@ export interface SimulationTransaction {
   readonly to: Address;
   readonly data: Hex;
   readonly value?: bigint;
+  /**
+   * Caller-supplied assertions checked on simulated state immediately before
+   * this transaction, inside the same `eth_simulateV1` call. Nothing is inferred
+   * from calldata; failure throws `SimulationAssertError` with the transaction
+   * index, phase, assertion index, a copy of the assertion (`to`, `data`, and
+   * `check`), and return data.
+   */
+  readonly assertBefore?: readonly Assertion[];
+  /**
+   * Caller-supplied assertions checked on simulated state immediately after
+   * this transaction, inside the same `eth_simulateV1` call. Nothing is inferred
+   * from calldata; failure throws `SimulationAssertError` with the transaction
+   * index, phase, assertion index, a copy of the assertion (`to`, `data`, and
+   * `check`), and return data.
+   */
+  readonly assertAfter?: readonly Assertion[];
 }
 
 /**
@@ -101,8 +150,9 @@ export interface Transfer {
 /**
  * Happy-path return of `simulate`. All failures throw typed errors.
  *
- * - `simulationTxs` are exactly the caller's ordered transactions, normalized
- *   (checksummed `from`/`to`, `value` defaulted to `0n`).
+ * - `simulationTxs` contain the caller's ordered `from`/`to`/`data`/`value`
+ *   fields, normalized (checksummed addresses, `value` defaulted to `0n`);
+ *   assertion declarations are not included.
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the net per-asset balance change over the whole bundle,
@@ -111,8 +161,10 @@ export interface Transfer {
  *   transfer to its emitting user transaction.
  */
 export interface SimulationResult {
-  /** Exactly the caller's ordered transactions, normalized. */
-  readonly simulationTxs: readonly Readonly<SimulationTransaction>[];
+  /** Caller transaction fields in order, normalized; assertion declarations are omitted. */
+  readonly simulationTxs: readonly Readonly<
+    Pick<SimulationTransaction, "from" | "to" | "data" | "value">
+  >[];
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
    * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas used.
@@ -167,10 +219,11 @@ export interface RawCall {
 export interface SimulationCall {
   readonly logs: readonly RawLog[];
   /**
-   * True iff the call succeeded. The bundle as a whole reverts via
-   * `SimulationRevertedError` before the result is returned, so on a
-   * successful `simulate()` every entry is `true` today. Field kept for
-   * per-call inspection alongside logs and return data.
+   * True iff the call succeeded. A failed user call throws
+   * `SimulationRevertedError`, and a failed assertion throws
+   * `SimulationAssertError` before the result is returned, so on a successful
+   * `simulate()` every entry is `true` today. Field kept for per-call
+   * inspection alongside logs and return data.
    */
   readonly status: boolean;
   /** Return data from the top-level call. */
@@ -180,7 +233,8 @@ export interface SimulationCall {
    * post-refund consumption and does not account for EIP-150's 63/64 rule in
    * nested calls, so consumers deriving a limit must add their own headroom,
    * larger than headroom derived from `eth_estimateGas`. On Monad it reports the
-   * call's gas limit (150M by default) instead of gas consumed.
+   * call's gas limit (`callGasLimit` when set, otherwise 150M by default)
+   * instead of gas consumed.
    */
   readonly gasUsed: bigint;
 }

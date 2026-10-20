@@ -18,10 +18,12 @@ import { rpc } from "./eth-simulate-v1.js";
  * @param params.signal - Optional pipeline abort signal; checked around the
  *   request so an aborted pipeline never produces a pin.
  * @returns The resolved {@link StateBlock}.
- * @throws {ExternalServiceError} For transport failures, timeouts, or an
+ * @throws {RpcTransportError} For transport failures, timeouts, or an
  *   aborted signal.
- * @throws {InvalidSimulationResponseError} When the node returns a block
- *   without a number or hash.
+ * @throws {InvalidSimulationResponseError} When the node returns a 2xx body
+ *   that is not JSON or is the JSON value `null`, or a block without a number
+ *   or hash. Other JSON bodies without an RPC result are interpreted as a
+ *   missing block and remain an {@link RpcTransportError}.
  * @internal
  */
 export async function resolvePinnedBlock(params: {

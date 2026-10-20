@@ -6,7 +6,11 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
+import {
+  type Market as MidnightMarket,
+  type MarketInput as MidnightMarketInput,
+  MarketUtils as MidnightMarketUtils,
+} from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -218,15 +222,34 @@ export function validateUserAddress(
 
 /**
  * Validates that the accrual position belongs to the expected market and user.
- * Throws {@link MarketIdMismatchError} if the position's market ID
- * does not match the expected market.
- * Throws {@link AccrualPositionUserMismatchError} if the position's user
- * does not match the expected user.
  *
  * @param params - Validation parameters.
  * @param params.positionData - The accrual position to validate.
  * @param params.expectedMarketId - The market ID the position must belong to.
  * @param params.expectedUser - The user address the position must belong to.
+ * @returns Nothing when `positionData` belongs to the expected market and user.
+ * @throws {MarketIdMismatchError} when the position's market ID differs from `expectedMarketId`.
+ * @throws {AccrualPositionUserMismatchError} when the position's user address differs from
+ *   `expectedUser`.
+ * @example
+ * ```ts
+ * import type { AccrualPosition } from "@morpho-org/morpho-sdk/blue/entities";
+ * import type { MarketId } from "@morpho-org/morpho-sdk/blue/types";
+ * import { validateAccrualPosition } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
+ *
+ * export function assertPositionOwner(
+ *   positionData: AccrualPosition,
+ *   expectedMarketId: MarketId,
+ *   expectedUser: Address,
+ * ): void {
+ *   validateAccrualPosition({
+ *     positionData,
+ *     expectedMarketId,
+ *     expectedUser,
+ *   });
+ * }
+ * ```
  */
 export const validateAccrualPosition = (params: {
   positionData: AccrualPosition;
@@ -243,6 +266,84 @@ export const validateAccrualPosition = (params: {
 };
 
 /**
+ * Computes the total debt supported by post-operation Midnight collateral at LLTV minus
+ * `DEFAULT_LLTV_BUFFER`.
+ * Mirrors Midnight's `isHealthy` formula in `Midnight.sol`, summing
+ * `collateral.mulDivDown(price, ORACLE_PRICE_SCALE).mulDivDown(lltv, WAD)` across indexes with the
+ * default buffer subtracted from each LLTV.
+ *
+ * @param params - Market, collateral amounts, and oracle prices.
+ * @param params.market - Hydrated Midnight market containing each collateral's LLTV.
+ * @param params.collateral - Post-operation collateral balances by market index.
+ * @param params.collateralPrices - Oracle prices by index, scaled by `ORACLE_PRICE_SCALE`.
+ * @returns Maximum safe debt in Midnight units.
+ * @throws {UnknownCollateralIndexError} when a held collateral index is not configured.
+ * @throws {MissingMarketPriceError} when a held collateral index has no supplied price.
+ * @example
+ * ```ts
+ * import { ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+ * import {
+ *   getMidnightMaxSafeDebt,
+ *   morphoViemExtension,
+ * } from "@morpho-org/morpho-sdk";
+ * import { createPublicClient, http, type Hex } from "viem";
+ * import { base } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: base, transport: http() })
+ *   .extend(morphoViemExtension());
+ * const midnight = client.morpho.midnight(base.id);
+ *
+ * const getMarketMaxSafeDebt = async (marketId: Hex) => {
+ *   const market = await midnight.getMarketData(marketId);
+ *   const maxSafeDebt = getMidnightMaxSafeDebt({
+ *     market,
+ *     collateral: [1_000_000n],
+ *     collateralPrices: [ORACLE_PRICE_SCALE],
+ *   });
+ *   // maxSafeDebt: debt units supported at LLTV minus DEFAULT_LLTV_BUFFER
+ *   return maxSafeDebt;
+ * };
+ * ```
+ */
+export const getMidnightMaxSafeDebt = (params: {
+  readonly market: MidnightMarket;
+  readonly collateral: readonly bigint[];
+  readonly collateralPrices: readonly bigint[];
+}): bigint => {
+  let maxSafeDebt = 0n;
+  for (let index = 0; index < params.collateral.length; index += 1) {
+    const amount = params.collateral[index] ?? 0n;
+    if (amount === 0n) continue;
+
+    const collateral = MidnightMarketUtils.getCollateralByIndex(
+      params.market.params,
+      BigInt(index),
+    );
+    const price = params.collateralPrices[index];
+    if (price === undefined) {
+      throw new MissingMarketPriceError(params.market.id);
+    }
+
+    const collateralValue = MathLib.mulDivDown(
+      amount,
+      price,
+      ORACLE_PRICE_SCALE,
+    );
+    const effectiveLltv =
+      collateral.lltv > DEFAULT_LLTV_BUFFER
+        ? collateral.lltv - DEFAULT_LLTV_BUFFER
+        : 0n;
+    maxSafeDebt += MathLib.mulDivDown(
+      collateralValue,
+      effectiveLltv,
+      MathLib.WAD,
+    );
+  }
+
+  return maxSafeDebt;
+};
+
+/**
  * Validates that the resulting position stays within the safe LTV threshold
  * (LLTV minus buffer) after supplying additional collateral and borrowing.
  *
@@ -252,6 +353,33 @@ export const validateAccrualPosition = (params: {
  * @param params.borrowAmount - Amount being borrowed.
  * @param params.marketId - The market identifier (for error messages).
  * @param params.lltv - The market's liquidation LTV.
+ * @returns Nothing when the debt after borrowing, including the rounding allowance, is within the
+ *   safe limit after adding collateral.
+ * @throws {MissingMarketPriceError} when `positionData.market.price` is unset or zero.
+ * @throws {BorrowExceedsSafeLtvError} when `positionData.borrowAssets + borrowAmount + 1n` exceeds
+ *   the safe limit after adding collateral at LLTV minus `DEFAULT_LLTV_BUFFER`.
+ * @example
+ * ```ts
+ * import type { AccrualPosition } from "@morpho-org/morpho-sdk/blue/entities";
+ * import type { MarketId } from "@morpho-org/morpho-sdk/blue/types";
+ * import { validatePositionHealth } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertSafeBorrow(
+ *   positionData: AccrualPosition,
+ *   additionalCollateral: bigint,
+ *   borrowAmount: bigint,
+ *   marketId: MarketId,
+ *   lltv: bigint,
+ * ): void {
+ *   validatePositionHealth({
+ *     positionData,
+ *     additionalCollateral,
+ *     borrowAmount,
+ *     marketId,
+ *     lltv,
+ *   });
+ * }
+ * ```
  */
 export const validatePositionHealth = (params: {
   positionData: AccrualPosition;
@@ -296,10 +424,18 @@ export const validatePositionHealth = (params: {
 
 /**
  * Validates that the viem client chain ID matches the expected chain ID.
- * Throws {@link ChainIdMismatchError} if they differ.
  *
  * @param clientChainId - Chain ID reported by the viem client (may be undefined).
  * @param expectedChainId - Chain ID expected by the entity or action.
+ * @returns Nothing when `clientChainId` matches `expectedChainId`.
+ * @throws {ChainIdMismatchError} when `clientChainId` is undefined or differs from
+ *   `expectedChainId`.
+ * @example
+ * ```ts
+ * import { validateChainId } from "@morpho-org/morpho-sdk";
+ *
+ * validateChainId(8453, 8453);
+ * ```
  */
 export const validateChainId = (
   clientChainId: number | undefined,
@@ -317,8 +453,18 @@ export const validateChainId = (
  *
  * @param chainId - The chain to look up wNative on.
  * @param asset - The asset address to check (collateral, loan, vault asset…).
- * @throws {ChainWNativeMissingError} if wNative is not configured for the chain.
- * @throws {NativeAmountOnNonWNativeAssetError} if the asset is not wNative.
+ * @returns Nothing when `asset` is the chain's configured wrapped native token.
+ * @throws {UnsupportedChainIdError} when `chainId` has no address registry.
+ * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
+ * @throws {NativeAmountOnNonWNativeAssetError} when the asset is not wNative.
+ * @example
+ * ```ts
+ * import { getChainAddress } from "@morpho-org/morpho-sdk/addresses";
+ * import { validateNativeAsset } from "@morpho-org/morpho-sdk";
+ *
+ * const wNative = getChainAddress(8453, "wNative");
+ * validateNativeAsset(8453, wNative);
+ * ```
  */
 export const validateNativeAsset = (chainId: number, asset: Address): void => {
   const { wNative } = getChainAddresses(chainId);
@@ -511,6 +657,22 @@ export const validatePositionHealthAfterWithdraw = (params: {
  * @param params.positionData - The current accrual position.
  * @param params.repayAssets - The amount of assets to repay.
  * @param params.marketId - The market identifier (for error messages).
+ * @returns Nothing when `repayAssets` does not exceed the outstanding debt.
+ * @throws {RepayExceedsDebtError} when `repayAssets` exceeds the position's borrow assets.
+ * @example
+ * ```ts
+ * import type { AccrualPosition } from "@morpho-org/morpho-sdk/blue/entities";
+ * import type { MarketId } from "@morpho-org/morpho-sdk/blue/types";
+ * import { validateRepayAmount } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertRepayWithinDebt(
+ *   positionData: AccrualPosition,
+ *   repayAssets: bigint,
+ *   marketId: MarketId,
+ * ): void {
+ *   validateRepayAmount({ positionData, repayAssets, marketId });
+ * }
+ * ```
  */
 export const validateRepayAmount = (params: {
   positionData: AccrualPosition;
@@ -709,7 +871,22 @@ export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
  * @param params.positionData - The current accrual position.
  * @param params.withdrawAssets - The amount of assets to withdraw.
  * @param params.marketId - The market identifier (for error messages).
+ * @returns Nothing when `withdrawAssets` does not exceed the position's supplied assets.
  * @throws {WithdrawExceedsSupplyError} when `withdrawAssets > positionData.supplyAssets`.
+ * @example
+ * ```ts
+ * import type { AccrualPosition } from "@morpho-org/morpho-sdk/blue/entities";
+ * import type { MarketId } from "@morpho-org/morpho-sdk/blue/types";
+ * import { validateWithdrawAmount } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertWithdrawWithinSupply(
+ *   positionData: AccrualPosition,
+ *   withdrawAssets: bigint,
+ *   marketId: MarketId,
+ * ): void {
+ *   validateWithdrawAmount({ positionData, withdrawAssets, marketId });
+ * }
+ * ```
  */
 export const validateWithdrawAmount = (params: {
   positionData: AccrualPosition;
@@ -733,7 +910,22 @@ export const validateWithdrawAmount = (params: {
  * @param params.positionData - The current accrual position.
  * @param params.withdrawShares - The amount of shares to withdraw.
  * @param params.marketId - The market identifier (for error messages).
+ * @returns Nothing when `withdrawShares` does not exceed the position's supply shares.
  * @throws {WithdrawSharesExceedSupplyError} when `withdrawShares > positionData.supplyShares`.
+ * @example
+ * ```ts
+ * import type { AccrualPosition } from "@morpho-org/morpho-sdk/blue/entities";
+ * import type { MarketId } from "@morpho-org/morpho-sdk/blue/types";
+ * import { validateWithdrawShares } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertWithdrawSharesWithinSupply(
+ *   positionData: AccrualPosition,
+ *   withdrawShares: bigint,
+ *   marketId: MarketId,
+ * ): void {
+ *   validateWithdrawShares({ positionData, withdrawShares, marketId });
+ * }
+ * ```
  */
 export const validateWithdrawShares = (params: {
   positionData: AccrualPosition;

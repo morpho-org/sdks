@@ -10,7 +10,7 @@ const approvalTx = (
   token: Address,
   spender: Address,
   amount: bigint,
-): Required<Readonly<SimulationTransaction>> => ({
+): Readonly<SimulationTransaction & { readonly value: bigint }> => ({
   from: getAddress(owner),
   to: getAddress(token),
   data: encodeFunctionData({
@@ -24,7 +24,9 @@ const approvalTx = (
 /** One authorization's preparation calls, in execution order. @internal */
 export interface PlannedPreparation {
   readonly authorizationIndex: number;
-  readonly calls: readonly Required<Readonly<SimulationTransaction>>[];
+  readonly calls: readonly (SimulationTransaction & {
+    readonly value: bigint;
+  })[];
 }
 
 /**
@@ -54,7 +56,7 @@ export function prepareAuthorizations(params: {
   const preparations: PlannedPreparation[] = [];
 
   authorizations.forEach((auth, authorizationIndex) => {
-    const calls: Required<Readonly<SimulationTransaction>>[] = [];
+    const calls: (SimulationTransaction & { readonly value: bigint })[] = [];
 
     switch (auth.type) {
       case "erc20Approval":

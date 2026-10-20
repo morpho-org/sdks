@@ -5,11 +5,13 @@ import {
   Token,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
+import { expectFailClosed } from "@morpho-org/test/chaos";
 import { zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  MissingPermitDomainNameError,
   UnsupportedPermitDomainExtensionsError,
 } from "../error.js";
 import { getPermitTypedData } from "./permit.js";
@@ -158,6 +160,49 @@ describe("getPermitTypedData", () => {
     );
   });
 
+  test("throws MissingPermitDomainNameError when neither name() nor eip712Domain() is available", async () => {
+    const token = new Token({ address: randomAddress() });
+
+    const error = await expectFailClosed(
+      (async () => getPermitTypedData(permitArgs(token), ChainId.EthMainnet))(),
+      "config",
+    );
+    expect(error).toBeInstanceOf(MissingPermitDomainNameError);
+  });
+
+  test("uses the token name as fallback domain name when no domain is fetched", () => {
+    const token = new Token({ address: randomAddress(), name: "Token" });
+
+    const typedData = getPermitTypedData(permitArgs(token), ChainId.EthMainnet);
+
+    expect(typedData.domain).toStrictEqual({
+      name: "Token",
+      version: "1",
+      chainId: ChainId.EthMainnet,
+      verifyingContract: token.address,
+    });
+  });
+
+  test("uses the fetched EIP-5267 domain even when name is absent", () => {
+    const address = randomAddress();
+    const token = new Token({
+      address,
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "Token",
+        version: "1",
+        chainId: BigInt(ChainId.EthMainnet),
+        verifyingContract: address,
+        salt: zeroHash,
+        extensions: [],
+      }),
+    });
+
+    const typedData = getPermitTypedData(permitArgs(token), ChainId.EthMainnet);
+
+    expect(typedData.domain?.name).toBe("Token");
+  });
+
   test("throws when fetched EIP-5267 domain advertises extensions", () => {
     const token = tokenWithDomain({ extensions: [5267n] });
 
@@ -165,4 +210,32 @@ describe("getPermitTypedData", () => {
       getPermitTypedData(permitArgs(token), ChainId.EthMainnet),
     ).toThrow(UnsupportedPermitDomainExtensionsError);
   });
+});
+
+describe("chaos: S11 invalid authorization", () => {
+  test.each([
+    {
+      label: "chain",
+      token: tokenWithDomain({ chainId: BigInt(ChainId.BaseMainnet) }),
+      error: InvalidPermitDomainChainIdError,
+    },
+    {
+      label: "verifying contract",
+      token: tokenWithDomain({ verifyingContract: randomAddress() }),
+      error: InvalidPermitDomainVerifyingContractError,
+    },
+  ])(
+    "a token EIP-712 domain for another $label yields no typed data",
+    async ({ token, error }) => {
+      let typedData: unknown;
+      const rejected = await expectFailClosed(
+        Promise.resolve().then(() => {
+          typedData = getPermitTypedData(permitArgs(token), ChainId.EthMainnet);
+        }),
+        "auth",
+      );
+      expect(rejected).toBeInstanceOf(error);
+      expect(typedData).toBeUndefined();
+    },
+  );
 });

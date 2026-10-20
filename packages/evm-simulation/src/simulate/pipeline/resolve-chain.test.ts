@@ -67,6 +67,27 @@ describe("resolveChain", () => {
     },
   );
 
+  it("accepts a positive callGasLimit", () => {
+    const entry = {
+      simulateV1Url: "http://rpc.local",
+      callGasLimit: 30_000_000n,
+    };
+    expect(resolveChain(makeConfig([[988, entry]]), 988)).toBe(entry);
+  });
+
+  it.each([0n, -1n, 30_000_000])(
+    "throws SimulationValidationError for callGasLimit %s",
+    (callGasLimit) => {
+      const entry = {
+        simulateV1Url: "http://rpc.local",
+        callGasLimit,
+      } as unknown as ChainSimulationConfig;
+      expect(() => resolveChain(makeConfig([[988, entry]]), 988)).toThrow(
+        SimulationValidationError,
+      );
+    },
+  );
+
   it.each([0, "", "false"])(
     "throws SimulationValidationError for parentHashCheck %j",
     (parentHashCheck) => {

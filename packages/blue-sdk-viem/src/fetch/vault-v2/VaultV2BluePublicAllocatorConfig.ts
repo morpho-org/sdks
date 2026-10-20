@@ -18,6 +18,7 @@ import type {
   DeploylessFetchParameters,
   FetchParameters,
 } from "../../types.js";
+import { isTransportError } from "../../utils.js";
 import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarketPublicAllocatorConfig.js";
 
 /**
@@ -81,7 +82,8 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * Only `VaultV2MorphoMarketV1AdapterV2` adapters participate. The function
  * derives every adapter-market id and shared vault allocation id from the
  * hydrated vault, uses one deployless `eth_call` by default, and falls back to
- * direct reads unless deployless mode is forced.
+ * direct reads unless deployless mode is forced or the deployless call fails with a transport
+ * error.
  *
  * @param vault - Hydrated Vault V2 whose accrued adapters provide the candidate markets.
  * @param client - Viem client used for deployless or direct reads.
@@ -89,12 +91,16 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
+ * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback
+ *   unless forced or the deployless call fails with a transport error.
  * @param parameters.targetMarketParams - Optional target market whose config and cap ids are fetched even when the adapter has no current position.
  * @returns Vault-wide config when the BluePublicAllocator is authorized, active-adapter set, adapter-market configs keyed by `adapterMarketCapId`, and allocations keyed by derived id.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when deployless mode is forced and fails, or when a direct contract read fails.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
@@ -208,8 +214,8 @@ export async function fetchVaultV2BluePublicAllocatorData(
         allocations,
       };
     } catch (error) {
-      if (deployless === "force") throw error;
-      // Fall back to direct reads when deployless execution is unavailable.
+      if (deployless === "force" || isTransportError(error)) throw error;
+      // Fall back to direct reads for non-transport deployless failures.
     }
   }
 

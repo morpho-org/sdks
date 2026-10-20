@@ -8,6 +8,7 @@ import type {
   MidnightAuthorizationAction,
   Transaction,
 } from "../../../types/index.js";
+import { validateClientChainId } from "../validateClientChainId.js";
 
 /** Parameters for {@link getMidnightAuthorizationRequirement}. */
 export interface GetMidnightAuthorizationRequirementParams {
@@ -31,7 +32,9 @@ export interface GetMidnightAuthorizationRequirementParams {
  * @param params.owner - Account granting authorization.
  * @param params.authorized - MidnightBundlesV2.
  * @returns Authorization transaction, or `null` when already authorized.
- * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
+ *   another chain than `params.chainId`.
+ * @throws {viem.BaseError} when the `eth_chainId` request or authorization read fails.
  * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not MidnightBundlesV2.
  * @example
  * ```ts
@@ -64,6 +67,7 @@ export const getMidnightAuthorizationRequirement = async (
     chainId: params.chainId,
     authorized: params.authorized,
   });
+  await validateClientChainId(params.viemClient, params.chainId);
   const midnight = getChainAddress(params.chainId, "midnight");
   const isAuthorized = await readContract(params.viemClient, {
     address: midnight,

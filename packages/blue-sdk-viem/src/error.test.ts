@@ -7,7 +7,9 @@ import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError,
+  MalformedTokenMetadataError,
   MarketParamsIdMismatchError,
+  MissingPermitDomainNameError,
   NonTupleReturnValueError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
@@ -293,6 +295,43 @@ describe("InvalidPermitDomainVerifyingContractError", () => {
     const err = new InvalidPermitDomainVerifyingContractError(TOKEN, undefined);
     expect(err.domainVerifyingContract).toBeUndefined();
     expect(err.message).toContain('got "undefined"');
+  });
+});
+
+describe("MissingPermitDomainNameError", () => {
+  test("preserves token as a readonly field", () => {
+    const err = new MissingPermitDomainNameError(TOKEN);
+    expect(err.token).toBe(TOKEN);
+  });
+
+  test("message quotes the token address", () => {
+    const err = new MissingPermitDomainNameError(TOKEN);
+    expect(err.message).toContain(`"${TOKEN}"`);
+  });
+});
+
+describe("MalformedTokenMetadataError", () => {
+  test("preserves token and field as readonly fields", () => {
+    const err = new MalformedTokenMetadataError(TOKEN, "eip712Domain");
+    expect(err.token).toBe(TOKEN);
+    expect(err.field).toBe("eip712Domain");
+  });
+
+  test("passes the cause through when given", () => {
+    const cause = new Error("decode failed");
+    const err = new MalformedTokenMetadataError(TOKEN, "name", { cause });
+    expect(err.cause).toBe(cause);
+  });
+
+  test("leaves cause undefined when omitted", () => {
+    const err = new MalformedTokenMetadataError(TOKEN, "symbol");
+    expect(err.cause).toBeUndefined();
+  });
+
+  test("message quotes the token address and names the field", () => {
+    const err = new MalformedTokenMetadataError(TOKEN, "eip712Domain");
+    expect(err.message).toContain(`"${TOKEN}"`);
+    expect(err.message).toContain("eip712Domain()");
   });
 });
 

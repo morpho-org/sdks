@@ -1,6 +1,13 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { isDefined, Time } from "@morpho-org/morpho-ts";
+import {
+  erc2612Abi,
+  isContractRevertError,
+  isTransportError,
+  isUndecodableResultError,
+  MissingPermitDomainNameError,
+  permit2Abi,
+} from "@morpho-org/blue-sdk-viem";
+import { _try, isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -11,6 +18,7 @@ import {
 import { readContract } from "viem/actions";
 import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
 import { encodeErc20Permit } from "../../actions/requirements/encode/encodeErc20Permit.js";
+import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   validateChainId,
   validateRequirementSpender,
@@ -51,6 +59,8 @@ export interface GetBundlesTokenRequirementsParams {
   readonly useSimplePermit?: boolean;
   /** Explicit unused uint256 nonce; defaults to the lowest unused nonce found via getUnusedPermit2Nonce. */
   readonly permit2Nonce?: bigint;
+  /** Timestamp the deadline is validated against; defaults to the current time. */
+  readonly now?: bigint;
 }
 
 /**
@@ -71,13 +81,18 @@ export interface GetBundlesTokenRequirementsParams {
  * @param params.owner - Account funding the operation.
  * @param params.chainId - Target chain id; must match the client chain.
  * @param params.deadline - Final-call and signature deadline.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @param params.supportSignature - Whether ERC-2612 or Permit2 signatures may be requested.
  * @param params.supportDeployless - Whether ERC-2612 metadata reads may use deployless calls.
- * @param params.useSimplePermit - Prefer ERC-2612 when its nonce probe succeeds.
+ * @param params.useSimplePermit - Prefer ERC-2612 when `nonces()` succeeds and the token's permit
+ *   domain is known; a recognized `nonces()` revert or undecodable result, or a missing domain
+ *   (no `name()` and no EIP-5267 domain), falls back to Permit2 or classic approval. A malformed
+ *   `eip712Domain()` result rejects with `MalformedTokenMetadataError`.
  * @param params.permit2Nonce - Explicit unused uint256 nonce; defaults to the lowest unused nonce
  *   found via {@link getUnusedPermit2Nonce}.
  * @returns Ordered deep-frozen approval transactions and/or signable token requirements.
- * @throws {ChainIdMismatchError} when the connected client targets another chain.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
+ *   another chain than `params.chainId`.
  * @throws {NegativeInputError} when `amount` or `permit2Nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
  * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
@@ -89,8 +104,16 @@ export interface GetBundlesTokenRequirementsParams {
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
  * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
- * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, or ERC-2612 metadata
- *   read fails. A failed ERC-2612 nonce probe alone falls back to Permit2 or classic approval.
+ * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
+ *   undecodable data, or is out of range.
+ * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
+ *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
+ *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+ * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, ERC-2612 metadata,
+ *   or `eth_chainId` read fails. An ERC-2612 nonce probe falls back to Permit2 or classic approval
+ *   only when the token reverts or returns undecodable data; other read failures propagate. A
+ *   missing permit domain is handled internally and also falls back; this function does not
+ *   surface `MissingPermitDomainNameError`.
  * @example
  * ```ts
  * import { addressesRegistry } from "@morpho-org/blue-sdk";
@@ -153,11 +176,12 @@ export const getBundlesTokenRequirements = async (
   // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
   // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
   // this too, but the exported resolver must guard its own callers.
-  const timestamp = Time.timestamp();
+  const timestamp = params.now ?? Time.timestamp();
   if (params.deadline <= timestamp) {
     throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
   if (params.amount === 0n) return [];
+  await validateClientChainId(viemClient, params.chainId);
 
   const { permit2, dai } = getChainAddresses(params.chainId);
 
@@ -169,21 +193,33 @@ export const getBundlesTokenRequirements = async (
         address: params.token,
         functionName: "nonces",
         args: [params.owner],
-      }).catch(() => undefined);
+      }).catch((error: unknown) => {
+        if (isTransportError(error)) throw error;
+        if (isContractRevertError(error) || isUndecodableResultError(error))
+          return undefined;
+        throw error;
+      });
 
       if (isDefined(nonce)) {
-        return [
-          await encodeErc20Permit(viemClient, {
-            token: params.token,
-            owner: params.owner,
-            spender: params.spender,
-            amount: params.amount,
-            chainId: params.chainId,
-            nonce,
-            deadline: params.deadline,
-            supportDeployless: params.supportDeployless,
-          }),
-        ];
+        const permit = await _try(
+          () =>
+            encodeErc20Permit(viemClient, {
+              token: params.token,
+              owner: params.owner,
+              spender: params.spender,
+              amount: params.amount,
+              chainId: params.chainId,
+              nonce,
+              deadline: params.deadline,
+              now: timestamp,
+              supportDeployless: params.supportDeployless,
+            }),
+          MissingPermitDomainNameError,
+        );
+        if (isDefined(permit)) return [permit];
+        // A token that exposes nonces() but has neither name() nor
+        // eip712Domain() cannot be permitted over a known domain: fall
+        // through to the Permit2/classic-approval path.
       }
     }
 
@@ -227,6 +263,7 @@ export const getBundlesTokenRequirements = async (
         chainId: params.chainId,
         amount: params.amount,
         deadline: params.deadline,
+        now: timestamp,
         state: {
           type: "permit2SignatureTransfer",
           permit2Allowance: allowance,
@@ -254,6 +291,7 @@ export const getBundlesTokenRequirements = async (
     chainId: params.chainId,
     amount: params.amount,
     deadline: params.deadline,
+    now: timestamp,
     state: {
       type: "approval",
       allowance,

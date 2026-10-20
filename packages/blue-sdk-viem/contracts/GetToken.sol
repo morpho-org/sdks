@@ -5,6 +5,11 @@ import {IERC20Permit, Eip5267Domain} from "./interfaces/IERC20Permit.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IWstEth} from "./interfaces/IWstEth.sol";
 
+/// @dev Thrown when a successful optional metadata call returns non-empty returndata
+/// that does not decode, so the field is reported as absent only on real reverts or
+/// empty returndata (no code / zero data).
+error MalformedReturnData(bytes4 selector);
+
 struct TokenResponse {
     uint256 decimals;
     bool hasSymbol;
@@ -53,14 +58,14 @@ contract GetToken {
     ) private view returns (bool success, string memory value) {
         bytes memory returnData;
         (success, returnData) = target.staticcall(callData);
-        if (!success) return (false, "");
+        if (!success || returnData.length == 0) return (false, "");
 
         if (_isValidStringReturnData(returnData)) {
             value = abi.decode(returnData, (string));
             return (true, value);
         }
 
-        if (returnData.length != 0x20) return (false, "");
+        if (returnData.length != 0x20) revert MalformedReturnData(bytes4(callData));
 
         return (true, _bytes32ToString(bytes32(_loadWord(returnData, 0))));
     }
@@ -79,7 +84,8 @@ contract GetToken {
     function _queryEip5267Domain(address target) private view returns (bool success, Eip5267Domain memory value) {
         bytes memory returnData;
         (success, returnData) = target.staticcall(abi.encodeCall(IERC20Permit.eip712Domain, ()));
-        if (!success || !_isValidEip5267DomainReturnData(returnData)) return (false, value);
+        if (!success || returnData.length == 0) return (false, value);
+        if (!_isValidEip5267DomainReturnData(returnData)) revert MalformedReturnData(IERC20Permit.eip712Domain.selector);
 
         // Work around a Solidity via-IR decoding regression hit by valid EIP-5267 domains
         // such as Treehouse ETH (tETH) on mainnet. Decoding raw returndata locally avoids

@@ -41,6 +41,12 @@ import {
   VaultMorphoMismatchError,
 } from "../../types/index.js";
 
+const answerWrongChain = (handle: ReturnType<typeof createMockClient>) =>
+  handle.request.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    throw new Error(`unexpected ${method}`);
+  });
+
 const blue = addressesRegistry[mainnet.id].blue;
 
 const mockV1Requirements = (
@@ -413,6 +419,16 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       type: "erc20Approval",
       args: { spender: arcBundler, amount: 501n },
     });
+    expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
+      "eth_chainId",
+      "eth_getCode",
+      "eth_getCode",
+      "eth_call",
+      "eth_call",
+      "eth_call",
+      "eth_call",
+      "eth_call",
+    ]);
   });
 
   test("behavior: allowance includes pending V1 performance fee shares", async () => {
@@ -682,5 +698,24 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     await expect(requirements).rejects.toBeInstanceOf(
       VaultIsBlueFeeRecipientError,
     );
+  });
+  test("[INV-05] error: ChainIdMismatchError when the RPC reports another chain via eth_chainId", async () => {
+    const handle = createMockClient(mainnet);
+    const exit = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      });
+    answerWrongChain(handle);
+    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
+      ChainIdMismatchError,
+    );
+    expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+      "eth_chainId",
+    ]);
   });
 });

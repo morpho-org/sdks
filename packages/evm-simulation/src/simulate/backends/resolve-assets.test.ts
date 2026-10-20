@@ -15,8 +15,8 @@ import {
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  ExternalServiceError,
-  MissingVerificationEvidenceError,
+  RpcTransportError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import { resolveAssets } from "./resolve-assets.js";
@@ -37,7 +37,6 @@ const limit: OperationLimit = {
   quote: { assetsPaid: 10n },
   slippageTolerance: 0n,
 };
-const ctx = { chainId: 1, mode: "final" } as const;
 
 describe("resolveAssets", () => {
   test("default: no limits cause no RPC reads", async () => {
@@ -46,7 +45,6 @@ describe("resolveAssets", () => {
       await resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [],
         blockNumber: 1n,
       }),
@@ -62,7 +60,6 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations,
       blockNumber: 1n,
     });
@@ -81,7 +78,6 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations: [limit, limit],
       blockNumber: 10n,
     });
@@ -111,7 +107,6 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations,
       blockNumber: 1n,
     });
@@ -137,7 +132,6 @@ describe("resolveAssets", () => {
     const result = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations: [
         {
           type: "blueSupply",
@@ -161,7 +155,6 @@ describe("resolveAssets", () => {
     const request = resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations: [
         {
           type: "blueRepayWithdrawCollateral",
@@ -174,13 +167,11 @@ describe("resolveAssets", () => {
     });
     await expect(request).rejects.toThrowError(
       expect.objectContaining({
-        name: "MissingVerificationEvidenceError",
+        name: "SlippageCheckUnavailableError",
         message: expect.stringContaining("the resolved token address is zero"),
       }),
     );
-    await expect(request).rejects.toBeInstanceOf(
-      MissingVerificationEvidenceError,
-    );
+    await expect(request).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
     expect(
       handle.request.mock.calls.filter(
         (call) => (call[0] as { method: string }).method === "eth_call",
@@ -199,11 +190,10 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
   test("error: a revert nested in an rpc error stays missing evidence", async () => {
     const handle = createMockClient(mainnet);
@@ -225,22 +215,12 @@ describe("resolveAssets", () => {
     const error = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations: [limit],
       blockNumber: 1n,
     }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
-    expect(error).toMatchObject({
-      context: {
-        stage: "verification",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 1n,
-        operation: "vaultV2Deposit",
-        field: "assetsPaid",
-      },
-    });
-    const chain = (error as MissingVerificationEvidenceError).cause;
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(error).not.toHaveProperty("context");
+    const chain = (error as SlippageCheckUnavailableError).cause;
     expect(chain).toBeInstanceOf(BaseError);
     const names: string[] = [];
     let node = chain as { constructor: { name: string }; cause?: unknown };
@@ -264,13 +244,12 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
-  test("error: JSON-RPC error in an HTTP 200 maps to ExternalServiceError", async () => {
+  test("error: JSON-RPC error in an HTTP 200 wraps viem errors", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
       new RpcRequestError({
@@ -283,13 +262,12 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
-  test("error: HttpRequestError remains bypassable", async () => {
+  test("error: HttpRequestError is wrapped with RpcTransportError", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
       new HttpRequestError({ body: {}, url: "https://rpc.example" }),
@@ -298,26 +276,24 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
-  test("error: an unknown rpc failure maps to ExternalServiceError", async () => {
+  test("error: an unknown rpc failure wraps viem errors", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(new Error("unexpected failure"));
     await expect(
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
-  test("error: an aborted request maps to ExternalServiceError", async () => {
+  test("error: an aborted request wraps viem errors", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
       Object.assign(new Error("request aborted"), { name: "AbortError" }),
@@ -326,11 +302,10 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
   test("error: empty asset() return data becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
@@ -339,11 +314,10 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
   test("error: short asset() return data becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
@@ -352,13 +326,12 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
-  test("error: TimeoutError maps to ExternalServiceError", async () => {
+  test("error: TimeoutError wraps viem errors", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
       new TimeoutError({ body: {}, url: "https://rpc.example" }),
@@ -367,11 +340,10 @@ describe("resolveAssets", () => {
       resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
-        ...ctx,
         operations: [limit],
         blockNumber: 1n,
       }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
   test("error: zero market token metadata becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
@@ -384,7 +356,6 @@ describe("resolveAssets", () => {
     const error = await resolveAssets({
       client: handle.client,
       morpho: zeroAddress,
-      ...ctx,
       operations: [
         {
           type: "blueBorrow",
@@ -395,19 +366,10 @@ describe("resolveAssets", () => {
       ],
       blockNumber: 1n,
     }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(
       `market:${marketId.toLowerCase()}`,
     );
-    expect(error).toMatchObject({
-      context: {
-        stage: "verification",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 1n,
-        operation: "blueBorrow",
-        field: "assetsReceived",
-      },
-    });
+    expect(error).not.toHaveProperty("context");
   });
 });

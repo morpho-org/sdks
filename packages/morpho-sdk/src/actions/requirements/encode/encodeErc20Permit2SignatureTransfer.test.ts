@@ -3,6 +3,7 @@ import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import {
   ChainId,
   getChainAddress,
+  Time,
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
 import { createWalletClient, http, maxUint256, verifyTypedData } from "viem";
@@ -138,6 +139,17 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
     expect(() =>
       encodeErc20Permit2SignatureTransfer({ ...base(), deadline: 1n }),
     ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("behavior: a deadline that has passed on the wall clock is accepted with an earlier now", () => {
+    const deadline = Time.timestamp() - Time.s.from.h(1n);
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      ...base(),
+      deadline,
+      now: deadline - 1n,
+    });
+
+    expect(requirement.action.type).toBe("permit2SignatureTransfer");
   });
 
   test("error: UnknownAddressError when the chain has no registered Permit2", () => {

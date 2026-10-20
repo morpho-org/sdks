@@ -6,9 +6,18 @@ import {
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { keccak256, zeroAddress, zeroHash } from "viem";
+import {
+  decodeAbiParameters,
+  getAbiItem,
+  IntegerOutOfRangeError,
+  InvalidAddressError,
+  keccak256,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, createFixtures, group } from "../__test__/fixtures.js";
+import { midnightAbi } from "../abis.js";
 import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
@@ -17,10 +26,19 @@ import {
 } from "../errors.js";
 import { Market, MarketParams } from "../market/index.js";
 import { TakeAmountsLib, TickLib } from "../math/index.js";
-import { GroupUtils, TreeUtils } from "../signatures/index.js";
-import type { BuildOfferParams } from "./Offer.js";
+import {
+  Group,
+  GroupUtils,
+  Payload,
+  RateRatifierV1,
+  TreeUtils,
+} from "../signatures/index.js";
+import { onchainOfferHashFixtures } from "./__fixtures__/onchainOfferHash.js";
+import type { BuildOfferParams, OfferStruct } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
+
+const takeOfferParam = getAbiItem({ abi: midnightAbi, name: "take" }).inputs[0];
 
 const ecrecoverRatifier = getChainAddress(
   ChainId.BaseMainnet,
@@ -282,6 +300,144 @@ describe("OfferUtils.toStruct", () => {
     expect(Object.isFrozen(offer.market)).toBe(false);
     expect(Object.isFrozen(offerMarket.collateralParams)).toBe(false);
     expect(Object.isFrozen(offerMarket.collateralParams[0])).toBe(false);
+  });
+});
+
+describe("OfferUtils.onchainHash", () => {
+  test("behavior: hashes offers with their final V1 descriptor group", () => {
+    const offer = baseOffer({
+      ratifier: getChainAddress(ChainId.BaseMainnet, "rateRatifierV1"),
+    });
+    const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
+    const publishedOffer = descriptor.offers[0]!;
+
+    expect(offer.hasExplicitGroup).toBe(false);
+    expect(publishedOffer.onchainHash).not.toBe(offer.onchainHash);
+    expect(publishedOffer.onchainHash).toBe(
+      OfferUtils.onchainHashStruct(
+        OfferUtils.toStruct({ offer: publishedOffer }),
+      ),
+    );
+  });
+
+  test("behavior: re-groups Group.create offers for V1 descriptor hashes", () => {
+    const ratifier = getChainAddress(ChainId.BaseMainnet, "rateRatifierV1");
+    const offerGroup = Group.create([
+      baseOffer({ ratifier, tick: 5_000n, maxUnits: 0n }),
+      baseOffer({
+        ratifier,
+        tick: 5_004n,
+        expiry: 2_104n,
+        maxUnits: 0n,
+      }),
+    ]);
+    const groupedOffers = offerGroup.offers;
+    const descriptor = RateRatifierV1.buildDescriptor(
+      groupedOffers.map((offer) => ({ offer, rate: 0n })),
+    );
+
+    groupedOffers.forEach((offer, index) => {
+      expect(descriptor.offers[index]!.onchainHash).not.toBe(offer.onchainHash);
+    });
+  });
+
+  test.each(onchainOfferHashFixtures.takes)(
+    "behavior: matches the Take event offer hash",
+    ({ offerEncoding, eventOfferHash, structHash }) => {
+      const [offerStruct] = decodeAbiParameters(
+        [takeOfferParam],
+        offerEncoding,
+      );
+      const offer = Offer.from(offerStruct);
+
+      expect(OfferUtils.onchainHashStruct(offerStruct)).toBe(eventOfferHash);
+      expect(OfferUtils.onchainHash(offer)).toBe(eventOfferHash);
+      expect(offer.onchainHash).toBe(eventOfferHash);
+      expect(OfferUtils.hashStruct(offerStruct)).toBe(structHash);
+      expect(structHash).not.toBe(eventOfferHash);
+    },
+  );
+
+  test.each(onchainOfferHashFixtures.publishes)(
+    "behavior: hashes offers decoded from published payloads",
+    async (fixture) => {
+      const [payload] = decodeAbiParameters([{ type: "bytes" }], fixture.data);
+      const items = await Payload.decode(payload);
+
+      expect(
+        items.map(({ offer }) => ({
+          structHash: OfferUtils.hash(offer),
+          onchainHash: OfferUtils.onchainHash(offer),
+        })),
+      ).toEqual(fixture.offers);
+    },
+  );
+
+  test("behavior: sorts collaterals for offers but preserves struct order", () => {
+    const offer = Offer.create(
+      buildOfferParams({
+        market: {
+          ...baseMarketParamsInput(),
+          collateralParams: [
+            {
+              token: "0x0000000000000000000000000000000000007002",
+              lltv: 770_000_000_000_000_000n,
+              liquidationCursor: 250_000_000_000_000_000n,
+              oracle: "0x0000000000000000000000000000000000008002",
+            },
+            {
+              token: "0x0000000000000000000000000000000000007001",
+              lltv: 770_000_000_000_000_000n,
+              liquidationCursor: 250_000_000_000_000_000n,
+              oracle: "0x0000000000000000000000000000000000008001",
+            },
+          ],
+        },
+      }),
+    );
+    const sortedStruct = OfferUtils.toStruct({ offer });
+    const reversedStruct: OfferStruct = {
+      ...sortedStruct,
+      market: {
+        ...sortedStruct.market,
+        collateralParams: [...sortedStruct.market.collateralParams].reverse(),
+      },
+    };
+    const reversedOffer = Offer.from(reversedStruct);
+
+    expect(OfferUtils.onchainHash(reversedOffer)).toBe(
+      OfferUtils.onchainHash(offer),
+    );
+    expect(OfferUtils.onchainHashStruct(reversedStruct)).not.toBe(
+      OfferUtils.onchainHashStruct(sortedStruct),
+    );
+  });
+
+  test("error: rejects mixed-case addresses with invalid checksums", () => {
+    const offerStruct = OfferUtils.toStruct({ offer: baseOffer() });
+    const invalidChecksumMaker =
+      "0x52908400098527886E0F7030069857D2E4169EE7".replace(
+        "EE7",
+        "Ee7",
+      ) as OfferStruct["maker"];
+
+    expect(() =>
+      OfferUtils.onchainHashStruct({
+        ...offerStruct,
+        maker: invalidChecksumMaker,
+      }),
+    ).toThrow(InvalidAddressError);
+  });
+
+  test("error: rejects uint fields that exceed their ABI size", () => {
+    const offerStruct = OfferUtils.toStruct({ offer: baseOffer() });
+
+    expect(() =>
+      OfferUtils.onchainHashStruct({
+        ...offerStruct,
+        maxUnits: 2n ** 128n,
+      }),
+    ).toThrow(IntegerOutOfRangeError);
   });
 });
 

@@ -15,11 +15,10 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
-  ExternalServiceError,
-  MissingVerificationEvidenceError,
+  RpcTransportError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
-import type { SimulationMode } from "../../params.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
 
 /** Caller-selected operation with only the quoted wallet assets resolved. @internal */
@@ -32,21 +31,19 @@ export interface ResolvedSlippageOperation {
 /**
  * Resolve underlying tokens only when an asset quote lacks an explicit token.
  * Share-only quotes need no RPC reads; vault versions and factories are not discovered.
- * @param params - Caller operations, Morpho address, client, request context, and pinned state block.
+ * @param params - Caller operations, Morpho address, client, and pinned state block.
  * @returns Operations with the token addresses required by their asset quotes.
- * @throws {ExternalServiceError} For transport failures during a required metadata read.
- * @throws {MissingVerificationEvidenceError} For reverted, malformed, or empty metadata.
+ * @throws {RpcTransportError} For transport failures during a required metadata read.
+ * @throws {SlippageCheckUnavailableError} For reverted, malformed, or empty metadata.
  * @internal
  */
 export async function resolveAssets(params: {
   readonly client: Client;
   readonly morpho: Address;
   readonly operations: readonly OperationLimit[];
-  readonly chainId: number;
-  readonly mode: SimulationMode;
   readonly blockNumber: bigint;
 }): Promise<readonly ResolvedSlippageOperation[]> {
-  const { client, morpho, operations, chainId, mode, blockNumber } = params;
+  const { client, morpho, operations, blockNumber } = params;
   const tokens = new Map<string, readonly [Address, Address]>();
   const resolved: ResolvedSlippageOperation[] = [];
   for (const limit of operations) {
@@ -114,23 +111,15 @@ export async function resolveAssets(params: {
               ) !== null) ||
               (cause instanceof Error && cause.name === "AbortError"))
           ) {
-            throw new ExternalServiceError(
-              "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
+            throw new RpcTransportError(
+              "RPC request failed. Check the endpoint and try again.",
               { cause },
             );
           }
-          throw new MissingVerificationEvidenceError(
-            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
+          throw new SlippageCheckUnavailableError(
+            `Cannot resolve the token for "${limit.type}" asset source "${key}".`,
             {
               cause,
-              context: {
-                stage: "verification",
-                chainId,
-                mode,
-                blockNumber,
-                ...plan.subject,
-                field,
-              },
             },
           );
         }
@@ -141,18 +130,8 @@ export async function resolveAssets(params: {
           ? pair[source.asset === "loan" ? 0 : 1]
           : pair[0];
       if (isAddressEqual(token, zeroAddress)) {
-        throw new MissingVerificationEvidenceError(
-          `Cannot resolve verification evidence for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
-          {
-            context: {
-              stage: "verification",
-              chainId,
-              mode,
-              blockNumber,
-              ...plan.subject,
-              field,
-            },
-          },
+        throw new SlippageCheckUnavailableError(
+          `Cannot resolve the token for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
         );
       }
       result[field] = token;

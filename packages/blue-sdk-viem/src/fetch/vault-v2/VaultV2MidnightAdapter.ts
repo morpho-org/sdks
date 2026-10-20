@@ -21,7 +21,11 @@ import {
   code as queryCode,
 } from "../../queries/vault-v2/GetVaultV2MidnightAdapter.js";
 import type { DeploylessFetchParameters } from "../../types.js";
-import { readContractRestructured } from "../../utils.js";
+import {
+  catchRevertOnly,
+  isTransportError,
+  readContractRestructured,
+} from "../../utils.js";
 
 type MidnightAdapterResponseMarket = {
   readonly id: Hash;
@@ -138,8 +142,8 @@ export function toAccrualVaultV2MidnightAdapter(
  *   viem error.
  * @throws {UnresolvedBlockNumberError} when the direct-read path (`deployless: false` or fallback)
  *   resolves a pending block.
- * @throws {viem.BaseError} when a direct contract read fails or when the deployless query fails
- *   under `deployless: "force"`.
+ * @throws {viem.BaseError} when a direct contract read fails, a transport error occurs during a
+ *   deployless read, or the deployless query fails under `deployless: "force"`.
  * @example
  * ```ts
  * import { fetchVaultV2MidnightAdapter } from "@morpho-org/blue-sdk-viem";
@@ -178,7 +182,7 @@ export async function fetchVaultV2MidnightAdapter(
 
       return toVaultV2MidnightAdapter(address, response);
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (deployless === "force" || isTransportError(error)) throw error;
       if (isUnknownOfFactoryError(error))
         throw new UnknownOfFactory(midnightAdapterFactory, address);
     }
@@ -213,7 +217,7 @@ export async function fetchVaultV2MidnightAdapter(
       abi: midnightAdapterFactoryAbi,
       functionName: "isMidnightAdapter",
       args: [address],
-    }).catch(() => false),
+    }).catch(catchRevertOnly(false)),
     readContract(client, {
       ...blockParameters,
       address,
@@ -350,8 +354,8 @@ export async function fetchVaultV2MidnightAdapter(
  *   viem error.
  * @throws {UnresolvedBlockNumberError} when the direct-read path (`deployless: false` or fallback)
  *   resolves a pending block.
- * @throws {viem.BaseError} when a direct contract read fails or when the deployless query fails
- *   under `deployless: "force"`.
+ * @throws {viem.BaseError} when a direct contract read fails, a transport error occurs during a
+ *   deployless read, or the deployless query fails under `deployless: "force"`.
  * @remarks `AccrualVaultV2MidnightAdapter.realAssets(timestamp)` should be used for simulations
  *   inside a Midnight take callback: onchain `realAssets()` reverts with `OtherSellInProgress`
  *   during that callback. With `deployless: "force"`, deployless query errors propagate unmapped.
@@ -398,7 +402,7 @@ export async function fetchAccrualVaultV2MidnightAdapter(
         },
       );
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (deployless === "force" || isTransportError(error)) throw error;
       if (isUnknownOfFactoryError(error))
         throw new UnknownOfFactory(midnightAdapterFactory, address);
     }

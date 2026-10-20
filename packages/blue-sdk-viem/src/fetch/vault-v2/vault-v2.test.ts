@@ -22,9 +22,12 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  createClient,
+  custom,
   encodeAbiParameters,
   encodeErrorResult,
   erc20Abi,
+  HttpRequestError,
   RawContractError,
   zeroAddress,
 } from "viem";
@@ -57,6 +60,7 @@ import { abi as vaultV2QueryAbi } from "../../queries/vault-v2/GetVaultV2.js";
 import { abi as marketAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1Adapter.js";
 import { abi as marketAdapterV2QueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import { abi as vaultAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
+import { isTransportError } from "../../utils.js";
 import { fetchAccrualVaultV2, fetchVaultV2 } from "./VaultV2.js";
 import {
   fetchAccrualVaultV2Adapter,
@@ -605,6 +609,42 @@ describe("fetchVaultV2", () => {
     await expect(fetchVaultV2(VAULT, handle.client, {})).rejects.toThrow(
       UnsupportedVaultV2AdapterError,
     );
+  });
+
+  test("rethrows HTTP 429 transport failures before adapter mapping", async () => {
+    const handle = createMockClient(mainnet);
+    const client = createClient({
+      chain: mainnet,
+      transport: custom({ request: handle.request }, { retryCount: 0 }),
+    });
+    const transportError = new HttpRequestError({
+      url: "http://localhost",
+      status: 429,
+    });
+    const baseRequest = handle.request.getMockImplementation();
+    if (baseRequest == null) throw new Error("missing mock request");
+    handle.request.mockImplementation(async (call) => {
+      if (call.method === "eth_call") throw transportError;
+      return baseRequest(call);
+    });
+
+    const error = await fetchVaultV2(VAULT, client, {}).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(isTransportError(error)).toBe(true);
+    expect(
+      handle.request.mock.calls.filter(([call]) => call.method === "eth_call"),
+    ).toHaveLength(1);
+  });
+
+  test("maps unsupported adapter reverts when deployless is forced", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
+
+    await expect(
+      fetchVaultV2(VAULT, handle.client, { deployless: "force" }),
+    ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
   });
 
   test("throws forced deployless failures", async () => {

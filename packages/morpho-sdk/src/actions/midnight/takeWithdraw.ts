@@ -14,9 +14,15 @@ import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
   validateReferralFee,
-  validateUint256Field,
 } from "../../helpers/validate.js";
+import {
+  validateMidnightReferralFeeCap,
+  validateMidnightTakeableOfferBounds,
+  validateMidnightUint128Field,
+} from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
+import { validateMidnightSellTargetBounds } from "../../helpers/validateMidnightTakeFeasibility.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
@@ -53,6 +59,14 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
     takeableOffers: params.takeableOffers,
     expectedBuy: true,
   });
+  validateMidnightTakeableOfferBounds(params.takeableOffers);
+  // Rejects receivers that would strand the withdrawn assets in a contract.
+  validateMidnightReceiver({
+    chainId: params.chainId,
+    market: params.market,
+    field: "receiver",
+    receiver: params.receiver,
+  });
 
   const { target } = params;
   if (target.type === "assets") {
@@ -65,8 +79,8 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
     if (target.maxUnits <= 0n) {
       throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
     }
-    validateUint256Field("target.assets", target.assets);
-    validateUint256Field("target.maxUnits", target.maxUnits);
+    validateMidnightUint128Field("target.assets", target.assets);
+    validateMidnightUint128Field("target.maxUnits", target.maxUnits);
   } else {
     if (target.units === maxUint256) {
       throw new UnboundedMidnightTakeInputError("target.units");
@@ -80,14 +94,28 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
         target.minSellerAssets,
       );
     }
-    validateUint256Field("target.units", target.units);
-    validateUint256Field("target.minSellerAssets", target.minSellerAssets);
+    validateMidnightUint128Field("target.units", target.units);
+    validateMidnightUint128Field(
+      "target.minSellerAssets",
+      target.minSellerAssets,
+    );
   }
   if (params.deadline === maxUint256) {
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
+  validateMidnightReferralFeeCap(referralFeePct);
+  validateMidnightSellTargetBounds({ target, referralFeePct });
+  if (referralFeePct > 0n) {
+    // Rejects fee recipients that would strand the fee in a contract.
+    validateMidnightReceiver({
+      chainId: params.chainId,
+      market: params.market,
+      field: "referralFeeRecipient",
+      receiver: referralFeeRecipient,
+    });
+  }
   return { marketId, referralFeePct, referralFeeRecipient };
 };
 
@@ -104,9 +132,10 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
  * @param params.chainId - Chain id used to resolve `MidnightBundlesV2`.
  * @param params.market - Midnight market traded by every takeable offer.
  * @param params.target - `{ type: "assets", assets, maxUnits }` or `{ type: "units", units, minSellerAssets }`.
- * @param params.receiver - Recipient of the withdrawn loan assets.
+ * @param params.receiver - Recipient of the withdrawn loan assets; Midnight protocol and market
+ *   token contracts are rejected.
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
- * @param params.deadline - Bounded bundle execution deadline timestamp.
+ * @param params.deadline - Bounded bundle execution deadline timestamp. Not checked against the clock; validate freshness before building.
  * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
  * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
@@ -120,13 +149,21 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
  * @throws {NonPositiveInputError} when the target amount, `maxUnits`, `minSellerAssets` or
  *   `deadline` is not positive.
- * @throws {NegativeInputError} when `referralFeePct` is negative.
- * @throws {InputExceedsMaxError} when `target.assets`, `target.maxUnits`, `target.units`,
- *   `target.minSellerAssets` or `deadline` exceeds `uint256`.
+ * @throws {NegativeInputError} when a takeable offer cap or `referralFeePct` is negative.
+ * @throws {InputExceedsMaxError} when a target amount or offer cap exceeds `uint128`, when
+ *   `target.maxUnits` exceeds `uint128` (an SDK cap: the bundle accepts `uint256`, but a higher
+ *   ceiling gives no slippage protection), or when `deadline` exceeds `uint256`.
  * @throws {UnboundedMidnightTakeInputError} when `target.units`, `target.maxUnits` or `deadline`
  *   is `maxUint256`.
+ * @throws {MidnightZeroReceiverError} when `receiver` is the zero address.
+ * @throws {MidnightContractReceiverError} when `receiver` is a Midnight protocol contract or a
+ *   market token contract, or when `referralFeeRecipient` is either with a positive referral fee.
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+ * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+ * @throws {MidnightTakeTargetUnreachableError} when `target.minSellerAssets` exceeds `target.units`
+ *   minus the referral fee, or `target.maxUnits` is below `target.assets` plus the referral fee, since
+ *   a unit sells for at most one asset.
  * @example
  * ```ts
  * import { Time } from "@morpho-org/morpho-ts";

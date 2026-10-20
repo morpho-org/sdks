@@ -69,11 +69,13 @@ export interface MockClientHandle<chain extends Chain = Chain> {
  * (`readContract(client, ...)`), which resolve through `client.transport`
  * rather than methods on the client object.
  *
- * Only `eth_chainId` and `eth_call` are pre-handled. `eth_chainId` returns the
- * supplied chain's id; `eth_call` is dispatched through {@link mockRead}'s
- * registry (see {@link MockClientHandle.dispatch}). Every other RPC method
- * throws an "unhandled" error so missing mocks fail loudly. Tests that need
- * other methods (e.g. `eth_getBlockByNumber`) should override
+ * `eth_chainId`, `eth_call` and `eth_getCode` are pre-handled. `eth_chainId`
+ * returns the supplied chain's id; `eth_call` is dispatched through
+ * {@link mockRead}'s registry (see {@link MockClientHandle.dispatch});
+ * `eth_getCode` answers `"0x01"` (non-empty bytecode) and can be overridden
+ * via `request.mockImplementation`. Every other RPC method throws an
+ * "unhandled" error so missing mocks fail loudly. Tests that need other
+ * methods (e.g. `eth_getBlockByNumber`) should override
  * `request.mockImplementation` directly.
  *
  * @param chain - The viem {@link Chain} the mock client is bound to. The
@@ -89,6 +91,9 @@ export interface MockClientHandle<chain extends Chain = Chain> {
  *   `Error` with "unhandled RPC" in the message at call time when the
  *   caller invokes an RPC method that has not been pre-programmed —
  *   missing mocks fail loudly with the offending method and params.
+ *   `eth_getCode` is the exception: it answers `"0x01"` (non-empty
+ *   bytecode) so contract-code guards pass; override `request` to
+ *   simulate a code-less or unreachable target.
  *
  * @example
  * ```ts
@@ -120,6 +125,7 @@ export function createMockClient<chain extends Chain>(
   const dispatch = new Map<string, Hex>();
   const request = vi.fn<RpcHandler>(async ({ method, params }) => {
     if (method === "eth_chainId") return `0x${chain.id.toString(16)}`;
+    if (method === "eth_getCode") return "0x01";
     if (method === "eth_call") {
       const [tx] = (params ?? []) as [{ to?: Address; data?: Hex }];
       if (typeof tx?.to === "string" && typeof tx.data === "string") {

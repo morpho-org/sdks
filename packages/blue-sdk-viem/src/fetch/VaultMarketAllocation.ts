@@ -20,6 +20,9 @@ import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
  * @param parameters.deployless - Optional deployless read mode forwarded to downstream fetchers.
  * @returns The hydrated `VaultMarketAllocation` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or
+ * viem.WebSocketRequestError (detect with isTransportError).
  * @example
  * ```ts
  * import type { MarketId, VaultMarketAllocation } from "@morpho-org/blue-sdk";

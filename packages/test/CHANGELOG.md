@@ -1,6 +1,6 @@
 # @morpho-org/test
 
-## 2.11.0-next.0
+## 2.11.0
 
 ### Minor Changes
 
@@ -9,15 +9,26 @@
   balance on Tempo and throws `AnvilFeeTokenFundingError` if the write does not produce the expected
   balance.
   `@morpho-org/morpho-test` now requires `@morpho-org/test` `^2.11.0`.
-- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+- Fail closed on missing contract code: Blue, VaultV1 and VaultV2 `getRequirements()` now throw `MissingContractCodeError` when a registered bundles or protocol target holds no code, and `simulate()` rejects calldata transactions to code-less addresses with `SimulationValidationError` before `eth_simulateV1`. `@morpho-org/test` classifies the new error as `config`, `classifyError` now maps `BlacklistViolationError` to `config` and `ConsumerLimitViolationError` to `revert` where both were previously `unknown`, and `createMockClient` now answers `eth_getCode` with non-empty bytecode by default. `getBundlesTokenRequirements`, `getVaultBundlesSharesRequirements` and `getBlueAuthorizationRequirement` accept an optional `now` timestamp override for their deadline checks and pass it through to the signature encoders; `resolveBundlesTokenRequirements`, `encodeErc20Permit`, `encodeErc20Permit2SignatureTransfer`, `encodeVaultSharesPermit` and `encodeBlueSignatureAuthorization` accept the same optional `now` (additive). Migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+- Add the `@morpho-org/test/chaos` subpath exporting `createFaultProxy`, `fault`, `classifyError`, and `expectFailClosed`.
+
+  The subpath also exports `FaultProxyInternalError`. Fault-proxy teardown throws this error when
+  request processing failed, so broken fixtures cannot pass silently.
+
 - Add `getErpcForkUrl` for authenticated Morpho eRPC fork URLs.
 
 ### Patch Changes
 
+- Anvil test clients with automine enabled now wait for the local block number to advance after `writeContract`, `sendTransaction` and `sendRawTransaction` before polling the receipt, so receipt lookups that race automining are no longer forwarded to the fork RPC. The 180 s receipt timeout is unchanged.
+- Normalize WDK provider transport failures, reconcile failover rejections that may follow an earlier accepted broadcast, and expose typed errors for uncertain EOA broadcasts (including gateway errors) and malformed transaction hashes, classifying invalid hashes as integrity failures.
+
+  Provider errors follow viem's own retry rules. Network and timeout failures, JSON-RPC codes -32005 and -32603, HTTP 429, and retryable HTTP statuses are still retried; other JSON-RPC codes, such as -32000 ("header not found"), now fail immediately instead of after viem retries. See MIGRATION.md under "Migrating to 3.0" for the provider and submission error changes.
+
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
+- `classifyError` classifies `DepositOwnerMismatchError`, `DepositSpenderMismatchError`, `DepositAssetMismatchError` and `DepositAmountMismatchError` as `auth`, and a `SimulationRevertedError` whose `revertData` starts with a Permit2 or bundles signature, nonce or deadline error selector (`DeadlinePassed()`, `InvalidNonce()`, `SignatureExpired(uint256)`, `InvalidSigner()`, `InvalidSignature()`, `InvalidSignatureLength()`, `InvalidContractSignature()`) as `auth`.
+- `classifyError` maps `SlippageCheckUnavailableError` to `integrity`.
 - `spawnAnvil` no longer fails to start when the fork RPC is slow or fails on Anvil's `anvil_nodeInfo` startup probe. Through the Morpho eRPC, that probe averages 21 s on HyperEVM and the CDN answers HTTP 504. Alchemy rejects it with error -32600, which Anvil 1.8 doesn't accept either. Anvil now reaches an `http(s)` `forkUrl` through a local proxy on 127.0.0.1, closed when Anvil stops. The proxy answers the probe with -32601, alone or in a batch, and forwards every other request unchanged. Anvil names its fork disk cache after the fork URL, so it gets `http://fork-<hash of the fork URL>.invalid` and reaches the proxy through `HTTP_PROXY`: each fork URL keeps the same cache file across runs and processes. A trailing `@<block>` on `forkUrl` and `forkHeader` keep working. The proxy never puts the fork URL in errors. When `HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY` is set, Anvil forks directly through that proxy as before, because the local proxy can't reach the fork RPC through it.
 - `createAnvilTestClient` answers `eth_getTransactionReceipt` with null while the transaction is still in Anvil's pool (checked with `txpool_content`, which Anvil answers locally), without sending the lookup to Anvil. Anvil forwards a receipt lookup it can't answer to the fork RPC, and a caching RPC such as the Morpho eRPC can take seconds to return null for a hash only Anvil knows, which made heavy fork tests time out. This covers every receipt lookup made through the client, including viem-tracer's check after each send.
-- Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
 
 ## 2.10.1
 

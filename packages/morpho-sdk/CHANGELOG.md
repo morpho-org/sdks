@@ -1,43 +1,63 @@
 # @morpho-org/morpho-sdk
 
-## 7.1.0-next.1
-
-### Patch Changes
-
-- Re-cut the `next` prerelease to republish after the public-snapshot gate fix (#226).
-
-## 7.1.0-next.0
+## 8.1.0
 
 ### Minor Changes
 
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+- `midnightCancelAndMake` snapshots its inputs, including `collateral.market`, and rejects malformed or oversized payloads and non-32-byte roots, publication groups, cancellation groups, Blue callback salts, and root-signature `r`/`s` with `InvalidMidnightHexInputError`. `MorphoMidnight.cancelOffers` rejects malformed or zero `accountAddress` values with `MidnightInvalidAccountAddressError`.
+- Midnight maker flows and `getOffersData` accept `validation: false` to skip the Midnight mempool validation API call; local maker checks still run.
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
+## 8.0.0
 
-  If you are still on `@morpho-org/blue-sdk` 7.x or `@morpho-org/morpho-ts` below 4.1, pin `@morpho-org/blue-sdk-viem@~6.2`.
+### Major Changes
 
-- Add shared Midnight position accrual helpers and errors.
-- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
-- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), and `withdraw` and `redeem` (from `getRequirements()`) throw it when the exit exceeds the vault's idle assets, before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+- Fail closed on missing contract code: Blue, VaultV1 and VaultV2 `getRequirements()` now throw `MissingContractCodeError` when a registered bundles or protocol target holds no code, and `simulate()` rejects calldata transactions to code-less addresses with `SimulationValidationError` before `eth_simulateV1`. `@morpho-org/test` classifies the new error as `config`, `classifyError` now maps `BlacklistViolationError` to `config` and `ConsumerLimitViolationError` to `revert` where both were previously `unknown`, and `createMockClient` now answers `eth_getCode` with non-empty bytecode by default. `getBundlesTokenRequirements`, `getVaultBundlesSharesRequirements` and `getBlueAuthorizationRequirement` accept an optional `now` timestamp override for their deadline checks and pass it through to the signature encoders; `resolveBundlesTokenRequirements`, `encodeErc20Permit`, `encodeErc20Permit2SignatureTransfer`, `encodeVaultSharesPermit` and `encodeBlueSignatureAuthorization` accept the same optional `now` (additive). Migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+- An RPC endpoint connected to the wrong chain now fails closed instead of serving another chain's state.
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
+  - `@morpho-org/morpho-sdk`: entity reads (`getMarketData`, `getPositionData`, `getVaultV2BlueReallocationData`, `getData`, `supplyBlueMakeLend`) and requirement resolvers (`getRequirements()`, `getBundlesTokenRequirements`, `getUnusedPermit2Nonce`, `getBlueAuthorizationRequirement`, the Midnight requirement resolvers and the exported `encodeErc20Permit`) each send their own uncached `eth_chainId` request (a `getRequirements()` that runs several of these resolvers sends one request per resolver) and throw `ChainIdMismatchError(observed, expected)` before any state read when the endpoint serves another chain. Previously only `client.chain?.id` was compared. The new `validateClientChainId(client, chainId)` performs both checks and is available from the `morpho-sdk/utils` subpath. Synchronous builders (`buildTx`) still compare only the declared chain. Breaking: these calls can now throw `ChainIdMismatchError` for the RPC's chain and viem errors from `eth_chainId`; migrate with packages/morpho-sdk/MIGRATION-v7-to-v8.md.
+  - `@morpho-org/evm-simulation`: after an `RpcTransportError` from the block lookup, metadata reads or `eth_simulateV1`, or a `SlippageCheckUnavailableError` from quoted-asset resolution or a failed planned state read parsed by `executePlan`, `simulate()` probes `eth_chainId` once and throws `InvalidChainIdError` when the endpoint serves another chain (for example a `blockNumber` or `block` above that chain's head). A successful simulation still sends no `eth_chainId` request.
 
-  Projects still on `@morpho-org/blue-sdk` 7 / `@morpho-org/morpho-ts` 3 should pin `@morpho-org/blue-sdk-viem@~6.2`.
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
+- Midnight `takeWithdraw` (entity method and the `midnightTakeWithdraw` builder) now throws `MidnightZeroReceiverError` when `receiver` is the zero address, instead of building a transaction that sends the withdrawn loan assets to `0x0`. See MIGRATION-v7-to-v8.md.
+- Midnight `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, and
+  `repayWithdrawCollateral` now require `positionData` and `collateralPrices` for buffered health
+  checks using the SDK's fixed `DEFAULT_LLTV_BUFFER`. They can throw
+  `BorrowExceedsSafeLtvError`, `WithdrawMakesPositionUnhealthyError`, `WithdrawExceedsCollateralError`,
+  `MissingMarketPriceError`, `UnknownCollateralIndexError`, `AccrualPositionUserMismatchError`, and
+  `MarketIdMismatchError`. See
+  `packages/morpho-sdk/MIGRATION-v7-to-v8.md`.
+
+  Before: `takeBorrow({ marketData, target, ... })`
+  After: `takeBorrow({ marketData, positionData, collateralPrices, target, ... })`
+
+### Minor Changes
+
+- Midnight `redeem` now checks `units`, and picks its default face value, after applying realized losses and continuous fees accrued since the `positionData` snapshot, instead of building a transaction that reverts with `Panic(0x11)`. Inconsistent hand-built snapshots now throw `InvalidMidnightPositionLossFactorError` or `InvalidMidnightPositionAccrualStateError`.
+- Reject out-of-range Midnight amounts and collateral totals, and cap Midnight referral fees at 10% with `MidnightReferralFeePctExceededError`.
+- Midnight `makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `repayWithdrawCollateral`, and `cancelOffers` now throw `ExpiredDeadlineError` when `deadline` is at or before the current time, before any API read, instead of building a transaction that reverts with `DeadlinePassed()`. A zero or negative `deadline` on these methods now throws `ExpiredDeadlineError` instead of `NonPositiveInputError`. Transaction builders stay clock-free.
+- Midnight maker flows now throw typed errors before publication for expired offers, expiries after maturity, exhausted offer groups, inaccessible ticks, market fees above an offer's cap, zero-price sells, unreachable Rate V1 bounds, reduce-only offers without debt or credit, and invalid uncreated-market maturity, LLTV, liquidation cursor, or oracle settings. `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, and `supplyCollateralMakeBorrow` also reject offers with a nonzero callback, and every maker flow rejects wrong-side offers before calling the mempool API. This affects `getOffersData`, `makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, and `supplyCollateralMakeBorrow`.
+- Adds `OfferUtils.onchainHash`, `OfferUtils.onchainHashStruct`, and `Offer#onchainHash`: the `keccak256(abi.encode(offer))` hash Midnight emits in `Take` and uses to identify offers on-chain, distinct from `OfferUtils.hash`.
+- Midnight builders and their `MorphoMidnight` entity methods now reject receivers that strand funds permanently. `midnightTakeBorrow`, `midnightSupplyCollateralTakeBorrow`, `midnightTakeWithdraw`, `midnightTakeRepayWithdrawCollateral`, `midnightRepayWithdrawCollateral`, `midnightRedeem`, `midnightTakeLend`, throw `MidnightContractReceiverError` when `receiver`, `collateralReceiver` (with withdrawals), or `referralFeeRecipient` (with a positive fee) is a Midnight protocol contract (`midnight`, `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, `priceRatifierV1`, `rateRatifierV1`) or a market loan/collateral token contract. `midnightRedeem` and `MorphoMidnight.redeem` additionally throw `MidnightZeroReceiverError` for a zero `receiver`, and `MorphoMidnight.redeem` now builds its transaction eagerly so these errors throw on the method call.
+- Export `isContractRevertError`, `catchRevertOnly`, and `isTransportError` from `blue-sdk-viem`, and re-export them from the `morpho-sdk` `/blue/utils` and `/utils` subpaths.
+
+  Fetchers that previously returned partial entities when RPC infrastructure failed now reject with the original viem error. For transport failures, its cause chain contains `HttpRequestError`, `TimeoutError`, `LimitExceededRpcError`, `SocketClosedError`, or `WebSocketRequestError`; use `isTransportError` to detect them. Deployless reads no longer fall back after transport errors.
+
+- Midnight `repayWithdrawCollateral` and `takeRepayWithdrawCollateral` (entity methods and the `midnightRepayWithdrawCollateral` / `midnightTakeRepayWithdrawCollateral` builders) now throw `MidnightZeroReceiverError` when collateral withdrawals are requested and `collateralReceiver` is the zero address, instead of building a transaction that transfers the collateral to `0x0`. Calls without withdrawals still accept a zero receiver. `MidnightZeroReceiverError.field` is widened from `"receiver"` to `"receiver" | "collateralReceiver"`; code that switches exhaustively on `field` must handle the new value.
 
 ### Patch Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
-
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
-
 - Vault V1 `inKindRedeem` and Vault V2 `inKindRedeem` and `forceWithdraw` `getRequirements()` now read allowances, nonces and balances with separate `eth_call`s instead of viem `multicall`. They no longer throw `ChainDoesNotSupportContract` on chains whose viem definition has no `multicall3` contract, such as Arc.
 - Return the caller's average price guard when provided and reject takeable offers whose units exceed their offer `maxUnits`.
+- Register the Tempo (chain 4217) `midnight`, `midnightBlueBuyCallbackFactory`,
+  `midnightMempool`, `ecrecoverAuthorizer`, `priceRatifierV1` and `rateRatifierV1` deployments
+  from morpho-org/deployments address-book.json at commit b2a17f1, with their deployment blocks
+  in the registry. The addresses are sourced byte-for-byte from the canonical deployment registry
+  and verified on-chain; each deployment block is the first Tempo block with code at that address.
 - Updated dependencies
-  - @morpho-org/midnight-sdk@2.1.0-next.0
-  - @morpho-org/blue-sdk-viem@6.3.0-next.0
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/midnight-sdk@2.1.0
+  - @morpho-org/blue-sdk-viem@7.0.0
+  - @morpho-org/morpho-ts@4.0.1
+  - @morpho-org/blue-sdk@8.0.1
 
 ## 7.0.0
 

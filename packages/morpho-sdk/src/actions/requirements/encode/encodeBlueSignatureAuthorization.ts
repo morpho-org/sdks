@@ -29,6 +29,8 @@ interface EncodeBlueSignatureAuthorizationParams {
   isAuthorized?: boolean;
   /** Signature deadline in seconds. Defaults to two hours from now. */
   deadline?: bigint;
+  /** Timestamp the deadline is validated against; defaults to the current time. */
+  now?: bigint;
 }
 
 /**
@@ -53,6 +55,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * @param params.nonce - The owner's current Morpho authorization nonce.
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
  * @param params.deadline - Optional signature deadline in seconds.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
@@ -110,7 +113,7 @@ export const encodeBlueSignatureAuthorization = async (
   // from now and is always valid.
   if (params.deadline != null) {
     validateDeadline(params.deadline);
-    const timestamp = Time.timestamp();
+    const timestamp = params.now ?? Time.timestamp();
     if (params.deadline <= timestamp) {
       throw new ExpiredDeadlineError(params.deadline, timestamp);
     }

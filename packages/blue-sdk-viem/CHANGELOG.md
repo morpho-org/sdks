@@ -1,28 +1,22 @@
 # @morpho-org/blue-sdk-viem
 
-## 6.3.0-next.0
+## 7.0.0
+
+### Major Changes
+
+- `fetchToken` no longer defaults `decimals` to 0: it throws `UnknownTokenError` when `decimals()` is absent or out of range, and propagates transport errors from every metadata read instead of returning undefined fields. `getPermitTypedData` throws `MissingPermitDomainNameError` when neither `name()` nor `eip712Domain()` is available. `name`, `symbol` and `eip712Domain` resolve to `undefined` only on revert or no code; a malformed `eip712Domain()` or `bytes32` result throws the new `MalformedTokenMetadataError`. With `useSimplePermit`, transport errors from the ERC-2612 `nonces()` probe now propagate; fallback is limited to recognized reverts or undecodable return data. Adds the `isUndecodableResultError` helper. Migrate with packages/blue-sdk-viem/MIGRATION-v6-to-v7.md, packages/morpho-sdk/MIGRATION-v7-to-v8.md and packages/wdk-protocol-lending-morpho-evm/MIGRATION.md.
 
 ### Minor Changes
 
-- Add deployless accrual support for Vault V2 Midnight adapters.
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+- Export `isContractRevertError`, `catchRevertOnly`, and `isTransportError` from `blue-sdk-viem`, and re-export them from the `morpho-sdk` `/blue/utils` and `/utils` subpaths.
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
-
-  If you are still on `@morpho-org/blue-sdk` 7.x or `@morpho-org/morpho-ts` below 4.1, pin `@morpho-org/blue-sdk-viem@~6.2`.
-
-- Add deployless reads for Vault V2 Midnight adapters.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7 / `@morpho-org/morpho-ts` 3 should pin `@morpho-org/blue-sdk-viem@~6.2`.
+  Fetchers that previously returned partial entities when RPC infrastructure failed now reject with the original viem error. For transport failures, its cause chain contains `HttpRequestError`, `TimeoutError`, `LimitExceededRpcError`, `SocketClosedError`, or `WebSocketRequestError`; use `isTransportError` to detect them. Deployless reads no longer fall back after transport errors.
 
 ### Patch Changes
 
 - Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/morpho-ts@4.0.1
+  - @morpho-org/blue-sdk@8.0.1
 
 ## 6.2.1
 

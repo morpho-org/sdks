@@ -33,6 +33,8 @@ export interface EncodeVaultSharesPermitParams {
   readonly amount: bigint;
   /** Shared permit and bundle deadline. */
   readonly deadline: bigint;
+  /** Timestamp the deadline is validated against; defaults to the current time. */
+  readonly now?: bigint;
 }
 
 /**
@@ -50,6 +52,7 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
  *   can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
@@ -65,6 +68,8 @@ export interface EncodeVaultSharesPermitParams {
  * @throws {InvalidPermitDomainChainIdError} when a Vault V1 permit domain targets another chain or omits `chainId`.
  * @throws {InvalidPermitDomainVerifyingContractError} when a Vault V1 permit domain targets another token or omits `verifyingContract`.
  * @throws {UnsupportedPermitDomainExtensionsError} when a Vault V1 permit domain advertises unsupported extensions.
+ * @throws {MissingPermitDomainNameError} when a Vault V1 `vault` has neither an EIP-5267 domain
+ *   nor a `name`, so its permit domain is unknown.
  * @example
  * ```ts
  * import { encodeVaultSharesPermit } from "@morpho-org/morpho-sdk";
@@ -132,7 +137,7 @@ export const encodeVaultSharesPermit = (
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
-  const now = Time.timestamp();
+  const now = params.now ?? Time.timestamp();
   // Validate the explicit deadline: this exported encoder can be called independently of the
   // guarded resolvers, and an out-of-range or already-expired deadline otherwise surfaces only as
   // a downstream wallet typed-data error or an on-chain revert.

@@ -2,6 +2,7 @@ import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
   InputExceedsMaxError,
+  MidnightReferralFeePctExceededError,
   NegativeInputError,
   NonPositiveInputError,
   ReferralFeePctExceededError,
@@ -49,5 +50,28 @@ describe("ReferralFeePctExceededError", () => {
     expect(error.field).toBe("referralFeePct");
     expect(error.value).toBe(MathLib.WAD);
     expect(error.max).toBe(MathLib.WAD - 1n);
+  });
+});
+
+describe("MidnightReferralFeePctExceededError", () => {
+  const referralFeePct = MathLib.WAD / 10n + 1n;
+
+  test("default", () => {
+    const error = new MidnightReferralFeePctExceededError(referralFeePct);
+
+    expect(error.name).toBe("MidnightReferralFeePctExceededError");
+    expect(error.referralFeePct).toBe(referralFeePct);
+    expect(error.message).toBe(
+      `Referral fee "${referralFeePct}" exceeds the SDK's 10% Midnight referral-fee cap "${MathLib.WAD / 10n}". Reduce referralFeePct.`,
+    );
+  });
+
+  test("behavior: stays catchable as the generic maximum-bound error", () => {
+    const error = new MidnightReferralFeePctExceededError(referralFeePct);
+
+    expect(error).toBeInstanceOf(InputExceedsMaxError);
+    expect(error.field).toBe("referralFeePct");
+    expect(error.value).toBe(referralFeePct);
+    expect(error.max).toBe(MathLib.WAD / 10n);
   });
 });

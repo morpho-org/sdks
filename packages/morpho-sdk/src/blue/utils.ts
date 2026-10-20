@@ -16,11 +16,15 @@ export {
   VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 export {
+  catchRevertOnly,
   decodeBytes32String,
   getAuthorizationTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
+  isContractRevertError,
+  isTransportError,
+  isUndecodableResultError,
   MetaMorphoAction,
   optionalBoolean,
   readContractRestructured,

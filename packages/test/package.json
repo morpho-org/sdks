@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/test",
   "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
-  "version": "2.11.0-next.0",
+  "version": "2.11.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -24,6 +24,7 @@
     "./vitest": "./src/vitest.ts",
     "./fixtures": "./src/fixtures.ts",
     "./mock": "./src/mock.ts",
+    "./chaos": "./src/chaos.ts",
     "./playwright": "./src/playwright.ts"
   },
   "typesVersions": {
@@ -36,6 +37,9 @@
       ],
       "mock": [
         "src/mock.ts"
+      ],
+      "chaos": [
+        "src/chaos.ts"
       ],
       "playwright": [
         "src/playwright.ts"
@@ -95,6 +99,11 @@
         "types": "./lib/esm/mock.d.ts",
         "import": "./lib/esm/mock.js"
       },
+      "./chaos": {
+        "types": "./lib/esm/chaos.d.ts",
+        "import": "./lib/esm/chaos.js",
+        "require": "./lib/cjs/chaos.js"
+      },
       "./playwright": {
         "types": "./lib/esm/playwright.d.ts",
         "import": "./lib/esm/playwright.js",
@@ -113,6 +122,9 @@
         ],
         "mock": [
           "lib/esm/mock.d.ts"
+        ],
+        "chaos": [
+          "lib/esm/chaos.d.ts"
         ],
         "playwright": [
           "lib/esm/playwright.d.ts"

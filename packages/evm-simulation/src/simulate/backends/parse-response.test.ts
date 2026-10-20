@@ -1,5 +1,6 @@
 import {
   type Address,
+  encodeErrorResult,
   encodeFunctionResult,
   erc20Abi,
   getAddress,
@@ -9,12 +10,16 @@ import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MissingVerificationEvidenceError,
+  SimulationAssertError,
   SimulationRevertedError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
+import type { SimulationTransaction } from "../../types.js";
+import { erc20BalanceAssertion } from "../assertions.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
+import { REVERT_ERRORS_ABI } from "./decode-revert.js";
 import { parseSimulationResponse } from "./parse-response.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -22,9 +27,20 @@ const TARGET: Address = getAddress(
   "0x2222222222222222222222222222222222222222",
 );
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+const SLIPPAGE_REVERT_DATA = "0x8199f5f3" as const;
 
 const NOW = 1_700_000_000n;
+const INVALID_NONCE = encodeErrorResult({
+  abi: REVERT_ERRORS_ABI,
+  errorName: "InvalidNonce",
+});
+const ALL_CAPS_REACHED = encodeErrorResult({
+  abi: REVERT_ERRORS_ABI,
+  errorName: "AllCapsReached",
+});
 const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
+const balanceAssertion = (min: bigint) =>
+  erc20BalanceAssertion({ token: TOKEN, account: OWNER, min });
 
 const parsed = parseRequest({
   chainId: 1,
@@ -54,11 +70,32 @@ const allowanceHex = (value: bigint): `0x${string}` =>
     result: value,
   });
 
+const balanceHex = (value: bigint): `0x${string}` =>
+  encodeFunctionResult({
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    result: value,
+  });
+
+const assertionPlan = (transactions: readonly SimulationTransaction[]) =>
+  makePlan(
+    [],
+    parseRequest({
+      chainId: 1,
+      transactions,
+    }),
+  );
+
 const buildBlocks = (
   plan: ReturnType<typeof makePlan>,
   overrides: Record<
     number,
-    { status?: "failure" | "success"; data?: `0x${string}` }
+    {
+      status?: "failure" | "success";
+      data?: `0x${string}`;
+      errorData?: `0x${string}`;
+      errorMessage?: string;
+    }
   > = {},
 ) => [
   {
@@ -79,7 +116,16 @@ const buildBlocks = (
         returnData: data,
         gasUsed: numberToHex(256n),
         logs: [],
-        ...(status === "success" ? {} : { error: { message: "reverted" } }),
+        ...(status === "success"
+          ? {}
+          : {
+              error: {
+                message: override.errorMessage ?? "reverted",
+                ...(override.errorData === undefined
+                  ? {}
+                  : { data: override.errorData }),
+              },
+            }),
       };
     }),
   },
@@ -110,6 +156,41 @@ const parseWithoutParentHashCheck = (
     stateBlockTimestamp: NOW,
     parentHashCheck: false,
   });
+
+const userRevertError = (
+  plan: ReturnType<typeof makePlan>,
+  {
+    data,
+    errorData,
+  }: {
+    readonly data?: `0x${string}`;
+    readonly errorData?: `0x${string}`;
+  } = {},
+) => {
+  const txIndex = plan.calls.findIndex((call) => call.type === "transaction");
+  const blocks = buildBlocks(plan, {
+    [txIndex]: { status: "failure", data },
+  });
+  const block = blocks[0];
+  const blocksWithErrorData =
+    block === undefined || errorData === undefined
+      ? blocks
+      : [
+          {
+            ...block,
+            calls: block.calls.map((call, index) => {
+              if (index !== txIndex) return call;
+              const error = { message: "reverted", data: errorData };
+              return { ...call, error };
+            }),
+          },
+        ];
+  try {
+    parse(plan, blocksWithErrorData);
+  } catch (error) {
+    return error;
+  }
+};
 
 describe("parseSimulationResponse", () => {
   test("default: state reads grouped by phase, preparations carried", () => {
@@ -143,6 +224,276 @@ describe("parseSimulationResponse", () => {
     ).toThrow(SimulationRevertedError);
   });
 
+  test("error: failing assertBefore takes precedence over its transaction revert", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+          [transactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationAssertError);
+    expect(error).not.toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      transactionIndex: 0,
+      phase: "before",
+      assertionIndex: 0,
+      assertion: { to: TOKEN },
+      returnData: balanceHex(4n),
+    });
+  });
+
+  test("error: transaction revert takes precedence over a failing assertAfter", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertAfter: [balanceAssertion(5n)],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+          [transactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).not.toBeInstanceOf(SimulationAssertError);
+    expect(error).toMatchObject({ transactionIndex: 0 });
+  });
+
+  test("error: passing assertBefore preserves the transaction UNKNOWN_REVERT", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(5n) },
+          [transactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ transactionIndex: 0 });
+  });
+
+  test("error: failing assertAfter is reported for its transaction", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertAfter: [balanceAssertion(5n)],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationAssertError);
+    expect(error).not.toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      transactionIndex: 0,
+      phase: "after",
+      assertionIndex: 0,
+      assertion: { to: TOKEN },
+      returnData: balanceHex(4n),
+    });
+  });
+
+  test("error: failing second assertBefore reports assertionIndex 1", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [
+          balanceAssertion(1n),
+          erc20BalanceAssertion({ token: TARGET, account: OWNER, min: 5n }),
+        ],
+      },
+    ]);
+    const assertionCallIndexes = plan.calls
+      .map((call, index) => ({ call, index }))
+      .filter(({ call }) => call.type === "assertion")
+      .map(({ index }) => index);
+    expect(assertionCallIndexes).toHaveLength(2);
+    const [firstAssertionIndex, secondAssertionIndex] = assertionCallIndexes;
+    if (firstAssertionIndex === undefined || secondAssertionIndex === undefined)
+      throw new Error("Expected two assertion calls");
+
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [firstAssertionIndex]: { data: balanceHex(10n) },
+          [secondAssertionIndex]: { data: balanceHex(4n) },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationAssertError);
+    expect(error).not.toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      transactionIndex: 0,
+      phase: "before",
+      assertionIndex: 1,
+      assertion: { to: TARGET },
+      returnData: balanceHex(4n),
+    });
+    expect((error as Error).message).toContain("assertBefore[1]");
+  });
+
+  test("error: an earlier transaction revert precedes later assertBefore", () => {
+    const plan = assertionPlan([
+      { from: OWNER, to: TARGET, data: "0x12345678" },
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+      },
+    ]);
+    const laterAssertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    const firstTransactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 0,
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [laterAssertionIndex]: { data: balanceHex(4n) },
+          [firstTransactionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ transactionIndex: 0 });
+  });
+
+  test("error: reverted assertion read reports SimulationAssertError", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { status: "failure" },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationAssertError);
+    expect((error as Error).message).toContain(
+      "Transaction 0 assertBefore[0] read reverted",
+    );
+    expect(error).toMatchObject({ returnData: "0x", transactionIndex: 0 });
+  });
+
+  test("user revert reason: decodes error.data", () => {
+    const error = userRevertError(makePlan(), {
+      errorData: SLIPPAGE_REVERT_DATA,
+    });
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ revertData: SLIPPAGE_REVERT_DATA });
+  });
+
+  test("user revert reason: falls back to returnData when error.data is absent", () => {
+    const error = userRevertError(makePlan(), {
+      data: SLIPPAGE_REVERT_DATA,
+    });
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ revertData: SLIPPAGE_REVERT_DATA });
+  });
+
+  test("user revert reason: falls back to returnData when error.data is 0x", () => {
+    const error = userRevertError(makePlan(), {
+      data: SLIPPAGE_REVERT_DATA,
+      errorData: "0x",
+    });
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({ revertData: SLIPPAGE_REVERT_DATA });
+  });
+
   test("error: SimulationRevertedError on preparation revert", () => {
     const plan = makePlan([
       {
@@ -160,17 +511,203 @@ describe("parseSimulationResponse", () => {
     })();
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect(error).toMatchObject({
-      reasonCode: "UNKNOWN_REVERT",
-      context: {
-        stage: "preparation",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 24_000_000n,
-        authorizationIndex: 0,
-        preparationCallIndex: 0,
-      },
+      message: expect.stringContaining(
+        "Authorization 0 preparation call 0 reverted:",
+      ),
+      revertData: "0x",
     });
   });
+
+  test("error: preparation revert named from error.data", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [prepIndex]: { status: "failure", errorData: INVALID_NONCE },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        revertData: INVALID_NONCE,
+        message: "Authorization 0 preparation call 0 reverted: InvalidNonce()",
+      }),
+    );
+  });
+
+  test("error: revert data falls back to returnData without error.data", () => {
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [txIndex]: { status: "failure", data: ALL_CAPS_REACHED },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        revertData: ALL_CAPS_REACHED,
+        message: "Transaction 0 reverted: AllCapsReached()",
+      }),
+    );
+  });
+
+  test("error: error.data takes precedence over returnData", () => {
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [txIndex]: {
+            status: "failure",
+            data: ALL_CAPS_REACHED,
+            errorData: INVALID_NONCE,
+          },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        revertData: INVALID_NONCE,
+        message: "Transaction 0 reverted: InvalidNonce()",
+      }),
+    );
+  });
+
+  test.each(["0x", "0xDEADBEEF", "0x1234", INVALID_NONCE] as const)(
+    "error: preparation preserves original bytes %s",
+    (data) => {
+      const plan = makePlan([
+        {
+          authorizationIndex: 2,
+          calls: [{ from: OWNER, to: TOKEN, data: "0x", value: 0n }],
+        },
+      ]);
+      const index = plan.calls.findIndex((call) => call.type === "preparation");
+      let error: unknown;
+      try {
+        parse(
+          plan,
+          buildBlocks(plan, {
+            [index]: { status: "failure", errorData: data },
+          }),
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(SimulationRevertedError);
+      expect(error).toMatchObject({
+        revertData: data,
+        message: expect.stringContaining(
+          "Authorization 2 preparation call 0 reverted:",
+        ),
+      });
+    },
+  );
+
+  test("error: empty error.data does not discard populated returnData", () => {
+    const plan = makePlan();
+    const index = plan.calls.findIndex((call) => call.type === "transaction");
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [index]: {
+            status: "failure",
+            errorData: "0x",
+            data: ALL_CAPS_REACHED,
+          },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        revertData: ALL_CAPS_REACHED,
+        message: "Transaction 0 reverted: AllCapsReached()",
+      }),
+    );
+  });
+
+  test("error: transaction message uses the user index after state reads and preparations", () => {
+    const plan = makePlan(
+      [
+        {
+          authorizationIndex: 0,
+          calls: [{ from: OWNER, to: TOKEN, data: "0x", value: 0n }],
+        },
+      ],
+      parseRequest({
+        chainId: 1,
+        transactions: [
+          { from: OWNER, to: TARGET, data: "0x" },
+          { from: OWNER, to: TARGET, data: "0x" },
+        ],
+      }),
+    );
+    const index = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 1,
+    );
+    const data = encodeErrorResult({
+      abi: REVERT_ERRORS_ABI,
+      errorName: "ERC20InsufficientBalance",
+      args: [OWNER, 1283n, 2000n],
+    });
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, { [index]: { status: "failure", errorData: data } }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        revertData: data,
+        transactionIndex: 1,
+        message: `Transaction 1 reverted: ERC20InsufficientBalance(sender="${OWNER}", balance=1283, needed=2000)`,
+      }),
+    );
+  });
+
+  test.each(["preparation", "transaction"] as const)(
+    "error: %s fallback hides provider text and preserves diagnostics",
+    (type) => {
+      const plan = makePlan([
+        {
+          authorizationIndex: 0,
+          calls: [{ from: OWNER, to: TOKEN, data: "0x", value: 0n }],
+        },
+      ]);
+      const index = plan.calls.findIndex((call) => call.type === type);
+      const providerMessage =
+        "request failed https://rpc.example/private-token";
+      const blocks = buildBlocks(plan, {
+        [index]: {
+          status: "failure",
+          errorData: "0xdeadbeef",
+          errorMessage: providerMessage,
+        },
+      });
+      let error: unknown;
+      try {
+        parse(plan, blocks);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(SimulationRevertedError);
+      const reverted = error as SimulationRevertedError;
+      expect(reverted.message).toContain("Revert reason unavailable");
+      expect(reverted.message).not.toContain(providerMessage);
+      expect(reverted.cause).toBe(blocks[0]!.calls[index]!.error);
+      expect(reverted.revertData).toBe("0xdeadbeef");
+      expect(reverted.transactionIndex).toBe(
+        type === "transaction" ? 0 : undefined,
+      );
+    },
+  );
 
   test("error: preparation revert wins over the user revert it caused", () => {
     const plan = makePlan([
@@ -196,19 +733,136 @@ describe("parseSimulationResponse", () => {
     })();
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect(error).toMatchObject({
-      reasonCode: "UNKNOWN_REVERT",
-      context: {
-        stage: "preparation",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 24_000_000n,
-        authorizationIndex: 0,
-        preparationCallIndex: 0,
-      },
+      message: expect.stringContaining(
+        "Authorization 0 preparation call 0 reverted:",
+      ),
+      revertData: "0x",
     });
   });
 
-  test("error: MissingVerificationEvidenceError on failed state read", () => {
+  test("error: revertData decodes returnData when error.data is not hex", () => {
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    const blocks = buildBlocks(plan, { [txIndex]: { status: "failure" } });
+    Object.assign(blocks[0]!.calls[txIndex]!, {
+      returnData: "0x756688fe",
+      error: { message: "execution reverted", data: "execution reverted" },
+    });
+    expect(() => parse(plan, blocks)).toThrow(
+      expect.objectContaining({
+        name: "SimulationRevertedError",
+        revertData: "0x756688fe",
+      }),
+    );
+  });
+
+  test("error: revertData decodes authorization selector when error.data is empty", () => {
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    const blocks = buildBlocks(plan, { [txIndex]: { status: "failure" } });
+    Object.assign(blocks[0]!.calls[txIndex]!, {
+      returnData: "0x756688fe",
+      error: { message: "execution reverted", data: "0x" },
+    });
+
+    expect(() => parse(plan, blocks)).toThrow(
+      expect.objectContaining({
+        name: "SimulationRevertedError",
+        revertData: "0x756688fe",
+      }),
+    );
+  });
+
+  test("error: preparation revertData prefers error.data over returnData", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
+    const blocks = buildBlocks(plan, { [prepIndex]: { status: "failure" } });
+    Object.assign(blocks[0]!.calls[prepIndex]!, {
+      returnData: "0x",
+      error: { message: "execution reverted", data: "0x70f65caa" },
+    });
+
+    expect(() => parse(plan, blocks)).toThrow(
+      expect.objectContaining({
+        name: "SimulationRevertedError",
+        revertData: "0x70f65caa",
+      }),
+    );
+  });
+
+  test("error: user-call revertData prefers error.data over returnData", () => {
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
+    const blocks = buildBlocks(plan, { [txIndex]: { status: "failure" } });
+    Object.assign(blocks[0]!.calls[txIndex]!, {
+      returnData: "0x756688fe",
+      error: { message: "execution reverted", data: "0x70f65caa" },
+    });
+
+    expect(() => parse(plan, blocks)).toThrow(
+      expect.objectContaining({
+        name: "SimulationRevertedError",
+        revertData: "0x70f65caa",
+      }),
+    );
+  });
+
+  test("error: revertData falls back to returnData and applies to preparation reverts", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [prepIndex]: { status: "failure", data: "0x756688fe" },
+        }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        name: "SimulationRevertedError",
+        revertData: "0x756688fe",
+      }),
+    );
+  });
+
+  test("error: preparation revertData falls back to returnData when error.data is 0x", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
+    const blocks = buildBlocks(plan, {
+      [prepIndex]: { status: "failure", data: SLIPPAGE_REVERT_DATA },
+    });
+    Object.assign(blocks[0]!.calls[prepIndex]!, {
+      error: { message: "reverted", data: "0x" },
+    });
+    const error = (() => {
+      try {
+        parse(plan, blocks);
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      revertData: SLIPPAGE_REVERT_DATA,
+    });
+  });
+
+  test("error: SlippageCheckUnavailableError on failed state read", () => {
     const plan = makePlan();
     const readIndex = plan.calls.findIndex((c) => c.type === "stateRead");
     const read = plan.calls[readIndex];
@@ -216,25 +870,22 @@ describe("parseSimulationResponse", () => {
     const readId = read.read.id;
     const error = (() => {
       try {
-        parse(plan, buildBlocks(plan, { [readIndex]: { status: "failure" } }));
+        parse(
+          plan,
+          buildBlocks(plan, {
+            [readIndex]: { status: "failure", errorMessage: "node secret" },
+          }),
+        );
       } catch (caught) {
         return caught;
       }
     })();
-    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect(isSimulationPackageError(error)).toBe(true);
-    expect(error).toMatchObject({
-      context: {
-        stage: "verification",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 24_000_000n,
-        field: readId,
-      },
-    });
-    expect(
-      (error as { context?: { operation?: unknown } }).context?.operation,
-    ).toBeUndefined();
+    expect((error as Error).message).toContain(readId);
+    expect((error as Error).message).not.toContain("node secret");
+    expect((error as Error).cause).toMatchObject({ message: "node secret" });
+    expect(error).not.toHaveProperty("context");
   });
 
   test("error: InvalidSimulationResponseError on call-count mismatch", () => {

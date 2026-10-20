@@ -1,3 +1,4 @@
+import { test as fastCheckTest, fc } from "@fast-check/vitest";
 import {
   AccrualPosition,
   ChainId,
@@ -6,7 +7,12 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { type Address, maxUint128, zeroAddress } from "viem";
+import {
+  Market as MidnightMarket,
+  MarketParams as MidnightMarketParams,
+  UnknownCollateralIndexError,
+} from "@morpho-org/midnight-sdk";
+import { type Address, getAddress, maxUint128, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
@@ -42,10 +48,12 @@ import {
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
 import {
+  DEFAULT_LLTV_BUFFER,
   MAX_REALLOCATION_PENALTY,
   MAX_SLIPPAGE_TOLERANCE,
 } from "./constant.js";
 import {
+  getMidnightMaxSafeDebt,
   validateAccrualPosition,
   validateChainId,
   validateMidnightMarketChainId,
@@ -64,6 +72,190 @@ import {
 
 const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_B: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+const midnightMarketData = (lltv = 770_000_000_000_000_000n) =>
+  new MidnightMarket({
+    params: new MidnightMarketParams({
+      ...midnightMarket,
+      collateralParams: midnightMarket.collateralParams.map((collateral) => ({
+        ...collateral,
+        lltv,
+      })),
+    }),
+    totalUnits: 1_000n,
+    lossFactor: 0n,
+    withdrawable: 1_000n,
+    continuousFeeCredit: 0n,
+    settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+    continuousFee: 0,
+    tickSpacing: 1,
+  });
+
+describe("getMidnightMaxSafeDebt", () => {
+  test("behavior: sums buffered capacity across collateral indexes", () => {
+    const secondCollateral = getAddress(
+      "0x0000000000000000000000000000000000007100",
+    );
+    const market = new MidnightMarket({
+      params: new MidnightMarketParams({
+        ...midnightMarket,
+        collateralParams: [
+          {
+            ...midnightMarket.collateralParams[0]!,
+            lltv: 800_000_000_000_000_000n,
+          },
+          {
+            ...midnightMarket.collateralParams[0]!,
+            token: secondCollateral,
+            lltv: 700_000_000_000_000_000n,
+          },
+        ],
+      }),
+      totalUnits: 1_000n,
+      lossFactor: 0n,
+      withdrawable: 1_000n,
+      continuousFeeCredit: 0n,
+      settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+      continuousFee: 0,
+      tickSpacing: 1,
+    });
+
+    expect(
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [10_000n, 20_000n],
+        collateralPrices: [
+          ORACLE_PRICE_SCALE + ORACLE_PRICE_SCALE / 2n,
+          ORACLE_PRICE_SCALE / 2n,
+        ],
+      }),
+    ).toBe(18_875n);
+  });
+
+  test("behavior: floors the effective LLTV at zero", () => {
+    const market = midnightMarketData(DEFAULT_LLTV_BUFFER);
+
+    expect(
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [10_000n],
+        collateralPrices: [ORACLE_PRICE_SCALE],
+      }),
+    ).toBe(0n);
+    expect(
+      getMidnightMaxSafeDebt({
+        market: midnightMarketData(0n),
+        collateral: [10_000n],
+        collateralPrices: [ORACLE_PRICE_SCALE],
+      }),
+    ).toBe(0n);
+  });
+
+  test("error: requires prices only for positive collateral", () => {
+    const market = midnightMarketData();
+
+    expect(() =>
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [1n],
+        collateralPrices: [],
+      }),
+    ).toThrow(MissingMarketPriceError);
+    expect(
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [0n],
+        collateralPrices: [],
+      }),
+    ).toBe(0n);
+  });
+
+  test("error: rejects positive collateral at an unconfigured index before reading its price", () => {
+    const market = midnightMarketData();
+
+    expect(() =>
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [0n, 1n],
+        collateralPrices: [],
+      }),
+    ).toThrow(UnknownCollateralIndexError);
+    expect(
+      getMidnightMaxSafeDebt({
+        market,
+        collateral: [0n, 0n],
+        collateralPrices: [],
+      }),
+    ).toBe(0n);
+  });
+
+  fastCheckTest.prop(
+    [
+      fc.record({
+        collateral0: fc.bigInt({ min: 0n, max: 10n ** 30n }),
+        collateral1: fc.bigInt({ min: 0n, max: 10n ** 30n }),
+        price0: fc.bigInt({ min: 0n, max: ORACLE_PRICE_SCALE * 10n }),
+        price1: fc.bigInt({ min: 0n, max: ORACLE_PRICE_SCALE * 10n }),
+        lltv0: fc.bigInt({
+          min: 0n,
+          max: 900_000_000_000_000_000n,
+        }),
+        lltv1: fc.bigInt({
+          min: 0n,
+          max: 900_000_000_000_000_000n,
+        }),
+      }),
+    ],
+    { numRuns: 1_000 },
+  )(
+    "property: buffered capacity does not exceed the unbuffered contract formula",
+    ({ collateral0, collateral1, price0, price1, lltv0, lltv1 }) => {
+      const secondCollateral = getAddress(
+        "0x0000000000000000000000000000000000007100",
+      );
+      const market = new MidnightMarket({
+        params: new MidnightMarketParams({
+          ...midnightMarket,
+          collateralParams: [
+            { ...midnightMarket.collateralParams[0]!, lltv: lltv0 },
+            {
+              ...midnightMarket.collateralParams[0]!,
+              token: secondCollateral,
+              lltv: lltv1,
+            },
+          ],
+        }),
+        totalUnits: 1_000n,
+        lossFactor: 0n,
+        withdrawable: 1_000n,
+        continuousFeeCredit: 0n,
+        settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+        continuousFee: 0,
+        tickSpacing: 1,
+      });
+      const collateral = [collateral0, collateral1] as const;
+      const prices = [price0, price1] as const;
+      const maxSafeDebt = getMidnightMaxSafeDebt({
+        market,
+        collateral,
+        collateralPrices: prices,
+      });
+      const unbufferedMaxSafeDebt =
+        MathLib.mulDivDown(
+          MathLib.mulDivDown(collateral0, price0, ORACLE_PRICE_SCALE),
+          lltv0,
+          MathLib.WAD,
+        ) +
+        MathLib.mulDivDown(
+          MathLib.mulDivDown(collateral1, price1, ORACLE_PRICE_SCALE),
+          lltv1,
+          MathLib.WAD,
+        );
+
+      expect(maxSafeDebt).toBeLessThanOrEqual(unbufferedMaxSafeDebt);
+    },
+  );
+});
 
 // ---------------------------------------------------------------------------
 // validateUserAddress

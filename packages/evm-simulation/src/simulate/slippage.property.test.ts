@@ -1,20 +1,9 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect } from "vitest";
-import {
-  ConsumerLimitViolationError,
-  type SimulationVerificationContext,
-} from "../errors.js";
+import { ConsumerLimitViolationError } from "../errors.js";
 import { checkSlippage } from "./slippage.js";
 
 const WAD = 10n ** 18n;
-const context: SimulationVerificationContext = {
-  stage: "verification",
-  mode: "final",
-  chainId: 1,
-  blockNumber: 1n,
-  operation: "vaultV2Deposit",
-  vault: "0x0000000000000000000000000000000000000001",
-};
 const expectedAmount = fc.oneof(
   fc.constantFrom(1n, 2n, WAD, (1n << 128n) - 1n),
   fc.bigInt({ min: 1n, max: (1n << 128n) - 1n }),
@@ -52,24 +41,28 @@ describe("checkSlippage", () => {
     ({ side: { field, debtShares }, expected, tolerance }) => {
       const bound = (expected * (WAD - tolerance) + WAD - 1n) / WAD;
       const limits = {
+        type: "blueSupply" as const,
         quote: { [field]: expected },
         slippageTolerance: tolerance,
       };
       expect(bound).toBeLessThanOrEqual(expected);
       expect(
         checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound },
-          context,
           debtShares,
         }),
-      ).toEqual(limits);
+      ).toEqual({
+        quote: limits.quote,
+        slippageTolerance: limits.slippageTolerance,
+      });
       if (bound > 0n) {
         expect(() =>
           checkSlippage({
+            label: "Limit operation 0 (vaultV2Deposit)",
             limits,
             observed: { [field]: bound - 1n },
-            context,
             debtShares,
           }),
         ).toThrow(ConsumerLimitViolationError);
@@ -100,26 +93,134 @@ describe("checkSlippage", () => {
     ({ side: { field, debtShares }, expected, tolerance }) => {
       const bound = (expected * (WAD + tolerance)) / WAD;
       const limits = {
+        type: "blueSupply" as const,
         quote: { [field]: expected },
         slippageTolerance: tolerance,
       };
       expect(bound).toBeGreaterThanOrEqual(expected);
       expect(
         checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound },
-          context,
           debtShares,
         }),
-      ).toEqual(limits);
+      ).toEqual({
+        quote: limits.quote,
+        slippageTolerance: limits.slippageTolerance,
+      });
       expect(() =>
         checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound + 1n },
-          context,
           debtShares,
         }),
       ).toThrow(ConsumerLimitViolationError);
+    },
+  );
+
+  const RAY = 10n ** 27n;
+  const shareCount = fc.bigInt({ min: 1n, max: (1n << 128n) - 1n });
+  const rayPrice = fc.bigInt({ min: 1n, max: (1n << 128n) - 1n });
+
+  // A sharePrice bound prices assets-per-share with the same rounding
+  // discipline as amount bounds: the paid-assets cap rounds the bound down
+  // while the realized rate rounds up, and the received-assets floor rounds
+  // the bound up while the realized rate rounds down. Amount quotes mirror
+  // the observation at 100% tolerance so only the rate check can reject.
+  test.prop(
+    [
+      fc.record({
+        shares: shareCount,
+        expected: rayPrice,
+        tolerance: toleranceWad,
+      }),
+    ],
+    { numRuns: 1000 },
+  )(
+    "behavior: sharePrice accepts paid assets exactly up to the rounded bound",
+    ({ shares, expected, tolerance }) => {
+      const bound = (expected * (WAD + tolerance)) / WAD; // wMulDown
+      fc.pre((bound * shares) % RAY !== 0n);
+      const maxAssets = (bound * shares) / RAY;
+      const limits = (assetsPaid: bigint) => ({
+        type: "vaultV2Deposit" as const,
+        quote: { assetsPaid, sharesMinted: shares },
+        slippageTolerance: WAD,
+        sharePrice: { expected, tolerance },
+      });
+      const observed = (assetsPaid: bigint) => ({
+        assetsPaid,
+        sharesMinted: shares,
+      });
+      expect(
+        checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
+          limits: limits(maxAssets),
+          observed: observed(maxAssets),
+        }),
+      ).toEqual({
+        quote: { assetsPaid: maxAssets, sharesMinted: shares },
+        slippageTolerance: WAD,
+        sharePrice: { expected, tolerance },
+      });
+      expect(() =>
+        checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
+          limits: limits(maxAssets + 1n),
+          observed: observed(maxAssets + 1n),
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    },
+  );
+
+  test.prop(
+    [
+      fc.record({
+        shares: shareCount,
+        expected: rayPrice,
+        tolerance: toleranceWad,
+      }),
+    ],
+    { numRuns: 1000 },
+  )(
+    "behavior: sharePrice accepts received assets exactly down to the rounded bound",
+    ({ shares, expected, tolerance }) => {
+      const bound = (expected * (WAD - tolerance) + WAD - 1n) / WAD; // wMulUp
+      fc.pre((bound * shares) % RAY !== 0n);
+      const minAssets = (bound * shares + RAY - 1n) / RAY;
+      const limits = (assetsReceived: bigint) => ({
+        type: "vaultV2Redeem" as const,
+        quote: { assetsReceived, sharesBurned: shares },
+        slippageTolerance: WAD,
+        sharePrice: { expected, tolerance },
+      });
+      const observed = (assetsReceived: bigint) => ({
+        assetsReceived,
+        sharesBurned: shares,
+      });
+      expect(
+        checkSlippage({
+          label: "Limit operation 0 (vaultV2Deposit)",
+          limits: limits(minAssets),
+          observed: observed(minAssets),
+        }),
+      ).toEqual({
+        quote: { assetsReceived: minAssets, sharesBurned: shares },
+        slippageTolerance: WAD,
+        sharePrice: { expected, tolerance },
+      });
+      // A zero bound accepts every rate, so there is no asset amount below it.
+      if (bound > 0n) {
+        expect(() =>
+          checkSlippage({
+            label: "Limit operation 0 (vaultV2Deposit)",
+            limits: limits(minAssets - 1n),
+            observed: observed(minAssets - 1n),
+          }),
+        ).toThrow(ConsumerLimitViolationError);
+      }
     },
   );
 });

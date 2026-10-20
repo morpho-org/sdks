@@ -11,7 +11,7 @@ import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MissingVerificationEvidenceError,
+  SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import { decodeStateRead, planStateReads } from "./read-state.js";
@@ -133,6 +133,172 @@ describe("planStateReads", () => {
     });
     expect(plan.reads.map((r) => r.to)).toEqual([asset, vault]);
   });
+  test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
+    "behavior: %s reads receiver supply shares only for quoted markets",
+    (type) => {
+      const otherMarketId = new MarketParams({
+        loanToken: vault,
+        collateralToken: asset,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      }).id;
+      const plan = planStateReads({
+        operations: [
+          {
+            limit: {
+              type,
+              vault,
+              receiver,
+              quote: {
+                positions: [
+                  { marketId, supplyShares: 1n },
+                  { marketId: otherMarketId, supplyShares: 2n },
+                ],
+              },
+              slippageTolerance: 0n,
+            },
+          },
+        ],
+        owner,
+        morpho: zeroAddress,
+      });
+      expect(plan.reads).toHaveLength(2);
+      expect(
+        plan.reads
+          .filter((read) => read.kind === "morpho.position")
+          .map((read) => ({
+            marketId: read.marketId,
+            owner: read.owner,
+          })),
+      ).toEqual([
+        { marketId, owner: receiver },
+        { marketId: otherMarketId, owner: receiver },
+      ]);
+      expect(plan.operations[0]?.measurements).toMatchObject([
+        { field: "positions", marketId, shares: "supplyShares" },
+        { field: "positions", marketId: otherMarketId, shares: "supplyShares" },
+      ]);
+    },
+  );
+  test("behavior: in-kind position reads default to the sender and dedupe with share reads", () => {
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "vaultV2InKindRedeem",
+            vault,
+            quote: {
+              sharesBurned: 1n,
+              positions: [{ marketId, supplyShares: 1n }],
+            },
+            slippageTolerance: 0n,
+          },
+        },
+        {
+          limit: {
+            type: "blueWithdraw",
+            marketId,
+            quote: { sharesBurned: 1n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+    });
+    const positionReads = plan.reads.filter(
+      (read) => read.kind === "morpho.position",
+    );
+    // One read serves both the in-kind delivery and the blue withdraw on the
+    // same market/owner; the vault share burn adds a balance read.
+    expect(positionReads).toHaveLength(1);
+    expect(positionReads[0]?.owner).toBe(owner);
+  });
+  test("behavior: position bounds plan one after-state read, deduped with share reads", () => {
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "blueSupplyCollateralBorrow",
+            marketId,
+            quote: { sharesMinted: 1n },
+            slippageTolerance: 0n,
+            position: { maxBorrowShares: 1n, minCollateral: 1n },
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+    });
+    const positionReads = plan.reads.filter(
+      (read) => read.kind === "morpho.position",
+    );
+    // The borrow-share delta and the absolute bounds share one position read.
+    expect(positionReads).toHaveLength(1);
+    expect(positionReads[0]?.owner).toBe(owner);
+    expect(plan.operations[0]?.positionBoundsReadId).toBe(positionReads[0]?.id);
+  });
+  test("behavior: position bounds read the limit account instead of the owner or receiver", () => {
+    const account = "0x0000000000000000000000000000000000000005";
+    const morpho = "0x0000000000000000000000000000000000000006";
+    const blueLimit: OperationLimit = {
+      type: "blueSupply",
+      marketId,
+      account,
+      receiver,
+      quote: { sharesMinted: 1n },
+      slippageTolerance: 0n,
+      position: { minSupplyShares: 1n },
+    };
+    const plan = planStateReads({
+      operations: [{ limit: blueLimit }],
+      owner,
+      morpho,
+    });
+    const boundsRead = plan.reads.find(
+      (read) => read.id === plan.operations[0]?.positionBoundsReadId,
+    );
+    expect(boundsRead).toMatchObject({
+      kind: "morpho.position",
+      owner: blueLimit.account,
+      to: morpho,
+    });
+  });
+  test("behavior: blueRefinance position bounds read the target market", () => {
+    const sourceMarketId = new MarketParams({
+      loanToken: vault,
+      collateralToken: asset,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    }).id;
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "blueRefinance",
+            sourceMarketId,
+            targetMarketId: marketId,
+            quote: { sharesMinted: 1n },
+            slippageTolerance: 0n,
+            position: { maxBorrowShares: 1n },
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+    });
+    expect(sourceMarketId).not.toBe(marketId);
+    const boundsRead = plan.reads.find(
+      (read) => read.id === plan.operations[0]?.positionBoundsReadId,
+    );
+    expect(boundsRead?.kind).toBe("morpho.position");
+    if (boundsRead?.kind === "morpho.position") {
+      expect(boundsRead.marketId).toBe(marketId);
+      expect(boundsRead.marketId).not.toBe(sourceMarketId);
+    }
+  });
   test("behavior: refinance reads target debt shares minted and source debt shares burned", () => {
     const sourceMarketId = new MarketParams({
       loanToken: asset,
@@ -178,8 +344,6 @@ describe("planStateReads", () => {
   });
 });
 
-const decodeCtx = { chainId: 1, mode: "final", blockNumber: 1n } as const;
-
 describe("decodeStateRead", () => {
   test("default: balance", () => {
     const read = planStateReads({
@@ -195,7 +359,6 @@ describe("decodeStateRead", () => {
           functionName: "balanceOf",
           result: 123n,
         }),
-        decodeCtx,
       ),
     ).toBe(123n);
   });
@@ -207,23 +370,15 @@ describe("decodeStateRead", () => {
     }).reads[0]!;
     const error = (() => {
       try {
-        decodeStateRead(read, "0x", decodeCtx);
+        decodeStateRead(read, "0x");
       } catch (caught) {
         return caught;
       }
     })();
-    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(read.id);
     expect(isSimulationPackageError(error)).toBe(true);
-    expect(error).toMatchObject({
-      context: {
-        stage: "verification",
-        chainId: 1,
-        mode: "final",
-        blockNumber: 1n,
-        field: read.id,
-      },
-    });
+    expect(error).not.toHaveProperty("context");
   });
   test("error: undecodable non-empty return data is an invalid response", () => {
     const read = planStateReads({
@@ -231,7 +386,7 @@ describe("decodeStateRead", () => {
       owner,
       morpho: zeroAddress,
     }).reads[0]!;
-    expect(() => decodeStateRead(read, "0x1234", decodeCtx)).toThrow(
+    expect(() => decodeStateRead(read, "0x1234")).toThrow(
       InvalidSimulationResponseError,
     );
   });
@@ -258,8 +413,7 @@ describe("decodeStateRead", () => {
           functionName: "position",
           result: [10n, 20n, 30n],
         }),
-        decodeCtx,
       ),
-    ).toEqual({ supplyShares: 10n, borrowShares: 20n });
+    ).toEqual({ supplyShares: 10n, borrowShares: 20n, collateral: 30n });
   });
 });

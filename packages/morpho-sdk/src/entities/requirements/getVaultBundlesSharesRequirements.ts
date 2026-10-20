@@ -8,6 +8,7 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
+import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
 import {
   type ActionRequirement,
@@ -29,12 +30,15 @@ import {
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, allowance bounds, and deadline values. `maxShareAllowance`
  *   defaults to `requiredShareAllowance`, which accepts only an exact match.
+ * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns No requirement when the allowance is within `[requiredShareAllowance,
  *   maxShareAllowance]`, otherwise one
  *   approval that sets it to exactly that cap, or one permit when the allowance is below the cap
  *   and signatures are supported.
+ * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
+ *   another chain than `params.chainId`.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
- * @throws {viem.BaseError} when an allowance or nonce read fails.
+ * @throws {viem.BaseError} when an allowance, permit nonce, or `eth_chainId` read fails.
  */
 export const getVaultBundlesSharesRequirements = async (
   viemClient: Client,
@@ -47,13 +51,15 @@ export const getVaultBundlesSharesRequirements = async (
     readonly maxShareAllowance?: bigint;
     readonly deadline: bigint;
     readonly supportSignature: boolean;
+    readonly now?: bigint;
   },
 ): Promise<readonly ActionRequirement[]> => {
   validateChainId(viemClient.chain?.id, params.chainId);
-  const now = Time.timestamp();
+  const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {
     throw new ExpiredDeadlineError(params.deadline, now);
   }
+  await validateClientChainId(viemClient, params.chainId);
   const spender = getChainAddress(params.chainId, "bundles.vaultBundlesV1");
   // The allowance is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
   const allowance = await readContract(viemClient, {
@@ -86,6 +92,7 @@ export const getVaultBundlesSharesRequirements = async (
         nonce,
         amount: params.requiredShareAllowance,
         deadline: params.deadline,
+        now,
       }),
     ];
   }

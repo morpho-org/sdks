@@ -25,6 +25,7 @@ import {
 } from "../abis.js";
 import { abi, code } from "../queries/GetHolding.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { catchRevertOnly, isTransportError } from "../utils.js";
 
 /** Lookup table used to decode optional deployless boolean results. */
 export const optionalBoolean = [undefined, false, true] as const;
@@ -48,6 +49,9 @@ export const optionalBoolean = [undefined, false, true] as const;
  * @returns The hydrated `Holding` entity for `user` and `token`.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  *   (any ERC-20 token; native-asset reads skip the registry lookup).
+ * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
+ * isTransportError).
  * @example
  * ```ts
  * import { NATIVE_ADDRESS, type Holding } from "@morpho-org/blue-sdk";
@@ -122,7 +126,7 @@ export async function fetchHolding(
         canTransfer: optionalBoolean[canTransfer],
       });
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (deployless === "force" || isTransportError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -166,7 +170,7 @@ export async function fetchHolding(
       address: token,
       functionName: "nonces",
       args: [user],
-    }).catch(() => undefined),
+    }).catch(catchRevertOnly(undefined)),
     isPermissionedBackedToken
       ? readContract(client, {
           ...parameters,
@@ -181,7 +185,7 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !isPermissionedWrapperToken),
+    }).catch(catchRevertOnly(!isPermissionedWrapperToken)),
   ]);
 
   const holding = new Holding({
@@ -200,7 +204,7 @@ export async function fetchHolding(
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",
       args: [user],
-    }).catch(() => undefined);
+    }).catch(catchRevertOnly(undefined));
 
   return holding;
 }

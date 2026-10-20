@@ -297,6 +297,15 @@ describe("addressesRegistry", () => {
     },
   );
 
+  test("behavior: leaves unset ratifiers unset on Tempo", () => {
+    expect(() =>
+      getChainAddress(ChainId.TempoMainnet, "ecrecoverRatifier"),
+    ).toThrow(UnknownAddressError);
+    expect(() =>
+      getChainAddress(ChainId.TempoMainnet, "setterRatifier"),
+    ).toThrow(UnknownAddressError);
+  });
+
   test.each([
     [
       ChainId.EthMainnet,
@@ -586,6 +595,42 @@ describe("addressesRegistry", () => {
       "rateRatifierV1",
       "0xDd0588d7D3Aaa76a33A7d054B0b107eB3bCD3F11",
       71_228_891n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "midnight",
+      "0x31Ff800b0FA4AA42071d4ae9D0392e84f256D83D",
+      42_413_205n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x0b92694fA046303dB9371FD0A5722e0f3dC2C323",
+      42_413_255n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "midnightMempool",
+      "0x947F74a8809a45edc03B6101bD40ACdFBE97553a",
+      42_413_247n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "ecrecoverAuthorizer",
+      "0xD05f2BdEd597053bdAfe14f75365eCA4bb2f9f3D",
+      42_413_214n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "priceRatifierV1",
+      "0xBea71461665fe20f74d1265f3B82707407dEb6A8",
+      42_413_230n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "rateRatifierV1",
+      "0x1eAC83708c7413a697F686bcAF7B5aa2D13eA61f",
+      42_413_221n,
     ],
     [
       ChainId.ScrollMainnet,

@@ -7,8 +7,14 @@ export {
   AddressMismatchError,
   ApprovalAmountLessThanSpendAmountError,
   ChainIdMismatchError,
+  MissingContractCodeError,
   VaultAssetMismatchError,
 } from "@morpho-org/morpho-sdk";
+export {
+  MalformedTokenMetadataError,
+  MissingPermitDomainNameError,
+  UnknownTokenError,
+} from "@morpho-org/morpho-sdk/blue/errors";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
@@ -22,7 +28,9 @@ export type {
 } from "@tetherto/wdk-wallet/protocols";
 export {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InvalidTransactionHashError,
   MissingWalletProviderError,
+  UnconfirmedBroadcastError,
 } from "./errors.js";
 export {
   type Market,

@@ -1,6 +1,6 @@
 # @morpho-org/morpho-test
 
-## 4.1.0-next.0
+## 4.1.0
 
 ### Minor Changes
 
@@ -18,9 +18,9 @@
   balance.
   `@morpho-org/morpho-test` now requires `@morpho-org/test` `^2.11.0`.
 - Updated dependencies
-  - @morpho-org/test@2.11.0-next.0
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/test@2.11.0
+  - @morpho-org/morpho-ts@4.0.1
+  - @morpho-org/blue-sdk@8.0.1
 
 ## 4.0.5
 

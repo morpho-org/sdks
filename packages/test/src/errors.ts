@@ -124,6 +124,39 @@ export class AnvilFeeTokenFundingError extends Error {
 }
 
 /**
+ * Error thrown when a fault proxy encounters an internal request-processing error.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   createFaultProxy,
+ *   FaultProxyInternalError,
+ * } from "@morpho-org/test/chaos";
+ *
+ * const upstream = "https://rpc.example.com";
+ * const proxy = await createFaultProxy({ upstream });
+ *
+ * try {
+ *   await proxy.kill();
+ * } catch (error) {
+ *   if (error instanceof FaultProxyInternalError) console.error(error.message);
+ * }
+ * ```
+ */
+export class FaultProxyInternalError extends Error {
+  /**
+   * Creates a fault proxy internal error.
+   *
+   * @param message Actionable description of the proxy failure.
+   * @param options Standard error options, including the aggregate cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "FaultProxyInternalError";
+  }
+}
+
+/**
  * Combines an Anvil operation failure with its cleanup failure.
  *
  * @param parameters Operation failure, cleanup failure, actionable message, and optional aggregate summary.

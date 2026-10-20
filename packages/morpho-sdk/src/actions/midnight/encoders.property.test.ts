@@ -1,12 +1,13 @@
 import {
   MAX_OFFER_CAP,
   MarketParams,
+  MarketUtils,
   midnightAbi,
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { decodeFunctionData, type Hex, maxUint256 } from "viem";
+import { decodeFunctionData, type Hex, maxUint128, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -31,7 +32,7 @@ const group =
 const positiveUint128 = fc.bigInt({ min: 1n, max: MAX_OFFER_CAP });
 const positiveTakeUint256 = fc.bigInt({
   min: 1n,
-  max: maxUint256 - 1n,
+  max: maxUint128,
 });
 const uint128 = fc.bigInt({ min: 0n, max: MAX_OFFER_CAP });
 const inputs = fc.record({
@@ -175,7 +176,15 @@ describe("Midnight calldata encoders", () => {
             onBehalf: midnightAddresses.taker,
           }).data,
         });
-        expect(redemption.args[1]).toBe(units);
+        expect(redemption).toEqual({
+          functionName: "withdraw",
+          args: [
+            MarketUtils.toStruct(midnightMarket),
+            units,
+            midnightAddresses.taker,
+            midnightAddresses.taker,
+          ],
+        });
 
         const repayment = decodeFunctionData({
           abi: midnightBundlesV2Abi,
@@ -249,6 +258,10 @@ describe("Midnight calldata encoders", () => {
     });
     fc.assert(
       fc.property(target, ({ byUnits, amount, bound, deadline }) => {
+        // A unit sells for at most one asset, so sell bounds must leave the target reachable.
+        const sellBound = byUnits
+          ? MathLib.min(bound, amount)
+          : MathLib.max(bound, amount);
         const lend = decodeFunctionData({
           abi: midnightBundlesV2Abi,
           data: midnightTakeLend({
@@ -276,8 +289,8 @@ describe("Midnight calldata encoders", () => {
             chainId: midnightChainId,
             market: midnightMarket,
             target: byUnits
-              ? { type: "units", units: amount, minSellerAssets: bound }
-              : { type: "assets", assets: amount, maxUnits: bound },
+              ? { type: "units", units: amount, minSellerAssets: sellBound }
+              : { type: "assets", assets: amount, maxUnits: sellBound },
             receiver: midnightAddresses.taker,
             collateralSupplies: [{ collateralIndex: 0n, assets: amount }],
             takeableOffers: [midnightApiTake({ buy: true })],
@@ -289,7 +302,7 @@ describe("Midnight calldata encoders", () => {
             ? "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget"
             : "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
         );
-        expect(borrow.args.slice(1, 4)).toEqual([amount, bound, false]);
+        expect(borrow.args.slice(1, 4)).toEqual([amount, sellBound, false]);
         expect(borrow.args[5]).toEqual([
           { collateralIndex: 0n, assets: amount },
         ]);
@@ -301,8 +314,8 @@ describe("Midnight calldata encoders", () => {
             chainId: midnightChainId,
             market: midnightMarket,
             target: byUnits
-              ? { type: "units", units: amount, minSellerAssets: bound }
-              : { type: "assets", assets: amount, maxUnits: bound },
+              ? { type: "units", units: amount, minSellerAssets: sellBound }
+              : { type: "assets", assets: amount, maxUnits: sellBound },
             receiver: midnightAddresses.taker,
             takeableOffers: [midnightApiTake({ buy: true })],
             deadline,
@@ -313,7 +326,7 @@ describe("Midnight calldata encoders", () => {
             ? "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget"
             : "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
         );
-        expect(takeBorrow.args.slice(1, 3)).toEqual([amount, bound]);
+        expect(takeBorrow.args.slice(1, 3)).toEqual([amount, sellBound]);
         expect(takeBorrow.args[5]).toEqual([]);
         expect(takeBorrow.args[9]).toBe(deadline);
 
@@ -323,8 +336,8 @@ describe("Midnight calldata encoders", () => {
             chainId: midnightChainId,
             market: midnightMarket,
             target: byUnits
-              ? { type: "units", units: amount, minSellerAssets: bound }
-              : { type: "assets", assets: amount, maxUnits: bound },
+              ? { type: "units", units: amount, minSellerAssets: sellBound }
+              : { type: "assets", assets: amount, maxUnits: sellBound },
             receiver: midnightAddresses.taker,
             takeableOffers: [midnightApiTake({ buy: true })],
             deadline,
@@ -335,7 +348,7 @@ describe("Midnight calldata encoders", () => {
             ? "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget"
             : "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
         );
-        expect(withdraw.args.slice(1, 4)).toEqual([amount, bound, true]);
+        expect(withdraw.args.slice(1, 4)).toEqual([amount, sellBound, true]);
 
         const repay = decodeFunctionData({
           abi: midnightBundlesV2Abi,

@@ -200,9 +200,6 @@ describeActors(blueSupplyScenario, (test, chainId) => {
       blockNumber,
       mode: "preview",
       authorizations: toSimulationAuthorizations({
-        chainId,
-        mode: "preview",
-        blockNumber,
         owner: client.account.address,
         requirements,
       }),
@@ -409,9 +406,6 @@ describeActors(vaultV2Scenario, (test, chainId) => {
     const depositRequirements = await deposit.getRequirements();
     const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
     const authorizations = toSimulationAuthorizations({
-      chainId,
-      mode: "preview",
-      blockNumber,
       owner: user,
       requirements: depositRequirements,
     });
@@ -466,9 +460,6 @@ describeActors(vaultV2Scenario, (test, chainId) => {
     const redeemRequirements = await redeem.getRequirements();
     expect(
       toSimulationAuthorizations({
-        chainId,
-        mode: "final",
-        blockNumber,
         owner: user,
         requirements: redeemRequirements,
       }).map(({ type }) => type),
@@ -552,9 +543,6 @@ describeActors(blueBorrowScenario, (test, chainId) => {
     const borrowRequirements = await borrow.getRequirements();
     const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
     const authorizations = toSimulationAuthorizations({
-      chainId,
-      mode: "preview",
-      blockNumber,
       owner: user,
       requirements: borrowRequirements,
     });
