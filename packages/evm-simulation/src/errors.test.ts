@@ -6,6 +6,8 @@ import {
   InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
+  LimitAccountMismatchError,
+  MissingExpectedQuoteError,
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
@@ -15,8 +17,14 @@ import {
   SlippageCheckUnavailableError,
   UnexpectedSimulationError,
   UnsupportedChainError,
+  UnsupportedLimitActionError,
   UnsupportedOperationError,
 } from "./errors.js";
+import {
+  LimitAccountMismatchError as EntryLimitAccountMismatchError,
+  MissingExpectedQuoteError as EntryMissingExpectedQuoteError,
+  UnsupportedLimitActionError as EntryUnsupportedLimitActionError,
+} from "./index.js";
 
 const A = "0x0000000000000000000000000000000000000001";
 const ASSERTION_FAILURE = {
@@ -40,6 +48,13 @@ const errors = [
   new AuthorizationRequestMismatchError("mismatch"),
   new ConsumerLimitViolationError("limit"),
   new UnexpectedSimulationError("unexpected"),
+  new LimitAccountMismatchError({ field: "onBehalf", expected: A, actual: A }),
+  new MissingExpectedQuoteError({
+    actionType: "blueSupply",
+    field: "sharesMinted",
+    expectedHint: "hint",
+  }),
+  new UnsupportedLimitActionError("unknownAction"),
 ];
 
 describe("SimulationPackageError", () => {
@@ -233,4 +248,10 @@ describe("isSimulationPackageError", () => {
   ])("behavior: rejects unrelated or malformed values", (value) => {
     expect(isSimulationPackageError(value)).toBe(false);
   });
+});
+
+test("the entry point exports the toSimulationLimits errors", () => {
+  expect(EntryLimitAccountMismatchError).toBe(LimitAccountMismatchError);
+  expect(EntryMissingExpectedQuoteError).toBe(MissingExpectedQuoteError);
+  expect(EntryUnsupportedLimitActionError).toBe(UnsupportedLimitActionError);
 });

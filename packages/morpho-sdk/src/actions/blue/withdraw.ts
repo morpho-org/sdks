@@ -12,6 +12,7 @@ import {
   type Transaction,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { getBundlesReferralFeeAssets } from "../bundles/common.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -184,6 +185,13 @@ export const blueWithdraw = (
         reallocationPenaltyAssets,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets:
+          withdrawAssets > 0n
+            ? getBundlesReferralFeeAssets(
+                withdrawAssets - reallocationPenaltyAssets,
+                referralFeePct,
+              )
+            : undefined,
         deadline: params.args.deadline,
       },
     },

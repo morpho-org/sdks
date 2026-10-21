@@ -116,6 +116,7 @@ describe("blueSupplyCollateralBorrow", () => {
         reallocationPenaltyAssets: 0n,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: 0n,
         deadline,
       },
     });
@@ -459,5 +460,53 @@ describe("blueSupplyCollateralBorrow", () => {
         },
       }),
     ).toThrow(UnexpectedRequirementSignatureError);
+  });
+});
+
+describe("blueSupplyCollateralBorrow — action metadata", () => {
+  test("behavior: referralFeeAssets is the fee deducted from borrow proceeds", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueSupplyCollateralBorrow({
+      market,
+      args: {
+        userAddress,
+        collateralAssets: 5n,
+        borrowAssets: 100n,
+        maxLtv,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBe(10n);
+  });
+
+  test("behavior: referralFeeAssets is the fee on the penalty-deducted net borrow", () => {
+    const reallocation = {
+      vault: getAddress("0x0000000000000000000000000000000000000031"),
+      from: { type: "idle" },
+      to: {
+        adapter: getAddress("0x0000000000000000000000000000000000000032"),
+      },
+      assets: 100n,
+      penalty: MathLib.WAD / 10n,
+    } satisfies VaultV2BlueReallocation;
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueSupplyCollateralBorrow({
+      market,
+      args: {
+        userAddress,
+        collateralAssets: 0n,
+        borrowAssets: 100n,
+        maxLtv,
+        reallocations: [reallocation],
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.reallocationPenaltyAssets).toBe(10n);
+    // 10% fee on the 100 - 10 net borrow.
+    expect(transaction.action.args.referralFeeAssets).toBe(9n);
   });
 });

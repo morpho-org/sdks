@@ -18,12 +18,12 @@ import {
   RpcTransportError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
+import type { ParsedOperationLimit } from "../request/parse-request.js";
 
 /** Caller-selected operation with only the quoted wallet assets resolved. @internal */
 export interface ResolvedSlippageOperation {
-  readonly limit: OperationLimit;
+  readonly limit: ParsedOperationLimit;
   readonly assetsPaid?: Address;
   readonly assetsReceived?: Address;
 }
@@ -40,7 +40,7 @@ export interface ResolvedSlippageOperation {
 export async function resolveAssets(params: {
   readonly client: Client;
   readonly morpho: Address;
-  readonly operations: readonly OperationLimit[];
+  readonly operations: readonly ParsedOperationLimit[];
   readonly blockNumber: bigint;
 }): Promise<readonly ResolvedSlippageOperation[]> {
   const { client, morpho, operations, blockNumber } = params;
@@ -49,7 +49,7 @@ export async function resolveAssets(params: {
   for (const limit of operations) {
     const plan = operationMeasurementPlan(limit);
     const result: {
-      limit: OperationLimit;
+      limit: ParsedOperationLimit;
       assetsPaid?: Address;
       assetsReceived?: Address;
     } = { limit };

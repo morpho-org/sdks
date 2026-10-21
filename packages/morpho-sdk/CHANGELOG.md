@@ -1,5 +1,24 @@
 # @morpho-org/morpho-sdk
 
+## 8.2.0
+
+### Minor Changes
+
+- Blue action metadata now exposes `args.referralFeeAssets`: the exact loan-token referral-fee amount the encoded BlueBundlesV1 call charges. `blueSupply` reports the fee deducted from `assets` before supplying (`floor(assets * referralFeePct / WAD)`); `blueSupplyCollateral`, `blueBorrow` and `blueSupplyCollateralBorrow` report the fee deducted from net borrow proceeds (`floor((borrowAssets - reallocationPenaltyAssets) * referralFeePct / WAD)`); `blueWithdraw` reports it only in exact-assets mode (omitted in exact-shares mode, where the withdrawn amount is resolved at execution); `blueRepay` / `blueRepayWithdrawCollateral` report it only for an exact-assets repay (`repayAssets > 0n`, omitted in exact-shares mode or when there is no repay leg). `@morpho-org/evm-simulation`'s `toSimulationLimits` consumes this metadata.
+- Midnight take flows now reject, before building, takes that `MidnightBundlesV2` would always revert:
+
+  - `takeLend`, `takeBorrow`, `takeWithdraw`, `supplyCollateralTakeBorrow` and `takeRepayWithdrawCollateral` throw `MidnightTakeableOffersNotFillableError` when every offer is expired, cannot start before the deadline, was made by `accountAddress`, has a `continuousFeeCap` below the market fee, has zero units, has a tick outside `[0, MAX_TICK]`, is a buy offer with a non-zero `receiverIfMakerIsSeller`, or would open debt after maturity with no credit left to sell, and the flow has no withdraw or repay fallback, or every offer is dropped as described below (assets targets on buys, any target on sells), even when a withdraw or repay fallback exists. They throw `MidnightTakeTargetUnreachableError` when the offers plus that fallback cannot hold the target's units or a buy assets target's `minUnits`, or a buy units target's `maxBuyerAssets` cannot pay the cheapest fill plus the referral fee.
+  - `takeLend` and `takeRepayWithdrawCollateral` throw `MidnightContinuousFeeAboveMaxError` when `maxContinuousFee` is below `marketData.continuousFee`, and on an assets target drop sell offers whose tick is outside `[0, MAX_TICK]` or whose buyer price is zero or above one, which used to revert the whole bundle with `Panic(0x12)` or `PriceGreaterThanOne()`.
+  - `takeBorrow`, `takeWithdraw` and `supplyCollateralTakeBorrow` drop buy offers whose tick is outside `[0, MAX_TICK]`, whose price is zero, or whose price stays below the settlement fee until the deadline (at or below it on an assets target), which used to revert the whole bundle with `Panic(0x12)` or an arithmetic underflow.
+  - `takeRepayWithdrawCollateral` and `repayWithdrawCollateral` throw `MidnightRepayExceedsDebtError` when the repay target exceeds `positionData.debt`; a full `repayWithdrawCollateral` throws `MidnightTakeTargetUnreachableError` when `maxBuyerAssets` is below the debt.
+  - The `midnightTakeBorrow`, `midnightTakeWithdraw` and `midnightSupplyCollateralTakeBorrow` builders throw `MidnightTakeTargetUnreachableError` when `minSellerAssets` exceeds `units` minus the referral fee, or `maxUnits` is below `assets` plus the referral fee.
+
+  Each check uses only the inputs, the market and position snapshots, and the current time; offers that are dead while another offer can fill are still passed through.
+
+### Patch Changes
+
+- Operation reallocation plans now treat idle legs that together take (nearly) all of a source vault's idle, within `allocatorCapHeadroom`, as liquidity-bound like a leg filling an allocator cap. A borrow or withdrawal without shortfall whose plan draws only on such idle no longer plans it. When other vaults' legs stay unbound, the reduced plan can still take that idle.
+
 ## 8.1.0
 
 ### Minor Changes

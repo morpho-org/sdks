@@ -13,22 +13,18 @@ import {
   InvalidSimulationResponseError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
+import { QUOTE_FIELD_DIRECTION, type ScalarQuoteField } from "../../limits.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
 import {
   operationMeasurementPlan,
   positionBoundsMarketId,
 } from "../measurement-plan.js";
+import type { ParsedOperationLimit } from "../request/parse-request.js";
 import type { StateRead } from "./contract.js";
 
 /** One quoted amount's observation source. @internal */
 type SlippageMeasurement = {
-  readonly field:
-    | "assetsReceived"
-    | "sharesMinted"
-    | "assetsPaid"
-    | "sharesBurned"
-    | "positions";
+  readonly field: ScalarQuoteField | "positions";
 } & (
   | { readonly type: "native"; readonly account: Address }
   | { readonly type: "balance"; readonly readId: string }
@@ -36,13 +32,13 @@ type SlippageMeasurement = {
       readonly type: "position";
       readonly readId: string;
       readonly marketId: MarketId;
-      readonly shares: "supplyShares" | "borrowShares";
+      readonly shares: "supplyShares" | "borrowShares" | "collateral";
     }
 );
 
 /** Caller quote paired with exactly the observations it needs. @internal */
 export interface SlippageOperationReads {
-  readonly limit: OperationLimit;
+  readonly limit: ParsedOperationLimit;
   readonly measurements: readonly SlippageMeasurement[];
   /** Read id of the `position` bound's after-value position read, when set. */
   readonly positionBoundsReadId?: string;
@@ -124,17 +120,13 @@ export function planStateReads(params: {
       const measurements: SlippageMeasurement[] = [];
       const account = limit.account ?? params.owner;
       const plan = operationMeasurementPlan(limit);
-      for (const field of [
-        "assetsReceived",
-        "assetsPaid",
-        "sharesMinted",
-        "sharesBurned",
-      ] as const) {
+      for (const field of Object.keys(
+        QUOTE_FIELD_DIRECTION,
+      ) as ScalarQuoteField[]) {
         if (limit.quote[field] === undefined) continue;
         const assetField = field === "assetsReceived" || field === "assetsPaid";
         if (!assetField) {
-          const source =
-            field === "sharesMinted" ? plan.sharesMinted : plan.sharesBurned;
+          const source = plan[field];
           if (source === undefined) continue;
           if (source.type === "position") {
             measurements.push({

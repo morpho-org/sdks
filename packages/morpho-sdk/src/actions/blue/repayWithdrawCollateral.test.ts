@@ -121,6 +121,7 @@ describe("blueRepayWithdrawCollateral", () => {
         nativeAmount: undefined,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: 0n,
         deadline,
       },
     });
@@ -466,5 +467,44 @@ describe("blueRepayWithdrawCollateral", () => {
         },
       }),
     ).toThrow(UnexpectedRequirementSignatureError);
+  });
+});
+
+describe("blueRepayWithdrawCollateral — action metadata", () => {
+  test("behavior: referralFeeAssets is the fee charged on top of the repay", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueRepayWithdrawCollateral({
+      market,
+      args: {
+        userAddress,
+        repayAssets: 90n,
+        repayShares: 0n,
+        maxRepayAssets: 101n,
+        collateralAssets: 0n,
+        maxLtv,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBe(10n);
+  });
+  test("behavior: referralFeeAssets is omitted in exact-shares mode", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueRepayWithdrawCollateral({
+      market,
+      args: {
+        userAddress,
+        repayAssets: 0n,
+        repayShares: 5n,
+        maxRepayAssets: 100n,
+        collateralAssets: 0n,
+        maxLtv,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBeUndefined();
   });
 });

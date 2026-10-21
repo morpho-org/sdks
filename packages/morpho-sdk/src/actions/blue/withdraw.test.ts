@@ -105,6 +105,7 @@ describe("blueWithdraw", () => {
         reallocationPenaltyAssets: 0n,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: 0n,
         deadline,
       },
     });
@@ -473,5 +474,66 @@ describe("blueWithdraw", () => {
         },
       }),
     ).toThrow(InputExceedsMaxError);
+  });
+});
+
+describe("blueWithdraw — action metadata", () => {
+  test("behavior: referralFeeAssets is the fee deducted from net proceeds", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueWithdraw({
+      market,
+      args: {
+        userAddress,
+        withdrawAssets: 100n,
+        withdrawShares: 0n,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBe(10n);
+  });
+
+  test("behavior: referralFeeAssets is the fee on the penalty-deducted net amount", () => {
+    const reallocation = {
+      vault: getAddress("0x0000000000000000000000000000000000000031"),
+      from: { type: "idle" },
+      to: {
+        adapter: getAddress("0x0000000000000000000000000000000000000032"),
+      },
+      assets: 100n,
+      penalty: MathLib.WAD / 10n,
+    } satisfies VaultV2BlueReallocation;
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueWithdraw({
+      market,
+      args: {
+        userAddress,
+        withdrawAssets: 100n,
+        withdrawShares: 0n,
+        reallocations: [reallocation],
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.reallocationPenaltyAssets).toBe(10n);
+    // 10% fee on the 100 - 10 net amount.
+    expect(transaction.action.args.referralFeeAssets).toBe(9n);
+  });
+  test("behavior: referralFeeAssets is omitted in exact-shares mode", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueWithdraw({
+      market,
+      args: {
+        userAddress,
+        withdrawAssets: 0n,
+        withdrawShares: 5n,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBeUndefined();
   });
 });

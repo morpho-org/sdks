@@ -43,6 +43,7 @@ const balanceAssertion = (min: bigint) =>
   erc20BalanceAssertion({ token: TOKEN, account: OWNER, min });
 
 const parsed = parseRequest({
+  limits: "none",
   chainId: 1,
   transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
 });
@@ -82,6 +83,7 @@ const assertionPlan = (transactions: readonly SimulationTransaction[]) =>
     [],
     parseRequest({
       chainId: 1,
+      limits: "none",
       transactions,
     }),
   );
@@ -644,6 +646,7 @@ describe("parseSimulationResponse", () => {
       ],
       parseRequest({
         chainId: 1,
+        limits: "none",
         transactions: [
           { from: OWNER, to: TARGET, data: "0x" },
           { from: OWNER, to: TARGET, data: "0x" },

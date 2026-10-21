@@ -898,12 +898,18 @@ export class VaultV2BlueReallocationData
    * (two hours by default; `0n` disables it). When an operation's plan would
    * come within `allocatorCapHeadroom` (1% of the cap by default) of a target
    * BluePublicAllocator cap, the plan is reduced to the larger of the
-   * operation's absolute shortfall and what vaults below their cap moved. The
-   * kept headroom absorbs other allocations up to that share of the cap landing
-   * before inclusion. The plan uses the full cap only when the shortfall needs
-   * it, and can then still revert if another allocation lands first. A plan of
-   * only the shortfall leaves the market fully utilized, so a competing borrow
-   * or withdraw landing first can also make it revert. For market-source reallocations
+   * operation's absolute shortfall and what unbound legs moved (legs that
+   * neither come within the headroom of an allocator cap nor take nearly all
+   * of their source vault's idle). The kept headroom absorbs other allocations
+   * up to that share of the cap landing before inclusion. The plan uses the
+   * full cap only when the shortfall needs it, and can then still revert if
+   * another allocation lands first.
+   * Idle legs that together leave at most `allocatorCapHeadroom` of a source
+   * vault's starting idle are bound the same way, so an operation without
+   * shortfall whose plan draws only on such idle plans no reallocation.
+   * A plan of only the shortfall leaves the market fully utilized, so a
+   * competing borrow or withdraw landing first can also make it revert. For
+   * market-source reallocations
    * the source position's interest is also reserved on cap ids shared with the
    * target, and reserves persist across every leg of a plan. Targets with no remaining supply
    * or allocator capacity are skipped before projecting source interest. The
@@ -1098,29 +1104,36 @@ export class VaultV2BlueReallocationData
 
       // The fallback pass only runs when the plan moves exactly the absolute
       // shortfall, which a reduced plan would move anyway.
-      const capBoundTargets = friendly.allocatorCapBoundTargets;
+      const allocatorCapBoundTargets = friendly.allocatorCapBoundTargets;
+      const idleBoundVaults = friendly.idleBoundVaults;
       let reallocatedAssets = 0n;
       let unboundAssets = 0n;
-      for (const { vault, to, assets } of reallocations) {
+      for (const { vault, from, to, assets } of reallocations) {
         reallocatedAssets += assets;
         const key = `${vault.toLowerCase()}:${to.adapter.toLowerCase()}`;
-        if (!capBoundTargets.has(key)) unboundAssets += assets;
+        if (
+          !allocatorCapBoundTargets.has(key) &&
+          !(from.type === "idle" && idleBoundVaults.has(vault.toLowerCase()))
+        )
+          unboundAssets += assets;
       }
       return {
         reallocations,
         data,
-        capBound: capBoundTargets.size > 0,
+        liquidityBound:
+          allocatorCapBoundTargets.size > 0 || idleBoundVaults.size > 0,
         reallocatedAssets,
         unboundAssets,
       };
     };
 
-    // A leg that fills an allocator cap reverts once any other allocation to
-    // that market lands first. A cap-bound plan therefore moves only the
-    // operation's shortfall, or what vaults below their cap already moved.
+    // A leg that fills an allocator cap, or idle legs that together take
+    // (nearly) all of a source vault's starting idle, revert once another
+    // allocation lands first. A bound plan therefore moves only the operation's
+    // shortfall, or what unbound legs moved.
     const target = plan(requiredAssets, allocatorCapHeadroom);
     let selected = target;
-    if (allocatorCapHeadroom > 0n && target.capBound) {
+    if (allocatorCapHeadroom > 0n && target.liquidityBound) {
       selected = plan(
         absoluteShortfall > target.unboundAssets
           ? absoluteShortfall
@@ -1182,6 +1195,8 @@ export class VaultV2BlueReallocationData
     readonly context: SimulationContext;
     /** Lowercased `vault:targetAdapter` keys of accepted legs reaching their allocator max-in net of the kept headroom. */
     readonly allocatorCapBoundTargets: ReadonlySet<string>;
+    /** Lowercased vault addresses whose accepted idle legs together leave at most `allocatorCapHeadroom` of the vault's starting idle. */
+    readonly idleBoundVaults: ReadonlySet<string>;
   } {
     if (options.enabled === false)
       return {
@@ -1189,6 +1204,7 @@ export class VaultV2BlueReallocationData
         data: this,
         context,
         allocatorCapBoundTargets: new Set(),
+        idleBoundVaults: new Set(),
       };
 
     this.getMarket(marketId);
@@ -1216,6 +1232,9 @@ export class VaultV2BlueReallocationData
     const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
     let remainingAssets = maxAssets;
     const allocatorCapBoundTargets = new Set<string>();
+    const idleBoundVaults = new Set<string>();
+    const initialIdleAssets = new Map<string, bigint>();
+    const idleTakenAssets = new Map<string, bigint>();
 
     // Onchain, market interest is booked once at transaction start, on pre-plan
     // positions at pre-plan rates, and stays on touched positions' cap ids.
@@ -1305,6 +1324,9 @@ export class VaultV2BlueReallocationData
                   donatedPenaltyAssetsKey
                 ]!,
           );
+          const vaultAddressKey = vaultAddress.toLowerCase();
+          if (!initialIdleAssets.has(vaultAddressKey))
+            initialIdleAssets.set(vaultAddressKey, availableIdleAssets);
           let activeAdapters = activeAdaptersCache.get(vaultAddress);
           if (activeAdapters == null) {
             activeAdapters = new Set(
@@ -1689,6 +1711,7 @@ export class VaultV2BlueReallocationData
           data,
           context: simulationContext,
           allocatorCapBoundTargets,
+          idleBoundVaults,
         };
 
       const {
@@ -1702,6 +1725,22 @@ export class VaultV2BlueReallocationData
         allocatorCapBoundTargets.add(
           `${acceptedReallocation.vault.toLowerCase()}:${acceptedReallocation.to.adapter.toLowerCase()}`,
         );
+      if (acceptedReallocation.from.type === "idle") {
+        const vaultKey = acceptedReallocation.vault.toLowerCase();
+        const taken =
+          (idleTakenAssets.get(vaultKey) ?? 0n) + acceptedReallocation.assets;
+        idleTakenAssets.set(vaultKey, taken);
+        // Candidates always record this; a missing entry counts the vault as bound.
+        const initial = initialIdleAssets.get(vaultKey) ?? 0n;
+        if (
+          taken >=
+          MathLib.zeroFloorSub(
+            initial,
+            MathLib.wMulUp(initial, allocatorCapHeadroom),
+          )
+        )
+          idleBoundVaults.add(vaultKey);
+      }
       const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
       let touchedVaultPairs = reserves.touchedPairs.get(touchedVaultKey);
       if (touchedVaultPairs == null) {
@@ -1734,6 +1773,7 @@ export class VaultV2BlueReallocationData
       data,
       context: simulationContext,
       allocatorCapBoundTargets,
+      idleBoundVaults,
     };
   }
 

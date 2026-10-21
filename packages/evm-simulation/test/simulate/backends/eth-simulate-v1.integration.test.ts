@@ -35,6 +35,7 @@ function planFor(
   return planExecution({
     request: parseRequest({
       chainId: mainnet.id,
+      limits: "none",
       transactions: transactions.map((tx) => ({ ...tx, from: owner })),
     }),
     owner,
@@ -58,6 +59,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const plan = planExecution({
       request: parseRequest({
         chainId,
+        limits: "none",
         transactions: [{ from: owner, to: RECIPIENT, data: "0x" }],
       }),
       owner,

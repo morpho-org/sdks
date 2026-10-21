@@ -18,7 +18,7 @@ import {
   RpcTransportError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
+import type { ParsedOperationLimit } from "../request/parse-request.js";
 import { resolveAssets } from "./resolve-assets.js";
 
 const vault = "0x0000000000000000000000000000000000000001";
@@ -31,7 +31,7 @@ const marketId = new MarketParams({
   irm: zeroAddress,
   lltv: 0n,
 }).id;
-const limit: OperationLimit = {
+const limit: ParsedOperationLimit = {
   type: "vaultV2Deposit",
   vault,
   quote: { assetsPaid: 10n },
@@ -53,7 +53,7 @@ describe("resolveAssets", () => {
   });
   test("behavior: share-only and explicit-asset quotes cause no RPC reads", async () => {
     const handle = createMockClient(mainnet);
-    const operations: OperationLimit[] = [
+    const operations: ParsedOperationLimit[] = [
       { ...limit, quote: { sharesMinted: 1n } },
       { ...limit, assetPaid: loan },
     ];
@@ -93,7 +93,7 @@ describe("resolveAssets", () => {
       functionName: "idToMarketParams",
       result: [loan, collateral, zeroAddress, zeroAddress, 0n],
     });
-    const operations: OperationLimit[] = [
+    const operations: ParsedOperationLimit[] = [
       "blueSupplyCollateralBorrow",
       "blueRepayWithdrawCollateral",
     ].map((type) => ({

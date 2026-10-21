@@ -44,6 +44,10 @@ export interface SimulateParams {
    * not final there, so the block at that number can change and fail the
    * `parentHash` check. */
   readonly block?: StateBlock;
-  /** Caller-selected quotes and percentage tolerances. Omitted limits are unchecked. */
-  readonly limits?: SimulationLimits;
+  /**
+   * Required caller-selected quotes and percentage tolerances, or the explicit
+   * `"none"` opt-out, which skips every limit read and check. Omitted `limits`
+   * is rejected rather than silently unchecked.
+   */
+  readonly limits: SimulationLimits | "none";
 }

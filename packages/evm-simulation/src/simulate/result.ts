@@ -43,7 +43,7 @@ export function assembleResult(params: {
     chainId: ctx.chainId,
     blockNumber: ctx.block.blockNumber,
     blockTimestamp: ctx.block.blockTimestamp,
-    limits: ctx.limits,
+    limits: request.limits === "none" ? "none" : ctx.limits,
     operations,
     authorizations,
   };

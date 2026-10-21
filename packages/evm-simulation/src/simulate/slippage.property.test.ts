@@ -30,6 +30,12 @@ describe("checkSlippage", () => {
             { field: "sharesMinted" as const, debtShares: false },
             { field: "sharesBurned" as const, debtShares: true },
           ),
+          // Collateral fields ignore `debtShares` on combined ops: production
+          // checks them with `debtShares: true`, and the flag must leave them alone.
+          fc.record({
+            field: fc.constant("collateralSupplied" as const),
+            debtShares: fc.boolean(),
+          }),
         ),
         expected: expectedAmount,
         tolerance: toleranceWad,
@@ -82,6 +88,10 @@ describe("checkSlippage", () => {
             { field: "sharesBurned" as const, debtShares: false },
             { field: "sharesMinted" as const, debtShares: true },
           ),
+          fc.record({
+            field: fc.constant("collateralWithdrawn" as const),
+            debtShares: fc.boolean(),
+          }),
         ),
         expected: expectedAmount,
         tolerance: toleranceWad,

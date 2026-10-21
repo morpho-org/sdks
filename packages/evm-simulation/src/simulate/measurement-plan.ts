@@ -18,7 +18,7 @@ type ShareMeasurementSource =
   | {
       readonly type: "position";
       readonly marketId: MarketId;
-      readonly shares: "supplyShares" | "borrowShares";
+      readonly shares: "supplyShares" | "borrowShares" | "collateral";
     }
   | { readonly type: "balance"; readonly token: Address };
 
@@ -28,6 +28,8 @@ interface OperationMeasurementPlan {
   readonly assetsReceived: AssetMeasurementSource;
   readonly sharesMinted?: ShareMeasurementSource;
   readonly sharesBurned?: ShareMeasurementSource;
+  readonly collateralSupplied?: ShareMeasurementSource;
+  readonly collateralWithdrawn?: ShareMeasurementSource;
 }
 
 const market = (
@@ -36,7 +38,7 @@ const market = (
 ): AssetMeasurementSource => ({ type: "market", marketId, asset });
 const position = (
   marketId: MarketId,
-  shares: "supplyShares" | "borrowShares",
+  shares: "supplyShares" | "borrowShares" | "collateral",
 ): ShareMeasurementSource => ({ type: "position", marketId, shares });
 const balance = (token: Address): ShareMeasurementSource => ({
   type: "balance",
@@ -64,11 +66,18 @@ export function operationMeasurementPlan(
       };
     }
     case "blueSupplyCollateral":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: market(limit.marketId, "collateral"),
+        assetsReceived: market(limit.marketId, "collateral"),
+        collateralSupplied: position(limit.marketId, "collateral"),
+      };
     case "blueWithdrawCollateral":
       return {
         subject: { operation: limit.type, marketId: limit.marketId },
         assetsPaid: market(limit.marketId, "collateral"),
         assetsReceived: market(limit.marketId, "collateral"),
+        collateralWithdrawn: position(limit.marketId, "collateral"),
       };
     case "blueBorrow":
     case "blueRepay": {
@@ -89,6 +98,7 @@ export function operationMeasurementPlan(
         assetsReceived: market(limit.marketId, "loan"),
         sharesMinted: shares,
         sharesBurned: shares,
+        collateralSupplied: position(limit.marketId, "collateral"),
       };
     }
     case "blueRepayWithdrawCollateral": {
@@ -99,6 +109,7 @@ export function operationMeasurementPlan(
         assetsReceived: market(limit.marketId, "collateral"),
         sharesMinted: shares,
         sharesBurned: shares,
+        collateralWithdrawn: position(limit.marketId, "collateral"),
       };
     }
     case "blueRefinance":

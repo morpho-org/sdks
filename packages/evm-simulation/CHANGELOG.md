@@ -1,5 +1,20 @@
 # @morpho-org/evm-simulation
 
+## 8.0.0
+
+### Major Changes
+
+- `simulate()` now fails closed on limits. `SimulateParams.limits` is required: pass `SimulationLimits` or the literal `"none"` (reserved for transactions no operation type covers — Merkl reward claims, Midnight actions, approval/authorization-only bundles) — an omitted `limits` or an empty `limits.operations` array throws `SimulationValidationError`. `slippageTolerance` is optional and defaults to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03%); a supplied tolerance must be below `1e18`. Quote amounts must be greater than zero. Every `OperationLimit` must quote the sides in its operation table. Minimums: `assetsReceived` on payout ops; `sharesMinted` for `blueSupply`, `vaultV1Deposit`, `vaultV2Deposit`, `vaultV1MigrateToV2`; `sharesBurned` for `blueRepay`, `blueRefinance`; `collateralSupplied` for `blueSupplyCollateral`. Caps: `assetsPaid` on every pay-in op (`blueSupply`, `blueSupplyCollateral`, `blueRepay`, `vaultV1Deposit`, `vaultV2Deposit`, and unconditionally on both combined ops); `sharesBurned` on supply/vault exits; `sharesMinted` on `blueBorrow`, `blueSupplyCollateralBorrow` and the `blueRefinance` target market; `collateralWithdrawn` on `blueWithdrawCollateral` and `blueRepayWithdrawCollateral`. `blueWithdraw`, `blueBorrow`, `blueWithdrawCollateral`, `blueRepayWithdrawCollateral`'s collateral leg, and every vault withdraw/redeem/force-exit also require `assetsReceived`; `vaultV1MigrateToV2` requires both share sides; in-kind redeems must quote `positions` (the per-market Blue supply shares delivered to the receiver) or `assetsReceived` (the idle wallet portion) on top of the `sharesBurned` cap, and the collateral a refinance moves is unverified. Each combined op requires the any-of minimum plus its other-leg cap (`sharesMinted`, `collateralWithdrawn`) and the unconditional `assetsPaid` cap — a single-leg use quotes a small positive cap such as `1n` on each inactive leg, and an active leg on either side (cap above `1n`) also requires that leg's other side (`assetsReceived` on an active borrow/collateral leg, `collateralSupplied`/`sharesBurned` on an active pay-in leg). `SlippageQuote` gains `collateralSupplied`/`collateralWithdrawn`, measured on the Blue position's `collateral` — `collateralSupplied` a minimum, `collateralWithdrawn` a cap; both are rejected on non-collateral operations. `checkedLimits.slippageTolerance` always reports the applied tolerance. `verification.limits` reports `"none"` back for an opted-out run instead of an empty limit set, and is typed `CheckedSimulationLimits | "none"`; `CheckedSimulationLimits`, `CheckedOperationLimit` and `CheckedSlippageLimits` are new root exports. See `docs/migrations/evm-simulation-v6-to-v7.md`. Maintained dependents of `@morpho-org/evm-simulation`: none (no workspace package declares it).
+
+### Minor Changes
+
+- Add `toSimulationLimits`, a pure builder that produces the `SimulationLimits` of a morpho-sdk action transaction (`tx.action`). `account` is always the passed `owner`; an action encoding a different `onBehalf` (or `redeem.recipient` on `vaultV2ForceRedeem`) throws `LimitAccountMismatchError`. Quote sides the args fix are derived — deposits quote `assetsPaid` and `sharesMinted` from `netAssets`/`maxSharePrice`, Blue legs net out referral fees and reallocation penalties via the new `referralFeeAssets` action metadata, collateral ops quote their collateral side, and native-funded actions mark `assetPaid` with `ethAddress` — while `expected` fields override derived values (a caller-passed `0n` passes through so `simulate()` rejects it). Sides the args cannot fix must be supplied via `expected` or `MissingExpectedQuoteError` names the field and what to compute; Midnight and action types without an operation throw `UnsupportedLimitActionError`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@8.2.0
+
 ## 7.0.0
 
 ### Major Changes

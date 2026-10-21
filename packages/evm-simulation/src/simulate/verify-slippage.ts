@@ -1,7 +1,11 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { type Address, ethAddress, isAddressEqual } from "viem";
 import { SlippageCheckUnavailableError } from "../errors.js";
-import type { InKindPositionQuote, SlippageQuote } from "../limits.js";
+import {
+  type InKindPositionQuote,
+  QUOTE_FIELD_DIRECTION,
+  type SlippageQuote,
+} from "../limits.js";
 import type { SimulatedOperation } from "../result.js";
 import type { RawLog, Transfer } from "../types.js";
 import type { CheckContext } from "./context.js";
@@ -113,10 +117,9 @@ export function verifySlippage(params: {
             });
           continue;
         }
-        observed[field] =
-          field === "assetsPaid" || field === "sharesBurned"
-            ? MathLib.max(0n, -delta)
-            : delta;
+        observed[field] = QUOTE_FIELD_DIRECTION[field].output
+          ? delta
+          : MathLib.max(0n, -delta);
       }
       if (limit.quote.positions !== undefined)
         observed.positions = observedPositions;

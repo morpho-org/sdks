@@ -37,6 +37,7 @@ const mainnetRequest = (
   state: Pick<SimulateParams, "block" | "blockNumber"> = {},
 ): SimulateParams => ({
   chainId: mainnet.id,
+  limits: "none",
   transactions: [{ from, to: from, data: "0x", value: 0n }],
   ...state,
 });
@@ -67,7 +68,7 @@ const quotedVaultDeposit = (
       {
         type: "vaultV2Deposit" as const,
         vault: NO_CODE_VAULT,
-        quote: { assetsPaid: 1n },
+        quote: { assetsPaid: 1n, sharesMinted: 1n },
         slippageTolerance: 0n,
       },
     ],

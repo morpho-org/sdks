@@ -41,7 +41,7 @@ const market = (
 ) => ({ type: "market", marketId: id, asset });
 const position = (
   id: typeof marketId | typeof sourceMarketId | typeof targetMarketId,
-  shares: "supplyShares" | "borrowShares",
+  shares: "supplyShares" | "borrowShares" | "collateral",
 ) => ({ type: "position", marketId: id, shares });
 const balance = (token: string) => ({ type: "balance", token });
 const vaultSource = (address: string) => ({ type: "vault", vault: address });
@@ -54,6 +54,8 @@ const cases: {
     readonly assetsReceived: unknown;
     readonly sharesMinted?: unknown;
     readonly sharesBurned?: unknown;
+    readonly collateralSupplied?: unknown;
+    readonly collateralWithdrawn?: unknown;
   };
 }[] = [
   ...(["blueSupply", "blueWithdraw"] as const).map((type) => ({
@@ -66,16 +68,24 @@ const cases: {
       sharesBurned: position(marketId, "supplyShares"),
     },
   })),
-  ...(["blueSupplyCollateral", "blueWithdrawCollateral"] as const).map(
-    (type) => ({
-      type,
-      expected: {
-        subject: { operation: type, marketId },
-        assetsPaid: market(marketId, "collateral"),
-        assetsReceived: market(marketId, "collateral"),
-      },
-    }),
-  ),
+  {
+    type: "blueSupplyCollateral",
+    expected: {
+      subject: { operation: "blueSupplyCollateral", marketId },
+      assetsPaid: market(marketId, "collateral"),
+      assetsReceived: market(marketId, "collateral"),
+      collateralSupplied: position(marketId, "collateral"),
+    },
+  },
+  {
+    type: "blueWithdrawCollateral",
+    expected: {
+      subject: { operation: "blueWithdrawCollateral", marketId },
+      assetsPaid: market(marketId, "collateral"),
+      assetsReceived: market(marketId, "collateral"),
+      collateralWithdrawn: position(marketId, "collateral"),
+    },
+  },
   ...(["blueBorrow", "blueRepay"] as const).map((type) => ({
     type,
     expected: {
@@ -94,6 +104,7 @@ const cases: {
       assetsReceived: market(marketId, "loan"),
       sharesMinted: position(marketId, "borrowShares"),
       sharesBurned: position(marketId, "borrowShares"),
+      collateralSupplied: position(marketId, "collateral"),
     },
   },
   {
@@ -104,6 +115,7 @@ const cases: {
       assetsReceived: market(marketId, "collateral"),
       sharesMinted: position(marketId, "borrowShares"),
       sharesBurned: position(marketId, "borrowShares"),
+      collateralWithdrawn: position(marketId, "collateral"),
     },
   },
   {

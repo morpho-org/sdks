@@ -84,6 +84,7 @@ async function buildFundedSupply(client: AnvilTestClient<typeof mainnet>) {
   const tx = action.buildTx();
   const params = {
     chainId: mainnet.id,
+    limits: "none",
     transactions: [
       {
         from: client.account.address,
@@ -344,6 +345,7 @@ describe.sequential("chaos: S4 simulation revert with a healthy RPC", () => {
       await expectRevert(
         simulate(configFor(proxy.url), {
           chainId: mainnet.id,
+          limits: "none",
           transactions: [
             {
               from: client.account.address,
@@ -375,6 +377,7 @@ describe.sequential("chaos: S4 simulation revert with a healthy RPC", () => {
       await expectRevert(
         simulate(configFor(proxy.url), {
           chainId: mainnet.id,
+          limits: "none",
           transactions: [
             {
               from: client.account.address,

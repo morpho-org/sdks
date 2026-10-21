@@ -32,15 +32,20 @@ export interface VaultV2BluePublicAllocatorOptions {
    * Share of each target-market BluePublicAllocator cap, scaled by WAD, that
    * operation planning keeps free. When a reallocation toward the utilization
    * target would come within this headroom of the cap, the plan is reduced to
-   * the larger of the operation's absolute shortfall and what vaults below
-   * their cap were already moving. A plan of only the shortfall leaves the
-   * market fully utilized, so a competing borrow or withdraw landing first can
-   * still make it revert. If the shortfall cannot be covered while keeping the
-   * headroom, the plan uses the full cap, first for the shortfall only and
-   * then toward the utilization target if that is still short.
+   * the larger of the operation's absolute shortfall and what unbound legs
+   * were already moving (legs that neither come within the headroom of an
+   * allocator cap nor take nearly all of their source vault's idle). A plan of
+   * only the shortfall leaves the market fully utilized, so a competing borrow
+   * or withdraw landing first can still make it revert. If the shortfall cannot
+   * be covered while keeping the headroom, the plan uses the full cap, first for
+   * the shortfall only and then toward the utilization target if that is still
+   * short.
+   * The same share marks idle legs as bound: idle legs that together leave at
+   * most this share of a source vault's starting idle reduce the plan the same
+   * way, since any idle withdrawal landing first would make it revert.
    * Discovery plans, `getPublicReallocationLiquidity` and
    * `getAvailableLiquidityToUtilization` ignore it and use the full cap.
-   * Must not exceed WAD (100%). Set to `0n` to disable.
+   * Must not exceed WAD (100%). Set to `0n` to disable both rules.
    *
    * @default DEFAULT_ALLOCATOR_CAP_HEADROOM (1%)
    */

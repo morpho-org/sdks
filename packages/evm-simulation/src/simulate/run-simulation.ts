@@ -63,7 +63,9 @@ export async function runSimulation(params: {
       });
     });
 
-  const limits = { operations: request.limits?.operations ?? [] };
+  const limits = {
+    operations: request.limits === "none" ? [] : request.limits.operations,
+  };
   const preview = request.mode === "preview";
   const owner = request.transactions[0]!.from;
   const addresses = _try(

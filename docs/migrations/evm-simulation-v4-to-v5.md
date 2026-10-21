@@ -130,7 +130,7 @@ Morpho positions.
 No transaction calldata is decoded to supply missing limits. Read
 `verification.operations[].checkedLimits` for the quote and tolerance checked;
 unchecked outcomes are observations, not economic guarantees. See the
-[package README](../../packages/evm-simulation/README.md#optional-limits) for units,
+[package README](../../packages/evm-simulation/README.md#limits) for units,
 subject scope, and which measurements require additional evidence.
 
 The unreleased state-reporting fields `verification.diff` and

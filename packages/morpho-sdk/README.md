@@ -78,6 +78,16 @@ prerequisites.
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
+Every transaction carries `tx.action` — typed metadata describing the encoded call (`type` plus
+the normalized `args`, including `referralFeeAssets`: the exact referral-fee amount the
+BlueBundlesV1 call charges, where derivable; it is omitted in exact-shares mode
+(`blueWithdraw`, `blueRepay` and `blueRepayWithdrawCollateral` with a shares input),
+where the underlying amount is resolved at execution. On the repay actions it is set
+only for an exact-assets repay (`repayAssets > 0n`), so it is also omitted when
+`blueRepayWithdrawCollateral` has no repay leg).
+`@morpho-org/evm-simulation`'s `toSimulationLimits` consumes this metadata to derive simulation
+limits from an action.
+
 ```typescript
 const vaultData = await vault.getData();
 const { buildTx, getRequirements } = vault.deposit({ amount, userAddress, vaultData });

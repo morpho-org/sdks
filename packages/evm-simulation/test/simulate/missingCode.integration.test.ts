@@ -49,6 +49,7 @@ describe.sequential("chaos: S8 missing contract", () => {
   }) => {
     const promise = simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -75,6 +76,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     await client.setCode({ address: USDC, bytecode: "0x" });
     const promise = simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -93,6 +95,7 @@ describe.sequential("chaos: S8 missing contract", () => {
   }) => {
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -137,6 +140,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     const tx = action.buildTx();
     const promise = simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -243,6 +247,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     const tx = action.buildTx();
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,

@@ -108,20 +108,27 @@ export const installE2eAsset = async (
 ): Promise<void> => {
   const asset = getE2eAsset(chainId);
   if (!asset.requiresInstall) return;
+  await installE2eAssetAt(client, asset.address);
+};
 
+/** Installs the fallback ERC-20 code and constructor storage at an arbitrary address. */
+const installE2eAssetAt = async (
+  client: AnvilTestClient<Chain>,
+  address: Address,
+): Promise<void> => {
   await client.setCode({
-    address: asset.address,
+    address,
     bytecode: E2E_ASSET_BYTECODE,
   });
   for (const { slot, value } of E2E_ASSET_STORAGE)
     await client.setStorageAt({
-      address: asset.address,
+      address,
       index: slot,
       value,
     });
   expect(
     await client.readContract({
-      address: asset.address,
+      address,
       abi: erc20Abi,
       functionName: "decimals",
     }),
@@ -167,11 +174,15 @@ export const withE2eActor = (test: TestAPI<E2eTestContext>, actor: E2eActor) =>
  */
 export const createE2eMarket = async (
   client: AnvilTestClient<Chain>,
-  chainId: number,
+  options: { readonly chainId: number; readonly collateralToken?: Address },
 ) => {
+  const { chainId } = options;
+  const collateralAsset = options.collateralToken;
   const { blue, adaptiveCurveIrm } = getChainAddresses(chainId);
   const asset = getE2eAsset(chainId);
   await installE2eAsset(client, chainId);
+  if (collateralAsset !== undefined)
+    await installE2eAssetAt(client, collateralAsset);
   // PUSH15 price; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN: answers `price()` with 1e36.
   await client.setCode({
     address: E2E_ORACLE,
@@ -179,7 +190,7 @@ export const createE2eMarket = async (
   });
   const market = new MarketParams({
     loanToken: asset.address,
-    collateralToken: asset.address,
+    collateralToken: collateralAsset ?? asset.address,
     oracle: E2E_ORACLE,
     irm: adaptiveCurveIrm,
     lltv: parseUnits("0.86", 18),

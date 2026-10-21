@@ -18,6 +18,7 @@ const paramsFor = (callGasLimit?: bigint) => ({
   },
   params: {
     chainId: 143,
+    limits: "none" as const,
     transactions: Array.from(
       { length: 11 },
       () =>

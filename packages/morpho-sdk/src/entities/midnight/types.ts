@@ -199,9 +199,10 @@ export interface MidnightPositionHealthParams {
   /** Owner-bound snapshot returned by `getPositionData`. */
   readonly positionData: AccrualPosition;
   /** Values from `price()` on each `marketData.params.collateralParams[i].oracle`,
-   * indexed like `positionData.collateral` and scaled by `ORACLE_PRICE_SCALE`. An empty array is
-   * safe only when the SDK's conservative post-operation debt is zero, such as after a `full` repay,
-   * a repayment units target covering `positionData.debt`, or `minUnits`/`repay.assets` covering it.
+   * indexed like `positionData.collateral` and scaled by `ORACLE_PRICE_SCALE`. Borrow methods always
+   * need prices. `takeRepayWithdrawCollateral` and `repayWithdrawCollateral` need them only when
+   * `collateralWithdrawals` is non-empty and the SDK's conservative post-operation debt is positive;
+   * otherwise an empty array is safe.
    */
   readonly collateralPrices: readonly bigint[];
 }

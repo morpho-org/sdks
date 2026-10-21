@@ -1868,6 +1868,22 @@ describe("MorphoMidnight", () => {
       expect(() => output.buildTx()).not.toThrow();
     });
 
+    test("behavior: partial repayment without withdrawals needs no prices", () => {
+      const market = marketData();
+      const output = midnight().takeRepayWithdrawCollateral({
+        ...params,
+        marketData: market,
+        ...positionHealthParams(market, {
+          debt: 1_000n,
+          collateral: [1_000n],
+          collateralPrices: [],
+        }),
+        target: { type: "units", units: 500n, maxBuyerAssets: 990n },
+      });
+
+      expect(() => output.buildTx()).not.toThrow();
+    });
+
     test("behavior: assets target uses minUnits for the post-operation debt", () => {
       const market = marketData();
       const output = midnight().takeRepayWithdrawCollateral({
@@ -4180,6 +4196,22 @@ describe("MorphoMidnight", () => {
         accountAddress: midnightAddresses.taker,
         repay: { type: "assets", assets: 1n },
         collateralWithdrawals: [{ collateralIndex: 1n, assets: 1n }],
+        deadline: maxUint256,
+      });
+
+      expect(() => output.buildTx()).not.toThrow();
+    });
+
+    test("behavior: partial repayment without withdrawals needs no prices", () => {
+      const output = midnight().repayWithdrawCollateral({
+        marketData: defaultMarketData,
+        ...positionHealthParams(defaultMarketData, {
+          debt: 1_000n,
+          collateral: [1_000n],
+          collateralPrices: [],
+        }),
+        accountAddress: midnightAddresses.taker,
+        repay: { type: "assets", assets: 400n },
         deadline: maxUint256,
       });
 

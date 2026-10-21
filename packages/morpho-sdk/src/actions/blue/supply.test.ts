@@ -101,6 +101,7 @@ describe("blueSupply", () => {
         nativeAmount: undefined,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: 0n,
         deadline,
       },
     });
@@ -492,5 +493,22 @@ describe("blueSupply", () => {
         args: { userAddress, assets: 1n, deadline: maxUint256 + 1n },
       }),
     ).toThrow(InputExceedsMaxError);
+  });
+});
+
+describe("blueSupply — action metadata", () => {
+  test("behavior: referralFeeAssets is the fee deducted from assets", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = blueSupply({
+      market,
+      args: {
+        userAddress,
+        assets: 100n,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
+      },
+    });
+    expect(transaction.action.args.referralFeeAssets).toBe(10n);
   });
 });

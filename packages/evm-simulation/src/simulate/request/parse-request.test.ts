@@ -1,10 +1,14 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
 import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type { SimulateParams } from "../../params.js";
+import type { SimulationVerification } from "../../result.js";
 import type { SimulationTransaction } from "../../types.js";
 import {
+  conditionalQuoteViolations,
+  missingInKindProceeds,
   type ParsedRequest,
   type ParsedTransaction,
   parseRequest,
@@ -72,50 +76,717 @@ const permit2Auth: SimulationAuthorization = {
   },
 };
 
-const parse = (input: unknown) => parseRequest(input as SimulateParams);
+const parse = (input: unknown) =>
+  parseRequest({ limits: "none", ...(input as object) } as SimulateParams);
+
+/** Operations of a parsed request whose limits are an object. */
+const limitsOperations = (request: ParsedRequest) =>
+  request.limits === "none" ? undefined : request.limits.operations;
 
 describe("parseRequest", () => {
   test.each([
     { quote: {}, slippageTolerance: 0n },
-    { quote: { sharesMinted: 1n } },
     { slippageTolerance: 0n },
     { quote: { sharesMinted: -1n }, slippageTolerance: 0n },
-    { quote: { sharesMinted: 1n }, slippageTolerance: -1n },
-    { quote: { sharesMinted: 1n }, slippageTolerance: 10n ** 18n + 1n },
-    { quote: { sharesMinted: 1n }, slippageTolerance: 0.01 },
     { quote: { sharesMinted: 1n, unexpected: 1n }, slippageTolerance: 0n },
-  ])(
-    "error: SimulationValidationError for malformed quote/tolerance %#",
-    (fields) => {
-      expect(() =>
+  ])("error: SimulationValidationError for malformed quote %#", (fields) => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [{ type: "vaultV2Deposit", vault: TARGET, ...fields }],
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+  test.each([-1n, 10n ** 18n, 10n ** 18n + 1n, 0.01])(
+    "error: SimulationValidationError for malformed slippageTolerance %s",
+    (slippageTolerance) => {
+      let error: unknown;
+      try {
         parse({
           chainId: 1,
           transactions: [tx()],
           limits: {
-            operations: [{ type: "vaultV2Deposit", vault: TARGET, ...fields }],
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: TARGET,
+                quote: { sharesMinted: 1n, assetsPaid: 1n },
+                slippageTolerance,
+              },
+            ],
           },
-        }),
-      ).toThrow(SimulationValidationError);
+        });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.startsWith("limits.operations[0].slippageTolerance"),
+        ),
+      ).toBe(true);
     },
   );
-  test.each([0n, 10_000000000000000n, 10n ** 18n])(
-    "behavior: accepts tolerance %s and preserves a zero quote",
+  test.each([0n, 10_000000000000000n, 10n ** 18n - 1n])(
+    "behavior: accepts tolerance %s below 1e18",
     (slippageTolerance) => {
       const operation = {
         type: "vaultV2Deposit",
         vault: TARGET,
-        quote: { assetsPaid: 0n },
+        quote: { sharesMinted: 1n, assetsPaid: 1n },
         slippageTolerance,
       };
       expect(
-        parse({
-          chainId: 1,
-          transactions: [tx()],
-          limits: { operations: [operation] },
-        }).limits?.operations,
+        limitsOperations(
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: { operations: [operation] },
+          }),
+        ),
       ).toEqual([operation]);
     },
   );
+  test("behavior: an omitted tolerance defaults to DEFAULT_SLIPPAGE_TOLERANCE", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            quote: { sharesMinted: 1n, assetsPaid: 1n },
+          },
+        ],
+      },
+    });
+    expect(limitsOperations(request)?.[0]?.slippageTolerance).toBe(
+      3_00000000000000n,
+    );
+  });
+  test.each([
+    {
+      type: "vaultV2Deposit",
+      subject: { vault: TARGET },
+      field: "assetsReceived",
+    },
+    { type: "vaultV2Deposit", subject: { vault: TARGET }, field: "assetsPaid" },
+    {
+      type: "vaultV2Deposit",
+      subject: { vault: TARGET },
+      field: "sharesMinted",
+    },
+    {
+      type: "vaultV2Deposit",
+      subject: { vault: TARGET },
+      field: "sharesBurned",
+    },
+    {
+      type: "blueSupplyCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "collateralSupplied",
+    },
+    {
+      type: "blueWithdrawCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "collateralWithdrawn",
+    },
+  ] as const)(
+    "error: SimulationValidationError for a zero $field quote",
+    ({ type, subject, field }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  ...subject,
+                  quote: { [field]: 0n },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote.${field}: must be positive (got "0")`,
+      );
+    },
+  );
+  const mintSideOps = [
+    ["blueSupply", { marketId: _MARKET_ID }],
+    ["blueBorrow", { marketId: _MARKET_ID }],
+    ["vaultV1Deposit", { vault: TARGET }],
+    ["vaultV2Deposit", { vault: TARGET }],
+    ["vaultV1MigrateToV2", { sourceVault: SPENDER, targetVault: TARGET }],
+  ] as const;
+  const burnSideOps = [
+    ["blueWithdraw", { marketId: _MARKET_ID }],
+    ["blueRepay", { marketId: _MARKET_ID }],
+    [
+      "blueRefinance",
+      { sourceMarketId: _MARKET_ID, targetMarketId: _MARKET_ID },
+    ],
+    ["vaultV1Withdraw", { vault: TARGET }],
+    ["vaultV2Withdraw", { vault: TARGET }],
+    ["vaultV1Redeem", { vault: TARGET }],
+    ["vaultV2Redeem", { vault: TARGET }],
+    ["vaultV2ForceWithdraw", { vault: TARGET }],
+    ["vaultV2ForceRedeem", { vault: TARGET }],
+    ["vaultV1InKindRedeem", { vault: TARGET }],
+    ["vaultV2InKindRedeem", { vault: TARGET }],
+    ["vaultV1MigrateToV2", { sourceVault: SPENDER, targetVault: TARGET }],
+  ] as const;
+  test.each(
+    mintSideOps.map(([type, subject]) => ({
+      type,
+      subject,
+      field: "sharesMinted",
+      quote:
+        type === "vaultV1MigrateToV2"
+          ? { sharesBurned: 1n }
+          : { assetsPaid: 1n },
+    })),
+  )(
+    "error: SimulationValidationError for $type missing $field",
+    ({ type, subject, field, quote }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [{ type, ...subject, quote, slippageTolerance: 0n }],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote.${field}: required for "${type}"`,
+      );
+    },
+  );
+  test.each(
+    burnSideOps.map(([type, subject]) => ({
+      type,
+      subject,
+      field: "sharesBurned",
+      quote:
+        type === "vaultV1MigrateToV2"
+          ? { sharesMinted: 1n }
+          : { assetsReceived: 1n },
+    })),
+  )(
+    "error: SimulationValidationError for $type missing $field",
+    ({ type, subject, field, quote }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [{ type, ...subject, quote, slippageTolerance: 0n }],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote.${field}: required for "${type}"`,
+      );
+    },
+  );
+  test.each([
+    {
+      type: "blueSupply",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsPaid",
+      quote: { sharesMinted: 1n },
+    },
+    {
+      type: "blueRepay",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsPaid",
+      quote: { sharesBurned: 1n },
+    },
+    {
+      type: "vaultV1Deposit",
+      subject: { vault: TARGET },
+      field: "assetsPaid",
+      quote: { sharesMinted: 1n },
+    },
+    {
+      type: "vaultV2Deposit",
+      subject: { vault: TARGET },
+      field: "assetsPaid",
+      quote: { sharesMinted: 1n },
+    },
+    {
+      type: "blueRefinance",
+      subject: { sourceMarketId: _MARKET_ID, targetMarketId: _MARKET_ID },
+      field: "sharesBurned",
+      quote: { sharesMinted: 1n },
+    },
+    {
+      type: "blueRefinance",
+      subject: { sourceMarketId: _MARKET_ID, targetMarketId: _MARKET_ID },
+      field: "sharesMinted",
+      quote: { sharesBurned: 1n },
+    },
+    {
+      type: "blueSupplyCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "collateralSupplied",
+      quote: { assetsPaid: 1n },
+    },
+    {
+      type: "blueSupplyCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsPaid",
+      quote: { collateralSupplied: 1n },
+    },
+    {
+      type: "blueWithdrawCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "collateralWithdrawn",
+      quote: { assetsReceived: 1n },
+    },
+    {
+      type: "blueWithdrawCollateral",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsReceived",
+      quote: { collateralWithdrawn: 1n },
+    },
+    {
+      type: "blueWithdraw",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsReceived",
+      quote: { sharesBurned: 1n },
+    },
+    {
+      type: "blueBorrow",
+      subject: { marketId: _MARKET_ID },
+      field: "assetsReceived",
+      quote: { sharesMinted: 1n },
+    },
+    ...[
+      "vaultV1Withdraw",
+      "vaultV2Withdraw",
+      "vaultV1Redeem",
+      "vaultV2Redeem",
+      "vaultV2ForceWithdraw",
+      "vaultV2ForceRedeem",
+    ].map((type) => ({
+      type,
+      subject: { vault: TARGET },
+      field: "assetsReceived",
+      quote: { sharesBurned: 1n },
+    })),
+  ] as const)(
+    "error: SimulationValidationError for $type missing $field",
+    ({ type, subject, field, quote }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [{ type, ...subject, quote, slippageTolerance: 0n }],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote.${field}: required for "${type}"`,
+      );
+    },
+  );
+  test.each([
+    {
+      type: "blueSupplyCollateralBorrow",
+      fields: 'collateralSupplied", "assetsReceived',
+      rejects: { assetsPaid: 1n },
+      accepts: [
+        { collateralSupplied: 1n, sharesMinted: 1n, assetsPaid: 1n },
+        // Borrow-only: `1n` is the inactive pay-in leg's cap.
+        { assetsReceived: 1n, sharesMinted: 1n, assetsPaid: 1n },
+      ],
+      missingCap: { collateralSupplied: 1n },
+      capField: "sharesMinted",
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      fields: 'sharesBurned", "assetsReceived',
+      rejects: { assetsPaid: 1n },
+      accepts: [
+        { sharesBurned: 1n, collateralWithdrawn: 1n, assetsPaid: 1n },
+        // Withdraw-only: `1n` is the inactive pay-in leg's cap.
+        { assetsReceived: 1n, collateralWithdrawn: 1n, assetsPaid: 1n },
+      ],
+      missingCap: { sharesBurned: 1n },
+      capField: "collateralWithdrawn",
+    },
+  ] as const)(
+    "behavior: $type requires at least one quoted side",
+    ({ type, fields, rejects, accepts, missingCap, capField }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote: rejects,
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote: supply at least one of "${fields}" for "${type}"`,
+      );
+      for (const quote of accepts) {
+        expect(
+          limitsOperations(
+            parse({
+              chainId: 1,
+              transactions: [tx()],
+              limits: {
+                operations: [
+                  {
+                    type,
+                    marketId: _MARKET_ID,
+                    quote,
+                    slippageTolerance: 0n,
+                  },
+                ],
+              },
+            }),
+          ),
+        ).toHaveLength(1);
+      }
+      // A single-leg use still must quote the required cap on the inactive
+      // leg (a small positive cap such as `1n`, since 0 is rejected).
+      const missingCapError = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote: missingCap,
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(missingCapError).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (missingCapError as SimulationValidationError).fieldErrors,
+      ).toContainEqual(
+        `limits.operations[0].quote.${capField}: required for "${type}"`,
+      );
+    },
+  );
+  test.each([
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { collateralSupplied: 1n, sharesMinted: 1n },
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      quote: { sharesBurned: 1n, collateralWithdrawn: 1n },
+    },
+  ] as const)(
+    "error: $type requires the assetsPaid cap unconditionally",
+    ({ type, quote }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote,
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (thrown) {
+          return thrown;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.startsWith("limits.operations[0].quote.assetsPaid: required"),
+        ),
+      ).toBe(true);
+    },
+  );
+  test.each([
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { assetsPaid: 2n, sharesMinted: 1n },
+      field: "collateralSupplied",
+      leg: "supply",
+      accepts: { collateralSupplied: 1n, sharesMinted: 1n, assetsPaid: 1n },
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      quote: { assetsPaid: 2n, collateralWithdrawn: 1n },
+      field: "sharesBurned",
+      leg: "repay",
+      accepts: { sharesBurned: 1n, collateralWithdrawn: 1n, assetsPaid: 1n },
+    },
+  ] as const)(
+    "behavior: $type requires the $leg leg's position side when the pay-in leg is active",
+    ({ type, quote, field, leg, accepts }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                { type, marketId: _MARKET_ID, quote, slippageTolerance: 0n },
+              ],
+            },
+          });
+        } catch (thrown) {
+          return thrown;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote.${field}: required for "${type}" when the ${leg} leg is active ("assetsPaid" above 1n)`,
+      );
+      // The inactive 1n cap does not activate the position side.
+      expect(
+        limitsOperations(
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote: accepts,
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          }),
+        )?.[0]?.quote,
+      ).toEqual(accepts);
+    },
+  );
+  test.each([
+    {
+      type: "blueSupplyCollateralBorrow",
+      activeField: "sharesMinted",
+      accepts: [
+        {
+          collateralSupplied: 1n,
+          assetsPaid: 1n,
+          sharesMinted: 1n,
+        },
+      ],
+      rejects: { collateralSupplied: 1n, assetsPaid: 1n, sharesMinted: 2n },
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      activeField: "collateralWithdrawn",
+      accepts: [
+        {
+          sharesBurned: 1n,
+          assetsPaid: 1n,
+          collateralWithdrawn: 1n,
+        },
+      ],
+      rejects: {
+        sharesBurned: 1n,
+        assetsPaid: 1n,
+        collateralWithdrawn: 2n,
+      },
+    },
+  ] as const)(
+    "error: $type with an active leg ($activeField above 1n) requires assetsReceived",
+    ({ type, accepts, rejects }) => {
+      for (const quote of accepts) {
+        expect(
+          limitsOperations(
+            parse({
+              chainId: 1,
+              transactions: [tx()],
+              limits: {
+                operations: [
+                  {
+                    type,
+                    marketId: _MARKET_ID,
+                    quote,
+                    slippageTolerance: 0n,
+                  },
+                ],
+              },
+            }),
+          ),
+        ).toHaveLength(1);
+      }
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote: rejects,
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.startsWith(
+            "limits.operations[0].quote.assetsReceived: required",
+          ),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test.each([
+    { type: "blueSupply", field: "collateralSupplied" },
+    { type: "blueWithdraw", field: "collateralWithdrawn" },
+    { type: "vaultV2Deposit", field: "collateralSupplied" },
+    { type: "vaultV2Deposit", field: "collateralWithdrawn" },
+    {
+      type: "blueSupplyCollateral",
+      field: "collateralWithdrawn",
+      extra: { collateralSupplied: 1n },
+    },
+    {
+      type: "blueWithdrawCollateral",
+      field: "collateralSupplied",
+      extra: { collateralWithdrawn: 1n },
+    },
+  ] as const)(
+    "error: SimulationValidationError for unmeasurable $field on $type",
+    ({ type, field, extra }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  vault: TARGET,
+                  quote: { [field]: 1n, ...extra },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes(`quote.${field}: cannot be measured`),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test.each([
+    ["missing", undefined],
+    ["empty operations", { operations: [] }],
+    ["missing operations", {}],
+    ["non-object", 7],
+  ] as const)(
+    "error: SimulationValidationError for %s limits",
+    (_name, limits) => {
+      const error = (() => {
+        try {
+          parseRequest({
+            chainId: 1,
+            transactions: [tx()],
+            ...(limits === undefined ? {} : { limits }),
+          } as SimulateParams);
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.startsWith("limits"),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("behavior: 'none' opts out of every limit check", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: "none",
+    });
+    expect(request.limits).toBe("none");
+  });
   test("behavior: separate asset overrides are preserved", () => {
     const request = parse({
       chainId: 1,
@@ -127,13 +798,18 @@ describe("parseRequest", () => {
             marketId: _MARKET_ID,
             assetPaid: TARGET,
             assetReceived: SPENDER,
-            quote: { assetsPaid: 1n, assetsReceived: 2n },
+            quote: {
+              assetsPaid: 1n,
+              assetsReceived: 2n,
+              collateralSupplied: 1n,
+              sharesMinted: 1n,
+            },
             slippageTolerance: 0n,
           },
         ],
       },
     });
-    expect(request.limits?.operations?.[0]).toMatchObject({
+    expect(limitsOperations(request)?.[0]).toMatchObject({
       assetPaid: TARGET,
       assetReceived: SPENDER,
     });
@@ -309,8 +985,12 @@ describe("parseRequest", () => {
     "error: SimulationValidationError for penalty/deallocations on %s",
     (type) => {
       for (const quote of [
-        { penalty: 1n },
-        { deallocations: [{ marketId: _MARKET_ID, assets: 1n }] },
+        { penalty: 1n, sharesBurned: 1n, assetsReceived: 1n },
+        {
+          deallocations: [{ marketId: _MARKET_ID, assets: 1n }],
+          sharesBurned: 1n,
+          assetsReceived: 1n,
+        },
       ]) {
         const error = (() => {
           try {
@@ -404,8 +1084,12 @@ describe("parseRequest", () => {
     "behavior: penalty and deallocations quotes on %s count as non-empty",
     (type) => {
       for (const quote of [
-        { penalty: 1n },
-        { deallocations: [{ marketId: _MARKET_ID, assets: 1n }] },
+        { penalty: 1n, sharesBurned: 1n, assetsReceived: 1n },
+        {
+          deallocations: [{ marketId: _MARKET_ID, assets: 1n }],
+          sharesBurned: 1n,
+          assetsReceived: 1n,
+        },
       ]) {
         const parsed = parse({
           chainId: 1,
@@ -421,8 +1105,110 @@ describe("parseRequest", () => {
             ],
           },
         });
-        expect(parsed.limits?.operations?.[0]?.quote).toEqual(quote);
+        expect(limitsOperations(parsed)?.[0]?.quote).toEqual(quote);
       }
+    },
+  );
+  test("behavior: a zero penalty quote on vaultV2ForceWithdraw survives parsing", () => {
+    const quote = { penalty: 0n, sharesBurned: 1n, assetsReceived: 1n };
+    const parsed = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2ForceWithdraw",
+            vault: TARGET,
+            quote,
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    });
+    expect(limitsOperations(parsed)?.[0]?.quote).toEqual(quote);
+  });
+  test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
+    "error: SimulationValidationError for %s without positions or assetsReceived",
+    (type) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  vault: TARGET,
+                  quote: { sharesBurned: 1n },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `limits.operations[0].quote: "positions" or "assetsReceived" required for "${type}"`,
+      );
+    },
+  );
+  test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
+    "behavior: %s parses with assetsReceived and no positions",
+    (type) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type,
+                vault: TARGET,
+                quote: { sharesBurned: 1n, assetsReceived: 1n },
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+        }),
+      ).not.toThrow();
+    },
+  );
+  test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
+    "error: SimulationValidationError for a zero supplyShares on %s",
+    (type) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  vault: TARGET,
+                  quote: {
+                    sharesBurned: 1n,
+                    positions: [{ marketId: _MARKET_ID, supplyShares: 0n }],
+                  },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes("quote.positions[0].supplyShares: must be positive"),
+        ),
+      ).toBe(true);
     },
   );
   test.each(["vaultV1InKindRedeem", "vaultV2InKindRedeem"] as const)(
@@ -432,23 +1218,26 @@ describe("parseRequest", () => {
         type,
         vault: TARGET,
         quote: {
+          sharesBurned: 1n,
           positions: [
             { marketId: _MARKET_ID, supplyShares: 1n },
             {
               marketId:
                 "0x00000000000000000000000000000000000000000000000000000000000000bb",
-              supplyShares: 0n,
+              supplyShares: 2n,
             },
           ],
         },
         slippageTolerance: 0n,
       };
       expect(
-        parse({
-          chainId: 1,
-          transactions: [tx()],
-          limits: { operations: [operation] },
-        }).limits?.operations,
+        limitsOperations(
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: { operations: [operation] },
+          }),
+        ),
       ).toEqual([operation]);
     },
   );
@@ -619,11 +1408,13 @@ describe("parseRequest", () => {
       sharePrice: { expected: 10n ** 27n, tolerance: 10_000000000000000n },
     };
     expect(
-      parse({
-        chainId: 1,
-        transactions: [tx()],
-        limits: { operations: [operation] },
-      }).limits?.operations,
+      limitsOperations(
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { operations: [operation] },
+        }),
+      ),
     ).toEqual([operation]);
   });
 
@@ -780,7 +1571,10 @@ describe("parseRequest", () => {
     "behavior: valid position bounds are preserved on %s",
     (type) => {
       const shared = {
-        quote: { assetsPaid: 1n },
+        quote:
+          type === "blueRefinance"
+            ? { sharesBurned: 1n, sharesMinted: 1n }
+            : { assetsPaid: 1n, sharesMinted: 1n },
         slippageTolerance: 0n,
         position: { maxBorrowShares: 10n, minCollateral: 5n },
       };
@@ -794,11 +1588,13 @@ describe("parseRequest", () => {
             }
           : { type, marketId: _MARKET_ID, ...shared };
       expect(
-        parse({
-          chainId: 1,
-          transactions: [tx()],
-          limits: { operations: [operation] },
-        }).limits?.operations,
+        limitsOperations(
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: { operations: [operation] },
+          }),
+        ),
       ).toEqual([operation]);
     },
   );
@@ -837,6 +1633,7 @@ describe("parseRequest", () => {
             slippageTolerance: 0n,
             quote: {
               assetsPaid: 1n,
+              sharesMinted: 1n,
             },
           },
         ],
@@ -848,7 +1645,7 @@ describe("parseRequest", () => {
     expect(request.transactions[0]?.value).toBe(5n);
     expect(request.authorizations).toHaveLength(1);
     expect((request.authorizations[0] as { owner: Address }).owner).toBe(OWNER);
-    expect(request.limits?.operations?.[0]).toMatchObject({ vault: SPENDER });
+    expect(limitsOperations(request)?.[0]).toMatchObject({ vault: SPENDER });
   });
 
   test("behavior: copies the caller's assertion without checksumming its address", () => {
@@ -1079,10 +1876,16 @@ describe("parseRequest", () => {
   });
 
   test.each([
-    ["asset quote only", { quote: { assetsPaid: 1n }, slippageTolerance: 0n }],
     [
-      "share quote only",
-      { quote: { sharesMinted: 1n }, slippageTolerance: 0n },
+      "shares and asset bounds",
+      {
+        quote: { sharesMinted: 1n, sharesBurned: 1n, assetsPaid: 1n },
+        slippageTolerance: 0n,
+      },
+    ],
+    [
+      "share bounds only",
+      { quote: { sharesMinted: 1n, sharesBurned: 1n }, slippageTolerance: 0n },
     ],
   ])(
     "behavior: accepts a vaultV1MigrateToV2 limit with %s",
@@ -1101,7 +1904,7 @@ describe("parseRequest", () => {
           ],
         },
       });
-      expect(request.limits?.operations).toHaveLength(1);
+      expect(limitsOperations(request)).toHaveLength(1);
     },
   );
 
@@ -1116,13 +1919,13 @@ describe("parseRequest", () => {
             sourceVault: SPENDER,
             targetVault: TARGET,
             assetPaid: SPENDER,
-            quote: { assetsPaid: 1n },
+            quote: { assetsPaid: 1n, sharesMinted: 1n, sharesBurned: 1n },
             slippageTolerance: 0n,
           },
         ],
       },
     });
-    expect(request.limits?.operations?.[0]).toMatchObject({
+    expect(limitsOperations(request)?.[0]).toMatchObject({
       assetPaid: SPENDER,
     });
   });
@@ -1139,7 +1942,7 @@ describe("parseRequest", () => {
               sourceVault: SPENDER,
               targetVault: TARGET,
               asset: SPENDER,
-              quote: { assetsPaid: 1n },
+              quote: { assetsPaid: 1n, sharesMinted: 1n, sharesBurned: 1n },
               slippageTolerance: 0n,
             },
           ],
@@ -1284,7 +2087,31 @@ describe("parseRequest", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
+      readonly limits: "none";
     }>().toExtend<SimulateParams>();
+  });
+
+  test("behavior: missingInKindProceeds flags only in-kind redeems lacking both proceeds sides", () => {
+    expect(missingInKindProceeds("vaultV1InKindRedeem", {})).toBe(true);
+    expect(missingInKindProceeds("vaultV2InKindRedeem", {})).toBe(true);
+    expect(
+      missingInKindProceeds("vaultV2InKindRedeem", { assetsReceived: 1n }),
+    ).toBe(false);
+    expect(
+      missingInKindProceeds("vaultV1InKindRedeem", {
+        positions: [{ marketId: _MARKET_ID as MarketId, supplyShares: 1n }],
+      }),
+    ).toBe(false);
+    expect(missingInKindProceeds("blueSupply", {})).toBe(false);
+  });
+
+  test("type-level: checked limits always carry the applied tolerance", () => {
+    expectTypeOf<
+      Exclude<
+        SimulationVerification["limits"],
+        "none"
+      >["operations"][number]["slippageTolerance"]
+    >().toEqualTypeOf<bigint>();
   });
 
   test("type-level: ParsedRequest fields are readonly", () => {
@@ -1367,7 +2194,7 @@ describe("parseRequest", () => {
           {
             type: "blueSupply",
             marketId: _MARKET_ID,
-            quote: { assetsPaid: 0n },
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
         ],
@@ -1377,11 +2204,11 @@ describe("parseRequest", () => {
     expect(Object.isFrozen(input.authorizations[0])).toBe(false);
     expect(Object.isFrozen(input.limits)).toBe(false);
     expect(Object.isFrozen(input.limits.operations[0]!.quote)).toBe(false);
-    expect(Object.isFrozen(request.limits?.operations?.[0]?.quote)).toBe(true);
+    expect(Object.isFrozen(limitsOperations(request)?.[0]?.quote)).toBe(true);
     expect(request.authorizations[0]).not.toBe(erc20Approval);
     expect(request.authorizations[0]).toEqual(erc20Approval);
     expect(request.authorizations[1]).not.toBe(permit2Auth);
-    expect(request.limits?.operations?.[0]).toMatchObject({
+    expect(limitsOperations(request)?.[0]).toMatchObject({
       type: "blueSupply",
       marketId: _MARKET_ID,
     });
@@ -1782,13 +2609,13 @@ describe("parseRequest", () => {
             slippageTolerance: 0n,
             quote: {
               sharesBurned: 1n,
-              assetsPaid: 2n,
+              assetsReceived: 2n,
             },
           },
         ],
       },
     });
-    expect(request.limits?.operations).toHaveLength(1);
+    expect(limitsOperations(request)).toHaveLength(1);
   });
 
   test("behavior: preview parses permit and blue signature authorizations", () => {
@@ -1876,5 +2703,50 @@ describe("parseRequest", () => {
         `transactions[0].${field}: must be a non-zero address`,
       );
     }
+  });
+});
+
+describe("conditionalQuoteViolations", () => {
+  test.each([
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { sharesMinted: 2n },
+      expected: ["assetsReceived"],
+    },
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { assetsPaid: 2n },
+      expected: ["collateralSupplied"],
+    },
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { sharesMinted: 2n, assetsPaid: 2n },
+      expected: ["assetsReceived", "collateralSupplied"],
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      quote: { collateralWithdrawn: 2n },
+      expected: ["assetsReceived"],
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      quote: { assetsPaid: 2n },
+      expected: ["sharesBurned"],
+    },
+    {
+      type: "blueSupplyCollateralBorrow",
+      quote: { sharesMinted: 1n, assetsPaid: 1n },
+      expected: [],
+    },
+    {
+      type: "blueRepayWithdrawCollateral",
+      quote: { collateralWithdrawn: 1n, assetsPaid: 1n },
+      expected: [],
+    },
+    { type: "blueSupply", quote: { assetsPaid: 2n }, expected: [] },
+  ] as const)("$type → $expected", ({ type, quote, expected }) => {
+    expect(conditionalQuoteViolations(type, quote).map((v) => v.field)).toEqual(
+      expected,
+    );
   });
 });

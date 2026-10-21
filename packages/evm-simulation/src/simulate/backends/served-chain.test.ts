@@ -62,6 +62,7 @@ describe("toServedChainError", () => {
 
   test("error: InvalidChainIdError when a planned state read fails on another chain", async () => {
     const request = parseRequest({
+      limits: "none",
       chainId: mainnet.id,
       transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
     });

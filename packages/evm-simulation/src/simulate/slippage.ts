@@ -3,14 +3,16 @@ import {
   ConsumerLimitViolationError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
-import type {
-  BluePositionBounds,
-  ForceExitDeallocationQuote,
-  InKindPositionQuote,
-  OperationType,
-  SharePriceLimit,
-  SlippageLimits,
-  SlippageQuote,
+import {
+  type BluePositionBounds,
+  type CheckedSlippageLimits,
+  type ForceExitDeallocationQuote,
+  type InKindPositionQuote,
+  type OperationType,
+  QUOTE_FIELD_DIRECTION,
+  type ScalarQuoteField,
+  type SharePriceLimit,
+  type SlippageQuote,
 } from "../limits.js";
 import { sharePriceMeasurement } from "./measurement-plan.js";
 
@@ -28,7 +30,7 @@ import { sharePriceMeasurement } from "./measurement-plan.js";
  */
 export function checkSlippage(params: {
   readonly label: string;
-  readonly limits: SlippageLimits & { readonly type: OperationType };
+  readonly limits: CheckedSlippageLimits & { readonly type: OperationType };
   readonly observed: SlippageQuote;
   readonly debtShares?: boolean;
   /** The subject's Blue position after the bundle, for `position` bounds. */
@@ -37,16 +39,22 @@ export function checkSlippage(params: {
     readonly borrowShares: bigint;
     readonly collateral: bigint;
   };
-}): SlippageLimits {
+}): CheckedSlippageLimits {
   const { label, limits, observed, debtShares = false } = params;
+  const slippageTolerance = limits.slippageTolerance;
   const quote: { -readonly [K in keyof SlippageQuote]: SlippageQuote[K] } = {};
-  for (const [field, output] of [
-    ["assetsReceived", true],
-    ["sharesMinted", !debtShares],
-    ["assetsPaid", false],
-    ["sharesBurned", debtShares],
-    ["penalty", false],
+  for (const [field, spec] of [
+    ...(Object.entries(QUOTE_FIELD_DIRECTION) as [
+      ScalarQuoteField,
+      { readonly output: boolean },
+    ][]),
+    ["penalty", { output: false } as const],
   ] as const) {
+    // Debt shares flip the direction: minted debt is a cap, burned debt a minimum.
+    const output =
+      (field === "sharesMinted" || field === "sharesBurned") && debtShares
+        ? !spec.output
+        : spec.output;
     const expected = limits.quote[field];
     if (expected === undefined) continue;
     const amount = observed[field];
@@ -56,8 +64,8 @@ export function checkSlippage(params: {
       );
     }
     const bound = output
-      ? MathLib.wMulUp(expected, MathLib.WAD - limits.slippageTolerance)
-      : MathLib.wMulDown(expected, MathLib.WAD + limits.slippageTolerance);
+      ? MathLib.wMulUp(expected, MathLib.WAD - slippageTolerance)
+      : MathLib.wMulDown(expected, MathLib.WAD + slippageTolerance);
     if (output ? amount < bound : amount > bound) {
       throw new ConsumerLimitViolationError(
         `${label}: slippage for "${field}" exceeds tolerance "${limits.slippageTolerance}" against quote "${expected}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,

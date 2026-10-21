@@ -15,9 +15,9 @@ import {
   InvalidSimulationResponseError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
-import type { OperationLimit } from "../limits.js";
 import type { RawLog } from "../types.js";
 import type { CheckContext } from "./context.js";
+import type { ParsedOperationLimit } from "./request/parse-request.js";
 import { planStateReads, type StateValue } from "./state/read-state.js";
 import { verifySlippage } from "./verify-slippage.js";
 
@@ -38,7 +38,7 @@ const ctx: CheckContext = {
     blockTimestamp: 2n,
   },
 };
-const limit: OperationLimit = {
+const limit: ParsedOperationLimit = {
   type: "vaultV2Deposit",
   vault,
   account: receiver,
@@ -106,7 +106,7 @@ describe("verifySlippage", () => {
     ).toThrow(`Limit operation 0 (${limit.type}): missing observation for`);
   });
   test("behavior: names the index of the failing operation", () => {
-    const second: OperationLimit = { ...limit, vault: receiver };
+    const second: ParsedOperationLimit = { ...limit, vault: receiver };
     const plan = planStateReads({
       operations: [{ limit }, { limit: second }],
       owner,
@@ -294,7 +294,7 @@ describe("verifySlippage", () => {
     ).toThrow(SlippageCheckUnavailableError);
   });
   test("behavior: debt shares minted are capped and debt shares burned are floored", () => {
-    const borrow: OperationLimit = {
+    const borrow: ParsedOperationLimit = {
       type: "blueBorrow",
       marketId:
         "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
@@ -353,7 +353,7 @@ describe("verifySlippage", () => {
       })[0]?.checkedLimits.quote,
     ).toEqual({ sharesMinted: 1000n });
 
-    const repay: OperationLimit = {
+    const repay: ParsedOperationLimit = {
       type: "blueRepay",
       marketId:
         "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
@@ -418,7 +418,7 @@ describe("verifySlippage", () => {
   test("behavior: in-kind positions measure receiver supply shares per market", () => {
     const marketId =
       "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId;
-    const inKindLimit: OperationLimit = {
+    const inKindLimit: ParsedOperationLimit = {
       type: "vaultV2InKindRedeem",
       vault,
       quote: { positions: [{ marketId, supplyShares: 100n }] },
@@ -479,7 +479,7 @@ describe("verifySlippage", () => {
       "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId;
     const otherMarket =
       "0x2222222222222222222222222222222222222222222222222222222222222222" as MarketId;
-    const forceLimit: OperationLimit = {
+    const forceLimit: ParsedOperationLimit = {
       type,
       vault,
       quote: { penalty: 7n, deallocations: [{ marketId, assets: 993n }] },
@@ -590,7 +590,7 @@ describe("verifySlippage", () => {
       penalty: 7n,
       deallocations: [{ marketId, assets: 993n }],
     });
-    const summedLimit: OperationLimit = {
+    const summedLimit: ParsedOperationLimit = {
       ...forceLimit,
       quote: { deallocations: [{ marketId, assets: 200n }] },
     };
@@ -813,7 +813,7 @@ describe("verifySlippage", () => {
     forceExitTest,
   );
   test("behavior: position bounds compare the absolute after-state", () => {
-    const borrowLimit: OperationLimit = {
+    const borrowLimit: ParsedOperationLimit = {
       type: "blueSupplyCollateralBorrow",
       marketId:
         "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
@@ -890,6 +890,130 @@ describe("verifySlippage", () => {
     expect(() => verifySlippage(missingPositionInput)).toThrow(
       `${label}: missing post-bundle position observation for "position"`,
     );
+  });
+  test("behavior: collateralSupplied is a floored minimum, collateralWithdrawn a cap", () => {
+    const collateralLimit: ParsedOperationLimit = {
+      type: "blueSupplyCollateral",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
+      quote: { collateralSupplied: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    const collateralOps = [
+      {
+        limit: collateralLimit,
+        measurements: [
+          {
+            field: "collateralSupplied" as const,
+            type: "position" as const,
+            readId: "position",
+            marketId: collateralLimit.marketId,
+            shares: "collateral" as const,
+          },
+        ],
+      },
+    ];
+    const before = new Map<string, StateValue>([
+      ["position", { supplyShares: 0n, borrowShares: 0n, collateral: 100n }],
+    ]);
+    const input = {
+      ctx,
+      logs: [] as const,
+      morpho: zeroAddress,
+      operations: collateralOps,
+      before,
+      transfers: [] as const,
+      requestTransactions: [] as const,
+    };
+    // +1100 within 1% of 1000 passes; +989 is below the floor; no change fails.
+    expect(
+      verifySlippage({
+        ...input,
+        after: new Map([
+          [
+            "position",
+            { supplyShares: 0n, borrowShares: 0n, collateral: 1100n },
+          ],
+        ]),
+      })[0]?.checkedLimits.quote,
+    ).toEqual({ collateralSupplied: 1000n });
+    for (const after_ of [989n, 100n]) {
+      expect(() =>
+        verifySlippage({
+          ...input,
+          after: new Map([
+            [
+              "position",
+              { supplyShares: 0n, borrowShares: 0n, collateral: after_ },
+            ],
+          ]),
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    }
+
+    const withdrawLimit: ParsedOperationLimit = {
+      type: "blueWithdrawCollateral",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
+      quote: { collateralWithdrawn: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    const withdrawOps = [
+      {
+        limit: withdrawLimit,
+        measurements: [
+          {
+            field: "collateralWithdrawn" as const,
+            type: "position" as const,
+            readId: "position",
+            marketId: withdrawLimit.marketId,
+            shares: "collateral" as const,
+          },
+        ],
+      },
+    ];
+    const withdrawBefore = new Map<string, StateValue>([
+      ["position", { supplyShares: 0n, borrowShares: 0n, collateral: 2000n }],
+    ]);
+    // A cap: -1000 exactly passes; -1011 (989 left) is over the cap. A zero
+    // withdrawal passes the cap — it is caught by the required assetsReceived
+    // side instead (rejected at parse time).
+    expect(
+      verifySlippage({
+        ctx,
+        logs: [] as const,
+        morpho: zeroAddress,
+        operations: withdrawOps,
+        before: withdrawBefore,
+        after: new Map([
+          [
+            "position",
+            { supplyShares: 0n, borrowShares: 0n, collateral: 1000n },
+          ],
+        ]),
+        transfers: [],
+        requestTransactions: [],
+      })[0]?.checkedLimits.quote,
+    ).toEqual({ collateralWithdrawn: 1000n });
+    for (const after_ of [989n]) {
+      expect(() =>
+        verifySlippage({
+          ctx,
+          logs: [] as const,
+          morpho: zeroAddress,
+          operations: withdrawOps,
+          before: withdrawBefore,
+          after: new Map([
+            [
+              "position",
+              { supplyShares: 0n, borrowShares: 0n, collateral: after_ },
+            ],
+          ]),
+          transfers: [],
+          requestTransactions: [],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    }
   });
   test("error: incoming native refund does not cover outgoing value evidence", () => {
     const nativeLimit = {

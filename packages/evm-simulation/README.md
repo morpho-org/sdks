@@ -35,7 +35,18 @@ try {
       // mode: "final" (default) executes the signed calldata against actual
       // permissions; mode: "preview" accepts typed authorization descriptors.
       transactions: [{ from: user, to: vault, data: encodedDeposit }],
-      // limits: { operations: [{ type: "vaultV1Deposit", vault, quote: { sharesMinted: 1000n }, slippageTolerance: 10_000000000000000n }] },
+      // limits is required: quote the deposit's pay-in cap and minimum
+      // minted shares. ("none" is reserved for transactions no operation
+      // type covers.)
+      limits: {
+        operations: [
+          {
+            type: "vaultV1Deposit",
+            vault,
+            quote: { assetsPaid: depositAssets, sharesMinted: quotedShares },
+          },
+        ],
+      },
     },
   );
 } catch (err) {
@@ -52,7 +63,7 @@ Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
-Upgrading from v4? See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover. Upgrading from v5? See the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) for the retention-guard address change and the 6.1.0 fail-closed RPC response handling. Upgrading from v6? See the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for the simplified errors and original revert bytes.
+Upgrading from v4? See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover. Upgrading from v5? Apply the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) first (retention-guard address change and 6.1.0 fail-closed RPC responses), then the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md). Upgrading from v6? See the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for the simplified errors, original revert bytes and required limits.
 
 ### API surface
 
@@ -63,10 +74,12 @@ All symbols below are re-exported from the package root.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
-- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits`, `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote` and `BluePositionBounds`.
+- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote` and `BluePositionBounds`.
+- `toSimulationLimits(action, { owner, receiver?, slippageTolerance?, expected? })` — build the `SimulationLimits` of a morpho-sdk action transaction (`tx.action`), deriving quote sides the encoded args fix and merging the caller's `expected` quote over them. `receiver` applies only to `vaultV2ForceRedeem` — every other action pays `msg.sender`, so a non-`owner` receiver throws `LimitAccountMismatchError`.
+
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `UnsupportedLimitActionError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (operation groups and the operation-keyed subject union used by verification results).
 
@@ -107,28 +120,72 @@ over its transaction's own revert. Reverted assertion reads also throw
 `SimulationAssertError`; the check decides whether empty or malformed return
 data passes. Assertion declarations are omitted from returned `simulationTxs`.
 
-### Optional limits
+### Limits
 
-The caller chooses the action, subject, quote, and percentage tolerance. Each
-entry supplies `quote` with at least one raw-unit amount: `assetsReceived`,
-`sharesMinted`, `assetsPaid`, or `sharesBurned` (or, on force exits,
-`penalty`/`deallocations`), plus `slippageTolerance` as a WAD-scaled fraction
-(`10_000000000000000n` = 1%, `1e18` = 100%). Tolerance must be between 0 and
-100% inclusive; it has no default. Omit `limits` to skip checks. Unquoted
-amounts stay unchecked. The simulator never decodes calldata or fetches a quote
-to infer constraints.
-Unknown input keys are rejected as `SimulationValidationError` rather than
-silently ignored.
+`limits` is required on every call: pass a `SimulationLimits` object, or the
+literal `"none"` to explicitly skip all checks and state reads — `"none"` is
+reserved for transactions that no operation type covers (Merkl reward claims,
+Midnight actions, approval/authorization-only bundles), and every transaction
+an operation type covers must pass limits. Missing `limits` and an empty
+`operations` array are rejected as `SimulationValidationError` — an implicit
+opt-out is never accepted.
+
+The caller chooses the action, subject, quote, and percentage tolerance. Every
+operation type requires the quote sides of the required-minimums and
+required-caps lists below — the per-operation table lives in
+`docs/migrations/evm-simulation-v6-to-v7.md`:
+
+- Required minimums: `assetsReceived` on payout ops (`blueWithdraw`,
+  `blueBorrow`, `blueWithdrawCollateral`, and every vault withdraw, redeem
+  and force-exit); supply/vault `sharesMinted` (`blueSupply`,
+  `vaultV1Deposit`, `vaultV2Deposit`, `vaultV1MigrateToV2`); debt
+  `sharesBurned` (`blueRepay`, `blueRefinance`); `collateralSupplied` on
+  `blueSupplyCollateral`; and either of `collateralSupplied`/`assetsReceived`
+  or `sharesBurned`/`assetsReceived` on the combined ops.
+- Required caps: `assetsPaid` on every pay-in op (`blueSupply`,
+  `blueSupplyCollateral`, `blueRepay`, `vaultV1Deposit`, `vaultV2Deposit`,
+  and unconditionally on both combined ops); supply/vault `sharesBurned`
+  (including `vaultV1MigrateToV2`'s source-vault shares);
+  debt `sharesMinted` (`blueBorrow`, `blueRefinance`'s target market,
+  `blueSupplyCollateralBorrow`); `collateralWithdrawn` on
+  `blueWithdrawCollateral` and `blueRepayWithdrawCollateral`.
+
+A single-leg combined use quotes `1n` on each inactive leg's cap
+(`sharesMinted`, `collateralWithdrawn`, `assetsPaid`, since `0` is rejected);
+an active leg on either side requires that leg's other side: `sharesMinted`
+above `1n` requires `assetsReceived` on `blueSupplyCollateralBorrow`, and
+`collateralWithdrawn` above `1n` requires it on
+`blueRepayWithdrawCollateral`; symmetrically, `assetsPaid` above `1n`
+requires `collateralSupplied` on `blueSupplyCollateralBorrow` and
+`sharesBurned` on `blueRepayWithdrawCollateral`. In-kind redeems must quote
+`positions` — the Blue supply shares delivered to the receiver per market —
+or `assetsReceived` for the idle wallet portion, on top of the `sharesBurned`
+cap.
+The collateral a refinance moves between markets is not verified.
+All quote amounts must be > 0.
+`slippageTolerance` is optional and defaults to blue-sdk's
+`DEFAULT_SLIPPAGE_TOLERANCE` (0.03%); when supplied it must be below `1e18`
+(100%). Unknown input keys are rejected as `SimulationValidationError` rather
+than silently ignored. The simulator never decodes calldata or fetches a quote
+to infer constraints — set `account`/`receiver` from the connected user, never
+from the transaction's own `onBehalf`.
+Optional extras keep their own rules: `sharePrice` bounds the realized
+assets-per-share rate of an operation's priced quote pair, `position` bounds
+the subject's post-bundle Blue position, `positions` bounds the supply shares
+an in-kind redeem delivers per market, and `penalty`/`deallocations` bound a
+Vault V2 force exit's realized economics — `penalty` and `deallocations` are
+checked only when quoted and never zero-rejected.
 
 Non-empty `limits.operations` and preview authorizations require a Morpho Blue
 address registered in blue-sdk's `getChainAddresses`; otherwise
 `UnsupportedChainError` is thrown.
 
-Received assets and minted supply shares must be at least
-`ceil(quote * (1 - tolerance))`; paid assets and burned supply shares must be at
-most `floor(quote * (1 + tolerance))`. For debt shares, minting is capped at
-`floor(quote * (1 + tolerance))` and burning must be at least
-`ceil(quote * (1 - tolerance))`. Equality and favorable movement pass.
+Minimums — `assetsReceived`, supply/vault `sharesMinted`, debt `sharesBurned`
+and `collateralSupplied` — must be at least `ceil(quote * (1 - tolerance))`;
+caps — `assetsPaid`, supply/vault `sharesBurned`, debt `sharesMinted` and
+`collateralWithdrawn` — must be at most `floor(quote * (1 + tolerance))`.
+`collateralSupplied` and `collateralWithdrawn` are measured on the Blue
+position's `collateral`. Equality and favorable movement pass.
 
 ```ts
 const result = await simulate(config, {
@@ -163,9 +220,10 @@ measure loan assets paid and collateral received.
 
 For `vaultV1InKindRedeem` and `vaultV2InKindRedeem`, `assetsReceived` measures
 only the receiver's wallet balance of the vault asset (the idle portion). These
-operations additionally accept a `positions` quote listing the expected Blue
-supply shares delivered to the receiver per market (`{ marketId, supplyShares }`);
-each entry is checked as a minimum output under the same tolerance. Quote supply
+operations must quote `positions`, the expected Blue
+supply shares delivered to the receiver per market (`{ marketId, supplyShares }`),
+or `assetsReceived` (an idle-only redeem delivers no position); each entry is
+checked as a minimum output under the same tolerance. Quote supply
 shares, not assets: convert a preview's delivered assets with the accrued
 market's `toSupplyShares(assets, "Down")` at the simulated block, since interest
 accrued between quote and execution lowers the shares delivered. `positions` is
@@ -209,7 +267,8 @@ Slippage and the optional `sharePrice`/`position` bounds are checked; refunds ar
 not checked.
 `sharesMinted` and `sharesBurned` quotes for `blueSupplyCollateral` and
 `blueWithdrawCollateral` are invalid and throw `SimulationValidationError`
-during request parsing. `SlippageCheckUnavailableError` reports runtime
+during request parsing, as do `collateralSupplied`/`collateralWithdrawn` quotes
+on any other operation. `SlippageCheckUnavailableError` reports runtime
 evidence gaps: a failed state read, native outgoing traces that do not cover
 value sent, a metadata read that reverts or returns empty/invalid data, a
 quoted force exit with no vault `Withdraw` for the account, or a
@@ -225,8 +284,9 @@ Only quoted amounts and `position` bounds are observed. ERC-20 assets and
 vault shares use `balanceOf`; Blue shares use `position`, checked against the
 after-bundle position for `position` bounds. Each distinct call runs before
 and after the bundle.
-Native amounts use the existing transfer traces. Without limits there are no
-slippage reads. Quotes with an asset amount resolve `asset()` or market parameters only
+Native amounts use the existing transfer traces. With `limits: "none"` —
+reserved for transactions no operation type covers — there are no slippage
+reads and `verification.operations` is empty. Quotes with an asset amount resolve `asset()` or market parameters only
 when an explicit `assetPaid` or `assetReceived` was not supplied; share-only quotes need no metadata
 reads. No vault factories, full entities, allocations, risk metrics, allowances,
 or nonces are fetched for slippage.
@@ -239,6 +299,46 @@ and tolerance checked, plus `sharePrice` and `position` when set. The result doe
 
 The result's historical `VerifiedSimulationResult` name does not imply that
 unchecked outcomes are economically verified.
+
+### Building limits with `toSimulationLimits`
+
+`toSimulationLimits(action, { owner, expected })` produces the
+`SimulationLimits` of a transaction built by a morpho-sdk action (`tx.action`),
+without touching the network. `account` is always `owner`; an action whose
+`args.onBehalf` (or `redeem.recipient` on `vaultV2ForceRedeem`) names another
+account throws `LimitAccountMismatchError`.
+
+Derived limits catch on-chain divergence from the encoded calldata, not wrong
+inputs; pass the UI's quote through `expected`.
+
+| Operation | Derived from args | Required via `expected` (when not derivable) | Not quotable |
+| --- | --- | --- | --- |
+| `vaultV1Deposit` / `vaultV2Deposit` | `assetsPaid`, `sharesMinted` (`netAssets` vs `maxSharePrice`) | — | — |
+| `vaultV1Withdraw` / `vaultV2Withdraw` | `assetsReceived` (`netAssets`, net of fee) | `sharesBurned` | — |
+| `vaultV1Redeem` / `vaultV2Redeem` | `sharesBurned` | `assetsReceived` | — |
+| `vaultV2ForceWithdraw` | `sharesBurned` cap (`exitAssets` vs `minSharePriceE27`) | `assetsReceived`; `sharesBurned` when `minSharePriceE27` is `0n` | — |
+| `vaultV2ForceRedeem` | — | `sharesBurned` (total burn including penalty shares — `forceDeallocate` burns extra shares from `onBehalf`), `assetsReceived` | — |
+| `vaultV1InKindRedeem` / `vaultV2InKindRedeem` | — | `sharesBurned` and `positions` or `assetsReceived` (per-market Blue supply shares delivered to the receiver, or the idle wallet portion) | — |
+| `vaultV1MigrateToV2` | `sharesBurned` (shares mode), `sharesMinted` (when `netAssets` known) | either when not derivable | — |
+| `blueSupply` | `assetsPaid` (gross; fee deducted inside) | `sharesMinted` | — |
+| `blueWithdraw` | `assetsReceived` net of penalty and fee (assets mode); `sharesBurned` in shares mode | `sharesBurned` (assets mode), `assetsReceived` (shares mode) | — |
+| `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
+| `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
+| `blueSupplyCollateralBorrow` | collateral + borrow sides above; `sharesMinted: 1n` on a collateral-only use, `assetsPaid: 1n` on a borrow-only use | `sharesMinted` when borrowing; `assetsReceived` (net wallet gain — the payout minus the pay-in on a same-token market) when both legs are active | — |
+| `blueRepay` | `assetsPaid` (`repayAssets` + fee; `maxRepayAssets` in shares mode); `sharesBurned` in shares mode | `sharesBurned` (assets mode, and the `maxUint256` full-repay sentinel) | — |
+| `blueWithdrawCollateral` | `collateralWithdrawn`, `assetsReceived` | — | — |
+| `blueRepayWithdrawCollateral` | repay + collateral sides above; `collateralWithdrawn: 1n` on a repay-only use, `assetsPaid: 1n` on a withdraw-only use | `sharesBurned` (assets-mode and `maxUint256` repays); `assetsReceived` (net wallet gain — the payout minus the pay-in on a same-token market) when both legs are active | — |
+| `blueRefinance` | — | `sharesBurned` (source debt moved), `sharesMinted` (target-market debt cap) | moved collateral, destination debt and fees are execution-resolved |
+
+`expected` values override derived ones; an explicit `0n` is passed through so
+`simulate()` rejects it, while the helper itself never emits a `0n` quote — it
+omits the field, or emits the `1n` cap on a combined op's inactive leg. A
+missing required side throws
+`MissingExpectedQuoteError` naming the field and what to compute; Midnight and
+other action types without an operation throw `UnsupportedLimitActionError`.
+Native-funded actions mark `assetPaid` with viem's `ethAddress`.
+
+### Preview authorizations
 
 Preview authorizations remain an adapter from `getRequirements()` through
 `toSimulationAuthorizations` into preparation calls. No permission or nonce

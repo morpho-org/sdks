@@ -39,8 +39,9 @@ import { runSimulation } from "./run-simulation.js";
  * against actual permissions and accepts no `authorizations`. `mode:
  * "preview"` accepts typed authorization descriptors, which the pipeline
  * prepares as simulated approval calls. No authorization read-back checks run.
- * `limits` are optional caller-supplied quotes and percentage tolerances;
- * violations throw `ConsumerLimitViolationError`.
+ * `limits` is required: caller-supplied quotes and percentage tolerances whose
+ * violations throw `ConsumerLimitViolationError`, or the explicit `"none"`
+ * opt-out, which skips every limit read and check.
  *
  * **Funding.** `value` transfers are funded by the sender's real native
  * balance — no balance inflation — so under-funded bundles revert exactly as
@@ -66,7 +67,8 @@ import { runSimulation } from "./run-simulation.js";
  *   are optional helpers for common checks.
  * @param params.mode - `"final"` (default) or `"preview"`.
  * @param params.authorizations - Preview-only typed authorization descriptors.
- * @param params.limits - Optional quotes and percentage tolerances; unquoted amounts require no reads.
+ * @param params.limits - Required quotes and percentage tolerances (unquoted
+ *   amounts require no reads), or `"none"` to skip every limit check.
  * @param params.blockNumber - Optional pinned block number or `BlockTag` other
  *   than `"pending"`.
  *   Defaults to `latest` (`finalized` on Monad, whose `latest` block is not
@@ -78,7 +80,10 @@ import { runSimulation } from "./run-simulation.js";
  *   `blockNumber`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed assertions or authorizations,
- *   final-mode authorizations, malformed limits, unknown fields, a `"pending"` block tag,
+ *   final-mode authorizations, missing or malformed limits, an empty
+ *   `limits.operations`, a non-positive or unmeasurable quote field, a
+ *   `slippageTolerance` at or above 1e18, a missing required quote side for an
+ *   operation, unknown fields, a `"pending"` block tag,
  *   a malformed `block` or one combined with `blockNumber`, a
  *   `blockOverrides.gasLimit` or `callGasLimit` that is not a positive bigint,
  *   a `parentHashCheck` that is not a boolean, or share quotes for
@@ -172,6 +177,7 @@ import { runSimulation } from "./run-simulation.js";
  *         }),
  *       },
  *     ],
+ *     limits: "none",
  *   },
  * );
  * ```

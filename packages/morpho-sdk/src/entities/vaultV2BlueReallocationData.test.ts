@@ -3177,6 +3177,153 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toEqual([30n]);
   });
 
+  test("behavior: returns no reallocation when an idle-bound plan has no shortfall", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      sourceSupply: 0n,
+      idle: 2n,
+      allocatorTargetCap: 10_000n,
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: { type: "borrow", amount: 1n },
+      }).reallocations,
+    ).toStrictEqual([]);
+  });
+
+  test("behavior: reduces an idle-bound plan to its absolute shortfall", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      sourceSupply: 0n,
+      idle: 13n,
+      allocatorTargetCap: 10_000n,
+    });
+
+    expect(
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation: { type: "borrow", amount: 11n },
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets]),
+    ).toStrictEqual([["idle", 1n]]);
+  });
+
+  test("behavior: keeps an idle leg that leaves more than the headroom share of idle", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      idle: 10_000n,
+      allocatorTargetCap: 10_000n,
+    });
+    const operation = { type: "borrow", amount: 10n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets] as const);
+
+    expect(legs(0n)).toStrictEqual([["idle", 12n]]);
+    expect(legs()).toStrictEqual(legs(0n));
+  });
+
+  test("behavior: treats an idle leg at exactly the headroom share as idle-bound", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      idle: 100n,
+      allocatorTargetCap: 10_000n,
+    });
+    const operation = { type: "borrow", amount: 89n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets] as const);
+
+    expect(legs(0n)).toStrictEqual([["idle", 99n]]);
+    expect(legs()).toStrictEqual([]);
+  });
+
+  test("behavior: keeps an idle leg one asset short of the headroom share", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      idle: 100n,
+      allocatorTargetCap: 10_000n,
+    });
+    const operation = { type: "borrow", amount: 88n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets] as const);
+
+    expect(legs(0n)).toStrictEqual([["idle", 98n]]);
+    expect(legs()).toStrictEqual([["idle", 98n]]);
+  });
+
+  test("behavior: moves the idle-bound threshold with a custom allocatorCapHeadroom", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      idle: 100n,
+      allocatorTargetCap: 10_000n,
+      canPullFromMarket: false,
+    });
+    const legs = (amount: bigint, allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation: { type: "borrow", amount },
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets] as const);
+
+    expect(legs(81n, 0n)).toStrictEqual([["idle", 90n]]);
+    expect(legs(81n, MathLib.WAD / 10n)).toStrictEqual([]);
+    expect(legs(80n, 0n)).toStrictEqual([["idle", 89n]]);
+    expect(legs(80n, MathLib.WAD / 10n)).toStrictEqual([["idle", 89n]]);
+    expect(legs(80n)).toStrictEqual([["idle", 89n]]);
+  });
+
+  test("behavior: keeps a vault's market leg when its idle leg is idle-bound", () => {
+    const { data } = makeFixture({
+      sourceSupply: 20n,
+      sourceBorrow: 8n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      idle: 1n,
+    });
+    const operation = { type: "borrow", amount: 10n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      data
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(({ from, assets }) => [from.type, assets] as const);
+    const fullPlan = legs(0n);
+
+    expect(fullPlan).toStrictEqual([
+      ["market", 11n],
+      ["idle", 1n],
+    ]);
+    expect(fullPlan[0]?.[1]).toBeGreaterThan(fullPlan[1]?.[1] ?? 0n);
+    expect(legs()).toStrictEqual([["market", 11n]]);
+  });
+
   test("behavior: keeps the headroom plan when the reduced plan falls short", () => {
     const fixture = {
       targetSupply: 100n,
@@ -3365,6 +3512,109 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(legs()).toEqual([[TARGET_ADAPTER, 4n]]);
   });
 
+  test("behavior: treats idle split across target adapters as idle-bound", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100_000n,
+      targetBorrow: 90_000n,
+      idle: 1_000n,
+      canPullFromMarket: false,
+      allocatorTargetCap: 10_000n,
+    });
+    const targetMarket = data.getMarket(targetParams.id);
+    const targetAdapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+    const [targetAdapterCapId] = targetAdapter.ids(targetParams);
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetMarket.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [new Market({ ...targetMarket })],
+    );
+    const [secondAdapterCapId, , secondAdapterMarketCapId] =
+      secondTargetAdapter.ids(targetParams);
+    const vault = data.getVault(VAULT);
+    const twoTargetData = new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: new AccrualVaultV2(
+          {
+            ...vault,
+            liquidityAllocations: vault.liquidityAllocations?.map(
+              (allocation) => ({ ...allocation }),
+            ),
+          },
+          undefined,
+          [...vault.accrualAdapters, secondTargetAdapter],
+          vault.assetBalance,
+          {},
+        ),
+      },
+      allocations: {
+        [VAULT]: {
+          ...data.allocations[VAULT],
+          [targetAdapterCapId]: {
+            id: targetAdapterCapId,
+            absoluteCap: 501n,
+            relativeCap: MathLib.WAD,
+            allocation: 0n,
+          },
+          [secondAdapterCapId]: {
+            id: secondAdapterCapId,
+            absoluteCap: 495n,
+            relativeCap: MathLib.WAD,
+            allocation: 0n,
+          },
+          [secondAdapterMarketCapId]: {
+            id: secondAdapterMarketCapId,
+            absoluteCap: 10_000n,
+            relativeCap: MathLib.WAD,
+            allocation: 0n,
+          },
+        },
+      },
+      publicAllocatorConfigs: data.publicAllocatorConfigs,
+      activeAdapters: {
+        [VAULT]: new Set([
+          ...(data.activeAdapters[VAULT] ?? []),
+          SECOND_TARGET_ADAPTER,
+        ]),
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: {
+          ...data.marketPublicAllocatorConfigs[VAULT],
+          [secondAdapterMarketCapId]: {
+            vault: VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            adapterMarketCapId: secondAdapterMarketCapId,
+            absoluteCap: 10_000n,
+            canPullFromMarket: false,
+          },
+        },
+      },
+    });
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      twoTargetData
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          allocatorCapHeadroom,
+          operation: { type: "borrow", amount: 894n },
+        })
+        .reallocations.map(
+          ({ to, from, assets }) => [to.adapter, from.type, assets] as const,
+        );
+
+    expect(legs(0n)).toStrictEqual([
+      [TARGET_ADAPTER, "idle", 501n],
+      [SECOND_TARGET_ADAPTER, "idle", 493n],
+    ]);
+    expect(legs()).toStrictEqual([]);
+  });
+
   test("behavior: reduces a cap-bound withdraw plan to its absolute shortfall", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
@@ -3512,6 +3762,121 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       [SECOND_VAULT, 1n],
     ]);
     expect(legs()).toStrictEqual([[VAULT, 2n]]);
+  });
+
+  test("behavior: budgets the reduced plan by another vault's unbound idle when one vault's idle leg is idle-bound", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100_000n,
+      targetBorrow: 90_000n,
+      idle: 1_001n,
+      canPullFromMarket: false,
+      allocatorTargetCap: 10_000n,
+    });
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: SECOND_VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetParams.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [new Market({ ...data.getMarket(targetParams.id) })],
+    );
+    const secondTargetIds = secondTargetAdapter.ids(targetParams);
+    const [, , secondTargetAdapterMarketCapId] = secondTargetIds;
+    const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
+    for (const id of secondTargetIds)
+      secondAllocations[id] = {
+        id,
+        absoluteCap: 10_000n,
+        relativeCap: MathLib.WAD,
+        allocation: 0n,
+      };
+    const firstVault = data.getVault(VAULT);
+    const sharedData = new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: firstVault,
+        [SECOND_VAULT]: new AccrualVaultV2(
+          {
+            ...firstVault,
+            address: SECOND_VAULT,
+            _totalAssets: 10_000n,
+            totalSupply: 10_000n,
+            liquidityAllocations: firstVault.liquidityAllocations?.map(
+              (allocation) => ({ ...allocation }),
+            ),
+          },
+          undefined,
+          [secondTargetAdapter],
+          10_000n,
+          {},
+        ),
+      },
+      allocations: {
+        [VAULT]: data.allocations[VAULT],
+        [SECOND_VAULT]: secondAllocations,
+      },
+      publicAllocatorConfigs: {
+        [VAULT]: data.publicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          vault: SECOND_VAULT,
+          canPullFromIdle: true,
+          penalty: 0n,
+        },
+      },
+      activeAdapters: {
+        [VAULT]: data.activeAdapters[VAULT],
+        [SECOND_VAULT]: new Set([SECOND_TARGET_ADAPTER]),
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          [secondTargetAdapterMarketCapId]: {
+            vault: SECOND_VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            adapterMarketCapId: secondTargetAdapterMarketCapId,
+            absoluteCap: 1_000n,
+            canPullFromMarket: false,
+          },
+        },
+      },
+    });
+    const operation = { type: "borrow", amount: 1_350n } as const;
+    const legs = (allocatorCapHeadroom?: bigint) =>
+      sharedData
+        .computeVaultV2BlueReallocations(targetParams.id, {
+          operation,
+          allocatorCapHeadroom,
+        })
+        .reallocations.map(
+          ({ vault, from, assets }) => [vault, from.type, assets] as const,
+        );
+    const fullPlan = legs(0n);
+    const defaultPlan = legs();
+
+    expect(fullPlan).toStrictEqual([
+      [VAULT, "idle", 1_001n],
+      [SECOND_VAULT, "idle", 499n],
+    ]);
+    expect(defaultPlan.length).toBeGreaterThan(0);
+    // Drawing on the idle-bound vault again is a known open policy gap; fixing it would change this assertion.
+    expect(defaultPlan).toStrictEqual([[VAULT, "idle", 499n]]);
+
+    const secondVaultIdleAssets = fullPlan.reduce(
+      (total, [vault, from, assets]) =>
+        vault === SECOND_VAULT && from === "idle" ? total + assets : total,
+      0n,
+    );
+    const defaultIdleAssets = defaultPlan.reduce(
+      (total, [, from, assets]) => (from === "idle" ? total + assets : total),
+      0n,
+    );
+    expect(secondVaultIdleAssets).toBe(499n);
+    expect(defaultIdleAssets).toBe(secondVaultIdleAssets);
   });
 
   test("error: InsufficientSharedLiquidityError when the full allocator cap is short", () => {

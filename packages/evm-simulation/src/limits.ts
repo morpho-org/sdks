@@ -101,7 +101,13 @@ export type SimulationOperationSubject =
   | VaultV1MigrateToV2Subject;
 
 /** Caller-quoted net amounts in raw units over the whole bundle.
- * Supply at least one amount. Unquoted amounts are not checked.
+ * In short, every operation requires its position side, payout operations
+ * require `assetsReceived` (in-kind redeems require `positions` or
+ * `assetsReceived` in its place), pay-in operations require `assetsPaid`, and the
+ * combined collateral operations add the active-leg rules. The package
+ * README's `Limits` section lists the required minimums and caps, and the
+ * per-operation table is in `docs/migrations/evm-simulation-v6-to-v7.md`.
+ * Only optional extra fields go unchecked when omitted.
  */
 export interface SlippageQuote {
   /**
@@ -123,8 +129,23 @@ export interface SlippageQuote {
    */
   readonly sharesBurned?: bigint;
   /**
+   * Expected net collateral added to the Blue position. This is a minimum:
+   * supplying less collateral than quoted is adverse. Measurable only on
+   * `blueSupplyCollateral` and `blueSupplyCollateralBorrow`.
+   */
+  readonly collateralSupplied?: bigint;
+  /**
+   * Expected net collateral removed from the Blue position. This is a maximum:
+   * withdrawing more collateral than quoted is adverse. Measurable only on
+   * `blueWithdrawCollateral` and `blueRepayWithdrawCollateral`.
+   */
+  readonly collateralWithdrawn?: bigint;
+  /**
    * In-kind vault redemptions only: the expected Blue supply shares delivered
-   * to the receiver in each market, measured over the whole bundle. This is an
+   * to the receiver in each market, measured over the whole bundle. Required
+   * unless `assetsReceived` is quoted — proceeds can land on Blue supply
+   * positions or the wallet — and supplied entries must be a non-empty array
+   * with positive `supplyShares`. This is an
    * output, so delivering less than the quote (minus tolerance) is adverse.
    * Quote shares, not assets: convert a preview's delivered assets with the
    * accrued market's `toSupplyShares(assets, "Down")` at the simulated block.
@@ -146,6 +167,34 @@ export interface SlippageQuote {
    */
   readonly deallocations?: readonly ForceExitDeallocationQuote[];
 }
+
+/**
+ * Scalar quote fields and their bound direction: `output: true` marks a minimum
+ * bound (observed may not fall below the quote), `output: false` a cap. Debt
+ * shares flip the direction at each use site. Array and object quote fields
+ * (`positions`, `deallocations`, `sharePrice`, `position`) are checked by their
+ * own rules and are not scaled here. @internal
+ */
+export const QUOTE_FIELD_DIRECTION = {
+  assetsReceived: { output: true },
+  assetsPaid: { output: false },
+  sharesMinted: { output: true },
+  sharesBurned: { output: false },
+  collateralSupplied: { output: true },
+  collateralWithdrawn: { output: false },
+} as const satisfies Partial<
+  Record<keyof SlippageQuote, { readonly output: boolean }>
+>;
+
+/** The scalar quote fields {@link QUOTE_FIELD_DIRECTION} scales. @internal */
+export type ScalarQuoteField = keyof typeof QUOTE_FIELD_DIRECTION;
+
+/**
+ * The cap an inactive combined-op leg quotes: `0` is rejected, so `1n` marks
+ * "this leg is not used".
+ * @internal
+ */
+export const INACTIVE_LEG_CAP = 1n;
 
 /** One Blue market's expected delivered supply shares in an in-kind vault redemption. */
 export interface InKindPositionQuote {
@@ -199,8 +248,11 @@ export interface BluePositionBounds {
 /** Caller quote and permitted adverse percentage deviation. */
 export interface SlippageLimits {
   readonly quote: SlippageQuote;
-  /** WAD-scaled fraction from 0 to 1e18 inclusive; 1e16 means 1%. No default. */
-  readonly slippageTolerance: bigint;
+  /**
+   * WAD-scaled fraction strictly below 1e18; 1e16 means 1%. Defaults to
+   * blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (3e14, 0.03%).
+   */
+  readonly slippageTolerance?: bigint;
   /**
    * Optional bound on the realized assets-per-share rate, computed from the two
    * quoted amounts the operation prices. Both amounts of the priced pair must be
@@ -216,6 +268,28 @@ export interface SlippageLimits {
   readonly position?: BluePositionBounds;
 }
 
+/**
+ * The limits actually checked, with the tolerance that was applied (defaults
+ * resolved) and the caller's optional `sharePrice`/`position` bounds carried
+ * through. Returned in the verification result.
+ */
+export type CheckedSlippageLimits = Omit<
+  SlippageLimits,
+  "slippageTolerance"
+> & {
+  readonly slippageTolerance: bigint;
+};
+
+/** An operation limit as checked: `slippageTolerance` holds the applied value (defaults resolved). */
+export type CheckedOperationLimit = OperationLimit & {
+  readonly slippageTolerance: bigint;
+};
+
+/** The limits a simulation checked, as reported in `SimulationVerification.limits`. */
+export interface CheckedSimulationLimits {
+  readonly operations: readonly CheckedOperationLimit[];
+}
+
 /** Caller-selected action and subject with the same quote/tolerance shape for every action.
  * Measurements cover the entire bundle for the named subject, never an inferred
  * individual transaction. Use separate simulations for per-transaction bounds.
@@ -224,15 +298,23 @@ export type OperationLimit = SlippageLimits & {
   /** Position/share owner; defaults to the transaction sender. */
   readonly account?: Address;
   /**
-   * Explicit asset paid; defaults to the action underlying. Use viem's
-   * `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) for native ETH;
+   * Explicit asset paid; defaults to the action underlying. The override is
+   * trusted as given and never checked against the subject's token: a wrong
+   * address measures a token the bundle does not move, so the required caps
+   * pass vacuously. Omit it unless native ETH is paid, in which case use
+   * viem's `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`);
    * sentinels such as `zeroAddress` are read as ERC-20 tokens.
    */
   readonly assetPaid?: Address;
   /**
-   * Explicit asset received; defaults to the action underlying. Use viem's
-   * `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) for native ETH;
-   * sentinels such as `zeroAddress` are read as ERC-20 tokens.
+   * Explicit asset received; defaults to the action underlying. The override
+   * is trusted as given and never checked against the subject's token: a
+   * token the bundle does not move fails the required minimums, but a token
+   * the account also receives from another call in the bundle can satisfy
+   * them without the operation paying out. Omit it unless native ETH is
+   * received, in which case use viem's `ethAddress`
+   * (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`); sentinels such as
+   * `zeroAddress` are read as ERC-20 tokens.
    */
   readonly assetReceived?: Address;
   /** Asset receiver; defaults to the transaction sender. */
@@ -255,7 +337,15 @@ export type OperationLimit = SlippageLimits & {
       }
   );
 
-/** Optional caller-selected checks. No action discovery or default bounds. */
+/**
+ * Caller-selected checks. No action discovery or inferred quote amounts;
+ * `operations` must be non-empty. Each operation requires its position side,
+ * payout operations `assetsReceived`, pay-in operations `assetsPaid`, and the
+ * combined collateral operations their active-leg sides — the package README's
+ * `Limits` section lists the required minimums and caps, and the per-operation
+ * table is in `docs/migrations/evm-simulation-v6-to-v7.md`. An
+ * omitted `slippageTolerance` defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
+ */
 export interface SimulationLimits {
-  readonly operations?: readonly OperationLimit[];
+  readonly operations: readonly OperationLimit[];
 }

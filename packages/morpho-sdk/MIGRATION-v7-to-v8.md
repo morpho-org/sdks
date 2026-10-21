@@ -142,9 +142,13 @@ Get `positionData` from
 `midnight.getPositionData({ marketId: marketData.id, accountAddress })`. For each collateral index,
 read `price()` from the oracle at `marketData.params.collateralParams[i].oracle` with viem's
 `readContract`. Prices use `ORACLE_PRICE_SCALE` and must be in the same index order as the market's
-collateral parameters. Pass `collateralPrices: []` only when the SDK's conservative post-operation
-debt is zero, such as after a `full` repay, a repayment units target covering `positionData.debt`,
-or `minUnits` / `repay.assets` covering it. Otherwise, pass the prices. For example:
+collateral parameters. `takeBorrow` and `supplyCollateralTakeBorrow` always need prices, because
+debt after a borrow is always positive. `takeRepayWithdrawCollateral` and
+`repayWithdrawCollateral` need prices only when `collateralWithdrawals` is non-empty and the SDK's
+conservative post-operation debt is positive. For these two methods, pass `collateralPrices: []`
+when there is no collateral withdrawal, including a partial repayment that leaves debt, or when the
+conservative post-operation debt is zero, such as after a `full` repay, a repayment units target
+covering `positionData.debt`, or `minUnits` / `repay.assets` covering it. For example:
 
 ```ts
 midnight.takeBorrow({

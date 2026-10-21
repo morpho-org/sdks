@@ -148,7 +148,7 @@ describe.sequential("runSimulation", () => {
             {
               type: "vaultV2Deposit",
               vault: TARGET,
-              quote: { assetsPaid: 1n },
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
               slippageTolerance: 0n,
             },
           ],
@@ -164,6 +164,7 @@ describe.sequential("runSimulation", () => {
       simulate(config, {
         chainId: CHAIN_ID,
         mode: "preview",
+        limits: "none",
         transactions: [TRANSACTION],
         authorizations: [
           {
@@ -189,9 +190,11 @@ describe.sequential("runSimulation", () => {
     ]);
     const result = await simulate(config, {
       chainId: CHAIN_ID,
+      limits: "none",
       transactions: [TRANSACTION],
     });
     expect(result.calls).toHaveLength(1);
+    expect(result.verification.limits).toBe("none");
     expect(mockExecutePlan).toHaveBeenCalledOnce();
     expect(methods).toEqual([
       "eth_getBlockByNumber",
@@ -219,7 +222,7 @@ describe.sequential("runSimulation", () => {
           ],
         ]),
       },
-      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+      { chainId: CHAIN_ID, limits: "none", transactions: [TRANSACTION] },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBe(16_777_216n);
   });
@@ -232,7 +235,7 @@ describe.sequential("runSimulation", () => {
           [CHAIN_ID, { simulateV1Url: RPC_URL, callGasLimit: 30_000_000n }],
         ]),
       },
-      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+      { chainId: CHAIN_ID, limits: "none", transactions: [TRANSACTION] },
     );
     expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBe(30_000_000n);
   });
@@ -245,6 +248,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.StableMainnet,
+        limits: "none",
         transactions: [TRANSACTION],
       },
     );
@@ -264,6 +268,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.StableMainnet,
+        limits: "none",
         transactions: [TRANSACTION],
       },
     );
@@ -276,7 +281,7 @@ describe.sequential("runSimulation", () => {
           [CHAIN_ID, { simulateV1Url: RPC_URL, parentHashCheck: false }],
         ]),
       },
-      { chainId: CHAIN_ID, transactions: [TRANSACTION] },
+      { chainId: CHAIN_ID, limits: "none", transactions: [TRANSACTION] },
     );
     expect(mockExecutePlan.mock.calls[1]?.[0].parentHashCheck).toBe(false);
   });
@@ -289,6 +294,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.MonadMainnet,
+        limits: "none",
         transactions: [TRANSACTION],
       },
     );
@@ -304,6 +310,7 @@ describe.sequential("runSimulation", () => {
       },
       {
         chainId: ChainId.MonadMainnet,
+        limits: "none",
         transactions: [TRANSACTION],
         blockNumber: STATE_BLOCK,
       },
@@ -322,6 +329,7 @@ describe.sequential("runSimulation", () => {
     ]);
     const result = await simulate(config, {
       chainId: CHAIN_ID,
+      limits: "none",
       transactions: [TRANSACTION],
       block: {
         number: STATE_BLOCK,
@@ -363,6 +371,7 @@ describe.sequential("runSimulation", () => {
     );
     const result = await simulate(config, {
       chainId: CHAIN_ID,
+      limits: "none",
       transactions: [TRANSACTION],
       block: {
         number: STATE_BLOCK,
@@ -383,6 +392,7 @@ describe.sequential("runSimulation", () => {
     );
     const error = await simulate(config, {
       chainId: CHAIN_ID,
+      limits: "none",
       transactions: [TRANSACTION],
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(RpcTransportError);
@@ -412,6 +422,7 @@ describe.sequential("runSimulation", () => {
       });
       const error = await simulate(config, {
         chainId: CHAIN_ID,
+        limits: "none",
         transactions: [TRANSACTION],
       }).catch((cause: unknown) => cause);
       if (mismatch) {
@@ -451,7 +462,8 @@ describe.sequential("runSimulation", () => {
             {
               type: "vaultV2Deposit",
               vault: TARGET,
-              quote: { sharesMinted: 1n },
+              assetPaid: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+              quote: { sharesMinted: 1n, assetsPaid: 1n },
               slippageTolerance: 0n,
             },
           ],
@@ -468,6 +480,7 @@ describe.sequential("runSimulation", () => {
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
+        limits: "none",
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
@@ -479,6 +492,7 @@ describe.sequential("runSimulation", () => {
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
+        limits: "none",
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(SimulationValidationError);
@@ -489,6 +503,7 @@ describe.sequential("runSimulation", () => {
     const { methods } = stubFetch([], "0x", 8453);
     const promise = simulate(config, {
       chainId: CHAIN_ID,
+      limits: "none",
       transactions: [TRANSACTION],
     });
     await expectFailClosed(promise, "chain");
@@ -502,6 +517,7 @@ describe.sequential("runSimulation", () => {
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
+        limits: "none",
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(SimulationValidationError);
@@ -513,6 +529,7 @@ describe.sequential("runSimulation", () => {
     await expect(
       simulate(config, {
         chainId: CHAIN_ID,
+        limits: "none",
         transactions: [TRANSACTION],
       }),
     ).rejects.toBeInstanceOf(SimulationValidationError);

@@ -13,7 +13,7 @@ import {
   isSimulationPackageError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
+import type { ParsedOperationLimit } from "../request/parse-request.js";
 import { decodeStateRead, planStateReads } from "./read-state.js";
 
 const owner = "0x0000000000000000000000000000000000000001";
@@ -27,7 +27,7 @@ const marketId = new MarketParams({
   irm: zeroAddress,
   lltv: 0n,
 }).id;
-const limit: OperationLimit = {
+const limit: ParsedOperationLimit = {
   type: "vaultV2Deposit",
   vault,
   account: receiver,
@@ -242,7 +242,7 @@ describe("planStateReads", () => {
   test("behavior: position bounds read the limit account instead of the owner or receiver", () => {
     const account = "0x0000000000000000000000000000000000000005";
     const morpho = "0x0000000000000000000000000000000000000006";
-    const blueLimit: OperationLimit = {
+    const blueLimit: ParsedOperationLimit = {
       type: "blueSupply",
       marketId,
       account,
@@ -340,6 +340,36 @@ describe("planStateReads", () => {
     expect(plan.operations[0]?.measurements).toMatchObject([
       { field: "sharesMinted", shares: "borrowShares" },
       { field: "sharesBurned", shares: "borrowShares" },
+    ]);
+  });
+  test("behavior: collateral quotes plan a position read on the collateral field", () => {
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "blueSupplyCollateral",
+            marketId,
+            account: receiver,
+            quote: { collateralSupplied: 1n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+    });
+    expect(plan.reads).toHaveLength(1);
+    expect(
+      decodeFunctionData({ abi: blueAbi, data: plan.reads[0]!.data }),
+    ).toMatchObject({ functionName: "position", args: [marketId, receiver] });
+    expect(plan.operations[0]?.measurements).toEqual([
+      {
+        field: "collateralSupplied",
+        type: "position",
+        readId: plan.reads[0]!.id,
+        marketId,
+        shares: "collateral",
+      },
     ]);
   });
 });

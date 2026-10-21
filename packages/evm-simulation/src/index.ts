@@ -27,6 +27,8 @@ export {
   InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
+  LimitAccountMismatchError,
+  MissingExpectedQuoteError,
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
@@ -36,6 +38,7 @@ export {
   SlippageCheckUnavailableError,
   UnexpectedSimulationError,
   UnsupportedChainError,
+  UnsupportedLimitActionError,
   UnsupportedOperationError,
 } from "./errors.js";
 export type {
@@ -43,6 +46,9 @@ export type {
   BlueMarketOperationType,
   BluePositionBounds,
   BlueRefinanceSubject,
+  CheckedOperationLimit,
+  CheckedSimulationLimits,
+  CheckedSlippageLimits,
   ForceExitDeallocationQuote,
   InKindPositionQuote,
   OperationLimit,
@@ -67,7 +73,10 @@ export type {
   StateBlock,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
-export { toSimulationAuthorizations } from "./requirements/index.js";
+export {
+  toSimulationAuthorizations,
+  toSimulationLimits,
+} from "./requirements/index.js";
 export type {
   AuthorizationPreparation,
   SimulatedOperation,

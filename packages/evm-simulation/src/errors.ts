@@ -1,4 +1,5 @@
 import type { Address, Hex } from "viem";
+import type { OperationType, SlippageQuote } from "./limits.js";
 import type { Assertion } from "./types.js";
 
 /** Stable error codes thrown by this package, part of the public API. */
@@ -15,6 +16,9 @@ export const SIMULATION_ERROR_CODES = [
   "AUTHORIZATION_REQUEST_MISMATCH",
   "CONSUMER_LIMIT_VIOLATION",
   "UNEXPECTED_SIMULATION_ERROR",
+  "LIMIT_ACCOUNT_MISMATCH",
+  "MISSING_EXPECTED_QUOTE",
+  "UNSUPPORTED_LIMIT_ACTION",
 ] as const;
 
 /** Stable string discriminator for log aggregation and external mapping. */
@@ -264,6 +268,97 @@ export class UnexpectedSimulationError extends SimulationPackageError {
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
 
+/**
+ * An action's encoded recipient differs from the account `toSimulationLimits`
+ * was asked to limit: `args.onBehalf` is not `owner` (`field: "onBehalf"`),
+ * `redeem.recipient` on `vaultV2ForceRedeem` is not `receiver ?? owner`
+ * (`field: "redeem.recipient"`), or a `receiver` other than `owner` is passed
+ * for an action that encodes no distinct receiver (`field: "receiver"`).
+ */
+export class LimitAccountMismatchError extends SimulationPackageError {
+  override readonly name = "LimitAccountMismatchError";
+  readonly code = "LIMIT_ACCOUNT_MISMATCH";
+
+  /** The args field carrying the mismatched address. */
+  readonly field: "onBehalf" | "receiver" | "redeem.recipient";
+  /** The address the limit would measure. */
+  readonly expected: Address;
+  /** The address the action encodes, or the passed `receiver` when `field` is `"receiver"`. */
+  readonly actual: Address;
+
+  constructor(mismatch: {
+    /** The args field carrying the mismatched address. */
+    readonly field: "onBehalf" | "receiver" | "redeem.recipient";
+    /** The address the limit would measure. */
+    readonly expected: Address;
+    /** The address the action encodes, or the passed `receiver` when `field` is `"receiver"`. */
+    readonly actual: Address;
+  }) {
+    super(
+      mismatch.field === "receiver"
+        ? `receiver: "${mismatch.actual}" was passed, but this action pays ` +
+            `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
+            `receiver or set it to owner; only vaultV2ForceRedeem encodes a ` +
+            `distinct receiver.`
+        : `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
+            `limit measures "${mismatch.expected}". Build the action for the ` +
+            `same account passed as owner/receiver`,
+    );
+    this.field = mismatch.field;
+    this.expected = mismatch.expected;
+    this.actual = mismatch.actual;
+  }
+}
+
+/**
+ * A quote side `toSimulationLimits` cannot derive from the action args and the
+ * caller did not supply through `expected`.
+ */
+export class MissingExpectedQuoteError extends SimulationPackageError {
+  override readonly name = "MissingExpectedQuoteError";
+  readonly code = "MISSING_EXPECTED_QUOTE";
+
+  /** The action type whose limit lacks the field. */
+  readonly actionType: string;
+  /** The missing `SlippageQuote` field. */
+  readonly field: keyof SlippageQuote;
+  /** What the caller should compute and pass via `expected`. */
+  readonly expectedHint: string;
+
+  constructor(missing: {
+    /** The action type whose limit lacks the field. */
+    readonly actionType: string;
+    /** The missing `SlippageQuote` field. */
+    readonly field: keyof SlippageQuote;
+    /** What the caller should compute and pass via `expected`. */
+    readonly expectedHint: string;
+  }) {
+    super(
+      `"${missing.actionType}": quote.${missing.field} cannot be derived from ` +
+        `the action args; ${missing.expectedHint}`,
+    );
+    this.actionType = missing.actionType;
+    this.field = missing.field;
+    this.expectedHint = missing.expectedHint;
+  }
+}
+
+/** An action type `toSimulationLimits` has no {@link OperationType} for. */
+export class UnsupportedLimitActionError extends SimulationPackageError {
+  override readonly name = "UnsupportedLimitActionError";
+  readonly code = "UNSUPPORTED_LIMIT_ACTION";
+
+  constructor(
+    /** The action type passed in. */
+    public readonly actionType: string,
+  ) {
+    super(
+      `"${actionType}": no simulation limit exists for this action type. ` +
+        `Pass limits built by hand, or "none" for transactions no operation type covers`,
+    );
+  }
+}
+
 const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
   Object.freeze({
     VALIDATION_ERROR: "SimulationValidationError",
@@ -278,6 +373,9 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
     CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
     UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
+    LIMIT_ACCOUNT_MISMATCH: "LimitAccountMismatchError",
+    MISSING_EXPECTED_QUOTE: "MissingExpectedQuoteError",
+    UNSUPPORTED_LIMIT_ACTION: "UnsupportedLimitActionError",
   });
 
 /**
@@ -294,6 +392,8 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  * declare const user: Address;
  * declare const vault: Address;
  * declare const encodedDeposit: Hex;
+ * declare const depositAssets: bigint;
+ * declare const quotedShares: bigint;
  * const config = {
  *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
  * };
@@ -301,6 +401,15 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  *   await simulate(config, {
  *     chainId: 1,
  *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
+ *     limits: {
+ *       operations: [
+ *         {
+ *           type: "vaultV1Deposit",
+ *           vault,
+ *           quote: { assetsPaid: depositAssets, sharesMinted: quotedShares },
+ *         },
+ *       ],
+ *     },
  *   });
  * } catch (e) {
  *   if (!isSimulationPackageError(e)) throw e;

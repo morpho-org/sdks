@@ -39,14 +39,19 @@ describe("SimulateParams", () => {
       bigint | Exclude<BlockTag, "pending"> | undefined
     >();
     expectTypeOf<SimulateParams["limits"]>().toEqualTypeOf<
-      SimulationLimits | undefined
+      SimulationLimits | "none"
     >();
   });
 
-  test("behavior: only chainId and transactions are required", () => {
+  test("behavior: chainId, transactions and limits are required", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly SimulationTransaction[];
+      readonly limits: "none";
     }>().toMatchTypeOf<SimulateParams>();
+    expectTypeOf<{
+      readonly chainId: number;
+      readonly transactions: readonly SimulationTransaction[];
+    }>().not.toMatchTypeOf<SimulateParams>();
   });
 });

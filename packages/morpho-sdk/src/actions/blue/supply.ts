@@ -9,6 +9,7 @@ import type {
   Transaction,
 } from "../../types/index.js";
 import { NonPositiveInputError } from "../../types/index.js";
+import { getBundlesReferralFeeAssets } from "../bundles/common.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -157,6 +158,7 @@ export const blueSupply = (
         nativeAmount: value > 0n ? value : undefined,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: getBundlesReferralFeeAssets(assets, referralFeePct),
         deadline: params.args.deadline,
       },
     },

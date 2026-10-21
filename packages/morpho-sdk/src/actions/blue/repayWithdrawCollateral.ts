@@ -254,6 +254,8 @@ export const blueRepayWithdrawCollateral = (
         nativeAmount: value > 0n ? value : undefined,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets:
+          repayAssets > 0n ? minimumRepayAssets - repayAssets : undefined,
         deadline: params.args.deadline,
       },
     },
