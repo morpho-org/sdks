@@ -4,7 +4,12 @@ import {
   midnightAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
@@ -12,6 +17,7 @@ import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver
 import {
   type Metadata,
   type MidnightRedeemAction,
+  MidnightZeroOnBehalfError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
@@ -46,6 +52,7 @@ export interface MidnightRedeemParams {
  * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
  * @throws {NonPositiveInputError} when `units <= 0n`.
  * @throws {InputExceedsMaxError} when `units` exceeds `uint128`.
+ * @throws {MidnightZeroOnBehalfError} when `onBehalf` is the zero address.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {MidnightZeroReceiverError} when `receiver` resolves to the zero address.
@@ -70,6 +77,9 @@ export const midnightRedeem = (
     throw new NonPositiveInputError("units", params.units);
   }
   validateMidnightUint128Field("units", params.units);
+  if (isAddressEqual(params.onBehalf, zeroAddress)) {
+    throw new MidnightZeroOnBehalfError("onBehalf");
+  }
 
   // Reject markets from another chain deployment before encoding the call.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });

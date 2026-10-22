@@ -972,6 +972,24 @@ const _addressesRegistry = {
     rateRatifierV1: "0xDd0588d7D3Aaa76a33A7d054B0b107eB3bCD3F11",
     wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
   },
+  [ChainId.XLayerMainnet]: {
+    blue: "0xeb00C490E888286357dC5B0a35D37D9260D11Ab5",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundles: {
+      vaultExitBundlesV1: "0x4Eda51CdD2993fE27D8bAB57051c65D2b66C632e",
+      vaultBundlesV1: "0xB9c332379D8Fba06b55e7ecF446E03a3365be8FE",
+      blueBundlesV1: "0xF27e384A863aE4Ce9215D387C0d5dA28936590be",
+    },
+    adaptiveCurveIrm: "0x5688FF1aBC4089cB69dC0F56727E696A49D77E24",
+    vaultV2BluePublicAllocator: "0x1b7C60330E3aFe5bA876F518Ff14316EA497f683",
+    vaultV2Factory: "0x63D6eAc0d16D57dd131D9023ADb060277d3237d7",
+    morphoMarketV1AdapterV2Factory:
+      "0xDD0FC0c74bd89A9C6623202473E75CbF472b33A4",
+    morphoVaultV1AdapterFactory: "0xFb1887f36664AAc366FA2aCf1532d99f1743b851",
+    registryList: "0xe9F2A824Eb33B97D0F7b3266A569d71342104829",
+    chainlinkOracleFactory: "0x625Eb26d759ef8077202d4a5A63098B4B28616Db",
+    wNative: "0xe538905cf8410324e03A5A23C1c177a474D59b2b",
+  },
 } as const;
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
@@ -1600,6 +1618,23 @@ const _deployments = {
     rateRatifierV1: 71_228_891n,
     wNative: 2n,
   },
+  [ChainId.XLayerMainnet]: {
+    blue: 73_110_254n,
+    permit2: 2_728_569n,
+    bundles: {
+      vaultExitBundlesV1: 73_110_399n,
+      vaultBundlesV1: 73_110_393n,
+      blueBundlesV1: 73_110_406n,
+    },
+    adaptiveCurveIrm: 73_110_254n,
+    vaultV2BluePublicAllocator: 73_110_387n,
+    vaultV2Factory: 73_110_352n,
+    morphoMarketV1AdapterV2Factory: 73_110_361n,
+    morphoVaultV1AdapterFactory: 73_110_379n,
+    registryList: 73_110_374n,
+    chainlinkOracleFactory: 73_110_334n,
+    wNative: 40_894n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
@@ -1833,6 +1868,9 @@ const _unwrappedTokensMapping: Record<
   },
   [ChainId.RobinhoodMainnet]: {
     [_addressesRegistry[ChainId.RobinhoodMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.XLayerMainnet]: {
+    [_addressesRegistry[ChainId.XLayerMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

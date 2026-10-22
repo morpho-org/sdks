@@ -1879,6 +1879,19 @@ export class MidnightZeroReceiverError extends Error {
   }
 }
 
+/** Thrown when a Midnight flow uses the zero address as the account it acts for. */
+export class MidnightZeroOnBehalfError extends Error {
+  /**
+   * @param field - Account field containing the zero address.
+   */
+  public constructor(public readonly field: "onBehalf") {
+    super(
+      `Midnight "${field}" cannot be the zero address. Provide a valid account.`,
+    );
+    this.name = "MidnightZeroOnBehalfError";
+  }
+}
+
 /**
  * Thrown when a Midnight receiver is a Midnight protocol or market token contract that cannot
  * forward received assets.

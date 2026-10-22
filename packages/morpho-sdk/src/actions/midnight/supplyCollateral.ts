@@ -4,13 +4,19 @@ import {
   midnightAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   type Metadata,
   type MidnightSupplyCollateralAction,
+  MidnightZeroOnBehalfError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
@@ -42,6 +48,7 @@ export interface MidnightSupplyCollateralParams {
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralAction>` targeting `Midnight`.
  * @throws {NonPositiveInputError} when `assets <= 0n`.
  * @throws {InputExceedsMaxError} when `assets` exceeds `uint128`.
+ * @throws {MidnightZeroOnBehalfError} when `onBehalf` is the zero address.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
@@ -65,6 +72,9 @@ export const midnightSupplyCollateral = (
     throw new NonPositiveInputError("assets", params.assets);
   }
   validateMidnightUint128Field("assets", params.assets);
+  if (isAddressEqual(params.onBehalf, zeroAddress)) {
+    throw new MidnightZeroOnBehalfError("onBehalf");
+  }
 
   // Reject markets from another chain deployment before encoding the call.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });

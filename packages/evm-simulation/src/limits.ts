@@ -106,7 +106,7 @@ export type SimulationOperationSubject =
  * `assetsReceived` in its place), pay-in operations require `assetsPaid`, and the
  * combined collateral operations add the active-leg rules. The package
  * README's `Limits` section lists the required minimums and caps, and the
- * per-operation table is in `docs/migrations/evm-simulation-v6-to-v7.md`.
+ * per-operation table is in `docs/migrations/evm-simulation-v7-to-v8.md`.
  * Only optional extra fields go unchecked when omitted.
  */
 export interface SlippageQuote {
@@ -343,7 +343,7 @@ export type OperationLimit = SlippageLimits & {
  * payout operations `assetsReceived`, pay-in operations `assetsPaid`, and the
  * combined collateral operations their active-leg sides — the package README's
  * `Limits` section lists the required minimums and caps, and the per-operation
- * table is in `docs/migrations/evm-simulation-v6-to-v7.md`. An
+ * table is in `docs/migrations/evm-simulation-v7-to-v8.md`. An
  * omitted `slippageTolerance` defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
  */
 export interface SimulationLimits {

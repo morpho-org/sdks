@@ -62,7 +62,7 @@ then call `buildTx()` without a separate root signature.
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
-Robinhood Chain, and Arc. Custom deployments can still be configured with `registerCustomAddresses`.
+Robinhood Chain, Arc, and X Layer. Custom deployments can still be configured with `registerCustomAddresses`.
 
 ## How it works
 

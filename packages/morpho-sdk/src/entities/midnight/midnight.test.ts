@@ -98,6 +98,7 @@ import {
   MidnightTakeableOfferMarketMismatchError,
   MidnightTakeableOffersNotFillableError,
   MidnightTakeTargetUnreachableError,
+  MidnightZeroOnBehalfError,
   MidnightZeroReceiverError,
   MissingAccrualPositionError,
   MissingMarketPriceError,
@@ -2093,6 +2094,19 @@ describe("MorphoMidnight", () => {
         }),
       ).toThrow(NegativeInputError);
     });
+    test("error: MidnightZeroOnBehalfError", () => {
+      const buildTx = () =>
+        midnight()
+          .supplyCollateral({
+            marketData: marketData(),
+            accountAddress: zeroAddress,
+            collateralAssets: 2_000n,
+          })
+          .buildTx();
+
+      expect(buildTx).toThrow(MidnightZeroOnBehalfError);
+      expect(buildTx).toThrow(expect.objectContaining({ field: "onBehalf" }));
+    });
 
     test("error: collateralAssets above uint128", () => {
       const collateralAssets = maxUint128 + 1n;
@@ -2334,6 +2348,38 @@ describe("MorphoMidnight", () => {
       expect(decoded.args[3]).toBe(midnightAddresses.maker);
     });
 
+    test("error: zero onBehalf is rejected before the default receiver", () => {
+      const market = marketData();
+      const redeem = () =>
+        midnight().redeem({
+          positionData: positionData(market, {
+            credit: 250n,
+            pendingFee: 50n,
+            user: zeroAddress,
+          }),
+          accountAddress: zeroAddress,
+        });
+
+      expect(redeem).toThrow(MidnightZeroOnBehalfError);
+      expect(redeem).toThrow(expect.objectContaining({ field: "onBehalf" }));
+    });
+
+    test("error: MidnightZeroReceiverError", () => {
+      const market = marketData();
+      const redeem = () =>
+        midnight().redeem({
+          positionData: positionData(market, {
+            credit: 250n,
+            pendingFee: 50n,
+          }),
+          accountAddress: midnightAddresses.taker,
+          receiver: zeroAddress,
+        });
+
+      expect(redeem).toThrow(MidnightZeroReceiverError);
+      expect(redeem).toThrow(expect.objectContaining({ field: "receiver" }));
+    });
+
     test("error: MissingAccrualPositionError", () => {
       expect(() =>
         midnight().redeem({
@@ -2424,22 +2470,6 @@ describe("MorphoMidnight", () => {
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(InsufficientMidnightWithdrawableLiquidityError);
-    });
-
-    test("error: MidnightZeroReceiverError for a zero receiver", () => {
-      const market = marketData();
-      const call = () =>
-        midnight().redeem({
-          positionData: positionData(market, {
-            credit: 250n,
-            pendingFee: 50n,
-          }),
-          accountAddress: midnightAddresses.taker,
-          receiver: zeroAddress,
-        });
-
-      expect(call).toThrow(MidnightZeroReceiverError);
-      expect(call).toThrow(expect.objectContaining({ field: "receiver" }));
     });
 
     test("error: MidnightContractReceiverError for a protocol receiver", () => {

@@ -1,5 +1,15 @@
 # @morpho-org/morpho-ts
 
+## 4.1.0
+
+### Minor Changes
+
+- Add X Layer (chain id 196) to the shared chain and address registries.
+
+  Register the `ChainId.XLayerMainnet` enum member, its explorer and native-currency (OKB) metadata, and its era-3 Morpho Blue, AdaptiveCurveIrm, bundles (VaultBundlesV1, VaultExitBundlesV1, BlueBundlesV1), BluePublicAllocator, VaultV2, adapter-factory, registry and oracle-factory addresses (sourced from the `morpho-org/deployments` address book), plus Permit2 and the WOKB wrapped-native token, with their deployment blocks.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
 ## 4.0.1
 
 ### Patch Changes

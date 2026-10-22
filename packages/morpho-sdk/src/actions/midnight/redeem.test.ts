@@ -12,6 +12,7 @@ import {
   ChainIdMismatchError,
   InputExceedsMaxError,
   MidnightContractReceiverError,
+  MidnightZeroOnBehalfError,
   MidnightZeroReceiverError,
   NonPositiveInputError,
 } from "../../types/index.js";
@@ -90,6 +91,19 @@ describe("midnightRedeem", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: MidnightZeroOnBehalfError for zero onBehalf", () => {
+    const buildTx = () =>
+      midnightRedeem({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        units: 1_000n,
+        onBehalf: zeroAddress,
+      });
+
+    expect(buildTx).toThrow(MidnightZeroOnBehalfError);
+    expect(buildTx).toThrow(expect.objectContaining({ field: "onBehalf" }));
   });
 
   test("error: units above the uint128 credit balance", () => {

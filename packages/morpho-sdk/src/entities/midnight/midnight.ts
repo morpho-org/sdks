@@ -1332,6 +1332,7 @@ export class MorphoMidnight {
    * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
    * @throws {InputExceedsMaxError} when `collateralAssets` exceeds `uint128`.
    * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
+   * @throws {MidnightZeroOnBehalfError} from `buildTx()` when `accountAddress` is the zero address.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
    * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below the pulled collateral assets.
    * @example
@@ -2206,14 +2207,15 @@ export class MorphoMidnight {
    * @throws {MissingAccrualPositionError} when no position snapshot is supplied.
    * @throws {AccrualPositionUserMismatchError} when the position snapshot belongs to another account.
    * @throws {NoMidnightCreditToRedeemError} when the selected unit amount is non-positive.
+   * @throws {InputExceedsMaxError} when the selected units exceed `uint128`.
    * @throws {MidnightRedeemExceedsCreditError} when the selected amount exceeds the accrued
    *   position credit.
    * @throws {InvalidMidnightPositionLossFactorError} when the market loss factor is below the
    *   position's `lastLossFactor`, which `getPositionData` snapshots never are.
    * @throws {InvalidMidnightPositionAccrualStateError} when the snapshot's credit, pending fee or
    *   loss factor are inconsistent, which `getPositionData` snapshots never are.
-   * @throws {InputExceedsMaxError} when the selected units exceed `uint128`.
    * @throws {InsufficientMidnightWithdrawableLiquidityError} when market liquidity cannot cover the redemption.
+   * @throws {MidnightZeroOnBehalfError} when `accountAddress` is the zero address.
    * @throws {MidnightZeroReceiverError} when `receiver` resolves to the zero address.
    * @throws {MidnightContractReceiverError} when `receiver` is a Midnight protocol contract or a
    *   market token contract.

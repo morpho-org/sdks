@@ -3,7 +3,7 @@ import {
   midnightAbi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, maxUint128 } from "viem";
+import { decodeFunctionData, maxUint128, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -15,6 +15,7 @@ import {
 import {
   ChainIdMismatchError,
   InputExceedsMaxError,
+  MidnightZeroOnBehalfError,
   NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
@@ -72,6 +73,19 @@ describe("midnightSupplyCollateral", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: MidnightZeroOnBehalfError for zero onBehalf", () => {
+    const buildTx = () =>
+      midnightSupplyCollateral({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        assets: 2_000n,
+        onBehalf: zeroAddress,
+      });
+
+    expect(buildTx).toThrow(MidnightZeroOnBehalfError);
+    expect(buildTx).toThrow(expect.objectContaining({ field: "onBehalf" }));
   });
 
   test("error: assets above the uint128 collateral balance", () => {

@@ -63,7 +63,10 @@ Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
-Upgrading from v4? See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover. Upgrading from v5? Apply the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) first (retention-guard address change and 6.1.0 fail-closed RPC responses), then the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md). Upgrading from v6? See the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for the simplified errors, original revert bytes and required limits.
+Upgrading from v4? Start with the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover, then apply the [v5 → v6](../../docs/migrations/evm-simulation-v5-to-v6.md), [v6 → v7](../../docs/migrations/evm-simulation-v6-to-v7.md), and [v7 → v8](../../docs/migrations/evm-simulation-v7-to-v8.md) guides in order.
+Upgrading from v5? Apply the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) first (retention-guard address change and 6.1.0 fail-closed RPC responses), then the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for simplified errors and original revert bytes, then the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
+Upgrading from v6? See the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for simplified errors and original revert bytes, then the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
+Upgrading from v7? See the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
 
 ### API surface
 
@@ -133,7 +136,7 @@ opt-out is never accepted.
 The caller chooses the action, subject, quote, and percentage tolerance. Every
 operation type requires the quote sides of the required-minimums and
 required-caps lists below — the per-operation table lives in
-`docs/migrations/evm-simulation-v6-to-v7.md`:
+`docs/migrations/evm-simulation-v7-to-v8.md`:
 
 - Required minimums: `assetsReceived` on payout ops (`blueWithdraw`,
   `blueBorrow`, `blueWithdrawCollateral`, and every vault withdraw, redeem

@@ -2,7 +2,7 @@
 
 | Field      | Value                   |
 | ---------- | ----------------------- |
-| **Status** | accepted                |
+| **Status** | accepted; `evm-simulation` 7.0.0 target superseded by ADR-2026-10-21-evm-simulation-fail-closed-limits-ships-in-v8 |
 | **Date**   | 2026-10-15              |
 | **Author** | @jinmel                 |
 | **Scope**  | `evm-simulation` 7.0.0  |
