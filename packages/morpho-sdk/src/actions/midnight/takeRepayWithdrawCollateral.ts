@@ -4,7 +4,8 @@ import {
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, maxUint256 } from "viem";
+import { encodeMidnightCalldata } from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
@@ -12,6 +13,7 @@ import {
   validateReferralFee,
   validateUint256Field,
 } from "../../helpers/validate.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
   validateMidnightReferralFeeCap,
   validateMidnightTakeableOfferBounds,
@@ -121,6 +123,7 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
  * @throws {MidnightZeroReceiverError} when collateral is withdrawn to the zero address.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
  *   contract or a market token contract, or when `referralFeeRecipient` is either with a positive
  *   referral fee.
@@ -170,6 +173,7 @@ export const midnightTakeRepayWithdrawCollateral = (
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   }
+  validateMidnightAddress("collateralReceiver", params.collateralReceiver);
   if (params.collateralWithdrawals.length > 0) {
     // Rejects receivers that would strand the withdrawn collateral in a contract.
     validateMidnightReceiver({
@@ -216,6 +220,11 @@ export const midnightTakeRepayWithdrawCollateral = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
+  if (params.referralFeeRecipient !== undefined)
+    validateMidnightAddress(
+      "referralFeeRecipient",
+      params.referralFeeRecipient,
+    );
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   if (referralFeePct > 0n) {
@@ -260,13 +269,13 @@ export const midnightTakeRepayWithdrawCollateral = (
     value: nativeFunding.value,
     data:
       target.type === "assets"
-        ? encodeFunctionData({
+        ? encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
             args: [market, target.assets, target.minUnits, ...args],
           })
-        : encodeFunctionData({
+        : encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",

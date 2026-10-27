@@ -7,7 +7,15 @@ import {
   registerCustomAddresses,
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, getAddress, maxUint256, zeroAddress } from "viem";
+import type { Address } from "viem";
+import {
+  decodeFunctionData,
+  getAddress,
+  IntegerOutOfRangeError,
+  InvalidAddressError,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -19,6 +27,7 @@ import {
 import {
   ChainIdMismatchError,
   InputExceedsMaxError,
+  MidnightCalldataEncodingError,
   MidnightContractReceiverError,
   MidnightZeroReceiverError,
   NegativeInputError,
@@ -290,6 +299,20 @@ describe("midnightRepayWithdrawCollateral", () => {
     ).toThrow(UnknownAddressError);
   });
 
+  test("error: an unencodable market throws a typed encoding error", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        market: { ...midnightMarket, maturity: maxUint256 + 1n },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        cause: expect.any(IntegerOutOfRangeError),
+      }),
+    );
+  });
+
   test("error: ChainIdMismatchError", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({ ...params, chainId: 1 }),
@@ -322,5 +345,55 @@ describe("midnightRepayWithdrawCollateral", () => {
         collateralReceiver: midnightBundlesV2,
       }),
     ).not.toThrow();
+  });
+});
+
+describe("midnightRepayWithdrawCollateral malformed address", () => {
+  test("error: a malformed market loanToken throws a typed encoding error", () => {
+    const call = () =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        market: { ...midnightMarket, loanToken: "0x123" as Address },
+      });
+
+    expect(call).toThrow(MidnightCalldataEncodingError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        input: "market.loanToken",
+        cause: expect.any(InvalidAddressError),
+      }),
+    );
+  });
+
+  test("error: a malformed collateralReceiver throws a typed encoding error", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        collateralReceiver: "0x123" as Address,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "collateralReceiver",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
+  });
+
+  test("error: a malformed native-funded loanToken throws a typed encoding error", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        market: { ...midnightMarket, loanToken: "0x123" as Address },
+        collateralWithdrawals: [],
+        nativeAmount: 1n,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "token",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
   });
 });

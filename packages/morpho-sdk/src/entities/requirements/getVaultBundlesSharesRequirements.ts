@@ -2,7 +2,7 @@ import type { Token } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
-import { erc20Abi } from "viem";
+import { erc20Abi, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -16,25 +16,17 @@ import {
 } from "../../types/index.js";
 
 /**
- * Resolves the exact vault-share approval or ERC-2612 requirement for a VaultBundlesV1 exit.
+ * Resolves the vault-share approval or ERC-2612 requirement for a VaultBundlesV1 exit.
  *
- * The exit burns however many shares the vault prices at execution time, so the share allowance is
- * the only cap on that burn. An allowance within `[requiredShareAllowance, maxShareAllowance]`
- * satisfies the requirement; one above `maxShareAllowance` is replaced by an onchain approval for
- * exactly the computed cap. Only an insufficient allowance may be raised through an ERC-2612 permit,
- * because VaultBundlesV1 skips a permit whose nonce was already consumed and the leftover allowance
- * would then stay in force.
+ * An allowance at least as large as `requiredShareAllowance` satisfies the requirement. Otherwise
+ * the helper returns a maxUint256 approval or, when supported, a vault-share permit.
  *
  * @internal
  *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
- * @param params - Vault snapshot, owner, allowance bounds, and deadline values. `maxShareAllowance`
- *   defaults to `requiredShareAllowance`, which accepts only an exact match.
+ * @param params - Vault snapshot, owner, minimum allowance, and deadline values.
  * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
- * @returns No requirement when the allowance is within `[requiredShareAllowance,
- *   maxShareAllowance]`, otherwise one
- *   approval that sets it to exactly that cap, or one permit when the allowance is below the cap
- *   and signatures are supported.
+ * @returns No requirement when the allowance is sufficient, otherwise one approval or permit.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
@@ -48,7 +40,6 @@ export const getVaultBundlesSharesRequirements = async (
     readonly owner: Address;
     readonly chainId: number;
     readonly requiredShareAllowance: bigint;
-    readonly maxShareAllowance?: bigint;
     readonly deadline: bigint;
     readonly supportSignature: boolean;
     readonly now?: bigint;
@@ -68,14 +59,8 @@ export const getVaultBundlesSharesRequirements = async (
     functionName: "allowance",
     args: [params.owner, spender],
   });
-  // Asset-mode withdrawals carry no onchain share cap, so the allowance itself is the cap. Only an
-  // allowance up to `maxShareAllowance` skips the approval or permit that resets it to the cap.
-  if (
-    allowance >= params.requiredShareAllowance &&
-    allowance <= (params.maxShareAllowance ?? params.requiredShareAllowance)
-  )
-    return [];
-  if (allowance < params.requiredShareAllowance && params.supportSignature) {
+  if (allowance >= params.requiredShareAllowance) return [];
+  if (params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,
       abi: erc2612Abi,
@@ -90,7 +75,6 @@ export const getVaultBundlesSharesRequirements = async (
         owner: params.owner,
         chainId: params.chainId,
         nonce,
-        amount: params.requiredShareAllowance,
         deadline: params.deadline,
         now,
       }),
@@ -100,7 +84,7 @@ export const getVaultBundlesSharesRequirements = async (
     encodeErc20Approval({
       token: params.vaultData.address,
       spender,
-      amount: params.requiredShareAllowance,
+      amount: maxUint256,
       chainId: params.chainId,
     }),
   ];

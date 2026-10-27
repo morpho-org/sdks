@@ -403,12 +403,14 @@ export namespace RateRatifierV1 {
    * highest leaf indices. A group matching the generic content id of all
    * leaves sharing it (for example from `OfferUtils.toStruct` or
    * `Group.create`) is re-derived with {@link groupId}; other explicit groups
-   * are committed as-is. An omitted `group` defaults to the leaf's
+   * are committed as-is. Every explicit group is first checked with
+   * {@link OfferUtils.validateOfferGroup}. An omitted `group` defaults to the leaf's
    * content-addressed singleton {@link groupId}, which commits to `rate` and
    * `allowedTaker` like the router does.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`).
    * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
    * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}.
@@ -487,6 +489,7 @@ export namespace RateRatifierV1 {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
@@ -660,6 +663,7 @@ export namespace RateRatifierV1 {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded RateRatifierV1 data.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
@@ -703,6 +707,7 @@ export namespace RateRatifierV1 {
    *
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.

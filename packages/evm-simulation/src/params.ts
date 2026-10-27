@@ -1,6 +1,6 @@
 import type { BlockTag, Hex } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
-import type { SimulationLimits } from "./limits.js";
+import type { SimulationInputLimits, SimulationLimits } from "./limits.js";
 import type { SimulationTransaction } from "./types.js";
 
 /** Every simulation mode; source of `SimulationMode`. */
@@ -45,9 +45,15 @@ export interface SimulateParams {
    * `parentHash` check. */
   readonly block?: StateBlock;
   /**
-   * Required caller-selected quotes and percentage tolerances, or the explicit
+   * Required caller-selected quotes, or the explicit
    * `"none"` opt-out, which skips every limit read and check. Omitted `limits`
    * is rejected rather than silently unchecked.
    */
   readonly limits: SimulationLimits | "none";
+}
+
+/** Input to `simulate()` accepting typed input limits alongside quote limits. */
+export interface SimulateInputParams extends Omit<SimulateParams, "limits"> {
+  /** Caller-selected quotes or typed inputs with pinned-block derivations, or the explicit opt-out. */
+  readonly limits: SimulationLimits | SimulationInputLimits | "none";
 }

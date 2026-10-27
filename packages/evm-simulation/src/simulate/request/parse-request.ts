@@ -3,6 +3,7 @@ import {
   type MarketId,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -22,10 +23,14 @@ import type {
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import {
+  type CheckedInputOperationLimit,
   type CheckedOperationLimit,
   type ForceExitDeallocationQuote,
   INACTIVE_LEG_CAP,
   type InKindPositionQuote,
+  MIDNIGHT_MARKET_INPUT_OPERATION_TYPES,
+  type MidnightCollateralAmount,
+  type MidnightMarketStruct,
   type OperationLimit,
   type OperationType,
   QUOTE_FIELD_DIRECTION,
@@ -35,7 +40,7 @@ import {
 } from "../../limits.js";
 import {
   SIMULATION_MODES,
-  type SimulateParams,
+  type SimulateInputParams,
   type SimulationMode,
   type StateBlock,
 } from "../../params.js";
@@ -45,6 +50,7 @@ import {
   positionBoundsMarketField,
   sharePriceMeasurement,
 } from "../measurement-plan.js";
+import { INPUT_FIELDS, validateOperationInputs } from "./operation-inputs.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
  * @internal
@@ -63,7 +69,14 @@ export interface ParsedTransaction {
  * (the parser applies `DEFAULT_SLIPPAGE_TOLERANCE`).
  * @internal
  */
-export type ParsedOperationLimit = CheckedOperationLimit;
+export type ParsedOperationLimit = (
+  | CheckedOperationLimit
+  | CheckedInputOperationLimit
+) & {
+  readonly derivedFields?: readonly ScalarQuoteField[];
+  readonly exactFields?: readonly ScalarQuoteField[];
+  readonly inactiveFields?: readonly ScalarQuoteField[];
+};
 
 /** The output of {@link parseRequest}: the caller's input validated, checksummed and defaulted.
  * @internal
@@ -187,6 +200,11 @@ const POSITION_BOUNDS_FIELDS = [
   "maxBorrowShares",
   "minSupplyShares",
   "minCollateral",
+] as const;
+const MIDNIGHT_POSITION_BOUNDS_FIELDS = ["maxCredit"] as const;
+const MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS = [
+  "maxDebt",
+  "maxCollateral",
 ] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
 const LIMITS_KEYS = ["operations"] as const;
@@ -673,20 +691,31 @@ const createChecks = (): FieldChecks => {
       }
       const spec = OPERATION_SPECS[type as OperationType];
       const requiredAddresses = new Set(spec.requiredAddresses);
+      const acceptsMarket = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
+        (acceptedType) => acceptedType === type,
+      );
       check.keys(operation, {
         allow: [
           "type",
           ...spec.markets,
           ...spec.addresses,
+          ...(acceptsMarket ? ["market"] : []),
+          ...(type === "midnightSupplyCollateral" ? ["collateralIndex"] : []),
+          ...(type === "midnightSupplyBlueMakeLend" ? ["callbackSalt"] : []),
           "quote",
           "slippageTolerance",
           "sharePrice",
           "position",
+          "inputs",
+          "referralFee",
+          "reallocationPenalty",
         ],
         path,
       });
       const errorsBefore = errors.length;
       const out = { type } as ParsedOperationLimit;
+      let collateralWithdrawals: MidnightCollateralAmount[] | undefined;
+      let collateralSupplies: MidnightCollateralAmount[] | undefined;
       for (const field of spec.markets) {
         const value = check.marketId(
           readField(operation, field),
@@ -694,11 +723,52 @@ const createChecks = (): FieldChecks => {
         );
         if (value !== undefined) Reflect.set(out, field, value);
       }
+      const rawMarket = readField(operation, "market");
+      if (acceptsMarket && rawMarket !== undefined) {
+        const invalidMarket = `${path}.market: must be a valid Midnight market struct; pass the struct used to build the operation.`;
+        if (!isRecord(rawMarket)) {
+          errors.push(invalidMarket);
+        } else {
+          try {
+            const market = rawMarket as MidnightMarketStruct;
+            const resolvedMarketId = MidnightMarketUtils.toId(market);
+            const operationMarketId = readField(operation, "marketId");
+            if (
+              typeof operationMarketId === "string" &&
+              resolvedMarketId.toLowerCase() !== operationMarketId.toLowerCase()
+            ) {
+              errors.push(
+                `${path}.market: must identify the same Midnight market as marketId; pass the struct used to build the operation.`,
+              );
+            } else {
+              Reflect.set(out, "market", MidnightMarketUtils.toStruct(market));
+            }
+          } catch {
+            errors.push(invalidMarket);
+          }
+        }
+      }
       for (const field of spec.addresses) {
         const raw = readField(operation, field);
         if (raw === undefined && !requiredAddresses.has(field)) continue;
         const value = check.address(raw, `${path}.${field}`);
         if (value !== undefined) Reflect.set(out, field, value);
+      }
+      if (type === "midnightSupplyBlueMakeLend") {
+        const callbackSalt = check.bytes32(
+          readField(operation, "callbackSalt"),
+          `${path}.callbackSalt`,
+        );
+        if (callbackSalt !== undefined)
+          Reflect.set(out, "callbackSalt", callbackSalt);
+      }
+      if (type === "midnightSupplyCollateral") {
+        const collateralIndex = check.uint256(
+          readField(operation, "collateralIndex"),
+          `${path}.collateralIndex`,
+        );
+        if (collateralIndex !== undefined)
+          Reflect.set(out, "collateralIndex", collateralIndex);
       }
       const rawTolerance = readField(operation, "slippageTolerance");
       if (rawTolerance === undefined) {
@@ -714,7 +784,63 @@ const createChecks = (): FieldChecks => {
           Reflect.set(out, "slippageTolerance", tolerance);
         }
       }
-      const quote = readField(operation, "quote");
+      const inputs = readField(operation, "inputs");
+      const referralFee = readField(operation, "referralFee");
+      const reallocationPenalty = readField(operation, "reallocationPenalty");
+      const suppliedQuote = readField(operation, "quote");
+      let quote = suppliedQuote;
+      if (inputs !== undefined) {
+        // Validate amounts before scheduling internal before-state reads.
+        validateOperationInputs({
+          type: type as OperationType,
+          inputs,
+          fee: referralFee,
+          penalty: reallocationPenalty,
+          errors,
+          path,
+        });
+        const repay = isRecord(inputs) ? readField(inputs, "repay") : undefined;
+        Reflect.set(
+          out,
+          "inputs",
+          isRecord(inputs)
+            ? { ...inputs, ...(isRecord(repay) ? { repay: { ...repay } } : {}) }
+            : inputs,
+        );
+        if (referralFee !== undefined)
+          Reflect.set(out, "referralFee", referralFee);
+        if (reallocationPenalty !== undefined)
+          Reflect.set(out, "reallocationPenalty", reallocationPenalty);
+        if (Object.hasOwn(INPUT_FIELDS, type)) {
+          const fields = INPUT_FIELDS[type as keyof typeof INPUT_FIELDS];
+          const derivedFields = fields.filter(
+            (field) =>
+              !isRecord(suppliedQuote ?? {}) ||
+              readField(suppliedQuote ?? {}, field) === undefined,
+          );
+          Reflect.set(out, "derivedFields", derivedFields);
+          // Combined-collateral checks treat these placeholders as inactive legs.
+          quote = {
+            ...Object.fromEntries(
+              fields.map((field) => [field, INACTIVE_LEG_CAP]),
+            ),
+            ...(isRecord(suppliedQuote)
+              ? Object.fromEntries(
+                  Object.entries(suppliedQuote).filter(
+                    ([, value]) => value !== undefined,
+                  ),
+                )
+              : {}),
+          };
+          if (suppliedQuote !== undefined && !isRecord(suppliedQuote))
+            errors.push(`${path}.quote: must be an object`);
+        }
+      } else {
+        if (referralFee !== undefined)
+          errors.push(`${path}.referralFee: requires inputs`);
+        if (reallocationPenalty !== undefined)
+          errors.push(`${path}.reallocationPenalty: requires inputs`);
+      }
       let normalizedQuote: Record<string, bigint> | undefined;
       if (!isRecord(quote)) {
         errors.push(
@@ -722,7 +848,16 @@ const createChecks = (): FieldChecks => {
         );
       } else {
         check.keys(quote, {
-          allow: [...QUOTE_FIELDS, "positions", "deallocations"],
+          allow:
+            type === "midnightSupplyBlueMakeLend"
+              ? ["assetsPaid", "sharesMinted"]
+              : [
+                  ...QUOTE_FIELDS,
+                  "positions",
+                  "deallocations",
+                  "collateralWithdrawals",
+                  "collateralSupplies",
+                ],
           path: `${path}.quote`,
         });
         normalizedQuote = {};
@@ -856,6 +991,113 @@ const createChecks = (): FieldChecks => {
             }
           }
         }
+        const rawCollateralWithdrawals = readField(
+          quote,
+          "collateralWithdrawals",
+        );
+        if (rawCollateralWithdrawals !== undefined) {
+          if (
+            type !== "midnightRepayWithdrawCollateral" &&
+            type !== "midnightTakeRepayWithdrawCollateral"
+          ) {
+            errors.push(
+              `${path}.quote.collateralWithdrawals: cannot be measured for "${type}"`,
+            );
+          } else if (!Array.isArray(rawCollateralWithdrawals)) {
+            errors.push(
+              `${path}.quote.collateralWithdrawals: must be an array of { collateralIndex, assets }`,
+            );
+          } else {
+            if (rawCollateralWithdrawals.length === 0)
+              errors.push(
+                `${path}.quote.collateralWithdrawals: must be a non-empty array`,
+              );
+            collateralWithdrawals = [];
+            const seen = new Set<bigint>();
+            for (const [i, entry] of rawCollateralWithdrawals.entries()) {
+              const entryPath = `${path}.quote.collateralWithdrawals[${i}]`;
+              if (!isRecord(entry)) {
+                errors.push(`${entryPath}: must be an object`);
+                continue;
+              }
+              check.keys(entry, {
+                allow: ["collateralIndex", "assets"],
+                path: entryPath,
+              });
+              const collateralIndex = check.uint256(
+                readField(entry, "collateralIndex"),
+                `${entryPath}.collateralIndex`,
+              );
+              const rawAssets = readField(entry, "assets");
+              const assets = check.uint256(rawAssets, `${entryPath}.assets`);
+              if (assets === 0n)
+                errors.push(
+                  `${entryPath}.assets: must be positive (got "${rawAssets}")`,
+                );
+              if (collateralIndex !== undefined) {
+                if (seen.has(collateralIndex))
+                  errors.push(
+                    `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+                  );
+                else seen.add(collateralIndex);
+              }
+              if (collateralIndex !== undefined && assets !== undefined)
+                collateralWithdrawals.push({ collateralIndex, assets });
+            }
+          }
+        }
+        const rawCollateralSupplies = readField(quote, "collateralSupplies");
+        if (
+          rawCollateralSupplies !== undefined ||
+          type === "midnightSupplyCollateralTakeBorrow"
+        ) {
+          if (type !== "midnightSupplyCollateralTakeBorrow") {
+            errors.push(
+              `${path}.quote.collateralSupplies: cannot be measured for "${type}"`,
+            );
+          } else if (!Array.isArray(rawCollateralSupplies)) {
+            errors.push(
+              `${path}.quote.collateralSupplies: must be an array of { collateralIndex, assets }`,
+            );
+          } else {
+            if (rawCollateralSupplies.length === 0)
+              errors.push(
+                `${path}.quote.collateralSupplies: must be a non-empty array`,
+              );
+            collateralSupplies = [];
+            const seen = new Set<bigint>();
+            for (const [i, entry] of rawCollateralSupplies.entries()) {
+              const entryPath = `${path}.quote.collateralSupplies[${i}]`;
+              if (!isRecord(entry)) {
+                errors.push(`${entryPath}: must be an object`);
+                continue;
+              }
+              check.keys(entry, {
+                allow: ["collateralIndex", "assets"],
+                path: entryPath,
+              });
+              const collateralIndex = check.uint256(
+                readField(entry, "collateralIndex"),
+                `${entryPath}.collateralIndex`,
+              );
+              const rawAssets = readField(entry, "assets");
+              const assets = check.uint256(rawAssets, `${entryPath}.assets`);
+              if (assets === 0n)
+                errors.push(
+                  `${entryPath}.assets: must be positive (got "${rawAssets}")`,
+                );
+              if (collateralIndex !== undefined) {
+                if (seen.has(collateralIndex))
+                  errors.push(
+                    `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+                  );
+                else seen.add(collateralIndex);
+              }
+              if (collateralIndex !== undefined && assets !== undefined)
+                collateralSupplies.push({ collateralIndex, assets });
+            }
+          }
+        }
         const quoteRecord = normalizedQuote;
         // Every operation type has required sides, so an empty quote is
         // rejected by the required-quotes loop below.
@@ -871,30 +1113,21 @@ const createChecks = (): FieldChecks => {
               `${path}.quote.${field}: cannot be measured for "${type}"`,
             );
         }
-        for (const required of spec.requiredQuotes) {
-          if (required.some((field) => quoteRecord[field] !== undefined))
-            continue;
-          if (required.length === 1)
-            errors.push(`${path}.quote.${required[0]}: required for "${type}"`);
-          else
-            errors.push(
-              `${path}.quote: supply at least one of ${required.map((field) => `"${field}"`).join(", ")} for "${type}"`,
-            );
-        }
-        // Conditional rules on the combined collateral operations: `1n` marks
-        // an inactive leg, so a value above it activates that leg's other side.
-        for (const { field, reason } of conditionalQuoteViolations(
-          type as OperationType,
-          quoteRecord as SlippageQuote,
-        )) {
-          errors.push(
-            `${path}.quote.${field}: required for "${type}" when ${reason}`,
-          );
-        }
+        errors.push(
+          ...requiredQuoteErrors({
+            type: type as OperationType,
+            quote: quoteRecord as SlippageQuote,
+            path,
+          }),
+        );
         Reflect.set(out, "quote", {
           ...quoteRecord,
           ...(positions === undefined ? {} : { positions }),
           ...(deallocations === undefined ? {} : { deallocations }),
+          ...(collateralWithdrawals === undefined
+            ? {}
+            : { collateralWithdrawals }),
+          ...(collateralSupplies === undefined ? {} : { collateralSupplies }),
         });
       }
       const rawSharePrice = readField(operation, "sharePrice");
@@ -941,26 +1174,145 @@ const createChecks = (): FieldChecks => {
         if (!isRecord(rawPosition)) {
           errors.push(`${path}.position: must be an object`);
         } else {
+          const positionFields =
+            type === "midnightRedeem"
+              ? MIDNIGHT_POSITION_BOUNDS_FIELDS
+              : type === "midnightRepayWithdrawCollateral" ||
+                  type === "midnightTakeRepayWithdrawCollateral"
+                ? MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS
+                : type === "midnightTakeBorrow" ||
+                    type === "midnightTakeWithdraw" ||
+                    type === "midnightSupplyCollateralTakeBorrow"
+                  ? []
+                  : POSITION_BOUNDS_FIELDS;
           check.keys(rawPosition, {
-            allow: POSITION_BOUNDS_FIELDS,
+            allow: positionFields,
             path: `${path}.position`,
           });
           const bounds: Record<string, bigint> = {};
+          let maxCollateral: MidnightCollateralAmount[] | undefined;
           let hasPositionBound = false;
-          for (const field of POSITION_BOUNDS_FIELDS) {
+          for (const field of positionFields) {
             const raw = readField(rawPosition, field);
             if (raw === undefined) continue;
             hasPositionBound = true;
+            if (field === "maxCollateral") {
+              if (!Array.isArray(raw)) {
+                errors.push(
+                  `${path}.position.maxCollateral: must be an array of { collateralIndex, assets }`,
+                );
+                continue;
+              }
+              if (raw.length === 0)
+                errors.push(
+                  `${path}.position.maxCollateral: must be a non-empty array`,
+                );
+              maxCollateral = [];
+              const seen = new Set<bigint>();
+              for (const [i, entry] of raw.entries()) {
+                const entryPath = `${path}.position.maxCollateral[${i}]`;
+                if (!isRecord(entry)) {
+                  errors.push(`${entryPath}: must be an object`);
+                  continue;
+                }
+                check.keys(entry, {
+                  allow: ["collateralIndex", "assets"],
+                  path: entryPath,
+                });
+                const collateralIndex = check.uint256(
+                  readField(entry, "collateralIndex"),
+                  `${entryPath}.collateralIndex`,
+                );
+                const assets = check.uint256(
+                  readField(entry, "assets"),
+                  `${entryPath}.assets`,
+                );
+                if (collateralIndex !== undefined) {
+                  if (seen.has(collateralIndex))
+                    errors.push(
+                      `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+                    );
+                  else seen.add(collateralIndex);
+                }
+                if (collateralIndex !== undefined && assets !== undefined)
+                  maxCollateral.push({ collateralIndex, assets });
+              }
+              continue;
+            }
             const value = check.uint256(raw, `${path}.position.${field}`);
             if (value !== undefined) bounds[field] = value;
           }
-          if (positionBoundsMarketField(type as OperationType) === undefined)
+          if (
+            type !== "midnightRedeem" &&
+            type !== "midnightRepayWithdrawCollateral" &&
+            type !== "midnightTakeRepayWithdrawCollateral" &&
+            positionBoundsMarketField(type as OperationType) === undefined
+          )
             errors.push(`${path}.position: cannot be measured for "${type}"`);
           if (!hasPositionBound)
             errors.push(`${path}.position: supply at least one bound`);
-          if (Object.keys(bounds).length > 0)
-            Reflect.set(out, "position", bounds);
+          if (Object.keys(bounds).length > 0 || maxCollateral !== undefined)
+            Reflect.set(out, "position", {
+              ...bounds,
+              ...(maxCollateral === undefined ? {} : { maxCollateral }),
+            });
         }
+      }
+      if (
+        type === "midnightRepayWithdrawCollateral" ||
+        type === "midnightTakeRepayWithdrawCollateral"
+      ) {
+        const position = readField(out, "position");
+        const maxCollateral = isRecord(position)
+          ? readField(position, "maxCollateral")
+          : undefined;
+        if (Array.isArray(maxCollateral)) {
+          const quotedIndexes = new Set(
+            (collateralWithdrawals ?? []).map(
+              ({ collateralIndex }) => collateralIndex,
+            ),
+          );
+          for (const [i, bound] of maxCollateral.entries()) {
+            const collateralIndex = isRecord(bound)
+              ? readField(bound, "collateralIndex")
+              : undefined;
+            if (
+              typeof collateralIndex === "bigint" &&
+              !quotedIndexes.has(collateralIndex)
+            )
+              errors.push(
+                `${path}.position.maxCollateral[${i}].collateralIndex: requires a matching quote.collateralWithdrawals entry`,
+              );
+          }
+        }
+        const maxDebt =
+          isRecord(position) &&
+          typeof readField(position, "maxDebt") === "bigint"
+            ? readField(position, "maxDebt")
+            : undefined;
+        const hasRepayLeg =
+          normalizedQuote?.debtRepaid !== undefined || maxDebt !== undefined;
+        const hasWithdrawLeg = (collateralWithdrawals?.length ?? 0) > 0;
+        if (type === "midnightTakeRepayWithdrawCollateral" && !hasRepayLeg)
+          errors.push(
+            `${path}: quote.debtRepaid or position.maxDebt is required for "${type}"`,
+          );
+        else if (!hasRepayLeg && !hasWithdrawLeg)
+          errors.push(
+            `${path}: quote.debtRepaid, position.maxDebt, or a non-empty quote.collateralWithdrawals is required`,
+          );
+        if (hasRepayLeg && normalizedQuote?.assetsPaid === undefined)
+          errors.push(
+            `${path}.quote.assetsPaid: required when the repayment leg is active`,
+          );
+        if (!hasRepayLeg && normalizedQuote?.assetsPaid !== undefined)
+          errors.push(
+            `${path}.quote.assetsPaid: cannot be measured without an active repayment leg`,
+          );
+      } else if (normalizedQuote?.debtRepaid !== undefined) {
+        errors.push(
+          `${path}.quote.debtRepaid: cannot be measured for "${type}"`,
+        );
       }
       return errors.length === errorsBefore ? out : undefined;
     },
@@ -1122,6 +1474,45 @@ const OPERATION_SPECS: Record<
     ],
     requiredAddresses: ["sourceVault", "targetVault"],
   },
+  // `marketId` is the Midnight market id; `collateralIndex` is parsed apart
+  // because it is the only integer subject field.
+  midnightSupplyCollateral: marketSpec([
+    ["collateralSupplied"],
+    ["assetsPaid"],
+  ]),
+  midnightSupplyBlueMakeLend: {
+    requiredQuotes: [["assetsPaid"], ["sharesMinted"]],
+    markets: ["marketId"],
+    addresses: ["loanToken", "account"],
+    requiredAddresses: ["loanToken"],
+  },
+  // Credit is measured on `account` (the position owner, `onBehalf`), the
+  // payout on `receiver`.
+  midnightRedeem: marketSpec([["creditRedeemed"], ["assetsReceived"]]),
+  midnightTakeLend: {
+    ...marketSpec([["assetsPaid"], ["unitsBought"]]),
+    addresses: [],
+  },
+  midnightTakeBorrow: {
+    ...marketSpec([["unitsSold"], ["assetsReceived"]]),
+    addresses: ["receiver", "assetPaid", "assetReceived"] as const,
+  },
+  midnightTakeWithdraw: {
+    ...marketSpec([["creditRedeemed"], ["assetsReceived"]]),
+    addresses: ["receiver", "assetPaid", "assetReceived"] as const,
+  },
+  midnightSupplyCollateralTakeBorrow: {
+    ...marketSpec([["unitsSold"], ["assetsReceived"]]),
+    addresses: ["receiver"],
+  },
+  midnightRepayWithdrawCollateral: {
+    ...marketSpec([]),
+    addresses: ["receiver"],
+  },
+  midnightTakeRepayWithdrawCollateral: {
+    ...marketSpec([]),
+    addresses: ["receiver"],
+  },
 };
 
 /**
@@ -1169,7 +1560,7 @@ export const conditionalQuoteViolations = (
       });
     if (
       (quote.assetsPaid ?? 0n) > INACTIVE_LEG_CAP &&
-      quote.collateralSupplied === undefined
+      (quote.collateralSupplied ?? 0n) === 0n
     )
       violations.push({
         field: "collateralSupplied",
@@ -1205,6 +1596,32 @@ export const conditionalQuoteViolations = (
 export const requiredQuoteGroups = (type: OperationType): RequiredQuotes =>
   OPERATION_SPECS[type].requiredQuotes;
 
+/** Validate required sides on either parsed or fully derived quotes. @internal */
+export function requiredQuoteErrors({
+  type,
+  quote,
+  path,
+}: {
+  readonly type: OperationType;
+  readonly quote: SlippageQuote;
+  readonly path: string;
+}): string[] {
+  const errors: string[] = [];
+  for (const required of requiredQuoteGroups(type)) {
+    if (required.some((field) => quote[field] !== undefined)) continue;
+    errors.push(
+      required.length === 1
+        ? `${path}.quote.${required[0]}: required for "${type}"`
+        : `${path}.quote: supply at least one of ${required.map((field) => `"${field}"`).join(", ")} for "${type}"`,
+    );
+  }
+  for (const { field, reason } of conditionalQuoteViolations(type, quote))
+    errors.push(
+      `${path}.quote.${field}: required for "${type}" when ${reason}`,
+    );
+  return errors;
+}
+
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
  *
@@ -1216,14 +1633,14 @@ export const requiredQuoteGroups = (type: OperationType): RequiredQuotes =>
  * authorization owner must be the same checksummed address, typed-data domains
  * must bind to `chainId`, and `mode: "final"` rejects authorizations outright.
  *
- * @param input - Caller input (`SimulateParams`-shaped).
+ * @param input - Caller input (`SimulateInputParams`-shaped, including quote-only requests).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
  * @throws {SimulationValidationError} On any unknown key, value or cross-field
  *   violation.
  * @internal
  */
-export function parseRequest(input: SimulateParams): ParsedRequest {
+export function parseRequest(input: SimulateInputParams): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 

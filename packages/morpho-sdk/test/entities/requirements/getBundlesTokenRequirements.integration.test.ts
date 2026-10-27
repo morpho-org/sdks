@@ -48,7 +48,7 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
       assert(isRequirementApproval(approval));
       expect(approval.action.args).toMatchObject({
         spender,
-        amount: params.amount,
+        amount: maxUint256,
       });
       await client.sendTransaction(approval);
       expect(
@@ -58,13 +58,8 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
           functionName: "allowance",
           args: [client.account.address, spender],
         }),
-      ).toBe(params.amount);
-      expect(
-        await getBundlesTokenRequirements(client, {
-          ...request,
-          approvalAmount: maxUint256,
-        }),
-      ).toEqual([]);
+      ).toBe(maxUint256);
+      expect(await getBundlesTokenRequirements(client, request)).toEqual([]);
     });
 
     test("behavior: reads the ERC-2612 nonce and produces an executable permit", async ({

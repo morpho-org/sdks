@@ -2550,7 +2550,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
       to: USDC,
       action: {
         type: "erc20Approval",
-        args: { spender, amount: assets },
+        args: { spender, amount: maxUint256 },
       },
     });
   }, 60_000);

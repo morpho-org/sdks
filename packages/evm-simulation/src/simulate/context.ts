@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import type { CheckedSimulationLimits } from "../limits.js";
+import type { CheckedSimulationInputLimits } from "../limits.js";
 import type { SimulationMode } from "../params.js";
 import type { ExecutionBlock } from "./backends/parse-response.js";
 
@@ -9,5 +9,5 @@ export interface CheckContext {
   readonly mode: SimulationMode;
   readonly block: ExecutionBlock;
   readonly owner: Address;
-  readonly limits: CheckedSimulationLimits;
+  readonly limits: CheckedSimulationInputLimits;
 }

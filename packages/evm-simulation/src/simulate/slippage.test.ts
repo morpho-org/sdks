@@ -8,6 +8,73 @@ import type { CheckedSlippageLimits } from "../limits.js";
 import { checkSlippage } from "./slippage.js";
 
 describe("checkSlippage", () => {
+  test("derived bound violations direct callers to the typed inputs or explicit quote", () => {
+    const depositError = (() => {
+      try {
+        checkSlippage({
+          label: "deposit",
+          limits: {
+            type: "vaultV2Deposit",
+            inputs: { assets: 100n },
+            quote: { sharesMinted: 100n },
+            slippageTolerance: 0n,
+          },
+          observed: { sharesMinted: 99n },
+          derivedFields: ["sharesMinted"],
+        });
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(depositError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((depositError as Error).message).toBe(
+      'deposit: derived minimum for "sharesMinted" is "100", got "99". Check the transaction against the typed inputs, or quote "sharesMinted" explicitly.',
+    );
+
+    const withdrawError = (() => {
+      try {
+        checkSlippage({
+          label: "withdraw",
+          limits: {
+            type: "blueWithdraw",
+            inputs: { assets: 100n },
+            quote: { sharesBurned: 50n },
+            slippageTolerance: 0n,
+          },
+          observed: { sharesBurned: 51n },
+          derivedFields: ["sharesBurned"],
+        });
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(withdrawError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((withdrawError as Error).message).toBe(
+      'withdraw: derived maximum for "sharesBurned" is "50", got "51". Check the transaction against the typed inputs, or quote "sharesBurned" explicitly.',
+    );
+  });
+  test("collateral-only combined supply accepts zero debt shares", () => {
+    const quote = {
+      assetsPaid: 100n,
+      collateralSupplied: 100n,
+      sharesMinted: 1n,
+    };
+    const checked = checkSlippage({
+      label: "collateral only",
+      limits: {
+        type: "blueSupplyCollateralBorrow",
+        inputs: { collateralAssets: 100n },
+        quote,
+        slippageTolerance: 0n,
+      },
+      observed: { ...quote, sharesMinted: 0n },
+      derivedFields: ["assetsPaid", "collateralSupplied", "sharesMinted"],
+      exactFields: ["assetsPaid", "collateralSupplied"],
+      debtShares: true,
+      inactiveFields: ["sharesMinted"],
+    });
+    expect(checked.quote).toEqual(quote);
+  });
   test.each([
     { field: "assetsReceived", accepted: 990n, rejected: 989n },
     { field: "sharesMinted", accepted: 990n, rejected: 989n },
@@ -631,6 +698,41 @@ describe("checkSlippage", () => {
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message.startsWith(label)).toBe(true);
   });
+  test("behavior: position.maxCredit is an inclusive final bound not scaled by tolerance", () => {
+    const limits: CheckedSlippageLimits & { type: "midnightRedeem" } = {
+      type: "midnightRedeem",
+      quote: { creditRedeemed: 10n },
+      slippageTolerance: 10_000000000000000n,
+      position: { maxCredit: 5n },
+    };
+    const label = "Limit operation 0 (midnightRedeem)";
+    const observed = { creditRedeemed: 10n };
+    expect(checkSlippage({ label, limits, observed, credit: 5n })).toEqual({
+      quote: limits.quote,
+      slippageTolerance: limits.slippageTolerance,
+      position: { maxCredit: 5n },
+    });
+    expect(() =>
+      checkSlippage({ label, limits, observed, credit: 6n }),
+    ).toThrow(ConsumerLimitViolationError);
+  });
+
+  test("error: position.maxCredit throws when the credit read is missing", () => {
+    const label = "Limit operation 0 (midnightRedeem)";
+    expect(() =>
+      checkSlippage({
+        label,
+        limits: {
+          type: "midnightRedeem",
+          quote: { creditRedeemed: 1n },
+          slippageTolerance: 0n,
+          position: { maxCredit: 0n },
+        },
+        observed: { creditRedeemed: 1n },
+      }),
+    ).toThrow(SlippageCheckUnavailableError);
+  });
+
   test("behavior: 100% tolerance retains inclusive boundaries", () => {
     const limits = {
       type: "blueSupply" as const,

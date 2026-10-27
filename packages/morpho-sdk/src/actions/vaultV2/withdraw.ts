@@ -35,8 +35,8 @@ export interface VaultV2WithdrawParams {
 /**
  * Encodes an exact-assets Vault V2 withdrawal through VaultBundlesV1.
  *
- * This low-level builder does not bind `permit.value` to a share cap; use
- * `MorphoVaultV2.withdraw().buildTx()` to validate it against the share cap derived from the handle's `vaultData`.
+ * This low-level builder does not bind `permit.value` to the required share amount; use
+ * `MorphoVaultV2.withdraw().buildTx()` to validate it against the minimum derived from the handle's `vaultData`.
  *
  * @param params.vault.chainId - Chain containing the vault and its registered VaultBundlesV1 contract.
  * @param params.vault.address - Vault V2 whose shares are burned for the withdrawal.
@@ -45,7 +45,7 @@ export interface VaultV2WithdrawParams {
  * @param params.args.recipient - Unsupported; net assets are always paid to the transaction sender.
  * @param params.args.onBehalf - Unsupported; VaultBundlesV1 always burns the transaction sender's shares.
  * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
- *   and the registered VaultBundlesV1 spender. Omit when the exact share allowance is already set.
+ *   and the registered VaultBundlesV1 spender. Omit when the share allowance meets the required amount.
  * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
  *   The fee is rounded down and deducted from the gross withdrawn assets.
  * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
@@ -74,7 +74,7 @@ export interface VaultV2WithdrawParams {
  *
  * export function buildUsdcWithdrawal(userAddress: Address, deadline: bigint) {
  *   const vault = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
- *   // Set the exact vault-share allowance before submitting; the entity API derives that cap.
+ *   // Satisfy the required vault-share allowance before submitting; the entity API derives it.
  *   const tx = vaultV2Withdraw({
  *     vault: { chainId: mainnet.id, address: vault },
  *     args: { amount: 1_000_000n, userAddress, deadline },

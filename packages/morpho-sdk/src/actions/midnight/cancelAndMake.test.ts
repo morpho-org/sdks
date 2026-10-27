@@ -12,6 +12,7 @@ import {
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
+import type { Address } from "viem";
 import {
   decodeFunctionData,
   getAddress,
@@ -50,6 +51,7 @@ const priceRatifierV1 = getChainAddress(midnightChainId, "priceRatifierV1");
 const root = `0x${"cd".repeat(32)}` as Hex;
 const groupA = `0x${"11".repeat(32)}` as Hex;
 const groupB = `0x${"22".repeat(32)}` as Hex;
+const oddLengthBytes32 = `0x${"a".repeat(63)}` as Hex;
 const market = new MarketParams(midnightMarket);
 const wNativeMarket = new MarketParams({
   ...midnightMarket,
@@ -634,6 +636,7 @@ describe("midnightCancelAndMake", () => {
 
     expect(tx.to).toBe(midnightBundlesV2);
     expect(tx.value).toBe(0n);
+    expect(tx.action.args).not.toHaveProperty("nativeAmount");
     expect(decoded.functionName).toBe("midnightBundlesV2CancelAndMake");
     expect(decoded.args.slice(1, 3)).toEqual([0n, zeroHash]);
     expect(decoded.args.slice(4)).toEqual([
@@ -666,6 +669,103 @@ describe("midnightCancelAndMake", () => {
     expect(Object.isFrozen(tx.action.args.groups)).toBe(true);
   });
 
+  test.each([
+    [
+      "cancellations[0].group",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          cancellations: [{ group: oddLengthBytes32, maxConsumed: 5n }],
+        }),
+    ],
+    [
+      "publication.root",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          publication: { ...params.publication, root: oddLengthBytes32 },
+        }),
+    ],
+    [
+      "publication.groups[0]",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            groups: [oddLengthBytes32],
+          },
+        }),
+    ],
+    [
+      "publication.rootSignature.r",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            rootSignature: {
+              height: 1n,
+              nonce: 1n,
+              deadline: maxUint256,
+              v: 27,
+              r: oddLengthBytes32,
+              s: zeroHash,
+            },
+          },
+        }),
+    ],
+    [
+      "publication.rootSignature.s",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            rootSignature: {
+              height: 1n,
+              nonce: 1n,
+              deadline: maxUint256,
+              v: 27,
+              r: zeroHash,
+              s: oddLengthBytes32,
+            },
+          },
+        }),
+    ],
+    [
+      "publication.blueSupply.callbackSalt",
+      () =>
+        midnightCancelAndMake({
+          ...params,
+          publication: {
+            ...params.publication,
+            blueSupply: {
+              market: {
+                loanToken: midnightMarket.loanToken,
+                collateralToken: zeroAddress,
+                oracle: zeroAddress,
+                irm: zeroAddress,
+                lltv: 0n,
+              },
+              assets: 1_000n,
+              callbackSalt: oddLengthBytes32,
+            },
+          },
+        }),
+    ],
+  ] as const)("error: rejects a 63-digit bytes32 in %s", (field, build) => {
+    let error: unknown;
+    try {
+      build();
+    } catch (cause) {
+      error = cause;
+    }
+
+    expect(error).toBeInstanceOf(InvalidMidnightHexInputError);
+    expect(error).toMatchObject({ field, reason: "oddLength" });
+  });
+
   test("behavior: wraps native ETH for the wNative collateral pull", () => {
     const nativeAmount = 500n;
     const tx = midnightCancelAndMake({
@@ -685,6 +785,7 @@ describe("midnightCancelAndMake", () => {
     });
 
     expect(tx.value).toBe(nativeAmount);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(decoded.args.at(-1)).toBe(wNative);
   });
 
@@ -1030,15 +1131,14 @@ describe("midnightCancelAndMake", () => {
   });
 
   test("error: MidnightReplacementGroupCancelledError", () => {
+    const group = `0x${"ab".repeat(32)}` as Hex;
     expect(() =>
       midnightCancelAndMake({
         ...params,
         cancellations: [
-          {
-            group: `0x${groupA.slice(2).toUpperCase()}` as Hex,
-            maxConsumed: 0n,
-          },
+          { group: `0x${"AB".repeat(32)}` as Hex, maxConsumed: 0n },
         ],
+        publication: { ...params.publication, groups: [group] },
       }),
     ).toThrow(MidnightReplacementGroupCancelledError);
   });
@@ -1379,6 +1479,50 @@ describe("midnightCancelAndMake without publication", () => {
           expect(args[15]).toBe(deadline);
         },
       ),
+    );
+  });
+});
+
+describe("midnightCancelAndMake malformed address", () => {
+  test("error: a malformed publication.ratifier throws a typed encoding error", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        publication: { ...params.publication, ratifier: "0x123" as Address },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "publication.ratifier",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
+  });
+
+  test("error: a malformed native-funded collateral token throws a typed encoding error", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        nativeAmount: 1n,
+        publication: {
+          ...params.publication,
+          collateral: {
+            market: new MarketParams({
+              ...midnightMarket,
+              collateralParams: midnightMarket.collateralParams.map(
+                (collateral) => ({ ...collateral, token: "0x123" as Address }),
+              ),
+            }),
+            supplies: [{ collateralIndex: 0n, assets: 1_000n }],
+          },
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "token",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
     );
   });
 });

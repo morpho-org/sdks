@@ -70,12 +70,13 @@ export function planExecution(params: {
     })[];
   }[];
   readonly reads: readonly StateRead[];
+  readonly derivationReads?: readonly StateRead[];
 }): ExecutionPlan {
   const { request, owner, preparations, reads } = params;
 
   const calls: PlannedCall[] = [];
 
-  for (const read of reads) {
+  for (const read of [...(params.derivationReads ?? []), ...reads]) {
     calls.push({
       type: "stateRead",
       phase: "before",

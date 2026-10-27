@@ -146,6 +146,18 @@ export const validateMidnightPublication = (
   });
 };
 
+/**
+ * @internal
+ * Rejects a value that is not exactly 32 bytes of hex before a Midnight flow derives or encodes
+ * from it.
+ *
+ * @param field - Input name reported by the error.
+ * @param value - Fixed-length bytes value to validate.
+ * @throws {InvalidMidnightHexInputError} when `value` is not exactly 32 bytes of hex.
+ */
+export const validateMidnightBytes32 = (field: string, value: Hex): void =>
+  validateHexInput(value, field, { exactBytes: 32 });
+
 // biome-ignore lint/complexity/useMaxParams: Keep value, field, and size explicit.
 const validateHexInput = (
   value: Hex,

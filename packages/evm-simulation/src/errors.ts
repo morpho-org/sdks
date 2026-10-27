@@ -18,6 +18,7 @@ export const SIMULATION_ERROR_CODES = [
   "UNEXPECTED_SIMULATION_ERROR",
   "LIMIT_ACCOUNT_MISMATCH",
   "MISSING_EXPECTED_QUOTE",
+  "AMBIGUOUS_EXPECTED_QUOTE",
   "UNSUPPORTED_LIMIT_ACTION",
 ] as const;
 
@@ -270,39 +271,82 @@ export class UnexpectedSimulationError extends SimulationPackageError {
 
 /**
  * An action's encoded recipient differs from the account `toSimulationLimits`
- * was asked to limit: `args.onBehalf` is not `owner` (`field: "onBehalf"`),
+ * was asked to limit: `args.onBehalf` is not `owner`, or not
+ * `options.onBehalf ?? owner` on `midnightSupplyCollateral` or `midnightRedeem`
+ * (`field: "onBehalf"`),
  * `redeem.recipient` on `vaultV2ForceRedeem` is not `receiver ?? owner`
- * (`field: "redeem.recipient"`), or a `receiver` other than `owner` is passed
- * for an action that encodes no distinct receiver (`field: "receiver"`).
+ * (`field: "redeem.recipient"`), a `receiver` other than `owner` is passed
+ * for an action that encodes no distinct receiver (`field: "receiver"`),
+ * `args.receiver` on `midnightRedeem`, `midnightTakeBorrow`,
+ * `midnightSupplyCollateralTakeBorrow`, or `midnightTakeWithdraw` is not
+ * `receiver ?? owner` (`field: "args.receiver"`),
+ * `args.collateralReceiver` on `midnightRepayWithdrawCollateral` or
+ * `midnightTakeRepayWithdrawCollateral` is not
+ * `receiver ?? owner` (`field: "args.collateralReceiver"`),
+ * or `onBehalf` other than `owner` is passed for an action other than
+ * `midnightSupplyCollateral` or `midnightRedeem` (`field: "options.onBehalf"`).
  */
 export class LimitAccountMismatchError extends SimulationPackageError {
   override readonly name = "LimitAccountMismatchError";
   readonly code = "LIMIT_ACCOUNT_MISMATCH";
 
-  /** The args field carrying the mismatched address. */
-  readonly field: "onBehalf" | "receiver" | "redeem.recipient";
-  /** The address the limit would measure. */
+  /** The action arg or `toSimulationLimits` option carrying the mismatched address. */
+  readonly field:
+    | "onBehalf"
+    | "receiver"
+    | "redeem.recipient"
+    | "options.onBehalf"
+    | "args.receiver"
+    | "args.collateralReceiver";
+  /**
+   * The address the limit would measure: `options.onBehalf ?? owner` for
+   * `onBehalf` on `midnightSupplyCollateral` and `midnightRedeem`,
+   * `options.receiver ?? owner` for `args.receiver` on Midnight redeem/sell
+   * actions and `args.collateralReceiver` on Midnight repay-withdraw, otherwise
+   * `owner` (or `receiver ?? owner` for `redeem.recipient`).
+   */
   readonly expected: Address;
-  /** The address the action encodes, or the passed `receiver` when `field` is `"receiver"`. */
+  /** The address the action encodes, or the passed option when `field` is `"receiver"` or `"options.onBehalf"`. */
   readonly actual: Address;
 
   constructor(mismatch: {
-    /** The args field carrying the mismatched address. */
-    readonly field: "onBehalf" | "receiver" | "redeem.recipient";
-    /** The address the limit would measure. */
+    /** The action arg or `toSimulationLimits` option carrying the mismatched address. */
+    readonly field:
+      | "onBehalf"
+      | "receiver"
+      | "redeem.recipient"
+      | "options.onBehalf"
+      | "args.receiver"
+      | "args.collateralReceiver";
+    /**
+     * The address the limit would measure: `options.onBehalf ?? owner` for
+     * `onBehalf` on `midnightSupplyCollateral` and `midnightRedeem`,
+     * `options.receiver ?? owner` for `args.receiver` on Midnight redeem/sell
+     * actions and `args.collateralReceiver` on Midnight repay-withdraw, otherwise
+     * `owner` (or `receiver ?? owner` for `redeem.recipient`).
+     */
     readonly expected: Address;
-    /** The address the action encodes, or the passed `receiver` when `field` is `"receiver"`. */
+    /** The address the action encodes, or the passed option when `field` is `"receiver"` or `"options.onBehalf"`. */
     readonly actual: Address;
   }) {
     super(
       mismatch.field === "receiver"
         ? `receiver: "${mismatch.actual}" was passed, but this action pays ` +
             `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
-            `receiver or set it to owner; only vaultV2ForceRedeem encodes a ` +
-            `distinct receiver.`
-        : `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
+            `receiver or set it to owner; only vaultV2ForceRedeem, ` +
+            `midnightRedeem, midnightTakeBorrow, ` +
+            `midnightSupplyCollateralTakeBorrow, midnightTakeWithdraw and a ` +
+            `collateral-withdrawing midnightRepayWithdrawCollateral or ` +
+            `midnightTakeRepayWithdrawCollateral encode a distinct receiver.`
+        : mismatch.field === "options.onBehalf"
+          ? `onBehalf: "${mismatch.actual}" was passed, but this action ` +
+            `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
+            `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
+            `and midnightRedeem act on a distinct account.`
+          : `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
             `limit measures "${mismatch.expected}". Build the action for the ` +
-            `same account passed as owner/receiver`,
+            `same account passed as owner/receiver, or as onBehalf on ` +
+            `midnightSupplyCollateral or midnightRedeem`,
     );
     this.field = mismatch.field;
     this.expected = mismatch.expected;
@@ -343,6 +387,38 @@ export class MissingExpectedQuoteError extends SimulationPackageError {
   }
 }
 
+/**
+ * An expected quote cannot be assigned to each of a maker action's
+ * per-collateral-index operations.
+ */
+export class AmbiguousExpectedQuoteError extends SimulationPackageError {
+  override readonly name = "AmbiguousExpectedQuoteError";
+  readonly code = "AMBIGUOUS_EXPECTED_QUOTE";
+
+  /** The action type whose expected quote is ambiguous. */
+  readonly actionType: string;
+  /** The number of independently verified collateral-index operations. */
+  readonly operations: number;
+
+  /**
+   * @param ambiguity - The action type and number of operations that need separate quotes.
+   */
+  constructor(ambiguity: {
+    /** The action type whose expected quote is ambiguous. */
+    readonly actionType: string;
+    /** The number of independently verified collateral-index operations. */
+    readonly operations: number;
+  }) {
+    super(
+      `"${ambiguity.actionType}": expected cannot be attributed: the action ` +
+        `supplies ${ambiguity.operations} collateral indexes, each verified as ` +
+        `its own operation. Omit expected, or build the limits by hand.`,
+    );
+    this.actionType = ambiguity.actionType;
+    this.operations = ambiguity.operations;
+  }
+}
+
 /** An action type `toSimulationLimits` has no {@link OperationType} for. */
 export class UnsupportedLimitActionError extends SimulationPackageError {
   override readonly name = "UnsupportedLimitActionError";
@@ -375,6 +451,7 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
     LIMIT_ACCOUNT_MISMATCH: "LimitAccountMismatchError",
     MISSING_EXPECTED_QUOTE: "MissingExpectedQuoteError",
+    AMBIGUOUS_EXPECTED_QUOTE: "AmbiguousExpectedQuoteError",
     UNSUPPORTED_LIMIT_ACTION: "UnsupportedLimitActionError",
   });
 

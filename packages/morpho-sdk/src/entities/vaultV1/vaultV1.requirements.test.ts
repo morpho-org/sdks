@@ -10,6 +10,7 @@ import {
   type Address,
   decodeFunctionData,
   erc20Abi,
+  maxUint256,
   serializeSignature,
   toHex,
 } from "viem";
@@ -29,8 +30,7 @@ import {
 } from "../../../test/helpers/signer.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../constants.js";
-import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
+import { computeVaultMaxShareAllowance } from "../../helpers/index.js";
 import {
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
@@ -63,15 +63,6 @@ const mockShareAllowance = (
     functionName: "allowance",
     result: allowance,
   });
-
-const approvedShareAmounts = async (handle: {
-  readonly getRequirements: () => Promise<
-    readonly Parameters<typeof isRequirementApproval>[0][]
-  >;
-}) =>
-  (await handle.getRequirements())
-    .filter(isRequirementApproval)
-    .map(({ action }) => action.args.amount);
 
 const prepareDeposit = (handle: ReturnType<typeof createMockClient>) =>
   handle.client
@@ -107,7 +98,7 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
     ).toEqual([
       {
         spender: getChainAddress(mainnet.id, "bundles.vaultBundlesV1"),
-        amount,
+        amount: maxUint256,
       },
     ]);
   });
@@ -405,7 +396,7 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       const withdraw = vault.withdraw(params);
       if (phase === "after requirements") await withdraw.getRequirements();
 
-      // Mutating caller-owned options must never change the prepared owner, assets, or share cap.
+      // Mutating caller-owned options must never change the prepared owner, assets, or requirement.
       params.amount = amount / 2n;
       params.userAddress = MUTATED_USER;
       const requirements = await withdraw.getRequirements();
@@ -461,6 +452,42 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     };
   };
 
+  test("behavior: accepts exactly the computed minimum share allowance", async () => {
+    const vaultData = inKindVaultV1Data();
+    const deadline = Time.timestamp() + Time.s.from.h(2n);
+    const slippageTolerance = 0n;
+    const minimum = computeVaultMaxShareAllowance({
+      vaultData,
+      deadline,
+      assets: amount,
+      slippageTolerance,
+    });
+    const requirementsAt = async (allowance: bigint) => {
+      const handle = createMockClient(mainnet);
+      mockShareAllowance(handle, allowance);
+      const withdraw = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+        .withdraw({
+          amount,
+          userAddress: IN_KIND_USER,
+          vaultData,
+          deadline,
+          slippageTolerance,
+        });
+      return withdraw.getRequirements();
+    };
+
+    expect(await requirementsAt(minimum)).toEqual([]);
+
+    const requirements = await requirementsAt(minimum - 1n);
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action).toMatchObject({
+      type: "erc20Approval",
+      args: { amount: maxUint256 },
+    });
+  });
+
   test("behavior: re-reads the share allowance after the approval is executed", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
@@ -474,8 +501,8 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     const [approval] = (await withdraw.getRequirements()).filter(
       isRequirementApproval,
     );
-    const requiredShareAllowance = approval?.action.args.amount;
-    if (requiredShareAllowance == null)
+    const approvedAllowance = approval?.action.args.amount;
+    if (approvedAllowance == null)
       throw new Error("Share approval requirement not found");
 
     // The caller executes that approval. Replaying a memoized requirement here would leave the
@@ -484,13 +511,13 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
       functionName: "allowance",
-      result: requiredShareAllowance,
+      result: approvedAllowance,
     });
 
     expect(await withdraw.getRequirements()).toEqual([]);
   });
 
-  test("behavior: accepts a stale allowance within one slippage tolerance above the cap", async () => {
+  test("behavior: reuses an allowance above the required share amount", async () => {
     const handle = createMockClient(mainnet);
     mockShareAllowance(handle, 0n);
     const withdraw = handle.client
@@ -501,44 +528,8 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
         userAddress: IN_KIND_USER,
         vaultData: inKindVaultV1Data(),
       });
-    const [requiredShareAllowance] = await approvedShareAmounts(withdraw);
-    if (requiredShareAllowance == null)
-      throw new Error("Share approval requirement not found");
-    const maxShareAllowance = computeVaultShareAllowanceCeiling({
-      requiredShareAllowance,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    expect(maxShareAllowance).toBeGreaterThan(requiredShareAllowance);
-
-    mockShareAllowance(handle, maxShareAllowance);
+    mockShareAllowance(handle, maxUint256);
     expect(await withdraw.getRequirements()).toEqual([]);
-
-    mockShareAllowance(handle, maxShareAllowance + 1n);
-    expect(await approvedShareAmounts(withdraw)).toEqual([
-      requiredShareAllowance,
-    ]);
-  });
-
-  test("behavior: pins the derived share cap across re-resolutions", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-    const { withdraw } = prepareWithdraw(handle);
-
-    const first = await withdraw.getRequirements();
-    const second = await withdraw.getRequirements();
-
-    // Re-reading the allowance must not retarget the cap derived from `vaultData` at creation.
-    expect(countAllowanceReads(handle)).toBe(2);
-    expect(
-      second.filter(isRequirementApproval).map(({ action }) => action.args),
-    ).toEqual(
-      first.filter(isRequirementApproval).map(({ action }) => action.args),
-    );
   });
 
   test("behavior: drops a signed permit once the allowance becomes oversized", async () => {
@@ -586,23 +577,17 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     } satisfies BundlesTokenRequirementSignature;
     expect(() => withdraw.buildTx([signature])).not.toThrow();
 
-    // An oversized allowance is reset onchain. The earlier permit still encodes in `buildTx()`
-    // since it matches the cap derived from `vaultData`; if its nonce is consumed onchain,
-    // VaultBundlesV1 skips it and burns under the live allowance, so the caller must execute
-    // the latest requirements (the reset) before submitting.
+    // A sufficient allowance supersedes the permit requirement; the signature remains valid
+    // input to the stateless builder if its nonce was consumed onchain.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
       functionName: "allowance",
-      result: permit.action.args.amount + 1n,
+      result: maxUint256,
     });
     const requirements = await withdraw.getRequirements();
     expect(requirements.find(isRequirementSignature)).toBeUndefined();
-    expect(
-      requirements
-        .filter(isRequirementApproval)
-        .map(({ action }) => action.args),
-    ).toEqual([expect.objectContaining({ amount: permit.action.args.amount })]);
+    expect(requirements).toEqual([]);
     expect(() => withdraw.buildTx([signature])).not.toThrow();
   });
 
@@ -645,12 +630,6 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       withdrawA.buildTx([signature]),
     );
 
-    // A permit signed for any amount between the derived share cap and the cap divided by
-    // `1 - slippageTolerance` is accepted; one above that ceiling is rejected.
-    const maxShareAllowance = computeVaultShareAllowanceCeiling({
-      requiredShareAllowance: permit.action.args.amount,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
     const permitAction = permit.action;
     if (permitAction.type !== "permit")
       throw new Error("Share permit requirement not found");
@@ -672,16 +651,8 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       },
     });
     expect(() =>
-      withdrawB.buildTx([oversizedSignature(maxShareAllowance)]),
+      withdrawB.buildTx([oversizedSignature(maxUint256)]),
     ).not.toThrow();
-    expect(() =>
-      withdrawB.buildTx([oversizedSignature(maxShareAllowance + 1n)]),
-    ).toThrowError(
-      expect.objectContaining({
-        name: "BundlesPermitMismatchError",
-        field: "amount",
-      }),
-    );
   });
 
   test("behavior: a permit signed on an earlier snapshot finalizes on a fresher handle", async () => {
@@ -720,8 +691,8 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     const signature = await permit.sign(signerWalletClient, signerAddress);
     const signedAmount = permit.action.args.amount;
 
-    // A fresher snapshot prices shares slightly higher, so it derives a smaller cap: the permit
-    // signed for the earlier, larger cap stays within `[cap, cap / (1 - slippageTolerance)]`.
+    // A fresher snapshot prices shares slightly higher, reducing the required allowance; the
+    // maxUint256 permit from the earlier snapshot still covers that minimum.
     const fresherShares = 9_997_002n;
     const fresherVaultData = {
       address: IN_KIND_VAULT,
@@ -821,7 +792,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       } satisfies Erc2612RequirementSignature;
       expect(() => prepared.buildTx([refreshedSignature])).not.toThrow();
 
-      // Simulate the refreshed permit being consumed and establishing the exact allowance.
+      // Simulate the refreshed permit being consumed and establishing its signed allowance.
       mockRead(handle, {
         address: IN_KIND_VAULT,
         abi: erc20Abi,
@@ -896,7 +867,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       ).toEqual([IN_KIND_USER, spender]);
       expect(requirements).toHaveLength(1);
       expect(requirements[0]?.action.args).toMatchObject({
-        amount,
+        amount: maxUint256,
         spender,
       });
       expect(
@@ -914,7 +885,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
           args: {
             owner: IN_KIND_USER,
             asset: IN_KIND_VAULT,
-            amount,
+            amount: maxUint256,
             nonce: 0n,
             deadline: requirement.action.args.deadline,
             signature: serializeSignature({
@@ -1080,7 +1051,45 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
         slippageTolerance: 0n,
       });
 
-  test("behavior: assets mode accepts an allowance within one slippage tolerance above the cap", async () => {
+  test("behavior: assets-mode migration accepts exactly the computed minimum source share allowance", async () => {
+    const sourceVault = migrationSnapshot(IN_KIND_VAULT, 10n);
+    const targetVault = migrationSnapshot(MIGRATION_TARGET_VAULT, 100n);
+    const deadline = Time.timestamp() + Time.s.from.h(2n);
+    const slippageTolerance = 0n;
+    const minimum = computeVaultMaxShareAllowance({
+      vaultData: sourceVault,
+      deadline,
+      assets: amount,
+      slippageTolerance,
+    });
+    const requirementsAt = async (allowance: bigint) => {
+      const handle = createMockClient(mainnet);
+      mockShareAllowance(handle, allowance);
+      const migration = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+        .migrateToV2({
+          assets: amount,
+          userAddress: IN_KIND_USER,
+          sourceVault,
+          targetVault,
+          deadline,
+          slippageTolerance,
+        });
+      return migration.getRequirements();
+    };
+
+    expect(await requirementsAt(minimum)).toEqual([]);
+
+    const requirements = await requirementsAt(minimum - 1n);
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action).toMatchObject({
+      type: "erc20Approval",
+      args: { amount: maxUint256 },
+    });
+  });
+
+  test("behavior: assets mode reuses a large leftover allowance", async () => {
     const handle = createMockClient(mainnet);
     mockShareAllowance(handle, 0n);
     const slippageTolerance = 10n ** 16n;
@@ -1094,24 +1103,11 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
         targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, 10n ** 12n),
         slippageTolerance,
       });
-    const [requiredShareAllowance] = await approvedShareAmounts(migration);
-    if (requiredShareAllowance == null)
-      throw new Error("Share approval requirement not found");
-    const maxShareAllowance = computeVaultShareAllowanceCeiling({
-      requiredShareAllowance,
-      slippageTolerance: slippageTolerance,
-    });
-
-    mockShareAllowance(handle, maxShareAllowance);
+    mockShareAllowance(handle, maxUint256);
     expect(await migration.getRequirements()).toEqual([]);
-
-    mockShareAllowance(handle, maxShareAllowance + 1n);
-    expect(await approvedShareAmounts(migration)).toEqual([
-      requiredShareAllowance,
-    ]);
   });
 
-  test("behavior: shares mode still requires an exact allowance", async () => {
+  test("behavior: shares mode reuses an allowance above the requested shares", async () => {
     const handle = createMockClient(mainnet);
     const shares = 10n ** 12n;
     mockShareAllowance(handle, shares + 1n);
@@ -1132,7 +1128,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
         slippageTolerance: 10n ** 16n,
       });
 
-    expect(await approvedShareAmounts(migration)).toEqual([shares]);
+    expect(await migration.getRequirements()).toEqual([]);
   });
 
   test("behavior: re-reads the share allowance after the approval is executed", async () => {
@@ -1148,24 +1144,23 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
     const [approval] = (await migration.getRequirements()).filter(
       isRequirementApproval,
     );
-    const requiredShareAllowance = approval?.action.args.amount;
-    if (requiredShareAllowance == null)
+    const approvedAllowance = approval?.action.args.amount;
+    if (approvedAllowance == null)
       throw new Error("Share approval requirement not found");
 
-    // Assets-mode calldata carries no share limit, so this allowance is the sole cap on the burn.
-    // Replaying a memoized requirement would hide both a satisfied approval and a later change.
+    // The requested authorization is sufficient when the caller executes its unlimited approval.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
       functionName: "allowance",
-      result: requiredShareAllowance,
+      result: approvedAllowance,
     });
 
     expect(await migration.getRequirements()).toEqual([]);
     expect(countAllowanceReads(handle)).toBe(2);
   });
 
-  test("behavior: pins the derived share cap across re-resolutions", async () => {
+  test("behavior: reuses an allowance above the required shares", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: IN_KIND_VAULT,
@@ -1176,9 +1171,9 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
     const migration = prepareMigration(handle);
 
     const first = await migration.getRequirements();
+    expect(first).toHaveLength(1);
 
-    // A larger leftover allowance must resurface as an outstanding requirement for the cap this
-    // handle already committed to, never satisfy it.
+    // An allowance above the minimum is sufficient even when it exceeds the prepared amount.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
@@ -1186,13 +1181,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
       result: amount,
     });
 
-    expect(
-      (await migration.getRequirements())
-        .filter(isRequirementApproval)
-        .map(({ action }) => action.args),
-    ).toEqual(
-      first.filter(isRequirementApproval).map(({ action }) => action.args),
-    );
+    expect(await migration.getRequirements()).toEqual([]);
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {

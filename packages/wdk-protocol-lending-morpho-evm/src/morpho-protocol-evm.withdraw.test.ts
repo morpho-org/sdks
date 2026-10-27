@@ -155,7 +155,7 @@ describe.sequential("prepared withdrawal adapter", () => {
     "error: UnresolvedVaultWithdrawRequirementsError before an unsigned quote (%s)",
     async (route) => {
       const { protocol, action, quote } = setup();
-      // Only requirement presence matters to this adapter; exact allowance math is SDK-owned.
+      // Only requirement presence matters to this adapter; minimum allowance math is SDK-owned.
       action.getRequirements.mockResolvedValue([{} as RequirementApproval]);
       const prepared =
         route === "prepared"
@@ -175,7 +175,7 @@ describe.sequential("prepared withdrawal adapter", () => {
   );
 
   test.each(["immediate", "prepared"] as const)(
-    "behavior: quotes when the exact share allowance is satisfied (%s)",
+    "behavior: quotes when the required share allowance is satisfied (%s)",
     async (route) => {
       const { protocol, action, transaction, quote } = setup();
       const prepared =

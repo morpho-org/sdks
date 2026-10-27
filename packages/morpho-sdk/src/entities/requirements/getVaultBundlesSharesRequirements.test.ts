@@ -3,7 +3,7 @@ import { Token } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { createPublicClient, erc20Abi, http } from "viem";
+import { createPublicClient, erc20Abi, http, maxUint256 } from "viem";
 import { base, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -53,23 +53,8 @@ const resolve = (
     supportSignature,
   });
 
-const resolveWithMax = (
-  handle: ReturnType<typeof createMockClient<typeof mainnet>>,
-  maxShareAllowance: bigint,
-) =>
-  getVaultBundlesSharesRequirements(handle.client, {
-    vaultData,
-    version: "vaultV1",
-    owner,
-    chainId: mainnet.id,
-    requiredShareAllowance,
-    maxShareAllowance,
-    deadline: Time.timestamp() + Time.s.from.h(1n),
-    supportSignature: true,
-  });
-
 describe("getVaultBundlesSharesRequirements", () => {
-  test("default: no requirement when the allowance already equals the cap", async () => {
+  test("default: no requirement when the allowance meets the required amount", async () => {
     const handle = createMockClient(mainnet);
     mockAllowance(handle, requiredShareAllowance);
 
@@ -95,54 +80,17 @@ describe("getVaultBundlesSharesRequirements", () => {
     expect(handle.request).not.toHaveBeenCalled();
   });
 
-  test.each([
-    requiredShareAllowance,
-    requiredShareAllowance + 1n,
-    requiredShareAllowance + 10n,
-  ])(
-    "behavior: no requirement when the allowance %s is within the accepted range",
+  test.each([requiredShareAllowance + 1n, maxUint256])(
+    "behavior: no requirement when the allowance %s exceeds the required amount",
     async (allowance) => {
       const handle = createMockClient(mainnet);
       mockAllowance(handle, allowance);
 
-      await expect(
-        resolveWithMax(handle, requiredShareAllowance + 10n),
-      ).resolves.toEqual([]);
+      await expect(resolve(handle, false)).resolves.toEqual([]);
     },
   );
 
-  test("behavior: resets an allowance above the accepted range with an exact approval", async () => {
-    const handle = createMockClient(mainnet);
-    mockAllowance(handle, requiredShareAllowance + 11n);
-
-    const requirements = await resolveWithMax(
-      handle,
-      requiredShareAllowance + 10n,
-    );
-
-    expect(requirements.map(({ action }) => action)).toEqual([
-      {
-        type: "erc20Approval",
-        args: { spender, amount: requiredShareAllowance },
-      },
-    ]);
-  });
-
-  test("behavior: replaces an oversized allowance with an exact approval", async () => {
-    const handle = createMockClient(mainnet);
-    // A prior unlimited approval would otherwise cap the burn far above the slippage-derived cap.
-    mockAllowance(handle, 2n ** 256n - 1n);
-
-    const [approval] = await resolve(handle, false);
-
-    expect(approval?.action).toEqual({
-      type: "erc20Approval",
-      args: { spender, amount: requiredShareAllowance },
-    });
-    expect(approval).toMatchObject({ to: vaultData.address });
-  });
-
-  test("behavior: approves the exact cap when the allowance is below it", async () => {
+  test("behavior: requests an unlimited approval when the allowance is below the cap", async () => {
     const handle = createMockClient(mainnet);
     mockAllowance(handle, requiredShareAllowance - 1n);
 
@@ -150,25 +98,18 @@ describe("getVaultBundlesSharesRequirements", () => {
 
     expect(approval?.action).toMatchObject({
       type: "erc20Approval",
-      args: { amount: requiredShareAllowance },
+      args: { amount: maxUint256 },
     });
   });
 
-  test("behavior: resets an oversized allowance onchain even with signature support", async () => {
+  test("behavior: accepts a larger allowance even with signature support", async () => {
     const handle = createMockClient(mainnet);
-    // A lowering permit could be skipped once its nonce is consumed, leaving the stale cap live.
     mockAllowance(handle, requiredShareAllowance + 1n);
 
-    const requirements = await resolve(handle, true);
-
-    expect(requirements).toHaveLength(1);
-    expect(requirements[0]?.action).toEqual({
-      type: "erc20Approval",
-      args: { spender, amount: requiredShareAllowance },
-    });
+    await expect(resolve(handle, true)).resolves.toEqual([]);
   });
 
-  test("behavior: requests an exact permit when the allowance is below the cap", async () => {
+  test("behavior: requests an unlimited permit when the allowance is below the cap", async () => {
     const handle = createMockClient(mainnet);
     mockAllowance(handle, requiredShareAllowance - 1n);
     mockRead(handle, {
@@ -182,7 +123,7 @@ describe("getVaultBundlesSharesRequirements", () => {
 
     expect(permit?.action).toMatchObject({
       type: "permit",
-      args: { spender, amount: requiredShareAllowance, nonce: 7n },
+      args: { spender, amount: maxUint256, nonce: 7n },
     });
   });
 
@@ -212,7 +153,7 @@ describe("getVaultBundlesSharesRequirements", () => {
 
     expect(permit?.action).toMatchObject({
       type: "permit",
-      args: { spender, amount: requiredShareAllowance, nonce: 7n },
+      args: { spender, amount: maxUint256, nonce: 7n },
     });
   });
 

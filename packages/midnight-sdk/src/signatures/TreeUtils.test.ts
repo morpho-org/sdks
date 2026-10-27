@@ -18,6 +18,7 @@ import {
 import type { MidnightApiFetch } from "../api/index.js";
 import {
   InvalidMarketParameterError,
+  InvalidOfferGroupError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
@@ -878,6 +879,38 @@ describe("TreeUtils.buildDescriptor", () => {
     expect(payload.root).toBe(
       "0xf26894e35339dea06aebcf09035fe62e768b2b8002c0db452ca255be4714ea9a",
     );
+  });
+
+  test("error: InvalidOfferGroupError for priceV1/rateV1 explicit groups with mixed cap modes", () => {
+    const unitOffer = baseOffer({
+      tick: 5_000n,
+      group: zeroHash,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    });
+    const assetOffer = baseOffer({
+      tick: 5_004n,
+      expiry: unitOffer.expiry + 1n,
+      group: zeroHash,
+      maxUnits: 0n,
+      maxAssets: 100n,
+    });
+
+    expect(() =>
+      TreeUtils.buildDescriptor({
+        type: "priceV1",
+        entries: [{ offer: unitOffer }, { offer: assetOffer }],
+      }),
+    ).toThrow(InvalidOfferGroupError);
+    expect(() =>
+      TreeUtils.buildDescriptor({
+        type: "rateV1",
+        entries: [
+          { offer: unitOffer, rate: 100n },
+          { offer: assetOffer, rate: 100n },
+        ],
+      }),
+    ).toThrow(InvalidOfferGroupError);
   });
 
   test("behavior: standalone input matches an explicit singleton group by default", () => {

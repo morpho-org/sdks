@@ -47,7 +47,6 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
-import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   validateDeadline,
   validateNativeVaultAsset,
@@ -224,16 +223,16 @@ export interface VaultV2Actions {
   /**
    * Prepares an exact-assets Vault V2 withdrawal through VaultBundlesV1.
    *
-   * Derives the share-burn cap from the supplied `vaultData` snapshot at handle creation, then
-   * reads the live vault-share allowance and, when a signature is needed, the permit nonce on
-   * each `getRequirements()` call. Captures the requested amount and owner at creation, so later
-   * changes to `params` do not change this handle's requirements or transaction.
+   * Derives the minimum required share allowance from the supplied `vaultData` snapshot at handle
+   * creation, then reads the live vault-share allowance and, when a signature is needed, the permit
+   * nonce on each `getRequirements()` call. Captures the requested amount and owner at creation, so
+   * later changes to `params` do not change this handle's requirements or transaction.
    *
    * @param params.amount - Positive gross withdrawal in underlying asset base units, before fees.
    * @param params.userAddress - Share owner that must sign and submit; receives the net assets.
-   * @param params.vaultData - Pre-fetched Vault V2 snapshot used to derive the share cap.
-   * @param params.slippageTolerance - Optional WAD-scaled share-price loss tolerance applied to
-   *   the share cap.
+   * @param params.vaultData - Pre-fetched Vault V2 snapshot used to derive the minimum share allowance.
+   * @param params.slippageTolerance - Optional WAD-scaled tolerance used only to size the minimum
+   *   share allowance. It does not impose an on-chain share-burn bound.
    *   Defaults to 0.03% and cannot exceed 10%.
    * @param params.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero;
    *   rounded down and deducted from the gross withdrawn assets.
@@ -242,17 +241,16 @@ export interface VaultV2Actions {
    *   defaults to two hours from handle creation.
    * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
    *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
-   *   when the allowance is between the cap and the cap divided by `1 - slippageTolerance`; a
-   *   larger allowance is always reset with an exact onchain approval, and an insufficient one is
-   *   raised by an approval or, with signature
-   *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
-   *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   *   when the allowance meets or exceeds the required share amount. An insufficient allowance is
+   *   raised by an unlimited approval or, with signature support, an ERC-2612 request. The minimum
+   *   is fixed at handle creation while each call re-reads the allowance. Confirm the approval or
+   *   pass its signed permit to `buildTx`.
    * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
    *   under the live allowance, so execute every requirement returned by the latest
-   *   `getRequirements()` — including the oversized-allowance reset — before submitting.
+   *   `getRequirements()` before submitting.
    * @throws {ChainIdMismatchError} when the connected client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
-   * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
+   * @throws {NonPositiveInputError} when `amount` or the computed required share amount is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   at any `getRequirements()` call.
    * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
@@ -266,8 +264,8 @@ export interface VaultV2Actions {
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
-   *   its spender or deadline differ from this operation's, or its amount is outside
-   *   `[cap, cap / (1 - slippageTolerance)]`.
+   *   its spender or deadline differ from this operation's, or its amount is below the required
+   *   share allowance.
    * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol
    *   contract has no code at its registered address.
    * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or `eth_chainId`
@@ -309,8 +307,9 @@ export interface VaultV2Actions {
    * Prepares an exact-shares Vault V2 redemption through VaultBundlesV1.
    *
    * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
-   * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
-   * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
+   * The caller must satisfy the minimum share allowance returned by `getRequirements()` before
+   * `buildTx()`; larger allowances also suffice, and each requirement resolution re-reads the live
+   * allowance and checks the deadline.
    *
    * @param params - The redeem parameters.
    * @param params.shares - Exact vault shares to burn.
@@ -318,7 +317,7 @@ export interface VaultV2Actions {
    * @param [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
    * @param [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
    * @param [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
-   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @returns Lazy share-allowance requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {NonPositiveInputError} when `shares` is not positive.
@@ -341,8 +340,8 @@ export interface VaultV2Actions {
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
-   *   deadline differ from this operation's.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender or
+   *   deadline differs from this operation's, or its amount is below the required share allowance.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -389,9 +388,10 @@ export interface VaultV2Actions {
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
-   * In-kind exits require an exact vault-share allowance for the computed cap. An ERC-2612 permit
-   * is emitted only to raise an insufficient allowance; an oversized allowance is always reset
-   * with an onchain approval before the exit.
+   * In-kind exits have no on-chain share-price or max-shares bound. A share-price drop before
+   * inclusion can burn more shares than quoted when the allowance is unlimited. The SDK requires
+   * the computed minimum allowance, and an insufficient allowance is raised by an unlimited
+   * approval or ERC-2612 permit.
    *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
@@ -426,8 +426,8 @@ export interface VaultV2Actions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612, has
-   *   the wrong asset, owner, or signature encoding, or names another spender, amount, or deadline
-   *   than the prepared cap.
+   *   the wrong asset, owner, or signature encoding, names another spender or deadline, or
+   *   signs an amount below the required share allowance.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -498,12 +498,13 @@ export interface VaultV2Actions {
    * validate the user's share balance. Per-market penalties and each vault withdrawal round the
    * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
    * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
-   * full-balance exit does not revert for insufficient shares. The approved share allowance this
-   * handle returns covers a burn at least one `slippageTolerance` step below the price floor
-   * whenever the floor exceeds one RAY unit and, in any case, at least one share above the burn
-   * at the floor, so a price within that headroom below the floor reverts on the contract's
-   * `minSharePriceE27` check rather than on the allowance; a deeper drop can still surface as an
-   * ERC-20 allowance underflow.
+   * full-balance exit does not revert for insufficient shares. Any approval or permit this handle
+   * returns is unlimited. The computed share amount is only the smallest existing allowance the
+   * SDK accepts without a new requirement: it covers a burn at least one `slippageTolerance` step
+   * below the price floor whenever the floor exceeds one RAY unit and, in any case, at least one
+   * share above the burn at the floor. A reused allowance just above that minimum can still
+   * surface a deeper price drop as an ERC-20 allowance underflow rather than the contract's
+   * `minSharePriceE27` check.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
@@ -567,8 +568,8 @@ export interface VaultV2Actions {
    * @throws {MissingContractCodeError} from `getRequirements()` when a fixed bundles or protocol contract has no code at its registered address.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
-   *   deadline differs from this operation. Any handle built from the same inputs accepts the
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender or deadline
+   *   differs from this operation, or its amount is below the required share allowance. Any handle built from the same inputs accepts the
    *   permit; a permit whose nonce was consumed is skipped onchain and the live allowance applies.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
@@ -862,27 +863,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
       assets: amount,
       slippageTolerance,
     });
-    const maxShareAllowance = computeVaultShareAllowanceCeiling({
-      requiredShareAllowance,
-      slippageTolerance,
-    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
         await this.assertWriteTargets(["bundles.vaultBundlesV1"]);
-        // Re-read the live share allowance on every call instead of caching the resolved
-        // requirements: the allowance is the sole cap on the burn, so a caller that executed the
-        // returned approval must see it satisfied on the next call, and an allowance revoked or
-        // raised afterwards must resurface as an outstanding requirement. The cap derived from
-        // `vaultData` is pinned at handle creation, so re-reading cannot move it.
+        // Re-read the live share allowance on every call instead of caching the resolved requirements.
         return getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData,
           version: "vaultV2",
           owner: userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
-          maxShareAllowance,
           deadline,
           supportSignature: this.client.options.supportSignature,
           now,
@@ -892,7 +884,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
         const permit = selectBundlesSharesPermitSignature(signatures, {
           spender,
           amount: requiredShareAllowance,
-          maxAmount: maxShareAllowance,
           deadline,
         });
         return vaultV2Withdraw({
@@ -1156,15 +1147,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
             required: peak,
           });
         }
-        // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
-        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`.
-        if (allowance === requiredShareAllowance) return [];
-        // A lowering permit can be skipped after its nonce is consumed, so oversized allowances
-        // must be reset with an onchain approval.
-        if (
-          allowance < requiredShareAllowance &&
-          this.client.options.supportSignature
-        ) {
+        if (allowance >= requiredShareAllowance) return [];
+        if (this.client.options.supportSignature) {
           return [
             encodeVaultSharesPermit({
               vault: vaultData,
@@ -1173,7 +1157,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
               owner: userAddress,
               chainId: this.chainId,
               nonce,
-              amount: requiredShareAllowance,
               deadline,
             }),
           ];
@@ -1182,7 +1165,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           encodeErc20Approval({
             token: this.vault,
             spender: vaultExitBundlesV1,
-            amount: requiredShareAllowance,
+            amount: maxUint256,
             chainId: this.chainId,
           }),
         ];
@@ -1419,17 +1402,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
     // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
     validateUint256Field("minSharePriceE27", minSharePriceE27);
-    // The allowance is only a spend cap, never the price protection: the bundle checks
-    // `minSharePriceE27` after its last withdrawal, so an allowance sized exactly to the floor
-    // underflows `_spendAllowance` (panic 0x11) on a below-floor price before that check runs. Size
-    // it for a price at least one tolerance step below the floor so the miss surfaces as the
-    // bundle's own revert instead, and, in any case, for at least one share above the at-floor
-    // burn — a burn of `atFloor + 1` shares prices strictly below the floor since
-    // `atFloor >= exitAssets * RAY / floor`. The `minSharePriceE27 - 1` branch keeps the
-    // denominator strictly below the floor whenever the floor exceeds 1, so even
-    // `slippageTolerance: 0n` leaves price-space headroom; a deeper drop still exhausts the
-    // allowance first. Add the fee shares the first withdrawal mints since the burn measured
-    // on-chain includes them. Saturated at `maxUint256` as an ABI-slot guard.
+    // This is the minimum allowance needed for successful execution, not an exit cap: the bundle
+    // independently rejects a realized share price below `minSharePriceE27`. Include the fee
+    // shares minted by the first withdrawal and enough headroom for the configured tolerance.
     const allowanceSharePriceE27 = MathLib.max(
       MathLib.min(
         MathLib.mulDivDown(
@@ -1491,7 +1466,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
             owner: userAddress,
             chainId: this.chainId,
             nonce,
-            amount: requiredShareAllowance,
             deadline,
           });
           return [requirement];
@@ -1500,7 +1474,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           encodeErc20Approval({
             token: this.vault,
             spender: vaultExitBundlesV1,
-            amount: requiredShareAllowance,
+            amount: maxUint256,
             chainId: this.chainId,
           }),
         ];

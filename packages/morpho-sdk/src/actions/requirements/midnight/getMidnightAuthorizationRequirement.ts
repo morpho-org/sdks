@@ -3,6 +3,7 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Client, encodeFunctionData } from "viem";
 import { readContract } from "viem/actions";
 import { validateChainId } from "../../../helpers/index.js";
+import { validateMidnightAccount } from "../../../helpers/validateMidnightAccount.js";
 import { validateMidnightAuthorizationTarget } from "../../../helpers/validateMidnightAuthorizationTarget.js";
 import type {
   MidnightAuthorizationAction,
@@ -34,6 +35,8 @@ export interface GetMidnightAuthorizationRequirementParams {
  * @returns Authorization transaction, or `null` when already authorized.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
+ * @throws {MidnightCalldataEncodingError} when `owner` or `authorized` is not a well-formed address.
+ * @throws {MidnightZeroAccountError} when `owner` is the zero address.
  * @throws {viem.BaseError} when the `eth_chainId` request or authorization read fails.
  * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not MidnightBundlesV2.
  * @example
@@ -61,6 +64,8 @@ export interface GetMidnightAuthorizationRequirementParams {
 export const getMidnightAuthorizationRequirement = async (
   params: GetMidnightAuthorizationRequirementParams,
 ): Promise<Readonly<Transaction<MidnightAuthorizationAction>> | null> => {
+  // Reject the zero account before reading state for it.
+  validateMidnightAccount("owner", params.owner);
   validateChainId(params.viemClient.chain?.id, params.chainId);
   // Reject unknown operators before reading authorization state.
   validateMidnightAuthorizationTarget({

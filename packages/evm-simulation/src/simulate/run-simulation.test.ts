@@ -1,8 +1,25 @@
-import { ChainId } from "@morpho-org/blue-sdk";
+import * as blueSdk from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  getChainAddresses,
+  type MarketId,
+} from "@morpho-org/blue-sdk";
+import { midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { expectFailClosed } from "@morpho-org/test/chaos";
-import { type Address, type Hex, numberToHex } from "viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import {
+  type Address,
+  encodeFunctionResult,
+  erc20Abi,
+  type Hex,
+  isAddressEqual,
+  numberToHex,
+  zeroAddress,
+} from "viem";
+import { base } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  ConsumerLimitViolationError,
   InvalidChainIdError,
   InvalidSimulationResponseError,
   RpcTransportError,
@@ -15,6 +32,8 @@ import type { SimulationConfig, SimulationTransaction } from "../types.js";
 import type { executePlan } from "./backends/index.js";
 import type { SimulationExecution } from "./backends/parse-response.js";
 import type { ExecutionPlan, PlannedCall } from "./plan/plan-execution.js";
+import { parseRequest } from "./request/parse-request.js";
+import { runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
 
 const mockExecutePlan = vi.fn<typeof executePlan>();
@@ -92,11 +111,17 @@ function stubFetch(
   calls: readonly unknown[],
   code: Hex = "0x6000",
   servedChainId?: number | "fail",
+  mockClient?: ReturnType<typeof createMockClient>,
 ) {
   const methods: string[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
-    const { method } = JSON.parse(String(init?.body)) as { method: string };
+    const { method, params } = JSON.parse(String(init?.body)) as {
+      method: string;
+      params?: readonly unknown[];
+    };
     methods.push(method);
+    if (method === "eth_call" && mockClient !== undefined)
+      return rpc(await mockClient.request({ method, params }));
     if (method === "eth_chainId") {
       if (servedChainId === "fail") throw new TypeError("fetch failed");
       return rpc(numberToHex(servedChainId ?? CHAIN_ID));
@@ -137,6 +162,225 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
+  test.each([
+    { label: "owner sends ETH", value: 1n, from: OWNER, guard: true },
+    { label: "owner sends no ETH", value: 0n, from: OWNER, guard: false },
+    { label: "other sender sends ETH", value: 1n, from: TARGET, guard: false },
+  ])(
+    "behavior: native value sent wiring — $label",
+    async ({ value, from, guard }) => {
+      const addresses = getChainAddresses(ChainId.BaseMainnet)!;
+      const mockClient = createMockClient(base);
+      mockRead(mockClient, {
+        address: addresses.midnight!,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: {
+          chainId: BigInt(ChainId.BaseMainnet),
+          midnight: addresses.midnight!,
+          loanToken: TARGET as Address,
+          collateralParams: [
+            {
+              token: addresses.wNative! as Address,
+              lltv: 0n,
+              liquidationCursor: 0n,
+              oracle: zeroAddress,
+            },
+          ],
+          maturity: 2_000_000_000n,
+          rcfThreshold: 0n,
+          enterGate: zeroAddress,
+          liquidatorGate: zeroAddress,
+        },
+      });
+      const { fetch } = stubFetch(
+        [],
+        "0x6000",
+        ChainId.BaseMainnet,
+        mockClient,
+      );
+      const request = {
+        chainId: ChainId.BaseMainnet,
+        transactions: [{ ...TRANSACTION, from, value }],
+        limits: {
+          operations: [
+            {
+              type: "midnightRepayWithdrawCollateral" as const,
+              marketId: `0x${"11".repeat(32)}` as MarketId,
+              quote: {
+                collateralWithdrawals: [{ collateralIndex: 0n, assets: 1n }],
+              },
+            },
+          ],
+        },
+      };
+      const simulationConfig = {
+        chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+      };
+      const error =
+        from === TARGET
+          ? await runSimulation({
+              config: simulationConfig,
+              request: {
+                ...parseRequest({
+                  ...request,
+                  transactions: [{ ...TRANSACTION, value: 0n }],
+                }),
+                transactions: [
+                  { ...TRANSACTION, value: 0n },
+                  { ...TRANSACTION, from: TARGET, value: 1n },
+                ],
+              },
+            }).catch((cause: unknown) => cause)
+          : await simulate(simulationConfig, request).catch(
+              (cause: unknown) => cause,
+            );
+      if (guard) {
+        expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+        expect(error).toHaveProperty(
+          "message",
+          expect.stringContaining("native ETH is sent"),
+        );
+      } else {
+        expect(error).not.toHaveProperty(
+          "message",
+          expect.stringContaining("native ETH is sent"),
+        );
+      }
+      expect(fetch).toHaveBeenCalled();
+    },
+  );
+
+  test("behavior: combined wNative pull cap uses the exact total from owner transactions", async () => {
+    userCallCount = 3;
+    const addresses = getChainAddresses(ChainId.BaseMainnet)!;
+    const mockClient = createMockClient(base);
+    mockRead(mockClient, {
+      address: addresses.midnight!,
+      abi: midnightAbi,
+      functionName: "toMarket",
+      result: {
+        chainId: BigInt(ChainId.BaseMainnet),
+        midnight: addresses.midnight!,
+        loanToken: TARGET as Address,
+        collateralParams: [
+          {
+            token: addresses.wNative! as Address,
+            lltv: 0n,
+            liquidationCursor: 0n,
+            oracle: zeroAddress,
+          },
+        ],
+        maturity: 2_000_000_000n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      },
+    });
+    let walletDelta = -1n;
+    mockExecutePlan.mockImplementation(async ({ plan, stateBlock }) => ({
+      ...execution(plan, stateBlock),
+      stateReads: plan.calls
+        .filter(
+          (call): call is Extract<PlannedCall, { type: "stateRead" }> =>
+            call.type === "stateRead",
+        )
+        .map(({ phase, read }) => {
+          const before = phase === "before";
+          let returnData: Hex;
+          if (read.kind === "erc20.balance") {
+            const value = isAddressEqual(read.token, addresses.wNative!)
+              ? before
+                ? 100n
+                : 100n + walletDelta
+              : before
+                ? 0n
+                : 1n;
+            returnData = encodeFunctionResult({
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              result: value,
+            });
+          } else if (read.kind === "midnight.collateral") {
+            returnData = encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "collateral",
+              result: before ? 0n : 5n,
+            });
+          } else if (read.kind === "midnight.credit") {
+            returnData = encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "updatePositionView",
+              result: before ? [100n, 0n, 0n] : [90n, 0n, 0n],
+            });
+          } else {
+            returnData = encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "debt",
+              result: 20n,
+            });
+          }
+          return { phase, read, returnData };
+        }),
+    }));
+    const { fetch } = stubFetch([], "0x6000", ChainId.BaseMainnet, mockClient);
+    const simulationConfig = {
+      chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+    };
+    const request = {
+      chainId: ChainId.BaseMainnet,
+      transactions: [
+        { ...TRANSACTION, from: OWNER, value: 1n },
+        { ...TRANSACTION, from: OWNER, value: 2n },
+        { ...TRANSACTION, from: TARGET, value: 10n },
+      ],
+      limits: {
+        operations: [
+          {
+            type: "midnightSupplyCollateralTakeBorrow" as const,
+            marketId: `0x${"11".repeat(32)}` as MarketId,
+            quote: {
+              collateralSupplies: [{ collateralIndex: 0n, assets: 5n }],
+              unitsSold: 10n,
+              assetsReceived: 1n,
+            },
+          },
+        ],
+      },
+    };
+    const parsedRequest = parseRequest({
+      ...request,
+      transactions: request.transactions.map((transaction) => ({
+        ...transaction,
+        from: OWNER,
+      })),
+    });
+    const run = () =>
+      runSimulation({
+        config: simulationConfig,
+        request: {
+          ...parsedRequest,
+          transactions: request.transactions,
+        },
+      });
+    const result = await run();
+    expect(result).toMatchObject({
+      verification: {
+        operations: [{ operation: "midnightSupplyCollateralTakeBorrow" }],
+      },
+    });
+    expect(result.verification.limits).not.toBe("none");
+    if (result.verification.limits !== "none") {
+      const checkedLimit = result.verification.limits.operations[0]!;
+      expect(Object.hasOwn(checkedLimit, "fieldChecks")).toBe(false);
+      expect(checkedLimit).not.toHaveProperty("fieldChecks");
+      expect(Object.keys(checkedLimit)).not.toContain("fieldChecks");
+    }
+    walletDelta = -3n;
+    await expect(run()).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+    expect(fetch).toHaveBeenCalled();
+  });
+
   test("error: an unregistered chain requires Morpho addresses for limits", async () => {
     const { fetch } = stubFetch([]);
     await expect(
@@ -157,6 +401,173 @@ describe.sequential("runSimulation", () => {
     ).rejects.toBeInstanceOf(UnsupportedChainError);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  test("error: mixed parking and Morpho limits require registered addresses", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [
+            {
+              type: "midnightSupplyBlueMakeLend",
+              loanToken: TARGET,
+              marketId: `0x${"11".repeat(32)}` as MarketId,
+              callbackSalt: `0x${"22".repeat(32)}` as Hex,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: native-funded Blue parking on an unregistered chain is unsupported", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [{ ...TRANSACTION, value: 1n }],
+        limits: {
+          operations: [
+            {
+              type: "midnightSupplyBlueMakeLend",
+              loanToken: TARGET,
+              marketId: `0x${"11".repeat(32)}` as MarketId,
+              callbackSalt: `0x${"22".repeat(32)}` as Hex,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: midnightSupplyCollateral on a chain without a Midnight address", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(
+        {
+          chains: new Map([
+            [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+          ]),
+        },
+        {
+          chainId: ChainId.ArbitrumMainnet,
+          transactions: [TRANSACTION],
+          limits: {
+            operations: [
+              {
+                type: "midnightSupplyCollateral",
+                marketId: `0x${"11".repeat(32)}` as MarketId,
+                collateralIndex: 0n,
+                quote: { assetsPaid: 1n, collateralSupplied: 1n },
+              },
+            ],
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: midnightRedeem on a chain without a Midnight address", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(
+        {
+          chains: new Map([
+            [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+          ]),
+        },
+        {
+          chainId: ChainId.ArbitrumMainnet,
+          transactions: [TRANSACTION],
+          limits: {
+            operations: [
+              {
+                type: "midnightRedeem",
+                marketId: `0x${"11".repeat(32)}` as Hex,
+                quote: { creditRedeemed: 1n, assetsReceived: 1n },
+              },
+            ],
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "midnightTakeBorrow",
+    "midnightTakeWithdraw",
+    "midnightSupplyCollateralTakeBorrow",
+    "midnightTakeLend",
+    "midnightRepayWithdrawCollateral",
+    "midnightTakeRepayWithdrawCollateral",
+  ] as const)(
+    "error: %s on a chain without a Midnight address",
+    async (type) => {
+      const { fetch } = stubFetch([]);
+      const operation =
+        type === "midnightTakeBorrow"
+          ? {
+              type,
+              marketId: `0x${"11".repeat(32)}` as Hex,
+              quote: { unitsSold: 1n, assetsReceived: 1n },
+            }
+          : type === "midnightTakeLend"
+            ? {
+                type,
+                marketId: `0x${"11".repeat(32)}` as Hex,
+                quote: { assetsPaid: 1n, unitsBought: 1n },
+              }
+            : type === "midnightSupplyCollateralTakeBorrow"
+              ? {
+                  type,
+                  marketId: `0x${"11".repeat(32)}` as MarketId,
+                  quote: {
+                    collateralSupplies: [{ collateralIndex: 0n, assets: 1n }],
+                    unitsSold: 1n,
+                    assetsReceived: 1n,
+                  },
+                }
+              : type === "midnightTakeWithdraw"
+                ? {
+                    type,
+                    marketId: `0x${"11".repeat(32)}` as Hex,
+                    quote: { creditRedeemed: 1n, assetsReceived: 1n },
+                  }
+                : {
+                    type,
+                    marketId: `0x${"11".repeat(32)}` as Hex,
+                    quote: { assetsPaid: 1n, debtRepaid: 1n },
+                  };
+      await expect(
+        simulate(
+          {
+            chains: new Map([
+              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+            ]),
+          },
+          {
+            chainId: ChainId.ArbitrumMainnet,
+            transactions: [TRANSACTION],
+            limits: { operations: [operation] },
+          },
+        ),
+      ).rejects.toBeInstanceOf(UnsupportedChainError);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
 
   test("error: preview authorizations on an unregistered chain require Morpho addresses", async () => {
     const { fetch } = stubFetch([]);
@@ -206,6 +617,110 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
+  });
+
+  test("error: Blue parking requires registered protocol addresses", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [
+            {
+              type: "midnightSupplyBlueMakeLend",
+              loanToken: TARGET,
+              marketId: `0x${"11".repeat(32)}` as MarketId,
+              callbackSalt: `0x${"22".repeat(32)}` as Hex,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+        },
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: Blue parking requires a registered callback factory", async () => {
+    const { fetch } = stubFetch([]);
+    const addresses = {
+      ...getChainAddresses(ChainId.BaseMainnet),
+      midnightBlueBuyCallbackFactory: undefined,
+    };
+    const getChainAddressesSpy = vi
+      .spyOn(blueSdk, "getChainAddresses")
+      .mockReturnValueOnce(addresses);
+    try {
+      await expect(
+        simulate(
+          {
+            chains: new Map([
+              [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+            ]),
+          },
+          {
+            chainId: ChainId.BaseMainnet,
+            transactions: [TRANSACTION],
+            limits: {
+              operations: [
+                {
+                  type: "midnightSupplyBlueMakeLend",
+                  loanToken: TARGET,
+                  marketId: `0x${"11".repeat(32)}` as MarketId,
+                  callbackSalt: `0x${"22".repeat(32)}` as Hex,
+                  quote: { assetsPaid: 1n, sharesMinted: 1n },
+                },
+              ],
+            },
+          },
+        ),
+      ).rejects.toBeInstanceOf(UnsupportedChainError);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      getChainAddressesSpy.mockRestore();
+    }
+  });
+
+  test("error: Blue parking requires a registered Midnight address", async () => {
+    const { fetch } = stubFetch([]);
+    const addresses = {
+      ...getChainAddresses(ChainId.BaseMainnet),
+      midnight: undefined,
+    };
+    expect(addresses.blue).toBeDefined();
+    expect(addresses.midnightBlueBuyCallbackFactory).toBeDefined();
+    const getChainAddressesSpy = vi
+      .spyOn(blueSdk, "getChainAddresses")
+      .mockReturnValueOnce(addresses);
+    try {
+      await expect(
+        simulate(
+          {
+            chains: new Map([
+              [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+            ]),
+          },
+          {
+            chainId: ChainId.BaseMainnet,
+            transactions: [TRANSACTION],
+            limits: {
+              operations: [
+                {
+                  type: "midnightSupplyBlueMakeLend",
+                  loanToken: TARGET,
+                  marketId: `0x${"11".repeat(32)}` as MarketId,
+                  callbackSalt: `0x${"22".repeat(32)}` as Hex,
+                  quote: { assetsPaid: 1n, sharesMinted: 1n },
+                },
+              ],
+            },
+          },
+        ),
+      ).rejects.toBeInstanceOf(UnsupportedChainError);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      getChainAddressesSpy.mockRestore();
+    }
   });
 
   test("behavior: a configured block gas limit is forwarded to execution", async () => {

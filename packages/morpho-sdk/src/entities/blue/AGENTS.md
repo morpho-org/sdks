@@ -57,16 +57,16 @@ required snapshot cannot prove the buffered position safe.
   selected repay mode, `positionData`, and deadline, and request Morpho authorization when
   `collateralAssets > 0n`. Share-mode deadlines cannot exceed the two-hour funding quote horizon.
   A full repay funds exactly the derived `maxRepayAssets` (deadline-accrued debt plus referral fee);
-  a reusable allowance is opt-in through `approvalAmount`.
+  classic approvals remain unlimited while the transaction's pull is bounded by that cap.
 - `withdrawCollateral` delegates to the repay path with no repay leg, so it funds no loan token; it
   requests only Morpho authorization.
 - `withdraw` and `refinance` request Morpho authorization.
 
-Classic approvals and ERC-2612 permits name BlueBundlesV1 as spender. A classic approval covers the
-actual pull amount unless a reusable `approvalAmount` is passed. Permit2 SignatureTransfer has
-two parts: the ERC-20 prerequisite names canonical Permit2, while the signed transfer names
-BlueBundlesV1. Native-only funding emits no token requirement and requires the funded token to be
-the chain's wNative.
+Classic approvals name BlueBundlesV1 and request the unlimited token maximum, capped by
+`MAX_TOKEN_APPROVALS`. ERC-2612 token permits and Permit2 SignatureTransfer remain exact because
+the bundles contract submits the exact pull amount to each permit path. Permit2's ERC-20 allowance
+prerequisite names canonical Permit2, while the signed transfer names BlueBundlesV1. Native-only
+funding emits no token requirement and requires the funded token to be the chain's wNative.
 
 Morpho authorization also names BlueBundlesV1. When `supportSignature` is
 enabled, the entity returns a signable authorization `Requirement`; otherwise it returns the

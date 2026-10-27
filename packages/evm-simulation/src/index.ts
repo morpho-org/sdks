@@ -21,6 +21,7 @@ export type {
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
+  AmbiguousExpectedQuoteError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
@@ -42,18 +43,38 @@ export {
   UnsupportedOperationError,
 } from "./errors.js";
 export type {
+  AssetsOrShares,
   BlueMarketOperationSubject,
   BlueMarketOperationType,
   BluePositionBounds,
   BlueRefinanceSubject,
+  CheckedInputOperationLimit,
   CheckedOperationLimit,
+  CheckedSimulationInputLimits,
   CheckedSimulationLimits,
   CheckedSlippageLimits,
+  FeelessInputType,
   ForceExitDeallocationQuote,
   InKindPositionQuote,
+  InputOperationLimit,
+  MidnightBlueParkingSubject,
+  MidnightBuySubject,
+  MidnightCollateralAmount,
+  MidnightCollateralOperationSubject,
+  MidnightDebtPositionBounds,
+  MidnightMarketStruct,
+  MidnightPositionBounds,
+  MidnightRedeemSubject,
+  MidnightRepayWithdrawCollateralSubject,
+  MidnightSellSubject,
+  OperationInputs,
   OperationLimit,
   OperationType,
+  ReallocationPenaltyInputType,
+  RepayInputs,
+  ScalarQuoteField,
   SharePriceLimit,
+  SimulationInputLimits,
   SimulationLimits,
   SimulationOperationSubject,
   SlippageLimits,
@@ -68,6 +89,7 @@ export {
   VAULT_OPERATION_TYPES,
 } from "./limits.js";
 export type {
+  SimulateInputParams,
   SimulateParams,
   SimulationMode,
   StateBlock,
@@ -80,7 +102,9 @@ export {
 export type {
   AuthorizationPreparation,
   SimulatedOperation,
+  SimulationInputVerification,
   SimulationVerification,
+  VerifiedSimulationInputResult,
   VerifiedSimulationResult,
 } from "./result.js";
 export type { AssertionBounds } from "./simulate/assertions.js";

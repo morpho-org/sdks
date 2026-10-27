@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; Alternative 4 superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-07-27 |
 | **Author** | @foulques |
 | **Scope**  | Packages: `morpho-sdk`, `morpho-ts` |

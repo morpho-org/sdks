@@ -12,6 +12,7 @@ import {
   decodeFunctionData,
   erc20Abi,
   getAddress,
+  maxUint256,
   toHex,
   zeroAddress,
   zeroHash,
@@ -90,8 +91,7 @@ export const shareAllowanceStateArbitrary = fc.record({
     "zero",
     "belowCap",
     "cap",
-    "ceiling",
-    "aboveCeiling",
+    "aboveCap",
     "random",
   ),
   randomAllowance: fc.bigInt({ min: 0n, max: UINT128_MAX }),
@@ -101,28 +101,26 @@ export const shareAllowanceStateArbitrary = fc.record({
 
 /**
  * Resolves share requirements through the resolver the vault entities use for asset-mode exits
- * and checks that only VaultBundlesV1 is authorized, for exactly `cap` shares.
+ * and checks that only VaultBundlesV1 is authorized, for unlimited shares.
  */
 export const expectVaultBundlesShareRequirements = async (params: {
   readonly vault: Address;
   readonly version: "vaultV1" | "vaultV2";
   readonly owner: Address;
   readonly cap: bigint;
-  readonly ceiling: bigint;
   readonly state: typeof shareAllowanceStateArbitrary extends fc.Arbitrary<
     infer T
   >
     ? T
     : never;
 }) => {
-  const { vault, version, owner, cap, ceiling, state } = params;
+  const { vault, version, owner, cap, state } = params;
   const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
   const allowance = {
     zero: 0n,
     belowCap: cap - 1n,
     cap,
-    ceiling,
-    aboveCeiling: ceiling + 1n,
+    aboveCap: cap + 1n,
     random: state.randomAllowance,
   }[state.allowanceEdge];
   const handle = createMockClient(mainnet);
@@ -144,7 +142,6 @@ export const expectVaultBundlesShareRequirements = async (params: {
     owner,
     chainId: mainnet.id,
     requiredShareAllowance: cap,
-    maxShareAllowance: ceiling,
     deadline: propertyDeadline,
     supportSignature: state.supportSignature,
   });
@@ -162,7 +159,7 @@ export const expectVaultBundlesShareRequirements = async (params: {
     functionName: "nonces",
   });
   for (const read of nonceReads) expect(read.args).toEqual([owner]);
-  if (allowance >= cap && allowance <= ceiling) {
+  if (allowance >= cap) {
     expect(requirements).toEqual([]);
     return;
   }
@@ -180,7 +177,7 @@ export const expectVaultBundlesShareRequirements = async (params: {
     expect(requirement.action.typedData.message).toMatchObject({
       owner,
       spender,
-      value: cap,
+      value: maxUint256,
       nonce: state.nonce,
       deadline: propertyDeadline,
     });
@@ -191,6 +188,6 @@ export const expectVaultBundlesShareRequirements = async (params: {
   }
   expect(requirement.to).toBe(vault);
   expect(decodeFunctionData({ abi: erc20Abi, data: requirement.data })).toEqual(
-    { functionName: "approve", args: [spender, cap] },
+    { functionName: "approve", args: [spender, maxUint256] },
   );
 };

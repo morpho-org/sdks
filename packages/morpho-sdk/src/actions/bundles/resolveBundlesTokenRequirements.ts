@@ -4,7 +4,6 @@ import { maxUint256 } from "viem";
 import { validateUint256Field } from "../../helpers/validate.js";
 import { validateRequirementSpender } from "../../helpers/validateRequirementSpender.js";
 import {
-  ApprovalAmountLessThanSpendAmountError,
   type BundlesTokenSignatureRequirement,
   type ERC20ApprovalAction,
   InputExceedsMaxError,
@@ -21,8 +20,6 @@ export type BundlesTokenRequirementsState =
       readonly type: "approval";
       /** Current allowance of the funding token for `spender`. */
       readonly allowance: bigint;
-      /** Allowance to set when the current allowance cannot cover `amount`. */
-      readonly approvalAmount: bigint;
     }
   | {
       readonly type: "permit2SignatureTransfer";
@@ -54,7 +51,6 @@ export type BundlesTokenRequirementsState =
  * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
  * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
  * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
- * @param params.state.approvalAmount - In the approval branch, allowance to set if needed; must cover `amount`.
  * @param params.state.permit2Allowance - In the SignatureTransfer branch, current token allowance from `owner` to canonical Permit2.
  * @param params.state.permit2Nonce - In the SignatureTransfer branch, caller-selected unused uint256 unordered nonce.
  * @param params.state.nonceBitmap - In the SignatureTransfer branch, owner's Permit2 bitmap word at `permit2Nonce >> 8n`.
@@ -66,7 +62,6 @@ export type BundlesTokenRequirementsState =
  * @throws {InputExceedsMaxError} when `amount`, the Permit2 nonce, or the SignatureTransfer
  *   `deadline` exceeds uint256.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the selected nonce bit is set.
- * @throws {ApprovalAmountLessThanSpendAmountError} when a classic approval cannot cover the pull.
  * @throws {UnknownAddressError} when the SignatureTransfer branch runs on a chain without canonical Permit2.
  * @throws {NonPositiveInputError} when the SignatureTransfer `deadline` is not positive.
  * @throws {ExpiredDeadlineError} when the SignatureTransfer `deadline` is positive but not in the future.
@@ -83,7 +78,7 @@ export type BundlesTokenRequirementsState =
  *   chainId: 1,
  *   amount: 1_000_000n,
  *   deadline: 1_900_000_000n,
- *   state: { type: "approval", allowance: 1_000_000n, approvalAmount: 1_000_000n },
+ *   state: { type: "approval", allowance: 1_000_000n },
  * });
  * // requirements is empty because the allowance already covers the amount.
  * ```
@@ -111,9 +106,6 @@ export const resolveBundlesTokenRequirements = (params: {
   if (params.amount === 0n) return [];
 
   if (params.state.type === "approval") {
-    if (params.state.approvalAmount < params.amount) {
-      throw new ApprovalAmountLessThanSpendAmountError();
-    }
     return getRequirementsApproval({
       address: params.token,
       chainId: params.chainId,
@@ -121,7 +113,6 @@ export const resolveBundlesTokenRequirements = (params: {
         // Compare against the bounded pull to avoid redundant approvals and USDT zero-resets.
         spender: params.spender,
         spendAmount: params.amount,
-        approvalAmount: params.state.approvalAmount,
       },
       allowances: params.state.allowance,
     });
@@ -152,7 +143,6 @@ export const resolveBundlesTokenRequirements = (params: {
       args: {
         spender: permit2,
         spendAmount: params.amount,
-        approvalAmount: maxUint256,
       },
       allowances: params.state.permit2Allowance,
     }),

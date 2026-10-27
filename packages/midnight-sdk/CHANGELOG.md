@@ -1,5 +1,15 @@
 # @morpho-org/midnight-sdk
 
+## 2.2.0
+
+### Minor Changes
+
+- `PriceRatifierV1` and `RateRatifierV1` now throw `InvalidOfferGroupError` from `buildDescriptor`, and from `buildProof`, `ratifierData` and `ratify` for raw leaf input, when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules, such as mixing unit and asset caps. Such groups were never valid: all their leaves share one onchain consumed counter. In `@morpho-org/morpho-sdk`, `MorphoMidnight.getOffersData` and the maker flows (`makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`) throw it as `InvalidMidnightOfferGroupError` when given a priceV1/rateV1 `Tree.create` request.
+
+### Patch Changes
+
+- Document that asks quotes by assets can include offers the MidnightBundlesV2 assets-target buy reverts on.
+
 ## 2.1.0
 
 ### Minor Changes

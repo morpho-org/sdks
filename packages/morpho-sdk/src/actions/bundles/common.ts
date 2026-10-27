@@ -63,7 +63,7 @@ export interface BundlesTokenPermit {
 
 /** ABI-ready ERC-2612 share permit consumed by vault bundles. */
 export interface BundleSharesPermit {
-  /** Exact vault-share allowance authorized by the permit. */
+  /** Vault-share allowance authorized by the permit. */
   readonly value: bigint;
   /** Vault permit nonce signed by the owner. */
   readonly nonce: bigint;
@@ -368,7 +368,7 @@ export const normalizeBundlesSignature = (
  * @param params.deadline - Unix timestamp in seconds used by the empty-permit sentinel.
  * @param params.owner - Optional expected signature owner.
  * @param params.spender - Optional expected fixed bundles contract authorized to pull shares.
- * @param params.amount - Optional exact share allowance in the vault share token's smallest unit.
+ * @param params.amount - Optional minimum share allowance in the vault share token's smallest unit.
  * @param params.requirementSignature - Optional signed ERC-2612 share requirement; omit for the empty-permit sentinel.
  * @returns The signed share permit or the contract's empty-permit sentinel.
  * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
@@ -448,12 +448,12 @@ export const getBundlesSharesPermit = (params: {
   }
   if (
     params.amount != null &&
-    (requirementSignature.args.amount !== params.amount ||
-      requirementSignature.action.args.amount !== params.amount)
+    (requirementSignature.args.amount < params.amount ||
+      requirementSignature.action.args.amount < params.amount)
   ) {
     throw new BundlesPermitMismatchError({
       field: "amount",
-      expected: String(params.amount),
+      expected: `at least ${params.amount}`,
       actual: String(requirementSignature.args.amount),
     });
   }
@@ -599,16 +599,14 @@ export const selectBundlesTokenRequirementSignature = (
  * @internal
  *
  * @param signatures - Signatures passed to the operation's `buildTx` function.
- * @param expected - Immutable spender, amount bounds, and deadline required by the operation.
+ * @param expected - Immutable spender, minimum amount, and deadline required by the operation.
  * @param expected.spender - Fixed bundles contract the permit must authorize.
  * @param expected.amount - Minimum share allowance the permit must cover.
- * @param expected.maxAmount - Optional inclusive share allowance ceiling; defaults to
- *   `expected.amount`, which accepts only an exact match.
  * @param expected.deadline - Deadline the permit must carry.
  * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
  * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612, its spender or
  *   deadline differ from the operation's, its signed amount differs from its action's amount, or
- *   its amount is outside `[expected.amount, expected.maxAmount ?? expected.amount]`.
+ *   its amount is below `expected.amount`.
  *   The nonce is not checked here: it is onchain state the vault's `permit` verifies at execution.
  */
 export const selectBundlesSharesPermitSignature = (
@@ -616,7 +614,6 @@ export const selectBundlesSharesPermitSignature = (
   expected: {
     readonly spender: Address;
     readonly amount: bigint;
-    readonly maxAmount?: bigint;
     readonly deadline: bigint;
   },
 ): Erc2612RequirementSignature | undefined => {
@@ -637,11 +634,6 @@ export const selectBundlesSharesPermitSignature = (
       actual: action.args.spender,
     });
   }
-  const maxAmount = expected.maxAmount ?? expected.amount;
-  const expectedAmount =
-    expected.maxAmount == null || expected.maxAmount === expected.amount
-      ? String(expected.amount)
-      : `[${expected.amount}, ${expected.maxAmount}]`;
   if (permit.args.amount !== action.args.amount) {
     throw new BundlesPermitMismatchError({
       field: "amount",
@@ -649,10 +641,10 @@ export const selectBundlesSharesPermitSignature = (
       actual: String(permit.args.amount),
     });
   }
-  if (permit.args.amount < expected.amount || permit.args.amount > maxAmount) {
+  if (permit.args.amount < expected.amount) {
     throw new BundlesPermitMismatchError({
       field: "amount",
-      expected: expectedAmount,
+      expected: `at least ${expected.amount}`,
       actual: String(permit.args.amount),
     });
   }

@@ -1,11 +1,15 @@
 import type { Address, Client } from "viem";
-import { erc20Abi, maxUint256 } from "viem";
+import { erc20Abi } from "viem";
 import { readContract } from "viem/actions";
 import {
   validateChainId,
   validateRequirementSpender,
 } from "../../../helpers/index.js";
 import { validateUint256Field } from "../../../helpers/validate.js";
+import {
+  validateMidnightAccount,
+  validateMidnightAddress,
+} from "../../../helpers/validateMidnightAccount.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 import { validateClientChainId } from "../validateClientChainId.js";
@@ -18,11 +22,6 @@ export interface GetMidnightApprovalRequirementsParams {
   readonly owner: Address;
   readonly spender: Address;
   readonly amount: bigint;
-  /**
-   * Allowance to set when an approval is needed. Defaults to `maxUint256`; must be
-   * at least `amount`.
-   */
-  readonly approvalAmount?: bigint;
 }
 
 /**
@@ -35,7 +34,7 @@ export interface GetMidnightApprovalRequirementsParams {
  * The returned approval sets an unlimited allowance (`maxUint256`, capped per
  * token by `MAX_TOKEN_APPROVALS`) whenever the current allowance is below
  * `amount`, because all of an account's Midnight offers and bundle calls share
- * one allowance per token. Pass `approvalAmount` to set a different allowance.
+ * one allowance per token.
  *
  * @param params.viemClient - Viem client used to read ERC20 allowance.
  * @param params.chainId - Chain id expected by the viem client.
@@ -43,14 +42,14 @@ export interface GetMidnightApprovalRequirementsParams {
  * @param params.owner - Token owner.
  * @param params.spender - Midnight spender that will pull tokens.
  * @param params.amount - Minimum allowance the spender needs.
- * @param params.approvalAmount - Allowance to approve when one is needed; defaults to `maxUint256` and must be at least `amount`.
  * @returns Approval transactions required for `spender` to pull `amount`.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
+ * @throws {MidnightCalldataEncodingError} when `owner`, `token` or `spender` is not a well-formed address.
+ * @throws {MidnightZeroAccountError} when `owner` is the zero address.
  * @throws {viem.BaseError} when the `eth_chainId` request or allowance read fails.
- * @throws {NegativeInputError} when `amount` or `approvalAmount` is negative.
- * @throws {InputExceedsMaxError} when `amount` or `approvalAmount` exceeds `maxUint256`.
- * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount < amount`.
+ * @throws {NegativeInputError} when `amount` is negative.
+ * @throws {InputExceedsMaxError} when `amount` exceeds `maxUint256`.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight or MidnightBundlesV2 deployment.
  * @example
  * ```ts
@@ -78,10 +77,13 @@ export interface GetMidnightApprovalRequirementsParams {
 export const getMidnightApprovalRequirements = async (
   params: GetMidnightApprovalRequirementsParams,
 ): Promise<readonly Readonly<Transaction<ERC20ApprovalAction>>[]> => {
+  // Reject the zero account before reading state for it.
+  validateMidnightAccount("owner", params.owner);
+  // Reject malformed addresses typed before the spender comparison and the allowance read.
+  validateMidnightAddress("token", params.token);
+  validateMidnightAddress("spender", params.spender);
   validateChainId(params.viemClient.chain?.id, params.chainId);
   validateUint256Field("amount", params.amount);
-  if (params.approvalAmount !== undefined)
-    validateUint256Field("approvalAmount", params.approvalAmount);
   // Validate the target even when no approval transaction needs to be encoded.
   validateRequirementSpender({
     chainId: params.chainId,
@@ -104,7 +106,6 @@ export const getMidnightApprovalRequirements = async (
     args: {
       spender: params.spender,
       spendAmount: params.amount,
-      approvalAmount: params.approvalAmount ?? maxUint256,
     },
     allowances: allowance,
   });

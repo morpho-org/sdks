@@ -38,6 +38,7 @@ import {
   erc20Abi,
   getAddress,
   type Hex,
+  IntegerOutOfRangeError,
   maxUint128,
   maxUint256,
   numberToHex,
@@ -55,6 +56,7 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
+  InvalidMidnightOfferGroupError,
   InvalidMidnightPositionAccrualStateError,
   InvalidMidnightPositionLossFactorError,
 } from "../../errors.js";
@@ -65,7 +67,6 @@ import {
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
-  ApprovalAmountLessThanSpendAmountError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   EmptyBlueParkingMarketError,
@@ -735,6 +736,53 @@ describe("MorphoMidnight", () => {
       ).toThrow(MidnightTakeableOfferMarketMismatchError);
     });
   });
+
+  test.each([
+    ["0x123", "MidnightCalldataEncodingError"],
+    [zeroAddress, "MidnightZeroAccountError"],
+  ] as const)(
+    "error: getOffersData rejects the %s maker with %s",
+    async (accountAddress, name) => {
+      await expect(
+        midnight().getOffersData({
+          accountAddress: accountAddress as Address,
+          offers: rateTree(makerOffer({ buy: true })),
+        }),
+      ).rejects.toMatchObject({ name });
+    },
+  );
+
+  test.each(["makeLend", "makeBorrow", "makeWithdraw", "makeRepay"] as const)(
+    "error: %s throws a typed encoding error for an unencodable offer tree",
+    async (method) => {
+      await expect(
+        midnight()[method]({
+          accountAddress: midnightBundlesV2,
+          offers: {
+            type: "rateV1",
+            entries: [
+              {
+                offer: midnightBaseOffer({
+                  buy: method === "makeLend" || method === "makeRepay",
+                  market: { ...midnightMarket, rcfThreshold: maxUint256 + 1n },
+                  expiry: apiValidMaturity - 60n,
+                  maxAssets: 1_000n,
+                  maxUnits: 0n,
+                  ratifier: rateRatifierV1,
+                  group: makerGroup,
+                }),
+                rate: 1_000_000_000n,
+              },
+            ],
+          },
+        } as never),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "offers",
+        cause: expect.any(IntegerOutOfRangeError),
+      });
+    },
+  );
 
   describe("takeLend", () => {
     const params = {
@@ -2282,6 +2330,26 @@ describe("MorphoMidnight", () => {
       ).toThrow(InvalidMidnightPositionAccrualStateError);
     });
 
+    test("error: a malformed positionData.user throws a typed encoding error", () => {
+      const position = positionData(marketData(), { credit: 250n });
+      expect(() =>
+        midnight().redeem({
+          positionData: Object.assign(
+            Object.create(Object.getPrototypeOf(position)),
+            position,
+            { user: "0x123" as Address },
+          ),
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          name: "MidnightCalldataEncodingError",
+          input: "positionData.user",
+          cause: expect.objectContaining({ name: "InvalidAddressError" }),
+        }),
+      );
+    });
+
     test("[INV-07] error: MidnightRedeemExceedsCreditError", () => {
       const market = marketData();
 
@@ -2634,7 +2702,7 @@ describe("MorphoMidnight", () => {
 
     test("behavior: derives groups and payload from a RateRatifierV1 tree", async () => {
       const lend = makerOffer({ buy: true });
-      const other = makerOffer({ buy: true, maxAssets: 2_000n });
+      const other = makerOffer({ buy: true, expiry: lend.expiry + 1n });
       const data = await midnight().getOffersData({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(lend, other),
@@ -2649,6 +2717,35 @@ describe("MorphoMidnight", () => {
           RateRatifierV1.ratify({ tree: data.tree as Tree<"rateV1"> }),
         ),
       );
+    });
+
+    test("error: InvalidMidnightOfferGroupError on explicit groups with mixed cap modes", async () => {
+      const units = makerOffer({
+        buy: true,
+        group: makerGroup,
+        maxUnits: 100n,
+        maxAssets: 0n,
+        ratifier: priceRatifierV1,
+      });
+      const assets = makerOffer({
+        buy: true,
+        group: makerGroup,
+        maxUnits: 0n,
+        maxAssets: 100n,
+        expiry: units.expiry + 1n,
+        ratifier: priceRatifierV1,
+      });
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers: {
+            type: "priceV1",
+            entries: [{ offer: units }, { offer: assets }],
+          },
+          validation: false,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightOfferGroupError);
     });
 
     test("behavior: accepts a PriceRatifierV1 tree", async () => {
@@ -2758,6 +2855,18 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(ChainIdMismatchError);
     });
 
+    test("error: a malformed loanToken throws a typed encoding error", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          loanToken: "0x123" as Address,
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "loanToken",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      });
+    });
+
     test("error: rejects invalid cancellation groups", async () => {
       const handle = createMockClient(midnightTestChain);
 
@@ -2767,7 +2876,6 @@ describe("MorphoMidnight", () => {
         }),
       ).rejects.toBeInstanceOf(InvalidMidnightHexInputError);
     });
-
     test("error: rejects a nonzero continuous fee cap before mempool validation", async () => {
       const fetch = vi.fn(offerValidation.fetch);
 
@@ -2979,6 +3087,63 @@ describe("MorphoMidnight", () => {
         ...overrides,
       });
 
+    test("error: a malformed blueMarket throws a typed encoding error", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          blueMarket: { ...blueMarket, loanToken: "0x123" as Address },
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "blueMarket",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      });
+    });
+
+    test.each([
+      {
+        label: "31-byte",
+        callbackSalt: `0x${"ee".repeat(31)}`,
+        reason: "wrongSize",
+      },
+      {
+        label: "33-byte",
+        callbackSalt: `0x${"ee".repeat(33)}`,
+        reason: "wrongSize",
+      },
+      {
+        label: "63-digit",
+        callbackSalt: `0x${"e".repeat(63)}`,
+        reason: "oddLength",
+      },
+    ] as const)(
+      "error: a $label callbackSalt throws before any RPC read",
+      async ({ callbackSalt, reason }) => {
+        const handle = createMockClient(midnightTestChain);
+        const error = await prepare(handle, {
+          callbackSalt: callbackSalt as Hex,
+        }).catch((cause: unknown) => cause);
+
+        expect(error).toBeInstanceOf(InvalidMidnightHexInputError);
+        expect(error).toMatchObject({
+          field: "callbackSalt",
+          reason,
+        });
+        expect(handle.request).not.toHaveBeenCalled();
+      },
+    );
+
+    test("error: a negative blueMarket.lltv throws a typed encoding error", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          blueMarket: { ...blueMarket, lltv: -1n },
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "blueMarket",
+        cause: expect.objectContaining({ name: "IntegerOutOfRangeError" }),
+      });
+    });
+
     test("error: rejects callback salts that are not 32-byte hex", async () => {
       const handle = createMockClient(midnightTestChain);
       mockBlueReads(handle);
@@ -2994,7 +3159,11 @@ describe("MorphoMidnight", () => {
           callbackSalt,
           offers: rateTree(blueOffer({ callback: offerCallback })),
         }),
-      ).rejects.toBeInstanceOf(InvalidMidnightHexInputError);
+      ).rejects.toMatchObject({
+        name: "InvalidMidnightHexInputError",
+        field: "callbackSalt",
+        reason: "wrongSize",
+      });
     });
 
     test("behavior: forwards native funding for a wNative Blue supply", async () => {
@@ -3680,6 +3849,50 @@ describe("MorphoMidnight", () => {
       expect(outputB.buildTx()).toEqual(outputA.buildTx());
     });
 
+    test("behavior: an unencodable collateral market throws a typed encoding error", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: {
+            market: { ...market, maturity: maxUint256 + 1n },
+            supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+          },
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "marketId",
+        cause: expect.any(IntegerOutOfRangeError),
+      });
+    });
+
+    test("behavior: an unencodable offer throws a typed encoding error", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          // A tree request is hashed by the SDK, after the input reaches it.
+          offers: {
+            type: "rateV1",
+            entries: [
+              {
+                offer: midnightBaseOffer({
+                  buy: false,
+                  market: { ...market, rcfThreshold: maxUint256 + 1n },
+                  expiry: apiValidMaturity - 60n,
+                  maxAssets: 1_000n,
+                  maxUnits: 0n,
+                  ratifier: rateRatifierV1,
+                  group: makerGroup,
+                }),
+                rate: 1_000_000_000n,
+              },
+            ],
+          },
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input: "offers",
+        cause: expect.any(IntegerOutOfRangeError),
+      });
+    });
+
     test("error: collateral supplies whose per-index sum exceeds uint128", async () => {
       const error = await prepare(createMockClient(midnightTestChain), {
         collateral: {
@@ -3960,6 +4173,30 @@ describe("MorphoMidnight", () => {
       expect(build).toThrow(MidnightZeroReceiverError);
       expect(build).toThrow(
         expect.objectContaining({ field: "collateralReceiver" }),
+      );
+    });
+
+    test("error: a malformed positionData.user throws a typed encoding error", () => {
+      const position = defaultPositionHealth.positionData;
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          marketData: defaultMarketData,
+          ...defaultPositionHealth,
+          positionData: Object.assign(
+            Object.create(Object.getPrototypeOf(position)),
+            position,
+            { user: "0x123" as Address },
+          ),
+          accountAddress: midnightAddresses.taker,
+          repay: { type: "full", maxBuyerAssets: 1_010n },
+          deadline: maxUint256,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          name: "MidnightCalldataEncodingError",
+          input: "positionData.user",
+          cause: expect.objectContaining({ name: "InvalidAddressError" }),
+        }),
       );
     });
 
@@ -4483,6 +4720,27 @@ describe("MorphoMidnight", () => {
       },
     );
 
+    test("error: rejects a bad-checksum accountAddress synchronously", () => {
+      // Built at runtime: the address lint checksums every hex address literal.
+      const badChecksum = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace(
+        "F3E9",
+        "f3E9",
+      ) as Address;
+      let error: unknown;
+      try {
+        new MorphoMidnight(client, midnightChainId).cancelOffers({
+          accountAddress: badChecksum,
+          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
+          deadline: maxUint256,
+        });
+      } catch (cause) {
+        error = cause;
+      }
+
+      expect(error).toBeInstanceOf(MidnightInvalidAccountAddressError);
+      expect(error).toMatchObject({ value: badChecksum });
+    });
+
     test("error: ChainIdMismatchError", () => {
       expect(() =>
         new MorphoMidnight(client, midnightChainId + 1).cancelOffers({
@@ -4776,68 +5034,10 @@ describe("approval thresholds", () => {
           spender,
           amount: maxUint256,
         });
-
-        const overridden = (
-          await getRequirements(handle, { approvalAmount: expected })
-        ).filter(({ action }) => action.type === "erc20Approval");
-        expect(overridden).toHaveLength(1);
-        expect(overridden[0]?.action.args).toMatchObject({
-          spender,
-          amount: expected,
-        });
       } else {
         expect(approvals).toEqual([]);
       }
     }
-  });
-
-  test("rejects an approvalAmount below one collateral token's pulled assets", async () => {
-    const secondCollateralToken = getAddress(
-      "0x0000000000000000000000000000000000007100",
-    );
-    const collateralMarket = new MarketParams({
-      ...midnightMarket,
-      collateralParams: [
-        ...midnightMarket.collateralParams,
-        {
-          ...midnightMarket.collateralParams[0]!,
-          token: secondCollateralToken,
-        },
-      ],
-    });
-    const collateralMarketData = new Market({
-      ...marketData(),
-      params: collateralMarket,
-    });
-    const handle = createMockClient(midnightTestChain);
-    mockAllowance({
-      handle,
-      token: midnightAddresses.collateralToken,
-      result: 0n,
-    });
-    mockAllowance({ handle, token: secondCollateralToken, result: 0n });
-    mockMidnightAuthorization(handle, true);
-
-    const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
-      marketData: collateralMarketData,
-      ...positionHealthParams(collateralMarketData, {
-        collateralPrices: [ORACLE_PRICE_SCALE, ORACLE_PRICE_SCALE],
-      }),
-      accountAddress: midnightAddresses.taker,
-      collateralSupplies: [
-        { collateralIndex: 0n, assets: 2_000n },
-        { collateralIndex: 1n, assets: 3_000n },
-      ],
-      target: { type: "assets", assets: 1_000n, maxUnits: 1_100n },
-      takeableOffers: [
-        midnightApiTake({ buy: true, market: collateralMarket }),
-      ],
-      deadline: Time.timestamp() + 600n,
-    });
-
-    await expect(
-      output.getRequirements({ approvalAmount: 2_500n }),
-    ).rejects.toThrow(ApprovalAmountLessThanSpendAmountError);
   });
 });
 describe("MorphoMidnight observed chain", () => {

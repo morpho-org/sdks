@@ -4,7 +4,8 @@ import {
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
+import { maxUint256, zeroAddress } from "viem";
+import { encodeMidnightCalldata } from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
@@ -12,6 +13,7 @@ import {
   validateReferralFee,
   validateUint256Field,
 } from "../../helpers/validate.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
   validateMidnightReferralFeeCap,
   validateMidnightTakeableOfferBounds,
@@ -100,6 +102,7 @@ export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
  * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @example
  * ```ts
  * import { Time } from "@morpho-org/morpho-ts";
@@ -165,6 +168,11 @@ export const midnightTakeLend = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
+  if (params.referralFeeRecipient !== undefined)
+    validateMidnightAddress(
+      "referralFeeRecipient",
+      params.referralFeeRecipient,
+    );
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   if (referralFeePct > 0n) {
@@ -206,13 +214,13 @@ export const midnightTakeLend = (
     value: nativeFunding.value,
     data:
       target.type === "assets"
-        ? encodeFunctionData({
+        ? encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
             args: [market, target.assets, target.minUnits, ...args],
           })
-        : encodeFunctionData({
+        : encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",

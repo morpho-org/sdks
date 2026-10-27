@@ -12,7 +12,6 @@ import {
   ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
-  MAX_TOKEN_APPROVALS,
   type Metadata,
   MixedBundlesFundingError,
   type MorphoClientType,
@@ -56,7 +55,6 @@ import {
   custom,
   erc20Abi,
   erc4626Abi,
-  getAddress,
   type Hash,
   HttpRequestError,
   isAddress,
@@ -155,7 +153,7 @@ export type RequirementSignatureRequest<
 export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
-/** An exact vault-share approval or ERC-2612 request for a prepared withdrawal. */
+/** An unlimited vault-share approval or ERC-2612 permit request for a prepared withdrawal. */
 export type VaultSharesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<Erc2612RequirementSignature>;
@@ -176,7 +174,7 @@ export class MixedBlueCollateralFundingError extends Error {
 
 /**
  * Thrown when an unsigned vault withdrawal or quote still has unresolved VaultBundlesV1 share
- * requirements, so execution would fail or burn shares under a stale allowance cap.
+ * requirements, so execution would fail when the share allowance is insufficient.
  */
 export class UnresolvedVaultWithdrawRequirementsError extends Error {
   constructor(
@@ -190,7 +188,7 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
   }
 }
 
-/** Controls token requirements for prepared vault deposits and Blue loan and collateral writes; `approvalAmount` applies only to the Blue writes. */
+/** Controls token-signature selection for prepared vault deposits and Blue loan and collateral writes. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
@@ -199,12 +197,6 @@ export interface RequirementOptions {
    * owner when omitted; set it only when concurrent flows must partition nonces themselves.
    */
   readonly permit2Nonce?: bigint;
-  /**
-   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
-   * as `maxUint256`. Applies only to Blue loan/collateral token requirements; ignored by vault
-   * deposit handles and signature paths.
-   */
-  readonly approvalAmount?: bigint;
 }
 
 /** Fields shared by ERC-20 and native Morpho Vault supply operations. */
@@ -459,9 +451,9 @@ export interface PreparedMorphoSupply {
  */
 export interface PreparedMorphoWithdraw {
   /**
-   * Resolves the exact share approval or ERC-2612 permit requirement for this prepared withdrawal.
+   * Resolves the share approval or ERC-2612 permit requirement for this prepared withdrawal.
    *
-   * @returns No requirements when the share allowance matches the cap, otherwise an approval
+   * @returns No requirements when the share allowance meets or exceeds the required share amount, otherwise an approval
    *   transaction or ERC-2612 request whose signed result can be passed directly to `submit` or `quote`.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the deadline.
@@ -494,17 +486,17 @@ export interface PreparedMorphoWithdraw {
   >;
   /**
    * Submits this prepared withdrawal with its optional signed share permit. When no signature is
-   * given, re-resolves the current VaultBundlesV1 share allowance and rejects rather than
-   * submitting against a stale or oversized leftover allowance.
+   * given, re-resolves the current VaultBundlesV1 share allowance and rejects only when it is
+   * insufficient.
    *
    * @param requirementSignature - Optional ERC-2612 share permit signed from this handle's
-   *   resolved requirements. Omit after confirming the exact share-approval transaction.
+   *   resolved requirements.
    * @param config - Optional ERC-4337 transaction configuration override; ignored for EOA wallets.
    * @returns The WDK withdrawal result containing the transaction hash and fee, denominated
    *   according to the wallet's payment configuration.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
-   *   share allowance is outside the prepared cap's accepted range `[cap, cap / (1 - slippageTolerance)]`.
+   *   share allowance is below the prepared required share amount.
    * @throws {MissingContractCodeError} when no signature is given and a fixed bundles or protocol
    *   contract has no code during requirement resolution.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
@@ -554,14 +546,14 @@ export interface PreparedMorphoWithdraw {
   ) => Promise<WithdrawResult>;
   /**
    * Quotes this prepared withdrawal with its optional signed share permit. Without a signature,
-   * re-reads the share allowance and requires it to match the prepared cap before estimating gas.
+   * re-reads the share allowance and requires it to meet the prepared required share amount before estimating gas.
    *
    * @param requirementSignature - Optional share permit signed from this handle's requirements.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The withdrawal fee quote without a transaction hash.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the share
-   *   allowance is outside `[cap, cap / (1 - slippageTolerance)]`. Satisfy this handle's requirements before quoting again.
+   *   allowance is below the prepared required share amount. Satisfy this handle's requirements before quoting again.
    * @throws {MissingContractCodeError} when no signature is given and a fixed bundles or protocol
    *   contract has no code during requirement resolution.
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
@@ -1479,12 +1471,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Withdraws assets from the configured Morpho vault.
    *
-   * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares, so it
-   * needs a share allowance within `[cap, cap / (1 - slippageTolerance)]` of the derived share cap. That allowance is the only cap on the
-   * burn, so this method resolves the prepared withdrawal's requirements first and submits only
-   * when none are outstanding — a leftover allowance above that range counts as outstanding. Use
-   * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
-   * prepared-operation handle.
+   * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares. This
+   * method resolves the prepared withdrawal's requirements first and submits only when the share
+   * allowance meets the derived required share amount. Use {@link prepareWithdraw} otherwise, so requirement
+   * resolution and submission share one immutable prepared-operation handle.
    *
    * @param options.token - Address of the configured vault's underlying asset.
    * @param options.amount - Asset amount to withdraw, in base units.
@@ -1497,8 +1487,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
-   * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is not already
-   *   within `[cap, cap / (1 - slippageTolerance)]`, so the withdrawal must go through {@link prepareWithdraw}.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is below the
+   *   derived required share amount, so the withdrawal must go through {@link prepareWithdraw}.
    * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
    *   at its registered address during requirement resolution.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
@@ -1515,7 +1505,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * async function withdrawUsdt(account: WalletAccountEvm): Promise<WithdrawResult> {
    *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires a VaultBundlesV1 share allowance within the accepted cap range; use prepareWithdraw() otherwise.
+   *   // Requires a sufficient VaultBundlesV1 share allowance; use prepareWithdraw() otherwise.
    *   return morpho.withdraw({ token: USDT, amount: 1_000_000n });
    * }
    * ```
@@ -1536,7 +1526,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Quotes a vault withdrawal after checking its share-allowance requirement.
    *
    * If an approval or permit is needed, use {@link prepareWithdraw}, satisfy its requirements,
-   * and call that same handle's `quote()` or `quote(signedPermit)` to retain its share cap.
+   * and call that same handle's `quote()` or `quote(signedPermit)`.
    *
    * @param options.token - Address of the configured vault's underlying asset.
    * @param options.amount - Asset amount to withdraw, in base units.
@@ -1546,8 +1536,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {ChainIdMismatchError} when the provider is on another chain.
-   * @throws {UnresolvedVaultWithdrawRequirementsError} when the share allowance is outside
-   *   `[cap, cap / (1 - slippageTolerance)]`.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the VaultBundlesV1 share allowance is
+   *   below the SDK-derived minimum share amount.
    * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
    * @throws {UnknownTokenError} when the vault share token has unusable decimals.
    * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
@@ -1565,7 +1555,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * export async function quoteWithdrawal(account: WalletAccountReadOnlyEvm) {
    *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
-   *   // Requires a share allowance within the accepted cap range to be already in place.
+   *   // Requires a sufficient share allowance to be in place.
    *   return morpho.quoteWithdraw({ token: "0xdAC17F958D2ee523a2206206994597C13D831ec7", amount: 1_000_000n });
    *   // Resolves to { fee: bigint }.
    * }
@@ -1612,7 +1602,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.token - Address of the configured vault's underlying asset.
    * @param options.amount - Asset amount to withdraw, in base units.
    * @param options.to - Optional asset recipient; when set, it must equal the wallet account address.
-   * @returns An immutable operation handle that retains the exact derived vault-share cap.
+   * @returns An immutable operation handle that retains the minimum required vault-share amount.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
@@ -2002,8 +1992,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * A max repay without a signature defaults to the token's reusable maximum approval because this
-   * adapter rebuilds the bounded debt quote; pass `requirementOptions.approvalAmount` to override.
+   * Classic approvals are unlimited, subject to the token-specific approval cap.
    *
    * @param options.token - Address of the configured market's loan token.
    * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
@@ -2013,14 +2002,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
    *   defaults to the lowest unused nonce when omitted.
-   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
-   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
-   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
-   *   funded amount.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
@@ -2068,21 +2053,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
-    const market = await this._getMarket(context);
     const action = await this._getRepayAction(context, operationOptions);
-    const approvalAmount =
-      operationRequirementOptions?.approvalAmount ??
-      (operationOptions.amount === "max"
-        ? // The adapter rebuilds the debt quote with fresh deadline and state at submission,
-          // so an exact allowance from requirement time could be short by accrued interest.
-          (MAX_TOKEN_APPROVALS[context.chainId]?.[
-            getAddress(market.params.loanToken)
-          ] ?? maxUint256)
-        : undefined);
     const requirements = await action.getRequirements(
-      approvalAmount === undefined
-        ? operationRequirementOptions
-        : { ...operationRequirementOptions, approvalAmount },
+      operationRequirementOptions,
     );
     await this._revalidate(context);
 
@@ -2276,15 +2249,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
    *   defaults to the lowest unused nonce when omitted.
-   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
-   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
-   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
-   *   funded amount.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
    *   undecodable data, or is out of range.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or

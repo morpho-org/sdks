@@ -15,7 +15,7 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@11.28.6+sha512.55d90390c3b39042f1505a2697789f0256c6d95bb28bdd7cb731af1887c9f2629ef581acb9f4e4ec772024c8203c2aed22a03299b97103fdcf32668e905d0024",
+  "packageManager": "pnpm@11.28.7+sha512.2161a30a2dc64b0c0f09786496fbce5f061be96b8ff11f0bc98e6bc675e0074ceb225b9197a278f2f171e6c9fb971bd1df8932e5bc31053baccdd52b15a1ae26",
   "engines": {
     "node": ">=26 <27"
   },
@@ -53,14 +53,13 @@
     "@vitest/ui": "^4.1.12",
     "dotenv-cli": "^11.0.0",
     "fast-check": "catalog:",
-    "happy-dom": "^20.11.1",
+    "happy-dom": "^21.0.4",
     "husky": "^9.1.7",
     "knip": "6.37.0",
     "lint-staged": "^17.2.0",
     "solc": "0.8.36",
     "typedoc": "^0.28.20",
     "typescript": "catalog:",
-    "undici": "^8.11.2",
     "viem": "2.55.10",
     "vite": "8.2.4",
     "vitest": "catalog:"

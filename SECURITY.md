@@ -39,7 +39,7 @@ We classify reports by their impact on SDK users. The examples are illustrative,
 
 | Severity | Meaning | SDK examples |
 | --- | --- | --- |
-| **Critical** | Direct, likely loss of user funds or approvals with default SDK usage and an honest RPC. | Calldata that sends assets to an address other than the requested receiver; an approval or permit granted to the wrong spender; a builder that drops the slippage or share-price bound entirely. |
+| **Critical** | Direct, likely loss of user funds or approvals with default SDK usage and an honest RPC. | Calldata that sends assets to an address other than the requested receiver; an approval or permit granted to the wrong spender; a builder that drops a documented slippage or share-price bound. |
 | **High** | Loss of funds that needs a specific but realistic setup, or a compromise of the release pipeline. | Wrong EIP-712 domain or chain binding that lets a signature be replayed; a wrong per-chain address in the registry; a way to publish an `@morpho-org/*` version without passing the release checks. |
 | **Medium** | Bounded or conditional loss, or a guard that can be bypassed by unusual but valid input. | A slippage or LLTV buffer computed looser than documented; a simulation that reports success for a bundle that reverts or leaves funds behind on-chain. |
 | **Low** | Little or no direct loss; griefing or degraded safety margins. | A leftover dust balance in an adapter; a typed error that fires late instead of early. |
@@ -97,7 +97,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 - Missing, wrong or bypassable slippage, share-price, deadline or LLTV-buffer protection.
 - Wrong EIP-712 typed data, domain separator, chain id, spender, nonce or deadline in a signature request.
 - Wrong or missing per-chain addresses in the registry, or a registry that can be silently overridden.
-- Unsafe defaults in bundler flows: approvals larger than needed, leftover approvals or balances, or funds routed to the wrong receiver.
+- Unsafe defaults in bundler flows: approvals to unregistered spenders, leftover balances, or funds routed to the wrong receiver. Unlimited approvals to registered spenders are accepted under the unlimited-approvals ADR (`ADR-2026-10-21-unlimited-sdk-approvals`); see the threat model.
 - Deployless-query bytecode or decoding bugs that mis-report state with an honest RPC.
 - Simulation results from `evm-simulation` that diverge from the on-chain outcome with an honest backend.
 - Supply-chain or CI issues that could alter a published package.
@@ -107,6 +107,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 - Bugs in `viem`, `wagmi` or other third-party dependencies; report them upstream. A way the SDK misuses a dependency is in scope.
 - Bugs in deployed smart contracts; see [SDK or protocol?](#sdk-or-protocol).
 - Findings whose only precondition is a malicious or compromised RPC, simulation, bundler or paymaster endpoint, unless the report shows a check the SDK could make against a source the endpoint cannot forge.
+- The accepted unlimited approvals to registered Bundles/Midnight spenders and the lack of an on-chain share-burn bound for asset-mode Vault V1/V2 withdrawals, the asset-mode `migrateToV2` source leg, and in-kind redemptions, as documented in the unlimited-approvals ADR (`ADR-2026-10-21-unlimited-sdk-approvals`) and the threat model.
 - Findings whose only precondition is a malicious integrator: a wrong client-to-chain pairing, an attacker-chosen address passed in or registered by the integrator, or a modified SDK.
 - Social engineering, denial of service against npm or GitHub, and physical attacks.
 

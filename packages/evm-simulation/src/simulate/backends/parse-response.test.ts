@@ -891,6 +891,42 @@ describe("parseSimulationResponse", () => {
     expect(error).not.toHaveProperty("context");
   });
 
+  test("error: failed derivation names the operation and subject with its cause", () => {
+    const plan = planExecution({
+      request: parsed,
+      owner: OWNER,
+      preparations: [],
+      reads: [
+        {
+          kind: "derivation",
+          id: "derive:2:preview",
+          operationIndex: 2,
+          subject: `vault ${TARGET}`,
+          to: TARGET,
+          data: "0x12345678",
+        },
+      ],
+    });
+    const readIndex = plan.calls.findIndex((call) => call.type === "stateRead");
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [readIndex]: { status: "failure", errorMessage: "original revert" },
+        }),
+      );
+    } catch (cause) {
+      error = cause;
+    }
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(error).toMatchObject({ cause: { message: "original revert" } });
+    expect((error as Error).message).toContain("limits.operations[2]");
+    expect((error as Error).message).toContain("derive:2:preview");
+    expect((error as Error).message).toContain(`vault ${TARGET}`);
+    expect((error as Error).message).not.toContain("Re-submit");
+  });
+
   test("error: InvalidSimulationResponseError on call-count mismatch", () => {
     const plan = makePlan();
     const blocks = buildBlocks(plan);

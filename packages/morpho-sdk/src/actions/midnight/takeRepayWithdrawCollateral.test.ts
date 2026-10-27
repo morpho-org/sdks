@@ -4,7 +4,9 @@ import {
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import {
+  BaseError,
   decodeFunctionData,
   getAddress,
   maxUint128,
@@ -57,6 +59,23 @@ const params = {
 } as const;
 
 describe("midnightTakeRepayWithdrawCollateral", () => {
+  test("error: a malformed offer group throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        takeableOffers: params.takeableOffers.map((take) => ({
+          ...take,
+          offer: { ...take.offer, group: "0x01" },
+        })),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        cause: expect.any(BaseError),
+      }),
+    );
+  });
+
   test("error: MidnightZeroReceiverError", () => {
     const build = () =>
       midnightTakeRepayWithdrawCollateral({
@@ -601,5 +620,38 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
         referralFeeRecipient: midnightAddresses.maker,
       }),
     ).toThrow(MidnightReferralFeePctExceededError);
+  });
+});
+
+describe("midnightTakeRepayWithdrawCollateral malformed address", () => {
+  test("error: a malformed collateralReceiver throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        collateralReceiver: "0x123" as Address,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "collateralReceiver",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
+  });
+
+  test("error: a malformed referralFeeRecipient throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        referralFeePct: 1n,
+        referralFeeRecipient: "0x123" as Address,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "referralFeeRecipient",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
   });
 });

@@ -112,9 +112,9 @@ Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collatera
 | `supply(options, config?)` | Deposit through VaultBundlesV1 using existing approvals or native funding |
 | `quoteSupply(options, config?)` | Quote a VaultBundlesV1 deposit using existing approvals or native funding |
 | `prepareSupply(options)` | Prepare one vault deposit handle exposing `getRequirements`, `submit`, and `quote` |
-| `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
+| `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` only when the VaultBundlesV1 share allowance is below the required amount |
 | `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
-| `quoteWithdraw(options, config?)` | Quote vault withdrawal when its exact share allowance is already in place |
+| `quoteWithdraw(options, config?)` | Quote vault withdrawal when the VaultBundlesV1 share allowance meets or exceeds the required amount |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
 | `quoteSupplyCollateral(options, config?)` | Quote collateral supply |
@@ -174,15 +174,23 @@ Requirement entries are one of:
 - Approval transaction: send the returned transaction before the final action.
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
 - Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Prepared vault deposits take theirs on the handle's `submit(requirementSignature)` or `quote(requirementSignature)`.
-- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
+- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, so `prepareWithdraw(options).getRequirements()` returns an unlimited share approval or a signable ERC-2612 share permit when `supportSignature` is enabled, only when the current allowance is below the required share amount.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline as long as it is within two hours (plus a 300-second clock-skew allowance) of submission — a longer deadline throws `BlueBundlesV1DeadlineExceedsWindowError`. Unsigned calls default to a two-hour deadline.
 
 For withdrawal quotes, keep the same prepared handle: confirm its approval before `prepared.quote()`,
 or pass its signed share permit to `prepared.quote(signedPermit)`. Both `quoteWithdraw()` and unsigned
-`prepared.quote()` throw `UnresolvedVaultWithdrawRequirementsError` when the exact share allowance
-is missing, including when an existing allowance exceeds the cap. Quoting does not execute approvals
+`prepared.quote()` throw `UnresolvedVaultWithdrawRequirementsError` only when the share allowance is
+below the required amount. Any larger leftover allowance also satisfies the requirement. Quoting does not execute approvals
 or consume permits. Every prepared-withdrawal method rechecks the provider chain and throws
 `ChainIdMismatchError` if the wallet has switched away from the configured vault chain.
+
+The WDK adapter exposes only asset-mode `VaultBundlesV1` withdrawals through `quoteWithdraw()` and
+`prepareWithdraw()`. These withdrawals have no on-chain share-price or max-shares bound; with an
+unlimited share allowance, a share-price drop before inclusion can burn more shares than quoted.
+
+For these withdrawals, `slippageTolerance` only sizes the minimum share allowance and does not add
+an on-chain burn bound. Migration and in-kind redemption are morpho-sdk flows; see the
+[v8-to-v9 migration guide](../morpho-sdk/MIGRATION-v8-to-v9.md).
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 

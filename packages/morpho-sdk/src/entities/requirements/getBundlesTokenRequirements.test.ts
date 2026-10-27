@@ -21,7 +21,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { MalformedTokenMetadataError } from "../../errors.js";
 import {
-  ApprovalAmountLessThanSpendAmountError,
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
@@ -146,7 +145,7 @@ describe("getBundlesTokenRequirements", () => {
     expect(handle.request).not.toHaveBeenCalled();
   });
 
-  test("returns a direct exact approval when signatures are disabled", async () => {
+  test("returns an unlimited direct approval when signatures are disabled", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: usdc,
@@ -169,12 +168,11 @@ describe("getBundlesTokenRequirements", () => {
     expect(isRequirementApproval(requirements[0])).toBe(true);
     expect(requirements[0]?.action).toMatchObject({
       type: "erc20Approval",
-      args: { spender: blueBundlesV1, amount: 1_000_000n },
+      args: { spender: blueBundlesV1, amount: maxUint256 },
     });
 
-    // A reusable `approvalAmount` sets a larger allowance only when one is
-    // actually required: an existing allowance that already covers the pull
-    // must not emit a redundant approval, even if it is below `approvalAmount`.
+    // An existing allowance that already covers the pull must not emit an
+    // approval, even when it is below the unlimited amount.
     mockRead(handle, {
       address: usdc,
       abi: erc20Abi,
@@ -187,7 +185,6 @@ describe("getBundlesTokenRequirements", () => {
         token: usdc,
         spender: blueBundlesV1,
         amount: 1_000_000n,
-        approvalAmount: maxUint256,
         owner: account.address,
         chainId: mainnet.id,
         deadline: maxUint256,
@@ -196,8 +193,8 @@ describe("getBundlesTokenRequirements", () => {
     );
     expect(coveredRequirements).toHaveLength(0);
 
-    // When the existing allowance does not cover the pull, the reusable
-    // `approvalAmount` is the amount set.
+    // When the existing allowance does not cover the pull, request the
+    // unlimited approval.
     mockRead(handle, {
       address: usdc,
       abi: erc20Abi,
@@ -210,7 +207,6 @@ describe("getBundlesTokenRequirements", () => {
         token: usdc,
         spender: blueBundlesV1,
         amount: 1_000_000n,
-        approvalAmount: maxUint256,
         owner: account.address,
         chainId: mainnet.id,
         deadline: maxUint256,
@@ -823,19 +819,6 @@ describe("getBundlesTokenRequirements", () => {
         supportSignature: false,
       }),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
-
-    await expect(
-      getBundlesTokenRequirements(handle.client, {
-        token: usdc,
-        spender: blueBundlesV1,
-        amount: 2n,
-        approvalAmount: 1n,
-        owner: account.address,
-        chainId: mainnet.id,
-        deadline: maxUint256,
-        supportSignature: false,
-      }),
-    ).rejects.toBeInstanceOf(ApprovalAmountLessThanSpendAmountError);
 
     await expect(
       getBundlesTokenRequirements(handle.client, {

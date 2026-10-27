@@ -294,7 +294,9 @@ export function parseSimulationResponse(params: {
     if (planned.type !== "stateRead") continue;
     if (!result.status) {
       throw new SlippageCheckUnavailableError(
-        `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
+        planned.read.kind === "derivation"
+          ? `Derivation read "${planned.read.id}" for limits.operations[${planned.read.operationIndex}] failed. Check the operation subject (${planned.read.subject}) and its support for this view call.`
+          : `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
         { cause: call.error },
       );
     }

@@ -159,6 +159,28 @@ describe("getBundlesSharesPermit", () => {
     ).toMatchObject({ value: 7n, nonce: 9n, deadline: 11n, v: 27 });
   });
 
+  test("behavior: accepts a maxUint256 share permit for a smaller amount", () => {
+    const unlimitedPermit = {
+      ...permit,
+      args: { ...permit.args, amount: maxUint256 },
+      action: {
+        ...permit.action,
+        args: { ...permit.action.args, amount: maxUint256 },
+      },
+    };
+
+    expect(
+      getBundlesSharesPermit({
+        vault,
+        owner,
+        spender,
+        amount: 7n,
+        deadline: 13n,
+        requirementSignature: unlimitedPermit,
+      }),
+    ).toMatchObject({ value: maxUint256 });
+  });
+
   test("error: BundlesPermitMismatchError", () => {
     expect(() =>
       getBundlesSharesPermit({
@@ -461,7 +483,7 @@ describe("selectBundlesSharesPermitSignature", () => {
 
   test.each([
     ["spender", { spender: owner }],
-    ["amount", { amount: 8n }],
+    ["amount", { amount: 6n }],
     ["deadline", { deadline: 12n }],
   ] as const)(
     "error: BundlesPermitMismatchError for a different %s",
@@ -488,8 +510,8 @@ describe("selectBundlesSharesPermitSignature", () => {
     },
   );
 
-  test.each([7n, 8n, 10n])(
-    "behavior: accepts a signed amount of %s within the expected range",
+  test.each([7n, 8n, 10n, maxUint256])(
+    "behavior: accepts a signed amount of %s at or above the requirement",
     (signedAmount) => {
       const signed = {
         args: { ...permit.args, amount: signedAmount },
@@ -498,44 +520,39 @@ describe("selectBundlesSharesPermitSignature", () => {
           args: { ...permit.action.args, amount: signedAmount },
         },
       };
-      expect(
-        selectBundlesSharesPermitSignature([signed], {
-          ...expected,
-          maxAmount: 10n,
-        }),
-      ).toEqual(signed);
-    },
-  );
-
-  test.each([6n, 11n])(
-    "error: BundlesPermitMismatchError for a signed amount of %s outside the range",
-    (signedAmount) => {
-      expect(() =>
-        selectBundlesSharesPermitSignature(
-          [
-            {
-              args: { ...permit.args, amount: signedAmount },
-              action: {
-                ...permit.action,
-                args: { ...permit.action.args, amount: signedAmount },
-              },
-            },
-          ],
-          { ...expected, maxAmount: 10n },
-        ),
-      ).toThrowError(
-        expect.objectContaining({
-          name: "BundlesPermitMismatchError",
-          field: "amount",
-          expected: `[${expected.amount}, 10]`,
-          actual: String(signedAmount),
-        }),
+      expect(selectBundlesSharesPermitSignature([signed], expected)).toEqual(
+        signed,
       );
     },
   );
 
-  test("behavior: accepts only the exact amount without a ceiling", () => {
+  test("error: BundlesPermitMismatchError when the signed amount is below the requirement", () => {
+    const signedAmount = 6n;
     expect(() =>
+      selectBundlesSharesPermitSignature(
+        [
+          {
+            args: { ...permit.args, amount: signedAmount },
+            action: {
+              ...permit.action,
+              args: { ...permit.action.args, amount: signedAmount },
+            },
+          },
+        ],
+        expected,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "amount",
+        expected: `at least ${expected.amount}`,
+        actual: String(signedAmount),
+      }),
+    );
+  });
+
+  test("behavior: accepts a larger amount without a ceiling", () => {
+    expect(
       selectBundlesSharesPermitSignature(
         [
           {
@@ -548,11 +565,9 @@ describe("selectBundlesSharesPermitSignature", () => {
         ],
         expected,
       ),
-    ).toThrowError(
+    ).toEqual(
       expect.objectContaining({
-        name: "BundlesPermitMismatchError",
-        field: "amount",
-        expected: String(expected.amount),
+        args: expect.objectContaining({ amount: 8n }),
       }),
     );
   });
@@ -566,7 +581,7 @@ describe("selectBundlesSharesPermitSignature", () => {
             action: permit.action,
           },
         ],
-        { ...expected, maxAmount: 10n },
+        expected,
       ),
     ).toThrowError(
       expect.objectContaining({

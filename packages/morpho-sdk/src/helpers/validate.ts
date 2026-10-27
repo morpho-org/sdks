@@ -55,6 +55,7 @@ import {
   MAX_REALLOCATION_PENALTY,
   MAX_SLIPPAGE_TOLERANCE,
 } from "./constant.js";
+import { validateMidnightAddress } from "./validateMidnightAccount.js";
 
 /** @internal */
 const compareMarketIds = (idA: MarketId, idB: MarketId) => {
@@ -489,6 +490,7 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
  * @returns The transaction `value` and the `wrappedNative` contract argument.
  * @throws {NegativeInputError} when `nativeAmount` is negative.
  * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
+ * @throws {MidnightCalldataEncodingError} when a pulled `token` is not a 20-byte hex address.
  * @throws {NativeAmountOnNonWNativeAssetError} when pulls are non-empty and none use wNative.
  * @throws {InputExceedsMaxError} when `nativeAmount` exceeds the maximum wNative pull, including
  *   when the call pulls none.
@@ -527,6 +529,8 @@ export const validateMidnightNativeAmount = (params: {
   if (!isDefined(wNative)) {
     throw new ChainWNativeMissingError(chainId);
   }
+  // Reject a malformed address before viem compares it with wNative.
+  for (const pull of pulls) validateMidnightAddress("token", pull.token);
 
   const wNativePulled = pulls.reduce(
     (total, pull) =>

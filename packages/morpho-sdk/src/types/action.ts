@@ -51,7 +51,7 @@ export type MidnightBuyTarget =
 export type MidnightSellTarget =
   | {
       readonly type: "assets";
-      /** Loan assets received before the referral fee. */
+      /** Exact loan assets paid to `receiver`; any referral fee is sold on top of this amount. */
       readonly assets: bigint;
       readonly maxUnits: bigint;
     }
@@ -626,6 +626,8 @@ export interface MidnightCancelAndMakeAction
       readonly cancellations: readonly MidnightGroupCancellation[];
       readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly blueSupply?: MidnightBlueSupply;
+      /** Native ETH wrapped into wNative to fund this bundle. */
+      readonly nativeAmount?: bigint;
       readonly deadline: bigint;
     }
   > {}

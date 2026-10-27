@@ -39,6 +39,8 @@ import { TreeUtils } from "./TreeUtils.js";
 const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
 const otherRatifier = "0x000000000000000000000000000000000000A222" as const;
 const allowedTaker = "0x000000000000000000000000000000000000A000" as const;
+const explicitGroup =
+  "0x1111111111111111111111111111111111111111111111111111111111111111";
 const midnight = "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A" as const;
 const { baseMarket, baseOffer } = createFixtures({
   midnight,
@@ -202,6 +204,136 @@ describe("RateRatifierV1.buildDescriptor", () => {
       rate: 0n,
       allowedTaker: zeroAddress,
     });
+  });
+
+  test("error: rejects explicit groups with mixed cap modes", () => {
+    const leaves = [
+      {
+        offer: leaf({
+          group: explicitGroup,
+          maxUnits: 100n,
+          maxAssets: 0n,
+        }).offer,
+        rate: 5n,
+      },
+      {
+        offer: leaf({
+          group: explicitGroup,
+          maxUnits: 0n,
+          maxAssets: 100n,
+        }).offer,
+        rate: 5n,
+      },
+    ];
+
+    expect(() => RateRatifierV1.buildDescriptor(leaves)).toThrow(
+      InvalidOfferGroupError,
+    );
+    expect(() => RateRatifierV1.ratify({ tree: leaves })).toThrow(
+      InvalidOfferGroupError,
+    );
+    expect(() =>
+      RateRatifierV1.buildProof({ tree: leaves, leafIndex: 0n }),
+    ).toThrow(InvalidOfferGroupError);
+    expect(() =>
+      RateRatifierV1.ratifierData({ tree: leaves, leafIndex: 0n }),
+    ).toThrow(InvalidOfferGroupError);
+  });
+
+  test("error: rejects explicit groups with different cap values", () => {
+    expect(() =>
+      RateRatifierV1.buildDescriptor([
+        { ...leaf({ group: explicitGroup, maxUnits: 100n }), rate: 5n },
+        { ...leaf({ group: explicitGroup, maxUnits: 200n }), rate: 5n },
+      ]),
+    ).toThrow(InvalidOfferGroupError);
+  });
+
+  test("error: rejects explicit groups with a negative cap", () => {
+    expect(() =>
+      RateRatifierV1.buildDescriptor([
+        leaf(
+          {
+            group: explicitGroup,
+            maxUnits: -1n,
+            maxAssets: 0n,
+          },
+          5n,
+        ),
+      ]),
+    ).toThrow(InvalidOfferGroupError);
+  });
+
+  test("error: rejects explicit groups with an overflowing cap", () => {
+    expect(() =>
+      RateRatifierV1.buildDescriptor([
+        leaf(
+          {
+            group: explicitGroup,
+            maxUnits: 2n ** 128n,
+            maxAssets: 0n,
+          },
+          5n,
+        ),
+      ]),
+    ).toThrow(InvalidOfferGroupError);
+  });
+
+  test("error: rejects defaulted ids that collide with explicit groups", () => {
+    const a = leaf({ maxUnits: 100n, maxAssets: 0n }, 5n);
+    const b = leaf(
+      {
+        group: RateRatifierV1.groupId([a]),
+        maxUnits: 0n,
+        maxAssets: 100n,
+      },
+      5n,
+    );
+
+    expect(() => RateRatifierV1.buildDescriptor([a, b])).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
+  test("error: rejects collisions after generic group re-derivation", () => {
+    const x1 = leaf({ maxUnits: 100n, maxAssets: 0n, tick: 5_000n }, 5n);
+    const x2 = leaf({ maxUnits: 100n, maxAssets: 0n, tick: 5_004n }, 6n);
+    const groupedOffers = Group.create([x1.offer, x2.offer]).offers;
+    const groupLeaves = [
+      { ...x1, offer: groupedOffers[0]! },
+      { ...x2, offer: groupedOffers[1]! },
+    ];
+    const y = leaf(
+      {
+        group: RateRatifierV1.groupId(groupLeaves),
+        maxUnits: 0n,
+        maxAssets: 100n,
+        tick: 5_008n,
+      },
+      7n,
+    );
+
+    expect(() => RateRatifierV1.buildDescriptor([...groupLeaves, y])).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
+  test("behavior: keeps a valid explicit group on every offer", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([
+      {
+        ...leaf({ group: explicitGroup, maxUnits: 100n, tick: 5_000n }),
+        rate: 5n,
+      },
+      {
+        ...leaf({ group: explicitGroup, maxUnits: 100n, tick: 5_004n }),
+        rate: 6n,
+      },
+    ]);
+
+    expect(descriptor.offers.map((item) => item.group)).toEqual([
+      explicitGroup,
+      explicitGroup,
+    ]);
   });
 
   test("error: InvalidTreeError when empty", () => {

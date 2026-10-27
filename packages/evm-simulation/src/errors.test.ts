@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
+  AmbiguousExpectedQuoteError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
@@ -21,6 +22,7 @@ import {
   UnsupportedOperationError,
 } from "./errors.js";
 import {
+  AmbiguousExpectedQuoteError as EntryAmbiguousExpectedQuoteError,
   LimitAccountMismatchError as EntryLimitAccountMismatchError,
   MissingExpectedQuoteError as EntryMissingExpectedQuoteError,
   UnsupportedLimitActionError as EntryUnsupportedLimitActionError,
@@ -53,6 +55,10 @@ const errors = [
     actionType: "blueSupply",
     field: "sharesMinted",
     expectedHint: "hint",
+  }),
+  new AmbiguousExpectedQuoteError({
+    actionType: "midnightCancelAndMake",
+    operations: 2,
   }),
   new UnsupportedLimitActionError("unknownAction"),
 ];
@@ -251,6 +257,7 @@ describe("isSimulationPackageError", () => {
 });
 
 test("the entry point exports the toSimulationLimits errors", () => {
+  expect(EntryAmbiguousExpectedQuoteError).toBe(AmbiguousExpectedQuoteError);
   expect(EntryLimitAccountMismatchError).toBe(LimitAccountMismatchError);
   expect(EntryMissingExpectedQuoteError).toBe(MissingExpectedQuoteError);
   expect(EntryUnsupportedLimitActionError).toBe(UnsupportedLimitActionError);

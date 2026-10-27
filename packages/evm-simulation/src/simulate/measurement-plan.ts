@@ -1,18 +1,26 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 import type {
+  InputOperationLimit,
   OperationLimit,
   OperationType,
   SimulationOperationSubject,
 } from "../limits.js";
 
 type AssetMeasurementSource =
+  | { readonly type: "token"; readonly token: Address }
   | {
       readonly type: "market";
       readonly marketId: MarketId;
       readonly asset: "loan" | "collateral";
     }
-  | { readonly type: "vault"; readonly vault: Address };
+  | { readonly type: "vault"; readonly vault: Address }
+  | {
+      readonly type: "midnightCollateral";
+      readonly marketId: Hex;
+      readonly collateralIndex: bigint;
+    }
+  | { readonly type: "midnightLoan"; readonly marketId: Hex };
 
 type ShareMeasurementSource =
   | {
@@ -20,16 +28,28 @@ type ShareMeasurementSource =
       readonly marketId: MarketId;
       readonly shares: "supplyShares" | "borrowShares" | "collateral";
     }
-  | { readonly type: "balance"; readonly token: Address };
+  | { readonly type: "balance"; readonly token: Address }
+  | {
+      readonly type: "midnightCollateral";
+      readonly marketId: Hex;
+      readonly collateralIndex: bigint;
+    }
+  | { readonly type: "midnightCredit"; readonly marketId: Hex }
+  | { readonly type: "midnightDebt"; readonly marketId: Hex }
+  | { readonly type: "midnightNet"; readonly marketId: Hex };
 
 interface OperationMeasurementPlan {
   readonly subject: SimulationOperationSubject;
-  readonly assetsPaid: AssetMeasurementSource;
-  readonly assetsReceived: AssetMeasurementSource;
+  readonly assetsPaid?: AssetMeasurementSource;
+  readonly assetsReceived?: AssetMeasurementSource;
   readonly sharesMinted?: ShareMeasurementSource;
   readonly sharesBurned?: ShareMeasurementSource;
   readonly collateralSupplied?: ShareMeasurementSource;
   readonly collateralWithdrawn?: ShareMeasurementSource;
+  readonly creditRedeemed?: ShareMeasurementSource;
+  readonly unitsSold?: ShareMeasurementSource;
+  readonly unitsBought?: ShareMeasurementSource;
+  readonly debtRepaid?: ShareMeasurementSource;
 }
 
 const market = (
@@ -51,7 +71,7 @@ const vault = (address: Address): AssetMeasurementSource => ({
 
 /** Describe each quote field's evidence source with an exhaustive operation switch. @internal */
 export function operationMeasurementPlan(
-  limit: OperationLimit,
+  limit: OperationLimit | InputOperationLimit,
 ): OperationMeasurementPlan {
   switch (limit.type) {
     case "blueSupply":
@@ -156,6 +176,94 @@ export function operationMeasurementPlan(
         sharesMinted: balance(limit.targetVault),
         sharesBurned: balance(limit.sourceVault),
       };
+    case "midnightSupplyCollateral": {
+      const collateral = {
+        type: "midnightCollateral",
+        marketId: limit.marketId,
+        collateralIndex: limit.collateralIndex,
+      } as const;
+      return {
+        subject: {
+          operation: limit.type,
+          marketId: limit.marketId,
+          collateralIndex: limit.collateralIndex,
+        },
+        assetsPaid: collateral,
+        assetsReceived: collateral,
+        collateralSupplied: collateral,
+      };
+    }
+    case "midnightSupplyBlueMakeLend": {
+      const loanToken: AssetMeasurementSource = {
+        type: "token",
+        token: limit.loanToken,
+      };
+      return {
+        subject: {
+          operation: limit.type,
+          loanToken: limit.loanToken,
+          marketId: limit.marketId,
+          callbackSalt: limit.callbackSalt,
+        },
+        assetsPaid: loanToken,
+        assetsReceived: loanToken,
+        sharesMinted: position(limit.marketId, "supplyShares"),
+      };
+    }
+    case "midnightRedeem": {
+      const loan = { type: "midnightLoan", marketId: limit.marketId } as const;
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: loan,
+        assetsReceived: loan,
+        creditRedeemed: { type: "midnightCredit", marketId: limit.marketId },
+      };
+    }
+    case "midnightTakeLend": {
+      const loan = { type: "midnightLoan", marketId: limit.marketId } as const;
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: loan,
+        unitsBought: { type: "midnightNet", marketId: limit.marketId },
+      };
+    }
+    case "midnightTakeBorrow":
+    case "midnightTakeWithdraw": {
+      const loan = { type: "midnightLoan", marketId: limit.marketId } as const;
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: loan,
+        assetsReceived: loan,
+        ...(limit.type === "midnightTakeBorrow"
+          ? {
+              unitsSold: {
+                type: "midnightNet",
+                marketId: limit.marketId,
+              },
+            }
+          : {
+              creditRedeemed: {
+                type: "midnightCredit",
+                marketId: limit.marketId,
+              },
+            }),
+      };
+    }
+    case "midnightSupplyCollateralTakeBorrow": {
+      const loan = { type: "midnightLoan", marketId: limit.marketId } as const;
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsReceived: loan,
+        unitsSold: { type: "midnightNet", marketId: limit.marketId },
+      };
+    }
+    case "midnightRepayWithdrawCollateral":
+    case "midnightTakeRepayWithdrawCollateral":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: { type: "midnightLoan", marketId: limit.marketId },
+        debtRepaid: { type: "midnightDebt", marketId: limit.marketId },
+      };
     default: {
       const exhaustive: never = limit;
       return exhaustive;
@@ -213,6 +321,15 @@ const SHARE_PRICE_MEASUREMENTS = {
   vaultV1InKindRedeem: null,
   vaultV2InKindRedeem: null,
   vaultV1MigrateToV2: null,
+  midnightSupplyCollateral: null,
+  midnightSupplyBlueMakeLend: null,
+  midnightRedeem: null,
+  midnightTakeLend: null,
+  midnightTakeBorrow: null,
+  midnightTakeWithdraw: null,
+  midnightSupplyCollateralTakeBorrow: null,
+  midnightRepayWithdrawCollateral: null,
+  midnightTakeRepayWithdrawCollateral: null,
 } as const satisfies Record<OperationType, SharePriceMeasurement | null>;
 
 /**
@@ -257,6 +374,15 @@ export function positionBoundsMarketField(
     case "vaultV1InKindRedeem":
     case "vaultV2InKindRedeem":
     case "vaultV1MigrateToV2":
+    case "midnightSupplyCollateral":
+    case "midnightSupplyBlueMakeLend":
+    case "midnightRedeem":
+    case "midnightTakeLend":
+    case "midnightTakeBorrow":
+    case "midnightTakeWithdraw":
+    case "midnightSupplyCollateralTakeBorrow":
+    case "midnightRepayWithdrawCollateral":
+    case "midnightTakeRepayWithdrawCollateral":
       return undefined;
     default: {
       const exhaustive: never = type;
@@ -272,11 +398,21 @@ export function positionBoundsMarketField(
  * @internal
  */
 export function positionBoundsMarketId(
-  limit: OperationLimit,
+  limit: OperationLimit | InputOperationLimit,
 ): MarketId | undefined {
   const marketField = positionBoundsMarketField(limit.type);
   if (marketField === "marketId")
-    return "marketId" in limit ? limit.marketId : undefined;
+    return "marketId" in limit &&
+      limit.type !== "midnightSupplyCollateral" &&
+      limit.type !== "midnightRedeem" &&
+      limit.type !== "midnightTakeLend" &&
+      limit.type !== "midnightTakeBorrow" &&
+      limit.type !== "midnightTakeWithdraw" &&
+      limit.type !== "midnightSupplyCollateralTakeBorrow" &&
+      limit.type !== "midnightRepayWithdrawCollateral" &&
+      limit.type !== "midnightTakeRepayWithdrawCollateral"
+      ? limit.marketId
+      : undefined;
   if (marketField === "targetMarketId")
     return "targetMarketId" in limit ? limit.targetMarketId : undefined;
   return undefined;

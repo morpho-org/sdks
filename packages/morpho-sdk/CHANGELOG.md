@@ -1,5 +1,43 @@
 # @morpho-org/morpho-sdk
 
+## 9.0.0
+
+### Major Changes
+
+- Classic ERC-20 and vault-share approvals now request `maxUint256`, subject to the existing
+  token-specific caps and zero-reset behavior; vault-share permits are also unlimited. Larger existing
+  vault-share allowances are reused. ERC-2612 token permits remain exact because the bundle's `permit`
+  call uses the pull amount; Permit2 SignatureTransfer remains exact because the bundle derives both
+  the permitted and requested amounts from that same pull amount. The `approvalAmount` option and
+  `ApprovalAmountLessThanSpendAmountError` are removed; migrate callers by dropping the option and
+  error handling. See `MIGRATION-v8-to-v9.md` for the removed API and migration details. WDK
+  withdrawals no longer reject larger existing share allowances. Asset-mode exits without an
+  on-chain share-price or max-shares bound no longer have an SDK share-allowance ceiling, so a
+  share-price drop before inclusion can burn more shares than quoted.
+
+## 8.4.0
+
+### Minor Changes
+
+- Expose native funding amount in Midnight maker action metadata.
+- Midnight builders and entity methods reject a zero account and report encoding failures as typed errors, and every SDK error class sets a stable `name`:
+
+  - Midnight entity methods other than `cancelOffers`, `supplyCollateral` and `redeem` throw `MidnightZeroAccountError` when `accountAddress` is the zero address, and `getMidnightApprovalRequirements` / `getMidnightAuthorizationRequirement` throw it for a zero `owner`. Every direct builder with an `onBehalf` (`midnightSupplyCollateral`, `midnightRedeem` and now `midnightSetIsAuthorized`) throws `MidnightZeroOnBehalfError` for a zero `onBehalf`, as do `MorphoMidnight.redeem` and both `getRequirements()` and `buildTx()` of `MorphoMidnight.supplyCollateral` for a zero `accountAddress`. `cancelOffers` throws `MidnightInvalidAccountAddressError` when `accountAddress` is malformed or zero. Midnight reverts `Unauthorized()` for these transactions.
+  - Midnight action builders, `MorphoMidnight` methods and `getMidnightApprovalRequirements` / `getMidnightAuthorizationRequirement` throw `MidnightCalldataEncodingError` (viem's error kept as `cause`) instead of raw viem errors for malformed `bytes32`, out-of-range integers, unencodable offers or markets, and malformed addresses, including mixed-case addresses with invalid checksums. `error.input` names what failed: the contract function, `"offers"` (offer-tree hashing), `"marketId"` (market-id hashing) or the name of the malformed address input, such as `"accountAddress"`, `"onBehalf"`, `"owner"`, `"receiver"`, `"collateralReceiver"`, `"referralFeeRecipient"`, `"market.midnight"`, `"authorized"`, `"publication.ratifier"`, `"loanToken"`, `"market.loanToken"`, `"market.collateralParams[i].token"`, `"positionData.user"`, `"spender"` or `"token"` (a token pulled with native funding, or the token checked by `getMidnightApprovalRequirements`). `"blueMarket"` reports the Blue market encoding in `supplyBlueMakeLend`: a malformed address or an out-of-range `lltv`.
+  - Every exported SDK error class, including the Blue, Vault and requirement errors and not only the Midnight ones, now sets `.name` to its class name instead of `"Error"`. This is the only change in this release note that reaches beyond Midnight.
+  - Midnight JSDoc states that `accountAddress` must send the transaction for flows where Midnight acts on `msg.sender`.
+
+  Code that caught viem's encoding errors from Midnight builders can read `error.cause`; code that compared `error.name` with `"Error"` should use `instanceof` or the class name.
+
+- `PriceRatifierV1` and `RateRatifierV1` now throw `InvalidOfferGroupError` from `buildDescriptor`, and from `buildProof`, `ratifierData` and `ratify` for raw leaf input, when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules, such as mixing unit and asset caps. Such groups were never valid: all their leaves share one onchain consumed counter. In `@morpho-org/morpho-sdk`, `MorphoMidnight.getOffersData` and the maker flows (`makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`) throw it as `InvalidMidnightOfferGroupError` when given a priceV1/rateV1 `Tree.create` request.
+
+### Patch Changes
+
+- Midnight sell docs now state that an assets-target sell pays the receiver exactly `target.assets` and adds the referral fee on top.
+- Remove a redundant receiver address check from the Midnight `takeBorrow` and `supplyCollateralTakeBorrow` builders; behavior is unchanged.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.2.0
+
 ## 8.3.0
 
 ### Minor Changes

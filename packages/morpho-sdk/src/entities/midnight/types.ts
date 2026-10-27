@@ -121,15 +121,8 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly nativeAmount?: bigint;
 }
 
-/** Options for Midnight `getRequirements()`. */
-export interface MidnightRequirementsParams {
-  /**
-   * ERC-20 allowance to set when an approval is needed. Defaults to `maxUint256` (capped per token by
-   * `MAX_TOKEN_APPROVALS`). Applies to every token the flow approves and must cover the amount each
-   * of them pulls. Flows that need no token approval ignore it.
-   */
-  readonly approvalAmount?: bigint;
-}
+/** No per-call options are available for Midnight requirements. */
+export type MidnightRequirementsParams = Record<string, never>;
 
 /**
  * Lazy Midnight entity result with async requirements and sync transaction building.

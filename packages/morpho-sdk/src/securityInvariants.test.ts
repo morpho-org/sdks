@@ -644,12 +644,13 @@ describe("[INV-06] Authorization", () => {
     )?.addresses;
     await fc.assert(
       fc.asyncProperty(unregisteredSpender(addresses), async (spender) => {
-        const common = { chainId: mainnet.id, nonce: 0n, amount: 1n, deadline };
+        const common = { chainId: mainnet.id, nonce: 0n, deadline };
         expect(() =>
           encodeErc20Permit2SignatureTransfer({
             ...common,
             token: assetAddress,
             spender,
+            amount: 1n,
           }),
         ).toThrow(UnsupportedErc20ApprovalSpenderError);
         expect(() =>
@@ -667,6 +668,7 @@ describe("[INV-06] Authorization", () => {
             token: assetAddress,
             owner: userAddress,
             spender,
+            amount: 1n,
           }),
         ).rejects.toBeInstanceOf(UnsupportedErc20ApprovalSpenderError);
         await expect(

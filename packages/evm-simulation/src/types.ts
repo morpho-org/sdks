@@ -217,6 +217,11 @@ export interface RawCall {
  * level — see `SimulationResult.assetChanges`.
  */
 export interface SimulationCall {
+  /**
+   * Logs emitted by the call. A typed Blue input pre-accrues its market, so
+   * this call omits that market's `AccrueInterest` event when it would have
+   * been the block's first accrual.
+   */
   readonly logs: readonly RawLog[];
   /**
    * True iff the call succeeded. A failed user call throws
@@ -235,6 +240,9 @@ export interface SimulationCall {
    * larger than headroom derived from `eth_estimateGas`. On Monad it reports the
    * call's gas limit (`callGasLimit` when set, otherwise 150M by default)
    * instead of gas consumed.
+   *
+   * A typed Blue input pre-accrues its market, so this excludes the accrual
+   * cost the real transaction would pay.
    */
   readonly gasUsed: bigint;
 }

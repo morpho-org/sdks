@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
+  CheckedSimulationInputLimits,
   CheckedSimulationLimits,
   CheckedSlippageLimits,
   SimulationOperationSubject,
@@ -61,4 +62,16 @@ export interface SimulationVerification {
 /** `simulationTxs` contains caller transaction fields; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
+}
+
+/** Verification for requests that may derive operation limits from typed inputs. */
+export interface SimulationInputVerification
+  extends Omit<SimulationVerification, "limits"> {
+  /** Resolved quotes, per-side checks and quoted-side tolerances, or the explicit opt-out. */
+  readonly limits: CheckedSimulationInputLimits | "none";
+}
+
+/** Simulation result for requests accepting input-based limits. */
+export interface VerifiedSimulationInputResult extends SimulationResult {
+  readonly verification: SimulationInputVerification;
 }

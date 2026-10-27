@@ -1,6 +1,11 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, isAddressEqual, zeroAddress } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  isAddressEqual,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -57,5 +62,21 @@ describe("midnightSetIsAuthorized", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(UnsupportedMidnightAuthorizationTargetError);
+  });
+
+  test("error: a malformed authorized throws a typed encoding error", () => {
+    expect(() =>
+      midnightSetIsAuthorized({
+        chainId: midnightChainId,
+        authorized: "0x123" as Address,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "authorized",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
   });
 });

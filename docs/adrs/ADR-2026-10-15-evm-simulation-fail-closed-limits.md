@@ -2,7 +2,7 @@
 
 | Field      | Value                   |
 | ---------- | ----------------------- |
-| **Status** | accepted; `evm-simulation` 7.0.0 target superseded by ADR-2026-10-21-evm-simulation-fail-closed-limits-ships-in-v8 |
+| **Status** | accepted; `evm-simulation` 7.0.0 target superseded by ADR-2026-10-21-evm-simulation-fail-closed-limits-ships-in-v8; derivation of limits from action args superseded for the input-based form by ADR-2026-10-22-evm-simulation-limits-from-user-inputs |
 | **Date**   | 2026-10-15              |
 | **Author** | @jinmel                 |
 | **Scope**  | `evm-simulation` 7.0.0  |

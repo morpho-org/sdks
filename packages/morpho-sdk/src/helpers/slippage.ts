@@ -167,19 +167,22 @@ export const computeVaultMaxSharePrice = (params: {
 };
 
 /**
- * Computes the exact vault-share authorization cap for an asset-denominated exit.
+ * Computes the minimum vault-share allowance required for an asset-denominated exit.
  *
- * The cap covers both the current and deadline-accrued preview. Vault V2 and MetaMorpho 1.0 divide
- * by `1 - slippageTolerance`, rounding up, to cover a share-price decline before inclusion;
+ * The requirement covers both the current and deadline-accrued preview. Vault V2 and MetaMorpho 1.0
+ * divide by `1 - slippageTolerance`, rounding up, to cover a share-price decline before inclusion;
  * MetaMorpho 1.1's `lostAssets` clamp keeps that preview upper-bounded without widening it.
+ *
+ * "Max" refers to the most shares the exit is expected to burn at the tolerated price, which is
+ * the minimum allowance the SDK requires.
  *
  * @param params - Vault snapshot, execution deadline, asset amount, and WAD-scaled slippage.
  * @param params.vaultData - Hydrated Vault V1 `AccrualVault` or Vault V2 `AccrualVaultV2` snapshot.
  * @param params.deadline - Bundle execution deadline as a Unix timestamp in seconds, used for accrual.
  * @param params.assets - Assets withdrawn from the vault, in the underlying token's smallest unit.
  * @param params.slippageTolerance - Accepted share-price decline as a WAD-scaled fraction (`1e18` = 100%).
- * @returns The maximum shares the prepared operation may burn.
- * @throws {NonPositiveInputError} when `assets` or the computed share cap is not positive.
+ * @returns The minimum share allowance required by the prepared exit.
+ * @throws {NonPositiveInputError} when `assets` or the computed required share amount is not positive.
  * @throws {NegativeInputError} when `slippageTolerance` is negative.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
  * @example
@@ -201,7 +204,7 @@ export const computeVaultMaxSharePrice = (params: {
  *   assets: 1_000_000n,
  *   slippageTolerance: 500_000_000_000_000n,
  * });
- * // shares is the exact allowance or permit value for the prepared exit.
+ * // shares is the minimum required allowance for the prepared exit.
  * ```
  */
 export const computeVaultMaxShareAllowance = (params: {
@@ -234,30 +237,4 @@ export const computeVaultMaxShareAllowance = (params: {
   return needsLossBuffer
     ? MathLib.wDivUp(previewedShares, MathLib.WAD - params.slippageTolerance)
     : previewedShares;
-};
-
-/**
- * Computes the largest live share allowance a re-prepared asset-mode exit accepts without a reset.
- *
- * A Safe approval can execute after the caller re-prepared the exit from a fresher snapshot, whose
- * cap is slightly lower. Allowances in `[requiredShareAllowance, ceiling]` are kept, so the burn may
- * exceed the current cap by at most one more slippage tolerance.
- *
- * @internal
- *
- * @param params.requiredShareAllowance - Cap from {@link computeVaultMaxShareAllowance}.
- * @param params.slippageTolerance - WAD-scaled slippage used to derive that cap.
- * @returns `requiredShareAllowance / (1 - slippageTolerance)`, rounded down.
- * @throws {NegativeInputError} when `slippageTolerance` is negative.
- * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
- */
-export const computeVaultShareAllowanceCeiling = (params: {
-  readonly requiredShareAllowance: bigint;
-  readonly slippageTolerance: bigint;
-}): bigint => {
-  validateSlippageTolerance(params.slippageTolerance);
-  return MathLib.wDivDown(
-    params.requiredShareAllowance,
-    MathLib.WAD - params.slippageTolerance,
-  );
 };

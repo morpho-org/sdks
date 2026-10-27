@@ -12,12 +12,29 @@ import {
   ExcessiveSlippageToleranceError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   VaultAddressMismatchError,
 } from "../../types/index.js";
 
 describe("MorphoVaultV2 deposit input validation", () => {
+  test("error: NativeAmountOnNonWNativeVaultError for a non-WETH vault before any RPC read", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    expect(() =>
+      vault.deposit({
+        nativeAmount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: inKindVaultV2Data({ address: KeyrockUsdcVaultV2.address }),
+      }),
+    ).toThrow(NativeAmountOnNonWNativeVaultError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
   test.each(["amount", "nativeAmount"] as const)(
     "error: InputExceedsMaxError before preparing requirements for oversized %s",
     (field) => {

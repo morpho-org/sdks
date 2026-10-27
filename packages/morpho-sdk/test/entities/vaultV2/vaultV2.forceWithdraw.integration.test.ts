@@ -1,5 +1,5 @@
 import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
+import { MathLib, Time } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -9,6 +9,7 @@ import {
   erc20Abi,
   isAddressEqual,
   isHex,
+  maxUint256,
   parseEventLogs,
   parseUnits,
   RpcRequestError,
@@ -70,6 +71,35 @@ const balances = async (client: AnvilTestClient, vault: Address) => {
   return { shares, assets };
 };
 
+const requiredForceWithdrawAllowance = ({
+  exitAssets,
+  minSharePriceE27,
+  feeSharesProjected,
+}: {
+  readonly exitAssets: bigint;
+  readonly minSharePriceE27: bigint;
+  readonly feeSharesProjected: bigint;
+}) => {
+  const allowanceSharePriceE27 = MathLib.max(
+    MathLib.min(
+      MathLib.mulDivDown(
+        minSharePriceE27,
+        MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+        MathLib.WAD,
+      ),
+      minSharePriceE27 - 1n,
+    ),
+    1n,
+  );
+  return MathLib.min(
+    MathLib.max(
+      MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+      MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+    ) + feeSharesProjected,
+    maxUint256,
+  );
+};
+
 describe("MorphoVaultV2.forceWithdraw integration", () => {
   test("delivers the penalty-adjusted assets across two markets", async ({
     client,
@@ -118,23 +148,36 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
         userAddress: client.account.address,
       }),
     );
-    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
-      exit.getRequirements(),
-    );
-    if (!isRequirementApproval(approval)) {
-      throw new Error("VaultExitBundlesV1 approval requirement not found");
-    }
-    await client.sendTransaction(approval);
-    await client.sendTransaction(exit.buildTx());
+    const tx = exit.buildTx();
+    const requiredAllowance = requiredForceWithdrawAllowance({
+      exitAssets,
+      minSharePriceE27: tx.action.args.minSharePriceE27,
+      feeSharesProjected: computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: client.account.address,
+        timestamp: tx.action.args.deadline,
+      }),
+    });
+    await client.writeContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [tx.to, requiredAllowance],
+    });
+    await expect(
+      withChainTimestamp(await client.timestamp(), () =>
+        exit.getRequirements(),
+      ),
+    ).resolves.toEqual([]);
+    await client.sendTransaction(tx);
 
     const final = await balances(client, vaultAddress);
     expect(final.assets - initial.assets).toBe(preview.netAssets);
-    // The approved amount is the SDK's derived upper bound on the burn, and it is the only
-    // authorization the exit gets. A real burn above it would mean the bound under-counts what the
-    // contract actually takes from the user's position.
     const sharesBurnt = initial.shares - final.shares;
     expect(sharesBurnt).toBeGreaterThan(0n);
-    expect(sharesBurnt).toBeLessThanOrEqual(approval.action.args.amount);
+    expect(
+      (preview.netAssets * 10n ** 27n) / sharesBurnt,
+    ).toBeGreaterThanOrEqual(exit.buildTx().action.args.minSharePriceE27);
     // Nothing is left stranded in the periphery.
     await expect(
       client.readContract({
@@ -378,16 +421,28 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     expect(feeSharesNow).toBeGreaterThan(0n);
 
     const initial = await balances(client, vaultAddress);
-    const [approval] = await withChainTimestamp(now, () =>
-      exit.getRequirements(),
-    );
-    if (!isRequirementApproval(approval)) {
-      throw new Error("VaultExitBundlesV1 approval requirement not found");
-    }
-    await client.sendTransaction(approval);
+    const tx = exit.buildTx();
+    const requiredAllowance = requiredForceWithdrawAllowance({
+      exitAssets: requestedExitAssets,
+      minSharePriceE27: tx.action.args.minSharePriceE27,
+      feeSharesProjected: computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: client.account.address,
+        timestamp: tx.action.args.deadline,
+      }),
+    });
+    await client.writeContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [tx.to, requiredAllowance],
+    });
+    await expect(
+      withChainTimestamp(now, () => exit.getRequirements()),
+    ).resolves.toEqual([]);
     await client.setNextBlockTimestamp({ timestamp: now });
     const receipt = await client.waitForTransactionReceipt({
-      hash: await client.sendTransaction(exit.buildTx()),
+      hash: await client.sendTransaction(tx),
     });
 
     const transfers = parseEventLogs({
@@ -418,7 +473,6 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     expect(measured).toBe(grossBurnt - minted);
     expect(measured).toBeGreaterThan(0n);
     expect(final.assets - initial.assets).toBe(preview.netAssets);
-    expect(grossBurnt).toBeLessThanOrEqual(approval.action.args.amount);
     expect((preview.netAssets * 10n ** 27n) / measured).toBeGreaterThanOrEqual(
       exit.buildTx().action.args.minSharePriceE27,
     );
@@ -599,16 +653,28 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     });
     expect(derivedFloor).toBeLessThan(projectedFloor);
 
-    const [approval] = await withChainTimestamp(now, () =>
-      exit.getRequirements(),
-    );
-    if (!isRequirementApproval(approval)) {
-      throw new Error("VaultExitBundlesV1 approval requirement not found");
-    }
-    await client.sendTransaction(approval);
+    const tx = exit.buildTx();
+    const requiredAllowance = requiredForceWithdrawAllowance({
+      exitAssets,
+      minSharePriceE27: tx.action.args.minSharePriceE27,
+      feeSharesProjected: computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: client.account.address,
+        timestamp: tx.action.args.deadline,
+      }),
+    });
+    await client.writeContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [tx.to, requiredAllowance],
+    });
+    await expect(
+      withChainTimestamp(now, () => exit.getRequirements()),
+    ).resolves.toEqual([]);
     const initial = await balances(client, vaultAddress);
 
-    // With the SDK's allowance in place, the projection-only floor still false-reverts on the
+    // With the exact required allowance in place, the projection-only floor still false-reverts on the
     // contract's own price check (`SlippageExceeded`) — not on an `_spendAllowance` underflow
     // (panic 0x11), which is what an allowance sized exactly to the floor would have produced.
     const staleTx = vaultV2ForceWithdraw({
@@ -650,7 +716,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     // The faithful exit — same snapshot, same wall clock — settles at the realized price: chain
     // time stays near `chainNow`, far inside `deadline`, so no projection is ever realized.
     const receipt = await client.waitForTransactionReceipt({
-      hash: await client.sendTransaction(exit.buildTx()),
+      hash: await client.sendTransaction(tx),
     });
     const transfers = parseEventLogs({
       abi: erc20Abi,
@@ -685,7 +751,6 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     // …yet sits below the projection-only floor: this is exactly the stale-clock regime, where the
     // wall-clock projection prices shares the chain never realizes.
     expect(realizedPrice).toBeLessThan(projectedFloor);
-    expect(grossBurnt).toBeLessThanOrEqual(approval.action.args.amount);
   });
 
   test("error: VaultV2ForceWithdrawCoverageError when the markets cannot cover the exit", async ({

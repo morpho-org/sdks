@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; bounded vault-share allowance superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-08-28 |
 | **Author** | @foulques |
 | **Scope**  | Packages: `morpho-sdk` |

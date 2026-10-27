@@ -1,5 +1,5 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
-import { zeroAddress } from "viem";
+import { type Hex, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { OPERATION_TYPES, type OperationLimit } from "../limits.js";
 import {
@@ -34,6 +34,7 @@ const targetMarketId = new MarketParams({
   irm: zeroAddress,
   lltv: 0n,
 }).id;
+const midnightMarketId: Hex = `0x${"11".repeat(32)}`;
 
 const market = (
   id: typeof marketId | typeof sourceMarketId | typeof targetMarketId,
@@ -45,17 +46,27 @@ const position = (
 ) => ({ type: "position", marketId: id, shares });
 const balance = (token: string) => ({ type: "balance", token });
 const vaultSource = (address: string) => ({ type: "vault", vault: address });
+const midnightCollateral = {
+  type: "midnightCollateral",
+  marketId: midnightMarketId,
+  collateralIndex: 1n,
+};
+const directToken = { type: "token", token: loan };
 
 const cases: {
   readonly type: OperationLimit["type"];
   readonly expected: {
     readonly subject: unknown;
     readonly assetsPaid: unknown;
-    readonly assetsReceived: unknown;
+    readonly assetsReceived?: unknown;
     readonly sharesMinted?: unknown;
     readonly sharesBurned?: unknown;
     readonly collateralSupplied?: unknown;
     readonly collateralWithdrawn?: unknown;
+    readonly creditRedeemed?: unknown;
+    readonly debtRepaid?: unknown;
+    readonly unitsSold?: unknown;
+    readonly unitsBought?: unknown;
   };
 }[] = [
   ...(["blueSupply", "blueWithdraw"] as const).map((type) => ({
@@ -169,17 +180,123 @@ const cases: {
       sharesBurned: balance(sourceVault),
     },
   },
+  {
+    type: "midnightSupplyCollateral",
+    expected: {
+      subject: {
+        operation: "midnightSupplyCollateral",
+        marketId: midnightMarketId,
+        collateralIndex: 1n,
+      },
+      assetsPaid: midnightCollateral,
+      assetsReceived: midnightCollateral,
+      collateralSupplied: midnightCollateral,
+    },
+  },
+  {
+    type: "midnightSupplyBlueMakeLend",
+    expected: {
+      subject: {
+        operation: "midnightSupplyBlueMakeLend",
+        loanToken: loan,
+        marketId,
+        callbackSalt: midnightMarketId,
+      },
+      assetsPaid: directToken,
+      assetsReceived: directToken,
+      sharesMinted: position(marketId, "supplyShares"),
+    },
+  },
+  {
+    type: "midnightRedeem",
+    expected: {
+      subject: { operation: "midnightRedeem", marketId: midnightMarketId },
+      assetsPaid: { type: "midnightLoan", marketId: midnightMarketId },
+      assetsReceived: { type: "midnightLoan", marketId: midnightMarketId },
+      creditRedeemed: { type: "midnightCredit", marketId: midnightMarketId },
+    },
+  },
+  {
+    type: "midnightTakeLend",
+    expected: {
+      subject: { operation: "midnightTakeLend", marketId },
+      assetsPaid: { type: "midnightLoan", marketId },
+      unitsBought: { type: "midnightNet", marketId },
+    },
+  },
+  {
+    type: "midnightTakeBorrow",
+    expected: {
+      subject: { operation: "midnightTakeBorrow", marketId: midnightMarketId },
+      assetsPaid: { type: "midnightLoan", marketId: midnightMarketId },
+      assetsReceived: { type: "midnightLoan", marketId: midnightMarketId },
+      unitsSold: { type: "midnightNet", marketId: midnightMarketId },
+    },
+  },
+  {
+    type: "midnightTakeWithdraw",
+    expected: {
+      subject: {
+        operation: "midnightTakeWithdraw",
+        marketId: midnightMarketId,
+      },
+      assetsPaid: { type: "midnightLoan", marketId: midnightMarketId },
+      assetsReceived: { type: "midnightLoan", marketId: midnightMarketId },
+      creditRedeemed: { type: "midnightCredit", marketId: midnightMarketId },
+    },
+  },
+  {
+    type: "midnightSupplyCollateralTakeBorrow",
+    expected: {
+      subject: { operation: "midnightSupplyCollateralTakeBorrow", marketId },
+      assetsPaid: undefined,
+      assetsReceived: { type: "midnightLoan", marketId },
+      unitsSold: { type: "midnightNet", marketId },
+    },
+  },
+  {
+    type: "midnightRepayWithdrawCollateral",
+    expected: {
+      subject: {
+        operation: "midnightRepayWithdrawCollateral",
+        marketId: midnightMarketId,
+      },
+      assetsPaid: { type: "midnightLoan", marketId: midnightMarketId },
+      debtRepaid: { type: "midnightDebt", marketId: midnightMarketId },
+    },
+  },
+  {
+    type: "midnightTakeRepayWithdrawCollateral",
+    expected: {
+      subject: {
+        operation: "midnightTakeRepayWithdrawCollateral",
+        marketId,
+      },
+      assetsPaid: { type: "midnightLoan", marketId },
+      debtRepaid: { type: "midnightDebt", marketId },
+    },
+  },
 ];
 
 const limitFor = (type: OperationLimit["type"]): OperationLimit =>
   ({
     type,
-    marketId,
+    marketId:
+      type === "midnightSupplyCollateral" ||
+      type === "midnightRedeem" ||
+      type === "midnightTakeBorrow" ||
+      type === "midnightTakeWithdraw" ||
+      type === "midnightRepayWithdrawCollateral"
+        ? midnightMarketId
+        : marketId,
     sourceMarketId,
     targetMarketId,
     vault,
     sourceVault,
     targetVault,
+    collateralIndex: 1n,
+    loanToken: loan,
+    callbackSalt: midnightMarketId,
     quote: { assetsPaid: 1n },
     slippageTolerance: 0n,
   }) as OperationLimit;
@@ -198,6 +315,10 @@ describe("positionBoundsMarketField", () => {
     ["blueRefinance", "targetMarketId"],
     ["vaultV1Deposit", undefined],
     ["vaultV1MigrateToV2", undefined],
+    ["midnightSupplyCollateral", undefined],
+    ["midnightRedeem", undefined],
+    ["midnightRepayWithdrawCollateral", undefined],
+    ["midnightTakeRepayWithdrawCollateral", undefined],
   ] as const)(
     "behavior: position bounds for %s use %s",
     (type, expectedField) => {
@@ -248,6 +369,15 @@ describe("sharePriceMeasurement", () => {
     { type: "vaultV1InKindRedeem", expected: undefined },
     { type: "vaultV2InKindRedeem", expected: undefined },
     { type: "vaultV1MigrateToV2", expected: undefined },
+    { type: "midnightSupplyCollateral", expected: undefined },
+    { type: "midnightSupplyBlueMakeLend", expected: undefined },
+    { type: "midnightRedeem", expected: undefined },
+    { type: "midnightTakeLend", expected: undefined },
+    { type: "midnightTakeBorrow", expected: undefined },
+    { type: "midnightTakeWithdraw", expected: undefined },
+    { type: "midnightSupplyCollateralTakeBorrow", expected: undefined },
+    { type: "midnightRepayWithdrawCollateral", expected: undefined },
+    { type: "midnightTakeRepayWithdrawCollateral", expected: undefined },
   ] as const;
   test.each(sharePriceCases)(
     "behavior: %s prices $expected",

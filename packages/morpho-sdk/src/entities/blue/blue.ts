@@ -99,11 +99,6 @@ export interface BlueTokenRequirementsParams {
   readonly useSimplePermit?: boolean;
   /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
   readonly permit2Nonce?: bigint;
-  /**
-   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
-   * example `maxUint256`). Defaults to the exact pulled amount. Ignored by signature paths.
-   */
-  readonly approvalAmount?: bigint;
 }
 
 /** Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1. */
@@ -261,7 +256,6 @@ export interface BlueActions {
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic `approvalAmount` is below the funded `assets`.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -514,8 +508,6 @@ export interface BlueActions {
    * @throws {RepayExceedsDebtError} when an exact asset repay exceeds current debt.
    * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
    * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
-   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
@@ -668,8 +660,8 @@ export interface BlueActions {
    * saturated full close; the entity derives `maxRepayAssets` from debt projected through the
    * requested deadline plus the referral fee, and the contract refunds unused funding. A
    * previously signed share-mode cap remains valid when it still covers the fresh derived minimum.
-   * Full-repay requirements fund exactly the derived `maxRepayAssets`; pass `approvalAmount` to
-   * request a reusable allowance instead. The transaction remains bounded by the derived cap.
+   * Full-repay requirements use unlimited classic approvals while the transaction remains bounded
+   * by the derived `maxRepayAssets` cap.
    * Share-mode deadlines cannot exceed the two-hour quote horizon. Blue authorization is required
    * only for collateral withdrawal. Pure repay uses `maxLtv = maxUint256`; withdrawals use buffered
    * LLTV. No share-price or `slippageTolerance` input exists.
@@ -700,8 +692,6 @@ export interface BlueActions {
    * @throws {WithdrawMakesPositionUnhealthyError} when the post-repay withdrawal exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
-   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
@@ -1133,7 +1123,6 @@ export class MorphoBlue implements BlueActions {
     deadline: bigint;
     useSimplePermit?: boolean;
     permit2Nonce?: bigint;
-    approvalAmount?: bigint;
     now?: bigint;
   }): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline, params.now);
@@ -1148,7 +1137,6 @@ export class MorphoBlue implements BlueActions {
       supportDeployless: this.client.options.supportDeployless,
       useSimplePermit: params.useSimplePermit,
       permit2Nonce: params.permit2Nonce,
-      approvalAmount: params.approvalAmount,
       now: params.now,
     });
   }
@@ -1241,7 +1229,6 @@ export class MorphoBlue implements BlueActions {
             now,
             useSimplePermit: requirementsParams?.useSimplePermit,
             permit2Nonce: requirementsParams?.permit2Nonce,
-            approvalAmount: requirementsParams?.approvalAmount,
           });
         });
       },
@@ -1728,7 +1715,6 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.loanToken,
                   amount: maxRepayAssets,
-                  approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
                   now,
@@ -1875,7 +1861,6 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.collateralToken,
                   amount: collateralAssets,
-                  approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
                   now,

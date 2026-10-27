@@ -355,12 +355,14 @@ export namespace PriceRatifierV1 {
    * highest leaf indices. A group matching the generic content id of all
    * leaves sharing it (for example from `OfferUtils.toStruct` or
    * `Group.create`) is re-derived with {@link groupId}; other explicit groups
-   * are committed as-is. An omitted `group` defaults to the leaf's
+   * are committed as-is. Every explicit group is first checked with
+   * {@link OfferUtils.validateOfferGroup}. An omitted `group` defaults to the leaf's
    * content-addressed singleton {@link groupId}, which commits to
    * `allowedTaker` like the router does.
    *
    * @param leaves - Price-bounded offer leaves in leaf order.
    * @returns PriceRatifierV1 tree descriptor.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`).
    * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
@@ -421,6 +423,7 @@ export namespace PriceRatifierV1 {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
@@ -579,6 +582,7 @@ export namespace PriceRatifierV1 {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded PriceRatifierV1 data.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
@@ -619,6 +623,7 @@ export namespace PriceRatifierV1 {
    *
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
+   * @throws {InvalidOfferGroupError} when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules (members differ in maker, side, loan token, chain, Midnight contract or cap mode/value, an offer has an invalid cap, or a buy offer sets `receiverIfMakerIsSeller`). For raw leaf input only.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example

@@ -6,6 +6,7 @@ import {
   MidnightZeroReceiverError,
   ReferralFeeRecipientMissingError,
 } from "../types/index.js";
+import { validateMidnightAddress } from "./validateMidnightAccount.js";
 
 /** Registry keys of the Midnight protocol contracts that cannot forward received assets. */
 const MIDNIGHT_CONTRACT_KEYS = [
@@ -33,6 +34,7 @@ const MIDNIGHT_CONTRACT_KEYS = [
  * @param params.market - Midnight market whose token contracts are also rejected.
  * @param params.field - Receiver field being validated, reported on the thrown error.
  * @param params.receiver - Receiver address to check.
+ * @throws {MidnightCalldataEncodingError} when the receiver or a market token address is malformed.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {MidnightZeroReceiverError} when `receiver` is the zero address and `field` is not
  *   `"referralFeeRecipient"`.
@@ -51,6 +53,13 @@ export const validateMidnightReceiver = (params: {
   const { field, receiver } = params;
   const market =
     "params" in params.market ? params.market.params : params.market;
+
+  // Validate addresses before comparing them so malformed values stay a typed SDK error.
+  validateMidnightAddress(field, receiver);
+  validateMidnightAddress("market.loanToken", market.loanToken);
+  for (const [index, { token }] of market.collateralParams.entries()) {
+    validateMidnightAddress(`market.collateralParams[${index}].token`, token);
+  }
 
   if (isAddressEqual(receiver, zeroAddress)) {
     if (field === "referralFeeRecipient") {

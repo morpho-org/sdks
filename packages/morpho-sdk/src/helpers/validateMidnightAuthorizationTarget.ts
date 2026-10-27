@@ -1,6 +1,7 @@
 import { getChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import { UnsupportedMidnightAuthorizationTargetError } from "../types/index.js";
+import { validateMidnightAddress } from "./validateMidnightAccount.js";
 
 /**
  * Validates that a Midnight authorization grant targets a supported protocol operator.
@@ -9,6 +10,7 @@ import { UnsupportedMidnightAuthorizationTargetError } from "../types/index.js";
  * @param params.chainId - Chain id used to resolve supported Midnight operators.
  * @param params.authorized - Operator address receiving authorization.
  * @returns Nothing after the operator matches MidnightBundlesV2.
+ * @throws {MidnightCalldataEncodingError} when `authorized` is not a 20-byte hex address.
  * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not a supported operator.
  * @internal
  */
@@ -16,6 +18,8 @@ export const validateMidnightAuthorizationTarget = (params: {
   readonly chainId: number;
   readonly authorized: Address;
 }): void => {
+  // Reject a malformed address before viem compares it.
+  validateMidnightAddress("authorized", params.authorized);
   const { midnightBundlesV2 } = getChainAddresses(params.chainId);
   const supportedTargets = midnightBundlesV2 == null ? [] : [midnightBundlesV2];
 
