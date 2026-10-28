@@ -1,5 +1,37 @@
 # @morpho-org/morpho-sdk
 
+## 9.1.0-next.0
+
+### Minor Changes
+
+- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
+
+  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+- Add shared Midnight position accrual helpers and errors.
+- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
+- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), and `withdraw` and `redeem` (from `getRequirements()`) throw it when the exit exceeds the vault's idle assets, before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
+- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x). Morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the new Midnight ABIs.
+
+  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+### Patch Changes
+
+- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
+
+  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x, 4.0.x and 4.1.x are no longer accepted because they lack `MidnightPositionLib`.
+
+- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.3.0-next.0
+  - @morpho-org/blue-sdk-viem@7.1.0-next.1
+  - @morpho-org/morpho-ts@4.2.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.1
+
 ## 9.0.0
 
 ### Major Changes

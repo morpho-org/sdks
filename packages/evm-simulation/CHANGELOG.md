@@ -1,5 +1,14 @@
 # @morpho-org/evm-simulation
 
+## 8.2.1-next.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.1.0-next.0
+  - @morpho-org/morpho-ts@4.2.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.1
+
 ## 8.2.0
 
 ### Minor Changes

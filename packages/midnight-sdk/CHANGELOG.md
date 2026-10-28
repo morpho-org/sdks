@@ -1,5 +1,19 @@
 # @morpho-org/midnight-sdk
 
+## 2.3.0-next.0
+
+### Minor Changes
+
+- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
+
+  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x, 4.0.x and 4.1.x are no longer accepted because they lack `MidnightPositionLib`.
+
+### Patch Changes
+
+- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0-next.0
+
 ## 2.2.0
 
 ### Minor Changes

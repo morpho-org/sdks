@@ -1,5 +1,20 @@
 # @morpho-org/blue-sdk
 
+## 8.1.0-next.1
+
+### Minor Changes
+
+- Add the `VaultV2MidnightAdapter` entity with its `IVaultV2MidnightAdapterMarket` and `IVaultV2MidnightAdapterCollateralParams` inputs (structurally compatible with midnight-sdk's `IMarketParams` (pass `market.params`) and `ICollateralParams`) and its `IVaultV2MidnightAdapterMarketData` / `VaultV2MidnightAdapterMarketData` market data, plus `VaultV2MidnightAdapterUtils` (cap ids in contract order, duration allocations and headroom; `durationAllocations` throws `VaultV2Errors.InvalidMidnightDurationsLength` for an invalid `length`) and shared `VaultV2Utils.adapterCapId` and `VaultV2Utils.collateralCapId`. `VaultV2Utils.allocationHeadroom` now accepts any object with `allocation`, `absoluteCap` and `relativeCap`; `id` is no longer required.
+
+  `@morpho-org/blue-sdk` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 4.0.x and 4.1.x are no longer accepted because they lack the new Midnight ABI.
+
+- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0-next.0
+
 ## 8.1.0-next.0
 
 ### Minor Changes

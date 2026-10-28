@@ -1,5 +1,30 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.1.0-next.1
+
+### Minor Changes
+
+- Add deployless accrual support for Vault V2 Midnight adapters.
+- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
+
+  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+- Add deployless reads for Vault V2 Midnight adapters.
+- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x). Morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the new Midnight ABIs.
+
+  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+
+### Patch Changes
+
+- `fetchVaultV2MidnightAdapter` and `fetchAccrualVaultV2MidnightAdapter` now rethrow transport errors (rate limits, timeouts) from the deployless read instead of falling back to per-market reads.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0-next.0
+  - @morpho-org/blue-sdk@8.1.0-next.1
+
 ## 7.1.0-next.0
 
 ### Minor Changes
