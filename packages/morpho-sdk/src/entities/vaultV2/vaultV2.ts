@@ -2,7 +2,7 @@ import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  type MarketParams,
+  MarketParams,
   MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
@@ -620,6 +620,8 @@ export interface VaultV2Actions {
    *
    * This is the share-based counterpart to forceWithdraw, useful for maximum withdrawal scenarios
    * where specifying an exact asset amount is impractical.
+   *
+   * Inputs are copied when the handle is created, so later changes to them are not encoded.
    *
    * The total assets passed to forceDeallocate calls must be greater than or equal to the
    * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
@@ -1514,16 +1516,22 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
+    const shares = redeem.shares;
+    const deallocationsSnapshot: Deallocation[] = deallocations.map(
+      ({ adapter, marketParams, amount }) => ({
+        adapter,
+        amount,
+        ...(marketParams && { marketParams: new MarketParams(marketParams) }),
+      }),
+    );
+
     return {
       buildTx: () =>
         vaultV2ForceRedeem({
           vault: { address: this.vault },
           args: {
-            deallocations,
-            redeem: {
-              shares: redeem.shares,
-              recipient: userAddress,
-            },
+            deallocations: deallocationsSnapshot,
+            redeem: { shares, recipient: userAddress },
             onBehalf: userAddress,
           },
           metadata: this.client.options.metadata,

@@ -287,7 +287,6 @@ describe("fetchAccrualVaultV2 deployless path", () => {
       });
       await client.setNextBlockTimestamp({ timestamp: ACCRUAL_TIMESTAMP });
       await client.mine({ blocks: 1 });
-      const block = await client.getBlock({ blockTag: "latest" });
 
       const scenarios = [
         {
@@ -310,10 +309,14 @@ describe("fetchAccrualVaultV2 deployless path", () => {
           address: rejectingSharesGate,
           bytecode: gateBytecode,
         });
+        const block = await client.getBlock({ blockTag: "latest" });
 
         const [deployless, multicall, onchainAccrual] = await Promise.all([
           fetchAccrualVaultV2(vaultAddress, client),
-          fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+          fetchAccrualVaultV2(vaultAddress, client, {
+            deployless: false,
+            blockTag: "pending",
+          }),
           client.readContract({
             address: vaultAddress,
             abi: vaultV2Abi,

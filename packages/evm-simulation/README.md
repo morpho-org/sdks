@@ -74,7 +74,7 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
+- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
 - Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote`, `BluePositionBounds`, `MidnightPositionBounds`, `MidnightDebtPositionBounds`, `MidnightMarketStruct`, and `MidnightCollateralAmount`.
@@ -99,17 +99,24 @@ All symbols below are re-exported from the package root.
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Input-based limits: `InputOperationLimit`, `OperationInputs`, `AssetsOrShares`, `RepayInputs`, `SimulationInputLimits` and `SimulateInputParams`; checked input outputs use `CheckedInputOperationLimit`, `CheckedSimulationInputLimits`, `SimulationInputVerification` and `VerifiedSimulationInputResult`. `ScalarQuoteField` names the keys of `fieldChecks`; `FeelessInputType` names the input operation types that reject `referralFee`, and `ReallocationPenaltyInputType` names those that accept `reallocationPenalty`. Existing `SimulateParams`, `SimulationLimits`, `CheckedOperationLimit` and quote-only result types remain unchanged; `simulate()` accepts both forms and preserves its quote-only return overload, including wrappers typed with `SimulateParams`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
-- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject`, `MidnightBuySubject`, `MidnightBlueParkingSubject`, `MidnightCollateralOperationSubject`, `MidnightRedeemSubject`, `MidnightSellSubject`, and `MidnightRepayWithdrawCollateralSubject` (operation groups and the operation-keyed subject union used by verification results).
 
 ### Assertions
 
 Each transaction may declare caller-supplied `assertBefore` and `assertAfter`
-assertions. The `erc20BalanceAssertion`, `nativeBalanceAssertion`, and
+assertions, plus `assertLogs` checks over that transaction's frozen log copy,
+whose hex `address`, `topics`, and `data` are lowercase. Log
+assertions run after the transaction succeeds and before its `assertAfter`
+assertions; they do not add calls to the simulation plan. The `erc20BalanceAssertion`, `nativeBalanceAssertion`, and
 `maxDepositAssertion` helpers construct common calls; their optional `min` and
 `max` bounds are inclusive and require at least one bound. Values are in token
 base units, wei, or vault asset units, respectively.
+
+Assertions run as ordinary calls from the bundle owner (`msg.sender` is the
+owner), so they must be view calls: a call that writes state acts with the
+owner's authority, and later calls see its writes.
 
 An assertion can also call any view function and inspect its return data:
 
@@ -128,17 +135,75 @@ const allowanceIsZero: Assertion = {
 };
 ```
 
-Assertions run as ordinary calls inside the same `eth_simulateV1` request, not
-as static calls. They must be view calls: any state they write is visible to
-later calls. Morpho Vault V2's `maxDeposit` is `pure` and always returns 0, so
+Every `assertLogs` check for a transaction receives the same recursively frozen
+copy of its logs. The address, topics, and data are lowercase hex, so the event
+signature can be compared directly with viem's `toEventSelector`. Use viem to
+decode a log from the transaction's `RawLog[]`. `decodeEventLog` requires a
+non-empty topics tuple, so this example narrows the signature topic and builds
+that tuple without changing the `RawLog` shape or casting:
+
+```ts
+import type { LogAssertion } from "@morpho-org/evm-simulation";
+import {
+  decodeEventLog,
+  erc20Abi,
+  isAddressEqual,
+  toEventSelector,
+  type Address,
+  type Hex,
+} from "viem";
+
+const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const approvalTopic = toEventSelector("Approval(address,address,uint256)");
+const approvalMatches = (
+  owner: Address,
+  spender: Address,
+  amount: bigint,
+): LogAssertion => ({
+  check: (logs) => {
+    const log = logs.find(
+      (entry) =>
+        isAddressEqual(entry.address, USDC) &&
+        entry.topics[0] === approvalTopic,
+    );
+    if (!log) return "Approval event is missing.";
+    const [signature, ...indexedTopics] = log.topics;
+    if (!signature) return "Approval event is missing.";
+    const topics: [Hex, ...Hex[]] = [signature, ...indexedTopics];
+    const { args } = decodeEventLog({
+      abi: erc20Abi,
+      eventName: "Approval",
+      data: log.data,
+      topics,
+    });
+    return isAddressEqual(args.owner, owner) &&
+      isAddressEqual(args.spender, spender) &&
+      args.value === amount
+      ? undefined
+      : "Approval event has unexpected values.";
+  },
+});
+```
+
+`assertBefore` and `assertAfter` assertions run as ordinary calls inside the
+same `eth_simulateV1` request, not as static calls. They must be view calls: any
+state they write is visible to later calls. Morpho Vault V2's `maxDeposit` is
+`pure` and always returns 0, so
 `min > 0` always fails there; the helper is meaningful for Vault V1/MetaMorpho.
 
-A failed check throws `SimulationAssertError` (`SIMULATION_ASSERT_FAILED`) with
+A failed `assertBefore` or `assertAfter` check throws `SimulationAssertError`
+(`SIMULATION_ASSERT_FAILED`) with
 `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's
 `assertion` (`to`, `data`, and `check`), and raw `returnData`. A failing `assertBefore` takes precedence
 over its transaction's own revert. Reverted assertion reads also throw
 `SimulationAssertError`; the check decides whether empty or malformed return
 data passes. Assertion declarations are omitted from returned `simulationTxs`.
+An `assertLogs` failure throws `SimulationLogAssertError` with the same
+`SIMULATION_ASSERT_FAILED` code, the transaction and assertion indexes, a copy
+of the log assertion, and the lowercase log values passed to its check, which
+receives them in a frozen copy. A transaction
+revert takes precedence over its log assertions, and a failing log assertion
+takes precedence over its `assertAfter` assertions.
 
 ### Limits
 
@@ -813,8 +878,14 @@ Preview authorizations remain an adapter from `getRequirements()` through
 `toSimulationAuthorizations` into preparation calls. No permission or nonce
 read-back policy runs. Successful execution establishes success under the
 simulated permissions; it does not prove that a future signature is valid.
-Preparation and user-transaction failures still propagate. Final mode executes
-actual calldata without preparation. State reads and preparation calls do not
+Preparation and user-transaction failures still propagate. A preparation that
+emits asset transfers fails closed with `SimulationValidationError`; simulate
+that authorization as a transaction in final mode to check its asset flows.
+This rejects any ERC-20 Transfer or WETH Deposit/Withdrawal event signature,
+including malformed and four-topic logs. Native-value trace transfers are also
+rejected because they carry the ERC-20 Transfer topic.
+Tokens that move value without emitting logs remain outside this check.
+Final mode executes actual calldata without preparation. State reads and preparation calls do not
 receive public transaction indices.
 
 ### Revert messages and bytes

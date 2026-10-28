@@ -1,6 +1,7 @@
 import {
   getChainAddresses,
   MarketParams,
+  MarketUtils,
   MathLib,
   marketParamsAbi,
 } from "@morpho-org/blue-sdk";
@@ -23,9 +24,11 @@ import {
 import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/index.js";
+import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import {
   deployMorphoMarketV1AdapterV2,
   deployVaultV2,
+  setUpSingleAdapterVaultV2,
   submitAndAcceptVaultV2Call,
 } from "../../helpers/vaultV2.js";
 
@@ -36,6 +39,13 @@ const baseTargetMarket = new MarketParams({
   irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
   lltv: 860_000_000_000_000_000n,
 });
+
+const snapshotSourceMarket = new MarketParams({
+  ...baseTargetMarket,
+  lltv: 945_000_000_000_000_000n,
+});
+
+const snapshotTargetMarket = baseTargetMarket;
 
 const baseTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -71,10 +81,10 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
         });
       }
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({
@@ -253,6 +263,181 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
       expect(allocationAfter).toBeGreaterThan(targetAllocation.allocation);
       expect(allocationAfter).toBeLessThanOrEqual(
         MathLib.wMulDown(vaultAfter._totalAssets, relativeCap),
+      );
+    },
+  );
+
+  baseTest(
+    "plans a market-source reallocation at the fetched block timestamp",
+    async ({ client }) => {
+      const anvilClient = client as AnvilTestClient;
+      const { blue: morpho, vaultV2BluePublicAllocator: allocator } =
+        getChainAddresses(base.id);
+      assert(allocator != null);
+      const sourceDepositAssets = parseUnits("1000000", 6);
+      const sourceBorrowAssets = parseUnits("1700000", 6);
+      const maxWithdrawalUtilization =
+        (MathLib.WAD * 9n) / 10n - 1_000_000_000_000n;
+      const onchainMaxWithdrawalUtilization = (MathLib.WAD * 9n) / 10n;
+
+      for (const marketParams of [snapshotSourceMarket, snapshotTargetMarket]) {
+        const marketState = await readContractRestructured(client, {
+          address: morpho,
+          abi: blueAbi,
+          functionName: "market",
+          args: [marketParams.id],
+        });
+        if (marketState.lastUpdate === 0n) {
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "createMarket",
+            args: [marketParams],
+          });
+        }
+      }
+
+      await supplyLoan({
+        client: anvilClient,
+        chainId: base.id,
+        market: snapshotSourceMarket,
+        supplyAmount: sourceDepositAssets,
+      });
+
+      const { vault, adapter, depositAndAllocate } =
+        await setUpSingleAdapterVaultV2(anvilClient, {
+          asset: snapshotTargetMarket.loanToken,
+          markets: [snapshotSourceMarket, snapshotTargetMarket],
+        });
+      await depositAndAllocate({
+        assets: sourceDepositAssets,
+        perMarket: [
+          { market: snapshotSourceMarket, assets: sourceDepositAssets },
+        ],
+      });
+
+      await submitAndAcceptVaultV2Call(anvilClient, {
+        vault,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "setIsAllocator",
+          args: [allocator, true],
+        }),
+      });
+      await client.writeContract({
+        address: allocator,
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "setIsActiveAdapter",
+        args: [vault, adapter, true],
+      });
+      await client.writeContract({
+        address: allocator,
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "setAbsoluteCap",
+        args: [vault, adapter, snapshotTargetMarket, maxUint128],
+      });
+      await client.writeContract({
+        address: allocator,
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "setCanPullFromMarket",
+        args: [vault, adapter, snapshotSourceMarket, true],
+      });
+
+      await supplyCollateral({
+        client: anvilClient,
+        chainId: base.id,
+        market: snapshotSourceMarket,
+        collateralAmount: parseUnits("1000", 18),
+      });
+      await borrow({
+        client: anvilClient,
+        chainId: base.id,
+        market: snapshotSourceMarket,
+        borrowAmount: sourceBorrowAssets,
+      });
+
+      const blockBeforeTimeAdvance = await client.getBlock();
+      await client.setNextBlockTimestamp({
+        timestamp: blockBeforeTimeAdvance.timestamp + 30n * 24n * 60n * 60n,
+      });
+      await client.mine({ blocks: 1 });
+      const block = await client.getBlock();
+      const market = client
+        .extend(morphoViemExtension())
+        .morpho.blue(snapshotTargetMarket, base.id);
+      const reallocationData = await market.getVaultV2BlueReallocationData({
+        vaultAddresses: [vault],
+        block,
+      });
+      const defaultPlan = market.getVaultV2BlueReallocations({
+        reallocationData,
+        options: { maxWithdrawalUtilization },
+      });
+      const explicitPlan = market.getVaultV2BlueReallocations({
+        reallocationData,
+        options: { timestamp: block.timestamp, maxWithdrawalUtilization },
+      });
+      const sourceMarket = reallocationData.getMarket(snapshotSourceMarket.id);
+      const accruedSourceMarket = sourceMarket.accrueInterest(block.timestamp);
+      const sourceWithdrawals = defaultPlan.reallocations
+        .filter(
+          ({ from }) =>
+            from.type === "market" &&
+            from.marketParams.id === snapshotSourceMarket.id,
+        )
+        .reduce((assets, { assets: withdrawal }) => assets + withdrawal, 0n);
+
+      expect(block.timestamp - sourceMarket.lastUpdate).toBeGreaterThanOrEqual(
+        24n * 60n * 60n,
+      );
+      expect(sourceMarket.rateAtTarget ?? 0n).toBeGreaterThan(0n);
+      expect(accruedSourceMarket.totalBorrowAssets).toBeGreaterThan(
+        sourceMarket.totalBorrowAssets,
+      );
+      expect(defaultPlan.reallocations).toStrictEqual(
+        explicitPlan.reallocations,
+      );
+      expect(sourceWithdrawals).toBeGreaterThan(0n);
+      expect(
+        MarketUtils.getUtilization({
+          totalSupplyAssets:
+            accruedSourceMarket.totalSupplyAssets - sourceWithdrawals,
+          totalBorrowAssets: accruedSourceMarket.totalBorrowAssets,
+        }),
+      ).toBeLessThanOrEqual(maxWithdrawalUtilization);
+
+      for (const {
+        from,
+        to,
+        assets,
+        penalty,
+        vault: reallocatableVault,
+      } of defaultPlan.reallocations) {
+        assert(from.type === "market");
+        await client.writeContract({
+          address: allocator,
+          abi: vaultV2BluePublicAllocatorAbi,
+          functionName: "reallocate",
+          args: [
+            reallocatableVault,
+            from.adapter,
+            from.marketParams,
+            to.adapter,
+            snapshotTargetMarket,
+            assets,
+            penalty,
+          ],
+        });
+      }
+
+      const sourceMarketAfter = await readContractRestructured(client, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "market",
+        args: [snapshotSourceMarket.id],
+      });
+      expect(MarketUtils.getUtilization(sourceMarketAfter)).toBeLessThanOrEqual(
+        onchainMaxWithdrawalUtilization,
       );
     },
   );

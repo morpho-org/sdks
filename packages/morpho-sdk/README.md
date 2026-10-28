@@ -58,7 +58,9 @@ BlueBundlesV1, and the remaining rows identify their destination.
 supplies it in the same transaction.
 
 `makeWithdraw` publishes reduce-only sell offers for lend limit exits. `makeRepay` publishes
-reduce-only buy offers for borrow limit exits and uses the same loan reserve inputs as `makeLend`.
+reduce-only buy offers for borrow limit exits; its `loanAssets` input only sets the
+minimum Midnight allowance that `getRequirements()` checks (the approval it returns is
+unlimited), while the signed offer caps bound fills.
 Both preserve the supplied offer tree and use `midnightCancelAndMake`; neither executes a fill
 or withdraws collateral during publication. Send their approval/authorization requirements first,
 then call `buildTx()` without a separate root signature.

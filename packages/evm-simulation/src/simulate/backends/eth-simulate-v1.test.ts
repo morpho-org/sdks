@@ -7,7 +7,6 @@ import {
   numberToHex,
   parseAbi,
   UnknownRpcError,
-  zeroAddress,
 } from "viem";
 import { vi } from "vitest";
 import {
@@ -140,7 +139,7 @@ describe.sequential("executePlan", () => {
           blockStateCalls: [
             {
               calls: [
-                { chainId: "0x1", from: zeroAddress, to: USDC, value: "0x0" },
+                { chainId: "0x1", from: OWNER, to: USDC, value: "0x0" },
                 {
                   chainId: "0x1",
                   from: OWNER,
@@ -148,7 +147,7 @@ describe.sequential("executePlan", () => {
                   data: "0x12",
                   value: "0x0",
                 },
-                { chainId: "0x1", from: zeroAddress, to: USDC, value: "0x0" },
+                { chainId: "0x1", from: OWNER, to: USDC, value: "0x0" },
               ],
             },
           ],

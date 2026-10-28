@@ -33,6 +33,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
+  extendRpc,
   mockDeploylessRead,
   mockDeploylessReads,
   mockReadFailure,
@@ -250,6 +251,46 @@ function mockVaultV2BaseReads(
       functionName: "canReceiveShares",
       result: canReceiveShares,
     });
+}
+
+function mockAccrualVaultV2NoAdaptersReads(
+  handle: ReturnType<typeof createMockClient>,
+) {
+  mockVaultV2BaseReads(handle, {
+    performanceFee: 0n,
+    managementFee: 0n,
+  });
+  mockRead(handle, {
+    address: VAULT,
+    abi: vaultV2Abi,
+    functionName: "liquidityAdapter",
+    result: zeroAddress,
+  });
+  mockRead(handle, {
+    address: VAULT,
+    abi: vaultV2Abi,
+    functionName: "adaptersLength",
+    result: 0n,
+  });
+  mockRead(handle, {
+    address: ASSET,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    result: 777n,
+  });
+}
+
+function mockBlockNumber(handle: ReturnType<typeof createMockClient>) {
+  extendRpc(handle, async (call, base) => {
+    if (call.method === "eth_blockNumber") return "0x64";
+    return base(call);
+  });
+}
+
+function getEthCallBlockTags(handle: ReturnType<typeof createMockClient>) {
+  return handle.request.mock.calls
+    .filter(([call]) => call.method === "eth_call")
+    .map(([call]) => (call.params as readonly unknown[] | undefined)?.[1]);
 }
 
 function mockVaultV2AllocationReads(
@@ -1627,6 +1668,7 @@ describe("individual adapter fetchers", () => {
 describe("fetchAccrualVaultV2 deployless path", () => {
   test("falls back to sequential reads when the single deployless call fails", async () => {
     const handle = createMockClient(mainnet);
+    mockBlockNumber(handle);
     mockDeploylessReads(handle, [
       // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
       "0x",
@@ -1646,6 +1688,17 @@ describe("fetchAccrualVaultV2 deployless path", () => {
 
     const vault = await fetchAccrualVaultV2(VAULT, handle.client);
 
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_blockNumber",
+      ),
+    ).toHaveLength(1);
+    const blockTags = getEthCallBlockTags(handle);
+    const sequentialBlockTags = blockTags.slice(1);
+    expect(sequentialBlockTags.length).toBeGreaterThan(0);
+    expect(sequentialBlockTags.every((blockTag) => blockTag === "0x64")).toBe(
+      true,
+    );
     expect(vault.assetBalance).toBe(777n);
     expect(vault.accrualLiquidityAdapter).toBeUndefined();
     expect(vault.accrualAdapters).toEqual([]);
@@ -1653,6 +1706,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
 
   test("falls back to sequential adapter and penalty reads when the single call fails", async () => {
     const handle = createMockClient(mainnet);
+    mockBlockNumber(handle);
     mockDeploylessReads(handle, [
       // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
       "0x",
@@ -1714,6 +1768,79 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
     expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
   });
+
+  test("pins sequential reads to the latest block when deployless is disabled", async () => {
+    const handle = createMockClient(mainnet);
+    mockAccrualVaultV2NoAdaptersReads(handle);
+    mockBlockNumber(handle);
+
+    await fetchAccrualVaultV2(VAULT, handle.client, { deployless: false });
+
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_blockNumber",
+      ),
+    ).toHaveLength(1);
+    const blockTags = getEthCallBlockTags(handle);
+    expect(blockTags.length).toBeGreaterThan(0);
+    expect(blockTags.every((blockTag) => blockTag === "0x64")).toBe(true);
+  });
+
+  test("replaces a latest block tag with the pinned block number", async () => {
+    const handle = createMockClient(mainnet);
+    mockAccrualVaultV2NoAdaptersReads(handle);
+    mockBlockNumber(handle);
+
+    await fetchAccrualVaultV2(VAULT, handle.client, {
+      deployless: false,
+      blockTag: "latest",
+    });
+
+    expect(
+      handle.request.mock.calls.filter(
+        ([call]) => call.method === "eth_blockNumber",
+      ),
+    ).toHaveLength(1);
+    const blockTags = getEthCallBlockTags(handle);
+    expect(blockTags.length).toBeGreaterThan(0);
+    expect(blockTags.every((blockTag) => blockTag === "0x64")).toBe(true);
+  });
+
+  test.each([
+    {
+      selector: "block number",
+      parameters: { blockNumber: 42n },
+      expectedBlockTag: "0x2a",
+    },
+    {
+      selector: "pending block tag",
+      parameters: { blockTag: "pending" },
+      expectedBlockTag: "pending",
+    },
+  ] as const)(
+    "preserves an explicit $selector without resolving latest",
+    async ({ parameters, expectedBlockTag }) => {
+      const handle = createMockClient(mainnet);
+      mockAccrualVaultV2NoAdaptersReads(handle);
+      mockBlockNumber(handle);
+
+      await fetchAccrualVaultV2(VAULT, handle.client, {
+        deployless: false,
+        ...parameters,
+      });
+
+      expect(
+        handle.request.mock.calls.filter(
+          ([call]) => call.method === "eth_blockNumber",
+        ),
+      ).toHaveLength(0);
+      const blockTags = getEthCallBlockTags(handle);
+      expect(blockTags.length).toBeGreaterThan(0);
+      expect(blockTags.every((blockTag) => blockTag === expectedBlockTag)).toBe(
+        true,
+      );
+    },
+  );
 
   test("does not fall back when the single deployless call is forced", async () => {
     const handle = createMockClient(mainnet);

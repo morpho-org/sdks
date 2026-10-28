@@ -1,4 +1,4 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -17,13 +17,16 @@ import {
   type AuthorizationRequirementSignature,
   type BundlesTokenRequirementSignature,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MutuallyExclusiveRepayAmountsError,
   NativeFundingAmountMismatchError,
   NonPositiveInputError,
   UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
+import { blueRepay } from "./repay.js";
 import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
+import { blueWithdrawCollateral } from "./withdrawCollateral.js";
 
 const chainId = mainnet.id;
 const userAddress = getAddress("0x00000000000000000000000000000000000000A1");
@@ -506,5 +509,55 @@ describe("blueRepayWithdrawCollateral — action metadata", () => {
       },
     });
     expect(transaction.action.args.referralFeeAssets).toBeUndefined();
+  });
+});
+
+describe("blueRepayWithdrawCollateral market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+  const staleMarket = {
+    chainId,
+    marketParams: withStaleId(
+      new MarketParams({
+        ...marketParamsInput,
+        oracle: getAddress("0x0000000000000000000000000000000000000023"),
+      }),
+      marketParams.id,
+    ),
+  };
+
+  test("error: rejects market params whose id does not hash from the tuple", () => {
+    expect(() =>
+      blueRepayWithdrawCollateral({
+        market: staleMarket,
+        args: {
+          userAddress,
+          repayAssets: 5n,
+          repayShares: 0n,
+          maxRepayAssets: 7n,
+          collateralAssets: 2n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(MarketIdMismatchError);
+    expect(() =>
+      blueRepay({
+        market: staleMarket,
+        args: {
+          userAddress,
+          repayAssets: 5n,
+          repayShares: 0n,
+          maxRepayAssets: 7n,
+          deadline,
+        },
+      }),
+    ).toThrow(MarketIdMismatchError);
+    expect(() =>
+      blueWithdrawCollateral({
+        market: staleMarket,
+        args: { userAddress, collateralAssets: 2n, maxLtv, deadline },
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

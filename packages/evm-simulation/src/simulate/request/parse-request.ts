@@ -44,7 +44,7 @@ import {
   type SimulationMode,
   type StateBlock,
 } from "../../params.js";
-import type { Assertion } from "../../types.js";
+import type { Assertion, LogAssertion } from "../../types.js";
 import {
   operationMeasurementPlan,
   positionBoundsMarketField,
@@ -62,6 +62,7 @@ export interface ParsedTransaction {
   readonly value: bigint;
   readonly assertBefore?: readonly Assertion[];
   readonly assertAfter?: readonly Assertion[];
+  readonly assertLogs?: readonly LogAssertion[];
 }
 
 /**
@@ -158,6 +159,11 @@ interface FieldChecks {
   ): void;
   assertion(value: unknown, path: string): Assertion | undefined;
   assertions(value: unknown, path: string): readonly Assertion[] | undefined;
+  logAssertion(value: unknown, path: string): LogAssertion | undefined;
+  logAssertions(
+    value: unknown,
+    path: string,
+  ): readonly LogAssertion[] | undefined;
   domain(value: unknown, path: string): Eip712Domain | undefined;
   fields(args: {
     readonly actual: unknown;
@@ -195,6 +201,7 @@ const TRANSACTION_KEYS = [
   "value",
   "assertBefore",
   "assertAfter",
+  "assertLogs",
 ] as const;
 const POSITION_BOUNDS_FIELDS = [
   "maxBorrowShares",
@@ -323,6 +330,35 @@ const createChecks = (): FieldChecks => {
           check.assertion(assertion, `${path}[${index}]`),
         )
         .filter((assertion): assertion is Assertion => assertion !== undefined);
+    },
+
+    logAssertion: (value, path) => {
+      if (!isRecord(value)) {
+        errors.push(`${path}: must be an object`);
+        return undefined;
+      }
+      check.keys(value, { allow: ["check"], path });
+      const assertionCheck = readField(value, "check");
+      if (typeof assertionCheck !== "function")
+        errors.push(`${path}.check: must be a function`);
+      return typeof assertionCheck === "function"
+        ? { check: assertionCheck as LogAssertion["check"] }
+        : undefined;
+    },
+
+    logAssertions: (value, path) => {
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: must be an array`);
+        return undefined;
+      }
+      if (value.length === 0) return undefined;
+      return value
+        .map((assertion, index) =>
+          check.logAssertion(assertion, `${path}[${index}]`),
+        )
+        .filter(
+          (assertion): assertion is LogAssertion => assertion !== undefined,
+        );
     },
 
     domain: (domain, path) => {
@@ -1714,6 +1750,11 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
         rawAssertAfter === undefined
           ? undefined
           : check.assertions(rawAssertAfter, `${path}.assertAfter`);
+      const rawAssertLogs = readField(tx, "assertLogs");
+      const assertLogs =
+        rawAssertLogs === undefined
+          ? undefined
+          : check.logAssertions(rawAssertLogs, `${path}.assertLogs`);
       if (from !== undefined && to !== undefined && data !== undefined) {
         transactions.push({
           from,
@@ -1722,6 +1763,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
           value: value ?? 0n,
           ...(assertBefore !== undefined ? { assertBefore } : {}),
           ...(assertAfter !== undefined ? { assertAfter } : {}),
+          ...(assertLogs !== undefined ? { assertLogs } : {}),
         });
         transactionIndices.push(i);
       }

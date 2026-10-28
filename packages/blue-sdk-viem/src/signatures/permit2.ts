@@ -5,6 +5,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
+import { Permit2ExpirationOutOfRangeError } from "../error.js";
 
 /** Message fields for Permit2 allowance typed data. */
 export interface Permit2PermitArgs {
@@ -13,6 +14,7 @@ export interface Permit2PermitArgs {
   nonce: number;
   deadline: bigint;
   spender: Address;
+  /** Allowance expiry as a Unix timestamp in seconds (uint48). Defaults to the maximum uint48. */
   expiration?: number;
 }
 
@@ -45,6 +47,7 @@ const permit2PermitTypes = {
  * @param args - Permit2 allowance message fields.
  * @param chainId - Chain id whose Permit2 deployment verifies the signature.
  * @returns Typed data ready to pass to a wallet for signing.
+ * @throws {Permit2ExpirationOutOfRangeError} When `expiration` is not an integer in the uint48 range.
  * @example
  * ```ts
  * import { ChainId } from "@morpho-org/blue-sdk";
@@ -66,6 +69,15 @@ export const getPermit2PermitTypedData = (
   args: Permit2PermitArgs,
   chainId: ChainId,
 ): TypedDataDefinition<typeof permit2PermitTypes, "PermitSingle"> => {
+  if (
+    args.expiration != null &&
+    (!Number.isInteger(args.expiration) ||
+      args.expiration < 0 ||
+      BigInt(args.expiration) > MathLib.MAX_UINT_48)
+  ) {
+    throw new Permit2ExpirationOutOfRangeError(args.expiration);
+  }
+
   return {
     domain: {
       name: "Permit2",
@@ -77,12 +89,12 @@ export const getPermit2PermitTypedData = (
       details: {
         token: args.erc20,
         amount: MathLib.min(args.allowance, MathLib.MAX_UINT_160),
-        // Use an unlimited expiration because it most
-        // closely mimics how a standard approval works.
-        expiration: MathLib.min(
-          args.expiration ?? MathLib.MAX_UINT_48,
-          MathLib.MAX_UINT_48,
-        ),
+        expiration:
+          args.expiration != null
+            ? BigInt(args.expiration)
+            : // Use an unlimited expiration because it most
+              // closely mimics how a standard approval works.
+              MathLib.MAX_UINT_48,
         nonce: args.nonce,
       },
       spender: args.spender,

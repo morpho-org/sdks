@@ -947,10 +947,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         }
       }
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({
@@ -1280,10 +1280,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         }
       }
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({
@@ -1612,10 +1612,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         bytecode: `0x7f${destinationPrice.toString(16).padStart(64, "0")}60005260206000f3`,
       });
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({

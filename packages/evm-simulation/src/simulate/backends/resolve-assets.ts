@@ -1,4 +1,4 @@
-import type { MarketParams } from "@morpho-org/blue-sdk";
+import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import {
@@ -71,7 +71,8 @@ type MidnightMarket = MidnightMarketStruct;
  * @throws {SlippageCheckUnavailableError} For reverted, malformed, or empty
  *   metadata; a supplied market struct for another Midnight deployment; an
  *   explicit `assetPaid` that does not match its collateral token; or a
- *   collateral index the Midnight market does not configure.
+ *   collateral index the Midnight market does not configure; or Blue market
+ *   params that do not hash to the requested market id.
  * @internal
  */
 export async function resolveAssets(params: {
@@ -236,14 +237,30 @@ export async function resolveAssets(params: {
               args: [source.marketId],
               blockNumber,
             });
-            pair = [values[0], values[1]];
-            blueMarkets.set(key, {
+            const marketParams = {
               loanToken: values[0],
               collateralToken: values[1],
               oracle: values[2],
               irm: values[3],
               lltv: values[4],
-            });
+            };
+            const receivedMarketId = MarketUtils.getMarketId(marketParams);
+            const isUncreatedMarket =
+              isAddressEqual(values[0], zeroAddress) &&
+              isAddressEqual(values[1], zeroAddress) &&
+              isAddressEqual(values[2], zeroAddress) &&
+              isAddressEqual(values[3], zeroAddress) &&
+              values[4] === 0n;
+            if (
+              !isUncreatedMarket &&
+              receivedMarketId.toLowerCase() !== source.marketId.toLowerCase()
+            ) {
+              throw new SlippageCheckUnavailableError(
+                `Cannot resolve the token for "${limit.type}": idToMarketParams("${source.marketId.toLowerCase()}") returned params for market "${receivedMarketId}". Check the RPC endpoint.`,
+              );
+            }
+            pair = [values[0], values[1]];
+            blueMarkets.set(key, marketParams);
           } else if (
             source.type === "midnightCollateral" ||
             source.type === "midnightLoan"
@@ -270,6 +287,7 @@ export async function resolveAssets(params: {
             pair = [asset, asset];
           }
         } catch (cause) {
+          if (cause instanceof SlippageCheckUnavailableError) throw cause;
           const reverted =
             cause instanceof BaseError &&
             cause.walk(

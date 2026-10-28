@@ -28,6 +28,7 @@ export {
   MarketParamsIdMismatchError as BlueMarketParamsIdMismatchError,
   MissingPermitDomainNameError,
   NonTupleReturnValueError,
+  Permit2ExpirationOutOfRangeError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
   UnsupportedPermitDomainExtensionsError,

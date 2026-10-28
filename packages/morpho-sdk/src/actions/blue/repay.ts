@@ -62,6 +62,7 @@ export interface BlueRepayParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueRepayAction>>` whose calldata invokes the
  *   combined BlueBundlesV1 entrypoint with a zero collateral-withdrawal leg.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount or fee is negative.
  * @throws {MutuallyExclusiveRepayAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when repayment, funding, or deadline is not positive.

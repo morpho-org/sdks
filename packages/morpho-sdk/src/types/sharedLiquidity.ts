@@ -7,12 +7,15 @@ export interface VaultV2BluePublicAllocatorOptions {
   readonly enabled?: boolean;
 
   /**
-   * Timestamp at which market and Vault V2 state is evaluated. Canonical state
-   * and the returned post-state stay at this timestamp; only target-market cap
-   * checks reserve interest on the vault's existing allocation through this
-   * timestamp plus `capAccrualBuffer`. For market-source reallocations the
-   * source position's interest is also reserved on cap ids shared with the
-   * target, and reserves persist across every leg of a plan.
+   * Timestamp at which market and Vault V2 state is evaluated. Defaults to the
+   * snapshot's timestamp (the fetched block's timestamp), never earlier than
+   * the latest market/vault `lastUpdate`; when the snapshot has no timestamp,
+   * defaults to the latest market/vault `lastUpdate`. Canonical state and the
+   * returned post-state stay at this timestamp; only target-market cap checks
+   * reserve interest on the vault's existing allocation through this timestamp
+   * plus `capAccrualBuffer`. For market-source reallocations the source
+   * position's interest is also reserved on cap ids shared with the target, and
+   * reserves persist across every leg of a plan.
    */
   readonly timestamp?: BigIntish;
 
@@ -59,17 +62,30 @@ export interface VaultV2BluePublicAllocatorOptions {
 
   /**
    * Maximum utilization source markets may reach during friendly discovery,
-   * scaled by WAD. The amount-aware planner falls back to 100% only when the
-   * friendly phase cannot cover the operation's absolute shortfall.
+   * scaled by WAD. Within each penalty tier, the amount-aware planner falls
+   * back to 100% only when that tier's friendly pass leaves an absolute
+   * shortfall.
    *
    * @default 90% (900000000000000000n)
    */
   readonly maxWithdrawalUtilization?: bigint;
 
   /**
-   * Maximum proportional vault-asset penalty accepted for each
-   * BluePublicAllocator call, scaled by WAD. Vaults with a higher configured
-   * penalty are ignored. Must not exceed WAD (100%).
+   * Maximum proportional vault-asset penalty accepted per call, scaled by
+   * WAD; higher-penalty vaults are ignored. Must not exceed WAD. Operation
+   * plans consider penalty tiers ascending, free first. Each tier uses friendly
+   * source utilization (90% by default) before 100%; positive tiers cover only
+   * the remaining absolute shortfall. Free capacity inside
+   * `allocatorCapHeadroom` stays unused, so a penalized leg can cover it.
+   * Getters count all vaults up to this limit. For `refinance`, compute the
+   * plan on the destination-market handle (for example,
+   * `client.morpho.blue(destination.marketParams, chainId)`), not the source
+   * handle. Pass the source position's `borrowAssets` accrued to
+   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
+   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * The planner includes the referral fee and its own allocator-leg penalties
+   * in destination debt, so penalized legs also cover their own penalty.
+   * Refinance never uses vaults with a 100% penalty.
    *
    * @default 0n
    */

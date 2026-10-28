@@ -1,5 +1,22 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.1.0
+
+### Minor Changes
+
+- `getPermit2PermitTypedData` now throws `Permit2ExpirationOutOfRangeError` when `expiration` is not an integer in the uint48 range, instead of silently capping it. Omitting `expiration` still signs the maximum uint48.
+
+### Patch Changes
+
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.0.2
+
 ## 7.0.0
 
 ### Major Changes

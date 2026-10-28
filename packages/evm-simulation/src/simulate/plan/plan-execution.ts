@@ -1,6 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-import { zeroAddress } from "viem";
 import type { SimulationTransaction } from "../../types.js";
 import type { ParsedRequest } from "../request/parse-request.js";
 import type { ReadPhase, StateRead } from "../state/contract.js";
@@ -49,11 +48,11 @@ export interface ExecutionPlan {
  * `assertBefore` reads, transaction, and `assertAfter` reads → every `after`
  * state read.
  *
- * Preparation calls run `from` the owner; state reads and assertion reads run
- * `from` `zeroAddress` and never receive a public `txIdx`.
+ * Preparation calls, state reads and assertion reads run `from` the owner and
+ * never receive a public `txIdx`.
  *
  * @param request - The parsed request.
- * @param owner - The bundle owner; sender of preparation calls.
+ * @param owner - The bundle owner; sender of preparation calls, state reads, derivation reads and assertion reads.
  * @param preparations - Ordered authorization preparations to simulate.
  * @param reads - The full state-read list, replayed at `before` and `after`.
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
@@ -82,7 +81,7 @@ export function planExecution(params: {
       phase: "before",
       read,
       transaction: {
-        from: zeroAddress,
+        from: owner,
         to: read.to,
         data: read.data,
         value: 0n,
@@ -109,7 +108,7 @@ export function planExecution(params: {
         phase: "before",
         assertionIndex,
         transaction: {
-          from: zeroAddress,
+          from: owner,
           to: assertion.to,
           data: assertion.data,
           value: 0n,
@@ -133,7 +132,7 @@ export function planExecution(params: {
         phase: "after",
         assertionIndex,
         transaction: {
-          from: zeroAddress,
+          from: owner,
           to: assertion.to,
           data: assertion.data,
           value: 0n,
@@ -148,7 +147,7 @@ export function planExecution(params: {
       phase: "after",
       read,
       transaction: {
-        from: zeroAddress,
+        from: owner,
         to: read.to,
         data: read.data,
         value: 0n,

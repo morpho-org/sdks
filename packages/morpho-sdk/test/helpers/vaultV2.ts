@@ -26,8 +26,9 @@ export async function createVaultV2(params: {
   client: AnvilTestClient;
   asset: Address;
   chainId: number;
+  salt?: Hex;
 }) {
-  const { client, asset, chainId } = params;
+  const { client, asset, chainId, salt = toHex(0n, { size: 32 }) } = params;
   const { vaultV2Factory } = getChainAddresses(chainId);
 
   if (!vaultV2Factory) {
@@ -38,7 +39,7 @@ export async function createVaultV2(params: {
     address: vaultV2Factory,
     abi: vaultV2FactoryAbi,
     functionName: "createVaultV2",
-    args: [client.account?.address, asset, toHex(0n, { size: 32 })],
+    args: [client.account?.address, asset, salt],
   });
 
   const txReceipt = await client.waitForTransactionReceipt({
@@ -81,15 +82,18 @@ export const submitAndAcceptVaultV2Call = async (
   await client.waitForTransactionReceipt({ hash });
 };
 
-export const deployVaultV2 = async (
-  client: AnvilTestClient,
-  asset: Address,
-) => {
+export const deployVaultV2 = async (params: {
+  readonly client: AnvilTestClient;
+  readonly asset: Address;
+  readonly salt?: Hex;
+}) => {
+  const { client, asset, salt } = params;
   await client.deal({ amount: parseEther("1") });
   const { address: vault } = await createVaultV2({
     client,
     asset,
     chainId: client.chain.id,
+    salt,
   });
   await client.writeContract({
     address: vault,
@@ -118,9 +122,14 @@ export const setUpSingleAdapterVaultV2 = async (
     readonly liquidityMarket?: MarketParams;
     readonly managementFee?: bigint;
     readonly maxRate?: bigint;
+    readonly salt?: Hex;
   },
 ) => {
-  const vault = await deployVaultV2(client, params.asset);
+  const vault = await deployVaultV2({
+    client,
+    asset: params.asset,
+    salt: params.salt,
+  });
   await submitAndAcceptVaultV2Call(client, {
     vault,
     data: encodeFunctionData({

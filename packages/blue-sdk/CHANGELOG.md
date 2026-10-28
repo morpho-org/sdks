@@ -1,5 +1,13 @@
 # @morpho-org/blue-sdk
 
+## 8.0.2
+
+### Patch Changes
+
+- Document that `VaultV2` / `AccrualVaultV2` state must come from `fetchVaultV2` /
+  `fetchAccrualVaultV2` unmodified, and that omitted fee-recipient `...CanReceiveShares` flags default
+  to `true`.
+
 ## 8.0.1
 
 ### Patch Changes

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import {
-  globSync,
+  existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -147,6 +148,21 @@ if (errors.length > 0) {
 
 if (compilerErrors.length > 0) process.exit(1);
 
+const queriesDir = join(packageDir, "src", "queries");
+const queriesStat = lstatSync(queriesDir, { throwIfNoEntry: false });
+const linkedEntries = !queriesStat
+  ? []
+  : queriesStat.isSymbolicLink()
+    ? [queriesDir]
+    : readdirSync(queriesDir, { recursive: true, withFileTypes: true })
+        .filter((entry) => !entry.isDirectory() && !entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name));
+if (linkedEntries.length > 0) {
+  throw new Error(
+    `Symlinks or special files under src/queries:\n${linkedEntries.map((file) => `- ${relative(workspaceRoot, file)}`).join("\n")}\nReplace them with regular files and directories so compile never writes outside src/queries.`,
+  );
+}
+
 const writtenFiles: string[] = [];
 
 for (const [sourceName, contracts] of Object.entries(output.contracts)) {
@@ -179,19 +195,52 @@ export const ${config.bytecodeExportName} =
 }
 
 const writtenFileSet = new Set(writtenFiles);
-for (const outputPath of globSync(
-  join(packageDir, "src", "queries", "**", "*.ts"),
-)) {
+const unexpectedFiles: string[] = [];
+for (const entry of existsSync(queriesDir)
+  ? readdirSync(queriesDir, { recursive: true, withFileTypes: true })
+  : []) {
+  if (entry.isDirectory()) continue;
+  const outputPath = join(entry.parentPath, entry.name);
+  // Defense in depth: the pre-write scan already rejects these.
+  if (!entry.isFile()) {
+    unexpectedFiles.push(relative(workspaceRoot, outputPath));
+    continue;
+  }
+  if (writtenFileSet.has(outputPath)) continue;
+
+  if (parse(outputPath).base === "index.ts") {
+    const barrelExports = readFileSync(outputPath, "utf8")
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== "");
+    if (
+      !barrelExports.every((line) =>
+        /^export \* (as [A-Za-z0-9_$]+ )?from "\.\/(?:[A-Za-z0-9_$-][A-Za-z0-9_$.-]*\/)*[A-Za-z0-9_$-][A-Za-z0-9_$.-]*\.js";$/.test(
+          line,
+        ),
+      )
+    ) {
+      unexpectedFiles.push(relative(workspaceRoot, outputPath));
+    }
+    continue;
+  }
+
   if (
-    parse(outputPath).base === "index.ts" ||
-    writtenFileSet.has(outputPath) ||
-    !readFileSync(outputPath, "utf8").startsWith(
+    parse(outputPath).ext === ".ts" &&
+    readFileSync(outputPath, "utf8").startsWith(
       `/** @internal ${config.describeArtifact(parse(outputPath).name)} ABI. */`,
     )
-  )
+  ) {
+    unlinkSync(outputPath);
     continue;
+  }
 
-  unlinkSync(outputPath);
+  unexpectedFiles.push(relative(workspaceRoot, outputPath));
+}
+
+if (unexpectedFiles.length > 0) {
+  throw new Error(
+    `Unexpected files under src/queries with no Solidity source in contracts/:\n${unexpectedFiles.map((file) => `- ${file}`).join("\n")}\nEvery shipped file there must be generated from a contract; delete them, add their .sol source, or move fixtures and helpers to test/ and tests to test/**/*.integration.test.ts.`,
+  );
 }
 
 if (writtenFiles.length > 0) {

@@ -49,6 +49,7 @@ import {
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
+import { validateMarketParamsId } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -86,10 +87,16 @@ import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 type VaultV2BlueReallocationsParams = {
   readonly reallocationData: VaultV2BlueReallocationData;
   readonly options?: VaultV2BluePublicAllocatorOptions & {
-    readonly operation?: {
-      readonly type: "borrow" | "withdraw";
-      readonly amount: bigint;
-    };
+    readonly operation?:
+      | {
+          readonly type: "borrow" | "withdraw";
+          readonly amount: bigint;
+        }
+      | {
+          readonly type: "refinance";
+          readonly amount: bigint;
+          readonly referralFeePct?: bigint;
+        };
   };
 };
 
@@ -889,7 +896,7 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {UnsupportedBlueMarketIrmError} when positive source or destination debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
-   * @throws {MarketIdMismatchError} when a position snapshot belongs to another market.
+   * @throws {MarketIdMismatchError} when `destination.marketParams.id` does not hash from its tuple fields, or a position snapshot belongs to another market.
    * @throws {AccrualPositionUserMismatchError} when a position snapshot belongs to another user.
    * @throws {RefinanceSameMarketError} when source and destination IDs match.
    * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
@@ -972,10 +979,13 @@ export interface BlueActions {
    *
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
    * vault's BluePublicAllocator permissions and allocation caps at one block.
+   * The snapshot keeps the fetched block's timestamp as its default planning time.
    *
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
-   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @param params.block.timestamp - Timestamp of the fetched block. Stored on the snapshot and used as the
+   *   planning timestamp when `options.timestamp` is omitted, never earlier than the latest market/vault
+   *   `lastUpdate`. An explicit `options.timestamp` is used as given.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client declares another chain or its RPC reports another
    *   chain via `eth_chainId`.
@@ -1009,14 +1019,23 @@ export interface BlueActions {
    * persist across every leg of a plan. Operation plans keep
    * `allocatorCapHeadroom` (1% of the cap by default) free under each target
    * BluePublicAllocator cap unless the operation shortfall needs it.
+   * For `refinance`, compute the plan on the destination-market handle (for
+   * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
+   * source-market handle. Pass the source position's `borrowAssets` accrued to
+   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
+   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * The planner includes the referral fee and its own planned allocator-leg
+   * penalties in destination debt. Refinance never uses vaults with a 100%
+   * penalty.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, or penalty limit is negative.
+   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
    * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
+   * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -1026,7 +1045,7 @@ export interface BlueActions {
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
-   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall and, for refinance, its planned allocator penalties.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
    * ```ts
@@ -1044,12 +1063,22 @@ export interface BlueActions {
 
 /** Binds a viem client to a Morpho Blue market's action builders. */
 export class MorphoBlue implements BlueActions {
+  /**
+   * Binds `client` to the market described by `marketParams` on `chainId`.
+   *
+   * @param client - Morpho client used for reads and requirement lookups.
+   * @param marketParams - Market params whose `id` must hash from their five tuple fields.
+   * @param chainId - Chain the market lives on.
+   * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     public readonly marketParams: MarketParams,
     private readonly chainId: number,
-  ) {}
+  ) {
+    validateMarketParamsId(marketParams);
+  }
 
   private validateDeadline(deadline: bigint, now = Time.timestamp()): void {
     if (deadline <= now) {
@@ -1926,6 +1955,7 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     this.validateWriteCommon(params);
+    validateMarketParamsId(destination.marketParams);
     // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
     // here, matching the pure action's normalization.
     const referralFeePct = params.referralFeePct ?? 0n;
@@ -2042,10 +2072,13 @@ export class MorphoBlue implements BlueActions {
    *
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
    * vault's BluePublicAllocator permissions and allocation caps at one block.
+   * The snapshot keeps the fetched block's timestamp as its default planning time.
    *
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
-   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @param params.block.timestamp - Timestamp of the fetched block. Stored on the snapshot and used as the
+   *   planning timestamp when `options.timestamp` is omitted, never earlier than the latest market/vault
+   *   `lastUpdate`. An explicit `options.timestamp` is used as given.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client declares another chain or its RPC reports another
    *   chain via `eth_chainId`.
@@ -2118,6 +2151,7 @@ export class MorphoBlue implements BlueActions {
 
     return new VaultV2BlueReallocationData({
       chainId: this.chainId,
+      timestamp: block.timestamp,
       markets: { [targetMarket.id]: targetMarket },
       vaults: Object.fromEntries(
         vaultEntries.map(({ vault }) => [vault.address, vault]),
@@ -2159,14 +2193,23 @@ export class MorphoBlue implements BlueActions {
    * persist across every leg of a plan. Operation plans keep
    * `allocatorCapHeadroom` (1% of the cap by default) free under each target
    * BluePublicAllocator cap unless the operation shortfall needs it.
+   * For `refinance`, compute the plan on the destination-market handle (for
+   * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
+   * source-market handle. Pass the source position's `borrowAssets` accrued to
+   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
+   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * The planner includes the referral fee and its own planned allocator-leg
+   * penalties in destination debt. Refinance never uses vaults with a 100%
+   * penalty.
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, or penalty limit is negative.
+   * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
    * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
+   * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -2176,7 +2219,7 @@ export class MorphoBlue implements BlueActions {
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
-   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall and, for refinance, its planned allocator penalties.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
    * ```ts

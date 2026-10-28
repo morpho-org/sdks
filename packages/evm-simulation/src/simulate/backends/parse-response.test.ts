@@ -3,7 +3,9 @@ import {
   encodeErrorResult,
   encodeFunctionResult,
   erc20Abi,
+  ethAddress,
   getAddress,
+  type Hex,
   numberToHex,
 } from "viem";
 import { describe, expect, test } from "vitest";
@@ -11,12 +13,18 @@ import {
   InvalidSimulationResponseError,
   isSimulationPackageError,
   SimulationAssertError,
+  SimulationLogAssertError,
   SimulationRevertedError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
-import type { SimulationTransaction } from "../../types.js";
+import type {
+  LogAssertion,
+  RawLog,
+  SimulationTransaction,
+} from "../../types.js";
 import { erc20BalanceAssertion } from "../assertions.js";
+import { parseTransfers, TRANSFER_TOPIC } from "../parsing/transfers.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { REVERT_ERRORS_ABI } from "./decode-revert.js";
@@ -97,6 +105,7 @@ const buildBlocks = (
       data?: `0x${string}`;
       errorData?: `0x${string}`;
       errorMessage?: string;
+      logs?: readonly RawLog[];
     }
   > = {},
 ) => [
@@ -117,7 +126,7 @@ const buildBlocks = (
         status: status === "success" ? "0x1" : "0x0",
         returnData: data,
         gasUsed: numberToHex(256n),
-        logs: [],
+        logs: override.logs ?? [],
         ...(status === "success"
           ? {}
           : {
@@ -265,6 +274,44 @@ describe("parseSimulationResponse", () => {
     });
   });
 
+  test("error: failing assertBefore prevents log assertions", () => {
+    let checked = false;
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+        assertLogs: [
+          {
+            check: () => {
+              checked = true;
+              return undefined;
+            },
+          },
+        ],
+      },
+    ]);
+    const assertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [assertionIndex]: { data: balanceHex(4n) },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(SimulationAssertError);
+    expect(error).toMatchObject({ phase: "before" });
+    expect(checked).toBe(false);
+  });
+
   test("error: transaction revert takes precedence over a failing assertAfter", () => {
     const plan = assertionPlan([
       {
@@ -295,6 +342,398 @@ describe("parseSimulationResponse", () => {
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect(error).not.toBeInstanceOf(SimulationAssertError);
     expect(error).toMatchObject({ transactionIndex: 0 });
+  });
+
+  test("error: transaction revert takes precedence over a failing log assertion", () => {
+    let checked = false;
+    const logAssertion: LogAssertion = {
+      check: () => {
+        checked = true;
+        return "Approval event is missing.";
+      },
+    };
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [logAssertion],
+      },
+    ]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    expect(() =>
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [transactionIndex]: { status: "failure" },
+        }),
+      ),
+    ).toThrow(SimulationRevertedError);
+    expect(checked).toBe(false);
+  });
+
+  test("error: failing log assertion takes precedence over a failing assertAfter", () => {
+    const logAssertion: LogAssertion = {
+      check: () => "Approval event is missing.",
+    };
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [logAssertion],
+        assertAfter: [balanceAssertion(5n)],
+      },
+    ]);
+    const afterAssertionIndex = plan.calls.findIndex(
+      (call) => call.type === "assertion" && call.phase === "after",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [afterAssertionIndex]: { data: balanceHex(4n) },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      message: "Transaction 0 assertLogs[0] failed: Approval event is missing.",
+      transactionIndex: 0,
+      assertionIndex: 0,
+      assertion: logAssertion,
+      logs: [],
+    });
+  });
+
+  test("error: reports log assertion indices after earlier checks", () => {
+    const order: string[] = [];
+    const logAssertion = (label: string, failure?: string): LogAssertion => ({
+      check: () => {
+        order.push(label);
+        return failure;
+      },
+    });
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [logAssertion("tx0/a0"), logAssertion("tx0/a1")],
+      },
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [logAssertion("tx1/a0"), logAssertion("tx1/a1", "failure")],
+      },
+    ]);
+    let error: unknown;
+    try {
+      parse(plan, buildBlocks(plan));
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({ transactionIndex: 1, assertionIndex: 1 });
+    expect((error as Error).message).toContain("Transaction 1 assertLogs[1]");
+    expect(order).toEqual(["tx0/a0", "tx0/a1", "tx1/a0", "tx1/a1"]);
+  });
+
+  test("behavior: log assertions receive only their transaction's logs", () => {
+    const firstLog: RawLog = { address: TOKEN, topics: [], data: "0x" };
+    const secondLog: RawLog = { address: TARGET, topics: [], data: "0x" };
+    const received: (readonly RawLog[])[] = [];
+    const firstAssertion: LogAssertion = {
+      check: (logs) => {
+        received.push(logs);
+        return undefined;
+      },
+    };
+    const secondAssertion: LogAssertion = {
+      check: (logs) => {
+        received.push(logs);
+        return undefined;
+      },
+    };
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [firstAssertion],
+      },
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [secondAssertion],
+      },
+    ]);
+    const firstTransactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 0,
+    );
+    const secondTransactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 1,
+    );
+    const execution = parse(
+      plan,
+      buildBlocks(plan, {
+        [firstTransactionIndex]: { logs: [firstLog] },
+        [secondTransactionIndex]: { logs: [secondLog] },
+      }),
+    );
+    expect(received).toEqual([
+      [{ ...firstLog, address: firstLog.address.toLowerCase() }],
+      [{ ...secondLog, address: secondLog.address.toLowerCase() }],
+    ]);
+    expect(
+      execution.calls
+        .filter((call) => call.planned.type === "transaction")
+        .map((call) => call.result.logs),
+    ).toEqual([[firstLog], [secondLog]]);
+  });
+
+  test("behavior: assertLogs preserves mixed-case synthetic native and ERC-20 logs in emission order", () => {
+    const topicFor = (address: Address): Hex =>
+      `0x${address.slice(2).toUpperCase().padStart(64, "0")}`;
+    const mixedTransferTopic =
+      `0x${TRANSFER_TOPIC.slice(2).toUpperCase()}` as Hex;
+    const emittedLogs: RawLog[] = [
+      {
+        address: TOKEN,
+        topics: [mixedTransferTopic, topicFor(OWNER), topicFor(TARGET)],
+        data: `0x${"AB".repeat(32)}` as Hex,
+      },
+      {
+        address: ethAddress,
+        topics: [mixedTransferTopic, topicFor(TARGET), topicFor(TOKEN)],
+        data: `0x${"CD".repeat(32)}` as Hex,
+      },
+      {
+        address: TARGET,
+        topics: [mixedTransferTopic, topicFor(TOKEN), topicFor(OWNER)],
+        data: `0x${"EF".repeat(32)}` as Hex,
+      },
+    ];
+    let receivedLogs: readonly RawLog[] | undefined;
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [
+          {
+            check: (logs) => {
+              receivedLogs = logs;
+              return undefined;
+            },
+          },
+        ],
+      },
+    ]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+
+    parse(
+      plan,
+      buildBlocks(plan, {
+        [transactionIndex]: { logs: emittedLogs },
+      }),
+    );
+
+    expect(receivedLogs).toEqual(
+      emittedLogs.map(({ address, topics, data }) => ({
+        address: address.toLowerCase(),
+        topics: topics.map((topic) => topic.toLowerCase()),
+        data: data.toLowerCase(),
+      })),
+    );
+  });
+
+  test("error: assertLogs requires logs in the transaction result", () => {
+    let checked = false;
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [
+          {
+            check: () => {
+              checked = true;
+              return undefined;
+            },
+          },
+        ],
+      },
+    ]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    const blocks = buildBlocks(plan);
+    Reflect.deleteProperty(blocks[0]!.calls[transactionIndex]!, "logs");
+
+    expect(() => parse(plan, blocks)).toThrow(
+      expect.objectContaining({
+        name: "InvalidSimulationResponseError",
+        message:
+          "eth_simulateV1 omitted logs for transaction 0. Log assertions cannot be evaluated.",
+      }),
+    );
+    expect(checked).toBe(false);
+  });
+
+  test("behavior: missing logs without assertLogs still normalizes to an empty array", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+      },
+    ]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    const blocks = buildBlocks(plan);
+    Reflect.deleteProperty(blocks[0]!.calls[transactionIndex]!, "logs");
+
+    const execution = parse(plan, blocks);
+
+    expect(
+      execution.calls.find(({ planned }) => planned.type === "transaction")
+        ?.result.logs,
+    ).toEqual([]);
+  });
+
+  test("behavior: checks receive a frozen lowercase copy without changing calls or transfers", () => {
+    const recipient = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+    const mixedCaseLog: RawLog = {
+      address: TOKEN,
+      topics: [
+        `0x${TRANSFER_TOPIC.slice(2).toUpperCase()}` as Hex,
+        `0x${TOKEN.slice(2).toUpperCase().padStart(64, "0")}` as Hex,
+        `0x${recipient.slice(2).toUpperCase().padStart(64, "0")}` as Hex,
+      ],
+      data: `0x${"AB".repeat(32)}` as Hex,
+    };
+    let receivedLogs: readonly RawLog[] | undefined;
+    let secondReceivedLogs: readonly RawLog[] | undefined;
+    const transaction: SimulationTransaction = {
+      from: OWNER,
+      to: TARGET,
+      data: "0x12345678",
+    };
+    const plan = assertionPlan([
+      {
+        ...transaction,
+        assertLogs: [
+          {
+            check: (logs) => {
+              receivedLogs = logs;
+              return undefined;
+            },
+          },
+          {
+            check: (logs) => {
+              secondReceivedLogs = logs;
+              return undefined;
+            },
+          },
+        ],
+      },
+    ]);
+    const baselinePlan = assertionPlan([transaction]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    const baselineTransactionIndex = baselinePlan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    const execution = parse(
+      plan,
+      buildBlocks(plan, {
+        [transactionIndex]: { logs: [mixedCaseLog] },
+      }),
+    );
+    const baseline = parse(
+      baselinePlan,
+      buildBlocks(baselinePlan, {
+        [baselineTransactionIndex]: { logs: [mixedCaseLog] },
+      }),
+    );
+
+    expect(receivedLogs).toEqual([
+      {
+        address: TOKEN.toLowerCase(),
+        topics: mixedCaseLog.topics.map((topic) => topic.toLowerCase()),
+        data: mixedCaseLog.data.toLowerCase(),
+      },
+    ]);
+    expect(Object.isFrozen(receivedLogs)).toBe(true);
+    expect(Object.isFrozen(receivedLogs?.[0])).toBe(true);
+    expect(Object.isFrozen(receivedLogs?.[0]?.topics)).toBe(true);
+    expect(secondReceivedLogs).toBe(receivedLogs);
+    const transactionCalls = execution.calls.filter(
+      (call) => call.planned.type === "transaction",
+    );
+    const baselineTransactionCalls = baseline.calls.filter(
+      (call) => call.planned.type === "transaction",
+    );
+    expect(transactionCalls.map(({ result }) => result.logs)).toEqual([
+      [mixedCaseLog],
+    ]);
+    expect(transactionCalls.map(({ result }) => result.logs)).toEqual(
+      baselineTransactionCalls.map(({ result }) => result.logs),
+    );
+    expect(parseTransfers(execution.calls.map(({ result }) => result))).toEqual(
+      parseTransfers(baseline.calls.map(({ result }) => result)),
+    );
+  });
+
+  test("error: mutating log assertion input preserves the frozen copy and TypeError cause", () => {
+    const log: RawLog = { address: TOKEN, topics: [], data: "0xAB" as Hex };
+    const assertion: LogAssertion = {
+      check: (logs) => {
+        (logs as RawLog[]).push(log);
+        return undefined;
+      },
+    };
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [assertion],
+      },
+    ]);
+    const transactionIndex = plan.calls.findIndex(
+      (call) => call.type === "transaction",
+    );
+    let error: unknown;
+    try {
+      parse(
+        plan,
+        buildBlocks(plan, {
+          [transactionIndex]: { logs: [log] },
+        }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({
+      cause: expect.any(TypeError),
+      logs: [{ address: TOKEN.toLowerCase(), data: "0xab" }],
+    });
   });
 
   test("error: passing assertBefore preserves the transaction UNKNOWN_REVERT", () => {
@@ -932,6 +1371,29 @@ describe("parseSimulationResponse", () => {
     const blocks = buildBlocks(plan);
     blocks[0]!.calls.pop();
     expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+  });
+
+  test("error: reports a missing transaction result when call counts match", () => {
+    const plan = assertionPlan([
+      { from: OWNER, to: TARGET, data: "0x12345678" },
+    ]);
+    const incompletePlan = {
+      ...plan,
+      calls: plan.calls.filter((call) => call.type !== "transaction"),
+    };
+    const blocks = buildBlocks(incompletePlan);
+
+    expect(blocks[0]?.calls).toHaveLength(incompletePlan.calls.length);
+    let error: unknown;
+    try {
+      parse(incompletePlan, blocks);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect((error as Error).message).toBe(
+      "eth_simulateV1 plan is missing transaction result 0.",
+    );
   });
 
   test("error: InvalidSimulationResponseError for a block beyond the successor", () => {

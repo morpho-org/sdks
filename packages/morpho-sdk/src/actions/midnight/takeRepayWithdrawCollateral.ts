@@ -106,6 +106,7 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @throws {MidnightTakeableOfferZeroSellerReceiverError} when any offer routes seller proceeds to the zero address.
  * @throws {UnknownCollateralIndexError} when a withdrawal targets a collateral index not configured on the market.
  * @throws {NonPositiveInputError} when the target amount, `minUnits`, `maxBuyerAssets`, a
  *   withdrawal amount or `deadline` is not positive.

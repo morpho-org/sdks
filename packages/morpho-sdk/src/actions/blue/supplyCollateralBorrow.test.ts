@@ -1,4 +1,4 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -17,6 +17,7 @@ import {
   type AuthorizationRequirementSignature,
   type BundlesTokenRequirementSignature,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   NativeFundingAmountMismatchError,
   NegativeInputError,
   NonPositiveInputError,
@@ -24,6 +25,8 @@ import {
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { blueBorrow } from "./borrow.js";
+import { blueSupplyCollateral } from "./supplyCollateral.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 const chainId = mainnet.id;
@@ -508,5 +511,47 @@ describe("blueSupplyCollateralBorrow — action metadata", () => {
     expect(transaction.action.args.reallocationPenaltyAssets).toBe(10n);
     // 10% fee on the 100 - 10 net borrow.
     expect(transaction.action.args.referralFeeAssets).toBe(9n);
+  });
+});
+
+describe("blueSupplyCollateralBorrow market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+  const staleMarket = {
+    chainId,
+    marketParams: withStaleId(
+      new MarketParams({
+        ...marketParamsInput,
+        oracle: getAddress("0x0000000000000000000000000000000000000023"),
+      }),
+      marketParams.id,
+    ),
+  };
+
+  test("error: rejects market params whose id does not hash from the tuple", () => {
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market: staleMarket,
+        args: {
+          userAddress,
+          collateralAssets: 5n,
+          borrowAssets: 7n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(MarketIdMismatchError);
+    expect(() =>
+      blueBorrow({
+        market: staleMarket,
+        args: { userAddress, borrowAssets: 7n, maxLtv, deadline },
+      }),
+    ).toThrow(MarketIdMismatchError);
+    expect(() =>
+      blueSupplyCollateral({
+        market: staleMarket,
+        args: { userAddress, collateralAssets: 5n, deadline },
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

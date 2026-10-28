@@ -12,6 +12,7 @@ import {
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
+  SimulationLogAssertError,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
@@ -40,6 +41,12 @@ const ASSERTION_FAILURE = {
 const errors = [
   new SimulationRevertedError("reverted"),
   new SimulationAssertError("assertion failed", ASSERTION_FAILURE),
+  new SimulationLogAssertError("log assertion failed", {
+    transactionIndex: 0,
+    assertionIndex: 0,
+    assertion: { check: () => "failed" },
+    logs: [],
+  }),
   new BlacklistViolationError("retained"),
   new SimulationValidationError("invalid"),
   new UnsupportedChainError(1),
@@ -157,6 +164,15 @@ describe("error names match class names", () => {
       expected: "SimulationAssertError",
     },
     {
+      error: new SimulationLogAssertError("log assertion failed", {
+        transactionIndex: 0,
+        assertionIndex: 0,
+        assertion: { check: () => "failed" },
+        logs: [],
+      }),
+      expected: "SimulationLogAssertError",
+    },
+    {
       error: new BlacklistViolationError("x"),
       expected: "BlacklistViolationError",
     },
@@ -179,6 +195,32 @@ describe("SimulationAssertError", () => {
     expect(
       new SimulationAssertError("assertion failed", ASSERTION_FAILURE),
     ).not.toBeInstanceOf(SimulationRevertedError);
+  });
+});
+
+describe("SimulationLogAssertError", () => {
+  test("copies the assertion and logs while preserving coordinates", () => {
+    const assertion = { check: () => "failed" };
+    const logs = [] as const;
+    const error = new SimulationLogAssertError("log assertion failed", {
+      transactionIndex: 1,
+      assertionIndex: 2,
+      assertion,
+      logs,
+    });
+    expect(error).toMatchObject({
+      name: "SimulationLogAssertError",
+      code: "SIMULATION_ASSERT_FAILED",
+      transactionIndex: 1,
+      assertionIndex: 2,
+      assertion,
+      logs,
+    });
+    expect(error.assertion).not.toBe(assertion);
+    expect(error.logs).not.toBe(logs);
+    expect(SIMULATION_ERROR_CODES).not.toContain(
+      "SIMULATION_LOG_ASSERT_FAILED",
+    );
   });
 });
 
@@ -245,6 +287,11 @@ describe("isSimulationPackageError", () => {
     {},
     { name: "SimulationRevertedError", code: "SIMULATION_REVERTED" },
     { name: "SimulationRevertedError", code: "UNKNOWN", message: "failure" },
+    {
+      name: "SimulationLogAssertError",
+      code: "SIMULATION_REVERTED",
+      message: "failure",
+    },
     {
       name: "RpcTransportError",
       code: "SIMULATION_REVERTED",

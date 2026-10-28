@@ -84,7 +84,14 @@ export interface MakeOffersParams {
 /** Parameters for a Midnight lend maker flow. */
 export interface MakeLendParams extends MakeOffersParams {
   readonly loanToken: Address;
-  /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
+  /**
+   * Minimum Midnight loan-token allowance, together with `reservedLoanAssets`, that `getRequirements()` checks.
+   * When the allowance is lower, it returns an unlimited approval (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`).
+   * Not checked against the offers: their signed `maxAssets`/`maxUnits` caps, the maker's balance and the
+   * allowance bound what takers can fill, so size those caps to what you mean to lend
+   * (`maxAssets` counts loan assets, `maxUnits` counts position units).
+   * For grouped OCA offers, pass the group amount once instead of summing every leg.
+   */
   readonly loanAssets: bigint;
   /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. Leave out groups listed in `cancellations`; this transaction cancels them. */
   readonly reservedLoanAssets?: bigint;
@@ -96,7 +103,7 @@ export interface SupplyBlueMakeLendParams extends MakeOffersParams {
    * Morpho Blue market the parked assets are supplied to; its loan token must match every offer.
    * The contract does not check supply share-price slippage: use only markets protected against
    * supply-share-price inflation. Markets with no supply shares or parked amounts that mint zero
-   * shares are rejected.
+   * shares are rejected (checked at preparation time; see `supplyBlueMakeLend`).
    */
   readonly blueMarket: BlueMarketParams;
   /** Loan assets pulled from the maker and supplied to `blueMarket` for the maker's callback. */

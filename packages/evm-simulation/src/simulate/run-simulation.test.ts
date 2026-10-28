@@ -9,11 +9,15 @@ import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
   encodeFunctionResult,
   erc20Abi,
+  ethAddress,
   type Hex,
   isAddressEqual,
   numberToHex,
+  parseAbi,
   zeroAddress,
 } from "viem";
 import { base } from "viem/chains";
@@ -28,12 +32,18 @@ import {
   UnsupportedChainError,
 } from "../errors.js";
 import type { StateBlock } from "../params.js";
-import type { SimulationConfig, SimulationTransaction } from "../types.js";
+import { encodeUint256, padAddress } from "../test-helpers/index.js";
+import type {
+  RawLog,
+  SimulationConfig,
+  SimulationTransaction,
+} from "../types.js";
 import type { executePlan } from "./backends/index.js";
 import type { SimulationExecution } from "./backends/parse-response.js";
+import { TRANSFER_TOPIC, WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import type { ExecutionPlan, PlannedCall } from "./plan/plan-execution.js";
 import { parseRequest } from "./request/parse-request.js";
-import { runSimulation } from "./run-simulation.js";
+import { NO_WNATIVE_MIRROR_WRAPPERS, runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
 
 const mockExecutePlan = vi.fn<typeof executePlan>();
@@ -162,6 +172,112 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
+  test.each([
+    "erc20",
+    "native",
+    "deposit",
+    "withdrawal",
+    "malformed",
+    "four-topic",
+    "approval",
+    "empty",
+  ] as const)("preview preparation transfer guard: %s", async (kind) => {
+    stubFetch([]);
+    const addresses = getChainAddresses(ChainId.BaseMainnet);
+    const transfers = kind !== "approval" && kind !== "empty";
+    const log =
+      kind === "deposit" || kind === "withdrawal"
+        ? {
+            address: addresses.wNative!,
+            topics: encodeEventTopics({
+              abi: parseAbi([
+                "event Deposit(address indexed account, uint256 amount)",
+                "event Withdrawal(address indexed account, uint256 amount)",
+              ]),
+              eventName: kind === "deposit" ? "Deposit" : "Withdrawal",
+              args: { account: OWNER },
+            }),
+            data: encodeAbiParameters([{ type: "uint256" }], [400n]),
+          }
+        : {
+            address: kind === "native" ? ethAddress : TARGET,
+            topics: encodeEventTopics({
+              abi: erc20Abi,
+              eventName: kind === "approval" ? "Approval" : "Transfer",
+              args:
+                kind === "approval"
+                  ? { owner: OWNER, spender: TARGET }
+                  : { from: OWNER, to: TARGET },
+            }),
+            data: encodeAbiParameters([{ type: "uint256" }], [400n]),
+          };
+    mockExecutePlan.mockImplementation(async ({ plan, stateBlock }) => {
+      const baseExecution = execution(plan, stateBlock);
+      const planned = plan.calls.find((call) => call.type === "preparation")!;
+      return {
+        ...baseExecution,
+        calls: [
+          {
+            planned,
+            result: {
+              status: true,
+              gasUsed: 21_000n,
+              returnData: "0x",
+              logs:
+                kind === "empty"
+                  ? []
+                  : [
+                      {
+                        ...log,
+                        topics: [
+                          ...log.topics.filter(
+                            (topic): topic is Hex => typeof topic === "string",
+                          ),
+                          ...(kind === "four-topic"
+                            ? [numberToHex(400n, { size: 32 })]
+                            : []),
+                        ],
+                        data: kind === "malformed" ? "0x" : log.data,
+                      },
+                    ],
+            },
+          },
+          ...baseExecution.calls,
+        ],
+      };
+    });
+    const result = simulate(
+      { chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]) },
+      {
+        chainId: ChainId.BaseMainnet,
+        mode: "preview",
+        limits: "none",
+        authorizations: [
+          {
+            type: "erc20Approval",
+            owner: OWNER,
+            token: TARGET,
+            spender: TARGET,
+            amount: 1n,
+          },
+        ],
+        transactions: [TRANSACTION],
+      },
+    );
+    if (transfers) {
+      await expect(result).rejects.toBeInstanceOf(SimulationValidationError);
+      await expect(result).rejects.toMatchObject({
+        message:
+          'Preview authorization "0" preparation call "0" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.',
+      });
+    } else {
+      const output = await result;
+      expect(output.transfers).toEqual([]);
+      expect(output.calls).toHaveLength(1);
+      expect(output.verification.authorizations).toHaveLength(1);
+    }
+  });
+
   test.each([
     { label: "owner sends ETH", value: 1n, from: OWNER, guard: true },
     { label: "owner sends no ETH", value: 0n, from: OWNER, guard: false },
@@ -617,6 +733,130 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
+  });
+
+  test("behavior: deduplicates a mirror wrapper on a registered chain outside the no-mirror map", async () => {
+    const amount = 1_000n;
+    const addresses = getChainAddresses(ChainId.ScrollMainnet)!;
+    const token = addresses.wNative!;
+    const logs: RawLog[] = [
+      {
+        address: token,
+        topics: [WITHDRAWAL_TOPIC, padAddress(OWNER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: token,
+        topics: [TRANSFER_TOPIC, padAddress(OWNER), padAddress(zeroAddress)],
+        data: encodeUint256(amount),
+      },
+    ];
+    const mockClient = createMockClient(base);
+    stubFetch([], "0x6000", ChainId.ScrollMainnet, mockClient);
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+      const result = execution(plan, stateBlock);
+      return {
+        ...result,
+        calls: result.calls.map((call, index) =>
+          index === 0 ? { ...call, result: { ...call.result, logs } } : call,
+        ),
+      };
+    });
+
+    const result = await simulate(
+      {
+        chains: new Map([[ChainId.ScrollMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.ScrollMainnet,
+        limits: "none",
+        transactions: [TRANSACTION],
+      },
+    );
+
+    expect(result.transfers).toEqual([
+      {
+        token,
+        from: OWNER,
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+    ]);
+    expect(result.assetChanges).toContainEqual({
+      account: OWNER,
+      changes: [{ token, diff: -amount }],
+    });
+  });
+
+  test("behavior: no-mirror wrapper entries match registered wNative addresses", () => {
+    for (const [chainId, wrapperAddress] of NO_WNATIVE_MIRROR_WRAPPERS) {
+      const wNative = getChainAddresses(chainId as ChainId)?.wNative;
+      expect(wNative).toBeDefined();
+      if (wNative === undefined) continue;
+      expect(isAddressEqual(wNative, wrapperAddress)).toBe(true);
+    }
+  });
+
+  test("behavior: keeps a Withdrawal and zero-address Transfer on Base", async () => {
+    const amount = 1_000n;
+    const token = getChainAddresses(ChainId.BaseMainnet)!.wNative!;
+    expect(token).toBe("0x4200000000000000000000000000000000000006");
+    const logs: RawLog[] = [
+      {
+        address: token,
+        topics: [WITHDRAWAL_TOPIC, padAddress(OWNER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: token,
+        topics: [TRANSFER_TOPIC, padAddress(OWNER), padAddress(zeroAddress)],
+        data: encodeUint256(amount),
+      },
+    ];
+    const mockClient = createMockClient(base);
+    stubFetch([], "0x6000", ChainId.BaseMainnet, mockClient);
+    mockExecutePlan.mockImplementationOnce(async ({ plan, stateBlock }) => {
+      const result = execution(plan, stateBlock);
+      return {
+        ...result,
+        calls: result.calls.map((call, index) =>
+          index === 0 ? { ...call, result: { ...call.result, logs } } : call,
+        ),
+      };
+    });
+
+    const result = await simulate(
+      {
+        chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+      },
+      {
+        chainId: ChainId.BaseMainnet,
+        limits: "none",
+        transactions: [TRANSACTION],
+      },
+    );
+
+    expect(result.transfers).toEqual([
+      {
+        token,
+        from: OWNER,
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+      {
+        token,
+        from: OWNER,
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+    ]);
+    expect(result.assetChanges).toContainEqual({
+      account: OWNER,
+      changes: [{ token, diff: -2n * amount }],
+    });
   });
 
   test("error: Blue parking requires registered protocol addresses", async () => {

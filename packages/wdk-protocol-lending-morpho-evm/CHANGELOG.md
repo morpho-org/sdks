@@ -1,5 +1,29 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.1.0
+
+### Minor Changes
+
+- Reject ERC-4337 token-paymaster operations whose fee-token approval targets a spender other than the configured `paymasterAddress`. Write methods now throw the new `PaymasterApprovalSpenderMismatchError` before signing. If the installed WDK or AbstractionKit no longer exposes the hooks this check relies on, token-paymaster writes throw `PaymasterApprovalGuardUnavailableError` instead of skipping it.
+
+  WDK checked only the paymaster in the final paymaster response, while the approval spender came from the earlier paymaster quote, so a quote naming another address could still receive the Safe's fee-token allowance.
+
+- On Optimism and Base, EOA submissions whose execution, L1 data, and operator fees exceed `transactionMaxFee` throw the re-exported `MaximumFeeExceededError`. Invalid `transactionMaxFee` configuration is rejected with `InvalidTransactionMaxFeeError`.
+
+### Patch Changes
+
+- Concurrent EOA writes from the same account are now sent one at a time so each gets its own nonce instead of reusing the pending one.
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.1.0
+  - @morpho-org/blue-sdk-viem@7.1.0
+  - @morpho-org/blue-sdk@8.0.2
+
 ## 4.0.0
 
 ### Major Changes

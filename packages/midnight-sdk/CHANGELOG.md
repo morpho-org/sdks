@@ -1,5 +1,17 @@
 # @morpho-org/midnight-sdk
 
+## 2.2.1
+
+### Patch Changes
+
+- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- Reject Midnight sell offers that send seller proceeds to the zero address:
+
+  - `MidnightApi.fetchBookQuote`, `fetchBookTakeableOffers` and `fetchTakeableOffers` (static and instance) throw `InvalidMidnightApiResponseError` when a returned sell offer has `receiverIfMakerIsSeller` set to `zeroAddress`.
+  - `takeLend` and `takeRepayWithdrawCollateral` (entity methods and `midnightTakeLend` / `midnightTakeRepayWithdrawCollateral` builders) throw the new `MidnightTakeableOfferZeroSellerReceiverError` for such an offer.
+
+  With a token that accepts transfers to the zero address, taking such an offer burned the taker's principal while the protocol still recorded the position.
+
 ## 2.2.0
 
 ### Minor Changes

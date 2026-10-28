@@ -33,7 +33,7 @@ import {
   isAddressEqual,
   zeroAddress,
 } from "viem";
-import { getChainId, readContract } from "viem/actions";
+import { getBlockNumber, getChainId, readContract } from "viem/actions";
 import {
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
@@ -431,8 +431,10 @@ export async function fetchVaultV2(
  * `MorphoMarketV1AdapterV2`. Calling `maxDeposit` on the returned `AccrualVaultV2` therefore throws
  * `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2 market adapter liquidity adapter.
  * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
- * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
- * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
+ * fallback or `deployless: false` first resolves the latest block number and pins every read to it,
+ * so the snapshot is block-consistent at the cost of one extra `eth_blockNumber` call. Other block
+ * tags are passed through unpinned; pass an explicit `blockNumber` for a block-consistent snapshot
+ * with them.
  *
  * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
  * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
@@ -501,15 +503,27 @@ export async function fetchAccrualVaultV2(
     }
   }
 
+  let readParameters = parameters;
+  if (
+    parameters.blockNumber == null &&
+    (parameters.blockTag ?? "latest") === "latest"
+  ) {
+    const { blockTag: _blockTag, ...rest } = parameters;
+    readParameters = {
+      ...rest,
+      blockNumber: await getBlockNumber(client, { cacheTime: 0 }),
+    };
+  }
+
   const vaultV2 = await fetchVaultV2(address, client, {
-    ...parameters,
+    ...readParameters,
     deployless,
   });
 
   const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
     [
       readContract(client, {
-        ...parameters,
+        ...readParameters,
         address: vaultV2.asset,
         abi: erc20Abi,
         functionName: "balanceOf",
@@ -517,18 +531,18 @@ export async function fetchAccrualVaultV2(
       }),
       vaultV2.liquidityAdapter !== zeroAddress
         ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, {
-            ...parameters,
+            ...readParameters,
             deployless,
           })
         : undefined,
       ...vaultV2.adapters.map(async (adapter) => {
         const [accrualAdapter, forceDeallocatePenalty] = await Promise.all([
           fetchAccrualVaultV2Adapter(adapter, client, {
-            ...parameters,
+            ...readParameters,
             deployless,
           }),
           readContract(client, {
-            ...parameters,
+            ...readParameters,
             address,
             abi: vaultV2Abi,
             functionName: "forceDeallocatePenalty",

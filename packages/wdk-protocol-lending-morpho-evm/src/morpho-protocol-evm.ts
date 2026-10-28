@@ -24,6 +24,7 @@ import {
   VaultAssetMismatchError,
   type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+import { MaximumFeeExceededError } from "@tetherto/wdk-wallet";
 import type {
   BorrowResult,
   RepayResult,
@@ -63,19 +64,25 @@ import {
   keccak256,
   maxUint256,
   type PublicActions,
+  parseAbi,
   parseTransaction,
   publicActions,
   RpcRequestError,
+  serializeTransaction,
   TimeoutError,
   TransactionNotFoundError,
   type Transport,
   zeroAddress,
 } from "viem";
+import { readContract } from "viem/actions";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   InvalidTransactionHashError,
+  InvalidTransactionMaxFeeError,
   MissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
 } from "./errors.js";
 import {
@@ -84,6 +91,12 @@ import {
   MORPHO_VAULT_PRESETS,
   type VaultPresetKey,
 } from "./morpho-presets.js";
+
+/** @internal */
+export const GAS_PRICE_ORACLE_ABI = parseAbi([
+  "function getL1Fee(bytes data) view returns (uint256)",
+  "function getOperatorFee(uint256 gasUsed) view returns (uint256)",
+]);
 
 /** An EVM wallet account (read-only, signer, or ERC-4337) usable with the Morpho protocol methods. */
 export type MorphoEvmAccount =
@@ -128,6 +141,9 @@ const NETWORK_ERROR_CODES = new Set([
 ]);
 
 const GATEWAY_UNCERTAIN_STATUSES = new Set([502, 504, 524]);
+
+// Serializes EOA sends per chain and address: concurrent sends would otherwise read the same pending nonce.
+const eoaSendQueues = new Map<string, Promise<void>>();
 
 /** Mirrors the default `retries` of WDK's `FailoverProvider` (@tetherto/wdk-wallet-evm). */
 const DEFAULT_RETRIES = 3;
@@ -366,6 +382,13 @@ export interface PreparedMorphoSupply {
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -509,6 +532,13 @@ export interface PreparedMorphoWithdraw {
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @example
    * ```ts
    * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -911,7 +941,8 @@ function toWdkTransaction(tx: {
  *
  * Wraps `@morpho-org/morpho-sdk` to expose Morpho Vault V2 earn flows and
  * Morpho Blue market borrow/repay flows through the WDK
- * {@link LendingProtocol} contract.
+ * {@link LendingProtocol} contract. Concurrent EOA sends are serialized per
+ * chain and address within one loaded copy of this package.
  */
 export default class MorphoProtocolEvm extends LendingProtocol {
   /**
@@ -1209,12 +1240,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when configuration, the wallet balance, or submission is invalid.
    * @example
    * ```ts
@@ -1497,7 +1535,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @example
    * ```ts
    * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1731,12 +1776,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -1938,12 +1990,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -2179,12 +2238,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -2431,12 +2497,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
+   * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
    *   rejected send is not found. ERC-4337 bundler errors are rethrown unchanged.
    * @throws {InvalidTransactionHashError} when the wallet returns a malformed hash; ERC-4337 errors
    *   include a hint when the user operation may already be in flight.
+   * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
+   *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
+   *   write runs against a WDK or AbstractionKit that no longer exposes the hook
+   *   the approval check relies on.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -3239,6 +3312,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
           : {}),
         ...config,
       };
+      const isTokenPaymaster =
+        !(
+          "useNativeCoins" in effectiveConfig && effectiveConfig.useNativeCoins
+        ) && !("isSponsored" in effectiveConfig && effectiveConfig.isSponsored);
+      if (
+        isTokenPaymaster &&
+        typeof Reflect.get(account, "_getSmartAccount") !== "function"
+      )
+        throw new PaymasterApprovalGuardUnavailableError("_getSmartAccount");
       const hasNonceLane =
         ("nonceKey" in effectiveConfig &&
           effectiveConfig.nonceKey !== undefined &&
@@ -3250,14 +3332,80 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       const operationConfig = hasNonceLane
         ? config
         : { ...config, nonceKey: 0n };
-      // WDK reads this protected hook while signing. Bind it to the validated
-      // context so a provider switch cannot change the signature domain.
+      const paymasterAddress =
+        "paymasterAddress" in effectiveConfig
+          ? effectiveConfig.paymasterAddress
+          : undefined;
+      // WDK reads these protected hooks while signing. Bind the chain to the
+      // validated context so a provider switch cannot change the signature
+      // domain, and the fee-token approval to the configured paymaster.
       const chainBoundAccount = new Proxy(account, {
         // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
         get(target, property, receiver) {
-          return property === "_getChainId"
-            ? async () => BigInt(prepared.context.chainId)
-            : Reflect.get(target, property, receiver);
+          if (property === "_getChainId")
+            return async () => BigInt(prepared.context.chainId);
+          const value: unknown = Reflect.get(target, property, receiver);
+          if (property !== "_getSmartAccount" || typeof value !== "function")
+            return value;
+          return async (...args: unknown[]) => {
+            const smartAccount: unknown = await Reflect.apply(
+              value,
+              receiver,
+              args,
+            );
+            if (typeof smartAccount !== "object" || smartAccount === null) {
+              if (isTokenPaymaster)
+                throw new PaymasterApprovalGuardUnavailableError(
+                  "_getSmartAccount",
+                );
+              return smartAccount;
+            }
+            if (
+              isTokenPaymaster &&
+              typeof Reflect.get(
+                smartAccount,
+                "prependTokenPaymasterApproveToCallData",
+              ) !== "function"
+            )
+              throw new PaymasterApprovalGuardUnavailableError(
+                "prependTokenPaymasterApproveToCallData",
+              );
+            // AbstractionKit takes the approval spender from the paymaster quote.
+            return new Proxy(smartAccount, {
+              // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
+              get(innerTarget, innerProperty, innerReceiver) {
+                const method: unknown = Reflect.get(
+                  innerTarget,
+                  innerProperty,
+                  innerReceiver,
+                );
+                if (
+                  innerProperty !== "prependTokenPaymasterApproveToCallData" ||
+                  typeof method !== "function"
+                )
+                  return method;
+                return (...approveArgs: unknown[]) => {
+                  const spender = approveArgs[2];
+                  if (
+                    !(
+                      typeof spender === "string" &&
+                      typeof paymasterAddress === "string" &&
+                      isAddress(spender, { strict: false }) &&
+                      isAddress(paymasterAddress, { strict: false }) &&
+                      isAddressEqual(spender, paymasterAddress)
+                    )
+                  )
+                    throw new PaymasterApprovalSpenderMismatchError(
+                      typeof spender === "string" ? spender : undefined,
+                      typeof paymasterAddress === "string"
+                        ? paymasterAddress
+                        : undefined,
+                    );
+                  return Reflect.apply(method, innerReceiver, approveArgs);
+                };
+              },
+            });
+          };
         },
       });
 
@@ -3270,110 +3418,199 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       return result;
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
-      const { fee } = await this._evmAccount.quoteSendTransaction(
-        prepared.transaction,
-      );
-      const client = await this._getViemClient(prepared.context);
       const address = (await this._evmAccount.getAddress()) as Address;
-      const transaction = await client.prepareTransactionRequest({
-        account: address,
-        chainId: prepared.context.chainId,
-        to: prepared.transaction.to,
-        value: prepared.transaction.value,
-        data: prepared.transaction.data,
+      const key = `${prepared.context.chainId}:${address.toLowerCase()}`;
+      const previous = eoaSendQueues.get(key) ?? Promise.resolve();
+      let release!: () => void;
+      const tail = new Promise<void>((resolve) => {
+        release = resolve;
       });
-      const signed = await this._evmAccount.signTransaction({
-        ...prepared.transaction,
-        chainId: prepared.context.chainId,
-        gasLimit: transaction.gas,
-        nonce: transaction.nonce,
-        ...(transaction.gasPrice === undefined
-          ? {
-              maxFeePerGas: transaction.maxFeePerGas,
-              maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
-            }
-          : { gasPrice: transaction.gasPrice }),
-      });
-      await this._revalidate(prepared.context);
-      const serializedTransaction = signed as `0x${string}`;
-      const signedChainId = parseTransaction(serializedTransaction).chainId;
-      if (signedChainId !== prepared.context.chainId) {
-        throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
-      }
-      let hash: Hash;
+      const entry = previous.then(() => tail);
+      eoaSendQueues.set(key, entry);
       try {
-        // The returned hash is shape-checked but not compared with the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
-        hash = await client.sendRawTransaction({
-          serializedTransaction,
-        });
-      } catch (error) {
+        await previous;
+        const walletConfig: unknown = Reflect.get(this._evmAccount, "_config");
+        if (typeof walletConfig !== "object" || walletConfig === null)
+          throw new InvalidTransactionMaxFeeError(walletConfig);
+        const transactionMaxFee: unknown = Reflect.get(
+          walletConfig,
+          "transactionMaxFee",
+        );
         if (
-          error instanceof BaseError &&
-          error.walk(
-            (cause) =>
-              cause instanceof TimeoutError ||
-              (cause instanceof HttpRequestError &&
-                (cause.status === undefined ||
-                  GATEWAY_UNCERTAIN_STATUSES.has(cause.status))),
+          transactionMaxFee !== undefined &&
+          transactionMaxFee !== null &&
+          !(
+            (typeof transactionMaxFee === "bigint" &&
+              transactionMaxFee >= 0n) ||
+            (typeof transactionMaxFee === "number" &&
+              Number.isInteger(transactionMaxFee) &&
+              transactionMaxFee >= 0)
           )
-        ) {
-          throw new UnconfirmedBroadcastError(
-            keccak256(serializedTransaction),
-            serializedTransaction,
-            error,
-          );
-        }
-        const isReconciliationError =
-          error instanceof BaseError &&
-          error.walk(
-            (cause) =>
-              cause instanceof RpcRequestError ||
-              (cause instanceof HttpRequestError && cause.status !== undefined),
-          );
-        // When a failover provider (array `provider` with retries) rejects or fails a send
-        // that an earlier endpoint may have accepted, reconcile even unrecognized errors.
-        if (!this._sendMayRetry && !isReconciliationError) {
-          throw error;
-        }
-        const localHash = keccak256(serializedTransaction);
-        let transactionFound = false;
-        try {
-          const foundTransaction = await client.getTransaction({
-            hash: localHash,
+        )
+          throw new InvalidTransactionMaxFeeError(transactionMaxFee);
+        const maxFee =
+          typeof transactionMaxFee === "bigint"
+            ? transactionMaxFee
+            : typeof transactionMaxFee === "number"
+              ? BigInt(transactionMaxFee)
+              : undefined;
+        const { fee } = await this._evmAccount.quoteSendTransaction(
+          prepared.transaction,
+        );
+        const client = await this._getViemClient(prepared.context);
+        const transaction = await client.prepareTransactionRequest({
+          account: address,
+          chainId: prepared.context.chainId,
+          to: prepared.transaction.to,
+          value: prepared.transaction.value,
+          data: prepared.transaction.data,
+        });
+        const gasPriceOracle = client.chain?.contracts?.gasPriceOracle;
+        const gasPriceOracleAddress =
+          gasPriceOracle !== undefined && "address" in gasPriceOracle
+            ? gasPriceOracle.address
+            : undefined;
+        const feeParameters =
+          transaction.gasPrice === undefined
+            ? {
+                maxFeePerGas: transaction.maxFeePerGas,
+                maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
+              }
+            : { gasPrice: transaction.gasPrice };
+        if (maxFee !== undefined && gasPriceOracleAddress !== undefined) {
+          // Optimism and Base define the GasPriceOracle; WDK's cap omits L1 data and operator fees.
+          const serialized = serializeTransaction({
+            chainId: prepared.context.chainId,
+            to: transaction.to,
+            value: transaction.value,
+            data: transaction.data,
+            gas: transaction.gas,
+            nonce: transaction.nonce,
+            ...feeParameters,
           });
-          transactionFound = foundTransaction !== null;
-        } catch (lookupError) {
-          if (!(lookupError instanceof TransactionNotFoundError)) {
-            throw new UnconfirmedBroadcastError(
-              localHash,
-              serializedTransaction,
-              new AggregateError(
-                [error, lookupError],
-                "Broadcast and reconciliation lookup both failed",
-              ),
+          const [l1Fee, operatorFee] = await Promise.all([
+            readContract(client, {
+              address: gasPriceOracleAddress,
+              abi: GAS_PRICE_ORACLE_ABI,
+              functionName: "getL1Fee",
+              args: [serialized],
+            }),
+            readContract(client, {
+              address: gasPriceOracleAddress,
+              abi: GAS_PRICE_ORACLE_ABI,
+              functionName: "getOperatorFee",
+              args: [transaction.gas],
+            }),
+          ]);
+          const executionFeePerGas =
+            transaction.maxFeePerGas ?? transaction.gasPrice;
+          const executionFee =
+            executionFeePerGas === undefined
+              ? fee
+              : transaction.gas * executionFeePerGas;
+          const execution = fee > executionFee ? fee : executionFee;
+          const totalFee = execution + l1Fee + operatorFee;
+          if (totalFee > maxFee)
+            throw new MaximumFeeExceededError(
+              `Transaction fee "${totalFee}" (execution "${execution}" + L1 "${l1Fee}" + operator "${operatorFee}") exceeds transactionMaxFee "${maxFee}". Raise transactionMaxFee or retry when L1 fees are lower.`,
+              {},
             );
-          }
         }
-        if (!transactionFound) {
-          if (this._sendMayRetry) {
+        const signed = await this._evmAccount.signTransaction({
+          ...prepared.transaction,
+          chainId: prepared.context.chainId,
+          gasLimit: transaction.gas,
+          nonce: transaction.nonce,
+          ...feeParameters,
+        });
+        await this._revalidate(prepared.context);
+        const serializedTransaction = signed as `0x${string}`;
+        const signedChainId = parseTransaction(serializedTransaction).chainId;
+        if (signedChainId !== prepared.context.chainId) {
+          throw new ChainIdMismatchError(
+            signedChainId,
+            prepared.context.chainId,
+          );
+        }
+        let hash: Hash;
+        try {
+          // The returned hash is shape-checked but not compared with the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
+          hash = await client.sendRawTransaction({
+            serializedTransaction,
+          });
+        } catch (error) {
+          if (
+            error instanceof BaseError &&
+            error.walk(
+              (cause) =>
+                cause instanceof TimeoutError ||
+                (cause instanceof HttpRequestError &&
+                  (cause.status === undefined ||
+                    GATEWAY_UNCERTAIN_STATUSES.has(cause.status))),
+            )
+          ) {
             throw new UnconfirmedBroadcastError(
-              localHash,
+              keccak256(serializedTransaction),
               serializedTransaction,
               error,
             );
           }
-          throw error;
+          const isReconciliationError =
+            error instanceof BaseError &&
+            error.walk(
+              (cause) =>
+                cause instanceof RpcRequestError ||
+                (cause instanceof HttpRequestError &&
+                  cause.status !== undefined),
+            );
+          // When a failover provider (array `provider` with retries) rejects or fails a send
+          // that an earlier endpoint may have accepted, reconcile even unrecognized errors.
+          if (!this._sendMayRetry && !isReconciliationError) {
+            throw error;
+          }
+          const localHash = keccak256(serializedTransaction);
+          let transactionFound = false;
+          try {
+            const foundTransaction = await client.getTransaction({
+              hash: localHash,
+            });
+            transactionFound = foundTransaction !== null;
+          } catch (lookupError) {
+            if (!(lookupError instanceof TransactionNotFoundError)) {
+              throw new UnconfirmedBroadcastError(
+                localHash,
+                serializedTransaction,
+                new AggregateError(
+                  [error, lookupError],
+                  "Broadcast and reconciliation lookup both failed",
+                ),
+              );
+            }
+          }
+          if (!transactionFound) {
+            if (this._sendMayRetry) {
+              throw new UnconfirmedBroadcastError(
+                localHash,
+                serializedTransaction,
+                error,
+              );
+            }
+            throw error;
+          }
+          hash = localHash;
         }
-        hash = localHash;
-      }
-      if (!(isHex(hash, { strict: true }) && hash.length === 66)) {
-        throw new InvalidTransactionHashError(hash, {
-          localHash: keccak256(serializedTransaction),
-          serializedTransaction,
-        });
-      }
+        if (!(isHex(hash, { strict: true }) && hash.length === 66)) {
+          throw new InvalidTransactionHashError(hash, {
+            localHash: keccak256(serializedTransaction),
+            serializedTransaction,
+          });
+        }
 
-      return { hash, fee };
+        return { hash, fee };
+      } finally {
+        release();
+        if (eoaSendQueues.get(key) === entry) eoaSendQueues.delete(key);
+      }
     }
     throw new Error(
       "The method requires the protocol to be initialized with a non read-only account.",

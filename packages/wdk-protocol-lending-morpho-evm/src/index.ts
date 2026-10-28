@@ -15,6 +15,7 @@ export {
   UnknownTokenError,
 } from "@morpho-org/morpho-sdk/blue/errors";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
+export { MaximumFeeExceededError } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
   BorrowResult,
@@ -28,7 +29,10 @@ export type {
 export {
   BlueBundlesV1DeadlineExceedsWindowError,
   InvalidTransactionHashError,
+  InvalidTransactionMaxFeeError,
   MissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
 } from "./errors.js";
 export {

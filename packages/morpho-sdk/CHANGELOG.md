@@ -1,5 +1,38 @@
 # @morpho-org/morpho-sdk
 
+## 9.1.0
+
+### Minor Changes
+
+- The `MorphoBlue` constructor and the Blue action builders (`blueSupply`, `blueSupplyCollateral`, `blueBorrow`, `blueSupplyCollateralBorrow`, `blueRepay`, `blueWithdrawCollateral`, `blueRepayWithdrawCollateral`, `blueWithdraw`, `blueRefinance`) now throw `MarketIdMismatchError` when a `MarketParams` `id` does not hash from its tuple fields, matching the existing check in `client.morpho.blue(...)`. Previously such an object made the action metadata name one market while the calldata targeted another.
+- Add an optional `timestamp` to `VaultV2BlueReallocationData` and keep the fetched block timestamp on snapshots from `getVaultV2BlueReallocationData`, so planning without `options.timestamp` runs at the fetched block by default.
+- Reject Midnight sell offers that send seller proceeds to the zero address:
+
+  - `MidnightApi.fetchBookQuote`, `fetchBookTakeableOffers` and `fetchTakeableOffers` (static and instance) throw `InvalidMidnightApiResponseError` when a returned sell offer has `receiverIfMakerIsSeller` set to `zeroAddress`.
+  - `takeLend` and `takeRepayWithdrawCollateral` (entity methods and `midnightTakeLend` / `midnightTakeRepayWithdrawCollateral` builders) throw the new `MidnightTakeableOfferZeroSellerReceiverError` for such an offer.
+
+  With a token that accepts transfers to the zero address, taking such an offer burned the taker's principal while the protocol still recorded the position.
+
+- Use free Vault V2 liquidity before penalized reallocations and size penalized legs to the remaining shortfall. Add a `refinance` operation (`amount`, optional WAD-scaled `referralFeePct`) to Vault V2 reallocation planning; destination debt includes the referral fee and planned allocator penalties.
+- `getPermit2PermitTypedData` now throws `Permit2ExpirationOutOfRangeError` when `expiration` is not an integer in the uint48 range, instead of silently capping it. Omitting `expiration` still signs the maximum uint48.
+
+### Patch Changes
+
+- Clarify that `loanAssets` in `makeLend` and `makeRepay` is only the minimum Midnight allowance `getRequirements()` checks; signed offer caps bound fills.
+- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- `MorphoVaultV2.forceRedeem` now copies its `deallocations` and `redeem` inputs when the handle is created, so changes made before `buildTx()` are not encoded.
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
+- No-op Vault V2 operation planning now returns a post-state accrued to the requested timestamp instead of the input snapshot.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.2.1
+  - @morpho-org/blue-sdk-viem@7.1.0
+  - @morpho-org/blue-sdk@8.0.2
+
 ## 9.0.0
 
 ### Major Changes

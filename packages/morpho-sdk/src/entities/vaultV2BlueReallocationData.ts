@@ -5,6 +5,7 @@ import {
   AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
+  type BigIntish,
   type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
   type IVaultV2BlueMarketPublicAllocatorConfig,
@@ -21,6 +22,10 @@ import {
 } from "@morpho-org/blue-sdk";
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
+import {
+  getBlueBundlesV1PenaltyAssets,
+  getBlueBundlesV1ReferralFeeAssets,
+} from "../actions/blue/common.js";
 import {
   DEFAULT_MAX_REALLOCATION_PENALTY,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
@@ -43,6 +48,7 @@ import {
   ReallocationAdapterSupplySharesUnderflowError,
   ReallocationAllocationUnderflowError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  ReferralFeePctExceededError,
   UnknownReallocationActiveAdaptersError,
   UnknownReallocationAdapterError,
   UnknownReallocationAllocationError,
@@ -98,7 +104,7 @@ type AdapterIds = ReturnType<AccrualVaultV2MorphoMarketV1AdapterV2["ids"]>;
 interface CapReservePair {
   readonly key: string;
   readonly ids: AdapterIds;
-  readonly reserve: () => bigint;
+  readonly reserve: (reserves: CapReserveState) => bigint;
 }
 
 interface ReallocationCandidate {
@@ -126,6 +132,19 @@ const createCapReserveState = (
   reserveByPairKey: new Map(),
 });
 
+const cloneCapReserveState = (state: CapReserveState): CapReserveState => {
+  const touchedPairs = new Map<string, Map<string, CapReservePair>>();
+  for (const [vault, pairs] of state.touchedPairs)
+    touchedPairs.set(vault, new Map(pairs));
+
+  return {
+    initialMarkets: { ...state.initialMarkets },
+    marketAccruals: new Map(state.marketAccruals),
+    touchedPairs,
+    reserveByPairKey: new Map(state.reserveByPairKey),
+  };
+};
+
 /** Transaction-scoped state shared by transitions in one simulated call. @internal */
 interface SimulationContext {
   readonly donatedPenaltyAssets: Readonly<Record<Address, bigint>>;
@@ -142,6 +161,13 @@ const createSimulationContext = (): SimulationContext => ({
 export interface InputVaultV2BlueReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
+  /**
+   * Timestamp of the block the state was fetched at. When present, this is the
+   * default planning timestamp when `options.timestamp` is omitted, never
+   * earlier than the latest market/vault `lastUpdate`; when absent, planning
+   * defaults to the latest market/vault `lastUpdate`.
+   */
+  readonly timestamp?: BigIntish;
   /** Markets indexed by market id. */
   readonly markets?: Readonly<
     Record<MarketId, ReadonlyMarketSnapshot | undefined>
@@ -402,6 +428,8 @@ export class VaultV2BlueReallocationData
   >;
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
+  /** Timestamp of the block the state was fetched at. */
+  public readonly timestamp?: bigint;
   /** Markets indexed by market id. */
   public readonly markets: Readonly<
     Record<MarketId, ReadonlyMarketSnapshot | undefined>
@@ -446,6 +474,8 @@ export class VaultV2BlueReallocationData
   public constructor(input: InputVaultV2BlueReallocationData) {
     const isClone = input instanceof VaultV2BlueReallocationData;
     this.chainId = input.chainId;
+    this.timestamp =
+      input.timestamp == null ? undefined : BigInt(input.timestamp);
     this.mutableMarkets = {};
     this.mutableVaults = {};
     this.mutableAllocations = {};
@@ -885,16 +915,29 @@ export class VaultV2BlueReallocationData
    * Computes Vault V2 BluePublicAllocator calls available for a target market.
    *
    * Without `options.operation`, discovers every friendly call. With an
-   * operation, targets the amount required by that borrow or loan-asset
-   * withdrawal and falls back to 100% source utilization only when friendly
-   * liquidity cannot cover the absolute shortfall. A shared relative-cap lower
-   * bound may require one call to exceed the targeted amount. Friendly source
-   * utilization defaults to 90% and is configurable through
-   * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
-   * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
-   * considered. Market/vault state and the returned post-state stay at
-   * `timestamp`; only target-market cap checks reserve interest the vault's
-   * existing allocation would accrue through `timestamp + capAccrualBuffer`
+   * operation, penalty tiers are considered ascending, starting with free
+   * vaults. The free tier aims to bring the target market back to 90%
+   * utilization; positive tiers cover only the remaining absolute shortfall
+   * (borrows minus supply). Within each tier, source markets go to the
+   * friendly source utilization (90% by default) before 100%. Free capacity
+   * inside `allocatorCapHeadroom` is kept unused, so a penalized leg can cover
+   * it instead. Discovery and liquidity getters still count every vault up to
+   * `options.maxPenalty`. A shared relative-cap lower bound may require one call
+   * to exceed the targeted amount. For `refinance`, compute the plan on the
+   * destination-market handle (for example,
+   * `client.morpho.blue(destination.marketParams, chainId)`), not the source
+   * handle. Pass the source position's `borrowAssets` accrued to
+   * `max(now, source.lastUpdate, destination.lastUpdate) + 2h` as
+   * `operation.amount`; the optional `operation.referralFeePct` is WAD-scaled.
+   * The planner includes the referral fee and its allocator-leg penalties in
+   * destination debt, so penalized legs also cover their own penalty.
+   * Refinance never uses vaults with a 100% penalty.
+   * Friendly source utilization defaults to 90% and is configurable through
+   * `options.maxWithdrawalUtilization`. Market/vault state and the returned
+   * post-state stay at `timestamp`. An enabled operation that needs no
+   * reallocation still returns a clone accrued to `timestamp`. Only
+   * target-market cap checks reserve interest the vault's existing allocation
+   * would accrue through `timestamp + capAccrualBuffer`
    * (two hours by default; `0n` disables it). When an operation's plan would
    * come within `allocatorCapHeadroom` (1% of the cap by default) of a target
    * BluePublicAllocator cap, the plan is reduced to the larger of the
@@ -935,8 +978,9 @@ export class VaultV2BlueReallocationData
    * every leg of a plan.
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when `capAccrualBuffer`, `allocatorCapHeadroom`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
+   * @throws {NegativeInputError} when `capAccrualBuffer`, `allocatorCapHeadroom`, `maxWithdrawalUtilization`, `maxPenalty`, or `referralFeePct` is negative.
    * @throws {InputExceedsMaxError} when `allocatorCapHeadroom`, `maxWithdrawalUtilization`, or `maxPenalty` exceeds WAD.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -944,7 +988,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall and, for refinance, its planned allocator penalties.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
    * ```ts
@@ -978,10 +1022,16 @@ export class VaultV2BlueReallocationData
   public computeVaultV2BlueReallocations(
     marketId: MarketId,
     options: VaultV2BluePublicAllocatorOptions & {
-      readonly operation?: {
-        readonly type: "borrow" | "withdraw";
-        readonly amount: bigint;
-      };
+      readonly operation?:
+        | {
+            readonly type: "borrow" | "withdraw";
+            readonly amount: bigint;
+          }
+        | {
+            readonly type: "refinance";
+            readonly amount: bigint;
+            readonly referralFeePct?: bigint;
+          };
     } = {},
   ): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
@@ -1014,6 +1064,16 @@ export class VaultV2BlueReallocationData
 
     const { amount, type } = operation;
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
+    const referralFeePct =
+      type === "refinance" ? (operation.referralFeePct ?? 0n) : 0n;
+    if (referralFeePct < 0n)
+      throw new NegativeInputError("referralFeePct", referralFeePct);
+    if (referralFeePct >= MathLib.WAD)
+      throw new ReferralFeePctExceededError(referralFeePct);
+    const feeAssets =
+      type === "refinance"
+        ? getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct)
+        : 0n;
 
     const timestamp =
       options.timestamp == null
@@ -1039,73 +1099,190 @@ export class VaultV2BlueReallocationData
     const newTotalBorrowAssets =
       type === "borrow"
         ? market.totalBorrowAssets + amount
-        : market.totalBorrowAssets;
+        : type === "refinance"
+          ? market.totalBorrowAssets + amount + feeAssets
+          : market.totalBorrowAssets;
     const newTotalSupplyAssets =
       type === "withdraw"
         ? market.totalSupplyAssets - amount
         : market.totalSupplyAssets;
 
+    const requiredAssets =
+      MathLib.wDivUp(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
+      newTotalSupplyAssets;
     if (
       MarketUtils.getUtilization({
         totalSupplyAssets: newTotalSupplyAssets,
         totalBorrowAssets: newTotalBorrowAssets,
-      }) <= DEFAULT_SUPPLY_TARGET_UTILIZATION
-    )
-      return { reallocations: [], data: this };
-
-    const requiredAssets =
-      MathLib.wDivUp(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
-      newTotalSupplyAssets;
-    if (requiredAssets <= 0n) return { reallocations: [], data: this };
+      }) <= DEFAULT_SUPPLY_TARGET_UTILIZATION ||
+      requiredAssets <= 0n
+    ) {
+      const data = this.clone();
+      data.setMarkets([market]);
+      return { reallocations: [], data };
+    }
 
     const absoluteShortfall =
       newTotalBorrowAssets > newTotalSupplyAssets
         ? newTotalBorrowAssets - newTotalSupplyAssets
         : 0n;
+    const penaltyTiers = [
+      0n,
+      ...new Set(
+        Object.values(this.publicAllocatorConfigs).flatMap((config) =>
+          config != null && config.penalty > 0n && config.penalty <= maxPenalty
+            ? [config.penalty]
+            : [],
+        ),
+      ),
+    ].sort(bigIntComparator((tier) => tier));
     const plan = (maxAssets: bigint, headroom: bigint) => {
-      const reserves = createCapReserveState(this.mutableMarkets);
-      const friendly =
-        this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
-          context: createSimulationContext(),
-          reserves,
-          marketId,
-          maxWithdrawalUtilization,
-          maxAssets,
-          capAccrualBuffer,
-          allocatorCapHeadroom: headroom,
-          options: normalizedOptions,
-        });
-      const reallocations = [...friendly.reallocations];
-      const data = friendly.data;
-      const friendlyMarket = data.getMarket(marketId);
-      const friendlyBorrow =
-        type === "borrow"
-          ? friendlyMarket.totalBorrowAssets + amount
-          : friendlyMarket.totalBorrowAssets;
-      const friendlySupply =
-        type === "withdraw"
-          ? friendlyMarket.totalSupplyAssets - amount
-          : friendlyMarket.totalSupplyAssets;
+      let reserves = createCapReserveState(this.mutableMarkets);
+      const reallocations: VaultV2BlueReallocation[] = [];
+      let data = this.clone();
+      let context = createSimulationContext();
+      let remainingShortfall = absoluteShortfall;
+      let allocatorCapBoundTargets: ReadonlySet<string> = new Set();
+      let idleBoundVaults: ReadonlySet<string> = new Set();
 
-      if (friendlyBorrow > friendlySupply) {
-        const fallback =
-          data.computeVaultV2BlueReallocationsAtUtilizationInPlace({
-            context: friendly.context,
-            reserves,
-            marketId,
-            maxWithdrawalUtilization: MathLib.WAD,
-            maxAssets: friendlyBorrow - friendlySupply,
-            capAccrualBuffer,
-            allocatorCapHeadroom: headroom,
-            options: normalizedOptions,
-          });
-        reallocations.push(...fallback.reallocations);
+      for (const penalty of penaltyTiers) {
+        if (type === "refinance" && penalty === MathLib.WAD) continue;
+        let isFriendlyPass = true;
+        for (const utilization of [maxWithdrawalUtilization, MathLib.WAD]) {
+          const isFreeFriendlyPass = penalty === 0n && isFriendlyPass;
+          isFriendlyPass = false;
+          if (remainingShortfall === 0n && !isFreeFriendlyPass) continue;
+
+          let passMaxAssets = isFreeFriendlyPass
+            ? maxAssets
+            : remainingShortfall;
+          const retryPaidPass = type === "refinance" && penalty > 0n;
+          if (retryPaidPass) {
+            passMaxAssets = MathLib.mulDivUp(
+              remainingShortfall,
+              MathLib.WAD,
+              MathLib.WAD - penalty,
+            );
+          }
+          let lo = retryPaidPass ? passMaxAssets - 1n : 0n;
+          // Grow by grossed-up gaps, bisect to the smallest found, and keep the best for non-monotonic shared-cap fitting.
+          const passStart = retryPaidPass
+            ? {
+                data: data.clone(),
+                context,
+                reserves: cloneCapReserveState(reserves),
+                reallocationCount: reallocations.length,
+              }
+            : undefined;
+          let previousPassReallocatedAssets = 0n;
+          let hi: bigint | undefined;
+          let bestAttempt:
+            | {
+                readonly data: VaultV2BlueReallocationData;
+                readonly context: SimulationContext;
+                readonly reserves: CapReserveState;
+                readonly reallocations: readonly VaultV2BlueReallocation[];
+                readonly remainingShortfall: bigint;
+                readonly passReallocatedAssets: bigint;
+              }
+            | undefined;
+
+          while (true) {
+            if (passStart != null) {
+              data = passStart.data.clone();
+              context = passStart.context;
+              reserves = cloneCapReserveState(passStart.reserves);
+              reallocations.length = passStart.reallocationCount;
+            }
+            const pass =
+              data.computeVaultV2BlueReallocationsAtUtilizationInPlace({
+                context,
+                reserves,
+                marketId,
+                maxWithdrawalUtilization: utilization,
+                maxAssets: passMaxAssets,
+                capAccrualBuffer,
+                allocatorCapHeadroom: headroom,
+                penalty,
+                options: normalizedOptions,
+              });
+            reallocations.push(...pass.reallocations);
+            data = pass.data;
+            context = pass.context;
+            if (isFreeFriendlyPass) {
+              allocatorCapBoundTargets = pass.allocatorCapBoundTargets;
+              idleBoundVaults = pass.idleBoundVaults;
+            }
+
+            const currentMarket = data.getMarket(marketId);
+            const penaltyAssets =
+              type === "refinance"
+                ? getBlueBundlesV1PenaltyAssets(reallocations)
+                : 0n;
+            const borrow =
+              type === "borrow"
+                ? currentMarket.totalBorrowAssets + amount
+                : type === "refinance"
+                  ? currentMarket.totalBorrowAssets +
+                    amount +
+                    feeAssets +
+                    penaltyAssets
+                  : currentMarket.totalBorrowAssets;
+            const supply =
+              type === "withdraw"
+                ? currentMarket.totalSupplyAssets - amount
+                : currentMarket.totalSupplyAssets;
+            remainingShortfall = borrow > supply ? borrow - supply : 0n;
+            const passReallocatedAssets = pass.reallocations.reduce(
+              (total, { assets }) => total + assets,
+              0n,
+            );
+            if (passStart == null) break;
+
+            if (
+              bestAttempt == null ||
+              remainingShortfall < bestAttempt.remainingShortfall ||
+              (remainingShortfall === bestAttempt.remainingShortfall &&
+                passReallocatedAssets < bestAttempt.passReallocatedAssets)
+            )
+              bestAttempt = {
+                data,
+                context,
+                reserves: cloneCapReserveState(reserves),
+                reallocations: pass.reallocations,
+                remainingShortfall,
+                passReallocatedAssets,
+              };
+
+            if (remainingShortfall === 0n)
+              hi = hi == null ? passMaxAssets : MathLib.min(hi, passMaxAssets);
+            else lo = MathLib.max(lo, passMaxAssets);
+
+            if (hi != null) {
+              if (hi - lo <= 1n) break;
+              passMaxAssets = (lo + hi) / 2n;
+              continue;
+            }
+
+            if (passReallocatedAssets <= previousPassReallocatedAssets) break;
+            previousPassReallocatedAssets = passReallocatedAssets;
+            passMaxAssets += MathLib.mulDivUp(
+              remainingShortfall,
+              MathLib.WAD,
+              MathLib.WAD - penalty,
+            );
+          }
+          if (passStart != null && bestAttempt != null) {
+            data = bestAttempt.data;
+            context = bestAttempt.context;
+            reserves = cloneCapReserveState(bestAttempt.reserves);
+            reallocations.length = passStart.reallocationCount;
+            reallocations.push(...bestAttempt.reallocations);
+            remainingShortfall = bestAttempt.remainingShortfall;
+          }
+        }
       }
 
-      // The fallback pass only runs when the plan moves exactly the absolute
-      // shortfall, which a reduced plan would move anyway.
-      const allocatorCapBoundTargets = friendly.allocatorCapBoundTargets;
-      const idleBoundVaults = friendly.idleBoundVaults;
       let reallocatedAssets = 0n;
       let unboundAssets = 0n;
       for (const { vault, from, to, assets } of reallocations) {
@@ -1124,6 +1301,11 @@ export class VaultV2BlueReallocationData
           allocatorCapBoundTargets.size > 0 || idleBoundVaults.size > 0,
         reallocatedAssets,
         unboundAssets,
+        coversShortfall:
+          type === "refinance"
+            ? reallocatedAssets >=
+              absoluteShortfall + getBlueBundlesV1PenaltyAssets(reallocations)
+            : reallocatedAssets >= absoluteShortfall,
       };
     };
 
@@ -1141,10 +1323,7 @@ export class VaultV2BlueReallocationData
         allocatorCapHeadroom,
       );
       // Shared-cap fitting is not monotonic in the budget.
-      if (
-        selected.reallocatedAssets < absoluteShortfall &&
-        target.reallocatedAssets >= absoluteShortfall
-      )
+      if (!selected.coversShortfall && target.coversShortfall)
         selected = target;
     }
     let available = MathLib.max(
@@ -1155,15 +1334,19 @@ export class VaultV2BlueReallocationData
     const fullCapBudgets =
       allocatorCapHeadroom > 0n ? [absoluteShortfall, requiredAssets] : [];
     for (const maxAssets of fullCapBudgets) {
-      if (selected.reallocatedAssets >= absoluteShortfall) break;
+      if (selected.coversShortfall) break;
       selected = plan(maxAssets, 0n);
       if (selected.reallocatedAssets > available)
         available = selected.reallocatedAssets;
     }
-    if (selected.reallocatedAssets < absoluteShortfall) {
+    if (!selected.coversShortfall) {
       throw new InsufficientSharedLiquidityError({
         marketId,
-        shortfall: absoluteShortfall,
+        shortfall:
+          absoluteShortfall +
+          (type === "refinance"
+            ? getBlueBundlesV1PenaltyAssets(selected.reallocations)
+            : 0n),
         available,
       });
     }
@@ -1179,6 +1362,7 @@ export class VaultV2BlueReallocationData
     maxAssets,
     capAccrualBuffer,
     allocatorCapHeadroom = 0n,
+    penalty,
     options = {},
   }: {
     readonly context: SimulationContext;
@@ -1188,6 +1372,7 @@ export class VaultV2BlueReallocationData
     readonly maxAssets?: bigint;
     readonly capAccrualBuffer: bigint;
     readonly allocatorCapHeadroom?: bigint;
+    readonly penalty?: bigint;
     readonly options?: VaultV2BluePublicAllocatorOptions;
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
@@ -1235,7 +1420,6 @@ export class VaultV2BlueReallocationData
     const idleBoundVaults = new Set<string>();
     const initialIdleAssets = new Map<string, bigint>();
     const idleTakenAssets = new Map<string, bigint>();
-
     // Onchain, market interest is booked once at transaction start, on pre-plan
     // positions at pre-plan rates, and stays on touched positions' cap ids.
     // This reserve state is shared across every planner pass and leg of the plan.
@@ -1252,26 +1436,26 @@ export class VaultV2BlueReallocationData
       return {
         key,
         ids: getAdapterIds(adapterIdsCache, adapter, market),
-        reserve: () => {
-          let reserve = reserves.reserveByPairKey.get(key);
+        reserve: (reserveState) => {
+          let reserve = reserveState.reserveByPairKey.get(key);
           if (reserve == null) {
-            let accruals = reserves.marketAccruals.get(market.id);
+            let accruals = reserveState.marketAccruals.get(market.id);
             if (accruals == null) {
-              const initialMarket = reserves.initialMarkets[market.id];
+              const initialMarket = reserveState.initialMarkets[market.id];
               if (initialMarket == null)
                 throw new UnknownReallocationMarketError(market.id);
               accruals = [
                 initialMarket.accrueInterest(timestamp),
                 initialMarket.accrueInterest(timestamp + capAccrualBuffer),
               ];
-              reserves.marketAccruals.set(market.id, accruals);
+              reserveState.marketAccruals.set(market.id, accruals);
             }
             const [atTimestamp, projected] = accruals;
             reserve = MathLib.zeroFloorSub(
               projected.toSupplyAssets(shares),
               atTimestamp.toSupplyAssets(shares),
             );
-            reserves.reserveByPairKey.set(key, reserve);
+            reserveState.reserveByPairKey.set(key, reserve);
           }
           return reserve;
         },
@@ -1291,7 +1475,7 @@ export class VaultV2BlueReallocationData
       ]) {
         if (seen.has(pair.key) || !pair.ids.includes(id)) continue;
         seen.add(pair.key);
-        reserve += pair.reserve();
+        reserve += pair.reserve(reserves);
       }
       return reserve;
     };
@@ -1309,6 +1493,8 @@ export class VaultV2BlueReallocationData
             publicAllocatorConfig.penalty >
               (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
           )
+            return;
+          if (penalty != null && publicAllocatorConfig.penalty !== penalty)
             return;
           const donatedPenaltyAssetsKey = findAddressKey(
             simulationContext.donatedPenaltyAssets,
@@ -1410,7 +1596,7 @@ export class VaultV2BlueReallocationData
               marketPublicAllocatorConfig.getMaxIn(
                 adapterMarketCapAllocation.allocation +
                   untracked +
-                  targetPair.reserve(),
+                  targetPair.reserve(reserves),
               ),
               MathLib.wMulUp(
                 marketPublicAllocatorConfig.absoluteCap,
@@ -1936,7 +2122,7 @@ export class VaultV2BlueReallocationData
   }
 
   private getLatestSnapshotTimestamp() {
-    let timestamp = 0n;
+    let timestamp = this.timestamp ?? 0n;
     for (const market of Object.values(this.markets)) {
       if (market != null) timestamp = MathLib.max(timestamp, market.lastUpdate);
     }
@@ -2018,6 +2204,7 @@ export class VaultV2BlueReallocationData
 
       data = new VaultV2BlueReallocationData({
         chainId: this.chainId,
+        timestamp: this.timestamp,
         markets: probeMarkets,
       });
       if (sourceVaultKey != null) {

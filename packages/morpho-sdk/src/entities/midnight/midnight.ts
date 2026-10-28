@@ -552,6 +552,7 @@ export class MorphoMidnight {
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {MidnightTakeableOfferZeroSellerReceiverError} when a sell offer routes seller proceeds to the zero address.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
@@ -1194,6 +1195,7 @@ export class MorphoMidnight {
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {MidnightTakeableOfferZeroSellerReceiverError} when a sell offer routes seller proceeds to the zero address.
    * @throws {ExpiredDeadlineError} when `deadline` has expired.
    * @throws {MidnightTakeDeadlineTooFarError} when `deadline` is more than one hour from now.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
@@ -1445,14 +1447,14 @@ export class MorphoMidnight {
    * for a new publication. Calls the Midnight mempool validation API while preparing the tree;
    * `validation: false` skips that call.
    *
-   * @param params - Maker, lend-side offers, loan reserve, cancellations, and deadline.
+   * @param params - Maker, lend-side offers, `loanAssets` and `reservedLoanAssets` allowance thresholds, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
    * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @param params.loanToken - Loan token shared by every offer market.
-   * @param params.loanAssets - New loan reserve assigned to the published groups.
+   * @param params.loanAssets - Minimum Midnight allowance (with `reservedLoanAssets`) that `getRequirements()` checks; the approval it returns is unlimited. The signed offer caps bound fills.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups, excluding groups in `cancellations`.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
@@ -1676,6 +1678,12 @@ export class MorphoMidnight {
    * `midnightBlueBuyCallbackFactory`, `accountAddress` and `callbackSalt`, and fetches the Morpho Blue market,
    * accruing interest to the current time before previewing parked shares (markets whose
    * IRM the SDK cannot accrue are previewed on their last-updated state).
+   * The share check runs once, before signing: the bundle supplies `assetsToPark` with no
+   * minimum-shares bound, so interest accrued before inclusion can still round the supply down
+   * to zero shares if `assetsToPark` is worth less than one share at inclusion. A preview above
+   * one share does not rule this out: interest accrued while the transaction waits, or not
+   * accrued by the SDK for an IRM it cannot accrue, raises the share price. Choosing a market
+   * whose share price makes that impossible is the caller's responsibility.
    * The caller is responsible for trusting the Blue market's oracle and IRM. If Blue liquidity is
    * drained, callback offers cannot fill until liquidity returns. `assetsToPark` may underfund the
    * offers; top-ups are allowed.
@@ -1736,7 +1744,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
    * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
    * @throws {EmptyBlueParkingMarketError} when `blueMarket` has no supply shares.
-   * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price.
+   * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price (checked at preparation time only).
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group or `callbackSalt` is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
@@ -2002,7 +2010,7 @@ export class MorphoMidnight {
    *
    * Shares the lend-side publication and requirement handling of {@link MorphoMidnight.makeLend}.
    * Loan assets are pulled by Midnight when the offers fill, not during publication.
-   * The loan reserve uses the same approval sizing as `makeLend`.
+   * `loanAssets` is only the allowance threshold `getRequirements()` checks, as in `makeLend`; the signed offer caps bound fills.
    * A partially consumed offer group remains publishable with its shared remaining cap reduced.
    * No repay offer can be live after market maturity; late borrowers should repay directly with
    * {@link MorphoMidnight.repayWithdrawCollateral}.
@@ -2010,14 +2018,14 @@ export class MorphoMidnight {
    * Every offer must already have `buy = true` and `reduceOnly = true`.
    * The supplied tree, group caps and prices are preserved; no separate root signature is needed.
    *
-   * @param params - Maker, reduce-only offers, optional cancellations, loan reserve, and deadline.
+   * @param params - Maker, reduce-only offers, optional cancellations, `loanAssets` and `reservedLoanAssets` allowance thresholds, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
    * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @param params.loanToken - Loan token shared by every offer market.
-   * @param params.loanAssets - New loan reserve assigned to the published groups.
+   * @param params.loanAssets - Minimum Midnight allowance (with `reservedLoanAssets`) that `getRequirements()` checks; the approval it returns is unlimited. The signed offer caps bound fills.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
    * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.

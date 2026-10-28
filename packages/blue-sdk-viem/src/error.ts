@@ -1,4 +1,9 @@
-import type { Address, ChainId, MarketId } from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  type ChainId,
+  type MarketId,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 
 /** Thrown when a decimal string cannot be parsed into token units. */
@@ -38,6 +43,16 @@ export class InvalidPermitDomainChainIdError extends Error {
     super(
       `Invalid permit domain chain ID for token "${token}": expected "${expectedChainId}", got "${domainChainId}"`,
     );
+  }
+}
+
+/** Thrown when a Permit2 allowance `expiration` is not a uint48 timestamp in seconds; Permit2 cannot sign it. */
+export class Permit2ExpirationOutOfRangeError extends Error {
+  constructor(public readonly expiration: number) {
+    super(
+      `Permit2 expiration "${expiration}" is not an integer between 0 and ${MathLib.MAX_UINT_48}. Pass a Unix timestamp in seconds, or omit expiration for the maximum.`,
+    );
+    this.name = "Permit2ExpirationOutOfRangeError";
   }
 }
 

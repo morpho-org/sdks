@@ -98,6 +98,7 @@ import {
   MidnightReplacementGroupCancelledError,
   MidnightTakeableOfferMarketMismatchError,
   MidnightTakeableOffersNotFillableError,
+  MidnightTakeableOfferZeroSellerReceiverError,
   MidnightTakeTargetUnreachableError,
   MidnightZeroOnBehalfError,
   MidnightZeroReceiverError,
@@ -735,6 +736,17 @@ describe("MorphoMidnight", () => {
         ]),
       ).toThrow(MidnightTakeableOfferMarketMismatchError);
     });
+
+    test.skipIf(takeFlow.expectedBuy)(
+      "error: MidnightTakeableOfferZeroSellerReceiverError",
+      () => {
+        expect(() =>
+          takeFlow.createOutput([
+            midnightApiTake({ receiverIfMakerIsSeller: zeroAddress }),
+          ]),
+        ).toThrow(MidnightTakeableOfferZeroSellerReceiverError);
+      },
+    );
   });
 
   test.each([

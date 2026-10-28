@@ -1,6 +1,11 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { type Hex, IntegerOutOfRangeError, maxUint256 } from "viem";
+import {
+  type Hex,
+  IntegerOutOfRangeError,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -81,7 +86,15 @@ describe("encodeMidnightCalldata", () => {
       () =>
         validateTakeableOffers({
           market,
-          takeableOffers: [{ offer: { buy: true, market } }],
+          takeableOffers: [
+            {
+              offer: {
+                buy: true,
+                market,
+                receiverIfMakerIsSeller: zeroAddress,
+              },
+            },
+          ],
           expectedBuy: true,
         }),
     ];

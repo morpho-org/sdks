@@ -1,5 +1,21 @@
 # @morpho-org/evm-simulation
 
+## 8.3.0
+
+### Minor Changes
+
+- Add per-transaction log assertions to simulated EVM transactions.
+
+### Patch Changes
+
+- Reject Blue market params that do not hash to the requested market id before resolving quoted assets.
+- Run state and assertion reads from the bundle owner so caller-sensitive token views cannot hide debits from quoted slippage checks.
+- Reject preview authorization preparations that emit asset transfers with `SimulationValidationError`. Simulate such authorizations as transactions in final mode to check their flows; public transfer indices remain unchanged.
+- Zero-address wNative transfers are kept on verified non-mirroring wrappers. Elsewhere, each `Deposit`/`Withdrawal` now cancels at most one matching zero-address `Transfer`.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.1.0
+  - @morpho-org/blue-sdk@8.0.2
+
 ## 8.2.0
 
 ### Minor Changes

@@ -169,6 +169,10 @@ When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupply
 
 For ERC-4337 accounts you can choose to batch the returned requirement transactions with the final transaction using your account-level flow. For EOA accounts, send requirements before the final operation.
 
+The adapter serializes its own EOA sends per chain and address within one loaded copy of the package, so concurrent `submit()`, `supply()`, `borrow()`, and other adapter writes get consecutive nonces. This does not cover transactions sent outside the adapter, including requirement transactions sent with `account.sendTransaction`, other processes, other wallets for the same key, or another copy of the package loaded in the same process (for example its ESM and CJS builds side by side, or two installed versions); serialize those yourself or wait for each send before starting the next.
+
+Each queued send still reads the account's pending nonce from the RPC after the previous send was broadcast. If the provider is load-balanced or fails over between nodes, the node answering that read may not count the previous transaction yet and returns the same nonce, so the second send can still fail with "replacement transaction underpriced". Point the account at a single RPC node, or one whose pending nonce is consistent across its backends, when you send concurrently.
+
 Requirement entries are one of:
 
 - Approval transaction: send the returned transaction before the final action.

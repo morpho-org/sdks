@@ -2115,7 +2115,10 @@ export class EmptyBlueParkingMarketError extends Error {
   }
 }
 
-/** Thrown when parked assets would mint no Morpho Blue supply shares. */
+/**
+ * Thrown when parked assets would mint no Morpho Blue supply shares at preparation time; see
+ * `MorphoMidnight.supplyBlueMakeLend` for why this is not an execution-time guarantee.
+ */
 export class ZeroBlueParkingSharesError extends Error {
   constructor(params: {
     readonly marketId: MarketId;
@@ -2139,6 +2142,16 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
       `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
     );
     this.name = "MidnightTakeableOfferMarketMismatchError";
+  }
+}
+
+/** Thrown when a quoted Midnight sell offer routes its seller proceeds to the zero address. */
+export class MidnightTakeableOfferZeroSellerReceiverError extends Error {
+  constructor(params: { index: number }) {
+    super(
+      `Midnight takeable offer "${params.index}" routes seller proceeds to the zero address. Drop the offer or refresh the quote.`,
+    );
+    this.name = "MidnightTakeableOfferZeroSellerReceiverError";
   }
 }
 

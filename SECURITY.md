@@ -109,6 +109,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 - Findings whose only precondition is a malicious or compromised RPC, simulation, bundler or paymaster endpoint, unless the report shows a check the SDK could make against a source the endpoint cannot forge.
 - The accepted unlimited approvals to registered Bundles/Midnight spenders and the lack of an on-chain share-burn bound for asset-mode Vault V1/V2 withdrawals, the asset-mode `migrateToV2` source leg, and in-kind redemptions, as documented in the unlimited-approvals ADR (`ADR-2026-10-21-unlimited-sdk-approvals`) and the threat model.
 - Findings whose only precondition is a malicious integrator: a wrong client-to-chain pairing, an attacker-chosen address passed in or registered by the integrator, or a modified SDK.
+- Findings whose only precondition is malicious code in the release `pack` job rewriting file contents and manifest fields other than identity and `publishConfig`. A bypass of the publish job's checksum, layout or collision checks stays in scope. See [`THREAT_MODEL.md`](./THREAT_MODEL.md#pack-job-tarball-contents-bin-lib-manifest-fields).
 - Social engineering, denial of service against npm or GitHub, and physical attacks.
 
 ### Trust boundaries in short
@@ -184,6 +185,7 @@ For a version published by this pipeline, the output should show `"repository": 
 ## Dependency policy
 
 - **Lockfile.** `pnpm-lock.yaml` is committed and CI installs with `pnpm install --frozen-lockfile`.
+- **Lifecycle scripts.** pnpm allows dependency lifecycle scripts only for packages listed under `allowBuilds` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml).
 - **Minimum release age.** pnpm refuses dependency versions published less than 3 days ago (`minimumReleaseAge: 4320`, `minimumReleaseAgeStrict: true` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml)). The only exception is a critical-severity security fix.
 - **Peer dependencies.** `viem` is a peer dependency, so integrators control its version. Several packages also take sibling `@morpho-org/*` packages as peers; the exact ranges are in each `package.json`.
 - **Caret ranges.** Runtime dependencies, including `@morpho-org/*` ones, may use caret ranges so coordinated patch and minor releases reach consumers without a release per upstream patch. Cantina flagged this in 2025 ([audit](#audits-and-assurance), finding 3.1.1); we accepted it and rely on consumer lockfiles, release age and provenance instead.

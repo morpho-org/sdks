@@ -15,7 +15,15 @@ export interface IVaultV2Allocation {
   allocation: bigint;
 }
 
-/** Plain input shape for a Morpho Vault V2. */
+/**
+ * Plain input shape for a Morpho Vault V2.
+ *
+ * Build it with `fetchVaultV2` or `fetchAccrualVaultV2` from `@morpho-org/blue-sdk-viem` (or
+ * `getData()` on a `@morpho-org/morpho-sdk` Vault V2 entity) and don't edit its fields afterwards:
+ * `@morpho-org/morpho-sdk` derives the deposit share-price bound, the withdrawal and in-kind
+ * redemption share allowances, the force-withdraw share-price floor and the Vault V1 `migrateToV2`
+ * destination share-price bound from them and does not check them against the chain.
+ */
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
@@ -37,9 +45,17 @@ export interface IVaultV2 extends IToken {
   managementFee: bigint;
   performanceFeeRecipient: Address;
   managementFeeRecipient: Address;
-  /** Whether the performance fee recipient can receive vault shares. Defaults to `true`. */
+  /**
+   * Whether the performance fee recipient can receive vault shares. Defaults to `true`;
+   * `fetchVaultV2` reads it with `canReceiveShares` when the performance fee is nonzero. Set it
+   * explicitly when building a snapshot by hand.
+   */
   performanceFeeRecipientCanReceiveShares?: boolean;
-  /** Whether the management fee recipient can receive vault shares. Defaults to `true`. */
+  /**
+   * Whether the management fee recipient can receive vault shares. Defaults to `true`;
+   * `fetchVaultV2` reads it with `canReceiveShares` when the management fee is nonzero. Set it
+   * explicitly when building a snapshot by hand.
+   */
   managementFeeRecipientCanReceiveShares?: boolean;
 }
 
@@ -184,7 +200,15 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 /** Plain input shape for a Morpho Vault V2 paired with accrued adapter state. */
 export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 
-/** Represents a Morpho Vault V2 with accrued adapter and liquidity state. */
+/**
+ * Represents a Morpho Vault V2 with accrued adapter and liquidity state.
+ *
+ * Build it with `fetchAccrualVaultV2` from `@morpho-org/blue-sdk-viem` (or `getData()` on a
+ * `@morpho-org/morpho-sdk` Vault V2 entity) and don't edit its state afterwards, including
+ * `accrualLiquidityAdapter`, `accrualAdapters`, `assetBalance` and `forceDeallocatePenalties`:
+ * `@morpho-org/morpho-sdk` derives its slippage and share-price bounds from this state and does not
+ * check it against the chain.
+ */
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

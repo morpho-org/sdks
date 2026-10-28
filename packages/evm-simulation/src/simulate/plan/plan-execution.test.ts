@@ -1,4 +1,4 @@
-import { type Address, getAddress, zeroAddress } from "viem";
+import { type Address, getAddress } from "viem";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
 import { parseRequest } from "../request/index.js";
 import { planExecution } from "./plan-execution.js";
@@ -45,6 +45,29 @@ const plan = (
   });
 
 describe("planExecution", () => {
+  test("derivation reads run from the owner before ordinary observations", () => {
+    const derivation = {
+      kind: "derivation" as const,
+      id: "derivation",
+      to: TARGET,
+      data: "0x1234" as const,
+    };
+    const calls = planExecution({
+      request: makeRequest(1),
+      owner: OWNER,
+      preparations: [],
+      reads,
+      derivationReads: [derivation],
+    }).calls;
+    expect(calls[0]).toEqual({
+      type: "stateRead",
+      phase: "before",
+      read: derivation,
+      transaction: { from: OWNER, to: TARGET, data: "0x1234", value: 0n },
+    });
+    expect(calls.filter((call) => call.type === "stateRead")).toHaveLength(3);
+  });
+
   test("order: before reads → preparations → txs → after reads", () => {
     const types = plan(2, [
       {
@@ -76,13 +99,12 @@ describe("planExecution", () => {
     ]);
   });
 
-  test("user txs keep public transactionIndex; reads run from zeroAddress", () => {
+  test("user txs keep public transactionIndex; reads run from owner", () => {
     const calls = plan(1).calls;
     const tx = calls.find((c) => c.type === "transaction");
     expect(tx?.type === "transaction" && tx.transactionIndex).toBe(0);
     for (const call of calls)
-      if (call.type === "stateRead")
-        expect(call.transaction.from).toBe(zeroAddress);
+      if (call.type === "stateRead") expect(call.transaction.from).toBe(OWNER);
     const prep = calls.find((c) => c.type === "preparation");
     expect(prep).toBeUndefined();
   });
@@ -159,7 +181,7 @@ describe("planExecution", () => {
         .map((call) => call.transaction),
     ).toEqual(
       [ASSERTIONS[0], ASSERTIONS[1], ASSERTIONS[1], ASSERTIONS[0]].map(
-        ({ to, data }) => ({ from: zeroAddress, to, data, value: 0n }),
+        ({ to, data }) => ({ from: OWNER, to, data, value: 0n }),
       ),
     );
   });

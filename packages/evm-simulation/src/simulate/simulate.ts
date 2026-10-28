@@ -44,6 +44,8 @@ import { runSimulation } from "./run-simulation.js";
  * against actual permissions and accepts no `authorizations`. `mode:
  * "preview"` accepts typed authorization descriptors, which the pipeline
  * prepares as simulated approval calls. No authorization read-back checks run.
+ * Preparations emitting asset-transfer logs fail closed; simulate those
+ * authorizations as transactions in final mode to check their asset flows.
  * `limits` is required: per-operation quotes, typed `inputs` or both, or the
  * explicit `"none"` opt-out, which skips every limit read and check. Typed
  * inputs derive their sides from pinned-block state in the simulated block and
@@ -70,6 +72,10 @@ import { runSimulation } from "./run-simulation.js";
  *   All must share the same `from`. Each transaction may include caller-supplied
  *   `assertBefore` and `assertAfter` arrays. Each assertion is a caller-supplied
  *   view call (`to`/`data`) whose return data is passed to `check`.
+ *   `assertLogs` accepts `{ check }` assertions that receive one shared,
+ *   recursively frozen copy of that transaction's emitted logs after it
+ *   succeeds and before `assertAfter`. Log addresses, topics, and data are
+ *   lowercase hex.
  *   `erc20BalanceAssertion`, `nativeBalanceAssertion`, and `maxDepositAssertion`
  *   are optional helpers for common checks.
  * @param params.mode - `"final"` (default) or `"preview"`.
@@ -107,7 +113,9 @@ import { runSimulation } from "./run-simulation.js";
  *   Midnight position reads, overlapping cross-operation wallet measurements
  *   when either operation uses typed inputs, or a typed-input `assetPaid` /
  *   `assetReceived` override that is neither the subject's token nor, for
- *   `ethAddress`, this chain's registered wrapped native token.
+ *   `ethAddress`, this chain's registered wrapped native token. Also thrown when
+ *   a preview authorization preparation emits asset transfers; simulate that
+ *   authorization as a transaction in final mode to check its asset flows.
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects, including when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
@@ -123,6 +131,11 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {SimulationAssertError} when an assertion fails; the error reports
  *   its transaction, phase, assertion index, a copy of the caller's assertion
  *   (`to`, `data`, and `check`), and return data.
+ *   A check exception is preserved as the error's cause.
+ * @throws {SimulationLogAssertError} when an `assertLogs` check fails; the error
+ *   reports its transaction index, assertion index, a copy of the assertion,
+ *   and the lowercase log values passed to the check. The check receives those
+ *   values in a frozen copy with lowercase hex `address`, `topics`, and `data`.
  *   A check exception is preserved as the error's cause.
  * @throws {SlippageCheckUnavailableError} when a planned state read fails
  *   or returns empty data, derivation state is missing or a derived amount is
@@ -153,8 +166,9 @@ import { runSimulation } from "./run-simulation.js";
  *   state block nor its immediate successor, a successor with a mismatched
  *   `parentHash` (unless `parentHashCheck` is off; off by default on Stable,
  *   chain 988), a block timestamp earlier than the pinned block's, a
- *   malformed per-call result, or a quoted balance/position read whose
- *   non-empty return data cannot be decoded, a matching force-exit
+ *   malformed per-call result, a transaction with `assertLogs` whose `logs`
+ *   are omitted, or a quoted balance/position read whose non-empty return data
+ *   cannot be decoded, a matching force-exit
  *   `ForceDeallocate`/`Withdraw` event log fails to decode, or a 2xx reply
  *   from the block lookup or `eth_getCode` whose body is not JSON or is the
  *   JSON value `null`, or an `eth_simulateV1` reply whose body is not JSON or
@@ -233,7 +247,9 @@ export function simulate(
  *   penalties, unsupported input operations, overlapping input-based wallet
  *   measurements, or an `assetPaid`/`assetReceived` override that is neither
  *   the subject's token nor, for `ethAddress`, this chain's registered wrapped
- *   native token.
+ *   native token. Also thrown when a preview authorization preparation emits
+ *   asset transfers; simulate that authorization as a transaction in final mode
+ *   to check its asset flows.
  * @throws {ConsumerLimitViolationError} When observed effects violate a bound or
  *   an undeclared Blue counter-side or inactive leg moves adversely, including
  *   with quote overrides. Use combined operations or quote-only limits for

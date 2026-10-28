@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
+import { Permit2ExpirationOutOfRangeError } from "../error.js";
 import { getAuthorizationTypedData } from "./manager.js";
 import { getPermitTypedData } from "./permit.js";
 import {
@@ -89,6 +90,83 @@ describe("getPermitTypedData", () => {
 });
 
 describe("getPermit2PermitTypedData", () => {
+  test("rejects an expiration above MAX_UINT_48", () => {
+    expect(() =>
+      getPermit2PermitTypedData(
+        {
+          erc20: TOKEN,
+          allowance: 1n,
+          expiration: Number(MathLib.MAX_UINT_48) + 1,
+          nonce: 0,
+          deadline: 1n,
+          spender: SPENDER,
+        },
+        ChainId.EthMainnet,
+      ),
+    ).toThrow(Permit2ExpirationOutOfRangeError);
+  });
+
+  test.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid expiration %s",
+    (expiration) => {
+      expect(() =>
+        getPermit2PermitTypedData(
+          {
+            erc20: TOKEN,
+            allowance: 1n,
+            expiration,
+            nonce: 0,
+            deadline: 1n,
+            spender: SPENDER,
+          },
+          ChainId.EthMainnet,
+        ),
+      ).toThrow(Permit2ExpirationOutOfRangeError);
+    },
+  );
+
+  test("accepts the maximum uint48 expiration", () => {
+    const typedData = getPermit2PermitTypedData(
+      {
+        erc20: TOKEN,
+        allowance: 1n,
+        expiration: Number(MathLib.MAX_UINT_48),
+        nonce: 0,
+        deadline: 1n,
+        spender: SPENDER,
+      },
+      ChainId.EthMainnet,
+    );
+
+    expect(typedData.message.details).toEqual({
+      token: TOKEN,
+      amount: 1n,
+      expiration: MathLib.MAX_UINT_48,
+      nonce: 0,
+    });
+  });
+
+  test("accepts a zero expiration", () => {
+    const typedData = getPermit2PermitTypedData(
+      {
+        erc20: TOKEN,
+        allowance: 1n,
+        expiration: 0,
+        nonce: 0,
+        deadline: 1n,
+        spender: SPENDER,
+      },
+      ChainId.EthMainnet,
+    );
+
+    expect(typedData.message.details).toEqual({
+      token: TOKEN,
+      amount: 1n,
+      expiration: 0n,
+      nonce: 0,
+    });
+  });
+
   test("clamps allowance and defaults expiration to MAX_UINT_48", () => {
     const typedData = getPermit2PermitTypedData(
       {

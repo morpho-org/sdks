@@ -30,6 +30,10 @@ import {
 } from "viem";
 import { describe, expect, test, vi } from "vitest";
 import { blueBundlesV1Abi } from "../abis.js";
+import {
+  getBlueBundlesV1PenaltyAssets,
+  getBlueBundlesV1ReferralFeeAssets,
+} from "../actions/blue/common.js";
 import { blueSupplyCollateralBorrow } from "../actions/index.js";
 import {
   DEFAULT_CAP_ACCRUAL_BUFFER,
@@ -43,6 +47,7 @@ import {
   ReallocationAdapterSupplySharesUnderflowError,
   ReallocationAllocationUnderflowError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  ReferralFeePctExceededError,
   UnknownReallocationActiveAdaptersError,
   UnknownReallocationAdapterError,
   UnknownReallocationAllocationError,
@@ -54,6 +59,13 @@ import {
 } from "../types/index.js";
 import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
+const originalComputeAtUtilization = (
+  VaultV2BlueReallocationData.prototype as unknown as {
+    computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+      ...args: never[]
+    ) => unknown;
+  }
+).computeVaultV2BlueReallocationsAtUtilizationInPlace;
 const TIMESTAMP = 1_700_000_000n;
 const VAULT = "0x00000000000000000000000000000000000000A2";
 const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
@@ -3093,39 +3105,49 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     ).toBeLessThanOrEqual(roundingCap);
   });
 
-  test("behavior: selects the nearest non-monotonic shared-cap fit", () => {
-    const operationAmount = 72n;
-    const penalty = MathLib.WAD / 1_000n;
-    const { data } = makeFixture({
-      sourceAdapter: TARGET_ADAPTER,
-      sourceSupply: 761_078n,
-      sourceTotalSupplyShares: 1_691_858n,
-      sourcePositionShares: 1_251_351n,
-      sourceUntracked: 1n,
-      targetSupply: 1n,
-      targetTotalSupplyShares: 1_000_001n,
-      targetBorrow: 0n,
-      targetPositionAssets: 0n,
-      vaultLastUpdate: TIMESTAMP - 1n,
-      maxRate: MathLib.WAD,
-      penalty,
-      allocatorTargetCap: 1_000_000n,
-      sourceAbsoluteCap: 1_000_000n,
-      targetCaps: [
-        { absoluteCap: 353_798n, relativeCap: MathLib.WAD },
-        { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
-        { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
-      ],
-    });
+  test.each([
+    {
+      tier: "penalized",
+      penalty: MathLib.WAD / 1_000n,
+      expectedAssets: 71n,
+    },
+    { tier: "free", penalty: 0n, expectedAssets: 82n },
+  ] as const)(
+    "behavior: selects the nearest non-monotonic shared-cap fit ($tier tier)",
+    ({ tier, penalty, expectedAssets }) => {
+      const operationAmount = 72n;
+      const { data } = makeFixture({
+        sourceAdapter: TARGET_ADAPTER,
+        sourceSupply: 761_078n,
+        sourceTotalSupplyShares: 1_691_858n,
+        sourcePositionShares: 1_251_351n,
+        sourceUntracked: 1n,
+        targetSupply: 1n,
+        targetTotalSupplyShares: 1_000_001n,
+        targetBorrow: 0n,
+        targetPositionAssets: 0n,
+        vaultLastUpdate: TIMESTAMP - 1n,
+        maxRate: MathLib.WAD,
+        penalty,
+        allocatorTargetCap: 1_000_000n,
+        sourceAbsoluteCap: 1_000_000n,
+        targetCaps: [
+          { absoluteCap: 353_798n, relativeCap: MathLib.WAD },
+          { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
+        ],
+      });
 
-    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
-      maxPenalty: penalty,
-      operation: { type: "borrow", amount: operationAmount },
-    });
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: operationAmount },
+      });
 
-    expect(result.reallocations[0]?.assets).toBeGreaterThan(operationAmount);
-    expect(result.reallocations[0]?.assets).toBe(82n);
-  });
+      const assets = result.reallocations[0]?.assets ?? 0n;
+      expect(assets).toBe(expectedAssets);
+      if (tier === "free") expect(assets).toBeGreaterThan(operationAmount);
+    },
+  );
 
   test("default: caps friendly reallocations to the 90% target", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
@@ -4073,6 +4095,172 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(defaultReallocations).toStrictEqual(explicitReallocations);
   });
 
+  test("behavior: defaults to and preserves the snapshot timestamp", () => {
+    const timestamp = TIMESTAMP + Time.s.from.y(1n);
+    const { data: fixtureData } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 850n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetSupply: 100n,
+      targetBorrow: 0n,
+    });
+    const data = new VaultV2BlueReallocationData({
+      ...fixtureData,
+      timestamp,
+    });
+
+    const defaultResult = data.computeVaultV2BlueReallocations(targetParams.id);
+    const explicitResult = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { timestamp },
+    );
+    const sourceMarketAtTimestamp = data
+      .getMarket(sourceParams.id)
+      .accrueInterest(timestamp);
+    const sourceWithdrawals = defaultResult.reallocations
+      .filter(
+        ({ from }) =>
+          from.type === "market" && from.marketParams.id === sourceParams.id,
+      )
+      .reduce((assets, { assets: withdrawal }) => assets + withdrawal, 0n);
+
+    expect(defaultResult.reallocations).toStrictEqual(
+      explicitResult.reallocations,
+    );
+    expect(data.clone().timestamp).toBe(timestamp);
+    expect(defaultResult.data.timestamp).toBe(timestamp);
+    expect(defaultResult.reallocations).not.toHaveLength(0);
+    expect(
+      MarketUtils.getUtilization({
+        totalSupplyAssets:
+          sourceMarketAtTimestamp.totalSupplyAssets - sourceWithdrawals,
+        totalBorrowAssets: sourceMarketAtTimestamp.totalBorrowAssets,
+      }),
+    ).toBeLessThanOrEqual((MathLib.WAD * 9n) / 10n);
+  });
+
+  test("behavior: operation planning defaults to the snapshot timestamp", () => {
+    const timestamp = TIMESTAMP + Time.s.from.y(1n);
+    const { data: fixtureData } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 850n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetSupply: 100n,
+      targetBorrow: 90n,
+    });
+    const data = new VaultV2BlueReallocationData({
+      ...fixtureData,
+      timestamp,
+    });
+    const operation = { type: "borrow", amount: 20n } as const;
+
+    const defaultResult = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation },
+    );
+    const explicitResult = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { timestamp, operation },
+    );
+
+    expect(defaultResult.reallocations).toStrictEqual(
+      explicitResult.reallocations,
+    );
+  });
+
+  test("behavior: no-op operation planning returns post-state accrued to the requested timestamp", () => {
+    const timestamp = TIMESTAMP + Time.s.from.y(1n);
+    const { data } = makeFixture();
+    const initialData = data.clone();
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp,
+      operation: { type: "borrow", amount: 1n },
+    });
+
+    expect(result.reallocations).toStrictEqual([]);
+    expect(result.data).not.toBe(data);
+    expect(result.data.getMarket(targetParams.id).lastUpdate).toBe(timestamp);
+    expect(data).toStrictEqual(initialData);
+  });
+
+  test("behavior: continuation from a no-op post-state plans at the requested timestamp", () => {
+    const timestamp = TIMESTAMP + Time.s.from.y(1n);
+    const { data } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 800n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetSupply: 1_001n,
+    });
+    const first = data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp,
+      operation: { type: "borrow", amount: 1n },
+    });
+    const continuation = first.data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        operation: { type: "borrow", amount: 1_000n },
+        maxWithdrawalUtilization: 900_000_000_000_000_000n,
+        capAccrualBuffer: 0n,
+      },
+    );
+    const explicit = data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp,
+      operation: { type: "borrow", amount: 1_000n },
+      maxWithdrawalUtilization: 900_000_000_000_000_000n,
+      capAccrualBuffer: 0n,
+    });
+
+    expect(continuation.reallocations).not.toHaveLength(0);
+    expect(continuation.reallocations).toStrictEqual(explicit.reallocations);
+  });
+
+  test("behavior: snapshot timestamp never precedes market lastUpdate", () => {
+    const updateWindow = Time.s.from.y(1n);
+    const timestamp = TIMESTAMP - updateWindow / 2n;
+    const lastUpdate = TIMESTAMP - updateWindow;
+    const { data: fixtureData } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 850n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetSupply: 100n,
+      targetBorrow: 0n,
+      sourceLastUpdate: lastUpdate,
+      targetLastUpdate: lastUpdate,
+      vaultLastUpdate: lastUpdate,
+    });
+    const latestMarket = makeMarket({
+      params: sourceParamsWithAnotherLoanToken,
+      supply: 1n,
+      borrow: 0n,
+      lastUpdate: TIMESTAMP,
+    });
+    const data = new VaultV2BlueReallocationData({
+      ...fixtureData,
+      timestamp,
+      markets: {
+        ...fixtureData.markets,
+        [latestMarket.id]: latestMarket,
+      },
+    });
+
+    const snapshotResult = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { timestamp },
+    );
+    const latestResult = data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp: TIMESTAMP,
+    });
+    const defaultResult = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(snapshotResult.reallocations).not.toStrictEqual(
+      latestResult.reallocations,
+    );
+    expect(defaultResult.reallocations).toStrictEqual(
+      latestResult.reallocations,
+    );
+  });
+
   test("behavior: falls back only for the remaining absolute shortfall", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
@@ -4173,24 +4361,39 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
   });
 
   test("behavior: excludes reallocations above the penalty threshold", () => {
+    const targetSupply = 100n;
+    const targetBorrow = 90n;
+    const borrowAmount = 20n;
+    const penalty = 7n;
     const { data } = makeFixture({
-      targetSupply: 100n,
-      targetBorrow: 90n,
-      penalty: 7n,
+      targetSupply,
+      targetBorrow,
+      penalty,
     });
 
-    expect(
+    expect(() =>
       data.computeVaultV2BlueReallocations(targetParams.id, {
         maxPenalty: 6n,
-        operation: { type: "borrow", amount: 1n },
-      }).reallocations,
-    ).toStrictEqual([]);
+        operation: { type: "borrow", amount: borrowAmount },
+      }),
+    ).toThrow(InsufficientSharedLiquidityError);
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount: borrowAmount },
+    });
+    const absoluteShortfall = targetBorrow + borrowAmount - targetSupply;
+    const penalizedAssets = result.reallocations
+      .filter(({ penalty: legPenalty }) => legPenalty > 0n)
+      .reduce((total, { assets }) => total + assets, 0n);
+
+    expect(penalizedAssets).toBe(absoluteShortfall);
     expect(
-      data.computeVaultV2BlueReallocations(targetParams.id, {
-        maxPenalty: 7n,
-        operation: { type: "borrow", amount: 1n },
-      }).reallocations[0]?.assets,
-    ).toBe(2n);
+      result.reallocations.map(({ penalty: legPenalty, assets }) => [
+        legPenalty,
+        assets,
+      ]),
+    ).toEqual([[penalty, absoluteShortfall]]);
   });
 
   test("error: InsufficientSharedLiquidityError rejects a partial plan", () => {
@@ -4250,7 +4453,981 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
   });
 });
 
+describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
+  const addSecondVault = (
+    data: VaultV2BlueReallocationData,
+    {
+      idle,
+      penalty,
+      allocatorTargetCap = 10_000n,
+    }: {
+      readonly idle: bigint;
+      readonly penalty: bigint;
+      readonly allocatorTargetCap?: bigint;
+    },
+  ) => {
+    const targetMarket = data.getMarket(targetParams.id);
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: SECOND_VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetMarket.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [new Market({ ...targetMarket })],
+    );
+    const [, , secondTargetAdapterMarketCapId] =
+      secondTargetAdapter.ids(targetParams);
+    const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
+    for (const id of secondTargetAdapter.ids(targetParams)) {
+      secondAllocations[id] = {
+        id,
+        absoluteCap: allocatorTargetCap,
+        relativeCap: MathLib.WAD,
+        allocation: 0n,
+      };
+    }
+    const firstVault = data.getVault(VAULT);
+    const secondVault = new AccrualVaultV2(
+      {
+        ...firstVault,
+        address: SECOND_VAULT,
+        _totalAssets: idle,
+        totalSupply: idle,
+        liquidityAllocations: firstVault.liquidityAllocations?.map(
+          (allocation) => ({ ...allocation }),
+        ),
+      },
+      undefined,
+      [secondTargetAdapter],
+      idle,
+      {},
+    );
+
+    return new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: firstVault,
+        [SECOND_VAULT]: secondVault,
+      },
+      allocations: {
+        [VAULT]: data.allocations[VAULT],
+        [SECOND_VAULT]: secondAllocations,
+      },
+      publicAllocatorConfigs: {
+        [VAULT]: data.publicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          vault: SECOND_VAULT,
+          canPullFromIdle: true,
+          penalty,
+        },
+      },
+      activeAdapters: {
+        [VAULT]: data.activeAdapters[VAULT],
+        [SECOND_VAULT]: new Set([SECOND_TARGET_ADAPTER]),
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          [secondTargetAdapterMarketCapId]: {
+            vault: SECOND_VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            adapterMarketCapId: secondTargetAdapterMarketCapId,
+            absoluteCap: allocatorTargetCap,
+            canPullFromMarket: false,
+          },
+        },
+      },
+    });
+  };
+
+  test("uses free liquidity for the 90% target before a larger penalized vault", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+    });
+    const penalty = 7n;
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    expect(
+      result.reallocations.map(({ vault, penalty: legPenalty, assets }) => [
+        vault,
+        legPenalty,
+        assets,
+      ]),
+    ).toEqual([[VAULT, 0n, 23n]]);
+  });
+
+  test("uses penalized liquidity only for the remaining absolute shortfall", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 4n,
+      canPullFromMarket: false,
+    });
+    const penalty = 7n;
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    const penalizedAssets = result.reallocations
+      .filter(({ penalty: legPenalty }) => legPenalty > 0n)
+      .reduce((total, { assets }) => total + assets, 0n);
+    expect(penalizedAssets).toBe(6n);
+    expect(result.reallocations).toHaveLength(2);
+    expect(
+      result.reallocations.map(({ penalty: legPenalty, assets }) => [
+        legPenalty,
+        assets,
+      ]),
+    ).toEqual([
+      [0n, 4n],
+      [penalty, 6n],
+    ]);
+  });
+
+  test("replans free and penalized tiers around allocator-cap headroom", () => {
+    const targetSupply = 100n;
+    const targetBorrow = 90n;
+    const borrowAmount = 20n;
+    const absoluteShortfall = targetBorrow + borrowAmount - targetSupply;
+    const penalty = 7n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply,
+      targetBorrow,
+      idle: 100n,
+      canPullFromMarket: false,
+      allocatorTargetCap: 4n,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty,
+    });
+    const plan = (allocatorCapHeadroom?: bigint) =>
+      multiVaultData.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: borrowAmount },
+        allocatorCapHeadroom,
+      });
+    const assertPlan = ({
+      allocatorCapHeadroom,
+      freeAssets,
+      penalizedAssets,
+    }: {
+      readonly allocatorCapHeadroom?: bigint;
+      readonly freeAssets: bigint;
+      readonly penalizedAssets: bigint;
+    }) => {
+      const result = plan(allocatorCapHeadroom);
+      const actualFreeAssets = result.reallocations
+        .filter(({ penalty: legPenalty }) => legPenalty === 0n)
+        .reduce((total, { assets }) => total + assets, 0n);
+      const actualPenalizedAssets = result.reallocations
+        .filter(({ penalty: legPenalty }) => legPenalty > 0n)
+        .reduce((total, { assets }) => total + assets, 0n);
+
+      expect(actualFreeAssets).toBe(freeAssets);
+      expect(actualPenalizedAssets).toBe(absoluteShortfall - actualFreeAssets);
+      expect(actualPenalizedAssets).toBe(penalizedAssets);
+      expect(
+        result.reallocations.map(({ vault, penalty: legPenalty, assets }) => [
+          vault,
+          legPenalty,
+          assets,
+        ]),
+      ).toEqual([
+        [VAULT, 0n, freeAssets],
+        [SECOND_VAULT, penalty, penalizedAssets],
+      ]);
+    };
+
+    assertPlan({ freeAssets: 3n, penalizedAssets: 7n });
+    assertPlan({
+      allocatorCapHeadroom: 0n,
+      freeAssets: 4n,
+      penalizedAssets: 6n,
+    });
+
+    const referralFeePct = MathLib.WAD / 10n;
+    const feeAssets = getBlueBundlesV1ReferralFeeAssets(
+      borrowAmount,
+      referralFeePct,
+    );
+    const refinanceShortfall = absoluteShortfall + feeAssets;
+    const assertRefinanceCoverage = (allocatorCapHeadroom?: bigint) => {
+      const result = multiVaultData.computeVaultV2BlueReallocations(
+        targetParams.id,
+        {
+          maxPenalty: penalty,
+          operation: {
+            type: "refinance",
+            amount: borrowAmount,
+            referralFeePct,
+          },
+          allocatorCapHeadroom,
+        },
+      );
+      const assets = result.reallocations.reduce(
+        (total, { assets: legAssets }) => total + legAssets,
+        0n,
+      );
+      const penalties = getBlueBundlesV1PenaltyAssets(result.reallocations);
+
+      expect(assets - penalties).toBeGreaterThanOrEqual(refinanceShortfall);
+    };
+
+    assertRefinanceCoverage();
+    assertRefinanceCoverage(0n);
+  });
+
+  test("uses penalized liquidity for only the remaining withdraw shortfall", () => {
+    const targetSupply = 100n;
+    const targetBorrow = 90n;
+    const withdrawAmount = 20n;
+    const penalty = 7n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply,
+      targetBorrow,
+      idle: 4n,
+      canPullFromMarket: false,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: penalty,
+        operation: { type: "withdraw", amount: withdrawAmount },
+      },
+    );
+
+    const freeAssets = result.reallocations
+      .filter(({ penalty: legPenalty }) => legPenalty === 0n)
+      .reduce((total, { assets }) => total + assets, 0n);
+    const absoluteShortfall =
+      targetBorrow > targetSupply - withdrawAmount
+        ? targetBorrow - (targetSupply - withdrawAmount)
+        : 0n;
+    const penalizedAssets = result.reallocations
+      .filter(({ penalty: legPenalty }) => legPenalty > 0n)
+      .reduce((total, { assets }) => total + assets, 0n);
+
+    expect(freeAssets).toBe(4n);
+    expect(penalizedAssets).toBe(absoluteShortfall - freeAssets);
+    expect(result.reallocations).toHaveLength(2);
+    expect(
+      result.reallocations.map(({ vault, penalty: legPenalty, assets }) => [
+        vault,
+        legPenalty,
+        assets,
+      ]),
+    ).toEqual([
+      [VAULT, 0n, 4n],
+      [SECOND_VAULT, penalty, 6n],
+    ]);
+  });
+
+  test("uses free liquidity at 100% source utilization before friendly penalized liquidity", () => {
+    const { data } = makeFixture({
+      sourceSupply: 100n,
+      sourceBorrow: 90n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 0n,
+      canPullFromIdle: false,
+      canPullFromMarket: true,
+    });
+    const penalty = 7n;
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    expect(
+      result.reallocations.map(
+        ({ vault, from, penalty: legPenalty, assets }) => [
+          vault,
+          from.type,
+          legPenalty,
+          assets,
+        ],
+      ),
+    ).toEqual([[VAULT, "market", 0n, 10n]]);
+  });
+
+  test("uses cheaper penalized vaults before larger, more expensive vaults", () => {
+    const expensivePenalty = 10n;
+    const cheaperPenalty = 5n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 1_000n,
+      canPullFromMarket: false,
+      penalty: expensivePenalty,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 4n,
+      penalty: cheaperPenalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: expensivePenalty,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    expect(
+      result.reallocations.map(({ vault, penalty, assets }) => [
+        vault,
+        penalty,
+        assets,
+      ]),
+    ).toEqual([
+      [SECOND_VAULT, cheaperPenalty, 4n],
+      [VAULT, expensivePenalty, 6n],
+    ]);
+  });
+
+  test("uses cheaper positive-tier 100% fallback before more expensive idle liquidity", () => {
+    const cheaperPenalty = 5n;
+    const expensivePenalty = 10n;
+    const { data } = makeFixture({
+      sourceSupply: 100n,
+      sourceBorrow: 90n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 0n,
+      canPullFromIdle: false,
+      canPullFromMarket: true,
+      penalty: cheaperPenalty,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 1_000n,
+      penalty: expensivePenalty,
+    });
+    const sourceMarket = data.getMarket(sourceParams.id);
+    expect(
+      sourceMarket.getWithdrawToUtilization((MathLib.WAD * 9n) / 10n),
+    ).toBe(0n);
+    expect(sourceMarket.getWithdrawToUtilization(MathLib.WAD)).toBe(10n);
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: expensivePenalty,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    expect(
+      result.reallocations.map(({ vault, from, penalty, assets }) => [
+        vault,
+        from.type,
+        penalty,
+        assets,
+      ]),
+    ).toEqual([[VAULT, "market", cheaperPenalty, 10n]]);
+  });
+
+  test("limits a single penalized leg to the absolute shortfall", () => {
+    const penalty = 7n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+      penalty,
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount: 20n },
+    });
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(10n);
+  });
+
+  test("does not reallocate when an operation leaves utilization below 100%", () => {
+    const penalty = 7n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+      penalty,
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount: 5n },
+    });
+
+    expect(result.reallocations).toStrictEqual([]);
+  });
+
+  test("matches borrow planning for refinance when liquidity is free", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+    });
+    const amount = 20n;
+    const referralFeePct = MathLib.WAD / 10n;
+
+    const refinance = data.computeVaultV2BlueReallocations(targetParams.id, {
+      operation: { type: "refinance", amount, referralFeePct },
+    });
+    const borrow = data.computeVaultV2BlueReallocations(targetParams.id, {
+      operation: {
+        type: "borrow",
+        amount:
+          amount + getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct),
+      },
+    });
+
+    expect(refinance.reallocations).toStrictEqual(borrow.reallocations);
+  });
+
+  test("sizes a paid refinance leg to cover its fee and allocator penalty", () => {
+    const penalty = MathLib.WAD / 10n;
+    const amount = 200n;
+    const referralFeePct = MathLib.WAD / 100n;
+    const targetSupply = 1_000n;
+    const targetBorrow = 900n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply,
+      targetBorrow,
+      idle: 1_000n,
+      canPullFromMarket: false,
+      penalty,
+    });
+    const feeAssets = getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct);
+
+    const refinance = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "refinance", amount, referralFeePct },
+    });
+    expect(refinance.reallocations).toHaveLength(1);
+    const refinanceLeg = refinance.reallocations[0];
+    expect(refinanceLeg?.penalty).toBe(penalty);
+    const paidAssets = refinanceLeg?.assets ?? 0n;
+    const destinationBorrow = targetBorrow + amount + feeAssets;
+    const supplyAfter = refinance.data.getMarket(
+      targetParams.id,
+    ).totalSupplyAssets;
+
+    expect(feeAssets).toBeGreaterThan(0n);
+    expect(paidAssets).toBeGreaterThan(0n);
+    expect(supplyAfter).toBeGreaterThanOrEqual(
+      destinationBorrow + MathLib.wMulUp(paidAssets, penalty),
+    );
+    expect(targetSupply + paidAssets - 1n).toBeLessThan(
+      destinationBorrow + MathLib.wMulUp(paidAssets - 1n, penalty),
+    );
+
+    const borrow = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount },
+    });
+    const borrowAssets = borrow.reallocations.reduce(
+      (total, { assets }) => total + assets,
+      0n,
+    );
+
+    expect(paidAssets).toBeGreaterThan(borrowAssets);
+  });
+
+  test("retries a paid refinance pass after per-leg penalty rounding", () => {
+    const penalty = MathLib.WAD / 10n;
+    const { data } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 404n,
+      targetSupply: 10_000n,
+      targetBorrow: 9_000n,
+      idle: 500n,
+      penalty,
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "refinance", amount: 1_902n },
+    });
+    const paidLegs = result.reallocations.filter(
+      ({ penalty: legPenalty }) => legPenalty === penalty,
+    );
+
+    expect(paidLegs.map(({ from, assets }) => [from.type, assets])).toEqual([
+      ["market", 551n],
+      ["idle", 453n],
+    ]);
+    expect(
+      paidLegs.reduce((total, { assets }) => total + assets, 0n) -
+        getBlueBundlesV1PenaltyAssets(paidLegs),
+    ).toBe(902n);
+  });
+
+  test("replans a paid refinance pass from a snapshot when per-leg rounding leaves a gap", () => {
+    const penalty = MathLib.WAD / 10n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 5n,
+      canPullFromMarket: false,
+      penalty,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 5n,
+      penalty,
+    });
+
+    const result = multiVaultData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxPenalty: penalty,
+        operation: { type: "refinance", amount: 18n },
+      },
+    );
+
+    expect(
+      result.reallocations.map(({ assets, penalty: legPenalty }) => [
+        assets,
+        legPenalty,
+      ]),
+    ).toEqual([
+      [5n, penalty],
+      [5n, penalty],
+    ]);
+  });
+
+  test("uses one paid pass when the first refinance budget covers", () => {
+    const penalty = MathLib.WAD / 10n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+      penalty,
+    });
+    const ownedPassInstances = new WeakSet<VaultV2BlueReallocationData>();
+    const markOwned = (
+      instance: VaultV2BlueReallocationData,
+    ): VaultV2BlueReallocationData => {
+      ownedPassInstances.add(instance);
+      const clone = instance.clone.bind(instance);
+      vi.spyOn(instance, "clone").mockImplementation(() => markOwned(clone()));
+      return instance;
+    };
+    markOwned(data);
+    const passSpy = vi.spyOn(
+      VaultV2BlueReallocationData.prototype as unknown as {
+        computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+          ...args: never[]
+        ) => unknown;
+      },
+      "computeVaultV2BlueReallocationsAtUtilizationInPlace",
+    );
+
+    try {
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "refinance", amount: 12n },
+      });
+      const paidLegs = result.reallocations.filter(
+        ({ penalty: legPenalty }) => legPenalty === penalty,
+      );
+      const paidPassCalls = passSpy.mock.calls.filter(([args], index) => {
+        const input = args as unknown as { readonly penalty?: bigint };
+        const instance = passSpy.mock.contexts[index] as
+          | VaultV2BlueReallocationData
+          | undefined;
+        return (
+          input.penalty === penalty &&
+          instance != null &&
+          ownedPassInstances.has(instance)
+        );
+      }).length;
+      const reallocatedAssets = paidLegs.reduce(
+        (total, { assets }) => total + assets,
+        0n,
+      );
+
+      expect(paidPassCalls).toBe(1);
+      expect(paidLegs).toHaveLength(1);
+      expect(reallocatedAssets - getBlueBundlesV1PenaltyAssets(paidLegs)).toBe(
+        2n,
+      );
+    } finally {
+      passSpy.mockRestore();
+    }
+  });
+
+  test("grosses up retries for a high-penalty refinance pass", () => {
+    const penalty = MathLib.WAD - MathLib.WAD / 100n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 150n,
+      canPullFromMarket: false,
+      penalty,
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle: 150n,
+      penalty,
+    });
+    const passSpy = vi.spyOn(
+      VaultV2BlueReallocationData.prototype as unknown as {
+        computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+          ...args: never[]
+        ) => unknown;
+      },
+      "computeVaultV2BlueReallocationsAtUtilizationInPlace",
+    );
+
+    try {
+      const result = multiVaultData.computeVaultV2BlueReallocations(
+        targetParams.id,
+        {
+          maxPenalty: penalty,
+          operation: { type: "refinance", amount: 12n },
+        },
+      );
+      const paidLegs = result.reallocations.filter(
+        ({ penalty: legPenalty }) => legPenalty === penalty,
+      );
+      const reallocatedAssets = paidLegs.reduce(
+        (total, { assets }) => total + assets,
+        0n,
+      );
+      const penaltyAssets = getBlueBundlesV1PenaltyAssets(paidLegs);
+      const paidPassCalls = passSpy.mock.calls.filter(([args]) => {
+        const input = args as unknown as { readonly penalty?: bigint };
+        return input.penalty === penalty;
+      }).length;
+
+      expect(paidPassCalls).toBe(9);
+      expect(paidLegs).toHaveLength(2);
+      expect(reallocatedAssets).toBeGreaterThanOrEqual(2n + penaltyAssets);
+      expect(reallocatedAssets - penaltyAssets).toBe(2n);
+    } finally {
+      passSpy.mockRestore();
+    }
+  });
+
+  test("bounds retries for a penalty one unit below WAD", () => {
+    const penalty = MathLib.WAD - 1n;
+    const idle = (3n * MathLib.WAD) / 4n;
+    const allocatorTargetCap = 2n * idle;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle,
+      canPullFromMarket: false,
+      penalty,
+      allocatorTargetCap,
+      targetCaps: [
+        { absoluteCap: allocatorTargetCap, relativeCap: MathLib.WAD },
+        { absoluteCap: allocatorTargetCap, relativeCap: MathLib.WAD },
+        { absoluteCap: allocatorTargetCap, relativeCap: MathLib.WAD },
+      ],
+    });
+    const multiVaultData = addSecondVault(data, {
+      idle,
+      penalty,
+      allocatorTargetCap,
+    });
+    const passSpy = vi.spyOn(
+      VaultV2BlueReallocationData.prototype as unknown as {
+        computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+          ...args: never[]
+        ) => unknown;
+      },
+      "computeVaultV2BlueReallocationsAtUtilizationInPlace",
+    );
+
+    try {
+      expect(() =>
+        multiVaultData.computeVaultV2BlueReallocations(targetParams.id, {
+          maxPenalty: penalty,
+          operation: { type: "refinance", amount: 11n },
+        }),
+      ).toThrow(InsufficientSharedLiquidityError);
+      const paidPassCalls = passSpy.mock.calls.filter(([args]) => {
+        const input = args as unknown as { readonly penalty?: bigint };
+        return input.penalty === penalty;
+      }).length;
+
+      expect(paidPassCalls).toBe(15);
+    } finally {
+      passSpy.mockRestore();
+    }
+  });
+
+  test("keeps the best paid refinance attempt for non-monotonic shared-cap fits", () => {
+    const penalty = MathLib.WAD / 10n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 5n,
+      canPullFromMarket: false,
+      penalty,
+    });
+    const multiVaultData = addSecondVault(data, { idle: 5n, penalty });
+    type PassInput = {
+      readonly maxAssets?: bigint;
+      readonly penalty?: bigint;
+      readonly [key: string]: unknown;
+    };
+    type PassResult = {
+      readonly reallocations: readonly VaultV2BlueReallocation[];
+    };
+    const passPrototype = VaultV2BlueReallocationData.prototype as unknown as {
+      computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+        this: VaultV2BlueReallocationData,
+        input: PassInput,
+      ) => PassResult;
+    };
+    const originalPass = originalComputeAtUtilization as unknown as (
+      this: VaultV2BlueReallocationData,
+      input: PassInput,
+    ) => PassResult;
+    const ownedPassInstances = new WeakSet<VaultV2BlueReallocationData>();
+    const markOwned = (
+      instance: VaultV2BlueReallocationData,
+    ): VaultV2BlueReallocationData => {
+      ownedPassInstances.add(instance);
+      const clone = instance.clone.bind(instance);
+      vi.spyOn(instance, "clone").mockImplementation(() => markOwned(clone()));
+      return instance;
+    };
+    markOwned(multiVaultData);
+    const attempts: {
+      readonly assets: bigint;
+      readonly legs: readonly VaultV2BlueReallocation[];
+      readonly remainingShortfall: bigint;
+    }[] = [];
+    let paidPassCalls = 0;
+    const passSpy = vi
+      .spyOn(
+        passPrototype,
+        "computeVaultV2BlueReallocationsAtUtilizationInPlace",
+      )
+      .mockImplementation(function (
+        this: VaultV2BlueReallocationData,
+        input: PassInput,
+      ) {
+        const reduceBudget =
+          ownedPassInstances.has(this) &&
+          input.penalty === penalty &&
+          ++paidPassCalls === 3;
+        const adjustedInput = reduceBudget
+          ? { ...input, maxAssets: 0n }
+          : input;
+        const pass = originalPass.call(this, adjustedInput);
+        const assets = pass.reallocations.reduce(
+          (total, { assets: legAssets }) => total + legAssets,
+          0n,
+        );
+        const penaltyAssets = getBlueBundlesV1PenaltyAssets(pass.reallocations);
+        if (ownedPassInstances.has(this) && input.penalty === penalty)
+          attempts.push({
+            assets,
+            legs: pass.reallocations,
+            remainingShortfall:
+              8n + penaltyAssets > assets ? 8n + penaltyAssets - assets : 0n,
+          });
+        return pass;
+      });
+
+    try {
+      const result = multiVaultData.computeVaultV2BlueReallocations(
+        targetParams.id,
+        {
+          maxPenalty: penalty,
+          operation: { type: "refinance", amount: 18n },
+        },
+      );
+
+      expect(attempts).toHaveLength(3);
+      expect(attempts[2]?.assets).toBeLessThan(attempts[1]!.assets);
+      expect(attempts[1]?.remainingShortfall).toBe(0n);
+      expect(attempts[2]?.remainingShortfall).toBeGreaterThan(0n);
+      expect(result.reallocations).toEqual(attempts[1]?.legs);
+      expect(
+        result.reallocations.reduce(
+          (total, { assets: legAssets }) => total + legAssets,
+          0n,
+        ) - getBlueBundlesV1PenaltyAssets(result.reallocations),
+      ).toBe(8n);
+    } finally {
+      passSpy.mockRestore();
+    }
+  });
+
+  test("requires refinance liquidity to cover its allocator penalties", () => {
+    const penalty = MathLib.WAD / 10n;
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 10n,
+      canPullFromMarket: false,
+      penalty,
+    });
+
+    let refinanceError: InsufficientSharedLiquidityError | undefined;
+    try {
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "refinance", amount: 20n },
+      });
+    } catch (error) {
+      if (error instanceof InsufficientSharedLiquidityError)
+        refinanceError = error;
+      else throw error;
+    }
+    expect(refinanceError).toBeDefined();
+    expect(refinanceError?.params.shortfall).toBeGreaterThan(
+      refinanceError?.params.available ?? 0n,
+    );
+
+    const borrow = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount: 20n },
+    });
+    expect(
+      borrow.reallocations.reduce((total, { assets }) => total + assets, 0n),
+    ).toBe(10n);
+  });
+
+  test("skips 100%-penalty vaults for refinance", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      idle: 100n,
+      canPullFromMarket: false,
+      penalty: MathLib.WAD,
+    });
+
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: MathLib.WAD,
+        operation: { type: "refinance", amount: 20n },
+      }),
+    ).toThrow(InsufficientSharedLiquidityError);
+  });
+
+  test("validates the refinance referral fee percentage with Blue fee errors", () => {
+    const { data } = makeFixture();
+
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: {
+          type: "refinance",
+          amount: 1n,
+          referralFeePct: -1n,
+        },
+      }),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: {
+          type: "refinance",
+          amount: 1n,
+          referralFeePct: MathLib.WAD,
+        },
+      }),
+    ).toThrow(ReferralFeePctExceededError);
+  });
+});
+
 describe("VaultV2BlueReallocationData liquidity metrics", () => {
+  test("behavior: available-liquidity planning defaults to the snapshot timestamp", () => {
+    const timestamp = TIMESTAMP + Time.s.from.y(1n);
+    const { data: fixtureData } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceBorrow: 850n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetSupply: 100n,
+      targetBorrow: 0n,
+    });
+    const data = new VaultV2BlueReallocationData({
+      ...fixtureData,
+      timestamp,
+    });
+
+    const defaultLiquidity = data.getAvailableLiquidityToUtilization(
+      targetParams.id,
+    );
+    const snapshotLiquidity = data.getAvailableLiquidityToUtilization(
+      targetParams.id,
+      undefined,
+      { timestamp },
+    );
+    const lastUpdateLiquidity = data.getAvailableLiquidityToUtilization(
+      targetParams.id,
+      undefined,
+      { timestamp: TIMESTAMP },
+    );
+
+    expect(defaultLiquidity).toBe(snapshotLiquidity);
+    expect(defaultLiquidity).not.toBe(lastUpdateLiquidity);
+  });
+
   test("default: sums idle and market liquidity in target-utilization math", () => {
     const { data, sourceExpectedAssets } = makeFixture({
       targetSupply: 100n,

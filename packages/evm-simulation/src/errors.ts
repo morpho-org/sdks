@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { OperationType, SlippageQuote } from "./limits.js";
-import type { Assertion } from "./types.js";
+import type { Assertion, LogAssertion, RawLog } from "./types.js";
 
 /** Stable error codes thrown by this package, part of the public API. */
 export const SIMULATION_ERROR_CODES = [
@@ -148,6 +148,71 @@ export class SimulationAssertError extends SimulationPackageError {
   }
 }
 
+/**
+ * A caller-supplied `assertLogs` check did not hold for a simulated
+ * transaction's emitted logs.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   SimulationLogAssertError,
+ *   type RawLog,
+ * } from "@morpho-org/evm-simulation";
+ *
+ * const error = new SimulationLogAssertError("Approval event is missing", {
+ *   transactionIndex: 0,
+ *   assertionIndex: 0,
+ *   assertion: { check: (_logs: readonly RawLog[]) => "Approval event is missing" },
+ *   logs: [],
+ * });
+ * console.log(error.code); // "SIMULATION_ASSERT_FAILED"
+ * console.log(error.transactionIndex, error.logs);
+ * ```
+ */
+export class SimulationLogAssertError extends SimulationPackageError {
+  /** Stable discriminator used by consumers that inspect `error.name`. */
+  override readonly name = "SimulationLogAssertError";
+  /** Shares the existing error code for read-assertion failures. */
+  readonly code = "SIMULATION_ASSERT_FAILED";
+  /** Zero-based index in the caller's transactions. */
+  readonly transactionIndex: number;
+  /** Index in that transaction's `assertLogs` list. */
+  readonly assertionIndex: number;
+  /** A copy of the caller's log assertion. */
+  readonly assertion: LogAssertion;
+  /** Lowercase log values passed to the check, in emission order. */
+  readonly logs: readonly RawLog[];
+
+  /**
+   * Preserve the failed log assertion, its transaction coordinates, and the lowercase log values passed to the check.
+   * @param message - Human-readable assertion failure or check-thrown explanation.
+   * @param failure - Failed assertion, its transaction coordinates, and logs.
+   * @param failure.transactionIndex - Zero-based index in the caller's transactions.
+   * @param failure.assertionIndex - Zero-based index in that transaction's log assertions.
+   * @param failure.assertion - Copy of the caller's log assertion (`check`).
+   * @param failure.logs - Lowercase log values passed to the check.
+   * @param options - Optional original error cause.
+   * @param options.cause - Optional error thrown by the caller's check.
+   */
+  // biome-ignore lint/complexity/useMaxParams: public error constructor signature
+  constructor(
+    message: string,
+    failure: {
+      readonly transactionIndex: number;
+      readonly assertionIndex: number;
+      readonly assertion: LogAssertion;
+      readonly logs: readonly RawLog[];
+    },
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.transactionIndex = failure.transactionIndex;
+    this.assertionIndex = failure.assertionIndex;
+    this.assertion = { ...failure.assertion };
+    this.logs = [...failure.logs];
+  }
+}
+
 /** Per-asset net retained amount keyed by restricted contract and token. */
 export interface RetainedAsset {
   /** Restricted bundles contract that ended up holding the token. */
@@ -188,7 +253,7 @@ export class RpcTransportError extends SimulationPackageError {
   readonly code = "RPC_TRANSPORT_ERROR";
 }
 
-/** Bad input to the simulation functions. Not bypassable. */
+/** Bad input or a preview authorization preparation that emits asset transfers. Not bypassable. */
 export class SimulationValidationError extends SimulationPackageError {
   override readonly name = "SimulationValidationError";
   readonly code = "VALIDATION_ERROR";
@@ -435,32 +500,37 @@ export class UnsupportedLimitActionError extends SimulationPackageError {
   }
 }
 
-const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
-  Object.freeze({
-    VALIDATION_ERROR: "SimulationValidationError",
-    UNSUPPORTED_CHAIN: "UnsupportedChainError",
-    RPC_TRANSPORT_ERROR: "RpcTransportError",
-    SIMULATION_REVERTED: "SimulationRevertedError",
-    SIMULATION_ASSERT_FAILED: "SimulationAssertError",
-    BLACKLIST_ERROR: "BlacklistViolationError",
-    UNSUPPORTED_OPERATION: "UnsupportedOperationError",
-    INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
-    SLIPPAGE_CHECK_UNAVAILABLE: "SlippageCheckUnavailableError",
-    AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
-    CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
-    UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
-    LIMIT_ACCOUNT_MISMATCH: "LimitAccountMismatchError",
-    MISSING_EXPECTED_QUOTE: "MissingExpectedQuoteError",
-    AMBIGUOUS_EXPECTED_QUOTE: "AmbiguousExpectedQuoteError",
-    UNSUPPORTED_LIMIT_ACTION: "UnsupportedLimitActionError",
-  });
+const ERROR_NAME_BY_CODE: Readonly<
+  Record<SimulationErrorCode, readonly string[]>
+> = Object.freeze({
+  VALIDATION_ERROR: ["SimulationValidationError"],
+  UNSUPPORTED_CHAIN: ["UnsupportedChainError"],
+  RPC_TRANSPORT_ERROR: ["RpcTransportError"],
+  SIMULATION_REVERTED: ["SimulationRevertedError"],
+  SIMULATION_ASSERT_FAILED: [
+    "SimulationAssertError",
+    "SimulationLogAssertError",
+  ],
+  BLACKLIST_ERROR: ["BlacklistViolationError"],
+  UNSUPPORTED_OPERATION: ["UnsupportedOperationError"],
+  INVALID_SIMULATION_RESPONSE: ["InvalidSimulationResponseError"],
+  SLIPPAGE_CHECK_UNAVAILABLE: ["SlippageCheckUnavailableError"],
+  AUTHORIZATION_REQUEST_MISMATCH: ["AuthorizationRequestMismatchError"],
+  CONSUMER_LIMIT_VIOLATION: ["ConsumerLimitViolationError"],
+  UNEXPECTED_SIMULATION_ERROR: ["UnexpectedSimulationError"],
+  LIMIT_ACCOUNT_MISMATCH: ["LimitAccountMismatchError"],
+  MISSING_EXPECTED_QUOTE: ["MissingExpectedQuoteError"],
+  AMBIGUOUS_EXPECTED_QUOTE: ["AmbiguousExpectedQuoteError"],
+  UNSUPPORTED_LIMIT_ACTION: ["UnsupportedLimitActionError"],
+});
 
 /**
  * Structural guard for consumers where `instanceof` fails across bundles.
  *
  * @param value - Anything caught.
  * @returns `true` for package instances or objects carrying a message string,
- *   a known code and its matching class name. Subclass-specific fields are not checked.
+ *   a known code and one of its matching class names. Subclass-specific fields
+ *   are not checked.
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -506,11 +576,10 @@ export function isSimulationPackageError(
     code?: unknown;
   };
   if (typeof message !== "string") return false;
-  if (
-    typeof code !== "string" ||
-    !(SIMULATION_ERROR_CODES as readonly string[]).includes(code) ||
-    name !== ERROR_NAME_BY_CODE[code as SimulationErrorCode]
-  )
+  if (typeof name !== "string" || typeof code !== "string") return false;
+  if (!(SIMULATION_ERROR_CODES as readonly string[]).includes(code))
+    return false;
+  if (!ERROR_NAME_BY_CODE[code as SimulationErrorCode].includes(name))
     return false;
   return true;
 }

@@ -1,4 +1,4 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -24,6 +24,7 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   NativeFundingAmountMismatchError,
   NonPositiveInputError,
   ReferralFeeRecipientMissingError,
@@ -510,5 +511,29 @@ describe("blueSupply — action metadata", () => {
       },
     });
     expect(transaction.action.args.referralFeeAssets).toBe(10n);
+  });
+});
+
+describe("blueSupply market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+  const staleMarket = {
+    chainId,
+    marketParams: withStaleId(
+      new MarketParams({
+        ...marketParamsInput,
+        oracle: getAddress("0x0000000000000000000000000000000000000023"),
+      }),
+      marketParams.id,
+    ),
+  };
+
+  test("error: rejects market params whose id does not hash from the tuple", () => {
+    expect(() =>
+      blueSupply({
+        market: staleMarket,
+        args: { userAddress, assets: 5n, deadline },
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

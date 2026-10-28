@@ -21,6 +21,8 @@ import {
   BlueBundlesV1DeadlineExceedsWindowError,
   InvalidTransactionHashError,
   MissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
 } from "./errors.js";
 import type {
@@ -45,6 +47,13 @@ const MOCK_USER_OPERATION_HASH =
 const TOKEN = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const COLLATERAL = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const VAULT = "0x23f5E9c35820f4baB695Ac1F19c203cC3f8e1e11";
+const QUOTE_PAYMASTER = "0x2222222222222222222222222222222222222222";
+const FINAL_PAYMASTER = "0x3333333333333333333333333333333333333333";
+type EvmErc4337WalletConfig =
+  import("@tetherto/wdk-wallet-evm-erc-4337").EvmErc4337WalletConfig;
+const MIXED_CASE_PAYMASTER = viem.getAddress(
+  "0xabCDeF0123456789AbcdEf0123456789aBCDEF01",
+);
 const MARKET_ID =
   "0xe7e9694b754c4d4f7e21faf7223f6fa71abaeb10296a4c43a54a7977149687d2";
 const MARKET_PARAMS = {
@@ -231,7 +240,7 @@ const { MarketParams } = await import("@morpho-org/blue-sdk");
 const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import(
   "@tetherto/wdk-wallet-evm"
 );
-const { WalletAccountEvmErc4337 } = await import(
+const { ConfigurationError, WalletAccountEvmErc4337 } = await import(
   "@tetherto/wdk-wallet-evm-erc-4337"
 );
 const {
@@ -386,6 +395,199 @@ describe.sequential("MorphoProtocolEvm", () => {
         hash: MOCK_TRANSACTION_HASH,
         fee: 12_345n,
       });
+    });
+
+    test("serializes concurrent EOA submits on one instance", async () => {
+      const firstSend = Promise.withResolvers<typeof MOCK_TRANSACTION_HASH>();
+      const order: string[] = [];
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      prepareTransactionRequestMock.mockImplementation(async () => {
+        order.push("prepare");
+        return {
+          gas: 1n,
+          nonce: 0,
+          maxFeePerGas: 12_345n,
+          maxPriorityFeePerGas: 1n,
+        };
+      });
+      sendRawTransactionMock
+        .mockImplementationOnce(async () => {
+          order.push("send-start");
+          await firstSend.promise;
+          order.push("send-settled");
+          return MOCK_TRANSACTION_HASH;
+        })
+        .mockImplementationOnce(async () => {
+          order.push("send-next");
+          return MOCK_TRANSACTION_HASH;
+        });
+      const first = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const second = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const firstSubmission = first.submit();
+      await vi.waitFor(() =>
+        expect(sendRawTransactionMock).toHaveBeenCalledTimes(1),
+      );
+      const addressCalls = vi.mocked(account.getAddress).mock.calls.length;
+      const secondSubmission = second.submit();
+      await vi.waitFor(() =>
+        expect(vi.mocked(account.getAddress).mock.calls.length).toBeGreaterThan(
+          addressCalls,
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      try {
+        expect(order).toEqual(["prepare", "send-start"]);
+        expect(prepareTransactionRequestMock).toHaveBeenCalledTimes(1);
+      } finally {
+        firstSend.resolve(MOCK_TRANSACTION_HASH);
+      }
+      await Promise.all([firstSubmission, secondSubmission]);
+
+      expect(order).toEqual([
+        "prepare",
+        "send-start",
+        "send-settled",
+        "prepare",
+        "send-next",
+      ]);
+    });
+
+    test("serializes concurrent EOA submits across instances using the same account address", async () => {
+      const firstSend = Promise.withResolvers<typeof MOCK_TRANSACTION_HASH>();
+      const secondAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+        provider: "https://dummy-rpc-url.com",
+      });
+      secondAccount.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      secondAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      secondAccount.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      const secondProtocol = new MorphoProtocolEvm(secondAccount, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+      });
+      const first = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const second = await secondProtocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      sendRawTransactionMock
+        .mockImplementationOnce(async () => {
+          await firstSend.promise;
+          return MOCK_TRANSACTION_HASH;
+        })
+        .mockResolvedValueOnce(MOCK_TRANSACTION_HASH);
+
+      const firstSubmission = first.submit();
+      await vi.waitFor(() =>
+        expect(sendRawTransactionMock).toHaveBeenCalledTimes(1),
+      );
+      const firstAddressCalls = vi.mocked(account.getAddress).mock.calls.length;
+      const secondAddressCalls = vi.mocked(secondAccount.getAddress).mock.calls
+        .length;
+      const secondSubmission = second.submit();
+      await vi.waitFor(() => {
+        expect(vi.mocked(account.getAddress).mock.calls.length).toBe(
+          firstAddressCalls,
+        );
+        expect(
+          vi.mocked(secondAccount.getAddress).mock.calls.length,
+        ).toBeGreaterThan(secondAddressCalls);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      try {
+        expect(prepareTransactionRequestMock).toHaveBeenCalledTimes(1);
+      } finally {
+        firstSend.resolve(MOCK_TRANSACTION_HASH);
+      }
+      await Promise.all([firstSubmission, secondSubmission]);
+      expect(prepareTransactionRequestMock).toHaveBeenCalledTimes(2);
+    });
+
+    test("releases the EOA send queue when a broadcast fails", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      sendRawTransactionMock
+        .mockRejectedValueOnce(new Error("send failed"))
+        .mockResolvedValueOnce(MOCK_TRANSACTION_HASH);
+      const first = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const second = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      const firstSubmission = first.submit();
+      const secondSubmission = second.submit();
+
+      await expect(firstSubmission).rejects.toThrow("send failed");
+      await expect(secondSubmission).resolves.toEqual({
+        hash: MOCK_TRANSACTION_HASH,
+        fee: 12_345n,
+      });
+      expect(prepareTransactionRequestMock).toHaveBeenCalledTimes(2);
+      expect(sendRawTransactionMock).toHaveBeenCalledTimes(2);
+    });
+
+    test("does not serialize EOA submits from different accounts", async () => {
+      const firstSend = Promise.withResolvers<typeof MOCK_TRANSACTION_HASH>();
+      const secondSend = Promise.withResolvers<typeof MOCK_TRANSACTION_HASH>();
+      const otherAccount = new WalletAccountEvm(
+        "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
+        "0'/0/0",
+        { provider: "https://dummy-rpc-url.com" },
+      );
+      const otherAddress = await otherAccount.getAddress();
+      expect(otherAddress.toLowerCase()).not.toBe(ADDRESS.toLowerCase());
+      otherAccount.getAddress = vi.fn().mockResolvedValue(otherAddress);
+      otherAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      otherAccount.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      const otherProtocol = new MorphoProtocolEvm(otherAccount, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+      });
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      sendRawTransactionMock
+        .mockImplementationOnce(() => firstSend.promise)
+        .mockImplementationOnce(() => secondSend.promise);
+      const first = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const second = await otherProtocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      const firstSubmission = first.submit();
+      const secondSubmission = second.submit();
+      try {
+        await vi.waitFor(() =>
+          expect(prepareTransactionRequestMock).toHaveBeenCalledTimes(2),
+        );
+        expect(sendRawTransactionMock).toHaveBeenCalledTimes(2);
+      } finally {
+        firstSend.resolve(MOCK_TRANSACTION_HASH);
+        secondSend.resolve(MOCK_TRANSACTION_HASH);
+      }
+      await Promise.all([firstSubmission, secondSubmission]);
     });
 
     test.each([
@@ -2986,6 +3188,310 @@ describe.sequential("MorphoProtocolEvm", () => {
         nonceKey: 0n,
       });
     });
+
+    type PaymasterApprovalCase = {
+      name: string;
+      quotePaymaster: string;
+      configuredPaymasterAddress?: string;
+      accountMode?: "native" | "sponsored";
+      callConfig?: { paymasterAddress?: string; useNativeCoins?: true };
+      removedHook?:
+        | "_getSmartAccount"
+        | "_getSmartAccount:null"
+        | "prependTokenPaymasterApproveToCallData";
+      outcome:
+        | { kind: "sent" }
+        | {
+            kind: "spender-mismatch";
+            spender: string;
+            paymasterAddress: string | undefined;
+          }
+        | { kind: "config-error" }
+        | { kind: "guard-unavailable"; hook: string };
+    };
+
+    const paymasterApprovalCases: PaymasterApprovalCase[] = [
+      {
+        name: "rejects a quote spender that differs from the configured paymaster",
+        quotePaymaster: QUOTE_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        outcome: {
+          kind: "spender-mismatch",
+          spender: QUOTE_PAYMASTER,
+          paymasterAddress: FINAL_PAYMASTER,
+        },
+      },
+      {
+        name: "accepts the configured paymaster",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        outcome: { kind: "sent" },
+      },
+      {
+        name: "accepts a lowercased quote for a checksummed configured paymaster",
+        quotePaymaster: MIXED_CASE_PAYMASTER.toLowerCase(),
+        configuredPaymasterAddress: MIXED_CASE_PAYMASTER,
+        outcome: { kind: "sent" },
+      },
+      {
+        name: "rejects before signing when no paymasterAddress is configured",
+        quotePaymaster: FINAL_PAYMASTER,
+        outcome: { kind: "config-error" },
+      },
+      {
+        name: "rejects a per-call paymasterAddress override that differs from the quote",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        callConfig: { paymasterAddress: QUOTE_PAYMASTER },
+        outcome: {
+          kind: "spender-mismatch",
+          spender: FINAL_PAYMASTER,
+          paymasterAddress: QUOTE_PAYMASTER,
+        },
+      },
+      {
+        name: "rejects when the WDK smart-account hook is missing",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        removedHook: "_getSmartAccount",
+        outcome: {
+          kind: "guard-unavailable",
+          hook: "_getSmartAccount",
+        },
+      },
+      {
+        name: "rejects when the WDK smart-account hook resolves to a non-object",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        removedHook: "_getSmartAccount:null",
+        outcome: {
+          kind: "guard-unavailable",
+          hook: "_getSmartAccount",
+        },
+      },
+      {
+        name: "rejects when the AbstractionKit approval hook is missing",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        removedHook: "prependTokenPaymasterApproveToCallData",
+        outcome: {
+          kind: "guard-unavailable",
+          hook: "prependTokenPaymasterApproveToCallData",
+        },
+      },
+      {
+        name: "sends in native-coin mode when the AbstractionKit approval hook is missing",
+        quotePaymaster: FINAL_PAYMASTER,
+        accountMode: "native",
+        removedHook: "prependTokenPaymasterApproveToCallData",
+        outcome: { kind: "sent" },
+      },
+      {
+        name: "sends in sponsored mode when the AbstractionKit approval hook is missing",
+        quotePaymaster: FINAL_PAYMASTER,
+        accountMode: "sponsored",
+        removedHook: "prependTokenPaymasterApproveToCallData",
+        outcome: { kind: "sent" },
+      },
+      {
+        name: "sends when the call overrides token-paymaster mode to native coins without the AbstractionKit approval hook",
+        quotePaymaster: FINAL_PAYMASTER,
+        configuredPaymasterAddress: FINAL_PAYMASTER,
+        callConfig: { useNativeCoins: true },
+        removedHook: "prependTokenPaymasterApproveToCallData",
+        outcome: { kind: "sent" },
+      },
+    ];
+
+    test.each(paymasterApprovalCases)(
+      "$name",
+      async ({
+        quotePaymaster,
+        configuredPaymasterAddress,
+        accountMode,
+        callConfig,
+        removedHook,
+        outcome,
+      }) => {
+        const methods: string[] = [];
+        const handleRpc = ({ method }: { method: string }) => {
+          methods.push(method);
+          const paymasterFields = {
+            paymaster: configuredPaymasterAddress ?? FINAL_PAYMASTER,
+            paymasterData: "0x1234",
+            paymasterVerificationGasLimit: "0x10000",
+            paymasterPostOpGasLimit: "0x10000",
+          };
+          switch (method) {
+            case "eth_chainId":
+              return "0x1";
+            case "eth_getCode":
+              return "0x";
+            case "eth_call":
+              return `0x${"00".repeat(32)}`;
+            case "pimlico_getUserOperationGasPrice":
+              return {
+                fast: {
+                  maxFeePerGas: "0x3b9aca00",
+                  maxPriorityFeePerGas: "0x3b9aca00",
+                },
+              };
+            case "pimlico_getTokenQuotes":
+              return {
+                quotes: [
+                  {
+                    token: TOKEN,
+                    exchangeRate: "0x3b9aca00",
+                    paymaster: quotePaymaster,
+                  },
+                ],
+              };
+            case "pm_getPaymasterStubData":
+            case "pm_getPaymasterData":
+              return paymasterFields;
+            case "eth_estimateUserOperationGas":
+              return {
+                preVerificationGas: "0x5208",
+                verificationGasLimit: "0x186a0",
+                callGasLimit: "0x186a0",
+                paymasterVerificationGasLimit: "0x10000",
+                paymasterPostOpGasLimit: "0x10000",
+              };
+            case "eth_sendUserOperation":
+              return MOCK_USER_OPERATION_HASH;
+            default:
+              throw new Error(`Unhandled RPC ${method}`);
+          }
+        };
+        vi.stubGlobal(
+          "fetch",
+          vi.fn<typeof fetch>(async (_url, init) => {
+            const body = JSON.parse(String(init?.body));
+            const reply = (rpc: { id: number; method: string }) => ({
+              jsonrpc: "2.0",
+              id: rpc.id,
+              result: handleRpc(rpc),
+            });
+            return new Response(
+              JSON.stringify(
+                Array.isArray(body) ? body.map(reply) : reply(body),
+              ),
+            );
+          }),
+        );
+        const accountConfig = {
+          chainId: 1,
+          provider: {
+            request: async (rpc: { method: string }) => handleRpc(rpc),
+          },
+          bundlerUrl: "https://bundler.pimlico.test",
+          safeModulesVersion: "0.3.0",
+          ...(accountMode === "native"
+            ? { isSponsored: false, useNativeCoins: true }
+            : accountMode === "sponsored"
+              ? {
+                  paymasterUrl: "https://paymaster.pimlico.test",
+                  isSponsored: true,
+                  useNativeCoins: false,
+                }
+              : {
+                  paymasterUrl: "https://paymaster.pimlico.test",
+                  ...(configuredPaymasterAddress
+                    ? { paymasterAddress: configuredPaymasterAddress }
+                    : {}),
+                  paymasterToken: { address: TOKEN },
+                  isSponsored: false,
+                  useNativeCoins: false,
+                }),
+        } as EvmErc4337WalletConfig;
+        // biome-ignore lint/suspicious/noShadow: test-local account running WDK's token-paymaster flow
+        const account = new WalletAccountEvmErc4337(
+          SEED,
+          "0'/0/0",
+          accountConfig,
+        );
+        if (removedHook === "_getSmartAccount") {
+          assert(Reflect.set(account, removedHook, undefined));
+        } else if (removedHook === "_getSmartAccount:null") {
+          assert(Reflect.set(account, "_getSmartAccount", async () => null));
+        } else if (removedHook === "prependTokenPaymasterApproveToCallData") {
+          const getSmartAccount: unknown = Reflect.get(
+            account,
+            "_getSmartAccount",
+          );
+          assert(typeof getSmartAccount === "function");
+          assert(
+            Reflect.set(
+              account,
+              "_getSmartAccount",
+              async (...args: unknown[]) => {
+                const wrappedSmartAccount: object = await Reflect.apply(
+                  getSmartAccount,
+                  account,
+                  args,
+                );
+                return new Proxy(wrappedSmartAccount, {
+                  get(target, property) {
+                    return property === "prependTokenPaymasterApproveToCallData"
+                      ? undefined
+                      : Reflect.get(target, property);
+                  },
+                });
+              },
+            ),
+          );
+        }
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        readContractMock.mockResolvedValue(100_000n);
+        // biome-ignore lint/suspicious/noShadow: test-local protocol for the ERC-4337 account above
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+        });
+
+        try {
+          const result = protocol.supply(
+            { token: TOKEN, amount: 100_000n },
+            callConfig,
+          );
+          switch (outcome.kind) {
+            case "spender-mismatch": {
+              const error = await result.catch((caught: unknown) => caught);
+              assert(error instanceof PaymasterApprovalSpenderMismatchError);
+              expect(error).toMatchObject({
+                spender: outcome.spender,
+                paymasterAddress: outcome.paymasterAddress,
+              });
+              expect(methods).not.toContain("eth_sendUserOperation");
+              break;
+            }
+            case "config-error": {
+              const error = await result.catch((caught: unknown) => caught);
+              assert(error instanceof ConfigurationError);
+              expect(error.message).toContain("paymasterAddress");
+              expect(methods).not.toContain("eth_sendUserOperation");
+              break;
+            }
+            case "guard-unavailable": {
+              const error = await result.catch((caught: unknown) => caught);
+              assert(error instanceof PaymasterApprovalGuardUnavailableError);
+              expect(error.hook).toBe(outcome.hook);
+              expect(methods).not.toContain("eth_sendUserOperation");
+              break;
+            }
+            case "sent": {
+              await expect(result).resolves.toMatchObject({
+                hash: MOCK_USER_OPERATION_HASH,
+              });
+              expect(methods).toContain("eth_sendUserOperation");
+              break;
+            }
+          }
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
 
     test("behavior: bypasses WDK's transaction-only quote cache", async () => {
       const provider = {

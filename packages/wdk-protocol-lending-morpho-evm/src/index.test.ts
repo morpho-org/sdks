@@ -7,21 +7,29 @@ import {
   ChainIdMismatchError as SdkChainIdMismatchError,
   MissingContractCodeError as SdkMissingContractCodeError,
 } from "@morpho-org/morpho-sdk";
+import { MaximumFeeExceededError as WdkMaximumFeeExceededError } from "@tetherto/wdk-wallet";
 import { expect, test } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError as SourceBlueBundlesV1DeadlineExceedsWindowError,
   InvalidTransactionHashError as SourceInvalidTransactionHashError,
+  InvalidTransactionMaxFeeError as SourceInvalidTransactionMaxFeeError,
   MissingWalletProviderError as SourceMissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError as SourcePaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError as SourcePaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError as SourceUnconfirmedBroadcastError,
 } from "./errors.js";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   ChainIdMismatchError,
   InvalidTransactionHashError,
+  InvalidTransactionMaxFeeError,
   MalformedTokenMetadataError,
+  MaximumFeeExceededError,
   MissingContractCodeError,
   MissingPermitDomainNameError,
   MissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
   UnknownTokenError,
 } from "./index.js";
@@ -65,4 +73,26 @@ test("re-exports UnconfirmedBroadcastError by identity", () => {
 
 test("re-exports InvalidTransactionHashError by identity", () => {
   expect(InvalidTransactionHashError).toBe(SourceInvalidTransactionHashError);
+});
+
+test("re-exports InvalidTransactionMaxFeeError by identity", () => {
+  expect(InvalidTransactionMaxFeeError).toBe(
+    SourceInvalidTransactionMaxFeeError,
+  );
+});
+
+test("re-exports MaximumFeeExceededError by identity", () => {
+  expect(MaximumFeeExceededError).toBe(WdkMaximumFeeExceededError);
+});
+
+test("re-exports PaymasterApprovalSpenderMismatchError by identity", () => {
+  expect(PaymasterApprovalSpenderMismatchError).toBe(
+    SourcePaymasterApprovalSpenderMismatchError,
+  );
+});
+
+test("re-exports PaymasterApprovalGuardUnavailableError by identity", () => {
+  expect(PaymasterApprovalGuardUnavailableError).toBe(
+    SourcePaymasterApprovalGuardUnavailableError,
+  );
 });

@@ -1,4 +1,4 @@
-import { MarketParams } from "@morpho-org/blue-sdk";
+import { MarketUtils } from "@morpho-org/blue-sdk";
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketParams as MidnightMarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
 import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
@@ -28,13 +28,22 @@ import { resolveAssets } from "./resolve-assets.js";
 const vault = "0x0000000000000000000000000000000000000001";
 const loan = "0x0000000000000000000000000000000000000002";
 const collateral = "0x0000000000000000000000000000000000000003";
-const marketId = new MarketParams({
+const blueMarketParams = {
   loanToken: loan,
   collateralToken: collateral,
   oracle: zeroAddress,
   irm: zeroAddress,
   lltv: 0n,
-}).id;
+} as const;
+const marketId = MarketUtils.getMarketId(blueMarketParams);
+const idleMarketId = MarketUtils.getMarketId({
+  ...blueMarketParams,
+  collateralToken: zeroAddress,
+});
+const zeroLoanMarketId = MarketUtils.getMarketId({
+  ...blueMarketParams,
+  loanToken: zeroAddress,
+});
 const suppliedMidnightMarket = MidnightMarketUtils.toStruct(
   new MidnightMarketParams({
     chainId: mainnet.id,
@@ -107,6 +116,91 @@ describe("resolveAssets", () => {
         lltv: 0n,
       });
     expect(handle.request).toHaveBeenCalledTimes(1);
+  });
+  test("behavior: matching Blue market params resolve tokens", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [loan, collateral, zeroAddress, zeroAddress, 0n],
+    });
+    const result = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueSupply",
+          marketId,
+          quote: { assetsPaid: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    });
+    expect(result[0]?.assetsPaid).toBe(loan);
+    expect(result[0]?.marketParams).toEqual(blueMarketParams);
+  });
+  test("error: rejects Blue market params that hash to another market id", async () => {
+    const handle = createMockClient(mainnet);
+    const mismatchedMarketParams = {
+      ...blueMarketParams,
+      loanToken: vault,
+    } as const;
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [
+        mismatchedMarketParams.loanToken,
+        mismatchedMarketParams.collateralToken,
+        mismatchedMarketParams.oracle,
+        mismatchedMarketParams.irm,
+        mismatchedMarketParams.lltv,
+      ],
+    });
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueSupply",
+          marketId,
+          quote: { assetsPaid: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect((error as Error).message).toContain("returned params for market");
+    expect(handle.request).toHaveBeenCalledTimes(1);
+  });
+  test("error: all-zero Blue market params keep the zero-token error", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n],
+    });
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueSupply",
+          marketId,
+          quote: { assetsPaid: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect((error as Error).message).toContain(
+      `market:${marketId.toLowerCase()}`,
+    );
   });
   test.each(["assetsPaid", "assetsReceived"] as const)(
     "typed %s requires the canonical asset or a registered native alias",
@@ -373,7 +467,7 @@ describe("resolveAssets", () => {
       operations: [
         {
           type: "blueSupply",
-          marketId,
+          marketId: idleMarketId,
           quote: { assetsPaid: 1n },
           slippageTolerance: 0n,
         },
@@ -397,7 +491,7 @@ describe("resolveAssets", () => {
       operations: [
         {
           type: "blueRepayWithdrawCollateral",
-          marketId,
+          marketId: idleMarketId,
           quote: { assetsPaid: 1n, assetsReceived: 1n },
           slippageTolerance: 0n,
         },
@@ -609,7 +703,7 @@ describe("resolveAssets", () => {
       operations: [
         {
           type: "blueBorrow",
-          marketId,
+          marketId: zeroLoanMarketId,
           quote: { assetsReceived: 1n },
           slippageTolerance: 0n,
         },
@@ -618,7 +712,7 @@ describe("resolveAssets", () => {
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message).toContain(
-      `market:${marketId.toLowerCase()}`,
+      `market:${zeroLoanMarketId.toLowerCase()}`,
     );
     expect(error).not.toHaveProperty("context");
   });

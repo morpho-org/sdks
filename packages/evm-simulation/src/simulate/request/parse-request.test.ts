@@ -1798,13 +1798,99 @@ describe("parseRequest", () => {
     expect(parsedAssertion?.to).toBe(callerAssertion.to);
   });
 
+  test("behavior: copies log assertions without freezing caller objects", () => {
+    const callerAssertion = { check: () => undefined };
+    const request = parse({
+      chainId: 1,
+      transactions: [tx({ assertLogs: [callerAssertion] })],
+    });
+    const parsedAssertion = request.transactions[0]?.assertLogs?.[0];
+    expect(parsedAssertion).toEqual(callerAssertion);
+    expect(parsedAssertion).not.toBe(callerAssertion);
+    expect(Object.isFrozen(callerAssertion)).toBe(false);
+    expect(Object.isFrozen(parsedAssertion)).toBe(true);
+  });
+
   test("behavior: empty assertion arrays are omitted", () => {
     const request = parse({
       chainId: 1,
-      transactions: [tx({ assertBefore: [], assertAfter: [] })],
+      transactions: [tx({ assertBefore: [], assertAfter: [], assertLogs: [] })],
     });
     expect(request.transactions[0]).not.toHaveProperty("assertBefore");
     expect(request.transactions[0]).not.toHaveProperty("assertAfter");
+    expect(request.transactions[0]).not.toHaveProperty("assertLogs");
+  });
+
+  test("error: rejects a non-array log assertion list", () => {
+    let error: unknown;
+    try {
+      parse({
+        chainId: 1,
+        transactions: [tx({ assertLogs: { check: () => undefined } })],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect((error as SimulationValidationError).fieldErrors).toContain(
+      "transactions[0].assertLogs: must be an array",
+    );
+  });
+
+  test.each([
+    ["missing check", {}],
+    ["non-function check", { check: null }],
+  ])("error: rejects log assertion with %s", (_name, assertion) => {
+    let error: unknown;
+    try {
+      parse({
+        chainId: 1,
+        transactions: [tx({ assertLogs: [assertion] })],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect((error as SimulationValidationError).fieldErrors).toContain(
+      "transactions[0].assertLogs[0].check: must be a function",
+    );
+  });
+
+  test.each([null, 42])(
+    "error: rejects non-object log assertion %s",
+    (assertion) => {
+      let error: unknown;
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx({ assertLogs: [assertion] })],
+        });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContain(
+        "transactions[0].assertLogs[0]: must be an object",
+      );
+    },
+  );
+
+  test("error: rejects extra log assertion keys", () => {
+    let error: unknown;
+    try {
+      parse({
+        chainId: 1,
+        transactions: [
+          tx({ assertLogs: [{ check: () => undefined, extra: true }] }),
+        ],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect((error as SimulationValidationError).fieldErrors).toContain(
+      "transactions[0].assertLogs[0].extra: unknown field",
+    );
   });
 
   test.each([

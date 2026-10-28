@@ -1,9 +1,12 @@
 import type { MarketInput, OfferStruct } from "@morpho-org/midnight-sdk";
+import { isAddressEqual, zeroAddress } from "viem";
 import {
   EmptyMidnightTakeableOffersError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferZeroSellerReceiverError,
 } from "../types/index.js";
 import { encodeMidnightMarketId } from "./encodeMidnightCalldata.js";
+import { validateMidnightAddress } from "./validateMidnightAccount.js";
 import { validateOfferSides } from "./validateOfferSides.js";
 
 /**
@@ -14,13 +17,18 @@ import { validateOfferSides } from "./validateOfferSides.js";
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when an offer belongs to another market.
- * @throws {MidnightCalldataEncodingError} when a market cannot be ABI-encoded.
+ * @throws {MidnightTakeableOfferZeroSellerReceiverError} when a sell offer routes seller proceeds to the zero address.
+ * @throws {MidnightCalldataEncodingError} when a market cannot be ABI-encoded or a sell offer's
+ *   `receiverIfMakerIsSeller` is not an address.
  * @internal
  */
 export const validateTakeableOffers = (params: {
   readonly market: MarketInput;
   readonly takeableOffers: readonly {
-    readonly offer: Pick<OfferStruct, "buy" | "market">;
+    readonly offer: Pick<
+      OfferStruct,
+      "buy" | "market" | "receiverIfMakerIsSeller"
+    >;
   }[];
   readonly expectedBuy: boolean;
 }) => {
@@ -41,6 +49,15 @@ export const validateTakeableOffers = (params: {
         expectedMarket: marketId,
         actualMarket: actualMarketId,
       });
+    }
+    if (take.offer.buy) continue;
+    // Reject a malformed address before viem compares it.
+    validateMidnightAddress(
+      `takeableOffers[${index}].offer.receiverIfMakerIsSeller`,
+      take.offer.receiverIfMakerIsSeller,
+    );
+    if (isAddressEqual(take.offer.receiverIfMakerIsSeller, zeroAddress)) {
+      throw new MidnightTakeableOfferZeroSellerReceiverError({ index });
     }
   }
 

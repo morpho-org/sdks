@@ -3,6 +3,7 @@ import {
   AccrualPosition,
   ChainId,
   Market,
+  type MarketId,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
@@ -56,6 +57,7 @@ import {
   getMidnightMaxSafeDebt,
   validateAccrualPosition,
   validateChainId,
+  validateMarketParamsId,
   validateMidnightMarketChainId,
   validateMidnightNativeAmount,
   validateNativeAsset,
@@ -1240,5 +1242,25 @@ describe("validateWithdrawShares", () => {
         marketId: marketParams.id,
       }),
     ).toThrow(WithdrawSharesExceedSupplyError);
+  });
+});
+
+describe("validateMarketParamsId", () => {
+  test("accepts market params built by the constructor", () => {
+    expect(() => validateMarketParamsId(marketParams)).not.toThrow();
+  });
+
+  test("error: rejects an id that does not hash from the tuple", () => {
+    const staleId = new MarketParams({
+      ...marketParams,
+      oracle: "0x0000000000000000000000000000000000000023",
+    }).id;
+    const forged: MarketParams = Object.assign(
+      Object.create(MarketParams.prototype),
+      marketParams,
+      { id: staleId satisfies MarketId },
+    );
+
+    expect(() => validateMarketParamsId(forged)).toThrow(MarketIdMismatchError);
   });
 });

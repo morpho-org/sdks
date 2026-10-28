@@ -2,6 +2,7 @@ import {
   type AccrualPosition,
   getChainAddresses,
   type MarketId,
+  type MarketParams,
   MarketUtils,
   MathLib,
   ORACLE_PRICE_SCALE,
@@ -83,6 +84,22 @@ export const validateUint256Field = (field: string, value: bigint): void => {
   if (value < 0n) throw new NegativeInputError(field, value);
   if (value > maxUint256) {
     throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+  }
+};
+
+/**
+ * Rejects market params whose cached `id` does not hash from their five tuple fields, so a
+ * hand-built or mutated object cannot make the SDK describe one market while calldata targets another.
+ *
+ * @param marketParams - Market params whose `id` must equal the id derived from the tuple.
+ * @returns Nothing when `marketParams.id` matches the derived id.
+ * @throws {MarketIdMismatchError} when `marketParams.id` differs from the derived id.
+ * @internal
+ */
+export const validateMarketParamsId = (marketParams: MarketParams): void => {
+  const derivedId = MarketUtils.getMarketId(marketParams);
+  if (marketParams.id !== derivedId) {
+    throw new MarketIdMismatchError(marketParams.id, derivedId);
   }
 };
 
