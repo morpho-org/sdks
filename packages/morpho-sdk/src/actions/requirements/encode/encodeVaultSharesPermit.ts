@@ -1,7 +1,7 @@
 import { type Address, Eip5267Domain, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type WalletClient, zeroHash } from "viem";
+import { maxUint256, type WalletClient, zeroHash } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import {
   validateDeadline,
@@ -29,8 +29,6 @@ export interface EncodeVaultSharesPermitParams {
   readonly chainId: number;
   /** Current vault permit nonce for the owner. */
   readonly nonce: bigint;
-  /** Vault-share allowance to authorize. */
-  readonly amount: bigint;
   /** Shared permit and bundle deadline. */
   readonly deadline: bigint;
   /** Timestamp the deadline is validated against; defaults to the current time. */
@@ -38,7 +36,7 @@ export interface EncodeVaultSharesPermitParams {
 }
 
 /**
- * Builds the bounded ERC-2612 shares-permit requirement used by an in-kind vault exit.
+ * Builds an unlimited ERC-2612 shares-permit requirement used by a vault exit.
  *
  * Vault V1 uses the standard token permit domain. Vault V2 uses its protocol-specific domain with
  * only `chainId` and `verifyingContract`. The requirement's `action.typedData` holds the EIP-712
@@ -50,7 +48,6 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.owner - Account that owns and authorizes spending of the vault shares.
  * @param params.chainId - Chain on which the vault and spender are deployed.
  * @param params.nonce - Current vault permit nonce for the owner.
- * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
  * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
@@ -81,7 +78,6 @@ export interface EncodeVaultSharesPermitParams {
  *   owner,
  *   chainId: 1,
  *   nonce: 0n,
- *   amount: 1_000_000n,
  *   deadline,
  * });
  * const signature = await requirement.sign(walletClient, owner);
@@ -98,7 +94,6 @@ export const encodeVaultSharesPermit = (
     owner,
     chainId,
     nonce,
-    amount,
     deadline,
   } = params;
   const inputDomain = inputVault.eip5267Domain;
@@ -150,7 +145,7 @@ export const encodeVaultSharesPermit = (
     {
       owner,
       spender,
-      allowance: amount,
+      allowance: maxUint256,
       nonce,
       deadline,
       erc20: vault,
@@ -166,7 +161,7 @@ export const encodeVaultSharesPermit = (
     type: "permit",
     args: {
       spender,
-      amount,
+      amount: maxUint256,
       deadline,
       nonce,
     },
@@ -189,7 +184,7 @@ export const encodeVaultSharesPermit = (
           owner,
           signature,
           deadline,
-          amount,
+          amount: maxUint256,
           asset: vault.address,
           nonce,
         },

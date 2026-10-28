@@ -782,6 +782,7 @@ export namespace TreeUtils {
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
+   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example

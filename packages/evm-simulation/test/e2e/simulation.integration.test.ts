@@ -179,7 +179,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     client,
   }) => {
     const { blue } = getChainAddresses(chainId);
-    const market = await createE2eMarket(client, chainId);
+    const market = await createE2eMarket(client, { chainId });
     await wrapNative(client, { wNative: market.loanToken, amount: assets });
     const action = client
       .extend(morphoViemExtension({ supportSignature: false }))
@@ -256,7 +256,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     "final: simulated native-funded supply matches the executed wrap and Blue transfer",
     async ({ client }) => {
       const { blue } = getChainAddresses(chainId);
-      const market = await createE2eMarket(client, chainId);
+      const market = await createE2eMarket(client, { chainId });
       const tx = client
         .extend(morphoViemExtension({ supportSignature: false }))
         .morpho.blue(market, chainId)
@@ -283,7 +283,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
               type: "blueSupply",
               marketId: market.id,
               assetPaid: ethAddress,
-              quote: { assetsPaid: assets },
+              quote: { assetsPaid: assets, sharesMinted: 1n },
               slippageTolerance: 0n,
             },
           ],
@@ -300,7 +300,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
           operation: "blueSupply",
           marketId: market.id,
           checkedLimits: {
-            quote: { assetsPaid: assets },
+            quote: { assetsPaid: assets, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
         },
@@ -334,7 +334,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     client,
   }) => {
     const { blueBundlesV1 } = getChainAddresses(chainId).bundles!;
-    const market = await createE2eMarket(client, chainId);
+    const market = await createE2eMarket(client, { chainId });
     await client.approve({
       address: market.loanToken,
       args: [blueBundlesV1!, maxUint256],
@@ -354,6 +354,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     await expect(
       simulate(configFor(client, chainId), {
         chainId,
+        limits: "none",
         // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
         blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
         transactions: [transaction],
@@ -505,15 +506,26 @@ describeActors(blueBorrowScenario, (test, chainId) => {
   }) => {
     const { blue: morpho } = getChainAddresses(chainId);
     const user = client.account.address;
-    const market = await createE2eMarket(client, chainId);
+    // A distinct collateral token keeps the loan and collateral wallet deltas
+    // unmixed, so every combined-op side stays quotable. On chains without a
+    // wNative (e.g. Arc) the fallback loan asset is E2E_ASSET itself, so the
+    // collateral uses the next dedicated test address.
+    const collateralToken: Address =
+      "0xE2e0000000000000000000000000000000000004";
+    const market = await createE2eMarket(client, {
+      chainId,
+      collateralToken,
+    });
+    expect(collateralToken).not.toBe(market.loanToken);
     const liquidity = parseEther("10");
     const collateralAssets = parseEther("5");
     const borrowAssets = parseEther("2");
     // The extra test asset covers the interest accrued before the full repay.
     await wrapNative(client, {
       wNative: market.loanToken,
-      amount: liquidity + collateralAssets + assets,
+      amount: liquidity + assets,
     });
+    await client.deal({ erc20: collateralToken, amount: collateralAssets });
     await client.approve({
       address: market.loanToken,
       args: [morpho, liquidity],
@@ -527,7 +539,6 @@ describeActors(blueBorrowScenario, (test, chainId) => {
     const blue = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.blue(market, chainId);
-    // Loan and collateral use the same asset, so debt shares isolate one leg's effect.
     const balances = [
       { account: user, token: market.loanToken },
       { account: morpho, token: market.loanToken },
@@ -552,6 +563,9 @@ describeActors(blueBorrowScenario, (test, chainId) => {
     // No debt exists yet, so the borrow mints exactly this many shares.
     const borrowQuote = {
       sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
+      collateralSupplied: collateralAssets,
+      assetsPaid: collateralAssets,
+      assetsReceived: borrowAssets,
     };
     const borrowResult = await simulate(configFor(client, chainId), {
       chainId,
@@ -582,9 +596,9 @@ describeActors(blueBorrowScenario, (test, chainId) => {
         checkedLimits: { quote: borrowQuote, slippageTolerance: 0n },
       },
     ]);
-    expect(diffOf(borrowResult, balances[0]!)).toBe(
-      borrowAssets - collateralAssets,
-    );
+    // Loan and collateral are distinct tokens, so the user's loan-token diff
+    // is exactly the borrowed amount.
+    expect(diffOf(borrowResult, balances[0]!)).toBe(borrowAssets);
     const borrowSignatures = await fulfil(client, borrowRequirements);
     await expectExecutionMatches(client, {
       result: borrowResult,
@@ -606,7 +620,13 @@ describeActors(blueBorrowScenario, (test, chainId) => {
       client,
       repay.buildTx(await fulfil(client, await repay.getRequirements())),
     );
-    const repayQuote = { sharesBurned: borrowed.borrowShares };
+    const repayQuote = {
+      sharesBurned: borrowed.borrowShares,
+      // Generous cap on the repaid assets (includes accrued interest).
+      assetsPaid: borrowed.borrowAssets * 2n,
+      collateralWithdrawn: collateralAssets,
+      assetsReceived: collateralAssets,
+    };
     const repayResult = await simulate(configFor(client, chainId), {
       chainId,
       blockNumber: await client.getBlockNumber({ cacheTime: 0 }),

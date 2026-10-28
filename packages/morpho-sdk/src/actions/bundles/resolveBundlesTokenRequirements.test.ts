@@ -5,7 +5,6 @@ import { maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  ApprovalAmountLessThanSpendAmountError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
   isRequirementApproval,
@@ -28,7 +27,7 @@ const deadline = 1_900_000_000n;
 
 describe("resolveBundlesTokenRequirements", () => {
   const states = [
-    { type: "approval", allowance: 0n, approvalAmount: maxUint256 },
+    { type: "approval", allowance: 0n },
     {
       type: "permit2SignatureTransfer",
       permit2Allowance: maxUint256,
@@ -92,20 +91,6 @@ describe("resolveBundlesTokenRequirements", () => {
       ).toThrow(error);
     },
   );
-
-  test("error: ApprovalAmountLessThanSpendAmountError", () => {
-    expect(() =>
-      resolveBundlesTokenRequirements({
-        token: usdc,
-        spender,
-        owner,
-        chainId,
-        amount: 2n,
-        deadline,
-        state: { type: "approval", allowance: 0n, approvalAmount: 1n },
-      }),
-    ).toThrow(ApprovalAmountLessThanSpendAmountError);
-  });
 
   test.each([
     { permit2Nonce: -1n, error: NegativeInputError },
@@ -174,7 +159,6 @@ describe("resolveBundlesTokenRequirements", () => {
             state: {
               type: "approval",
               allowance: sufficient ? amount : amount - 1n,
-              approvalAmount: amount,
             },
           });
           expect(requirements).toHaveLength(sufficient ? 0 : 1);
@@ -182,7 +166,7 @@ describe("resolveBundlesTokenRequirements", () => {
             expect(isRequirementApproval(requirements[0])).toBe(true);
             expect(requirements[0]?.action).toMatchObject({
               type: "erc20Approval",
-              args: { spender, amount },
+              args: { spender, amount: maxUint256 },
             });
           }
         },
@@ -191,9 +175,8 @@ describe("resolveBundlesTokenRequirements", () => {
     );
   });
 
-  test("behavior: a raised approval target does not require replacing a sufficient allowance", () => {
+  test("behavior: a sufficient allowance does not require an approval", () => {
     const amount = 1_000_000n;
-    // The fixed call cannot pull beyond the supplied amount, even with a reusable approval target.
     const requirements = resolveBundlesTokenRequirements({
       token: usdc,
       spender,
@@ -204,7 +187,6 @@ describe("resolveBundlesTokenRequirements", () => {
       state: {
         type: "approval",
         allowance: amount,
-        approvalAmount: maxUint256,
       },
     });
     expect(requirements).toHaveLength(0);
@@ -220,7 +202,6 @@ describe("resolveBundlesTokenRequirements", () => {
         state: {
           type: "approval",
           allowance: maxUint256,
-          approvalAmount: maxUint256,
         },
       }),
     ).toHaveLength(0);
@@ -312,7 +293,7 @@ describe("resolveBundlesTokenRequirements", () => {
         chainId,
         amount: 1n,
         deadline,
-        state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+        state: { type: "approval", allowance: 0n },
       })[0]?.action,
     ).toMatchObject({ type: "erc20Approval", args: { spender: allowed } });
   });
@@ -321,17 +302,17 @@ describe("resolveBundlesTokenRequirements", () => {
     {
       label: "approval",
       amount: 1n,
-      state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+      state: { type: "approval", allowance: 0n },
     },
     {
       label: "sufficient allowance",
       amount: 1n,
-      state: { type: "approval", allowance: maxUint256, approvalAmount: 1n },
+      state: { type: "approval", allowance: maxUint256 },
     },
     {
       label: "zero amount",
       amount: 0n,
-      state: { type: "approval", allowance: 0n, approvalAmount: 0n },
+      state: { type: "approval", allowance: 0n },
     },
     {
       label: "permit2SignatureTransfer",

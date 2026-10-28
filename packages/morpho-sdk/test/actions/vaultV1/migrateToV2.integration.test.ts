@@ -1,5 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { isHex, parseUnits } from "viem";
+import { isHex, maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -159,7 +159,7 @@ describe("MigrateToV2 VaultV1", () => {
         expect(requirementSignature.args.asset).toEqual(
           SteakhouseUsdcVaultV1.address,
         );
-        expect(requirementSignature.args.amount).toEqual(shares);
+        expect(requirementSignature.args.amount).toEqual(maxUint256);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
         expect(requirementSignature.args.deadline).toBeGreaterThan(timestamp);

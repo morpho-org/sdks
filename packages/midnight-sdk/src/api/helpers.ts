@@ -305,7 +305,11 @@ export function mapPriceLevels(
     .sort((a, b) => (side === "asks" ? a.tick - b.tick : b.tick - a.tick));
 }
 
-/** @internal Maps a takeable-offer API payload to the SDK response shape. */
+/**
+ * @internal Maps a takeable-offer API payload, returning its market collaterals
+ * in canonical protocol order so the struct validated by the SDK is the one
+ * ABI-encoded onchain.
+ */
 function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
 ): MidnightApiTake {
@@ -319,12 +323,14 @@ function mapTakeableOffer(
         chainId: BigInt(offer.market.chain_id),
         midnight: offer.market.midnight,
         loanToken: offer.market.loan_token,
-        collateralParams: offer.market.collaterals.map((collateral) => ({
-          token: collateral.token,
-          lltv: BigInt(collateral.lltv),
-          liquidationCursor: BigInt(collateral.liquidation_cursor),
-          oracle: collateral.oracle,
-        })),
+        collateralParams: [...offer.market.collaterals]
+          .sort(MarketUtils.compareCollateralTokens)
+          .map((collateral) => ({
+            token: collateral.token,
+            lltv: BigInt(collateral.lltv),
+            liquidationCursor: BigInt(collateral.liquidation_cursor),
+            oracle: collateral.oracle,
+          })),
         maturity: BigInt(offer.market.maturity),
         rcfThreshold: BigInt(offer.market.rcf_threshold),
         enterGate: offer.market.enter_gate,

@@ -1,12 +1,14 @@
 import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, maxUint256 } from "viem";
+import { maxUint256 } from "viem";
+import { encodeMidnightCalldata } from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
   validateMidnightNativeAmount,
   validateReferralFee,
 } from "../../helpers/validate.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
   validateMidnightCollateralSupplySums,
   validateMidnightReferralFeeCap,
@@ -67,7 +69,8 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  *   for the full pulled amount.
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
  * @param params.deadline - Bounded bundle execution deadline timestamp. Not checked against the clock; validate freshness before building.
- * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+ * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the sale
+ *   proceeds; on an assets target it is added on top of `target.assets`.
  * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundlesV2`.
@@ -98,6 +101,7 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
  * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @throws {MidnightTakeTargetUnreachableError} when `target.minSellerAssets` exceeds `target.units`
  *   minus the referral fee, or `target.maxUnits` is below `target.assets` plus the referral fee, since
  *   a unit sells for at most one asset.
@@ -194,6 +198,11 @@ export const midnightSupplyCollateralTakeBorrow = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
+  if (params.referralFeeRecipient !== undefined)
+    validateMidnightAddress(
+      "referralFeeRecipient",
+      params.referralFeeRecipient,
+    );
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });
@@ -235,13 +244,13 @@ export const midnightSupplyCollateralTakeBorrow = (
     value: nativeFunding.value,
     data:
       target.type === "assets"
-        ? encodeFunctionData({
+        ? encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2SupplyCollateralAndSellWithAssetsTarget",
             args: [market, target.assets, target.maxUnits, ...args],
           })
-        : encodeFunctionData({
+        : encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2SupplyCollateralAndSellWithUnitsTarget",

@@ -1,9 +1,10 @@
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
-  SimulationLimits,
+  CheckedSimulationInputLimits,
+  CheckedSimulationLimits,
+  CheckedSlippageLimits,
   SimulationOperationSubject,
-  SlippageLimits,
 } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
@@ -15,7 +16,7 @@ import type {
 /** One operation described by the caller's `limits.operations`. */
 export type SimulatedOperation = {
   /** Quote and percentage tolerance checked against the named subject over the whole bundle. */
-  readonly checkedLimits: SlippageLimits;
+  readonly checkedLimits: CheckedSlippageLimits;
   /** Resolved selector from the limit; defaults to the transaction sender. */
   readonly account: Address;
   /** Resolved selector from the limit; defaults to the transaction sender. */
@@ -33,7 +34,7 @@ export interface AuthorizationPreparation {
   }[];
 }
 
-/** Optional slippage checks; execution success does not imply economic verification. */
+/** Limit checks the caller requested (or "none" when explicitly opted out); execution success does not imply economic verification. */
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
@@ -48,8 +49,11 @@ export interface SimulationVerification {
    * pinned state block or its successor, depending on the node.
    */
   readonly blockTimestamp: bigint;
-  /** Caller-supplied quotes and tolerances only; omitted limits remain unchecked. */
-  readonly limits: Required<SimulationLimits>;
+  /**
+   * Caller-supplied quotes and tolerances only: an object holds the checked
+   * limits; `"none"` means the caller opted out and nothing was verified.
+   */
+  readonly limits: CheckedSimulationLimits | "none";
   readonly operations: readonly SimulatedOperation[];
   /** Preview only; always empty in final. */
   readonly authorizations: readonly AuthorizationPreparation[];
@@ -58,4 +62,16 @@ export interface SimulationVerification {
 /** `simulationTxs` contains caller transaction fields; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
+}
+
+/** Verification for requests that may derive operation limits from typed inputs. */
+export interface SimulationInputVerification
+  extends Omit<SimulationVerification, "limits"> {
+  /** Resolved quotes, per-side checks and quoted-side tolerances, or the explicit opt-out. */
+  readonly limits: CheckedSimulationInputLimits | "none";
+}
+
+/** Simulation result for requests accepting input-based limits. */
+export interface VerifiedSimulationInputResult extends SimulationResult {
+  readonly verification: SimulationInputVerification;
 }

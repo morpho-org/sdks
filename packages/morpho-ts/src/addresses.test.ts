@@ -198,6 +198,10 @@ describe("addressesRegistry", () => {
       ChainId.ArcMainnet,
       ["0x4c2ff4D792d0a03A0e461e4B9B00Bc812A0147C2", 20_322_353n],
     ],
+    [
+      ChainId.XLayerMainnet,
+      ["0x1b7C60330E3aFe5bA876F518Ff14316EA497f683", 73_110_387n],
+    ],
   ] as const)(
     "behavior: exposes BluePublicAllocator on chain %i",
     (chainId, [vaultV2BluePublicAllocator, deploymentBlock]) => {
@@ -377,6 +381,11 @@ describe("addressesRegistry", () => {
       "0x2095B5974101A94B726593f0E81d177B058849C7",
       20_322_300n,
     ],
+    [
+      ChainId.XLayerMainnet,
+      "0x4Eda51CdD2993fE27D8bAB57051c65D2b66C632e",
+      73_110_399n,
+    ],
   ] as const)(
     "behavior: exposes VaultExitBundlesV1 on chain %s",
     (...[chainId, address, deploymentBlock]) => {
@@ -404,6 +413,7 @@ describe("addressesRegistry", () => {
     [ChainId.TempoMainnet, "0xe8aA1d8f1Cb111B7f52957D662Ee310D6d2Ee9B9"],
     [ChainId.RobinhoodMainnet, "0xcC108538f36242D6E0d6B9255f6D9Ccd137D70Fe"],
     [ChainId.ArcMainnet, "0x76c1dEefAe48523E14903085081Bda2999450b68"],
+    [ChainId.XLayerMainnet, "0xB9c332379D8Fba06b55e7ecF446E03a3365be8FE"],
   ] as const)(
     "behavior: exposes VaultBundlesV1 on chain %s",
     (...[chainId, address]) => {
@@ -426,6 +436,7 @@ describe("addressesRegistry", () => {
     [ChainId.TempoMainnet, "0xAE863452f44ADD237739A85eb6BB1989E2368362"],
     [ChainId.RobinhoodMainnet, "0x53A1eB6589861F686af7c531211E35Aefe30210f"],
     [ChainId.ArcMainnet, "0x3c4BaE2a2Ef708ddaAE40A0b66623afE44eF4A7F"],
+    [ChainId.XLayerMainnet, "0xF27e384A863aE4Ce9215D387C0d5dA28936590be"],
   ] as const)(
     "behavior: exposes BlueBundlesV1 on chain %s",
     (...[chainId, address]) => {
@@ -1022,6 +1033,13 @@ describe("addressesRegistry", () => {
       blueDeployment: 286n,
       wNativeDeployment: 2n,
     },
+    {
+      chainId: ChainId.XLayerMainnet,
+      blue: "0xeb00C490E888286357dC5B0a35D37D9260D11Ab5",
+      wNative: "0xe538905cf8410324e03A5A23C1c177a474D59b2b",
+      blueDeployment: 73_110_254n,
+      wNativeDeployment: 40_894n,
+    },
   ])(
     "behavior: exposes era-2 addresses for chain $chainId",
     ({ chainId, blue, wNative, blueDeployment, wNativeDeployment }) => {
@@ -1051,6 +1069,25 @@ describe("addressesRegistry", () => {
       chainlinkOracleFactory: 287n,
       preLiquidationFactory: 287n,
       wNative: 2n,
+    });
+  });
+
+  test("behavior: exposes X Layer deployment blocks", () => {
+    expect(deployments[ChainId.XLayerMainnet]).toMatchObject({
+      blue: 73_110_254n,
+      permit2: 2_728_569n,
+      bundles: {
+        vaultExitBundlesV1: 73_110_399n,
+        vaultBundlesV1: 73_110_393n,
+        blueBundlesV1: 73_110_406n,
+      },
+      adaptiveCurveIrm: 73_110_254n,
+      vaultV2Factory: 73_110_352n,
+      morphoMarketV1AdapterV2Factory: 73_110_361n,
+      morphoVaultV1AdapterFactory: 73_110_379n,
+      registryList: 73_110_374n,
+      chainlinkOracleFactory: 73_110_334n,
+      wNative: 40_894n,
     });
   });
 

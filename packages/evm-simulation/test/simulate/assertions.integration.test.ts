@@ -64,6 +64,7 @@ describe.sequential("simulate — transaction assertions", () => {
     await expectAssertionFailure(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -99,6 +100,7 @@ describe.sequential("simulate — transaction assertions", () => {
     await expectAssertionFailure(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: account,
@@ -148,6 +150,7 @@ describe.sequential("simulate — transaction assertions", () => {
     await expectAssertionFailure(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -186,6 +189,7 @@ describe.sequential("simulate — transaction assertions", () => {
     await expectAssertionFailure(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -253,10 +257,12 @@ describe.sequential("simulate — transaction assertions", () => {
 
     const withoutAssertions = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [transaction],
     });
     const withAssertions = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           ...transaction,
@@ -265,6 +271,8 @@ describe.sequential("simulate — transaction assertions", () => {
         },
       ],
     });
+    // `"none"` is reported back to the caller instead of an empty limit set.
+    expect(withoutAssertions.verification.limits).toBe("none");
     expect(withAssertions).toStrictEqual(withoutAssertions);
   }, 60_000);
 });

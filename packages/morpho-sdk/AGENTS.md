@@ -11,8 +11,9 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 - **VaultV1 and VaultV2 writes** route directly through the registered VaultBundlesV1 entrypoints:
   `deposit` enforces `maxSharePrice`, while `withdraw` / `redeem` burn the submitting account's
   approved shares. Vault V1 `migrateToV2` exits the source before enforcing the destination Vault V2
-  `maxSharePrice`. Deposit funding supports exclusive ERC-20 or native input; exits resolve an exact
-  vault-share approval or ERC-2612 permit. Vault V2 `forceRedeem` still uses `multicall` with
+  `maxSharePrice`. Deposit funding supports exclusive ERC-20 or native input; exits use unlimited
+  vault-share approvals or permits when the existing allowance is insufficient, and reuse any
+  larger allowance. Vault V2 `forceRedeem` still uses `multicall` with
   caller-supplied `forceDeallocate` calls before the final redeem. Vault V2 `forceWithdraw` and
   VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone
   VaultExitBundlesV1 periphery directly; `forceWithdraw` additionally derives its own
@@ -52,16 +53,14 @@ Protocol terms used across this package's docs and JSDoc:
   gross underlying assets to VaultBundlesV1 (ERC-2612 or Permit2 SignatureTransfer), which pulls
   those assets, deducts any referral fee, and enforces `maxSharePrice`. Withdrawals and redemptions
   burn the transaction sender's vault shares and pay the net assets to that sender; asset
-  withdrawals require a vault-share allowance between the SDK's deadline- and slippage-derived cap
-  and that cap divided by `1 - slippageTolerance` (so a Safe approval for a cap prepared from an
-  older snapshot still satisfies a re-prepared exit): an insufficient allowance is raised by an
-  approval or embedded ERC-2612 permit, while a larger one is always reset with an onchain approval
-  (never a permit). That allowance is the
-  only onchain share-burn cap in asset mode. Registered per chain as `bundles.vaultBundlesV1`; its canonical ABI export is `vaultBundlesV1Abi`.
+  withdrawals require a vault-share allowance at least as large as the SDK-derived share amount.
+  Insufficient allowances are raised by an unlimited classic approval or ERC-2612 share permit.
+  Registered per chain as `bundles.vaultBundlesV1`; its canonical ABI export is
+  `vaultBundlesV1Abi`.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions. Its `vaultExitBundlesV1ForceWithdrawVaultV2` entry point additionally force-withdraws into the underlying asset, computing its own deallocations, bounding the realized exit share price with `minSharePriceE27`, and optionally routing a referral fee.
-  In-kind redemptions require an exact vault-share allowance or embedded permit for the computed
-  cap; any different allowance, including an oversized one, is replaced before the exit.
+  In-kind redemptions require a vault-share allowance at least as large as the computed minimum;
+  insufficient allowances are raised by an unlimited approval or embedded permit.
 
 ### Constants and conventions
 

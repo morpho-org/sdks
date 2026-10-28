@@ -1,6 +1,13 @@
 import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, maxUint128, maxUint256, zeroAddress } from "viem";
+import type { Address } from "viem";
+import {
+  BaseError,
+  decodeFunctionData,
+  maxUint128,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -40,6 +47,23 @@ const params = {
 } as const;
 
 describe("midnightTakeLend", () => {
+  test("error: a malformed offer group throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        takeableOffers: params.takeableOffers.map((take) => ({
+          ...take,
+          offer: { ...take.offer, group: "0x01" },
+        })),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        cause: expect.any(BaseError),
+      }),
+    );
+  });
+
   test("default", () => {
     const tx = midnightTakeLend(params);
     const decoded = decodeFunctionData({
@@ -449,5 +473,23 @@ describe("midnightTakeLend", () => {
     expect(() =>
       midnightTakeLend({ ...params, referralFeePct: 10n ** 18n }),
     ).toThrow(ReferralFeePctExceededError);
+  });
+});
+
+describe("midnightTakeLend malformed address", () => {
+  test("error: a malformed referralFeeRecipient throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        referralFeePct: 1n,
+        referralFeeRecipient: "0x123" as Address,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "referralFeeRecipient",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
   });
 });

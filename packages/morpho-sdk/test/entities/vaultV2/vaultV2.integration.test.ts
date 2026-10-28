@@ -7,7 +7,6 @@ import { MAX_SLIPPAGE_TOLERANCE } from "../../../src/helpers/constant.js";
 import {
   ChainWNativeMissingError,
   ExcessiveSlippageToleranceError,
-  NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   VaultAddressMismatchError,
 } from "../../../src/types/index.js";
@@ -211,29 +210,6 @@ describe("MorphoVaultV2 entity tests", () => {
           } as never,
         }),
       ).toThrow(ChainWNativeMissingError);
-    });
-
-    test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id,
-      );
-
-      const vaultData = await vault.getData();
-      expect(() =>
-        vault.deposit({
-          nativeAmount: parseUnits("1", 18),
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      ).toThrow(NativeAmountOnNonWNativeVaultError);
     });
   });
 });

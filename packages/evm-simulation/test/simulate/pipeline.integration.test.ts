@@ -4,6 +4,7 @@ import {
   getChainAddresses,
   type MarketId,
   MarketParams,
+  SharesMath,
 } from "@morpho-org/blue-sdk";
 import {
   computeVaultV2ForceWithdrawPlan,
@@ -105,6 +106,7 @@ const simulateFinalTransaction = (
 ) =>
   simulate(configFor(client), {
     chainId: mainnet.id,
+    limits: "none",
     mode: "final",
     transactions: [
       {
@@ -299,7 +301,9 @@ describe.sequential("simulate pipeline — blue supply", () => {
           {
             type: "blueSupply" as const,
             marketId: CbbtcUsdcBlue.id,
-            slippageTolerance: 10n ** 18n,
+            // 1%: absorbs accrual on the scalar sides; the bound under test is
+            // sharePrice.
+            slippageTolerance: 10n ** 16n,
             quote: { assetsPaid: assets, sharesMinted: 1n },
             sharePrice: { expected, tolerance },
           },
@@ -381,8 +385,16 @@ describe.sequential("simulate pipeline — blue supply", () => {
           {
             type: "blueSupplyCollateralBorrow" as const,
             marketId: CbbtcUsdcBlue.id,
-            slippageTolerance: 10n ** 18n,
-            quote: { assetsReceived: borrowAssets },
+            // 1%: absorbs accrual on the scalar sides; the bound under test is
+            // position. Both legs are active, so `assetsPaid` quotes the real
+            // collateral debit and `collateralSupplied` is required above `1n`.
+            slippageTolerance: 10n ** 16n,
+            quote: {
+              assetsReceived: borrowAssets,
+              sharesMinted: marketData.toBorrowShares(borrowAssets, "Up"),
+              assetsPaid: collateralAssets,
+              collateralSupplied: collateralAssets,
+            },
             position,
           },
         ],
@@ -397,15 +409,14 @@ describe.sequential("simulate pipeline — blue supply", () => {
       ],
     });
 
-    // A debt cap below the resulting borrow shares fails.
-    await expect(
-      simulate(
-        configFor(client),
-        simulateParams({
-          maxBorrowShares: finalBorrowShares / 2n,
-        }),
-      ),
-    ).rejects.toThrow(ConsumerLimitViolationError);
+    // A debt cap below the resulting borrow shares fails, on the position
+    // bound alone.
+    const denied = simulate(
+      configFor(client),
+      simulateParams({ maxBorrowShares: finalBorrowShares / 2n }),
+    );
+    await expect(denied).rejects.toThrow(ConsumerLimitViolationError);
+    await expect(denied).rejects.toThrowError(/position\.maxBorrowShares/);
 
     // Exact final values pass inclusively and echo the bounds.
     const result = await simulate(
@@ -465,6 +476,12 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
             quote: {
               assetsReceived: borrowAssets,
               assetsPaid: collateralAssets,
+              collateralSupplied: 1n,
+              sharesMinted:
+                (await market.getMarketData()).toBorrowShares(
+                  borrowAssets,
+                  "Up",
+                ) * 2n,
             },
             slippageTolerance: 0n,
           },
@@ -535,7 +552,12 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
             marketId: CbbtcUsdcBlue.id,
             slippageTolerance: 0n,
             quote: {
+              // Full repay: the debt-share and pay-in caps cover interest
+              // accrued between the fixture and the simulated execution.
+              sharesBurned: positionAfter.borrowShares,
+              assetsPaid: positionAfter.borrowAssets * 2n,
               assetsReceived: collateralAssets,
+              collateralWithdrawn: collateralAssets,
             },
           },
         ],
@@ -636,6 +658,10 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
             quote: {
               assetsReceived: borrowAssets,
               assetsPaid: collateralAssets,
+              collateralSupplied: 1n,
+              // Generous debt-share cap: virtual conversion overestimates the
+              // real minted shares, so the bound stays permissive.
+              sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
             },
             slippageTolerance: 0n,
           },
@@ -651,7 +677,12 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       ],
     });
     expect(result.verification.operations[0]?.checkedLimits).toEqual({
-      quote: { assetsReceived: borrowAssets, assetsPaid: collateralAssets },
+      quote: {
+        assetsReceived: borrowAssets,
+        assetsPaid: collateralAssets,
+        collateralSupplied: 1n,
+        sharesMinted: SharesMath.toShares(borrowAssets, 0n, 0n, "Up"),
+      },
       slippageTolerance: 0n,
     });
   }, 120_000);
@@ -680,6 +711,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     await expect(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         mode: "preview",
         authorizations,
         transactions: [
@@ -711,6 +743,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     await expect(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -758,6 +791,7 @@ describe.sequential("simulate pipeline — negatives", () => {
               slippageTolerance: 0n,
               quote: {
                 sharesMinted: maxUint256,
+                assetsPaid: maxUint256,
               },
             },
           ],
@@ -779,6 +813,7 @@ describe.sequential("simulate pipeline — negatives", () => {
   }) => {
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -818,6 +853,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     await expect(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -871,7 +907,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
           {
             type: "vaultV1Deposit",
             vault: STEAKHOUSE,
-            quote: { assetsPaid: assets },
+            quote: { assetsPaid: assets, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
         ],
@@ -937,7 +973,12 @@ describe.sequential("simulate pipeline — vault V1", () => {
           {
             type: "vaultV1Withdraw",
             vault: STEAKHOUSE,
-            quote: { assetsReceived: withdrawAssets },
+            quote: {
+              assetsReceived: withdrawAssets,
+              // Generous cap on burned supply shares (tolerance 0).
+              sharesBurned:
+                (await vault.getData()).toShares(withdrawAssets) * 2n,
+            },
             slippageTolerance: 0n,
           },
         ],
@@ -979,7 +1020,12 @@ describe.sequential("simulate pipeline — vault V1", () => {
           {
             type: "vaultV1Redeem",
             vault: STEAKHOUSE,
-            quote: { sharesBurned: redeemShares },
+            quote: {
+              sharesBurned: redeemShares,
+              // Conservative floor: 1% under the quoted share price.
+              assetsReceived:
+                ((await vault.getData()).toAssets(redeemShares) * 99n) / 100n,
+            },
             slippageTolerance: 0n,
           },
         ],
@@ -1027,7 +1073,11 @@ describe.sequential("simulate pipeline — vault V2", () => {
       },
     ];
     const config = { ...configFor(client), timeoutMs: 30_000 };
-    const input = { chainId: mainnet.id, transactions };
+    const input = {
+      chainId: mainnet.id,
+      limits: "none" as const,
+      transactions,
+    };
     const unchecked = await simulate(config, input);
     expect(unchecked.verification.operations).toEqual([]);
     const sharesMinted = unchecked.transfers
@@ -1169,9 +1219,10 @@ describe.sequential("simulate pipeline — vault V2", () => {
       maxExitPlan.assetsToWithdraw +
       (maxExitPlan.maxExitAssets - maxExitPlan.assetsToWithdraw) / 2n;
     // Exit beyond all penalty-free liquidity so VaultExitBundlesV1 force-deallocates.
+    const dealtShares = exitVaultData.toShares(exitAssets * 2n);
     await client.deal({
       erc20: KEYROCK,
-      amount: exitVaultData.toShares(exitAssets * 2n),
+      amount: dealtShares,
     });
     const exit = vault.forceWithdraw({
       exitAssets,
@@ -1272,7 +1323,15 @@ describe.sequential("simulate pipeline — vault V2", () => {
           {
             type: "vaultV2ForceWithdraw" as const,
             vault: KEYROCK,
-            quote,
+            quote: {
+              ...quote,
+              // Conservative floor: half the requested exit assets covers
+              // any realized force-deallocation penalty.
+              assetsReceived: exitAssets / 2n,
+              // Generous cap: the burn cannot exceed the dealt share
+              // balance.
+              sharesBurned: dealtShares,
+            },
             slippageTolerance: 0n,
           },
         ],
@@ -1296,6 +1355,8 @@ describe.sequential("simulate pipeline — vault V2", () => {
     expect(result.verification.operations[0]!.checkedLimits.quote).toEqual({
       penalty,
       deallocations: quotedDeallocations,
+      assetsReceived: exitAssets / 2n,
+      sharesBurned: dealtShares,
     });
     // Quoting less deallocated than realized is adverse beyond tolerance.
     await expect(
@@ -1430,6 +1491,9 @@ describe.sequential("simulate pipeline — vault exits", () => {
               sharesMinted: (await target.getData()).toShares(
                 parseUnits("5", 6),
               ),
+              // Generous cap on source shares burned (supply-side cap).
+              sharesBurned:
+                (await source.getData()).toShares(parseUnits("5", 6)) * 2n,
             },
             slippageTolerance: 10_000000000000000n,
           },
@@ -1508,7 +1572,11 @@ describe.sequential("simulate pipeline — vault exits", () => {
           {
             type: "vaultV2ForceRedeem",
             vault: KEYROCK,
-            quote: { sharesBurned: redeemShares },
+            quote: {
+              sharesBurned: redeemShares,
+              // Conservative floor: up to 10% force-deallocation penalty.
+              assetsReceived: (redeemAssets * 9n) / 10n,
+            },
             // Total burned shares include the force-deallocation penalty.
             slippageTolerance: 10_000000000000000n,
           },
@@ -1637,7 +1705,11 @@ describe.sequential("simulate pipeline — vault exits", () => {
           {
             type: "vaultV2ForceRedeem" as const,
             vault: KEYROCK,
-            quote,
+            quote: {
+              ...quote,
+              sharesBurned: shares,
+              assetsReceived: redeemAssets / 2n,
+            },
             slippageTolerance: 0n,
           },
         ],
@@ -1658,6 +1730,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
     expect(result.verification.operations[0]!.checkedLimits.quote).toEqual({
       penalty,
       deallocations: quotedDeallocations,
+      assetsReceived: redeemAssets / 2n,
+      sharesBurned: shares,
     });
 
     // Quoting less deallocated than realized is adverse beyond tolerance.
@@ -1699,19 +1773,70 @@ describe.sequential("simulate pipeline — vault exits", () => {
     const marketParamsList = adapter.markets
       .filter((m) => (adapter.supplyShares[m.id] ?? 0n) > 0n)
       .map((m) => m.params);
+    // Redeem beyond the idle balance so the exit delivers Blue positions.
+    const amount = vaultData.assetBalance + parseUnits("5", 6);
+    await client.deal({
+      erc20: KEYROCK,
+      amount: vaultData.toShares(amount * 2n),
+    });
     const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 3600n;
     const exit = vault.inKindRedeem({
-      amount: parseUnits("5", 6),
+      amount,
       marketParamsList,
       vaultData,
       userAddress: client.account.address,
       deadline,
     });
+    const requirements = await exit.getRequirements();
     const auths = toSimulationAuthorizations({
       owner: client.account.address,
-      requirements: await exit.getRequirements(),
+      requirements,
     });
     const tx = exit.buildTx();
+
+    const morpho = getChainAddresses(mainnet.id).blue;
+    const positionSupplyShares = () =>
+      Promise.all(
+        marketParamsList.map(async (market) => {
+          const [supplyShares] = await client.readContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "position",
+            args: [market.id, client.account.address],
+          });
+          return supplyShares;
+        }),
+      );
+    // Measure the delivered supply shares on a throwaway execution, then
+    // restore the pre-exit state; a 1n floor per delivered market is the real
+    // positions quote (execution is deterministic at the pinned block).
+    const snapshot = await client.snapshot();
+    const before = await positionSupplyShares();
+    for (const r of requirements) {
+      if (!("to" in r)) continue;
+      await client.sendTransaction({
+        account: client.account,
+        to: r.to,
+        data: r.data,
+        value: r.value,
+      });
+    }
+    await client.sendTransaction({
+      account: client.account,
+      to: tx.to,
+      data: tx.data,
+      value: tx.value,
+    });
+    const after = await positionSupplyShares();
+    await client.revert({ id: snapshot });
+    const positions = marketParamsList
+      .map((market, i) => ({
+        marketId: market.id,
+        supplyShares: after[i]! - before[i]! > 0n ? 1n : 0n,
+      }))
+      .filter((position) => position.supplyShares > 0n);
+    expect(positions.length).toBeGreaterThan(0);
+
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
       mode: "preview",
@@ -1721,7 +1846,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
           {
             type: "vaultV2InKindRedeem",
             vault: KEYROCK,
-            quote: { sharesBurned: vaultData.toShares(parseUnits("5", 6)) },
+            quote: { sharesBurned: vaultData.toShares(amount), positions },
             slippageTolerance: 10_000000000000000n,
           },
         ],
@@ -1841,7 +1966,9 @@ describe.sequential("simulate pipeline — vault exits", () => {
           {
             type: "vaultV2InKindRedeem" as const,
             vault: KEYROCK,
-            quote,
+            // The burn is exact at the measured block; accrual only lowers
+            // the delivered shares, so the cap stays valid.
+            quote: { ...quote, sharesBurned: vaultData.toShares(amount) },
             slippageTolerance: tolerance,
           },
         ],
@@ -1951,6 +2078,16 @@ describe.sequential("simulate pipeline — blue refinance", () => {
               sharesBurned: (
                 await source.getPositionData(client.account.address)
               ).borrowShares,
+              // Target-market debt shares exceed the source's: the refinance
+              // adds the reallocation penalty and the referral fee to the new
+              // debt (observed ≈ 4.3% above the source shares), so cap the
+              // target market's conversion of the moved assets with 2x headroom.
+              sharesMinted:
+                (await target.getMarketData()).toBorrowShares(
+                  (await source.getPositionData(client.account.address))
+                    .borrowAssets,
+                  "Up",
+                ) * 2n,
             },
             slippageTolerance: 10_000000000000000n,
           },
@@ -2036,6 +2173,7 @@ describe.sequential("chaos: S11 invalid authorization", () => {
           { chains: new Map([[mainnet.id, { simulateV1Url: proxy.url }]]) },
           {
             chainId: mainnet.id,
+            limits: "none",
             transactions: [
               {
                 from: client.account.address,
@@ -2412,7 +2550,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
       to: USDC,
       action: {
         type: "erc20Approval",
-        args: { spender, amount: assets },
+        args: { spender, amount: maxUint256 },
       },
     });
   }, 60_000);

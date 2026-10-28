@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
+import * as publicApi from "../index.js";
 import {
   InputExceedsMaxError,
   MidnightReferralFeePctExceededError,
@@ -50,6 +52,26 @@ describe("ReferralFeePctExceededError", () => {
     expect(error.field).toBe("referralFeePct");
     expect(error.value).toBe(MathLib.WAD);
     expect(error.max).toBe(MathLib.WAD - 1n);
+  });
+});
+
+describe("error classes", () => {
+  const sources = ["./error.ts"].map((file) =>
+    readFileSync(new URL(file, import.meta.url), "utf8"),
+  );
+  const classes = sources.flatMap((source) =>
+    [...source.matchAll(/export class (\w+) extends/g)].map(([, name]) => ({
+      name: name!,
+      source,
+    })),
+  );
+
+  test("behavior: every class sets its own name and is exported from the package root", () => {
+    expect(classes.length).toBeGreaterThan(100);
+    for (const { name, source } of classes) {
+      expect(source, name).toContain(`this.name = "${name}";`);
+      expect(publicApi, name).toHaveProperty(name);
+    }
   });
 });
 

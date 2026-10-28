@@ -1,13 +1,128 @@
 # @morpho-org/evm-simulation
 
-## 7.0.1-next.0
+## 8.2.0
+
+### Minor Changes
+
+- Add typed user-input limits with independent pinned-block vault previews and accrued Blue share math, including Vault V1-to-V2 migration. Typed asset overrides must match the canonical subject token; native aliases net ETH and wNative wallet changes. Separate counter-side position-delta guards reject multi-operation input bundles that increase undeclared debt or decrease undeclared collateral or supply shares; use supported combined operations or quote-only limits with explicit position bounds. Derived sides use no percentage tolerance; explicitly quoted sides retain it. Support declared referral fees and absolute reallocation penalties on Blue borrow and withdrawal routes, deducted before referral fees. Enforce exact subject shares for borrow and vault withdrawal/migration source legs; assets-mode Blue withdrawals allow one share wei below the derived shares per earlier subject-market supply evidenced in the simulation. Preserve quote-based `OperationLimit` and `toSimulationLimits` without deprecation; quote-only behavior is unchanged. Inputs are preferred where supported, while refinance, in-kind redeems, force exits and Midnight operations still require quotes.
+
+  Typed sender-side wNative measurements also include native value sent by the request without an explicit alias.
+  Requests that send native value with typed inputs must have that value covered by a measured native or wNative side; otherwise simulation throws `SlippageCheckUnavailableError`.
+  Typed Blue inputs pre-accrue their market, so per-call logs omit that market's `AccrueInterest` event and `gasUsed` excludes accrual; quote-only limits do not accrue.
+
+  Preserve the existing quote-only `SimulateParams`, `SimulationLimits`, `CheckedOperationLimit`, and result types, including `typeof simulate` return-type helpers. Add `SimulateInputParams`, `SimulationInputLimits`, checked input-limit/result types, and overloads at the `simulate()` boundary. Input-based checked limits report `fieldChecks`; inactive combined legs reject adverse subject-position movement even when explicit quotes override derivations. Explicit collateral quotes retain the declared-market movement guard. Combined same-token operations derive signed net wallet amounts when the sender and receiver match, retaining their subject-position checks. Reject overlapping cross-operation wallet measurements involving typed inputs; split the bundle or use quote-only limits with bundle-wide wallet quotes.
+
+### Patch Changes
+
+- Classic ERC-20 and vault-share approvals now request `maxUint256`, subject to the existing
+  token-specific caps and zero-reset behavior; vault-share permits are also unlimited. Larger existing
+  vault-share allowances are reused. ERC-2612 token permits remain exact because the bundle's `permit`
+  call uses the pull amount; Permit2 SignatureTransfer remains exact because the bundle derives both
+  the permitted and requested amounts from that same pull amount. The `approvalAmount` option and
+  `ApprovalAmountLessThanSpendAmountError` are removed; migrate callers by dropping the option and
+  error handling. See `MIGRATION-v8-to-v9.md` for the removed API and migration details. WDK
+  withdrawals no longer reject larger existing share allowances. Asset-mode exits without an
+  on-chain share-price or max-shares bound no longer have an SDK share-allowance ceiling, so a
+  share-price drop before inclusion can burn more shares than quoted.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.0.0
+
+## 8.1.0
+
+### Minor Changes
+
+- Build verified per-index collateral limits for funded Midnight maker publications produced by `supplyCollateralMakeBorrow`, while keeping Blue-parking bundles that also supply collateral and other unsupported maker actions unsupported.
+
+  If a maker action supplies at multiple collateral indexes, a defined `expected` field throws `AmbiguousExpectedQuoteError` (`AMBIGUOUS_EXPECTED_QUOTE`). Maker collateral is always attributed to `owner`, so `onBehalf` must equal it.
+
+  Maintained dependents of `@morpho-org/evm-simulation`: none (no workspace package declares it).
+
+- Add the `midnightRedeem` operation type. Its limit names the Midnight market (`marketId`), the credit owner (`account`) and the payout `receiver`, and quotes `creditRedeemed` (a cap on the drop in `account`'s credit returned by `Midnight.updatePositionView`, so accrued continuous fees and realized losses are not counted as redeemed) and `assetsReceived` (a minimum on the receiver's loan-token balance delta), both measured over the whole bundle. `position.maxCredit` (`MidnightPositionBounds`) caps the credit left after the bundle; `0n` requires the bundle to close the position. The `midnightRedeem` limit takes `position?: MidnightPositionBounds`; `CheckedSlippageLimits.position` gains an optional `maxCredit`, so existing Blue readers keep compiling. `SimulationOperationSubject` gains `MidnightRedeemSubject`. `toSimulationLimits` derives both sides from a `midnightRedeem` action's `units` and accepts `onBehalf` and `receiver` for it; a mismatch with the encoded `args.onBehalf` or `args.receiver` throws `LimitAccountMismatchError` (`field: "onBehalf"` or the new `"args.receiver"`); a `receiver` option rejected on an action that pays `msg.sender` still reports `field: "receiver"`. Maintained dependents of `@morpho-org/evm-simulation`: none (no workspace package declares it).
+- Add whole-bundle limits for Midnight `midnightRepayWithdrawCollateral`. Direct
+  repayment checks loan-token payment and net debt reduction; collateral
+  withdrawals check both position reduction and receiver delivery. The operation
+  also requires Midnight credit to remain unchanged and supports exact final debt
+  and collateral bounds. Native-funded repayment counts the ETH sent plus the
+  net wNative change.
+
+  Exports `MidnightRepayWithdrawCollateralSubject`, `MidnightDebtPositionBounds`,
+  and `MidnightCollateralAmount`; expected quote fields include `debtRepaid` and
+  `collateralWithdrawals`, and `LimitAccountMismatchError.field` may be
+  `"args.collateralReceiver"`.
+
+  Maintained dependents of `@morpho-org/evm-simulation`: none.
+
+  Without a `debtRepaid` quote (withdraw-only or full repay), the sender's
+  Midnight debt must not increase across the bundle; a missing debt read throws
+  `SlippageCheckUnavailableError`.
+
+- Add whole-bundle limits for Midnight `midnightTakeBorrow` and
+  `midnightTakeWithdraw` sells. The borrow quote caps net position reduction
+  (`credit - debt`) with `unitsSold`; the reduce-only quote caps accrued credit
+  reduction with `creditRedeemed`. Both also require the receiver's net loan-token
+  proceeds, measured on the encoded receiver. Reduce-only limits reject any
+  bundle that changes debt. Explicit receivers are supported, and default
+  slippage tolerance applies in addition to the target's bounds; use
+  `slippageTolerance: 0n` for exact bounds.
+
+  Maintained dependents of `@morpho-org/evm-simulation`: none.
+
+- Add the `midnightSupplyCollateral` operation type. Its limit names the Midnight market (`marketId`) and `collateralIndex`, and quotes `collateralSupplied` (a minimum on `Midnight.collateral(marketId, account, collateralIndex)`) and `assetsPaid` (a cap on the sender's balance of the collateral token, resolved from `Midnight.toMarket(marketId)`), both measured over the whole bundle. `SimulationOperationSubject` gains `MidnightCollateralOperationSubject`. `toSimulationLimits` derives both sides from a `midnightSupplyCollateral` action and takes an optional `onBehalf` for the collateral owner (defaults to `owner`); a mismatch with `args.onBehalf`, or `onBehalf` other than `owner` on any other action, throws `LimitAccountMismatchError`. Other Midnight actions still throw `UnsupportedLimitActionError`. Maintained dependents of `@morpho-org/evm-simulation`: none (no workspace package declares it).
+- Add whole-bundle limits for Midnight `midnightSupplyCollateralTakeBorrow`. Limits verify exact minimum collateral credit at each supplied index, cap the reduction in net Midnight position units, and require loan-token proceeds. Wallet pulls and proceeds are combined into one net balance bound per token and account; collateral credit and pull caps are not widened by percentage tolerance. Owner native value from all bundle transactions, including unrelated ones, is subtracted from the owner's wNative pull cap, which is the quoted wNative collateral. Native value exceeding that cap fails closed with `SlippageCheckUnavailableError`, including when the cap is `0n` (for example, when the owner receives wNative loan proceeds but no quoted collateral is wNative). Native value sent on a chain without registered wNative fails closed with `SlippageCheckUnavailableError`; otherwise, if the operation has no owner wNative bound, native value is not checked. The combined operation throws `SimulationValidationError` when its wallet bounds overlap another operation's wallet balance reads or wallet bounds, or when its Midnight collateral, credit, or debt reads overlap another operation's Midnight position reads.
+
+  Maintained dependents of `@morpho-org/evm-simulation`: none.
+
+- Add whole-bundle economic limits for Midnight takeLend actions.
+- Add whole-bundle limits for Midnight `midnightTakeRepayWithdrawCollateral`.
+  Repayment through offers and the optional direct fallback reuse the
+  repay-withdraw checks: loan-token spend is checked against the target and
+  debt reduction against the target units, both within `slippageTolerance`
+  (the `maxUint256` full-debt target must close the debt instead); credit must
+  stay unchanged, and collateral withdrawals must reach the receiver. A
+  take-repay limit without a repayment leg is rejected.
+
+  Maintained dependents of `@morpho-org/evm-simulation`: none.
+
+- Add exact sender-wallet spending limits for Midnight Blue parking bundles.
+  Blue parking combined with collateral supplies is unsupported.
+  The quote is always the full parked amount; wNative measurements add ETH sent
+  to the net wNative balance change, so native funding needs no adjustment.
+- Verify BlueBuyCallback supply shares when simulating Midnight Blue parking.
+- Allow Midnight limit inputs to carry a market struct when the bundle creates the market.
 
 ### Patch Changes
 
 - Updated dependencies
-  - @morpho-org/morpho-sdk@8.2.0-next.0
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/morpho-sdk@8.4.0
+
+## 8.0.1
+
+### Patch Changes
+
+- Add X Layer (chain id 196) to the shared chain and address registries.
+
+  Register the `ChainId.XLayerMainnet` enum member, its explorer and native-currency (OKB) metadata, and its era-3 Morpho Blue, AdaptiveCurveIrm, bundles (VaultBundlesV1, VaultExitBundlesV1, BlueBundlesV1), BluePublicAllocator, VaultV2, adapter-factory, registry and oracle-factory addresses (sourced from the `morpho-org/deployments` address book), plus Permit2 and the WOKB wrapped-native token, with their deployment blocks.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.1.0
+  - @morpho-org/morpho-sdk@8.3.0
+
+## 8.0.0
+
+### Major Changes
+
+- `simulate()` now fails closed on limits. `SimulateParams.limits` is required: pass `SimulationLimits` or the literal `"none"` (reserved for transactions no operation type covers — Merkl reward claims, Midnight actions, approval/authorization-only bundles) — an omitted `limits` or an empty `limits.operations` array throws `SimulationValidationError`. `slippageTolerance` is optional and defaults to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03%); a supplied tolerance must be below `1e18`. Quote amounts must be greater than zero. Every `OperationLimit` must quote the sides in its operation table. Minimums: `assetsReceived` on payout ops; `sharesMinted` for `blueSupply`, `vaultV1Deposit`, `vaultV2Deposit`, `vaultV1MigrateToV2`; `sharesBurned` for `blueRepay`, `blueRefinance`; `collateralSupplied` for `blueSupplyCollateral`. Caps: `assetsPaid` on every pay-in op (`blueSupply`, `blueSupplyCollateral`, `blueRepay`, `vaultV1Deposit`, `vaultV2Deposit`, and unconditionally on both combined ops); `sharesBurned` on supply/vault exits; `sharesMinted` on `blueBorrow`, `blueSupplyCollateralBorrow` and the `blueRefinance` target market; `collateralWithdrawn` on `blueWithdrawCollateral` and `blueRepayWithdrawCollateral`. `blueWithdraw`, `blueBorrow`, `blueWithdrawCollateral`, `blueRepayWithdrawCollateral`'s collateral leg, and every vault withdraw/redeem/force-exit also require `assetsReceived`; `vaultV1MigrateToV2` requires both share sides; in-kind redeems must quote `positions` (the per-market Blue supply shares delivered to the receiver) or `assetsReceived` (the idle wallet portion) on top of the `sharesBurned` cap, and the collateral a refinance moves is unverified. Each combined op requires the any-of minimum plus its other-leg cap (`sharesMinted`, `collateralWithdrawn`) and the unconditional `assetsPaid` cap — a single-leg use quotes a small positive cap such as `1n` on each inactive leg, and an active leg on either side (cap above `1n`) also requires that leg's other side (`assetsReceived` on an active borrow/collateral leg, `collateralSupplied`/`sharesBurned` on an active pay-in leg). `SlippageQuote` gains `collateralSupplied`/`collateralWithdrawn`, measured on the Blue position's `collateral` — `collateralSupplied` a minimum, `collateralWithdrawn` a cap; both are rejected on non-collateral operations. `checkedLimits.slippageTolerance` always reports the applied tolerance. `verification.limits` reports `"none"` back for an opted-out run instead of an empty limit set, and is typed `CheckedSimulationLimits | "none"`; `CheckedSimulationLimits`, `CheckedOperationLimit` and `CheckedSlippageLimits` are new root exports. See `docs/migrations/evm-simulation-v7-to-v8.md`. Maintained dependents of `@morpho-org/evm-simulation`: none (no workspace package declares it).
+
+### Minor Changes
+
+- Add `toSimulationLimits`, a pure builder that produces the `SimulationLimits` of a morpho-sdk action transaction (`tx.action`). `account` is always the passed `owner`; an action encoding a different `onBehalf` (or `redeem.recipient` on `vaultV2ForceRedeem`) throws `LimitAccountMismatchError`. Quote sides the args fix are derived — deposits quote `assetsPaid` and `sharesMinted` from `netAssets`/`maxSharePrice`, Blue legs net out referral fees and reallocation penalties via the new `referralFeeAssets` action metadata, collateral ops quote their collateral side, and native-funded actions mark `assetPaid` with `ethAddress` — while `expected` fields override derived values (a caller-passed `0n` passes through so `simulate()` rejects it). Sides the args cannot fix must be supplied via `expected` or `MissingExpectedQuoteError` names the field and what to compute; Midnight and action types without an operation throw `UnsupportedLimitActionError`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@8.2.0
 
 ## 7.0.0
 

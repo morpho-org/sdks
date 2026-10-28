@@ -14,6 +14,7 @@ import {
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { getBundlesReferralFeeAssets } from "../bundles/common.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -239,6 +240,10 @@ export const blueSupplyCollateralBorrow = (
         reallocationPenaltyAssets,
         referralFeePct,
         referralFeeRecipient,
+        referralFeeAssets: getBundlesReferralFeeAssets(
+          borrowAssets - reallocationPenaltyAssets,
+          referralFeePct,
+        ),
         deadline: params.args.deadline,
       },
     },

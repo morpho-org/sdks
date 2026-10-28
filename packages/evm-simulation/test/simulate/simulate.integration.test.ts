@@ -1,5 +1,6 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { metaMorphoAbi } from "@morpho-org/morpho-ts/abis";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -16,7 +17,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { SimulationRevertedError, simulate } from "../../src/index.js";
+import {
+  ConsumerLimitViolationError,
+  SimulationRevertedError,
+  simulate,
+} from "../../src/index.js";
 
 // Pinned with the bundles deployments the verified pipeline routes through —
 // the shared 24_593_903 pin in `test/setup.ts` predates them.
@@ -95,6 +100,7 @@ describe.sequential("simulate — real revert propagation", () => {
     await expect(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -138,6 +144,7 @@ describe.sequential("simulate — real native funding", () => {
     await client.setBalance({ address: client.account.address, value: 0n });
     const error = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: "none",
       transactions: [
         {
           from: client.account.address,
@@ -182,7 +189,7 @@ describe.sequential("simulate — real native funding", () => {
             type: "blueSupply",
             marketId: WstethWethBlue.id,
             assetPaid: ethAddress,
-            quote: { assetsPaid: assets },
+            quote: { assetsPaid: assets, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
         ],
@@ -197,7 +204,7 @@ describe.sequential("simulate — real native funding", () => {
       ],
     });
     expect(result.verification.operations[0]?.checkedLimits).toEqual({
-      quote: { assetsPaid: assets },
+      quote: { assetsPaid: assets, sharesMinted: 1n },
       slippageTolerance: 0n,
     });
     expect(result.calls).toHaveLength(1);
@@ -260,10 +267,17 @@ describe.sequential("simulate — sequential state and stable indices", () => {
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
       limits: {
-        operations: supplies.map(([marketParams]) => ({
+        operations: supplies.map(([marketParams, asset]) => ({
           type: "blueSupply" as const,
           marketId: marketParams.id,
-          quote: { sharesMinted: 1n },
+          // `assetsPaid` measures the subject's net outflow per asset across the
+          // whole bundle, so the two USDC supplies both observe their sum.
+          quote: {
+            sharesMinted: 1n,
+            assetsPaid: supplies
+              .filter(([, token]) => token === asset)
+              .reduce((sum, [, , a]) => sum + a, 0n),
+          },
           slippageTolerance: 0n,
         })),
       },
@@ -276,8 +290,13 @@ describe.sequential("simulate — sequential state and stable indices", () => {
       0, 1, 2,
     ]);
     expect(result.verification.operations.map((o) => o.checkedLimits)).toEqual(
-      supplies.map(() => ({
-        quote: { sharesMinted: 1n },
+      supplies.map(([, asset]) => ({
+        quote: {
+          sharesMinted: 1n,
+          assetsPaid: supplies
+            .filter(([, token]) => token === asset)
+            .reduce((sum, [, , a]) => sum + a, 0n),
+        },
         slippageTolerance: 0n,
       })),
     );
@@ -290,10 +309,6 @@ const STEAKHOUSE_USDC: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
 const RE7_WETH: Address = "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0";
 const OTHER: Address = "0x00000000000000000000000000000000DeaDBeef";
 
-const blueAbi = parseAbi([
-  "struct MarketParams { address loanToken; address collateralToken; address oracle; address irm; uint256 lltv; }",
-  "function borrow(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver)",
-]);
 const vaultAbi = parseAbi([
   "function deposit(uint256 assets, address receiver) returns (uint256)",
   "function transfer(address to, uint256 shares) returns (bool)",
@@ -345,6 +360,7 @@ describe.sequential("simulate — named revert errors", () => {
     }) => {
       const error = await simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -396,6 +412,7 @@ describe.sequential("simulate — named revert errors", () => {
     await expect(
       simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: "none",
         transactions: [
           {
             from: client.account.address,
@@ -416,5 +433,133 @@ describe.sequential("simulate — named revert errors", () => {
       }),
       message: "Transaction 0 reverted: AllCapsReached()",
     });
+  }, 60_000);
+});
+
+describe.sequential("simulate — account attribution", () => {
+  test("error: ConsumerLimitViolationError when shares mint to another recipient", async ({
+    client,
+  }) => {
+    const addresses = getChainAddresses(mainnet.id)!;
+    const assets = 10n ** 15n;
+    const otherRecipient =
+      "0x000000000000000000000000000000000000dEaD" as Address;
+
+    // A direct Blue `supply` call: the sender funds the assets but `onBehalf`
+    // credits the supply shares to another account, so the limited account's
+    // position never moves.
+    await client.deal({ erc20: WETH, amount: assets });
+    await client.writeContract({
+      address: WETH,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [addresses.blue, maxUint256],
+    });
+    const data = encodeFunctionData({
+      abi: blueAbi,
+      functionName: "supply",
+      args: [
+        {
+          loanToken: WstethWethBlue.loanToken,
+          collateralToken: WstethWethBlue.collateralToken,
+          oracle: WstethWethBlue.oracle,
+          irm: WstethWethBlue.irm,
+          lltv: WstethWethBlue.lltv,
+        },
+        assets,
+        0n,
+        otherRecipient,
+        "0x",
+      ],
+    });
+
+    await expect(
+      simulate(configFor(client), {
+        chainId: mainnet.id,
+        limits: {
+          operations: [
+            {
+              type: "blueSupply",
+              marketId: WstethWethBlue.id,
+              account: client.account.address,
+              quote: { assetsPaid: assets, sharesMinted: 1n },
+              slippageTolerance: 0n,
+            },
+          ],
+        },
+        transactions: [
+          {
+            from: client.account.address,
+            to: addresses.blue,
+            data,
+            value: 0n,
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+  }, 60_000);
+
+  test("error: ConsumerLimitViolationError when collateral supplies to another recipient", async ({
+    client,
+  }) => {
+    const addresses = getChainAddresses(mainnet.id)!;
+    const collateralAssets = parseUnits("0.01", 8);
+    const otherRecipient =
+      "0x000000000000000000000000000000000000dEaD" as Address;
+
+    // A direct Blue `supplyCollateral` call: the sender funds the collateral
+    // but `onBehalf` credits it to another account, so the limited account's
+    // collateral never moves.
+    await client.deal({ erc20: CBBTC, amount: collateralAssets });
+    await client.writeContract({
+      address: CBBTC,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [addresses.blue, maxUint256],
+    });
+    const data = encodeFunctionData({
+      abi: blueAbi,
+      functionName: "supplyCollateral",
+      args: [
+        {
+          loanToken: CbbtcUsdcBlue.loanToken,
+          collateralToken: CbbtcUsdcBlue.collateralToken,
+          oracle: CbbtcUsdcBlue.oracle,
+          irm: CbbtcUsdcBlue.irm,
+          lltv: CbbtcUsdcBlue.lltv,
+        },
+        collateralAssets,
+        otherRecipient,
+        "0x",
+      ],
+    });
+
+    const denied = simulate(configFor(client), {
+      chainId: mainnet.id,
+      limits: {
+        operations: [
+          {
+            type: "blueSupplyCollateral",
+            marketId: CbbtcUsdcBlue.id,
+            account: client.account.address,
+            quote: {
+              collateralSupplied: collateralAssets,
+              assetsPaid: collateralAssets,
+            },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+      transactions: [
+        {
+          from: client.account.address,
+          to: addresses.blue,
+          data,
+          value: 0n,
+        },
+      ],
+    });
+    await expect(denied).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+    await expect(denied).rejects.toThrowError(/collateralSupplied/);
   }, 60_000);
 });

@@ -5,8 +5,12 @@ import {
   midnightChainId,
   midnightMarket,
 } from "../../test/fixtures/midnight.js";
+import { InvalidMidnightHexInputError } from "../types/index.js";
 import type { MidnightCancelAndMakeParams } from "../types/midnightCancelAndMake.js";
-import { snapshotMidnightCancelAndMakeParams } from "./validateMidnightPublication.js";
+import {
+  snapshotMidnightCancelAndMakeParams,
+  validateMidnightBytes32,
+} from "./validateMidnightPublication.js";
 
 const groupA = `0x${"aa".repeat(32)}` as Hex;
 const groupB = `0x${"bb".repeat(32)}` as Hex;
@@ -44,5 +48,42 @@ describe("snapshotMidnightCancelAndMakeParams", () => {
     expect(snapshot.publication?.collateral?.supplies).not.toBe(
       params.publication?.collateral?.supplies,
     );
+  });
+});
+
+describe("validateMidnightBytes32", () => {
+  test("default: accepts a 32-byte value", () => {
+    expect(() =>
+      validateMidnightBytes32("callbackSalt", `0x${"ab".repeat(32)}`),
+    ).not.toThrow();
+  });
+
+  test.each([
+    {
+      description: "31-byte",
+      value: `0x${"ab".repeat(31)}`,
+      reason: "wrongSize",
+    },
+    {
+      description: "33-byte",
+      value: `0x${"ab".repeat(33)}`,
+      reason: "wrongSize",
+    },
+    {
+      description: "63-digit",
+      value: `0x${"a".repeat(63)}`,
+      reason: "oddLength",
+    },
+    { description: "non-hex", value: `0x${"zz".repeat(32)}`, reason: "notHex" },
+  ] as const)("error: rejects a $description value", ({ value, reason }) => {
+    let error: unknown;
+    try {
+      validateMidnightBytes32("callbackSalt", value as Hex);
+    } catch (cause) {
+      error = cause;
+    }
+
+    expect(error).toBeInstanceOf(InvalidMidnightHexInputError);
+    expect(error).toMatchObject({ field: "callbackSalt", value, reason });
   });
 });

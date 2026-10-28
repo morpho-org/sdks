@@ -43,6 +43,7 @@ export enum ChainId {
   MorphMainnet = 2818,
   MegaEthMainnet = 4326,
   RobinhoodMainnet = 4663,
+  XLayerMainnet = 196,
 }
 
 /** Explorer, native currency, and identifier metadata for a supported chain. */
@@ -455,6 +456,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://robin.etherscan.io",
       identifier: "robinhood",
+    },
+    [ChainId.XLayerMainnet]: {
+      name: "X Layer",
+      id: ChainId.XLayerMainnet,
+      nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+      explorerUrl: "https://www.oklink.com/x-layer",
+      identifier: "xlayer",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

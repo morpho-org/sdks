@@ -10,17 +10,21 @@ import {
 } from "@morpho-org/morpho-ts";
 import {
   type Address,
-  encodeFunctionData,
   isAddressEqual,
   maxUint128,
   zeroAddress,
   zeroHash,
 } from "viem";
+import {
+  encodeMidnightCalldata,
+  encodeMidnightMarketId,
+} from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
   validateMidnightNativeAmount,
 } from "../../helpers/validate.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
   validateMidnightCollateralSupplySums,
   validateMidnightUint128Field,
@@ -143,6 +147,8 @@ const emptyMidnightMarket = {
  * @throws {UnknownCollateralIndexError} when a collateral index is not configured on the market.
  * @throws {NonPositiveInputError} when a collateral supply amount is non-positive.
  * @throws {NonPositiveInputError} when `blueSupply.assets` is non-positive.
+ * @throws {MidnightCalldataEncodingError} when another input cannot be ABI-encoded, such as an
+ *   out-of-range integer or malformed address.
  * @example
  * ```ts
  * import { getChainAddress } from "@morpho-org/morpho-ts";
@@ -215,6 +221,7 @@ export const midnightCancelAndMake = (
     const supportedTargets = [priceRatifierV1, rateRatifierV1].filter(
       (target): target is Address => target != null,
     );
+    validateMidnightAddress("publication.ratifier", publication.ratifier);
     if (
       !supportedTargets.some((target) =>
         isAddressEqual(publication.ratifier, target),
@@ -338,7 +345,7 @@ export const midnightCancelAndMake = (
   let tx = {
     to: getChainAddress(snapshot.chainId, "midnightBundlesV2"),
     value: nativeFunding.value,
-    data: encodeFunctionData({
+    data: encodeMidnightCalldata({
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
@@ -376,13 +383,16 @@ export const midnightCancelAndMake = (
         market:
           publication?.collateral == null
             ? zeroHash
-            : MarketUtils.toId(publication.collateral.market),
+            : encodeMidnightMarketId(publication.collateral.market),
         ratifier: publication?.ratifier ?? zeroAddress,
         root: publication?.root ?? zeroHash,
         groups: [...(publication?.groups ?? [])],
         cancellations,
         collateralSupplies: supplies,
         ...(blueSupply && { blueSupply }),
+        ...(nativeFunding.value > 0n
+          ? { nativeAmount: nativeFunding.value }
+          : {}),
         deadline: snapshot.deadline,
       },
     },

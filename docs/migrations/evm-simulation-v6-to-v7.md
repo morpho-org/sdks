@@ -91,3 +91,11 @@ Integrations requiring the removed fields can stay on 6.x during migration.
 
 The maintainer-approved lifecycle exception is recorded in
 [ADR-2026-10-12](../adrs/ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.md). It covers the listed removals and constructor changes only.
+
+## Upgrading from 5.x
+
+Consumers on 5.x (e.g. `evm-simulation` 5.1.0) must apply two guides in
+order: first the [v5 → v6 guide](./evm-simulation-v5-to-v6.md) (retention
+guard moved to `midnightBundlesV2`, fail-closed RPC responses, dependency
+majors), then this guide, then the [v7 → v8 guide](./evm-simulation-v7-to-v8.md)
+for required limits if you target 8.x.

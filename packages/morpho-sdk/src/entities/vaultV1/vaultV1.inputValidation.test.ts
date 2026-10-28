@@ -6,6 +6,8 @@ import {
   erc20Abi,
   http,
   maxUint256,
+  serializeSignature,
+  toHex,
 } from "viem";
 import { fraxtal, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -15,7 +17,6 @@ import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
-  BundlesPermitMismatchError,
   type Erc2612RequirementSignature,
   ExcessiveSlippageToleranceError,
   ExpiredDeadlineError,
@@ -109,8 +110,13 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
   const owner = "0x0000000000000000000000000000000000000001" as const;
   const targetVault = "0x0000000000000000000000000000000000000002" as const;
   const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+  const validSignature = serializeSignature({
+    r: toHex(1n, { size: 32 }),
+    s: toHex(2n, { size: 32 }),
+    yParity: 0,
+  });
 
-  test("error: BundlesPermitMismatchError for a withdrawal permit above the share cap", async () => {
+  test("behavior: accepts a withdrawal permit above the required share amount", async () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
@@ -138,32 +144,26 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       args: {
         owner,
         asset: SteakhouseUsdcVaultV1.address,
-        amount: 11n,
+        amount: maxUint256,
         nonce: 0n,
         deadline: maxUint256,
-        signature: "0x",
+        signature: validSignature,
       },
       action: {
         type: "permit",
-        args: { spender, amount: 11n, deadline: maxUint256 },
+        args: { spender, amount: maxUint256, deadline: maxUint256 },
       },
     } satisfies Erc2612RequirementSignature;
 
     const requirements = await withdrawal.getRequirements();
 
-    // Re-resolution re-reads the live allowance, so the array is rebuilt rather than memoized;
-    // the cap it reports must still be the one this handle already committed to.
+    // Re-resolution re-reads the live allowance, so the array is rebuilt rather than memoized.
     expect(await withdrawal.getRequirements()).toStrictEqual(requirements);
 
-    expect(() => withdrawal.buildTx([oversizedPermit])).toThrowError(
-      expect.objectContaining({
-        name: "BundlesPermitMismatchError",
-        field: "amount",
-      }),
-    );
+    expect(() => withdrawal.buildTx([oversizedPermit])).not.toThrow();
   });
 
-  test("error: BundlesPermitMismatchError for an asset migration permit above the computed share cap", () => {
+  test("behavior: accepts an asset migration permit above the required share amount", () => {
     const vault = createMockClient(mainnet)
       .client.extend(morphoViemExtension())
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
@@ -191,20 +191,18 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       args: {
         owner,
         asset: SteakhouseUsdcVaultV1.address,
-        amount: 11n,
+        amount: maxUint256,
         nonce: 0n,
         deadline: maxUint256,
-        signature: "0x",
+        signature: validSignature,
       },
       action: {
         type: "permit",
-        args: { spender, amount: 11n, deadline: maxUint256 },
+        args: { spender, amount: maxUint256, deadline: maxUint256 },
       },
     } satisfies Erc2612RequirementSignature;
 
-    expect(() => migration.buildTx([oversizedPermit])).toThrow(
-      BundlesPermitMismatchError,
-    );
+    expect(() => migration.buildTx([oversizedPermit])).not.toThrow();
   });
 });
 

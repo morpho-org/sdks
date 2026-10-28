@@ -1,4 +1,5 @@
 import { MarketParams } from "@morpho-org/midnight-sdk";
+import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -43,5 +44,20 @@ describe("validateMidnightMarket", () => {
         chainId: midnightChainId,
       }),
     ).toThrow(MidnightMarketAddressMismatchError);
+  });
+
+  test("error: a malformed market.midnight throws a typed encoding error", () => {
+    expect(() =>
+      validateMidnightMarket({
+        market: { ...midnightMarket, midnight: "0x123" as Address },
+        chainId: midnightChainId,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "market.midnight",
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      }),
+    );
   });
 });

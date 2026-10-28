@@ -6,9 +6,6 @@
     "packages/morpho-ts/src/addresses.ts": ["duplicates"]
   },
   "workspaces": {
-    ".": {
-      "ignoreDependencies": ["undici"]
-    },
     "packages/blue-sdk-viem": {
       "ignore": ["src/queries/**/index.ts"]
     },

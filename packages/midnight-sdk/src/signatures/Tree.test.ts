@@ -3,6 +3,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import {
+  InvalidOfferGroupError,
   InvalidRateRatifierV1TickError,
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -212,6 +213,41 @@ describe("Tree.create", () => {
         expectTypeOf(result).toEqualTypeOf<Tree<"rateV1">>();
       expectTypeOf(result).toExtend<AnyTree>();
     }
+  });
+
+  test("error: InvalidOfferGroupError on priceV1/rateV1 explicit groups with mixed cap modes", () => {
+    const unitOffer = {
+      ...offers[0]!,
+      group: zeroHash,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    };
+    const assetOffer = {
+      ...offers[1]!,
+      group: zeroHash,
+      maxUnits: 0n,
+      maxAssets: 100n,
+      expiry: offers[1]!.expiry + 1n,
+    };
+
+    expect(() =>
+      Tree.create({
+        type: "priceV1",
+        entries: [
+          { offer: unitOffer, allowedTaker: zeroAddress },
+          { offer: assetOffer, allowedTaker: zeroAddress },
+        ],
+      }),
+    ).toThrow(InvalidOfferGroupError);
+    expect(() =>
+      Tree.create({
+        type: "rateV1",
+        entries: [
+          { offer: unitOffer, rate: 100n },
+          { offer: assetOffer, rate: 101n },
+        ],
+      }),
+    ).toThrow(InvalidOfferGroupError);
   });
 
   test("error: InvalidTreeError on empty, duplicate and mixed-ratifier inputs", () => {

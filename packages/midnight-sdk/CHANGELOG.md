@@ -1,17 +1,14 @@
 # @morpho-org/midnight-sdk
 
-## 2.2.0-next.0
+## 2.2.0
 
 ### Minor Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
-
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
+- `PriceRatifierV1` and `RateRatifierV1` now throw `InvalidOfferGroupError` from `buildDescriptor`, and from `buildProof`, `ratifierData` and `ratify` for raw leaf input, when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules, such as mixing unit and asset caps. Such groups were never valid: all their leaves share one onchain consumed counter. In `@morpho-org/morpho-sdk`, `MorphoMidnight.getOffersData` and the maker flows (`makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`) throw it as `InvalidMidnightOfferGroupError` when given a priceV1/rateV1 `Tree.create` request.
 
 ### Patch Changes
 
-- Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
+- Document that asks quotes by assets can include offers the MidnightBundlesV2 assets-target buy reverts on.
 
 ## 2.1.0
 

@@ -280,6 +280,35 @@ const apiTakeableOffer = {
   ratifier_data: "0x1234",
 };
 
+const multiCollateralApiTakeableOffer = (() => {
+  const market = {
+    ...apiOfferMarket,
+    collaterals: [
+      apiCollateral,
+      { ...apiCollateral, token: SECOND_LOAN_TOKEN },
+    ],
+  };
+  return {
+    ...apiTakeableOffer,
+    market_id: MarketUtils.toId({
+      chainId: market.chain_id,
+      midnight: market.midnight,
+      loanToken: market.loan_token,
+      collateralParams: market.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: market.maturity,
+      rcfThreshold: market.rcf_threshold,
+      enterGate: market.enter_gate,
+      liquidatorGate: market.liquidator_gate,
+    }),
+    offer: { ...apiOffer, market },
+  };
+})();
+
 const apiBidTakeableOffer = {
   ...apiTakeableOffer,
   units: (2n * MathLib.WAD).toString(),
@@ -1099,6 +1128,22 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
     );
     expect(call.init?.method).toBe("GET");
   });
+
+  test("behavior: returns offer collaterals in canonical collateralIndex order", async () => {
+    const { fetch } = createJsonFetch({
+      data: [multiCollateralApiTakeableOffer],
+    });
+
+    const result = await MidnightApi.fetchBookTakeableOffers({
+      marketId: multiCollateralApiTakeableOffer.market_id,
+      side: "asks",
+      fetch,
+    });
+
+    expect(
+      result.data[0]?.offer.market.collateralParams.map(({ token }) => token),
+    ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
+  });
 });
 
 describe("MidnightApi.fetchBookQuote", () => {
@@ -1140,6 +1185,32 @@ describe("MidnightApi.fetchBookQuote", () => {
       "1010000000000000000",
     );
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: returns offer collaterals in canonical collateralIndex order", async () => {
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: "1010000000000000000",
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [multiCollateralApiTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: multiCollateralApiTakeableOffer.market_id,
+      side: "asks",
+      units: 1_000000000000000000n,
+      averageWorstPrice: "1010000000000000000",
+      fetch,
+    });
+
+    expect(
+      result.data.takeableOffers[0]?.offer.market.collateralParams.map(
+        ({ token }) => token,
+      ),
+    ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
   });
 
   test("behavior: serializes assets and slippage", async () => {
@@ -1806,6 +1877,23 @@ describe("MidnightApi.fetchTakeableOffers", () => {
     expect(url.searchParams.get("limit")).toBe("10");
     expect(url.searchParams.get("cursor")).toBe("previous");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: returns offer collaterals in canonical collateralIndex order", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: null,
+      data: [multiCollateralApiTakeableOffer],
+    });
+
+    const result = await MidnightApi.fetchTakeableOffers({
+      maker: MAKER,
+      marketIds: [multiCollateralApiTakeableOffer.market_id],
+      fetch,
+    });
+
+    expect(
+      result.data[0]?.offer.market.collateralParams.map(({ token }) => token),
+    ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
   });
 
   test("behavior: treats empty optional filters as unset", async () => {

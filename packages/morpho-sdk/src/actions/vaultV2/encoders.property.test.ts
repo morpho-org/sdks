@@ -31,7 +31,6 @@ import {
   computeMinForceWithdrawSharePrice,
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
-  computeVaultShareAllowanceCeiling,
 } from "../../helpers/slippage.js";
 import { vaultV2Deposit } from "./deposit.js";
 import { vaultV2ForceRedeem } from "./forceRedeem.js";
@@ -207,7 +206,7 @@ describe("vaultV2Withdraw", () => {
     ],
     { numRuns: 200 },
   )(
-    "behavior: the exact share approval covers the burn, stays within tolerance and targets VaultBundlesV1",
+    "behavior: the unlimited share approval covers the burn and targets VaultBundlesV1",
     async ({
       amount: rawAssets,
       referralFeePct,
@@ -243,10 +242,6 @@ describe("vaultV2Withdraw", () => {
         version: "vaultV2",
         owner: recipient,
         cap,
-        ceiling: computeVaultShareAllowanceCeiling({
-          requiredShareAllowance: cap,
-          slippageTolerance: tolerance,
-        }),
         state: shareState,
       });
 

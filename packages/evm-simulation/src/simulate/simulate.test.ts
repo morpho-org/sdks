@@ -44,6 +44,7 @@ function makeParams(overrides: object = {}): SimulateParams {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
+    limits: "none",
     ...overrides,
   } as SimulateParams;
 }
@@ -117,9 +118,29 @@ describe.sequential("simulate — pipeline delegation", () => {
   });
 
   it("limits execute through the pipeline", async () => {
-    const result = await simulate(makeConfig(), makeParams({ limits: {} }));
+    const result = await simulate(
+      makeConfig(),
+      makeParams({
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: VAULT,
+              quote: { sharesMinted: 1n, assetsPaid: 1n },
+            },
+          ],
+        },
+      }),
+    );
     expect(result).toEqual(makeResult());
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
+  });
+
+  it("missing limits throws SimulationValidationError", async () => {
+    await expect(
+      simulate(makeConfig(), makeParams({ limits: undefined } as never)),
+    ).rejects.toThrow(SimulationValidationError);
+    expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
   it("legacy signature authorization variant throws SimulationValidationError", async () => {

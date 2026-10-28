@@ -49,7 +49,7 @@
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "^8.1.0-0",
-    "@morpho-org/morpho-ts": "^4.1.0-0",
+    "@morpho-org/morpho-ts": "^4.2.0-0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

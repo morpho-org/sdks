@@ -60,8 +60,7 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   `maker === accountAddress`.
 - **Requirements.** Token requirements are plain ERC-20 approvals from `accountAddress` to
   `midnightBundlesV2`, returned when the allowance is below the pulled assets and set to an
-  unlimited allowance (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`, or
-  `approvalAmount` passed to `getRequirements()`/`getMidnightApprovalRequirements`), plus, for lend
+  unlimited allowance (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`), plus, for lend
   makers, a likewise unlimited approval to `midnight` when the allowance is below the loan
   reserve pulled when offers are taken (Blue-funded lend makers need none:
   their `BlueBuyCallback` pays Midnight); V2 takes no inline permit, so never produce

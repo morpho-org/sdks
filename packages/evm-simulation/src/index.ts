@@ -21,12 +21,15 @@ export type {
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
+  AmbiguousExpectedQuoteError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
   InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
+  LimitAccountMismatchError,
+  MissingExpectedQuoteError,
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
@@ -36,18 +39,42 @@ export {
   SlippageCheckUnavailableError,
   UnexpectedSimulationError,
   UnsupportedChainError,
+  UnsupportedLimitActionError,
   UnsupportedOperationError,
 } from "./errors.js";
 export type {
+  AssetsOrShares,
   BlueMarketOperationSubject,
   BlueMarketOperationType,
   BluePositionBounds,
   BlueRefinanceSubject,
+  CheckedInputOperationLimit,
+  CheckedOperationLimit,
+  CheckedSimulationInputLimits,
+  CheckedSimulationLimits,
+  CheckedSlippageLimits,
+  FeelessInputType,
   ForceExitDeallocationQuote,
   InKindPositionQuote,
+  InputOperationLimit,
+  MidnightBlueParkingSubject,
+  MidnightBuySubject,
+  MidnightCollateralAmount,
+  MidnightCollateralOperationSubject,
+  MidnightDebtPositionBounds,
+  MidnightMarketStruct,
+  MidnightPositionBounds,
+  MidnightRedeemSubject,
+  MidnightRepayWithdrawCollateralSubject,
+  MidnightSellSubject,
+  OperationInputs,
   OperationLimit,
   OperationType,
+  ReallocationPenaltyInputType,
+  RepayInputs,
+  ScalarQuoteField,
   SharePriceLimit,
+  SimulationInputLimits,
   SimulationLimits,
   SimulationOperationSubject,
   SlippageLimits,
@@ -62,16 +89,22 @@ export {
   VAULT_OPERATION_TYPES,
 } from "./limits.js";
 export type {
+  SimulateInputParams,
   SimulateParams,
   SimulationMode,
   StateBlock,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
-export { toSimulationAuthorizations } from "./requirements/index.js";
+export {
+  toSimulationAuthorizations,
+  toSimulationLimits,
+} from "./requirements/index.js";
 export type {
   AuthorizationPreparation,
   SimulatedOperation,
+  SimulationInputVerification,
   SimulationVerification,
+  VerifiedSimulationInputResult,
   VerifiedSimulationResult,
 } from "./result.js";
 export type { AssertionBounds } from "./simulate/assertions.js";

@@ -125,6 +125,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @returns Tree instance.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
@@ -211,6 +212,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @returns A tree whose entries and validation options are inferred from the route.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @throws {InvalidOfferGroupError} for priceV1/rateV1 entries whose explicit groups break `OfferUtils.validateOfferGroup` rules.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
    * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example

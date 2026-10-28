@@ -19,6 +19,7 @@ const ASSERTIONS = [
 
 const makeRequest = (count: number) =>
   parseRequest({
+    limits: "none",
     chainId: 1,
     transactions: Array.from({ length: count }, () => ({
       from: OWNER,
@@ -103,6 +104,7 @@ describe("planExecution", () => {
   test("order: transaction assertions bracket each transaction between reads and preparations", () => {
     const request = parseRequest({
       chainId: 1,
+      limits: "none",
       transactions: [
         {
           from: OWNER,

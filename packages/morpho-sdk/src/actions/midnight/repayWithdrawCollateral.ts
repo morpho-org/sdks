@@ -4,18 +4,18 @@ import {
   midnightBundlesV2Abi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, maxUint256, zeroAddress } from "viem";
 import {
-  type Address,
-  encodeFunctionData,
-  maxUint256,
-  zeroAddress,
-} from "viem";
+  encodeMidnightCalldata,
+  encodeMidnightMarketId,
+} from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   validateDeadline,
   validateMidnightNativeAmount,
   validateUint256Field,
 } from "../../helpers/validate.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import {
@@ -93,6 +93,7 @@ export interface MidnightRepayWithdrawCollateralParams {
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
  * @throws {MidnightZeroReceiverError} when collateral is withdrawn to the zero address.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
  *   contract or a market token contract.
  * @example
@@ -155,6 +156,7 @@ export const midnightRepayWithdrawCollateral = (
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   }
 
+  validateMidnightAddress("collateralReceiver", params.collateralReceiver);
   if (params.collateralWithdrawals.length > 0) {
     // Rejects receivers that would strand the withdrawn collateral in a contract.
     validateMidnightReceiver({
@@ -210,13 +212,13 @@ export const midnightRepayWithdrawCollateral = (
     value: nativeFunding.value,
     data:
       repay.type === "assets"
-        ? encodeFunctionData({
+        ? encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithAssetsTargetAndWithdrawCollateral",
             args: [market, repay.assets, repay.assets, ...args],
           })
-        : encodeFunctionData({
+        : encodeMidnightCalldata({
             abi: midnightBundlesV2Abi,
             functionName:
               "midnightBundlesV2BuyWithUnitsTargetAndWithdrawCollateral",
@@ -233,7 +235,7 @@ export const midnightRepayWithdrawCollateral = (
     action: {
       type: "midnightRepayWithdrawCollateral",
       args: {
-        market: MarketUtils.toId(params.market),
+        market: encodeMidnightMarketId(params.market),
         repay: { ...repay },
         collateralWithdrawals: params.collateralWithdrawals.map(
           ({ collateralIndex, assets }) => ({ collateralIndex, assets }),

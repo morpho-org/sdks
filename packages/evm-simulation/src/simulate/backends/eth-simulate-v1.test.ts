@@ -37,6 +37,7 @@ let params!: Parameters<typeof executePlan>[0];
 
 function makePlan(transactions = 1): ExecutionPlan {
   const request = parseRequest({
+    limits: "none",
     chainId: 1,
     transactions: Array.from({ length: transactions }, () => ({
       from: OWNER,

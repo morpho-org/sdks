@@ -44,7 +44,7 @@ export interface VaultV2InKindRedeemParams {
  *   the expected owner of an optional `requirementSignature` permit. VaultExitBundlesV1 burns
  *   `msg.sender`'s vault shares, so the submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
- * @param params.args.requirementSignature - Optional bounded Vault V2 shares permit.
+ * @param params.args.requirementSignature - Optional unlimited Vault V2 shares permit.
  * @param params.metadata - Optional analytics metadata.
  * @returns A deep-frozen `Readonly<Transaction<VaultV2InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.

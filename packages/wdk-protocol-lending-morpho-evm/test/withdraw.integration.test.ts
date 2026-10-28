@@ -69,10 +69,58 @@ describe.skipIf(!process.env.ERPC_SECRET)(
           supportSignature: route === "permit",
         });
         const options = { token: USDC, amount: ASSETS };
+        const prepared = await morpho.prepareWithdraw(options);
+        if (route === "oversizedApproval") {
+          await morpho.quoteWithdraw(options);
+          await prepared.quote();
+          expect(await prepared.getRequirements()).toEqual([]);
+          const nonceBefore = await client.getTransactionCount({
+            address: owner,
+          });
+          const assetsBefore = await client.readContract({
+            address: USDC,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [owner],
+          });
+          const sharesBefore = await client.readContract({
+            address: VAULT,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [owner],
+          });
+          const result = await prepared.submit();
+          expect(
+            (
+              await client.waitForTransactionReceipt({
+                hash: result.hash as Hash,
+              })
+            ).status,
+          ).toBe("success");
+          expect(await client.getTransactionCount({ address: owner })).toBe(
+            nonceBefore + 1,
+          );
+          expect(
+            await client.readContract({
+              address: USDC,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [owner],
+            }),
+          ).toBe(assetsBefore + ASSETS);
+          expect(
+            await client.readContract({
+              address: VAULT,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [owner],
+            }),
+          ).toBeLessThan(sharesBefore);
+          return;
+        }
         await expect(morpho.quoteWithdraw(options)).rejects.toBeInstanceOf(
           UnresolvedVaultWithdrawRequirementsError,
         );
-        const prepared = await morpho.prepareWithdraw(options);
         await expect(prepared.quote()).rejects.toBeInstanceOf(
           UnresolvedVaultWithdrawRequirementsError,
         );

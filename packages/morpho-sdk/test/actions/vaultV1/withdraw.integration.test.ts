@@ -186,12 +186,7 @@ describe("Withdraw VaultV1", () => {
           vaultData: await vaultV1.getData(),
         });
         const requirements2 = await withdraw2.getRequirements();
-        expect(requirements2).toHaveLength(1);
-        const approval2 = requirements2[0];
-        if (!isRequirementApproval(approval2)) {
-          throw new Error("Approve transaction not found");
-        }
-        await client.sendTransaction(approval2);
+        expect(requirements2).toEqual([]);
         await client.sendTransaction(withdraw2.buildTx());
       },
     });

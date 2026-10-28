@@ -38,7 +38,7 @@ Each finding below requires the endpoint to lie, unless its entry names another 
 
 #### Vault accounting read by deployless queries (`blue-sdk-viem`)
 
-Each value comes from the same `eth_call` that returns the vault it describes. The signed slippage or allowance bound is only as honest as that call.
+Each value comes from the same `eth_call` that returns the vault it describes. Deposit and force-withdraw price bounds are only as honest as these reads; an asset-mode exit's SDK-derived minimum share allowance is not an on-chain share-burn bound.
 
 - A stale `lastUpdate` widens the Vault V2 deposit `maxSharePrice`.
 - A raised `maxRate` widens the deposit `maxSharePrice`.
@@ -52,19 +52,19 @@ Each value comes from the same `eth_call` that returns the vault it describes. T
 - An inflated nested `lastTotalAssets` suppresses fee dilution.
 - A lowered nested V1 `fee` suppresses fee-share dilution.
 - A forged adapter-market `rateAtTarget` widens the deposit bound. Any in-range value is a valid rate, so range checks cannot catch it.
-- Spoofed `totalSupply` and `virtualShares` inflate the exact-asset withdrawal allowance.
+- Spoofed `totalSupply` and `virtualShares` can distort the SDK-derived minimum share allowance for an asset-mode withdrawal.
 - An overstated `assetBalance` with understated `virtualShares` widens `maxSharePriceE27`.
-- A forged market tuple with forged root share scalars widens asset withdrawals.
-- A lowered `_totalAssets` widens the exact-asset withdrawal share allowance.
-- Forged fee rates and fee-recipient flags inflate the withdrawal share allowance.
+- A forged market tuple with forged root share scalars can distort the SDK-derived minimum share allowance for an asset-mode withdrawal.
+- A lowered `_totalAssets` raises the SDK-derived minimum share allowance for an asset-mode withdrawal.
+- Forged fee rates and fee-recipient flags can distort the SDK-derived minimum share allowance for an asset-mode withdrawal.
 - A lowered `totalSupply` widens the deposit `maxSharePrice`.
-- A lowered `virtualShares` widens the deposit `maxSharePriceE27`, and a raised one widens the exact-asset withdrawal allowance.
+- A lowered `virtualShares` widens the deposit `maxSharePriceE27`, and a raised one can raise the SDK-derived minimum share allowance for an asset-mode withdrawal.
 - A lowered V1 `fee` widens the deadline deposit bound.
 - A duplicated `withdrawQueue` id plus a lowered `totalSupply` weakens deposit pricing. MetaMorpho rejects duplicate queue ids (`DuplicateMarket`), so only a forged response has one.
-- A forged `market(id)` tuple plus a failed nested `lostAssets()` widens asset withdrawals. A v1.1 vault only "fails" that read if the node returns selective errors.
-- A failed nested `lostAssets()` plus a forged adapter IRM read undercounts the withdrawal allowance. The SDK tolerates that revert only because pre-v1.1 vaults lack the function.
-- A failed nested `lostAssets()` combined with an understated `assetBalance` or forged `virtualShares` widens withdrawals.
-- A forged scalar or market tuple, combined with an omitted adapter IRM or fee-share leg, widens withdrawals or in-kind redemptions. The forged read is what makes each exploitable.
+- A forged `market(id)` tuple plus a failed nested `lostAssets()` can distort the SDK-derived minimum share allowance for an asset-mode withdrawal. A v1.1 vault only "fails" that read if the node returns selective errors.
+- A failed nested `lostAssets()` plus a forged adapter IRM read can understate the SDK-derived minimum share allowance for an asset-mode withdrawal. The SDK tolerates that revert only because pre-v1.1 vaults lack the function.
+- A failed nested `lostAssets()` combined with an understated `assetBalance` or forged `virtualShares` can distort the SDK-derived minimum share allowance for an asset-mode withdrawal.
+- A forged scalar or market tuple, combined with an omitted adapter IRM or fee-share leg, can distort the SDK's withdrawal allowance or in-kind redemption preview. The forged read is what makes each exploitable.
 - An omitted nested allocation plus a forged `assetBalance` or `totalSupply` widens the deposit price guard. The allocation is now read; the forged read remains.
 - A poisoned Vault V2 accounting cap plus the ERC-4337 fee-token approval. The accounting read is out of scope; the approval is the fee-cap gap under "Accepted gaps".
 
@@ -88,7 +88,7 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 - A foreign nested V1 vault plus an omitted parent allocation weakens deposit pricing. The allocation is now read; the foreign vault needs a forged read.
 - A shortened `adaptersLength()` in the sequential fallback omits funded adapters.
 - Repeated adapter entries double-count, or point planning at the wrong adapter.
-- An omitted adapter market combined with an understated balance or fee-share count widens withdrawals.
+- An omitted adapter market combined with an understated balance or fee-share count can distort the SDK-derived minimum share allowance for an asset-mode withdrawal.
 - Adapter queries return no adapter identity, so foreign state cannot be told from the requested adapter's.
 - `GetVaultV2.query` returns no identity the node cannot also forge.
 - `morphoVaultV1()` is immutable, so a different nested vault can only come from a forged read.
@@ -163,6 +163,13 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - Failover to another backend with the same chain id is accepted. EIP-155 bytes are valid on every node of that chain.
 - `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - A stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
+
+## Approvals and vault exits
+
+The following accepted behaviors are recorded in [ADR-2026-10-21-unlimited-sdk-approvals](./docs/adrs/ADR-2026-10-21-unlimited-sdk-approvals.md):
+
+- Classic ERC-20 approvals and vault-share approvals or permits to registered spenders are unlimited and remain in place for reuse. Per-token uint96 caps and USDT zero-reset behavior remain; ERC-2612 token permits and Permit2 SignatureTransfer remain exact.
+- Asset-mode Vault V1/V2 withdrawals, the asset-mode `migrateToV2` source leg, and in-kind redemption have no on-chain share-burn bound. A share-price drop before inclusion can burn more shares than quoted. The SDK-derived minimum share allowance only decides whether a new approval or permit is requested; it does not cap the on-chain share burn.
 
 ## Midnight API
 

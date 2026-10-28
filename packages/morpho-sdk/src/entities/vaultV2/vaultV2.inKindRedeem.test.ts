@@ -27,6 +27,7 @@ import {
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  type ActionRequirement,
   AdapterNotPartOfVaultError,
   BundlesPermitMismatchError,
   ChainIdMismatchError,
@@ -36,10 +37,12 @@ import {
   InKindRedeemZeroDeallocationError,
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
+  isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
   NonPositiveInputError,
   type PermitRequirementSignature,
+  type RequirementSignature,
   VaultAddressMismatchError,
   VaultV2SingleAdapterRequiredError,
   VaultV2UnsupportedExitAdapterError,
@@ -79,6 +82,53 @@ const mockV2Requirements = (
     functionName: "balanceOf",
     result: params.blueBalance ?? 1_000n,
   });
+};
+
+const expectInKindAllowanceThreshold = async (
+  makeExit: (
+    allowance: bigint,
+    supportSignature: boolean,
+  ) => {
+    getRequirements: () => Promise<readonly ActionRequirement[]>;
+    buildTx: (signatures?: readonly RequirementSignature[]) => unknown;
+  },
+  minimum: bigint,
+) => {
+  expect(await makeExit(minimum, false).getRequirements()).toEqual([]);
+
+  const belowMinimum = makeExit(minimum - 1n, false);
+  const requirements = await belowMinimum.getRequirements();
+  expect(requirements).toHaveLength(1);
+  const [approval] = requirements;
+  if (!isRequirementApproval(approval)) {
+    throw new Error("Expected an ERC-20 approval requirement");
+  }
+  expect(approval.action.args.amount).toBe(maxUint256);
+
+  const permitExit = makeExit(minimum - 1n, true);
+  const [requirement] = await permitExit.getRequirements();
+  if (
+    !isRequirementSignature(requirement) ||
+    requirement.action.type !== "permit"
+  ) {
+    throw new Error("Expected a share permit requirement");
+  }
+  const signed = await requirement.sign(signerWalletClient, signerAddress);
+  if (!isPermitSignature(signed)) {
+    throw new Error("Expected an ERC-2612 permit signature");
+  }
+  const undersizedPermit: PermitRequirementSignature = {
+    ...signed,
+    args: { ...signed.args, amount: minimum - 1n },
+    action: {
+      ...signed.action,
+      args: { ...signed.action.args, amount: minimum - 1n },
+    },
+  };
+
+  expect(() => permitExit.buildTx([undersizedPermit])).toThrow(
+    BundlesPermitMismatchError,
+  );
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
@@ -467,7 +517,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     ]);
   });
 
-  test("behavior: default approve path uses the bounded share amount", async () => {
+  test("behavior: default approve path uses an unlimited share approval", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle);
     const vault = handle.client
@@ -484,7 +534,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
     });
   });
 
@@ -507,7 +557,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: arcBundler, amount: 501n },
+      args: { spender: arcBundler, amount: maxUint256 },
     });
     expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
       "eth_chainId",
@@ -519,13 +569,13 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     ]);
   });
 
-  test("behavior: oversized allowance is replaced by an exact approval", async () => {
+  test("behavior: reuses an allowance above the required shares", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const [approval] = await vault
+    const requirements = await vault
       .inKindRedeem({
         amount: 500n,
         marketParamsList: [inKindMarketParams],
@@ -534,19 +584,16 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(approval?.action).toEqual({
-      type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
-    });
+    expect(requirements).toEqual([]);
   });
 
-  test("behavior: resets an oversized allowance with an onchain approval even when signatures are supported", async () => {
+  test("behavior: reuses a larger allowance when signatures are supported", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const [requirement] = await vault
+    const requirements = await vault
       .inKindRedeem({
         amount: 500n,
         marketParamsList: [inKindMarketParams],
@@ -555,13 +602,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    if (!requirement || !isRequirementApproval(requirement)) {
-      throw new Error("Expected an ERC-20 approval requirement");
-    }
-    expect(requirement.action.args).toEqual({
-      spender: IN_KIND_BUNDLER,
-      amount: 501n,
-    });
+    expect(requirements).toEqual([]);
   });
 
   test.each(["spender", "amount", "deadline"] as const)(
@@ -602,7 +643,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         ...permit,
         args: {
           ...permit.args,
-          amount: field === "amount" ? 502n : permit.args.amount,
+          amount: field === "amount" ? 499n : permit.args.amount,
           deadline:
             field === "deadline" ? 1_900_000_001n : permit.args.deadline,
         },
@@ -612,7 +653,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
             ...permit.action.args,
             spender:
               field === "spender" ? IN_KIND_USER : permit.action.args.spender,
-            amount: field === "amount" ? 502n : permit.action.args.amount,
+            amount: field === "amount" ? 499n : permit.action.args.amount,
             deadline:
               field === "deadline"
                 ? 1_900_000_001n
@@ -651,7 +692,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(exit.buildTx().action.args.marketParamsList).toEqual([]);
   });
 
-  test("behavior: signature path emits a bounded V2 permit", async () => {
+  test("behavior: signature path emits an unlimited V2 permit", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle);
     const vault = handle.client
@@ -668,7 +709,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
     expect(requirement?.action).toMatchObject({
       type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
     });
   });
 
@@ -701,56 +742,71 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(exitB.buildTx([permit])).toEqual(exitA.buildTx([permit]));
   });
 
-  test("behavior: allowance includes separately rounded penalty burns", async () => {
-    const handle = createMockClient(mainnet);
-    mockV2Requirements(handle);
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const [approval] = await vault
-      .inKindRedeem({
-        amount: 3n,
-        marketParamsList: [inKindMarketParams, secondInKindMarketParams],
-        vaultData: inKindVaultV2Data({
-          additionalMarket: true,
-          penalty: 20_000_000_000_000_000n,
-          supplyShares: 1_000_000n,
-          totalAssets: 501n,
-        }),
-        userAddress: IN_KIND_USER,
-      })
-      .getRequirements();
+  test("behavior: allowance threshold includes separately rounded penalty burns", async () => {
+    const params = {
+      amount: 3n,
+      marketParamsList: [inKindMarketParams, secondInKindMarketParams],
+      vaultData: inKindVaultV2Data({
+        additionalMarket: true,
+        penalty: 20_000_000_000_000_000n,
+        supplyShares: 1_000_000n,
+        totalAssets: 501n,
+      }),
+      userAddress: signerAddress,
+    };
+    const makeExit = (allowance: bigint, supportSignature: boolean) => {
+      const handle = createMockClient(mainnet);
+      mockV2Requirements(handle, { allowance });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id)
+        .inKindRedeem(params);
+    };
 
-    expect(approval?.action).toMatchObject({ args: { amount: 6n } });
+    await expectInKindAllowanceThreshold(makeExit, 6n);
   });
 
   test("behavior: current preview bounds interest-driven share-price growth", async () => {
     const now = 1_800_000_000n;
     const totalAssets = 1_000_000_000_000_000_000n;
     const amount = totalAssets / 2n;
-    const handle = createMockClient(mainnet);
-    mockV2Requirements(handle, { blueBalance: totalAssets });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const [approval] = await withChainTimestamp(now, () =>
-      vault
+    const deadline = now + Time.s.from.h(2n);
+    const vaultData = inKindVaultV2Data({
+      marketTotalAssets: totalAssets,
+      marketTotalSupplyShares: totalAssets,
+      supplyShares: totalAssets,
+      rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      maxRate: MathLib.WAD / Time.s.from.y(1n),
+    });
+    const deadlineVault = vaultData.accrueInterest(deadline).vault;
+    const previewAllowance = (assets: bigint) =>
+      MathLib.max(
+        vaultData.toShares(assets, "Up"),
+        deadlineVault.toShares(assets, "Up"),
+      );
+    const minimum =
+      previewAllowance(1n) +
+      previewAllowance(0n) +
+      previewAllowance(0n) +
+      previewAllowance(amount);
+    const makeExit = (allowance: bigint, supportSignature: boolean) => {
+      const handle = createMockClient(mainnet);
+      mockV2Requirements(handle, { allowance, blueBalance: totalAssets });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id)
         .inKindRedeem({
           amount,
           marketParamsList: [inKindMarketParams],
-          vaultData: inKindVaultV2Data({
-            marketTotalAssets: totalAssets,
-            marketTotalSupplyShares: totalAssets,
-            supplyShares: totalAssets,
-            rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
-            maxRate: MathLib.WAD / Time.s.from.y(1n),
-          }),
-          userAddress: IN_KIND_USER,
-        })
-        .getRequirements(),
-    );
+          vaultData,
+          userAddress: signerAddress,
+          deadline,
+        });
+    };
 
-    expect(approval?.action).toMatchObject({ args: { amount: amount + 1n } });
+    await withChainTimestamp(now, () =>
+      expectInKindAllowanceThreshold(makeExit, minimum),
+    );
   });
 
   test("behavior: deadline preview bounds management-fee dilution", async () => {
@@ -758,36 +814,40 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     const deadline = now + Time.s.from.h(4n);
     const totalAssets = 1_000_000_000_000_000_000n;
     const amount = totalAssets / 2n;
-    const handle = createMockClient(mainnet);
-    mockV2Requirements(handle, { blueBalance: totalAssets });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
     const vaultData = inKindVaultV2Data({
       marketTotalAssets: totalAssets,
       marketTotalSupplyShares: totalAssets,
       supplyShares: totalAssets,
       managementFee: 50_000_000_000_000_000n / Time.s.from.y(1n),
     });
-    const [approval] = await withChainTimestamp(now, () =>
-      vault
+    const deadlineVault = vaultData.accrueInterest(deadline).vault;
+    const previewAllowance = (assets: bigint) =>
+      MathLib.max(
+        vaultData.toShares(assets, "Up"),
+        deadlineVault.toShares(assets, "Up"),
+      );
+    const minimum =
+      previewAllowance(1n) +
+      previewAllowance(0n) +
+      previewAllowance(0n) +
+      previewAllowance(amount);
+    const makeExit = (allowance: bigint, supportSignature: boolean) => {
+      const handle = createMockClient(mainnet);
+      mockV2Requirements(handle, { allowance, blueBalance: totalAssets });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id)
         .inKindRedeem({
           amount,
           marketParamsList: [inKindMarketParams],
           vaultData,
-          userAddress: IN_KIND_USER,
+          userAddress: signerAddress,
           deadline,
-        })
-        .getRequirements(),
-    );
+        });
+    };
 
-    const approvalAmount =
-      approval?.action.type === "erc20Approval"
-        ? approval.action.args.amount
-        : 0n;
-    const { vault: deadlineVault } = vaultData.accrueInterest(deadline);
-    expect(approvalAmount).toBe(
-      deadlineVault.toShares(amount, "Up") + deadlineVault.toShares(1n, "Up"),
+    await withChainTimestamp(now, () =>
+      expectInKindAllowanceThreshold(makeExit, minimum),
     );
   });
 
@@ -832,7 +892,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(requirements).toEqual([]);
   });
 
-  test("behavior: exact bounded allowance returns no authorization", async () => {
+  test("behavior: a sufficient allowance returns no authorization", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, { allowance: 501n });
     const vault = handle.client

@@ -2,7 +2,7 @@
 
 | Field      | Value                       |
 | ---------- | --------------------------- |
-| **Status** | accepted; error context, revert-error surface and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation; in-kind position and quoted-penalty scope superseded by ADR-2026-10-13-evm-simulation-execution-time-values |
+| **Status** | accepted; error context, revert-error surface and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation; in-kind position and quoted-penalty scope superseded by ADR-2026-10-13-evm-simulation-execution-time-values; optional `limits`, required `slippageTolerance`, single-side sufficiency, tolerance range including `1e18`, absence of a default bound, and the quote-field table superseded by [ADR-2026-10-15](./ADR-2026-10-15-evm-simulation-fail-closed-limits.md); for the input-based form, caller-supplied-only, no-fetched-quote/default-bound and unquoted-no-state-read rules superseded by ADR-2026-10-22-evm-simulation-limits-from-user-inputs |
 | **Date**   | 2026-10-01                  |
 | **Author** | @jinmel                     |
 | **Scope**  | `evm-simulation` 5.0.0      |

@@ -383,7 +383,7 @@ describe("MorphoBlue write surface", () => {
     ]);
   });
 
-  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+  test("supply uses an unlimited classic approval", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
     mockRead(handle, {
@@ -398,7 +398,7 @@ describe("MorphoBlue write surface", () => {
 
     const requirements = await market
       .supply({ assets: 1n, userAddress, deadline: maxUint256 })
-      .getRequirements({ approvalAmount: maxUint256 });
+      .getRequirements();
 
     expect(requirements).toMatchObject([
       {
@@ -443,7 +443,7 @@ describe("MorphoBlue write surface", () => {
     expect(tx.action.args.assets).toBe(assets);
   });
 
-  test("repay forwards a reusable approvalAmount to the token requirement", async () => {
+  test("repay uses an unlimited classic approval", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
     mockRead(handle, {
@@ -463,7 +463,7 @@ describe("MorphoBlue write surface", () => {
         repayAssets: 1n,
         deadline: maxUint256,
       })
-      .getRequirements({ approvalAmount: maxUint256 });
+      .getRequirements();
 
     expect(requirements).toMatchObject([
       {
@@ -475,7 +475,7 @@ describe("MorphoBlue write surface", () => {
     ]);
   });
 
-  test("supplyCollateral forwards a reusable approvalAmount to the token requirement", async () => {
+  test("supplyCollateral uses an unlimited classic approval", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
     mockRead(handle, {
@@ -494,7 +494,7 @@ describe("MorphoBlue write surface", () => {
         collateralAssets: 1n,
         deadline: maxUint256,
       })
-      .getRequirements({ approvalAmount: maxUint256 });
+      .getRequirements();
 
     expect(requirements).toMatchObject([
       {
@@ -1341,70 +1341,49 @@ describe("MorphoBlue position validation", () => {
     },
   );
 
-  test("behavior: full repay approval equals the encoded maxRepayAssets", async () => {
+  test("behavior: full repay allowance threshold uses the encoded maxRepayAssets", async () => {
     const now = 1_800_000_000n;
     const positionData = makePosition(marketParams, {
       lastUpdate: now,
       rateAtTarget: 3_170_979_198n,
     });
-    const handle = createMockClient(mainnet);
-    const entity = handle.client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(marketParams, mainnet.id);
-    const firstAction = withChainTimestamp(now, () =>
-      entity.repay({
-        userAddress,
-        positionData,
-        repayShares: maxUint256,
-        deadline: now + 7_200n,
-      }),
+    const deadline = now + 7_200n;
+    const createRepay = (allowance: bigint) => {
+      const handle = createMockClient(mainnet);
+      const entity = handle.client
+        .extend(morphoViemExtension({ supportSignature: false }))
+        .morpho.blue(marketParams, mainnet.id);
+      mockRead(handle, {
+        address: marketParams.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: allowance,
+      });
+      return withChainTimestamp(now, () =>
+        entity.repay({
+          userAddress,
+          positionData,
+          repayShares: maxUint256,
+          deadline,
+        }),
+      );
+    };
+    const baseline = createRepay(0n);
+    const minimum = withChainTimestamp(
+      now,
+      () => baseline.buildTx().action.args.maxRepayAssets,
     );
-    const firstFundingCap = firstAction.buildTx().action.args.maxRepayAssets;
-    mockRead(handle, {
-      address: marketParams.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
+    const sufficient = createRepay(minimum);
+
+    expect(
+      await withChainTimestamp(now, () => sufficient.getRequirements()),
+    ).toEqual([]);
+
+    const insufficient = createRepay(minimum - 1n);
     const requirements = await withChainTimestamp(now, () =>
-      firstAction.getRequirements(),
+      insufficient.getRequirements(),
     );
-
-    expect(requirements[0]?.action).toMatchObject({
-      type: "erc20Approval",
-      args: { amount: firstFundingCap },
-    });
-  });
-
-  test("behavior: full repay with explicit approvalAmount keeps the reusable cap", async () => {
-    const now = 1_800_000_000n;
-    const positionData = makePosition(marketParams, {
-      lastUpdate: now,
-      rateAtTarget: 3_170_979_198n,
-    });
-    const handle = createMockClient(mainnet);
-    const entity = handle.client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(marketParams, mainnet.id);
-    const action = withChainTimestamp(now, () =>
-      entity.repay({
-        userAddress,
-        positionData,
-        repayShares: maxUint256,
-        deadline: now + 7_200n,
-      }),
-    );
-    mockRead(handle, {
-      address: marketParams.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-
-    const requirements = await withChainTimestamp(now, () =>
-      action.getRequirements({ approvalAmount: maxUint256 }),
-    );
-
+    expect(requirements).toHaveLength(1);
     expect(requirements[0]?.action).toMatchObject({
       type: "erc20Approval",
       args: { amount: maxUint256 },

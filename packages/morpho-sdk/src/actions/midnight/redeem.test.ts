@@ -1,6 +1,12 @@
 import { MarketUtils, midnightAbi } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { decodeFunctionData, maxUint128, zeroAddress } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  InvalidAddressError,
+  maxUint128,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -11,7 +17,9 @@ import {
 import {
   ChainIdMismatchError,
   InputExceedsMaxError,
+  MidnightCalldataEncodingError,
   MidnightContractReceiverError,
+  MidnightZeroOnBehalfError,
   MidnightZeroReceiverError,
   NonPositiveInputError,
 } from "../../types/index.js";
@@ -92,6 +100,19 @@ describe("midnightRedeem", () => {
     ).toThrow(NonPositiveInputError);
   });
 
+  test("error: MidnightZeroOnBehalfError for zero onBehalf", () => {
+    const buildTx = () =>
+      midnightRedeem({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        units: 1_000n,
+        onBehalf: zeroAddress,
+      });
+
+    expect(buildTx).toThrow(MidnightZeroOnBehalfError);
+    expect(buildTx).toThrow(expect.objectContaining({ field: "onBehalf" }));
+  });
+
   test("error: units above the uint128 credit balance", () => {
     expect(() =>
       midnightRedeem({
@@ -126,6 +147,19 @@ describe("midnightRedeem", () => {
 
     expect(call).toThrow(MidnightZeroReceiverError);
     expect(call).toThrow(expect.objectContaining({ field: "receiver" }));
+  });
+
+  test("error: a malformed receiver throws a typed encoding error", () => {
+    const call = () =>
+      midnightRedeem({ ...params, receiver: "0x123" as Address });
+
+    expect(call).toThrow(MidnightCalldataEncodingError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        input: "receiver",
+        cause: expect.any(InvalidAddressError),
+      }),
+    );
   });
 
   test("error: MidnightContractReceiverError for protocol receivers", () => {

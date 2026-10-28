@@ -1,12 +1,18 @@
 import { Market } from "@morpho-org/midnight-sdk";
 import { ChainId, getChainAddresses } from "@morpho-org/morpho-ts";
-import { type Address, getAddress, zeroAddress } from "viem";
+import {
+  type Address,
+  getAddress,
+  InvalidAddressError,
+  zeroAddress,
+} from "viem";
 import { describe, expect, it, test } from "vitest";
 import {
   midnightAddresses,
   midnightMarket,
 } from "../../test/fixtures/midnight.js";
 import {
+  MidnightCalldataEncodingError,
   MidnightContractReceiverError,
   MidnightZeroReceiverError,
   ReferralFeeRecipientMissingError,
@@ -25,6 +31,62 @@ const validate = (receiver: Address, field = "receiver" as const) =>
   });
 
 describe("validateMidnightReceiver", () => {
+  test("error: a malformed receiver throws a typed encoding error", () => {
+    const call = () => validate("0x123" as Address);
+
+    expect(call).toThrow(MidnightCalldataEncodingError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        input: "receiver",
+        cause: expect.any(InvalidAddressError),
+      }),
+    );
+  });
+
+  test("error: a malformed loan token throws a typed encoding error", () => {
+    const call = () =>
+      validateMidnightReceiver({
+        chainId,
+        market: { ...midnightMarket, loanToken: "0x123" as Address },
+        field: "receiver",
+        receiver: eoa,
+      });
+
+    expect(call).toThrow(MidnightCalldataEncodingError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        input: "market.loanToken",
+        cause: expect.any(InvalidAddressError),
+      }),
+    );
+  });
+
+  test("error: a malformed collateral token throws a typed encoding error", () => {
+    const call = () =>
+      validateMidnightReceiver({
+        chainId,
+        market: {
+          ...midnightMarket,
+          collateralParams: [
+            {
+              ...midnightMarket.collateralParams[0]!,
+              token: "0x123" as Address,
+            },
+          ],
+        },
+        field: "receiver",
+        receiver: eoa,
+      });
+
+    expect(call).toThrow(MidnightCalldataEncodingError);
+    expect(call).toThrow(
+      expect.objectContaining({
+        input: "market.collateralParams[0].token",
+        cause: expect.any(InvalidAddressError),
+      }),
+    );
+  });
+
   test("error: MidnightZeroReceiverError for a zero receiver", () => {
     const call = () => validate(zeroAddress);
 

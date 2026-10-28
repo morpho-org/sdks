@@ -1,11 +1,7 @@
 import type { Address } from "@morpho-org/blue-sdk";
-import { isAddressEqual } from "viem";
+import { isAddressEqual, maxUint256 } from "viem";
 import { APPROVE_ONLY_ONCE_TOKENS } from "../../helpers/constant.js";
-import {
-  ApprovalAmountLessThanSpendAmountError,
-  type ERC20ApprovalAction,
-  type Transaction,
-} from "../../types/index.js";
+import type { ERC20ApprovalAction, Transaction } from "../../types/index.js";
 import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
 
 /**
@@ -16,23 +12,20 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * Permit2, Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, and BlueBundlesV1
  * addresses when configured.
  *
- * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
- * `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) and the existing allowance is non-zero, prepends a
- * `approve(spender, 0)` reset transaction to satisfy those tokens' allowance-must-be-zero rule
- * before re-approving.
+ * When `allowances < spendAmount`, requests an approval for `maxUint256`, capped per token by
+ * `MAX_TOKEN_APPROVALS`. For tokens in `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) with a non-zero
+ * allowance, prepends an `approve(spender, 0)` reset before re-approving. No approval is emitted
+ * when `allowances >= spendAmount`.
  *
  * @param params.address - ERC-20 token address.
  * @param params.chainId - The chain the transaction targets, used to resolve supported spenders
  *   and token approval caps.
  * @param params.args.spendAmount - The amount the bundle will actually pull.
- * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
- *   may be `maxUint256` for reusable Permit2 or saturated-share-repay approvals).
  * @param params.args.spender - Address that will be granted the approval. Must be Permit2,
  *   Midnight, MidnightBundlesV2, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.
  * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
- *   followed by the new approval. Empty when no approval is needed.
- * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount < spendAmount`.
+ *   followed by the new approval. Empty when `allowances >= spendAmount`.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a supported SDK spender for `chainId`.
  * @example
@@ -42,7 +35,7 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * const txs = getRequirementsApproval({
  *   address: USDC,
  *   chainId: 1,
- *   args: { approvalAmount: 1_000_000n, spendAmount: 1_000_000n, spender: blueBundlesV1 },
+ *   args: { spendAmount: 1_000_000n, spender: blueBundlesV1 },
  *   allowances: 0n,
  * });
  * // txs satisfies Readonly<Transaction<ERC20ApprovalAction>>[]
@@ -51,19 +44,15 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
 export const getRequirementsApproval = (params: {
   address: Address;
   chainId: number;
-  args: { approvalAmount: bigint; spendAmount: bigint; spender: Address };
+  args: { spendAmount: bigint; spender: Address };
   allowances: bigint;
 }): Readonly<Transaction<ERC20ApprovalAction>>[] => {
   const {
     address,
     chainId,
-    args: { spendAmount, approvalAmount, spender },
+    args: { spendAmount, spender },
     allowances,
   } = params;
-
-  if (approvalAmount < spendAmount) {
-    throw new ApprovalAmountLessThanSpendAmountError();
-  }
 
   const approvals: Transaction<ERC20ApprovalAction>[] = [];
 
@@ -88,7 +77,7 @@ export const getRequirementsApproval = (params: {
       encodeErc20Approval({
         token: address,
         spender,
-        amount: approvalAmount,
+        amount: maxUint256,
         chainId,
       }),
     );

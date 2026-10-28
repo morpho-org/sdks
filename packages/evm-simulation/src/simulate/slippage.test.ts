@@ -4,10 +4,77 @@ import {
   ConsumerLimitViolationError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
-import type { SlippageLimits } from "../limits.js";
+import type { CheckedSlippageLimits } from "../limits.js";
 import { checkSlippage } from "./slippage.js";
 
 describe("checkSlippage", () => {
+  test("derived bound violations direct callers to the typed inputs or explicit quote", () => {
+    const depositError = (() => {
+      try {
+        checkSlippage({
+          label: "deposit",
+          limits: {
+            type: "vaultV2Deposit",
+            inputs: { assets: 100n },
+            quote: { sharesMinted: 100n },
+            slippageTolerance: 0n,
+          },
+          observed: { sharesMinted: 99n },
+          derivedFields: ["sharesMinted"],
+        });
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(depositError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((depositError as Error).message).toBe(
+      'deposit: derived minimum for "sharesMinted" is "100", got "99". Check the transaction against the typed inputs, or quote "sharesMinted" explicitly.',
+    );
+
+    const withdrawError = (() => {
+      try {
+        checkSlippage({
+          label: "withdraw",
+          limits: {
+            type: "blueWithdraw",
+            inputs: { assets: 100n },
+            quote: { sharesBurned: 50n },
+            slippageTolerance: 0n,
+          },
+          observed: { sharesBurned: 51n },
+          derivedFields: ["sharesBurned"],
+        });
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(withdrawError).toBeInstanceOf(ConsumerLimitViolationError);
+    expect((withdrawError as Error).message).toBe(
+      'withdraw: derived maximum for "sharesBurned" is "50", got "51". Check the transaction against the typed inputs, or quote "sharesBurned" explicitly.',
+    );
+  });
+  test("collateral-only combined supply accepts zero debt shares", () => {
+    const quote = {
+      assetsPaid: 100n,
+      collateralSupplied: 100n,
+      sharesMinted: 1n,
+    };
+    const checked = checkSlippage({
+      label: "collateral only",
+      limits: {
+        type: "blueSupplyCollateralBorrow",
+        inputs: { collateralAssets: 100n },
+        quote,
+        slippageTolerance: 0n,
+      },
+      observed: { ...quote, sharesMinted: 0n },
+      derivedFields: ["assetsPaid", "collateralSupplied", "sharesMinted"],
+      exactFields: ["assetsPaid", "collateralSupplied"],
+      debtShares: true,
+      inactiveFields: ["sharesMinted"],
+    });
+    expect(checked.quote).toEqual(quote);
+  });
   test.each([
     { field: "assetsReceived", accepted: 990n, rejected: 989n },
     { field: "sharesMinted", accepted: 990n, rejected: 989n },
@@ -16,7 +83,7 @@ describe("checkSlippage", () => {
   ] as const)(
     "behavior: inclusive 1% tolerance for $field",
     ({ field, accepted, rejected }) => {
-      const limits: SlippageLimits & { type: "blueSupply" } = {
+      const limits: CheckedSlippageLimits & { type: "blueSupply" } = {
         type: "blueSupply",
         quote: { [field]: 1000n },
         slippageTolerance: 10_000000000000000n,
@@ -51,8 +118,9 @@ describe("checkSlippage", () => {
     },
   );
   test("behavior: minting debt shares is capped and burning debt shares is floored", () => {
-    const debtLimits: SlippageLimits & { type: "blueBorrow" } = {
+    const debtLimits: CheckedSlippageLimits & { type: "blueBorrow" } = {
       type: "blueBorrow",
+
       quote: { sharesMinted: 1000n },
       slippageTolerance: 10_000000000000000n,
     };
@@ -76,8 +144,9 @@ describe("checkSlippage", () => {
       slippageTolerance: debtLimits.slippageTolerance,
     });
 
-    const repayLimits: SlippageLimits & { type: "blueRepay" } = {
+    const repayLimits: CheckedSlippageLimits & { type: "blueRepay" } = {
       type: "blueRepay",
+
       quote: { sharesBurned: 1000n },
       slippageTolerance: 10_000000000000000n,
     };
@@ -155,7 +224,7 @@ describe("checkSlippage", () => {
   test("behavior: in-kind positions accept down to the rounded bound per market", () => {
     const marketId =
       "0x00000000000000000000000000000000000000000000000000000000000000aa" as MarketId;
-    const limits: SlippageLimits & { type: "vaultV1InKindRedeem" } = {
+    const limits: CheckedSlippageLimits & { type: "vaultV1InKindRedeem" } = {
       type: "vaultV1InKindRedeem",
       quote: { positions: [{ marketId, supplyShares: 1000n }] },
       slippageTolerance: 10_000000000000000n,
@@ -192,7 +261,7 @@ describe("checkSlippage", () => {
     expect((error as Error).message).toContain(marketId);
   });
   test("behavior: force-exit penalty is a cost bounded above the quote", () => {
-    const limits: SlippageLimits & { type: "vaultV2ForceRedeem" } = {
+    const limits: CheckedSlippageLimits & { type: "vaultV2ForceRedeem" } = {
       type: "vaultV2ForceRedeem",
       quote: { penalty: 1000n },
       slippageTolerance: 10_000000000000000n,
@@ -237,7 +306,7 @@ describe("checkSlippage", () => {
       "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId;
     const otherMarket =
       "0x2222222222222222222222222222222222222222222222222222222222222222" as MarketId;
-    const limits: SlippageLimits & { type: "vaultV2ForceRedeem" } = {
+    const limits: CheckedSlippageLimits & { type: "vaultV2ForceRedeem" } = {
       type: "vaultV2ForceRedeem",
       quote: { deallocations: [{ marketId, assets: 1000n }] },
       slippageTolerance: 10_000000000000000n,
@@ -294,7 +363,7 @@ describe("checkSlippage", () => {
     const sharePrice = { expected: 10n ** 27n, tolerance: 10_000000000000000n };
 
     // Deposit shape: a higher assetsPaid-per-sharesMinted rate is adverse.
-    const deposit: SlippageLimits & { type: "vaultV2Deposit" } = {
+    const deposit: CheckedSlippageLimits & { type: "vaultV2Deposit" } = {
       type: "vaultV2Deposit",
       quote: { assetsPaid: 1010n, sharesMinted: 1000n },
       slippageTolerance: 10n ** 18n,
@@ -340,7 +409,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
 
     // Repay shape: a higher assetsPaid-per-debt-sharesBurned rate is adverse.
-    const repay: SlippageLimits & { type: "blueRepay" } = {
+    const repay: CheckedSlippageLimits & { type: "blueRepay" } = {
       type: "blueRepay",
       quote: { assetsPaid: 1010n, sharesBurned: 1000n },
       slippageTolerance: 10n ** 18n,
@@ -389,7 +458,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
 
     // Withdraw shape: a lower assetsReceived-per-sharesBurned rate is adverse.
-    const withdraw: SlippageLimits & { type: "blueWithdraw" } = {
+    const withdraw: CheckedSlippageLimits & { type: "blueWithdraw" } = {
       type: "blueWithdraw",
       quote: { assetsReceived: 990n, sharesBurned: 1000n },
       slippageTolerance: 10n ** 18n,
@@ -435,7 +504,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
 
     // Borrow shape: a lower assetsReceived-per-debt-sharesMinted rate is adverse.
-    const borrow: SlippageLimits & { type: "blueBorrow" } = {
+    const borrow: CheckedSlippageLimits & { type: "blueBorrow" } = {
       type: "blueBorrow",
       quote: { assetsReceived: 990n, sharesMinted: 1000n },
       slippageTolerance: 10n ** 18n,
@@ -484,7 +553,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
   });
   test("error: sharePrice throws SlippageCheckUnavailableError when a pair side is unobserved", () => {
-    const limits: SlippageLimits & { type: "vaultV2Deposit" } = {
+    const limits: CheckedSlippageLimits & { type: "vaultV2Deposit" } = {
       type: "vaultV2Deposit",
       quote: { assetsPaid: 1010n, sharesMinted: 1000n },
       slippageTolerance: 0n,
@@ -629,6 +698,41 @@ describe("checkSlippage", () => {
     expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
     expect((error as Error).message.startsWith(label)).toBe(true);
   });
+  test("behavior: position.maxCredit is an inclusive final bound not scaled by tolerance", () => {
+    const limits: CheckedSlippageLimits & { type: "midnightRedeem" } = {
+      type: "midnightRedeem",
+      quote: { creditRedeemed: 10n },
+      slippageTolerance: 10_000000000000000n,
+      position: { maxCredit: 5n },
+    };
+    const label = "Limit operation 0 (midnightRedeem)";
+    const observed = { creditRedeemed: 10n };
+    expect(checkSlippage({ label, limits, observed, credit: 5n })).toEqual({
+      quote: limits.quote,
+      slippageTolerance: limits.slippageTolerance,
+      position: { maxCredit: 5n },
+    });
+    expect(() =>
+      checkSlippage({ label, limits, observed, credit: 6n }),
+    ).toThrow(ConsumerLimitViolationError);
+  });
+
+  test("error: position.maxCredit throws when the credit read is missing", () => {
+    const label = "Limit operation 0 (midnightRedeem)";
+    expect(() =>
+      checkSlippage({
+        label,
+        limits: {
+          type: "midnightRedeem",
+          quote: { creditRedeemed: 1n },
+          slippageTolerance: 0n,
+          position: { maxCredit: 0n },
+        },
+        observed: { creditRedeemed: 1n },
+      }),
+    ).toThrow(SlippageCheckUnavailableError);
+  });
+
   test("behavior: 100% tolerance retains inclusive boundaries", () => {
     const limits = {
       type: "blueSupply" as const,

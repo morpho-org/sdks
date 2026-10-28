@@ -51,7 +51,7 @@ export type MidnightBuyTarget =
 export type MidnightSellTarget =
   | {
       readonly type: "assets";
-      /** Loan assets received before the referral fee. */
+      /** Exact loan assets paid to `receiver`; any referral fee is sold on top of this amount. */
       readonly assets: bigint;
       readonly maxUnits: bigint;
     }
@@ -321,6 +321,8 @@ export interface BlueSupplyAction
       readonly nativeAmount?: bigint;
       readonly referralFeePct: bigint;
       readonly referralFeeRecipient: Address;
+      /** Fee deducted from `assets` before supplying: floor(assets * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
       readonly deadline: bigint;
     }
   > {}
@@ -338,6 +340,12 @@ export interface BlueWithdrawAction
       readonly reallocationPenaltyAssets: bigint;
       readonly referralFeePct: bigint;
       readonly referralFeeRecipient: Address;
+      /**
+       * Fee deducted from net withdrawal proceeds:
+       * floor((withdrawAssets - reallocationPenaltyAssets) * referralFeePct / WAD); omitted in
+       * exact-shares mode, where the received amount is resolved at execution.
+       */
+      readonly referralFeeAssets?: bigint;
       readonly deadline: bigint;
     }
   > {}
@@ -353,6 +361,12 @@ type BlueSupplyCollateralBorrowActionArgs = {
   readonly reallocationPenaltyAssets: bigint;
   readonly referralFeePct: bigint;
   readonly referralFeeRecipient: Address;
+  /**
+   * Fee deducted from the borrow leg's net proceeds:
+   * floor((borrowAssets - reallocationPenaltyAssets) * referralFeePct / WAD); zero when
+   * `borrowAssets` is zero. The collateral-supply leg carries no fee.
+   */
+  readonly referralFeeAssets: bigint;
   readonly deadline: bigint;
 };
 
@@ -385,6 +399,14 @@ type BlueRepayWithdrawCollateralActionArgs = {
   readonly nativeAmount?: bigint;
   readonly referralFeePct: bigint;
   readonly referralFeeRecipient: Address;
+  /**
+   * Fee charged on top of the repaid assets, inside `maxRepayAssets`:
+   * floor(repayAssets * referralFeePct / (WAD - referralFeePct)); set only for an
+   * exact-assets repay (`repayAssets > 0n`), and omitted in exact-shares mode or
+   * when there is no repay leg, where the repaid amount is resolved at execution
+   * or never repaid.
+   */
+  readonly referralFeeAssets?: bigint;
   readonly deadline: bigint;
 };
 
@@ -604,6 +626,8 @@ export interface MidnightCancelAndMakeAction
       readonly cancellations: readonly MidnightGroupCancellation[];
       readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly blueSupply?: MidnightBlueSupply;
+      /** Native ETH wrapped into wNative to fund this bundle. */
+      readonly nativeAmount?: bigint;
       readonly deadline: bigint;
     }
   > {}

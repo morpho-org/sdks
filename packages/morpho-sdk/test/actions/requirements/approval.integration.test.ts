@@ -1,5 +1,5 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { parseUnits } from "viem";
+import { maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -50,7 +50,7 @@ describe("Approval", () => {
         }
 
         expect(requirements[0].action.args.spender).toBe(vaultBundlesV1);
-        expect(requirements[0].action.args.amount).toBe(amount);
+        expect(requirements[0].action.args.amount).toBe(maxUint256);
 
         await client.sendTransaction(requirements[0]);
 
@@ -110,7 +110,7 @@ describe("Approval", () => {
         expect(requirements[0].action.args.spender).toBe(vaultBundlesV1);
         expect(requirements[0].action.args.amount).toBe(0n);
         expect(requirements[1].action.args.spender).toBe(vaultBundlesV1);
-        expect(requirements[1].action.args.amount).toBe(amount);
+        expect(requirements[1].action.args.amount).toBe(maxUint256);
 
         await client.sendTransaction(requirements[0]);
         await client.sendTransaction(requirements[1]);

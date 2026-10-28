@@ -4,13 +4,19 @@ import {
   midnightAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, isAddressEqual, zeroAddress } from "viem";
+import {
+  encodeMidnightCalldata,
+  encodeMidnightMarketId,
+} from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   type Metadata,
   type MidnightSupplyCollateralAction,
+  MidnightZeroOnBehalfError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
@@ -37,14 +43,18 @@ export interface MidnightSupplyCollateralParams {
  * @param params.market - Midnight market receiving collateral.
  * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
  * @param params.assets - Collateral assets to supply.
- * @param params.onBehalf - Account whose collateral balance increases.
+ * @param params.onBehalf - Account whose collateral balance increases. `onBehalf`, or an
+ *   operator it authorized, must send the transaction; otherwise Midnight reverts
+ *   `Unauthorized()`. The collateral is pulled from the sender.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralAction>` targeting `Midnight`.
  * @throws {NonPositiveInputError} when `assets <= 0n`.
  * @throws {InputExceedsMaxError} when `assets` exceeds `uint128`.
+ * @throws {MidnightZeroOnBehalfError} when `onBehalf` is the zero address.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @example
  * ```ts
  * import { midnightSupplyCollateral } from "@morpho-org/morpho-sdk";
@@ -61,14 +71,19 @@ export interface MidnightSupplyCollateralParams {
 export const midnightSupplyCollateral = (
   params: MidnightSupplyCollateralParams,
 ): Readonly<Transaction<MidnightSupplyCollateralAction>> => {
+  // Reject a malformed account before comparing it with the zero address.
+  validateMidnightAddress("onBehalf", params.onBehalf);
   if (params.assets <= 0n) {
     throw new NonPositiveInputError("assets", params.assets);
   }
   validateMidnightUint128Field("assets", params.assets);
+  if (isAddressEqual(params.onBehalf, zeroAddress)) {
+    throw new MidnightZeroOnBehalfError("onBehalf");
+  }
 
   // Reject markets from another chain deployment before encoding the call.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = MarketUtils.toId(params.market);
+  const marketId = encodeMidnightMarketId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const collateralIndex = params.collateralIndex ?? 0n;
   // Validate that the supplied collateral index is configured before encoding.
@@ -77,7 +92,7 @@ export const midnightSupplyCollateral = (
   let tx = {
     to: midnight,
     value: 0n,
-    data: encodeFunctionData({
+    data: encodeMidnightCalldata({
       abi: midnightAbi,
       functionName: "supplyCollateral",
       args: [

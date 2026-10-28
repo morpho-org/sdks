@@ -28,7 +28,6 @@ import {
 import {
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
-  computeVaultShareAllowanceCeiling,
 } from "../../helpers/slippage.js";
 import { vaultV1Deposit } from "./deposit.js";
 import { vaultV1InKindRedeem } from "./inKindRedeem.js";
@@ -302,10 +301,6 @@ describe("vaultV1Withdraw", () => {
         version: "vaultV1",
         owner: user,
         cap,
-        ceiling: computeVaultShareAllowanceCeiling({
-          requiredShareAllowance: cap,
-          slippageTolerance: tolerance,
-        }),
         state: shareState,
       });
 
@@ -340,7 +335,7 @@ describe("vaultV1Withdraw", () => {
 });
 
 // bundles VaultBundlesV1.sol vaultBundlesV1Withdraw: require((assets == 0) != (shares == 0)); a
-// redeem burns exactly `shares`, so the share approval is the input itself.
+// redeem encodes the exact share burn, while the separate approval requirement is unlimited.
 describe("vaultV1Redeem", () => {
   test.prop(
     [

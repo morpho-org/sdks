@@ -64,7 +64,7 @@ export interface VaultV2ForceWithdrawParams {
  *   is outside that bound's protection.
  * @param params.args.referralFeeRecipient - Optional referral fee recipient. Defaults to the zero
  *   address, which is only valid alongside a zero `referralFeePct`.
- * @param params.args.requirementSignature - Optional bounded Vault V2 shares permit.
+ * @param params.args.requirementSignature - Optional unlimited Vault V2 shares permit.
  * @param params.metadata - Optional analytics metadata.
  * @returns A deep-frozen `Readonly<Transaction<VaultV2ForceWithdrawAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.

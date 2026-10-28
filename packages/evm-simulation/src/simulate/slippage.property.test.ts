@@ -1,4 +1,5 @@
 import { fc, test } from "@fast-check/vitest";
+import { MarketUtils } from "@morpho-org/blue-sdk";
 import { describe, expect } from "vitest";
 import { ConsumerLimitViolationError } from "../errors.js";
 import { checkSlippage } from "./slippage.js";
@@ -21,6 +22,69 @@ describe("checkSlippage", () => {
   test.prop(
     [
       fc.record({
+        totalSupplyAssets: fc.bigInt({ min: 1n, max: 10n ** 24n }),
+        totalSupplyShares: fc.bigInt({ min: 1n, max: 10n ** 30n }),
+        supplied: fc.bigInt({ min: 1n, max: 10n ** 24n }),
+        withdrawn: fc.bigInt({ min: 0n, max: 10n ** 24n }),
+        supplyCount: fc.integer({ min: 2, max: 10 }),
+      }),
+    ],
+    {
+      examples: [
+        [
+          {
+            totalSupplyAssets: 1000n,
+            totalSupplyShares: 1000000n,
+            supplied: 100n,
+            withdrawn: 500n,
+            supplyCount: 2,
+          },
+        ],
+      ],
+    },
+  )(
+    "multiple preceding supplies change withdrawal conversion by at most one share wei each",
+    ({
+      totalSupplyAssets,
+      totalSupplyShares,
+      supplied,
+      withdrawn,
+      supplyCount,
+    }) => {
+      const before = { totalSupplyAssets, totalSupplyShares };
+      let after = before;
+      for (let i = 0; i < supplyCount; i++)
+        after = {
+          totalSupplyAssets: after.totalSupplyAssets + supplied,
+          totalSupplyShares:
+            after.totalSupplyShares +
+            MarketUtils.toSupplyShares(supplied, after, "Down"),
+        };
+      const assets = (withdrawn % after.totalSupplyAssets) + 1n;
+      const expected = MarketUtils.toSupplyShares(assets, before, "Up");
+      const actual = MarketUtils.toSupplyShares(assets, after, "Up");
+      expect(actual).toBeLessThanOrEqual(expected);
+      expect(actual).toBeGreaterThanOrEqual(expected - BigInt(supplyCount));
+      expect(() =>
+        checkSlippage({
+          label: "withdraw after supply",
+          limits: {
+            type: "blueWithdraw",
+            inputs: { assets },
+            quote: { assetsReceived: assets, sharesBurned: expected },
+            slippageTolerance: 0n,
+          },
+          observed: { assetsReceived: assets, sharesBurned: actual },
+          derivedFields: ["assetsReceived", "sharesBurned"],
+          exactFields: ["assetsReceived"],
+          subjectShareRoundingAllowance: BigInt(supplyCount),
+        }),
+      ).not.toThrow();
+    },
+  );
+  test.prop(
+    [
+      fc.record({
         side: fc.oneof(
           fc.record({
             field: fc.constant("assetsReceived" as const),
@@ -30,6 +94,12 @@ describe("checkSlippage", () => {
             { field: "sharesMinted" as const, debtShares: false },
             { field: "sharesBurned" as const, debtShares: true },
           ),
+          // Collateral fields ignore `debtShares` on combined ops: production
+          // checks them with `debtShares: true`, and the flag must leave them alone.
+          fc.record({
+            field: fc.constant("collateralSupplied" as const),
+            debtShares: fc.boolean(),
+          }),
         ),
         expected: expectedAmount,
         tolerance: toleranceWad,
@@ -82,6 +152,10 @@ describe("checkSlippage", () => {
             { field: "sharesBurned" as const, debtShares: false },
             { field: "sharesMinted" as const, debtShares: true },
           ),
+          fc.record({
+            field: fc.constant("collateralWithdrawn" as const),
+            debtShares: fc.boolean(),
+          }),
         ),
         expected: expectedAmount,
         tolerance: toleranceWad,

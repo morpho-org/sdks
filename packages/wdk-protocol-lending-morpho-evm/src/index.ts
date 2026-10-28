@@ -5,7 +5,6 @@ export type {
 } from "@morpho-org/morpho-sdk";
 export {
   AddressMismatchError,
-  ApprovalAmountLessThanSpendAmountError,
   ChainIdMismatchError,
   MissingContractCodeError,
   VaultAssetMismatchError,

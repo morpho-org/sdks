@@ -50,7 +50,7 @@ const walletClient = createWalletClient({
 });
 
 describe("encodeVaultSharesPermit", () => {
-  test("default: signs a bounded Vault V2 permit", async () => {
+  test("default: signs an unlimited Vault V2 permit", async () => {
     const requirement = encodeVaultSharesPermit({
       vault: new Token({ address: vault, name: "Vault V2" }),
       version: "vaultV2",
@@ -58,19 +58,18 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     });
     const signed = await requirement.sign(walletClient, account.address);
 
     expect(signed.action).toMatchObject({
       type: "permit",
-      args: { spender, amount, deadline: deadline, nonce: 9n },
+      args: { spender, amount: maxUint256, deadline: deadline, nonce: 9n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
       asset: vault,
-      amount,
+      amount: maxUint256,
       nonce: 9n,
       deadline: deadline,
     });
@@ -85,7 +84,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     });
     const signed = await requirement.sign(walletClient, account.address);
@@ -111,7 +109,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     });
 
@@ -126,7 +123,7 @@ describe("encodeVaultSharesPermit", () => {
     expect(typedData.message).toMatchObject({
       owner: account.address,
       spender,
-      value: amount,
+      value: maxUint256,
       nonce: 9n,
       deadline: deadline,
     });
@@ -140,7 +137,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     });
 
@@ -160,7 +156,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     });
 
@@ -187,7 +182,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
-        amount,
         deadline,
       }),
     ).toThrow(MissingPermitDomainNameError);
@@ -201,13 +195,12 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 3n,
-      amount,
       deadline: deadline,
     });
 
     await expect(
       requirement.sign(walletClient, account.address),
-    ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
+    ).resolves.toMatchObject({ args: { amount: maxUint256, nonce: 3n } });
   });
 
   test("behavior: accepts the VaultBundlesV1 spender", () => {
@@ -224,7 +217,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 3n,
-        amount,
         deadline: deadline,
       }),
     ).not.toThrow();
@@ -238,7 +230,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
-      amount,
       deadline: deadline,
     };
     const requirement = encodeVaultSharesPermit(params);
@@ -254,7 +245,7 @@ describe("encodeVaultSharesPermit", () => {
       message: {
         owner: account.address,
         spender,
-        value: amount,
+        value: maxUint256,
         nonce: 9n,
         deadline: deadline,
       },
@@ -286,7 +277,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 3n,
-      amount,
       deadline: deadline,
     });
 
@@ -316,7 +306,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 3n,
-      amount,
       deadline: deadline,
     });
     extensions.push(1n);
@@ -336,7 +325,7 @@ describe("encodeVaultSharesPermit", () => {
       message: {
         owner: account.address,
         spender,
-        value: amount,
+        value: maxUint256,
         nonce: 3n,
         deadline: deadline,
       },
@@ -353,7 +342,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: "0x0000000000000000000000000000000000002999",
       chainId: mainnet.id,
       nonce: 0n,
-      amount,
       deadline: deadline,
     });
 
@@ -371,7 +359,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
-        amount,
         deadline: 1n,
       }),
     ).toThrow(ExpiredDeadlineError);
@@ -386,7 +373,6 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 0n,
-      amount,
       deadline: passed,
       now: passed - 1n,
     });
@@ -403,7 +389,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
-        amount,
         deadline: 0n,
       }),
     ).toThrow(NonPositiveInputError);
@@ -418,7 +403,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
-        amount,
         deadline: maxUint256 + 1n,
       }),
     ).toThrow(InputExceedsMaxError);
@@ -433,7 +417,6 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
-        amount,
         deadline: deadline,
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);

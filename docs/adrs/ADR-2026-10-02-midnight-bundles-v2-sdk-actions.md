@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                    |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                                                 |
+| **Status** | accepted; approvalAmount allowance-bound rationale superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-10-02                                                                                                                               |
 | **Author** | @jinmel                                                                                                                                  |
 | **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0, `blue-sdk` 8.0.0, `evm-simulation` next major |

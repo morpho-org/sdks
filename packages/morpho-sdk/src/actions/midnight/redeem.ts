@@ -4,14 +4,20 @@ import {
   midnightAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, isAddressEqual, zeroAddress } from "viem";
+import {
+  encodeMidnightCalldata,
+  encodeMidnightMarketId,
+} from "../../helpers/encodeMidnightCalldata.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import {
   type Metadata,
   type MidnightRedeemAction,
+  MidnightZeroOnBehalfError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
@@ -39,15 +45,18 @@ export interface MidnightRedeemParams {
  * @param params.chainId - Chain id used to resolve `Midnight`.
  * @param params.market - Midnight market whose credit is redeemed.
  * @param params.units - Credit units to withdraw.
- * @param params.onBehalf - Account whose credit balance is reduced.
+ * @param params.onBehalf - Account whose credit balance is reduced. `onBehalf`, or an operator
+ *   it authorized, must send the transaction; otherwise Midnight reverts `Unauthorized()`.
  * @param params.receiver - Optional receiver for withdrawn loan assets; defaults to `onBehalf`.
  *   Midnight protocol and market token contracts are rejected.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
  * @throws {NonPositiveInputError} when `units <= 0n`.
  * @throws {InputExceedsMaxError} when `units` exceeds `uint128`.
+ * @throws {MidnightZeroOnBehalfError} when `onBehalf` is the zero address.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
+ * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32`, an out-of-range integer or a malformed address.
  * @throws {MidnightZeroReceiverError} when `receiver` resolves to the zero address.
  * @throws {MidnightContractReceiverError} when `receiver` is a Midnight protocol contract or a
  *   market token contract.
@@ -66,14 +75,19 @@ export interface MidnightRedeemParams {
 export const midnightRedeem = (
   params: MidnightRedeemParams,
 ): Readonly<Transaction<MidnightRedeemAction>> => {
+  // Reject a malformed account before comparing it with the zero address.
+  validateMidnightAddress("onBehalf", params.onBehalf);
   if (params.units <= 0n) {
     throw new NonPositiveInputError("units", params.units);
   }
   validateMidnightUint128Field("units", params.units);
+  if (isAddressEqual(params.onBehalf, zeroAddress)) {
+    throw new MidnightZeroOnBehalfError("onBehalf");
+  }
 
   // Reject markets from another chain deployment before encoding the call.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });
-  const marketId = MarketUtils.toId(params.market);
+  const marketId = encodeMidnightMarketId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const receiver = params.receiver ?? params.onBehalf;
   // Rejects receivers that would strand the redeemed assets in a contract.
@@ -87,7 +101,7 @@ export const midnightRedeem = (
   let tx = {
     to: midnight,
     value: 0n,
-    data: encodeFunctionData({
+    data: encodeMidnightCalldata({
       abi: midnightAbi,
       functionName: "withdraw",
       args: [

@@ -2,8 +2,8 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import type {
   AuthorizationPreparation,
   SimulatedOperation,
-  SimulationVerification,
-  VerifiedSimulationResult,
+  SimulationInputVerification,
+  VerifiedSimulationInputResult,
 } from "../result.js";
 import type {
   AccountAssetChanges,
@@ -27,7 +27,7 @@ export function assembleResult(params: {
   readonly userCalls: readonly SimulationCall[];
   readonly transfers: readonly Transfer[];
   readonly assetChanges: readonly AccountAssetChanges[];
-}): VerifiedSimulationResult {
+}): VerifiedSimulationInputResult {
   const {
     ctx,
     request,
@@ -38,12 +38,12 @@ export function assembleResult(params: {
     assetChanges,
   } = params;
 
-  const verification: SimulationVerification = {
+  const verification: SimulationInputVerification = {
     mode: ctx.mode,
     chainId: ctx.chainId,
     blockNumber: ctx.block.blockNumber,
     blockTimestamp: ctx.block.blockTimestamp,
-    limits: ctx.limits,
+    limits: request.limits === "none" ? "none" : ctx.limits,
     operations,
     authorizations,
   };

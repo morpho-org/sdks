@@ -99,11 +99,11 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      # An exact Node release fixes the bundled npm (11.19.1), which supports
+      # An exact Node release fixes the bundled npm (11.20.0), which supports
       # trusted publishing. Bump it with .nvmrc's major.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 26.10.0
+          node-version: 26.12.1
           package-manager-cache: false
 
       - name: Require npm with trusted publishing

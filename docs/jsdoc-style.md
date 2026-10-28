@@ -94,7 +94,10 @@ Format: `@throws {ErrorClass} when <condition that triggers it>.`
 
 If the function can re-throw an error from a downstream call (e.g. an entity fetcher's RPC error), document the class. If the downstream class is from `viem` or another external package, document it qualified (`{viem.BaseError}`).
 
-Adding, renaming, or removing a `@throws` class on an exported function is a breaking change and must follow the §7 deprecation flow.
+Adding a `@throws` class to an exported function is a minor change. Renaming or
+removing one is a breaking change and must follow the §7 deprecation flow.
+Throwing a different class for an input that already failed is also a minor
+change.
 
 ### 6. `@example`
 

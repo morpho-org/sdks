@@ -1,13 +1,24 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
-## 3.0.1-next.0
+## 4.0.0
+
+### Major Changes
+
+- Classic ERC-20 and vault-share approvals now request `maxUint256`, subject to the existing
+  token-specific caps and zero-reset behavior; vault-share permits are also unlimited. Larger existing
+  vault-share allowances are reused. ERC-2612 token permits remain exact because the bundle's `permit`
+  call uses the pull amount; Permit2 SignatureTransfer remains exact because the bundle derives both
+  the permitted and requested amounts from that same pull amount. The `approvalAmount` option and
+  `ApprovalAmountLessThanSpendAmountError` are removed; migrate callers by dropping the option and
+  error handling. See `MIGRATION-v8-to-v9.md` for the removed API and migration details. WDK
+  withdrawals no longer reject larger existing share allowances. Asset-mode exits without an
+  on-chain share-price or max-shares bound no longer have an SDK share-allowance ceiling, so a
+  share-price drop before inclusion can burn more shares than quoted.
 
 ### Patch Changes
 
 - Updated dependencies
-  - @morpho-org/morpho-sdk@8.2.0-next.0
-  - @morpho-org/blue-sdk-viem@7.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/morpho-sdk@9.0.0
 
 ## 3.0.0
 

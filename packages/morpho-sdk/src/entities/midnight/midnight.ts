@@ -48,11 +48,20 @@ import {
 } from "../../helpers/callback.js";
 import { MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS } from "../../helpers/constant.js";
 import {
+  encodeMidnightMarketId,
+  wrapMidnightEncoding,
+} from "../../helpers/encodeMidnightCalldata.js";
+import {
   getMidnightMaxSafeDebt,
   validateChainId,
 } from "../../helpers/index.js";
+import {
+  validateMidnightAccount,
+  validateMidnightAddress,
+} from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+import { validateMidnightBytes32 } from "../../helpers/validateMidnightPublication.js";
 import { validateMidnightTakeFeasibility } from "../../helpers/validateMidnightTakeFeasibility.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import type { MorphoClientType } from "../../types/client.js";
@@ -89,6 +98,7 @@ import {
   type MidnightTakeRepayWithdrawCollateralAction,
   MidnightTakeTargetUnreachableError,
   type MidnightTakeWithdrawAction,
+  MidnightZeroOnBehalfError,
   MissingAccrualPositionError,
   NegativeInputError,
   NoMidnightCreditToRedeemError,
@@ -136,6 +146,8 @@ const validatePositionBinding = (params: {
       params.marketData.id,
     );
   }
+  // Reject a malformed address before viem compares it.
+  validateMidnightAddress("positionData.user", params.positionData.user);
   if (!isAddressEqual(params.positionData.user, params.accountAddress)) {
     throw new AccrualPositionUserMismatchError(
       params.positionData.user,
@@ -231,7 +243,11 @@ const getOffersDataInternal = async ({
   readonly marketCreationTime?: "expiry" | "now";
 }): Promise<OffersData> => {
   validateChainId(client.viemClient.chain?.id, chainId);
-  const tree: OffersData["tree"] = Tree.from(params.offers);
+  // Reject a malformed or zero maker before comparing offers against it.
+  validateMidnightAccount("accountAddress", params.accountAddress);
+  const tree: OffersData["tree"] = wrapMidnightEncoding("offers", () =>
+    Tree.from(params.offers),
+  );
   const midnight = getChainAddress(chainId, "midnight");
   tree.offers.forEach((offer, index) => {
     if (!isAddressEqual(offer.maker, params.accountAddress)) {
@@ -446,6 +462,7 @@ export class MorphoMidnight {
    * @returns Prepared tree, groups, ratifier, and encoded payload used by maker flows.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`, another chain than this entity's.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightMempoolValidationError} when the Midnight mempool API rejects the offer tree
    *   (not thrown when `validation` is `false`).
    * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
@@ -455,6 +472,8 @@ export class MorphoMidnight {
    * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {UnknownAddressError} when the chain has no deployment for the tree's V1 ratifier.
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an offer cannot be ABI-encoded, such as an out-of-range integer, or `accountAddress` is not a well-formed address.
    * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
    * @throws {MidnightOfferExpiredError} when an offer expiry is not later than the pinned block timestamp.
    * @throws {MidnightOfferExpiryAfterMaturityError} when an offer expiry exceeds its market maturity.
@@ -510,6 +529,8 @@ export class MorphoMidnight {
    * @returns Lazy loan-token approval and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -543,7 +564,6 @@ export class MorphoMidnight {
    *   offers plus the fallback.
    * @throws {MidnightContractReceiverError} when `referralFeeRecipient` is a Midnight protocol
    *   contract or a market token contract with a positive referral fee.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below the pulled loan assets.
    * @example
    * ```ts
    * const output = midnight.takeLend({
@@ -560,6 +580,8 @@ export class MorphoMidnight {
     params: TakeLendParams,
   ): MidnightActionOutput<MidnightTakeLendAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     validateTakeDeadlineWindow(params.deadline);
     const market = params.marketData.params;
     const rawParams = {
@@ -597,7 +619,7 @@ export class MorphoMidnight {
 
     return {
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
@@ -606,7 +628,6 @@ export class MorphoMidnight {
           owner: params.accountAddress,
           spender: tx.to,
           amount: pulledAssets,
-          approvalAmount: requirementsParams?.approvalAmount,
         });
         const authorization = await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
@@ -644,11 +665,14 @@ export class MorphoMidnight {
    *   Midnight protocol and market token contracts are rejected.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
    * @param params.deadline - Bounded bundle execution deadline timestamp.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the sale
+   *   proceeds; on an assets target it is added on top of `target.assets`.
    * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
    * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -712,6 +736,8 @@ export class MorphoMidnight {
     params: TakeBorrowParams,
   ): MidnightActionOutput<MidnightTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     validateTakeDeadlineWindow(params.deadline);
     const rawParams = {
       chainId: this.chainId,
@@ -796,11 +822,14 @@ export class MorphoMidnight {
    *   Midnight protocol and market token contracts are rejected.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
    * @param params.deadline - Bundle execution deadline timestamp.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the sale
+   *   proceeds; on an assets target it is added on top of `target.assets`.
    * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
    * @returns Lazy `MidnightBundlesV2` authorization requirement and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -846,6 +875,8 @@ export class MorphoMidnight {
     params: TakeWithdrawParams,
   ): MidnightActionOutput<MidnightTakeWithdrawAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     validateTakeDeadlineWindow(params.deadline);
     const rawParams = {
       chainId: this.chainId,
@@ -916,11 +947,14 @@ export class MorphoMidnight {
    *   Midnight protocol and market token contracts are rejected.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
    * @param params.deadline - Bounded bundle execution deadline timestamp.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the received assets.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee taken from the sale
+   *   proceeds; on an assets target it is added on top of `target.assets`.
    * @param params.referralFeeRecipient - Referral fee recipient; required with a positive fee.
    * @returns Lazy collateral approvals and `MidnightBundlesV2` authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -961,7 +995,6 @@ export class MorphoMidnight {
    *   withdrawal.
    * @throws {MidnightTakeTargetUnreachableError} when the live offers cannot hold the target, or
    *   its bounds cannot hold at any fill.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below a collateral token's pulled assets.
    * @example
    * ```ts
    * const output = midnight.supplyCollateralTakeBorrow({
@@ -980,6 +1013,8 @@ export class MorphoMidnight {
     params: SupplyCollateralTakeBorrowParams,
   ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     validateTakeDeadlineWindow(params.deadline);
     const market = params.marketData.params;
     const rawParams = {
@@ -1066,7 +1101,7 @@ export class MorphoMidnight {
 
     return {
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await Promise.all(
           [...collateralAmounts].map(([token, amount]) =>
@@ -1077,7 +1112,6 @@ export class MorphoMidnight {
               owner: params.accountAddress,
               spender: tx.to,
               amount,
-              approvalAmount: requirementsParams?.approvalAmount,
             }),
           ),
         );
@@ -1134,6 +1168,8 @@ export class MorphoMidnight {
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
@@ -1178,7 +1214,6 @@ export class MorphoMidnight {
    * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
    *   contract or a market token contract, or when `referralFeeRecipient` is either with a
    *   positive referral fee.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below the pulled loan assets.
    * @example
    * ```ts
    * const output = midnight.takeRepayWithdrawCollateral({
@@ -1199,6 +1234,8 @@ export class MorphoMidnight {
     params: TakeRepayWithdrawCollateralParams,
   ): MidnightActionOutput<MidnightTakeRepayWithdrawCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     validateTakeDeadlineWindow(params.deadline);
     const market = params.marketData.params;
     const rawParams = {
@@ -1294,7 +1331,7 @@ export class MorphoMidnight {
 
     return {
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
@@ -1303,7 +1340,6 @@ export class MorphoMidnight {
           owner: params.accountAddress,
           spender: tx.to,
           amount: pulledAssets,
-          approvalAmount: requirementsParams?.approvalAmount,
         });
         const authorization = await this.getBundlesV2AuthorizationRequirements(
           params.accountAddress,
@@ -1318,22 +1354,30 @@ export class MorphoMidnight {
    * Prepares a direct collateral supply using a caller-provided market snapshot.
    *
    * @param params - Supplier, market snapshot, collateral amount, reserve, and optional collateral index.
-   * @param params.accountAddress - Account receiving the supplied collateral position.
+   * @param params.accountAddress - Account receiving the supplied collateral position. It must send
+   *   the transaction: Midnight pulls the collateral from `msg.sender` and only lets the position owner
+   *   or its operators supply for it, and the approval requirements are resolved for this account.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
    * @param params.collateralAssets - Collateral assets supplied in this transaction.
    * @param params.reservedCollateralAssets - Existing collateral reserved by other open maker groups.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+   *   Only raises the approval requirement so those groups keep their allowance; the transaction
+   *   transfers only `collateralAssets`.
+   * @param params.collateralIndex - Optional collateral index; defaults to `0n`. Indexes follow the
+   *   market's collateral parameters, which Midnight sorts by token address, not the order they were
+   *   listed in when the market was built; check `marketData.getCollateralByIndex(index).token`.
    * @returns Lazy token-approval requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
    * @throws {InputExceedsMaxError} when `collateralAssets` exceeds `uint128`.
    * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
+   * @throws {MidnightZeroOnBehalfError} from `getRequirements()` and `buildTx()` when `accountAddress`
+   *   is the zero address.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below the pulled collateral assets.
    * @example
    * ```ts
    * const output = midnight.supplyCollateral({
@@ -1347,6 +1391,8 @@ export class MorphoMidnight {
     params: SupplyCollateralParams,
   ): MidnightActionOutput<MidnightSupplyCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject a malformed account here; the builder rejects the zero account.
+    validateMidnightAddress("accountAddress", params.accountAddress);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
     validateMidnightUint128Field("collateralAssets", params.collateralAssets);
@@ -1362,9 +1408,13 @@ export class MorphoMidnight {
 
     return {
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
-      ) =>
-        await getMidnightApprovalRequirements({
+        _requirementsParams?: MidnightRequirementsParams,
+      ) => {
+        // Match buildTx(): the requirement helper would report a zero owner with another class.
+        if (isAddressEqual(params.accountAddress, zeroAddress)) {
+          throw new MidnightZeroOnBehalfError("onBehalf");
+        }
+        return await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           token: collateral.token,
@@ -1372,8 +1422,8 @@ export class MorphoMidnight {
           spender: midnight,
           amount:
             params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
-          approvalAmount: requirementsParams?.approvalAmount,
-        }),
+        });
+      },
       buildTx: () =>
         midnightSupplyCollateral({
           chainId: this.chainId,
@@ -1406,9 +1456,12 @@ export class MorphoMidnight {
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups, excluding groups in `cancellations`.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightOfferReduceOnlyError} when an offer is reduce-only.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
    * @throws {NonPositiveInputError} when `loanAssets` is non-positive.
@@ -1439,7 +1492,6 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
    * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below `loanAssets + reservedLoanAssets`.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -1455,9 +1507,11 @@ export class MorphoMidnight {
    */
   async makeLend(params: MakeLendParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     rejectReduceOnlyOffers(tree.offers);
     return this.prepareLendOffers({ ...params, offers: tree });
   }
@@ -1478,9 +1532,12 @@ export class MorphoMidnight {
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @returns Prepared group metadata, lazy authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightOfferReduceOnlyError} when an offer is reduce-only.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
@@ -1522,9 +1579,11 @@ export class MorphoMidnight {
    */
   async makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     rejectReduceOnlyOffers(tree.offers);
     return this.prepareBorrowOffers({ ...params, offers: tree });
   }
@@ -1535,13 +1594,15 @@ export class MorphoMidnight {
   private async prepareLendOffers(
     params: MakeLendParams,
   ): Promise<MakeOffersOutput> {
+    // Reject a malformed address before viem compares offer markets with it.
+    validateMidnightAddress("loanToken", params.loanToken);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
       "reservedLoanAssets",
       params.reservedLoanAssets ?? 0n,
     );
 
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     validateOfferSides(tree.offers, true);
     validateMidnightMakerOfferCallbacks(tree.offers);
     const data = await getOffersDataInternal({
@@ -1578,7 +1639,7 @@ export class MorphoMidnight {
       root: data.tree.root,
       ratifierType: data.ratifierType,
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
@@ -1587,7 +1648,6 @@ export class MorphoMidnight {
           owner: data.accountAddress,
           spender: midnight,
           amount: params.loanAssets + (params.reservedLoanAssets ?? 0n),
-          approvalAmount: requirementsParams?.approvalAmount,
         });
         const authorization = await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
@@ -1616,6 +1676,12 @@ export class MorphoMidnight {
    * `midnightBlueBuyCallbackFactory`, `accountAddress` and `callbackSalt`, and fetches the Morpho Blue market,
    * accruing interest to the current time before previewing parked shares (markets whose
    * IRM the SDK cannot accrue are previewed on their last-updated state).
+   * The share check runs once, before signing: the bundle supplies `assetsToPark` with no
+   * minimum-shares bound, so interest accrued before inclusion can still round the supply down
+   * to zero shares if `assetsToPark` is worth less than one share at inclusion. A preview above
+   * one share does not rule this out: interest accrued while the transaction waits, or not
+   * accrued by the SDK for an IRM it cannot accrue, raises the share price. Choosing a market
+   * whose share price makes that impossible is the caller's responsibility.
    * The caller is responsible for trusting the Blue market's oracle and IRM. If Blue liquidity is
    * drained, callback offers cannot fill until liquidity returns. `assetsToPark` may underfund the
    * offers; top-ups are allowed.
@@ -1637,6 +1703,8 @@ export class MorphoMidnight {
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
    *   another chain than `this.chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when the offer tree or `blueMarket` cannot be ABI-encoded.
    * @throws {viem.BaseError} when the `eth_chainId` request, a Blue market RPC read, or a
    *   requirement RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `midnightBlueBuyCallbackFactory`, `midnight`, `blue` or V1 ratifier deployment.
@@ -1648,6 +1716,7 @@ export class MorphoMidnight {
    * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
    * @throws {NativeAmountOnNonWNativeAssetError} when `blueMarket.loanToken` is not wNative.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightMempoolValidationError} when the Midnight mempool API rejects the offer tree
    *   (not thrown when `validation` is `false`).
    * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
@@ -1673,11 +1742,10 @@ export class MorphoMidnight {
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
    * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
    * @throws {EmptyBlueParkingMarketError} when `blueMarket` has no supply shares.
-   * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price.
+   * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price (checked at preparation time only).
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group or `callbackSalt` is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below `assetsToPark`.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -1699,15 +1767,23 @@ export class MorphoMidnight {
   async supplyBlueMakeLend(
     params: SupplyBlueMakeLendParams,
   ): Promise<MakeOffersOutput> {
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
+    // Reject wrong-sized salts before callback derivation pads them or any read occurs.
+    validateMidnightBytes32("callbackSalt", params.callbackSalt);
     assertPositiveAmount("assetsToPark", params.assetsToPark);
     validateMidnightUint128Field("assetsToPark", params.assetsToPark);
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     validateOfferSides(tree.offers, true);
     rejectReduceOnlyOffers(tree.offers);
     await validateClientChainId(this.client.viemClient, this.chainId);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
     const { callbackSalt } = params;
+    // Encode the whole Blue market first so a malformed field fails typed, before the RPC read.
+    const callbackData = wrapMidnightEncoding("blueMarket", () =>
+      getMidnightBlueBuyCallbackData(params.blueMarket),
+    );
     const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
     const callback = getMidnightBlueBuyCallbackAddress({
       chainId: this.chainId,
@@ -1741,7 +1817,6 @@ export class MorphoMidnight {
         assets: params.assetsToPark,
       });
     }
-    const callbackData = getMidnightBlueBuyCallbackData(params.blueMarket);
     data.tree.offers.forEach((offer, index) => {
       const offerMarket = offerMarketParams(offer);
       if (!isAddressEqual(offerMarket.loanToken, params.blueMarket.loanToken)) {
@@ -1790,7 +1865,7 @@ export class MorphoMidnight {
       root: data.tree.root,
       ratifierType: data.ratifierType,
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
@@ -1799,7 +1874,6 @@ export class MorphoMidnight {
           owner: data.accountAddress,
           spender: getChainAddress(this.chainId, "midnightBundlesV2"),
           amount: params.assetsToPark,
-          approvalAmount: requirementsParams?.approvalAmount,
         });
         const authorization = await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,
@@ -1816,7 +1890,7 @@ export class MorphoMidnight {
   private async prepareBorrowOffers(
     params: MakeOffersParams,
   ): Promise<MakeOffersOutput> {
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     validateOfferSides(tree.offers, false);
     validateMidnightMakerOfferCallbacks(tree.offers);
     const data = await getOffersDataInternal({
@@ -1865,9 +1939,12 @@ export class MorphoMidnight {
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightOfferSideMismatchError} when an offer is not a sell offer (`buy = false`).
    * @throws {MidnightOfferNotReduceOnlyError} when any offer can increase a position.
    * @throws {MidnightOfferCallbackNotSupportedError} when an offer has a nonzero callback.
@@ -1912,9 +1989,11 @@ export class MorphoMidnight {
    */
   async makeWithdraw(params: MakeOffersParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, false);
     for (const [index, offer] of tree.offers.entries()) {
@@ -1948,9 +2027,12 @@ export class MorphoMidnight {
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
    * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightOfferSideMismatchError} when an offer is not a buy offer (`buy = true`).
    * @throws {MidnightOfferNotReduceOnlyError} when any offer can increase a position.
    * @throws {MidnightOfferCallbackNotSupportedError} when an offer has a nonzero callback.
@@ -1982,7 +2064,6 @@ export class MorphoMidnight {
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below `loanAssets + reservedLoanAssets`.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -1999,9 +2080,11 @@ export class MorphoMidnight {
    */
   async makeRepay(params: MakeLendParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, true);
     for (const [index, offer] of tree.offers.entries()) {
@@ -2036,6 +2119,8 @@ export class MorphoMidnight {
    *   required for the full pulled amount.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` or V1 ratifier deployment.
@@ -2048,6 +2133,7 @@ export class MorphoMidnight {
    * @throws {ChainWNativeMissingError} when wNative is not configured for the chain.
    * @throws {NativeAmountOnNonWNativeAssetError} when no collateral pull uses wNative.
    * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {InvalidMidnightOfferGroupError} when a priceV1/rateV1 `Tree.create` request has explicit groups that break `OfferUtils.validateOfferGroup` rules.
    * @throws {MidnightMempoolValidationError} when the Midnight mempool API rejects the offer tree
    *   (not thrown when `validation` is `false`).
    * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
@@ -2076,7 +2162,6 @@ export class MorphoMidnight {
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below a collateral token's pulled assets.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -2095,6 +2180,8 @@ export class MorphoMidnight {
     params: SupplyCollateralMakeBorrowParams,
   ): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
     const market =
@@ -2102,7 +2189,7 @@ export class MorphoMidnight {
         ? params.collateral.market
         : MarketParams.from(params.collateral.market);
 
-    const tree = Tree.from(params.offers);
+    const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     validateOfferSides(tree.offers, false);
     validateMidnightMakerOfferCallbacks(tree.offers);
     rejectReduceOnlyOffers(tree.offers);
@@ -2112,9 +2199,9 @@ export class MorphoMidnight {
       params: { ...params, offers: tree },
       marketCreationTime: "now",
     });
-    const marketId = MarketUtils.toId(market);
+    const marketId = encodeMidnightMarketId(market);
     for (const offer of data.tree.offers) {
-      const offerMarketId = MarketUtils.toId(offer.market);
+      const offerMarketId = encodeMidnightMarketId(offer.market);
       if (offerMarketId.toLowerCase() !== marketId.toLowerCase()) {
         throw new MarketIdMismatchError(offerMarketId, marketId);
       }
@@ -2159,7 +2246,7 @@ export class MorphoMidnight {
       root: data.tree.root,
       ratifierType: data.ratifierType,
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals = await Promise.all(
           [...collateralAmounts].map(([token, amount]) =>
@@ -2170,7 +2257,6 @@ export class MorphoMidnight {
               owner: data.accountAddress,
               spender: midnightBundlesV2,
               amount,
-              approvalAmount: requirementsParams?.approvalAmount,
             }),
           ),
         );
@@ -2189,7 +2275,9 @@ export class MorphoMidnight {
    * Prepares redemption of accrued Midnight credit from a position snapshot.
    *
    * @param params - Position owner, accrued position, optional unit amount, and receiver.
-   * @param params.accountAddress - Position owner whose credit is redeemed.
+   * @param params.accountAddress - Position owner whose credit is redeemed. It must send the
+   *   transaction (or authorize the sender): Midnight reverts `Unauthorized()` otherwise, which
+   *   `getRequirements()` cannot detect because it does not know the sender.
    * @param params.positionData - Owner-bound position snapshot returned by `getPositionData`.
    * @param params.receiver - Optional credit receiver; defaults to the position owner.
    *   Midnight protocol and market token contracts are rejected.
@@ -2202,18 +2290,20 @@ export class MorphoMidnight {
    *   is left. Redeem again after maturity to empty the position.
    * @returns No requirements and a synchronous redemption transaction builder.
    * @throws {ChainIdMismatchError} when the position market targets another chain.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {MidnightMarketAddressMismatchError} when the position market targets another Midnight deployment.
    * @throws {MissingAccrualPositionError} when no position snapshot is supplied.
    * @throws {AccrualPositionUserMismatchError} when the position snapshot belongs to another account.
    * @throws {NoMidnightCreditToRedeemError} when the selected unit amount is non-positive.
+   * @throws {InputExceedsMaxError} when the selected units exceed `uint128`.
    * @throws {MidnightRedeemExceedsCreditError} when the selected amount exceeds the accrued
    *   position credit.
    * @throws {InvalidMidnightPositionLossFactorError} when the market loss factor is below the
    *   position's `lastLossFactor`, which `getPositionData` snapshots never are.
    * @throws {InvalidMidnightPositionAccrualStateError} when the snapshot's credit, pending fee or
    *   loss factor are inconsistent, which `getPositionData` snapshots never are.
-   * @throws {InputExceedsMaxError} when the selected units exceed `uint128`.
    * @throws {InsufficientMidnightWithdrawableLiquidityError} when market liquidity cannot cover the redemption.
+   * @throws {MidnightZeroOnBehalfError} when `accountAddress` is the zero address.
    * @throws {MidnightZeroReceiverError} when `receiver` resolves to the zero address.
    * @throws {MidnightContractReceiverError} when `receiver` is a Midnight protocol contract or a
    *   market token contract.
@@ -2228,9 +2318,13 @@ export class MorphoMidnight {
    */
   redeem(params: RedeemParams): MidnightActionOutput<MidnightRedeemAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject a malformed account here; the builder rejects the zero account.
+    validateMidnightAddress("accountAddress", params.accountAddress);
     if (!params.positionData) {
       throw new MissingAccrualPositionError();
     }
+    if (params.positionData.user != null)
+      validateMidnightAddress("positionData.user", params.positionData.user);
     if (
       params.positionData.user == null ||
       !isAddressEqual(params.positionData.user, params.accountAddress)
@@ -2301,7 +2395,7 @@ export class MorphoMidnight {
    *   scaled by `ORACLE_PRICE_SCALE`. An empty array is safe only when
    *   `collateralWithdrawals` is empty or the conservative post-operation debt is zero: a `full`
    *   repay, or `repay.assets` covering `positionData.debt`.
-   * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`; a loan-token approval to `MidnightBundlesV2` is required when the allowance is below the pulled amount — unlimited (`maxUint256`) by default, or `approvalAmount` when passed to `getRequirements()` — and any unused part is refunded.
+   * @param params.repay - `{ type: "assets", assets }` (`0n` to only withdraw) or `{ type: "full", maxBuyerAssets }`; a loan-token approval to `MidnightBundlesV2` is required when the allowance is below the pulled amount (unlimited: `maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`), and any unused part is refunded.
    * @param params.nativeAmount - Optional native ETH sent as `value`; the bundle wraps it into the
    *   chain's wNative and transfers it to `msg.sender` before pulling. It may cover part or all of
    *   the maximum wNative amount this call can pull, but not more. Any wrapped native not pulled
@@ -2317,6 +2411,8 @@ export class MorphoMidnight {
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as a malformed `bytes32` or an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
@@ -2341,7 +2437,6 @@ export class MorphoMidnight {
    *   during this method call, before the lazy output is returned.
    * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
    *   contract or a market token contract.
-   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when `approvalAmount` is below the pulled loan assets.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -2361,6 +2456,8 @@ export class MorphoMidnight {
     params: RepayWithdrawCollateralParams,
   ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject the zero account before preparing anything for it.
+    validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
     validateMidnightDeadline(params.deadline);
     const market = params.marketData.params;
@@ -2451,7 +2548,7 @@ export class MorphoMidnight {
 
     return {
       getRequirements: async (
-        requirementsParams?: MidnightRequirementsParams,
+        _requirementsParams?: MidnightRequirementsParams,
       ) => {
         const approvals =
           pulledAssets > 0n
@@ -2462,7 +2559,6 @@ export class MorphoMidnight {
                 owner: params.accountAddress,
                 spender: tx.to,
                 amount: pulledAssets,
-                approvalAmount: requirementsParams?.approvalAmount,
               })
             : [];
         const authorization = await this.getBundlesV2AuthorizationRequirements(
@@ -2495,6 +2591,7 @@ export class MorphoMidnight {
    * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain, or from
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as an out-of-range integer.
    * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
    *   RPC read fails.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.

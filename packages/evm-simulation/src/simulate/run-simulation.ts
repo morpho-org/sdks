@@ -3,13 +3,18 @@ import {
   getChainAddresses,
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
+import { getMidnightBlueBuyCallbackAddress } from "@morpho-org/morpho-sdk";
 import { _try } from "@morpho-org/morpho-ts";
-import { zeroAddress } from "viem";
+import { isAddressEqual, zeroAddress } from "viem";
 import {
   InvalidSimulationResponseError,
   UnsupportedChainError,
 } from "../errors.js";
-import type { VerifiedSimulationResult } from "../result.js";
+import type {
+  CheckedInputOperationLimit,
+  CheckedOperationLimit,
+} from "../limits.js";
+import type { VerifiedSimulationInputResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
@@ -19,6 +24,11 @@ import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import { toServedChainError } from "./backends/served-chain.js";
 import type { CheckContext } from "./context.js";
+import {
+  decodeDerivationState,
+  planDerivationReads,
+} from "./derivation-reads.js";
+import { deriveQuote } from "./derive-quote.js";
 import { parseTransfers } from "./parsing/index.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
 import { resolveChain } from "./pipeline/resolve-chain.js";
@@ -31,6 +41,37 @@ import { verifySlippage } from "./verify-slippage.js";
 
 /** Total execution budget for a single `simulate()` call. */
 const DEFAULT_TIMEOUT_MS = 5000;
+
+type PublicOperationField<T> = T extends unknown ? keyof T : never;
+
+const PUBLIC_OPERATION_FIELDS = {
+  type: true,
+  inputs: true,
+  referralFee: true,
+  reallocationPenalty: true,
+  account: true,
+  assetPaid: true,
+  assetReceived: true,
+  receiver: true,
+  quote: true,
+  slippageTolerance: true,
+  sharePrice: true,
+  position: true,
+  fieldChecks: true,
+  marketId: true,
+  sourceMarketId: true,
+  targetMarketId: true,
+  vault: true,
+  sourceVault: true,
+  targetVault: true,
+  market: true,
+  collateralIndex: true,
+  loanToken: true,
+  callbackSalt: true,
+} satisfies Record<
+  PublicOperationField<CheckedInputOperationLimit | CheckedOperationLimit>,
+  true
+>;
 
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
@@ -46,7 +87,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
 export async function runSimulation(params: {
   readonly config: SimulationConfig;
   readonly request: ParsedRequest;
-}): Promise<VerifiedSimulationResult> {
+}): Promise<VerifiedSimulationInputResult> {
   const { config, request } = params;
   const chain = resolveChain(config, request.chainId);
   const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
@@ -63,19 +104,53 @@ export async function runSimulation(params: {
       });
     });
 
-  const limits = { operations: request.limits?.operations ?? [] };
+  const limits = {
+    operations: request.limits === "none" ? [] : request.limits.operations,
+  };
   const preview = request.mode === "preview";
   const owner = request.transactions[0]!.from;
   const addresses = _try(
     () => getChainAddresses(request.chainId),
     UnsupportedChainIdError,
   );
+  const wNative = addresses?.wNative;
+  const nativeValue = request.transactions.reduce(
+    (total, transaction) =>
+      isAddressEqual(transaction.from, owner)
+        ? total + (transaction.value ?? 0n)
+        : total,
+    0n,
+  );
+  const nativeValueSent = nativeValue > 0n;
   const requiresMorpho =
     limits.operations.length > 0 ||
     (preview && request.authorizations.length > 0);
   if (requiresMorpho && addresses?.blue == null)
     throw new UnsupportedChainError(request.chainId);
   const morpho = addresses?.blue ?? zeroAddress;
+  const requiresBlueBuyCallback = limits.operations.some(
+    (operation) => operation.type === "midnightSupplyBlueMakeLend",
+  );
+  const requiresMidnight = limits.operations.some(
+    (operation) =>
+      operation.type === "midnightSupplyCollateral" ||
+      operation.type === "midnightRedeem" ||
+      operation.type === "midnightTakeLend" ||
+      operation.type === "midnightTakeBorrow" ||
+      operation.type === "midnightTakeWithdraw" ||
+      operation.type === "midnightRepayWithdrawCollateral" ||
+      operation.type === "midnightSupplyCollateralTakeBorrow" ||
+      operation.type === "midnightSupplyBlueMakeLend" ||
+      operation.type === "midnightTakeRepayWithdrawCollateral",
+  );
+  if (requiresMidnight && addresses?.midnight == null)
+    throw new UnsupportedChainError(request.chainId);
+  if (
+    requiresBlueBuyCallback &&
+    addresses?.midnightBlueBuyCallbackFactory == null
+  )
+    throw new UnsupportedChainError(request.chainId);
+  const midnight = addresses?.midnight ?? zeroAddress;
 
   // Monad nodes reject `validation: false` and charge no gas in the simulated
   // block either way. Its `latest` block is not final: simulating at its number
@@ -111,11 +186,33 @@ export async function runSimulation(params: {
     resolveAssets({
       client,
       morpho,
+      midnight,
+      wNative,
       operations: limits.operations,
       blockNumber: pinnedBlock.number,
     }),
   );
-  const observations = planStateReads({ operations: resolved, owner, morpho });
+  const operations = resolved.map((operation) =>
+    operation.limit.type === "midnightSupplyBlueMakeLend"
+      ? {
+          ...operation,
+          blueBuyCallback: getMidnightBlueBuyCallbackAddress({
+            chainId: request.chainId,
+            owner,
+            salt: operation.limit.callbackSalt,
+          }),
+        }
+      : operation,
+  );
+  const observations = planStateReads({
+    operations,
+    owner,
+    morpho,
+    midnight,
+    wNative,
+    nativeValueSent,
+    nativeValue,
+  });
 
   const preparations = preview
     ? prepareAuthorizations({
@@ -130,6 +227,7 @@ export async function runSimulation(params: {
     owner,
     preparations,
     reads: observations.reads,
+    derivationReads: planDerivationReads(resolved, { morpho, owner }),
   });
 
   // Execute against the block resolved once above.
@@ -157,7 +255,9 @@ export async function runSimulation(params: {
   const decodePhase = (phase: "before" | "after") =>
     new Map(
       execution.stateReads
-        .filter((read) => read.phase === phase)
+        .filter(
+          (read) => read.phase === phase && read.read.kind !== "derivation",
+        )
         .map(
           (read) =>
             [
@@ -178,12 +278,28 @@ export async function runSimulation(params: {
     ]),
   );
 
+  const derivationData = new Map(
+    execution.stateReads
+      .filter(
+        (read) => read.phase === "before" && read.read.kind === "derivation",
+      )
+      .map((read) => [read.read.id, read.returnData]),
+  );
+  const derivedOperations = observations.operations.map((operation, index) => ({
+    ...operation,
+    limit: deriveQuote(operation.limit, {
+      ...decodeDerivationState(index, derivationData),
+      operationIndex: index,
+      netWalletAssets: operation.netWalletAssets,
+    }),
+  }));
+
   const ctx: CheckContext = {
     chainId: request.chainId,
     mode: request.mode,
     block: execution.block,
     owner,
-    limits,
+    limits: { operations: derivedOperations.map(({ limit }) => limit) },
   };
 
   const authorizations = request.authorizations.map(
@@ -201,7 +317,7 @@ export async function runSimulation(params: {
 
   const checked = verifySlippage({
     ctx,
-    operations: observations.operations,
+    operations: derivedOperations,
     before: decodePhase("before"),
     after: decodePhase("after"),
     transfers,
@@ -218,7 +334,31 @@ export async function runSimulation(params: {
   });
 
   return assembleResult({
-    ctx,
+    ctx: {
+      ...ctx,
+      limits: {
+        operations: derivedOperations.map(
+          (
+            { limit },
+            index,
+          ): CheckedInputOperationLimit | CheckedOperationLimit => {
+            const publicLimit = { ...limit };
+            for (const field of Object.keys(publicLimit)) {
+              if (!Object.hasOwn(PUBLIC_OPERATION_FIELDS, field))
+                Reflect.deleteProperty(publicLimit, field);
+            }
+            const { quote, slippageTolerance, fieldChecks } =
+              checked[index]!.checkedLimits;
+            return {
+              ...publicLimit,
+              quote,
+              slippageTolerance,
+              ...(fieldChecks === undefined ? {} : { fieldChecks }),
+            };
+          },
+        ),
+      },
+    },
     request,
     operations: checked,
     authorizations,

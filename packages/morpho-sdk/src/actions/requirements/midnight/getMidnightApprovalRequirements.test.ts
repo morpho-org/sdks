@@ -13,7 +13,6 @@ import {
   MAX_TOKEN_APPROVALS,
 } from "../../../helpers/index.js";
 import {
-  ApprovalAmountLessThanSpendAmountError,
   ChainIdMismatchError,
   InputExceedsMaxError,
   NegativeInputError,
@@ -118,6 +117,32 @@ describe("getMidnightApprovalRequirements", () => {
   });
 
   test.each([
+    { input: "token", token: "0x123", spender: midnightBundlesV2 },
+    { input: "spender", token: midnightAddresses.loanToken, spender: "0x123" },
+  ] as const)(
+    "error: a malformed $input throws a typed encoding error before any read",
+    async ({ input, token, spender }) => {
+      const handle = createMockClient(midnightTestChain);
+
+      await expect(
+        getMidnightApprovalRequirements({
+          viemClient: handle.client,
+          chainId: midnightChainId,
+          token: token as Address,
+          owner: midnightAddresses.taker,
+          spender: spender as Address,
+          amount: 1n,
+        }),
+      ).rejects.toMatchObject({
+        name: "MidnightCalldataEncodingError",
+        input,
+        cause: expect.objectContaining({ name: "InvalidAddressError" }),
+      });
+      expect(handle.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
     { name: "MidnightBundlesV2", spender: midnightBundlesV2 },
   ])(
@@ -169,85 +194,6 @@ describe("getMidnightApprovalRequirements", () => {
     expect(requirements[0]?.action.type).toBe("erc20Approval");
     expect(requirements[0]?.action.args.spender).toBe(midnightBundlesV2);
     expect(requirements[0]?.action.args.amount).toBe(maxUint256);
-  });
-
-  test("approves approvalAmount instead of maxUint256 when passed", async () => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-
-    const requirements = await getMidnightApprovalRequirements({
-      viemClient: handle.client,
-      chainId: midnightChainId,
-      token: midnightAddresses.loanToken,
-      owner: midnightAddresses.taker,
-      spender: midnightBundlesV2,
-      amount: 1_000n,
-      approvalAmount: 5_000n,
-    });
-
-    expect(requirements).toHaveLength(1);
-    expect(requirements[0]?.action.type).toBe("erc20Approval");
-    expect(requirements[0]?.action.args.spender).toBe(midnightBundlesV2);
-    expect(requirements[0]?.action.args.amount).toBe(5_000n);
-  });
-
-  test("throws ApprovalAmountLessThanSpendAmountError when approvalAmount is below amount", async () => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-
-    await expect(
-      getMidnightApprovalRequirements({
-        viemClient: handle.client,
-        chainId: midnightChainId,
-        token: midnightAddresses.loanToken,
-        owner: midnightAddresses.taker,
-        spender: midnightBundlesV2,
-        amount: 1_000n,
-        approvalAmount: 999n,
-      }),
-    ).rejects.toThrow(ApprovalAmountLessThanSpendAmountError);
-  });
-
-  test("throws InputExceedsMaxError when approvalAmount exceeds uint256", async () => {
-    const { client } = createMockClient(midnightTestChain);
-
-    await expect(
-      getMidnightApprovalRequirements({
-        viemClient: client,
-        chainId: midnightChainId,
-        token: midnightAddresses.loanToken,
-        owner: midnightAddresses.taker,
-        spender: midnightBundlesV2,
-        amount: 1_000n,
-        approvalAmount: maxUint256 + 1n,
-      }),
-    ).rejects.toThrow(InputExceedsMaxError);
-  });
-
-  test("throws NegativeInputError when approvalAmount is negative", async () => {
-    const { client } = createMockClient(midnightTestChain);
-
-    await expect(
-      getMidnightApprovalRequirements({
-        viemClient: client,
-        chainId: midnightChainId,
-        token: midnightAddresses.loanToken,
-        owner: midnightAddresses.taker,
-        spender: midnightBundlesV2,
-        amount: 1_000n,
-        approvalAmount: -1n,
-      }),
-    ).rejects.toThrow(NegativeInputError);
   });
 
   test("caps the unlimited approval at the token's MAX_TOKEN_APPROVALS maximum", async () => {

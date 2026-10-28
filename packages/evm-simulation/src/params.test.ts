@@ -1,9 +1,10 @@
 import type { BlockTag } from "viem";
 import { expectTypeOf } from "vitest";
 import type { SimulationAuthorization } from "./authorizations.js";
-import type { SimulationLimits } from "./limits.js";
+import type { SimulationInputLimits, SimulationLimits } from "./limits.js";
 import {
   SIMULATION_MODES,
+  type SimulateInputParams,
   type SimulateParams,
   type SimulationMode,
 } from "./params.js";
@@ -39,14 +40,22 @@ describe("SimulateParams", () => {
       bigint | Exclude<BlockTag, "pending"> | undefined
     >();
     expectTypeOf<SimulateParams["limits"]>().toEqualTypeOf<
-      SimulationLimits | undefined
+      SimulationLimits | "none"
+    >();
+    expectTypeOf<SimulateInputParams["limits"]>().toEqualTypeOf<
+      SimulationLimits | SimulationInputLimits | "none"
     >();
   });
 
-  test("behavior: only chainId and transactions are required", () => {
+  test("behavior: chainId, transactions and limits are required", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly SimulationTransaction[];
+      readonly limits: "none";
     }>().toMatchTypeOf<SimulateParams>();
+    expectTypeOf<{
+      readonly chainId: number;
+      readonly transactions: readonly SimulationTransaction[];
+    }>().not.toMatchTypeOf<SimulateParams>();
   });
 });

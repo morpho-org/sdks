@@ -1,7 +1,7 @@
 import { type MarketId, MathLib, UnknownDataError } from "@morpho-org/blue-sdk";
 import { Payload } from "@morpho-org/midnight-sdk";
 import type { AddressLabel } from "@morpho-org/morpho-ts";
-import type { Address, Hash, Hex } from "viem";
+import type { Address, BaseError, Hash, Hex } from "viem";
 import { MIDNIGHT_MAX_REFERRAL_FEE_PCT } from "../helpers/constant.js";
 
 /**
@@ -986,6 +986,7 @@ export class AmbiguousRequirementSignaturesError extends Error {
     super(
       `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
     );
+    this.name = "AmbiguousRequirementSignaturesError";
   }
 }
 
@@ -1010,6 +1011,7 @@ export class UnexpectedRequirementSignatureError extends Error {
     super(
       `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
     );
+    this.name = "UnexpectedRequirementSignatureError";
   }
 }
 
@@ -1022,6 +1024,7 @@ export class UnsupportedRequirementSignatureError extends Error {
     super(
       `Received a requirement signature with unsupported action type "${type}". Re-run getRequirements() and sign the current requirements.`,
     );
+    this.name = "UnsupportedRequirementSignatureError";
   }
 }
 
@@ -1031,6 +1034,7 @@ export class AddressMismatchError extends Error {
     super(
       `Address mismatch between client: ${clientAddress} and args: ${argsAddress}`,
     );
+    this.name = "AddressMismatchError";
   }
 }
 
@@ -1040,6 +1044,7 @@ export class ChainIdMismatchError extends Error {
     super(
       `Chain ID mismatch between client: ${clientChainId} and args: ${argsChainId}`,
     );
+    this.name = "ChainIdMismatchError";
   }
 }
 
@@ -1047,6 +1052,7 @@ export class ChainIdMismatchError extends Error {
 export class CryptoUnavailableError extends Error {
   constructor(feature: string) {
     super(`Crypto API is required for ${feature} but is unavailable.`);
+    this.name = "CryptoUnavailableError";
   }
 }
 
@@ -1054,13 +1060,7 @@ export class CryptoUnavailableError extends Error {
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {
     super(`A required ${property} is missing from the client.`);
-  }
-}
-
-/** Thrown when an approval amount is smaller than the spend amount it must cover. */
-export class ApprovalAmountLessThanSpendAmountError extends Error {
-  constructor() {
-    super("Approval amount is less than spend amount");
+    this.name = "MissingClientPropertyError";
   }
 }
 
@@ -1081,6 +1081,7 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
     super(
       `Requirement spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
     );
+    this.name = "UnsupportedErc20ApprovalSpenderError";
   }
 }
 
@@ -1094,6 +1095,7 @@ export class UnsupportedMidnightAuthorizationTargetError extends Error {
     super(
       `Midnight authorization target "${params.authorized}" is not supported on chain "${params.chainId}". Use "${params.supportedTargets.join('", "')}".`,
     );
+    this.name = "UnsupportedMidnightAuthorizationTargetError";
   }
 }
 
@@ -1105,6 +1107,7 @@ export class MissingAccrualPositionError extends Error {
         ? "Accrual position is missing. Fetch the position data and try again."
         : `Accrual position is missing for market: ${market}`,
     );
+    this.name = "MissingAccrualPositionError";
   }
 }
 
@@ -1114,6 +1117,7 @@ export class ExcessiveSlippageToleranceError extends Error {
     super(
       `Slippage tolerance ${slippageTolerance} exceeds maximum allowed (10%)`,
     );
+    this.name = "ExcessiveSlippageToleranceError";
   }
 }
 
@@ -1121,6 +1125,7 @@ export class ExcessiveSlippageToleranceError extends Error {
 export class EmptyDeallocationsError extends Error {
   constructor(vault: Address) {
     super(`Deallocations list cannot be empty for vault: ${vault}`);
+    this.name = "EmptyDeallocationsError";
   }
 }
 
@@ -1130,6 +1135,7 @@ export class DepositAmountMismatchError extends Error {
     super(
       `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
+    this.name = "DepositAmountMismatchError";
   }
 }
 
@@ -1139,6 +1145,7 @@ export class DepositAssetMismatchError extends Error {
     super(
       `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
     );
+    this.name = "DepositAssetMismatchError";
   }
 }
 
@@ -1148,6 +1155,7 @@ export class DepositOwnerMismatchError extends Error {
     super(
       `Deposit owner "${depositOwner}" does not match requirement signature owner "${signatureOwner}"`,
     );
+    this.name = "DepositOwnerMismatchError";
   }
 }
 
@@ -1157,6 +1165,7 @@ export class DepositSpenderMismatchError extends Error {
     super(
       `Deposit spender "${depositSpender}" does not match requirement signature spender "${signatureSpender}"`,
     );
+    this.name = "DepositSpenderMismatchError";
   }
 }
 
@@ -1166,6 +1175,7 @@ export class NativeAmountOnNonWNativeVaultError extends Error {
     super(
       `Cannot use nativeAmount: vault asset ${vaultAsset} is not the wrapped native token ${wNative}`,
     );
+    this.name = "NativeAmountOnNonWNativeVaultError";
   }
 }
 
@@ -1175,6 +1185,7 @@ export class ChainWNativeMissingError extends Error {
     super(
       `Chain ${chainId} does not have a configured wrapped native token (wNative)`,
     );
+    this.name = "ChainWNativeMissingError";
   }
 }
 
@@ -1184,6 +1195,7 @@ export class VaultAddressMismatchError extends Error {
     super(
       `Vault address mismatch between vault: ${vaultAddress} and args: ${argsVaultAddress}`,
     );
+    this.name = "VaultAddressMismatchError";
   }
 }
 
@@ -1193,6 +1205,7 @@ export class NativeAmountOnNonWNativeAssetError extends Error {
     super(
       `Cannot use nativeAmount: asset ${asset} is not the wrapped native token ${wNative}`,
     );
+    this.name = "NativeAmountOnNonWNativeAssetError";
   }
 }
 
@@ -1202,6 +1215,7 @@ export class BorrowExceedsSafeLtvError extends Error {
     super(
       `Borrow amount ${borrowAmount} exceeds safe maximum ${maxSafeBorrow} (LLTV minus buffer). Reduce borrow or increase collateral.`,
     );
+    this.name = "BorrowExceedsSafeLtvError";
   }
 }
 
@@ -1211,6 +1225,7 @@ export class MissingMarketPriceError extends Error {
     super(
       `Oracle price unavailable for market ${market}. Cannot validate position health.`,
     );
+    this.name = "MissingMarketPriceError";
   }
 }
 
@@ -1220,6 +1235,7 @@ export class MarketIdMismatchError extends Error {
     super(
       `Market ${marketId} does not match expected market ${expectedMarketId}`,
     );
+    this.name = "MarketIdMismatchError";
   }
 }
 
@@ -1229,6 +1245,7 @@ export class AccrualPositionUserMismatchError extends Error {
     super(
       `Accrual position user ${positionUser} does not match expected user ${expectedUser}`,
     );
+    this.name = "AccrualPositionUserMismatchError";
   }
 }
 
@@ -1238,6 +1255,7 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
     super(
       `Reallocation withdrawal cannot include the target market ${marketId} for vault ${vault}.`,
     );
+    this.name = "ReallocationWithdrawalOnTargetMarketError";
   }
 }
 
@@ -1372,6 +1390,7 @@ export class MutuallyExclusiveRepayAmountsError extends Error {
     super(
       `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
     );
+    this.name = "MutuallyExclusiveRepayAmountsError";
   }
 }
 
@@ -1385,6 +1404,7 @@ export class WithdrawExceedsCollateralError extends Error {
     super(
       `Withdraw amount ${params.withdrawAmount} exceeds available collateral ${params.available} for market: ${params.market}`,
     );
+    this.name = "WithdrawExceedsCollateralError";
   }
 }
 
@@ -1398,6 +1418,7 @@ export class WithdrawMakesPositionUnhealthyError extends Error {
     super(
       `Withdrawing ${params.withdrawAmount} collateral would make position unhealthy. Max safe borrow after withdrawal: ${params.maxSafeBorrow}. Actual Borrow assets: ${params.borrowAssets}.`,
     );
+    this.name = "WithdrawMakesPositionUnhealthyError";
   }
 }
 
@@ -1407,6 +1428,7 @@ export class RepayExceedsDebtError extends Error {
     super(
       `Repay amount ${params.repayAmount} exceeds outstanding debt ${params.debt} for market: ${params.market}`,
     );
+    this.name = "RepayExceedsDebtError";
   }
 }
 
@@ -1416,6 +1438,7 @@ export class InvalidSignatureError extends Error {
     super(
       "Signature verification failed: the signed data does not match the expected signer address",
     );
+    this.name = "InvalidSignatureError";
   }
 }
 
@@ -1429,6 +1452,7 @@ export class RepaySharesExceedDebtError extends Error {
     super(
       `Repay shares ${params.repayShares} exceed outstanding borrow shares ${params.borrowShares} for market: ${params.market}`,
     );
+    this.name = "RepaySharesExceedDebtError";
   }
 }
 
@@ -1450,6 +1474,7 @@ export class InsufficientSharedLiquidityError extends Error {
     super(
       `Shared liquidity is insufficient on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the operation amount or wait for additional vault liquidity.`,
     );
+    this.name = "InsufficientSharedLiquidityError";
   }
 }
 
@@ -1460,6 +1485,7 @@ export class UnknownReallocationMarketError extends UnknownDataError {
    */
   constructor(public readonly marketId: MarketId) {
     super(`unknown reallocation market "${marketId}"`);
+    this.name = "UnknownReallocationMarketError";
   }
 }
 
@@ -1470,6 +1496,7 @@ export class UnknownReallocationVaultError extends UnknownDataError {
    */
   constructor(public readonly vault: Address) {
     super(`unknown reallocation vault "${vault}"`);
+    this.name = "UnknownReallocationVaultError";
   }
 }
 
@@ -1484,6 +1511,7 @@ export class UnknownReallocationAllocationError extends UnknownDataError {
     public readonly id: Hash,
   ) {
     super(`unknown reallocation allocation "${id}" for vault "${vault}"`);
+    this.name = "UnknownReallocationAllocationError";
   }
 }
 
@@ -1492,6 +1520,7 @@ export class UnknownReallocationPublicAllocatorConfigError extends UnknownDataEr
   /** @param vault - Vault V2 address with missing allocator configuration. */
   constructor(public readonly vault: Address) {
     super(`unknown public allocator configuration for vault "${vault}"`);
+    this.name = "UnknownReallocationPublicAllocatorConfigError";
   }
 }
 
@@ -1500,6 +1529,7 @@ export class UnknownReallocationActiveAdaptersError extends UnknownDataError {
   /** @param vault - Vault V2 address with missing active-adapter state. */
   constructor(public readonly vault: Address) {
     super(`unknown active adapters for reallocation vault "${vault}"`);
+    this.name = "UnknownReallocationActiveAdaptersError";
   }
 }
 
@@ -1516,6 +1546,7 @@ export class UnknownReallocationMarketPublicAllocatorConfigError extends Unknown
     super(
       `unknown public allocator configuration "${adapterMarketCapId}" for vault "${vault}"`,
     );
+    this.name = "UnknownReallocationMarketPublicAllocatorConfigError";
   }
 }
 
@@ -1530,6 +1561,7 @@ export class UnknownReallocationAdapterError extends UnknownDataError {
     public readonly adapter: Address,
   ) {
     super(`unknown reallocation adapter "${adapter}" for vault "${vault}"`);
+    this.name = "UnknownReallocationAdapterError";
   }
 }
 
@@ -1546,6 +1578,7 @@ export class ReallocationAllocationUnderflowError extends Error {
     super(
       `Reallocation change "${params.change}" exceeds allocation "${params.allocation}" for id "${params.id}" on vault "${params.vault}". Refresh the reallocation data and recompute the plan.`,
     );
+    this.name = "ReallocationAllocationUnderflowError";
   }
 }
 
@@ -1563,6 +1596,7 @@ export class ReallocationAdapterSupplySharesUnderflowError extends Error {
     super(
       `Reallocation withdraw shares "${params.withdrawnShares}" exceed adapter supply shares "${params.supplyShares}" on market "${params.marketId}" for adapter "${params.adapter}". Refresh the reallocation data and recompute the plan.`,
     );
+    this.name = "ReallocationAdapterSupplySharesUnderflowError";
   }
 }
 
@@ -1572,6 +1606,7 @@ export class EmptyMidnightGroupCancellationsError extends Error {
     super(
       "Midnight group cancellations cannot be empty. Pass at least one offer group to cancel.",
     );
+    this.name = "EmptyMidnightGroupCancellationsError";
   }
 }
 
@@ -1581,6 +1616,7 @@ export class EmptyMidnightCollateralSuppliesError extends Error {
     super(
       "Midnight collateral supplies cannot be empty. Pass at least one collateral supply, or use `makeBorrow` to publish without collateral.",
     );
+    this.name = "EmptyMidnightCollateralSuppliesError";
   }
 }
 
@@ -1590,6 +1626,7 @@ export class DuplicateMidnightGroupCancellationError extends Error {
     super(
       `Midnight group cancellation "${params.index}" repeats group "${params.group}". Pass each offer group once.`,
     );
+    this.name = "DuplicateMidnightGroupCancellationError";
   }
 }
 
@@ -1599,6 +1636,7 @@ export class EmptyMidnightTakeableOffersError extends Error {
     super(
       "Midnight takeable offers cannot be empty. Refresh the quote and try again.",
     );
+    this.name = "EmptyMidnightTakeableOffersError";
   }
 }
 
@@ -1612,6 +1650,7 @@ export class MidnightOfferSideMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Use the matching flow or rebuild the offer list.`,
     );
+    this.name = "MidnightOfferSideMismatchError";
   }
 }
 
@@ -1621,6 +1660,7 @@ export class MidnightOfferReduceOnlyError extends Error {
     super(
       `Midnight offer "${params.index}" is reduce-only. Rebuild the offer with reduceOnly=false; reduce-only exits need a dedicated exit flow.`,
     );
+    this.name = "MidnightOfferReduceOnlyError";
   }
 }
 
@@ -1634,6 +1674,7 @@ export class MidnightOfferMakerMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" belongs to maker "${params.actualMaker}", expected "${params.expectedMaker}". Rebuild the offer set for the active account.`,
     );
+    this.name = "MidnightOfferMakerMismatchError";
   }
 }
 
@@ -1879,6 +1920,19 @@ export class MidnightZeroReceiverError extends Error {
   }
 }
 
+/** Thrown when a Midnight flow uses the zero address as the account it acts for. */
+export class MidnightZeroOnBehalfError extends Error {
+  /**
+   * @param field - Account field containing the zero address.
+   */
+  public constructor(public readonly field: "onBehalf") {
+    super(
+      `Midnight "${field}" cannot be the zero address. Provide a valid account.`,
+    );
+    this.name = "MidnightZeroOnBehalfError";
+  }
+}
+
 /**
  * Thrown when a Midnight receiver is a Midnight protocol or market token contract that cannot
  * forward received assets.
@@ -1978,6 +2032,7 @@ export class MidnightOfferMarketChainMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" targets chain "${params.actualChainId}", expected "${params.expectedChainId}". Rebuild the offer set for the selected chain.`,
     );
+    this.name = "MidnightOfferMarketChainMismatchError";
   }
 }
 
@@ -1991,6 +2046,7 @@ export class MidnightOfferMarketAddressMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" targets Midnight "${params.actualMidnight}", expected "${params.expectedMidnight}". Rebuild the offer set for the selected chain.`,
     );
+    this.name = "MidnightOfferMarketAddressMismatchError";
   }
 }
 
@@ -2003,6 +2059,7 @@ export class MidnightMarketAddressMismatchError extends Error {
     super(
       `Midnight market targets contract "${params.actualMidnight}", expected "${params.expectedMidnight}". Use market data from the selected chain deployment.`,
     );
+    this.name = "MidnightMarketAddressMismatchError";
   }
 }
 
@@ -2016,6 +2073,7 @@ export class MidnightOfferMarketLoanTokenMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" uses loan token "${params.actualLoanToken}", expected "${params.expectedLoanToken}". Rebuild the lend offer set for the approved loan token.`,
     );
+    this.name = "MidnightOfferMarketLoanTokenMismatchError";
   }
 }
 
@@ -2029,6 +2087,7 @@ export class MidnightOfferCallbackMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" uses callback "${params.actualCallback}", expected the maker's BlueBuyCallback "${params.expectedCallback}". Rebuild the offer with the derived callback.`,
     );
+    this.name = "MidnightOfferCallbackMismatchError";
   }
 }
 
@@ -2042,6 +2101,7 @@ export class MidnightOfferCallbackDataMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" uses callback data "${params.actualCallbackData}", expected "${params.expectedCallbackData}". Set the callback data to the ABI-encoded Blue market the assets are parked in.`,
     );
+    this.name = "MidnightOfferCallbackDataMismatchError";
   }
 }
 
@@ -2051,10 +2111,14 @@ export class EmptyBlueParkingMarketError extends Error {
     super(
       `Morpho Blue market "${params.marketId}" has no supply shares. Parking assets in an empty market is exposed to supply-share-price inflation; choose a market with existing supply.`,
     );
+    this.name = "EmptyBlueParkingMarketError";
   }
 }
 
-/** Thrown when parked assets would mint no Morpho Blue supply shares. */
+/**
+ * Thrown when parked assets would mint no Morpho Blue supply shares at preparation time; see
+ * `MorphoMidnight.supplyBlueMakeLend` for why this is not an execution-time guarantee.
+ */
 export class ZeroBlueParkingSharesError extends Error {
   constructor(params: {
     readonly marketId: MarketId;
@@ -2063,6 +2127,7 @@ export class ZeroBlueParkingSharesError extends Error {
     super(
       `Supplying "${params.assets}" assets to Morpho Blue market "${params.marketId}" mints zero supply shares at its current share price; park more assets or choose another market.`,
     );
+    this.name = "ZeroBlueParkingSharesError";
   }
 }
 
@@ -2076,6 +2141,7 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
     super(
       `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
     );
+    this.name = "MidnightTakeableOfferMarketMismatchError";
   }
 }
 
@@ -2089,6 +2155,7 @@ export class MidnightOfferRatifierMismatchError extends Error {
     super(
       `Midnight offer "${params.index}" uses ratifier "${params.actualRatifier}", expected "${params.expectedRatifier}" for its tree type. Rebuild the offer with the tree's ratifier.`,
     );
+    this.name = "MidnightOfferRatifierMismatchError";
   }
 }
 
@@ -2098,6 +2165,7 @@ export class MidnightReplacementGroupCancelledError extends Error {
     super(
       `Midnight offer group "${params.group}" is both published and cancelled. Give replacement offers a fresh group.`,
     );
+    this.name = "MidnightReplacementGroupCancelledError";
   }
 }
 
@@ -2105,6 +2173,7 @@ export class MidnightReplacementGroupCancelledError extends Error {
 export class NoMidnightCreditToRedeemError extends Error {
   constructor(market: string) {
     super(`No Midnight credit is available to redeem for market "${market}".`);
+    this.name = "NoMidnightCreditToRedeemError";
   }
 }
 
@@ -2114,6 +2183,7 @@ export class MidnightRedeemExceedsCreditError extends Error {
     super(
       `Midnight redeem amount exceeds position credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
     );
+    this.name = "MidnightRedeemExceedsCreditError";
   }
 }
 
@@ -2123,6 +2193,7 @@ export class InsufficientMidnightWithdrawableLiquidityError extends Error {
     super(
       `Midnight withdrawable liquidity is insufficient on market "${params.market}": units "${params.units}", withdrawable "${params.withdrawable}". Try again later or redeem less.`,
     );
+    this.name = "InsufficientMidnightWithdrawableLiquidityError";
   }
 }
 
@@ -2200,6 +2271,7 @@ export class MutuallyExclusiveWithdrawAmountsError extends Error {
     super(
       `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
     );
+    this.name = "MutuallyExclusiveWithdrawAmountsError";
   }
 }
 
@@ -2213,6 +2285,7 @@ export class WithdrawExceedsSupplyError extends Error {
     super(
       `Withdraw amount ${params.withdrawAmount} exceeds available supply ${params.available} for market: ${params.market}. Reduce withdraw amount.`,
     );
+    this.name = "WithdrawExceedsSupplyError";
   }
 }
 
@@ -2226,6 +2299,7 @@ export class WithdrawSharesExceedSupplyError extends Error {
     super(
       `Withdraw shares ${params.withdrawShares} exceed owned supply shares ${params.supplyShares} for market: ${params.market}. Reduce withdraw shares.`,
     );
+    this.name = "WithdrawSharesExceedSupplyError";
   }
 }
 
@@ -2247,6 +2321,7 @@ export class ReallocationWithdrawExceedsMarketSupplyError extends Error {
     super(
       `Withdraw amount "${params.withdrawAmount}" exceeds market total supply "${params.totalSupplyAssets}" on market ${params.marketId}. Reduce the withdraw amount.`,
     );
+    this.name = "ReallocationWithdrawExceedsMarketSupplyError";
   }
 }
 
@@ -2256,6 +2331,7 @@ export class VaultAssetMismatchError extends Error {
     super(
       `Source vault asset ${sourceAsset} does not match target vault asset ${targetAsset}`,
     );
+    this.name = "VaultAssetMismatchError";
   }
 }
 
@@ -2265,6 +2341,7 @@ export class RefinanceSameMarketError extends Error {
     super(
       `Refinance source and target market ${market} are identical. Refinance requires a different target market.`,
     );
+    this.name = "RefinanceSameMarketError";
   }
 }
 
@@ -2274,6 +2351,7 @@ export class RefinanceTokenMismatchError extends Error {
     super(
       `Refinance source market ${sourceMarket} and target market ${targetMarket} must share the same loanToken and collateralToken.`,
     );
+    this.name = "RefinanceTokenMismatchError";
   }
 }
 /** Thrown when a maker limit-exit offer can increase or open a position. */
@@ -2282,6 +2360,7 @@ export class MidnightOfferNotReduceOnlyError extends Error {
     super(
       `Midnight exit offer "${params.index}" must have reduceOnly=true. Rebuild the offer tree for the exit intent.`,
     );
+    this.name = "MidnightOfferNotReduceOnlyError";
   }
 }
 
@@ -2323,5 +2402,73 @@ export class MissingContractCodeError extends Error {
       `No contract code at ${role} address ${address} on chain ${chainId}. Check the address registry and that the client's RPC serves chain ${chainId}.`,
     );
     this.name = "MissingContractCodeError";
+  }
+}
+
+/**
+ * Thrown when a Midnight flow is prepared for the zero address. Midnight would revert
+ * `Unauthorized()`, and requirements resolved for the zero address can never be sent.
+ *
+ * @example
+ * ```ts
+ * import { MidnightZeroAccountError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new MidnightZeroAccountError("accountAddress");
+ * // error.field === "accountAddress"
+ * ```
+ */
+export class MidnightZeroAccountError extends Error {
+  /**
+   * @param field - Account field containing the zero address: `accountAddress` for an entity
+   * method, `owner` for a requirement helper. A zero `onBehalf` on a direct Midnight call throws
+   * {@link MidnightZeroOnBehalfError} instead.
+   */
+  public constructor(public readonly field: "accountAddress" | "owner") {
+    super(
+      `Midnight "${field}" cannot be the zero address. Pass the account that sends the transaction.`,
+    );
+    this.name = "MidnightZeroAccountError";
+  }
+}
+
+/**
+ * Thrown when a Midnight builder or `MorphoMidnight` method cannot ABI-encode its calldata,
+ * offer tree or market id, for example a `bytes32` field that is not 32 bytes, an integer
+ * outside its Solidity type or a malformed address. Wraps the viem error as `cause`.
+ *
+ * @example
+ * ```ts
+ * import { MidnightCalldataEncodingError } from "@morpho-org/morpho-sdk";
+ * import { BaseError } from "viem";
+ *
+ * const error = new MidnightCalldataEncodingError(
+ *   "midnightBundlesV2CancelAndMake",
+ *   new BaseError("bad bytes32"),
+ * );
+ * // error.input === "midnightBundlesV2CancelAndMake"
+ * ```
+ */
+export class MidnightCalldataEncodingError extends Error {
+  /**
+   * @param input - Input that could not be encoded: the contract function whose calldata
+   * failed, `"offers"` for offer-tree hashing, `"marketId"` for market-id hashing, or the name
+   * of the malformed address input, such as `"accountAddress"`, `"onBehalf"`, `"owner"`,
+   * `"receiver"`, `"collateralReceiver"`, `"referralFeeRecipient"`, `"market.midnight"`,
+   * `"authorized"`, `"publication.ratifier"`, `"loanToken"`, `"market.loanToken"`,
+   * `"market.collateralParams[i].token"`, `"positionData.user"`, `"spender"` or `"token"` (a token
+   * pulled with native funding, or the token checked by
+   * `getMidnightApprovalRequirements`). `"blueMarket"` reports the Blue market encoding in
+   * `supplyBlueMakeLend`: a malformed address or an out-of-range `lltv`.
+   * @param cause - viem encoding error.
+   */
+  public constructor(
+    public readonly input: string,
+    public override readonly cause: BaseError,
+  ) {
+    super(
+      `Cannot encode Midnight input "${input}": ${cause.shortMessage} Check bytes32 sizes, integer ranges and addresses in the inputs.`,
+      { cause },
+    );
+    this.name = "MidnightCalldataEncodingError";
   }
 }

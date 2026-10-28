@@ -135,6 +135,15 @@ describe("ChainUtils explorer URL helpers", () => {
         nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       },
     ],
+    [
+      196,
+      {
+        name: "X Layer",
+        explorerUrl: "https://www.oklink.com/x-layer",
+        identifier: "xlayer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+      },
+    ],
   ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],

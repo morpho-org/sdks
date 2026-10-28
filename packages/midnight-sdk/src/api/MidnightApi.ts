@@ -346,7 +346,12 @@ export class MidnightApi {
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and ABI-ready take caps. `averageWorstPrice` equals the caller's guard when provided,
-   *   otherwise the API's guard.
+   *   otherwise the API's guard. Offers are returned as the API sends them. An `asks` quote by
+   *   `assets` can include a sell offer whose buyer price (offer price plus the market's settlement
+   *   fee) exceeds one asset per unit, such as a `MAX_TICK` ask when the fee is positive. The
+   *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
+   *   handling, so the whole bundle fails. Drop these offers before building an assets-target buy,
+   *   or use a `units` target.
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -814,7 +819,12 @@ export class MidnightApi {
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
    * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @returns Quote and ABI-ready take caps. `averageWorstPrice` equals the caller's guard when provided,
-   *   otherwise the API's guard.
+   *   otherwise the API's guard. Offers are returned as the API sends them. An `asks` quote by
+   *   `assets` can include a sell offer whose buyer price (offer price plus the market's settlement
+   *   fee) exceeds one asset per unit, such as a `MAX_TICK` ask when the fee is positive. The
+   *   `MidnightBundlesV2` assets-target buy reverts on such an offer before its per-offer error
+   *   handling, so the whole bundle fails. Drop these offers before building an assets-target buy,
+   *   or use a `units` target.
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.

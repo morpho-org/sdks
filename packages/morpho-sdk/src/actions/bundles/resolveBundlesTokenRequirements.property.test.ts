@@ -1,5 +1,5 @@
 import { fc, test } from "@fast-check/vitest";
-import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
+import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -64,18 +64,12 @@ describe("resolveBundlesTokenRequirements", () => {
         owner: address,
         amount: amountArbitrary,
         allowance: allowanceArbitrary,
-        approvalExtra: fc.oneof(
-          fc.constantFrom(0n, 1n),
-          fc.bigInt({ min: 0n, max: UINT128_MAX }),
-        ),
       }),
     ],
     { numRuns: 200 },
   )(
-    "behavior: classic approvals target only the token and bundle spender and set exactly the requested approval",
-    ({ token, spender, owner, amount, allowance, approvalExtra }) => {
-      // Callers choose approvalAmount >= amount; the entity default is exactly the pulled amount.
-      const approvalAmount = amount + approvalExtra;
+    "behavior: classic approvals target only the token and bundle spender and set the token's maximum",
+    ({ token, spender, owner, amount, allowance }) => {
       const requirements = resolveBundlesTokenRequirements({
         token,
         spender,
@@ -83,7 +77,7 @@ describe("resolveBundlesTokenRequirements", () => {
         chainId,
         amount,
         deadline,
-        state: { type: "approval", allowance, approvalAmount },
+        state: { type: "approval", allowance },
       });
       if (allowance >= amount) {
         expect(requirements).toEqual([]);
@@ -105,8 +99,8 @@ describe("resolveBundlesTokenRequirements", () => {
         return decoded.args;
       });
       const approved = uint96CappedTokens.includes(token)
-        ? MathLib.min(approvalAmount, maxUint96)
-        : approvalAmount;
+        ? maxUint96
+        : maxUint256;
       const resets = resetTokens.includes(token) && allowance > 0n;
       expect(approvals).toEqual(
         resets
@@ -116,11 +110,6 @@ describe("resolveBundlesTokenRequirements", () => {
             ]
           : [[spender, approved]],
       );
-      if (approvalAmount === amount) {
-        for (const [, approvedAmount] of approvals) {
-          expect(approvedAmount).toBeLessThanOrEqual(amount);
-        }
-      }
     },
   );
 

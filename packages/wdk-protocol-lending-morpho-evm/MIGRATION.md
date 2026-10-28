@@ -1,3 +1,25 @@
+# Migrating to 4.0
+
+Version 4 follows `@morpho-org/morpho-sdk` v9. Classic token approvals and vault-share approvals
+are unlimited when the current allowance is below the required amount; sufficient existing
+allowances are reused. The per-token approval caps and USDT-style zero-reset behavior remain.
+Full-repay requirements now use the same unlimited approval behavior.
+
+Remove `approvalAmount` from `RequirementOptions`. `ApprovalAmountLessThanSpendAmountError` is no
+longer exported by this package. JavaScript callers that keep passing `approvalAmount` receive no
+warning: the extra property is ignored and the SDK uses the unlimited approval behavior.
+ERC-2612 token permits and Permit2 SignatureTransfer remain exact because the deployed bundles
+pass the exact pull amount to the permit call. Vault-share permits authorize `maxUint256`.
+
+`UnresolvedVaultWithdrawRequirementsError` now means the share allowance is below the SDK-derived
+minimum. Larger leftover allowances satisfy the requirement; there is no upper allowance range.
+The approval change also removes the former SDK share-burn ceiling. Asset-mode VaultBundlesV1
+withdrawals, the asset-mode V1 `migrateToV2` source leg, and in-kind redemption have no on-chain
+share-price or max-shares bound. With an unlimited share allowance, a share-price drop before
+inclusion can burn more shares than quoted. Vault V2 `forceWithdraw` retains its
+`minSharePriceE27` bound, shares-mode redemption uses a fixed share amount, and deposits and
+migration destinations retain `maxSharePrice`.
+
 # Migrating to 3.0
 
 Version 3 follows `@morpho-org/blue-sdk-viem` v7 and `@morpho-org/morpho-sdk` v8: token

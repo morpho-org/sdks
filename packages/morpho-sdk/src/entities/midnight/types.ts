@@ -96,7 +96,7 @@ export interface SupplyBlueMakeLendParams extends MakeOffersParams {
    * Morpho Blue market the parked assets are supplied to; its loan token must match every offer.
    * The contract does not check supply share-price slippage: use only markets protected against
    * supply-share-price inflation. Markets with no supply shares or parked amounts that mint zero
-   * shares are rejected.
+   * shares are rejected (checked at preparation time; see `supplyBlueMakeLend`).
    */
   readonly blueMarket: BlueMarketParams;
   /** Loan assets pulled from the maker and supplied to `blueMarket` for the maker's callback. */
@@ -121,15 +121,8 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly nativeAmount?: bigint;
 }
 
-/** Options for Midnight `getRequirements()`. */
-export interface MidnightRequirementsParams {
-  /**
-   * ERC-20 allowance to set when an approval is needed. Defaults to `maxUint256` (capped per token by
-   * `MAX_TOKEN_APPROVALS`). Applies to every token the flow approves and must cover the amount each
-   * of them pulls. Flows that need no token approval ignore it.
-   */
-  readonly approvalAmount?: bigint;
-}
+/** No per-call options are available for Midnight requirements. */
+export type MidnightRequirementsParams = Record<string, never>;
 
 /**
  * Lazy Midnight entity result with async requirements and sync transaction building.
@@ -199,9 +192,10 @@ export interface MidnightPositionHealthParams {
   /** Owner-bound snapshot returned by `getPositionData`. */
   readonly positionData: AccrualPosition;
   /** Values from `price()` on each `marketData.params.collateralParams[i].oracle`,
-   * indexed like `positionData.collateral` and scaled by `ORACLE_PRICE_SCALE`. An empty array is
-   * safe only when the SDK's conservative post-operation debt is zero, such as after a `full` repay,
-   * a repayment units target covering `positionData.debt`, or `minUnits`/`repay.assets` covering it.
+   * indexed like `positionData.collateral` and scaled by `ORACLE_PRICE_SCALE`. Borrow methods always
+   * need prices. `takeRepayWithdrawCollateral` and `repayWithdrawCollateral` need them only when
+   * `collateralWithdrawals` is non-empty and the SDK's conservative post-operation debt is positive;
+   * otherwise an empty array is safe.
    */
   readonly collateralPrices: readonly bigint[];
 }

@@ -1,16 +1,14 @@
 # @morpho-org/morpho-ts
 
-## 4.1.0-next.0
+## 4.1.0
 
 ### Minor Changes
 
-- Add shared Midnight position accrual helpers and errors.
-- Add the shared Midnight core position and market-state ABI fragment.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+- Add X Layer (chain id 196) to the shared chain and address registries.
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
+  Register the `ChainId.XLayerMainnet` enum member, its explorer and native-currency (OKB) metadata, and its era-3 Morpho Blue, AdaptiveCurveIrm, bundles (VaultBundlesV1, VaultExitBundlesV1, BlueBundlesV1), BluePublicAllocator, VaultV2, adapter-factory, registry and oracle-factory addresses (sourced from the `morpho-org/deployments` address book), plus Permit2 and the WOKB wrapped-native token, with their deployment blocks.
 
-  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
 
 ## 4.0.1
 

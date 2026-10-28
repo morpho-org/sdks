@@ -24,6 +24,9 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
+Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
+API removals and the new unlimited-approval behavior.
+
 Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating
 Midnight maker integrations. Upgrading from v7? Read the
 [v7 → v8 migration guide](./MIGRATION-v7-to-v8.md) before relying on fail-closed token metadata or
@@ -62,13 +65,13 @@ then call `buildTx()` without a separate root signature.
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
-Robinhood Chain, and Arc. Custom deployments can still be configured with `registerCustomAddresses`.
+Robinhood Chain, Arc, and X Layer. Custom deployments can still be configured with `registerCustomAddresses`.
 
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
 writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits,
-`withdraw`, and `redeem` use the same shape for token or exact vault-share authorization to
+`withdraw`, and `redeem` use the same shape for token or vault-share authorization to
 VaultBundlesV1. Vault `inKindRedeem` and `forceWithdraw` use it so callers can await
 `getRequirements()` to check share authorization to VaultExitBundlesV1 — and, for `inKindRedeem`,
 live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directly skips those
@@ -77,6 +80,19 @@ prerequisites.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
+
+Every transaction carries `tx.action` — typed metadata describing the encoded call (`type` plus
+the normalized `args`, including `referralFeeAssets`: the exact referral-fee amount the
+BlueBundlesV1 call charges, where derivable; it is omitted in exact-shares mode
+(`blueWithdraw`, `blueRepay` and `blueRepayWithdrawCollateral` with a shares input),
+where the underlying amount is resolved at execution. On the repay actions it is set
+only for an exact-assets repay (`repayAssets > 0n`), so it is also omitted when
+`blueRepayWithdrawCollateral` has no repay leg).
+`@morpho-org/evm-simulation`'s `toSimulationLimits` consumes this metadata
+for quote-based limits. For operations covered by `OperationInputs`, prefer
+independently chosen `inputs` in `simulate()` limits rather than bounds derived
+from action metadata. Refinance, in-kind redeems, force exits and Midnight
+operations still require quotes.
 
 ```typescript
 const vaultData = await vault.getData();
@@ -143,9 +159,9 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the share
-allowance returned by `getRequirements()` (an existing allowance up to one slippage tolerance
-above that cap is kept):
+Withdraw is a VaultBundlesV1 call that burns the caller's shares. Any existing allowance at or
+above the required share amount is reused; otherwise, `getRequirements()` returns an unlimited
+approval or permit:
 
 ```typescript
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
@@ -187,7 +203,7 @@ async function withdrawUsdc(provider: EIP1193Provider, supportSignature = false)
       if (receipt.status !== "success") throw new Error("The share approval reverted.");
     }
   }
-  // Approval is confirmed, or the exact allowance was already in place.
+  // Approval is confirmed, or the required allowance was already satisfied.
   return walletClient.sendTransaction({ ...withdrawal.buildTx(), account: userAddress });
 }
 // await withdrawUsdc(provider) returns the withdrawal transaction hash.

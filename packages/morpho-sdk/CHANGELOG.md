@@ -1,16 +1,65 @@
 # @morpho-org/morpho-sdk
 
-## 8.2.0-next.0
+## 9.0.0
+
+### Major Changes
+
+- Classic ERC-20 and vault-share approvals now request `maxUint256`, subject to the existing
+  token-specific caps and zero-reset behavior; vault-share permits are also unlimited. Larger existing
+  vault-share allowances are reused. ERC-2612 token permits remain exact because the bundle's `permit`
+  call uses the pull amount; Permit2 SignatureTransfer remains exact because the bundle derives both
+  the permitted and requested amounts from that same pull amount. The `approvalAmount` option and
+  `ApprovalAmountLessThanSpendAmountError` are removed; migrate callers by dropping the option and
+  error handling. See `MIGRATION-v8-to-v9.md` for the removed API and migration details. WDK
+  withdrawals no longer reject larger existing share allowances. Asset-mode exits without an
+  on-chain share-price or max-shares bound no longer have an SDK share-allowance ceiling, so a
+  share-price drop before inclusion can burn more shares than quoted.
+
+## 8.4.0
 
 ### Minor Changes
 
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+- Expose native funding amount in Midnight maker action metadata.
+- Midnight builders and entity methods reject a zero account and report encoding failures as typed errors, and every SDK error class sets a stable `name`:
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
+  - Midnight entity methods other than `cancelOffers`, `supplyCollateral` and `redeem` throw `MidnightZeroAccountError` when `accountAddress` is the zero address, and `getMidnightApprovalRequirements` / `getMidnightAuthorizationRequirement` throw it for a zero `owner`. Every direct builder with an `onBehalf` (`midnightSupplyCollateral`, `midnightRedeem` and now `midnightSetIsAuthorized`) throws `MidnightZeroOnBehalfError` for a zero `onBehalf`, as do `MorphoMidnight.redeem` and both `getRequirements()` and `buildTx()` of `MorphoMidnight.supplyCollateral` for a zero `accountAddress`. `cancelOffers` throws `MidnightInvalidAccountAddressError` when `accountAddress` is malformed or zero. Midnight reverts `Unauthorized()` for these transactions.
+  - Midnight action builders, `MorphoMidnight` methods and `getMidnightApprovalRequirements` / `getMidnightAuthorizationRequirement` throw `MidnightCalldataEncodingError` (viem's error kept as `cause`) instead of raw viem errors for malformed `bytes32`, out-of-range integers, unencodable offers or markets, and malformed addresses, including mixed-case addresses with invalid checksums. `error.input` names what failed: the contract function, `"offers"` (offer-tree hashing), `"marketId"` (market-id hashing) or the name of the malformed address input, such as `"accountAddress"`, `"onBehalf"`, `"owner"`, `"receiver"`, `"collateralReceiver"`, `"referralFeeRecipient"`, `"market.midnight"`, `"authorized"`, `"publication.ratifier"`, `"loanToken"`, `"market.loanToken"`, `"market.collateralParams[i].token"`, `"positionData.user"`, `"spender"` or `"token"` (a token pulled with native funding, or the token checked by `getMidnightApprovalRequirements`). `"blueMarket"` reports the Blue market encoding in `supplyBlueMakeLend`: a malformed address or an out-of-range `lltv`.
+  - Every exported SDK error class, including the Blue, Vault and requirement errors and not only the Midnight ones, now sets `.name` to its class name instead of `"Error"`. This is the only change in this release note that reaches beyond Midnight.
+  - Midnight JSDoc states that `accountAddress` must send the transaction for flows where Midnight acts on `msg.sender`.
 
-  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+  Code that caught viem's encoding errors from Midnight builders can read `error.cause`; code that compared `error.name` with `"Error"` should use `instanceof` or the class name.
 
-- Add shared Midnight position accrual helpers and errors.
+- `PriceRatifierV1` and `RateRatifierV1` now throw `InvalidOfferGroupError` from `buildDescriptor`, and from `buildProof`, `ratifierData` and `ratify` for raw leaf input, when an explicitly grouped offer breaks `OfferUtils.validateOfferGroup` rules, such as mixing unit and asset caps. Such groups were never valid: all their leaves share one onchain consumed counter. In `@morpho-org/morpho-sdk`, `MorphoMidnight.getOffersData` and the maker flows (`makeLend`, `makeBorrow`, `supplyBlueMakeLend`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`) throw it as `InvalidMidnightOfferGroupError` when given a priceV1/rateV1 `Tree.create` request.
+
+### Patch Changes
+
+- Midnight sell docs now state that an assets-target sell pays the receiver exactly `target.assets` and adds the referral fee on top.
+- Remove a redundant receiver address check from the Midnight `takeBorrow` and `supplyCollateralTakeBorrow` builders; behavior is unchanged.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.2.0
+
+## 8.3.0
+
+### Minor Changes
+
+- `midnightSupplyCollateral` and `midnightRedeem` (and `MorphoMidnight.supplyCollateral` / `redeem`) now throw the new `MidnightZeroOnBehalfError` when `onBehalf` is the zero address. For `redeem` with a zero `onBehalf` and no `receiver`, this replaces the `MidnightZeroReceiverError` previously thrown for the defaulted zero receiver.
+
+### Patch Changes
+
+- Add X Layer (chain id 196) to the shared chain and address registries.
+
+  Register the `ChainId.XLayerMainnet` enum member, its explorer and native-currency (OKB) metadata, and its era-3 Morpho Blue, AdaptiveCurveIrm, bundles (VaultBundlesV1, VaultExitBundlesV1, BlueBundlesV1), BluePublicAllocator, VaultV2, adapter-factory, registry and oracle-factory addresses (sourced from the `morpho-org/deployments` address book), plus Permit2 and the WOKB wrapped-native token, with their deployment blocks.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.1.0
+
+## 8.2.0
+
+### Minor Changes
+
+- Blue action metadata now exposes `args.referralFeeAssets`: the exact loan-token referral-fee amount the encoded BlueBundlesV1 call charges. `blueSupply` reports the fee deducted from `assets` before supplying (`floor(assets * referralFeePct / WAD)`); `blueSupplyCollateral`, `blueBorrow` and `blueSupplyCollateralBorrow` report the fee deducted from net borrow proceeds (`floor((borrowAssets - reallocationPenaltyAssets) * referralFeePct / WAD)`); `blueWithdraw` reports it only in exact-assets mode (omitted in exact-shares mode, where the withdrawn amount is resolved at execution); `blueRepay` / `blueRepayWithdrawCollateral` report it only for an exact-assets repay (`repayAssets > 0n`, omitted in exact-shares mode or when there is no repay leg). `@morpho-org/evm-simulation`'s `toSimulationLimits` consumes this metadata.
 - Midnight take flows now reject, before building, takes that `MidnightBundlesV2` would always revert:
 
   - `takeLend`, `takeBorrow`, `takeWithdraw`, `supplyCollateralTakeBorrow` and `takeRepayWithdrawCollateral` throw `MidnightTakeableOffersNotFillableError` when every offer is expired, cannot start before the deadline, was made by `accountAddress`, has a `continuousFeeCap` below the market fee, has zero units, has a tick outside `[0, MAX_TICK]`, is a buy offer with a non-zero `receiverIfMakerIsSeller`, or would open debt after maturity with no credit left to sell, and the flow has no withdraw or repay fallback, or every offer is dropped as described below (assets targets on buys, any target on sells), even when a withdraw or repay fallback exists. They throw `MidnightTakeTargetUnreachableError` when the offers plus that fallback cannot hold the target's units or a buy assets target's `minUnits`, or a buy units target's `maxBuyerAssets` cannot pay the cheapest fill plus the referral fee.
@@ -21,26 +70,9 @@
 
   Each check uses only the inputs, the market and position snapshots, and the current time; offers that are dead while another offer can fill are still passed through.
 
-- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
-- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), and `withdraw` and `redeem` (from `getRequirements()`) throw it when the exit exceeds the vault's idle assets, before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
-
 ### Patch Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
-
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x are no longer accepted because they lack `MidnightPositionLib`.
-
 - Operation reallocation plans now treat idle legs that together take (nearly) all of a source vault's idle, within `allocatorCapHeadroom`, as liquidity-bound like a leg filling an allocator cap. A borrow or withdrawal without shortfall whose plan draws only on such idle no longer plans it. When other vaults' legs stay unbound, the reduced plan can still take that idle.
-- Updated dependencies
-  - @morpho-org/midnight-sdk@2.2.0-next.0
-  - @morpho-org/blue-sdk-viem@7.1.0-next.0
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
 
 ## 8.1.0
 

@@ -24,7 +24,6 @@ import {
   validateRequirementSpender,
 } from "../../helpers/index.js";
 import {
-  ApprovalAmountLessThanSpendAmountError,
   type BundlesTokenSignatureRequirement,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
@@ -43,8 +42,6 @@ export interface GetBundlesTokenRequirementsParams {
   readonly spender: Address;
   /** Exact amount the bundles contract will pull. */
   readonly amount: bigint;
-  /** Classic approval amount; defaults to the exact pull amount. */
-  readonly approvalAmount?: bigint;
   /** Account funding the operation. */
   readonly owner: Address;
   /** Target chain id. */
@@ -77,7 +74,6 @@ export interface GetBundlesTokenRequirementsParams {
  * @param params.token - ERC-20 token funded by the operation.
  * @param params.spender - Registered fixed bundles contract that pulls the token.
  * @param params.amount - Exact amount the contract will pull; zero returns no requirements.
- * @param params.approvalAmount - Classic approval amount; defaults to `amount` and is ignored by signature paths.
  * @param params.owner - Account funding the operation.
  * @param params.chainId - Target chain id; must match the client chain.
  * @param params.deadline - Final-call and signature deadline.
@@ -103,7 +99,6 @@ export interface GetBundlesTokenRequirementsParams {
  *   was passed explicitly.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
  * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
- * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
  * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
  *   undecodable data, or is out of range.
  * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
@@ -274,10 +269,6 @@ export const getBundlesTokenRequirements = async (
     }
   }
 
-  const approvalAmount = params.approvalAmount ?? params.amount;
-  if (approvalAmount < params.amount) {
-    throw new ApprovalAmountLessThanSpendAmountError();
-  }
   const allowance = await readContract(viemClient, {
     abi: erc20Abi,
     address: params.token,
@@ -295,7 +286,6 @@ export const getBundlesTokenRequirements = async (
     state: {
       type: "approval",
       allowance,
-      approvalAmount,
     },
   });
 };

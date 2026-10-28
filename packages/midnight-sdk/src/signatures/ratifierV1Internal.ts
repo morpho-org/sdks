@@ -18,7 +18,7 @@ import { TreeUtils } from "./TreeUtils.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 import type { TreeData } from "./treeTypes.js";
 
-/** @internal Resolves V1 leaf groups mirroring the router's group_identity content ids. */
+/** @internal Resolves V1 leaf groups mirroring the router's group_identity content ids and validates explicit groups. */
 export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
   leaves: readonly TLeaf[],
   groupId: (leaves: readonly TLeaf[]) => Hash,
@@ -40,6 +40,10 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
 
   for (const [label, indices] of buckets) {
     const bucketLeaves = indices.map((index) => leaves[index]!);
+    // Called only to throw on incompatible group members.
+    OfferUtils.validateOfferGroup({
+      offers: bucketLeaves.map((leaf) => leaf.offer),
+    });
     if (
       GroupUtils.hash(bucketLeaves.map((leaf) => leaf.offer)).toLowerCase() !==
       label
@@ -51,6 +55,30 @@ export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
     for (const index of indices) {
       offers[index] = Offer.from({ ...leaves[index]!.offer, group });
     }
+  }
+
+  const finalGroups = new Map<
+    string,
+    { offers: Offer[]; hasExplicitGroup: boolean }
+  >();
+  for (const [index, offer] of offers.entries()) {
+    const label = offer.group.toLowerCase();
+    const hasExplicitGroup = leaves[index]!.offer.hasExplicitGroup;
+    const bucket = finalGroups.get(label);
+    if (bucket) {
+      bucket.offers.push(offer);
+      bucket.hasExplicitGroup ||= hasExplicitGroup;
+    } else {
+      finalGroups.set(label, { offers: [offer], hasExplicitGroup });
+    }
+  }
+  for (const {
+    offers: groupOffers,
+    hasExplicitGroup,
+  } of finalGroups.values()) {
+    if (!hasExplicitGroup) continue;
+    // Catches explicit groups that collide with a defaulted or re-derived id.
+    OfferUtils.validateOfferGroup({ offers: groupOffers });
   }
 
   return offers;
