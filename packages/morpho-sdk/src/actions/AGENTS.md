@@ -97,8 +97,10 @@ BluePublicAllocator sources are not sorted and idle uses no synthetic zero-addre
 market. BlueBundlesV1 executes every allocation unconditionally; aggregate penalties reduce borrow
 or withdrawal proceeds, and those builders reject an aggregate penalty above `borrowAssets` (or, in
 withdraw assets mode, the withdrawn amount). Migration instead adds penalties to destination debt,
-which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
-separate funding requirement.
+which the entity health check and encoded `maxLtv` bound. Penalties add no native value, but
+BlueBundlesV1 flash-loans the aggregate penalty from Blue, so Blue's loan-token balance must cover
+the operation transfer and any earlier market-leg withdrawals while that loan is outstanding;
+`getVaultV2BlueReallocationData` supplies `blueBalances` for this check.
 
 ## Discriminated unions
 

@@ -1,7 +1,9 @@
 import {
   blueMarketParamsAbi,
   midnightBlueBuyCallbackFactoryAbi,
+  midnightEcrecoverAuthorizerAbi,
   midnightEcrecoverRatifierAbi,
+  midnightEventsAbi,
   midnightPriceRatifierV1Abi,
   midnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
@@ -117,7 +119,9 @@ import {
 } from "@morpho-org/morpho-sdk/fetch";
 import {
   blueBuyCallbackFactoryAbi as rawMidnightBlueBuyCallbackFactoryAbi,
+  ecrecoverAuthorizerAbi as rawMidnightEcrecoverAuthorizerAbi,
   ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi,
+  midnightEventsAbi as rawMidnightEventsAbi,
   priceRatifierV1Abi as rawMidnightPriceRatifierV1Abi,
   rateRatifierV1Abi as rawMidnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/midnight/abis";
@@ -263,7 +267,9 @@ describe("protocol facades", () => {
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightBlueBuyCallbackFactoryAbi, rawMidnightBlueBuyCallbackFactoryAbi],
+    [midnightEcrecoverAuthorizerAbi, rawMidnightEcrecoverAuthorizerAbi],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
+    [midnightEventsAbi, rawMidnightEventsAbi],
     [midnightPriceRatifierV1Abi, rawMidnightPriceRatifierV1Abi],
     [midnightRateRatifierV1Abi, rawMidnightRateRatifierV1Abi],
     [MIDNIGHT_CBP, rawMidnightCbp],

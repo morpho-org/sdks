@@ -1,82 +1,22 @@
-import {
-  type AccrualPosition,
-  getChainAddresses,
-  MarketParams,
-  MathLib,
-} from "@morpho-org/blue-sdk";
-import {
-  blueAbi,
-  fetchAccrualVaultV2,
-  readContractRestructured,
-  vaultV2Abi,
-  vaultV2BluePublicAllocatorAbi,
-} from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { type AccrualPosition, MathLib } from "@morpho-org/blue-sdk";
+import { fetchAccrualVaultV2, vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
-import {
-  type Address,
-  encodeFunctionData,
-  maxUint128,
-  maxUint256,
-  parseEther,
-  parseUnits,
-  toHex,
-} from "viem";
-import { mainnet } from "viem/chains";
+import { maxUint256, parseEther } from "viem";
 import { assert, expect } from "vitest";
-import type { BlueActions } from "../../../src/entities/blue/blue.js";
 import type { VaultV2BlueReallocationData } from "../../../src/entities/vaultV2BlueReallocationData.js";
-import {
-  InsufficientSharedLiquidityError,
-  morphoViemExtension,
-} from "../../../src/index.js";
+import { InsufficientSharedLiquidityError } from "../../../src/index.js";
 import type { VaultV2BlueReallocation } from "../../../src/types/sharedLiquidity.js";
-import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import {
   satisfyBlueBundlesV1Requirements,
   blueBundlesV1Test as test,
 } from "../../helpers/blueBundlesV1.js";
 import {
-  setUpSingleAdapterVaultV2,
-  submitAndAcceptVaultV2Call,
-} from "../../helpers/vaultV2.js";
-
-const sourceMarket = new MarketParams({
-  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-  oracle: "0xbD60A6770b27E084E8617335ddE769241B0e71D8",
-  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
-  lltv: parseUnits("0.945", 18),
-});
-
-const destinationMarket = new MarketParams({
-  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-  oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
-  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
-  lltv: parseUnits("0.86", 18),
-});
-
-const referralRecipient =
-  "0x0000000000000000000000000000000000000002" as Address;
-const day = 24n * 60n * 60n;
-
-type VaultFixture = {
-  readonly vault: Address;
-  readonly adapter: Address;
-  readonly penalty: bigint;
-};
-
-type Scenario = {
-  readonly client: AnvilTestClient;
-  readonly source: BlueActions;
-  readonly destination: BlueActions;
-  readonly sourcePosition: AccrualPosition;
-  readonly destinationPosition: AccrualPosition;
-  readonly amount: bigint;
-  readonly reallocationData: VaultV2BlueReallocationData;
-  readonly vaults: readonly VaultFixture[];
-};
+  createScenario,
+  day,
+  destinationMarket,
+  referralRecipient,
+  type Scenario,
+} from "../../helpers/penalizedReallocations.js";
 
 const penaltyAssets = (
   reallocations: readonly { assets: bigint; penalty: bigint }[],
@@ -86,201 +26,6 @@ const penaltyAssets = (
       total + MathLib.mulDivUp(leg.assets, leg.penalty, MathLib.WAD),
     0n,
   );
-
-async function createIdleVault(params: {
-  readonly client: AnvilTestClient;
-  readonly assets: bigint;
-  readonly penalty: bigint;
-  readonly salt: `0x${string}`;
-}): Promise<VaultFixture> {
-  const { client, assets, penalty, salt } = params;
-  const { vault, adapter, depositAndAllocate } =
-    await setUpSingleAdapterVaultV2(client, {
-      asset: sourceMarket.loanToken,
-      markets: [destinationMarket],
-      salt,
-    });
-  const { vaultV2BluePublicAllocator: allocator } = getChainAddresses(
-    mainnet.id,
-  );
-  assert(allocator != null);
-  await submitAndAcceptVaultV2Call(client, {
-    vault,
-    data: encodeFunctionData({
-      abi: vaultV2Abi,
-      functionName: "setIsAllocator",
-      args: [allocator, true],
-    }),
-  });
-  await client.writeContract({
-    address: allocator,
-    abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "setIsActiveAdapter",
-    args: [vault, adapter, true],
-  });
-  await client.writeContract({
-    address: allocator,
-    abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "setAbsoluteCap",
-    args: [vault, adapter, destinationMarket, maxUint128],
-  });
-  await client.writeContract({
-    address: allocator,
-    abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "setCanPullFromIdle",
-    args: [vault, true],
-  });
-  await client.writeContract({
-    address: allocator,
-    abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "setPenalty",
-    args: [vault, penalty],
-  });
-  await depositAndAllocate({ assets, perMarket: [] });
-  return { vault, adapter, penalty };
-}
-
-async function createScenario(
-  client: AnvilTestClient,
-  penalties: readonly { assets: bigint; penalty: bigint }[],
-): Promise<Scenario> {
-  const morpho = client.extend(morphoViemExtension()).morpho;
-  const source = morpho.blue(sourceMarket, mainnet.id);
-  const destination = morpho.blue(destinationMarket, mainnet.id);
-  const { blue } = getChainAddresses(mainnet.id);
-  assert(blue != null);
-  const marketState = await readContractRestructured(client, {
-    address: blue,
-    abi: blueAbi,
-    functionName: "market",
-    args: [destinationMarket.id],
-  });
-  if (marketState.lastUpdate === 0n) {
-    await client.writeContract({
-      address: blue,
-      abi: blueAbi,
-      functionName: "createMarket",
-      args: [destinationMarket],
-    });
-  }
-
-  await supplyLoan({
-    client,
-    chainId: mainnet.id,
-    market: sourceMarket,
-    supplyAmount: parseEther("4"),
-  });
-  await supplyLoan({
-    client,
-    chainId: mainnet.id,
-    market: destinationMarket,
-    supplyAmount: parseEther("0.2"),
-  });
-  await supplyCollateral({
-    client,
-    chainId: mainnet.id,
-    market: sourceMarket,
-    collateralAmount: parseEther("5"),
-  });
-  await borrow({
-    client,
-    chainId: mainnet.id,
-    market: sourceMarket,
-    borrowAmount: parseEther("1"),
-  });
-  await supplyCollateral({
-    client,
-    chainId: mainnet.id,
-    market: destinationMarket,
-    collateralAmount: parseEther("5"),
-  });
-  await borrow({
-    client,
-    chainId: mainnet.id,
-    market: destinationMarket,
-    borrowAmount: parseEther("0.1"),
-  });
-  const [sourcePositionBeforeAccrual, destinationPositionBeforeAccrual] =
-    await Promise.all([
-      source.getPositionData(client.account.address),
-      destination.getPositionData(client.account.address),
-    ]);
-  const initialQuoteTimestamp =
-    MathLib.max(
-      Time.timestamp(),
-      sourcePositionBeforeAccrual.market.lastUpdate,
-      destinationPositionBeforeAccrual.market.lastUpdate,
-    ) + Time.s.from.h(2n);
-  const sourceDebtBeforeAccrual = sourcePositionBeforeAccrual.accrueInterest(
-    initialQuoteTimestamp,
-  ).borrowAssets;
-  const destinationDebtBeforeAccrual =
-    destinationPositionBeforeAccrual.accrueInterest(
-      initialQuoteTimestamp,
-    ).borrowAssets;
-
-  const vaults: VaultFixture[] = [];
-  for (const { assets, penalty } of penalties) {
-    vaults.push(
-      await createIdleVault({
-        client,
-        assets,
-        penalty,
-        salt: toHex(BigInt(vaults.length), { size: 32 }),
-      }),
-    );
-  }
-
-  const before = await client.getBlock();
-  await client.setNextBlockTimestamp({
-    timestamp: MathLib.max(before.timestamp, Time.timestamp()) + day,
-  });
-  await client.mine({ blocks: 1 });
-  await client.writeContract({
-    address: blue,
-    abi: blueAbi,
-    functionName: "accrueInterest",
-    args: [sourceMarket],
-  });
-  await client.writeContract({
-    address: blue,
-    abi: blueAbi,
-    functionName: "accrueInterest",
-    args: [destinationMarket],
-  });
-  const block = await client.getBlock();
-  const [sourcePosition, destinationPosition] = await Promise.all([
-    source.getPositionData(client.account.address),
-    destination.getPositionData(client.account.address),
-  ]);
-  const quoteTimestamp =
-    MathLib.max(
-      Time.timestamp(),
-      sourcePosition.market.lastUpdate,
-      destinationPosition.market.lastUpdate,
-    ) + Time.s.from.h(2n);
-  expect(
-    sourcePosition.accrueInterest(quoteTimestamp).borrowAssets,
-  ).toBeGreaterThan(sourceDebtBeforeAccrual);
-  expect(
-    destinationPosition.accrueInterest(quoteTimestamp).borrowAssets,
-  ).toBeGreaterThan(destinationDebtBeforeAccrual);
-  const amount = sourcePosition.accrueInterest(quoteTimestamp).borrowAssets;
-  const reallocationData = await destination.getVaultV2BlueReallocationData({
-    vaultAddresses: vaults.map(({ vault }) => vault),
-    block,
-  });
-  return {
-    client,
-    source,
-    destination,
-    sourcePosition,
-    destinationPosition,
-    amount,
-    reallocationData,
-    vaults,
-  };
-}
 
 async function executeScenario(params: {
   readonly scenario: Scenario;

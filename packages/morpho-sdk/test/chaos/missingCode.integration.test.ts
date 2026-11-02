@@ -27,7 +27,11 @@ import {
   MissingContractCodeError,
   morphoViemExtension,
 } from "../../src/index.js";
-import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../fixtures/blue.js";
+import {
+  CbbtcUsdcBlue,
+  deadSeededMarketData,
+  WbtcUsdcSourceMarket,
+} from "../fixtures/blue.js";
 import { SteakhouseUsdcVaultV1 } from "../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { setUpSingleAdapterVaultV2 } from "../helpers/vaultV2.js";
@@ -110,6 +114,7 @@ describe("chaos: S8 missing contract", () => {
         const market = morphoOf(client).blue(CbbtcUsdcBlue, mainnet.id);
         const action = market.supply({
           userAddress: client.account.address,
+          marketData: deadSeededMarketData(CbbtcUsdcBlue),
           assets: parseUnits("1", 6),
           deadline: maxUint256,
         });

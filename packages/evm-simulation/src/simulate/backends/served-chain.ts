@@ -1,6 +1,7 @@
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import {
+  ApprovalCheckUnavailableError,
   InvalidChainIdError,
   RpcTransportError,
   SimulationValidationError,
@@ -13,22 +14,24 @@ import {
  * endpoint serves another chain.
  *
  * Probes `eth_chainId` only after an {@link RpcTransportError},
- * {@link SlippageCheckUnavailableError} or a {@link SimulationValidationError}
- * from the contract-code check, so a successful simulation sends no extra
- * request. An honest endpoint on another chain fails the first way when the
- * requested block is above its head ("block / header not found"), the second
- * way when a quoted market or vault does not exist there, and the third way
- * when a calldata target has no code there. A failed probe or a matching chain
- * keeps the original error.
+ * {@link SlippageCheckUnavailableError}, an
+ * {@link ApprovalCheckUnavailableError} from approval-token resolution, or a
+ * {@link SimulationValidationError} from the contract-code check, so a
+ * successful simulation sends no extra request. An honest endpoint on another
+ * chain fails the first way when the requested block is above its head
+ * ("block / header not found"), the second way when a quoted market or vault
+ * does not exist there, the third way when an approval token cannot be
+ * resolved, and the fourth way when a calldata target has no code there. A
+ * failed probe or a matching chain keeps the original error.
  *
  * @param params - Probe parameters.
  * @param params.client - Shared simulation client.
  * @param params.chainId - Chain the request targets.
  * @param params.error - Error thrown by a boundary call.
  * @returns The error to throw: an {@link InvalidChainIdError} caused by the
- *   slippage-check or validation error, or by an {@link RpcTransportError}'s
- *   underlying cause, when the endpoint reports another chain; otherwise
- *   `error` unchanged.
+ *   slippage-check, approval-token resolution, or validation error, or by an
+ *   {@link RpcTransportError}'s underlying cause, when the endpoint reports
+ *   another chain; otherwise `error` unchanged.
  * @internal
  */
 export async function toServedChainError(params: {
@@ -40,6 +43,7 @@ export async function toServedChainError(params: {
   if (
     !(error instanceof RpcTransportError) &&
     !(error instanceof SlippageCheckUnavailableError) &&
+    !(error instanceof ApprovalCheckUnavailableError) &&
     !(error instanceof SimulationValidationError)
   ) {
     return error;

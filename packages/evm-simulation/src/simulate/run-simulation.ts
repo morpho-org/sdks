@@ -7,6 +7,7 @@ import { getMidnightBlueBuyCallbackAddress } from "@morpho-org/morpho-sdk";
 import { _try } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, zeroAddress } from "viem";
 import {
+  ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
   SimulationValidationError,
   UnsupportedChainError,
@@ -17,6 +18,8 @@ import type {
 } from "../limits.js";
 import type { VerifiedSimulationInputResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
+import { resolveApprovalLimits } from "./approval-limits.js";
+import { assertApprovalEvents, assertPendingApprovals } from "./approvals.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
 import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
@@ -42,6 +45,7 @@ import { planExecution } from "./plan/plan-execution.js";
 import { prepareAuthorizations } from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
+import { assertSignedAuthorizationsUsed } from "./signed-authorizations.js";
 import { decodeStateRead, planStateReads } from "./state/read-state.js";
 import { verifySlippage } from "./verify-slippage.js";
 
@@ -173,6 +177,9 @@ export async function runSimulation(params: {
   const nativeValueSent = nativeValue > 0n;
   const requiresMorpho =
     limits.operations.length > 0 ||
+    request.authorizations.some(
+      (authorization) => authorization.type === "blueAuthorizationSignature",
+    ) ||
     (preview && request.authorizations.length > 0);
   if (requiresMorpho && addresses?.blue == null)
     throw new UnsupportedChainError(request.chainId);
@@ -180,19 +187,30 @@ export async function runSimulation(params: {
   const requiresBlueBuyCallback = limits.operations.some(
     (operation) => operation.type === "midnightSupplyBlueMakeLend",
   );
-  const requiresMidnight = limits.operations.some(
-    (operation) =>
-      operation.type === "midnightSupplyCollateral" ||
-      operation.type === "midnightRedeem" ||
-      operation.type === "midnightTakeLend" ||
-      operation.type === "midnightTakeBorrow" ||
-      operation.type === "midnightTakeWithdraw" ||
-      operation.type === "midnightRepayWithdrawCollateral" ||
-      operation.type === "midnightSupplyCollateralTakeBorrow" ||
-      operation.type === "midnightSupplyBlueMakeLend" ||
-      operation.type === "midnightTakeRepayWithdrawCollateral",
-  );
+  const requiresMidnight =
+    limits.operations.some(
+      (operation) =>
+        operation.type === "midnightSupplyCollateral" ||
+        operation.type === "midnightSupplyCollateralMakeBorrow" ||
+        operation.type === "midnightRedeem" ||
+        operation.type === "midnightTakeLend" ||
+        operation.type === "midnightTakeBorrow" ||
+        operation.type === "midnightTakeWithdraw" ||
+        operation.type === "midnightRepayWithdrawCollateral" ||
+        operation.type === "midnightSupplyCollateralTakeBorrow" ||
+        operation.type === "midnightSupplyBlueMakeLend" ||
+        operation.type === "midnightTakeRepayWithdrawCollateral",
+    ) ||
+    request.authorizations.some(
+      (authorization) =>
+        authorization.type === "midnightAuthorizationSignature",
+    );
   if (requiresMidnight && addresses?.midnight == null)
+    throw new UnsupportedChainError(request.chainId);
+  const requiresEcrecoverAuthorizer = request.authorizations.some(
+    (authorization) => authorization.type === "midnightAuthorizationSignature",
+  );
+  if (requiresEcrecoverAuthorizer && addresses?.ecrecoverAuthorizer == null)
     throw new UnsupportedChainError(request.chainId);
   if (
     requiresBlueBuyCallback &&
@@ -200,6 +218,7 @@ export async function runSimulation(params: {
   )
     throw new UnsupportedChainError(request.chainId);
   const midnight = addresses?.midnight ?? zeroAddress;
+  const ecrecoverAuthorizer = addresses?.ecrecoverAuthorizer ?? zeroAddress;
 
   // Monad nodes reject `validation: false` and charge no gas in the simulated
   // block either way. Its `latest` block is not final: simulating at its number
@@ -241,6 +260,21 @@ export async function runSimulation(params: {
       blockNumber: pinnedBlock.number,
     }),
   );
+  const approvalLimits =
+    request.limits === "none"
+      ? undefined
+      : resolveApprovalLimits({
+          chainId: request.chainId,
+          owner,
+          operations: resolved,
+          explicit: request.limits.approvals,
+        });
+  if (preview && approvalLimits !== undefined)
+    assertPendingApprovals({
+      authorizations: request.authorizations,
+      allowed: approvalLimits.approvals,
+      addresses: approvalLimits.eventAddresses,
+    });
   const operations = resolved.map((operation) =>
     operation.limit.type === "midnightSupplyBlueMakeLend"
       ? {
@@ -268,6 +302,7 @@ export async function runSimulation(params: {
         authorizations: request.authorizations,
         owner,
         morpho,
+        midnight,
       })
     : [];
 
@@ -292,6 +327,31 @@ export async function runSimulation(params: {
         chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
     }),
   );
+  if (approvalLimits !== undefined) {
+    const missingLogs = execution.calls.find(
+      (
+        call,
+      ): call is (typeof execution.calls)[number] & {
+        planned: Extract<
+          (typeof execution.calls)[number]["planned"],
+          { type: "preparation" | "transaction" }
+        >;
+      } =>
+        (call.planned.type === "preparation" ||
+          call.planned.type === "transaction") &&
+        call.logsMissing,
+    )?.planned;
+    if (missingLogs !== undefined)
+      throw new ApprovalCheckUnavailableError(
+        `Simulation response omitted logs for ${missingLogs.type === "preparation" ? `authorization ${missingLogs.authorizationIndex}` : `transaction ${missingLogs.transactionIndex}`}; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
+      );
+    assertApprovalEvents({
+      logs: execution.calls.flatMap(({ result }) => result.logs),
+      owner,
+      allowed: approvalLimits.approvals,
+      addresses: approvalLimits.eventAddresses,
+    });
+  }
 
   for (const { planned, result } of execution.calls) {
     if (planned.type !== "preparation") continue;
@@ -314,6 +374,19 @@ export async function runSimulation(params: {
     throw new InvalidSimulationResponseError(
       `Execution returned ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s)`,
     );
+
+  // Require final signature-use evidence independently of operation limits.
+  if (!preview)
+    assertSignedAuthorizationsUsed({
+      authorizations: request.authorizations,
+      logs: execution.calls.some(
+        (call) => call.planned.type === "transaction" && call.logsMissing,
+      )
+        ? undefined
+        : userCalls.flatMap((call) => call.logs),
+      morpho,
+      ecrecoverAuthorizer,
+    });
 
   const decodePhase = (phase: "before" | "after") =>
     new Map(
@@ -371,7 +444,7 @@ export async function runSimulation(params: {
     limits: { operations: derivedOperations.map(({ limit }) => limit) },
   };
 
-  const authorizations = request.authorizations.map(
+  const authorizations = (preview ? request.authorizations : []).map(
     (authorization, authorizationIndex) => ({
       authorizationIndex,
       authorization,

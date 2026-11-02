@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
   "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
-  "version": "7.1.0",
+  "version": "7.2.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -48,7 +48,7 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^7.0.0 || ^8.0.0",
+    "@morpho-org/blue-sdk": "^8.1.0",
     "@morpho-org/morpho-ts": "^3.0.0 || ^4.0.0",
     "viem": "^2.0.0"
   },

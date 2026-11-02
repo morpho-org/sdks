@@ -1,5 +1,17 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.2.0
+
+### Minor Changes
+
+- `fetchMarket`, `fetchVault`, `fetchVaultV2` and `fetchAccrualVaultV2` now read the dead-deposit state of what they fetch, in both the deployless query and the multicall fallback: the supply shares `DEAD_ADDRESS` holds in a Blue market, the vault shares it holds in Vault V1 and V2, and those V2 shares converted to assets. `fetchAccrualVaultV2` also returns the absolute cap of every adapter and adapter market, and fills the same dead-share fields on nested markets and Vault V1 snapshots. When a market-adapter liquidity adapter has no allocation in the liquidity market, `fetchAccrualVaultV2` adds that market (or the adapter's empty position in it) and its cap to the snapshot, since deposits are allocated there; those reads are pinned to the vault's block, so without a `blockNumber` the deployless query is repeated at the latest block. Otherwise the deployless query is still a single `eth_call`; the multicall fallback adds one read per field.
+  The `@morpho-org/blue-sdk` peer range is now `^8.1.0`, which has these fields. Projects that must stay on `@morpho-org/blue-sdk` 7 should pin `@morpho-org/blue-sdk-viem@~7.1`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.1.0
+
 ## 7.1.0
 
 ### Minor Changes

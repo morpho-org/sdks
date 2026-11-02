@@ -14,6 +14,7 @@ import {
 } from "@morpho-org/morpho-sdk";
 import { classifyError, expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient } from "@morpho-org/test/mock";
+import { UnsupportedOperationError } from "@tetherto/wdk-wallet";
 import * as viem from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
@@ -3146,6 +3147,140 @@ describe.sequential("MorphoProtocolEvm", () => {
       }
     });
 
+    test.each(["build", "sign", "unchanged"] as const)(
+      "revalidates the chain around WDK signing (%s)",
+      async (switchDuring) => {
+        let providerChainId = "0x1";
+        // biome-ignore lint/suspicious/noShadow: test-local account exercising WDK's real sign/send hooks
+        const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+          chainId: 1,
+          provider: {
+            request: async ({ method }) => {
+              if (method === "eth_chainId") return providerChainId;
+              if (method === "eth_call")
+                return viem.numberToHex(100_000n, { size: 32 });
+              throw new Error(`Unexpected RPC method: ${method}`);
+            },
+          },
+          bundlerUrl: "https://dummy-bundler-url.com",
+          safeModulesVersion: "0.3.0",
+          isSponsored: false,
+          useNativeCoins: true,
+        });
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        readContractMock.mockResolvedValue(100_000n);
+        const signUserOperation = vi.fn(async () => {
+          if (switchDuring === "sign") providerChainId = "0x2105";
+          return "0x1234";
+        });
+        Reflect.set(
+          account,
+          "_prepareForSend",
+          vi.fn(async () => {
+            if (switchDuring === "build") providerChainId = "0x2105";
+            return {
+              fee: 777n,
+              chainId: 1n,
+              userOp: {},
+              smartAccount: {
+                entrypointAddress: VAULT,
+                signUserOperationWithSigners: signUserOperation,
+              },
+            };
+          }),
+        );
+        const fetchMock = vi.fn<typeof fetch>(async (_url, init) => {
+          const body = JSON.parse(String(init?.body));
+          expect(body.method).toBe("eth_sendUserOperation");
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: MOCK_USER_OPERATION_HASH,
+            }),
+          );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        // biome-ignore lint/suspicious/noShadow: test-local protocol for the chain-switch fixture
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+        });
+
+        try {
+          await createClientMock.withImplementation(
+            (parameters) =>
+              viem.createClient(
+                parameters as Parameters<typeof viem.createClient>[0],
+              ),
+            () =>
+              morphoViemExtensionMock.withImplementation(
+                () => () => ({ morpho: morphoNamespaceMock }),
+                async () => {
+                  const prepared = await protocol.prepareSupply({
+                    token: TOKEN,
+                    amount: 100_000n,
+                  });
+                  if (switchDuring === "unchanged") {
+                    await expect(prepared.submit()).resolves.toEqual({
+                      hash: MOCK_USER_OPERATION_HASH,
+                      fee: 777n,
+                    });
+                    expect(fetchMock).toHaveBeenCalledOnce();
+                    expect(signUserOperation).toHaveBeenCalledWith(
+                      expect.any(Object),
+                      expect.any(Array),
+                      1n,
+                    );
+                  } else {
+                    await expect(prepared.submit()).rejects.toBeInstanceOf(
+                      ChainIdMismatchError,
+                    );
+                    expect(fetchMock).not.toHaveBeenCalled();
+                  }
+                  expect(signUserOperation).toHaveBeenCalledTimes(
+                    switchDuring === "build" ? 0 : 1,
+                  );
+                },
+              ),
+          );
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
+
+    test.each([undefined, null, 42])(
+      "fails closed when WDK's signing hook is unavailable (%s)",
+      async (hook) => {
+        // biome-ignore lint/suspicious/noShadow: test-local account with an incompatible signing hook
+        const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+          chainId: 1,
+          provider: { request: async () => "0x1" },
+          bundlerUrl: "https://dummy-bundler-url.com",
+          safeModulesVersion: "0.3.0",
+          isSponsored: false,
+          useNativeCoins: true,
+        });
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        Reflect.set(account, "_signUserOperation", hook);
+        const sendTransaction = vi.spyOn(account, "sendTransaction");
+        readContractMock.mockResolvedValue(100_000n);
+        // biome-ignore lint/suspicious/noShadow: test-local protocol for the missing-hook fixture
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+        });
+
+        await expect(
+          protocol.supply({ token: TOKEN, amount: 100_000n }),
+        ).rejects.toBeInstanceOf(UnsupportedOperationError);
+        expect(sendTransaction).not.toHaveBeenCalled();
+      },
+    );
+
     test("binds WDK's signing chain without splitting atomic dispatch", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
@@ -3731,12 +3866,26 @@ describe.sequential("MorphoProtocolEvm", () => {
               () => () => ({ morpho: morphoNamespaceMock }),
               async () => {
                 await protocol.getMarketPosition();
-                const clientCache = Reflect.get(protocol, "_viemClient") as {
-                  value: { getBlockNumber: () => Promise<bigint> };
+                const clientIndex = createClientMock.mock.calls
+                  .map(([parameters], index) => ({ parameters, index }))
+                  .filter(
+                    ({ parameters }) =>
+                      typeof parameters === "object" &&
+                      parameters !== null &&
+                      "account" in parameters,
+                  )
+                  .at(-1)?.index;
+                assert.ok(clientIndex !== undefined);
+
+                const client = createClientMock.mock.results[clientIndex]
+                  ?.value as {
+                  extend: (actions: typeof viem.publicActions) => {
+                    getBlockNumber: () => Promise<bigint>;
+                  };
                 };
 
                 await expect(
-                  clientCache.value.getBlockNumber(),
+                  client.extend(viem.publicActions).getBlockNumber(),
                 ).rejects.toBeInstanceOf(errorClass);
                 expect(
                   providerSend.mock.calls.filter(
@@ -3777,10 +3926,46 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
-    test("reuses same-chain clients after the provider returns", async () => {
+    test("fetches market params for each operation", async () => {
+      const marketIdProtocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketId: MARKET_ID,
+      });
+
+      await marketIdProtocol.getMarketPosition();
+      expect(fetchMarketMock).toHaveBeenCalledTimes(1);
+
+      await marketIdProtocol.getMarketPosition();
+      expect(fetchMarketMock).toHaveBeenCalledTimes(2);
+    });
+
+    test("uses the current account for each operation's viem client", async () => {
+      const getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      account.getAddress = getAddress;
+
+      await protocol.getMarketPosition();
+      getAddress.mockResolvedValue(viem.zeroAddress);
+      await protocol.getMarketPosition();
+
+      const clientAccounts = createClientMock.mock.calls
+        .map(([parameters]) => parameters)
+        .filter(
+          (parameters): parameters is { readonly account: unknown } =>
+            typeof parameters === "object" &&
+            parameters !== null &&
+            "account" in parameters,
+        )
+        .map(({ account: address }) => address);
+
+      expect(clientAccounts).toEqual([ADDRESS, viem.zeroAddress]);
+      expect(morphoViemExtensionMock).toHaveBeenCalledTimes(2);
+    });
+
+    test("creates fresh same-chain clients after the provider returns", async () => {
       await protocol.getMarketPosition();
       expect(blueMock).toHaveBeenCalledWith(expect.any(Object), 1);
-      expect(morphoViemExtensionMock).toHaveBeenCalledOnce();
+      expect(morphoViemExtensionMock).toHaveBeenCalledTimes(1);
 
       mockGetChainId.mockResolvedValue(8453);
 
@@ -3792,7 +3977,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       mockGetChainId.mockResolvedValue(1);
       await protocol.getMarketPosition();
       expect(blueMock).toHaveBeenCalledTimes(2);
-      expect(morphoViemExtensionMock).toHaveBeenCalledOnce();
+      expect(morphoViemExtensionMock).toHaveBeenCalledTimes(2);
     });
 
     test("serializes concurrent chain observations by invocation order", async () => {
@@ -3830,7 +4015,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
     });
 
-    test("does not cache market data resolved after a chain switch", async () => {
+    test("re-fetches market data after a chain switch", async () => {
       const fetchedMarket = Promise.withResolvers<{
         params: InstanceType<typeof MarketParams>;
       }>();

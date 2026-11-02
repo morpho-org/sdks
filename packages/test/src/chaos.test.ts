@@ -1101,6 +1101,7 @@ describe("classifyError", () => {
       }
     }
     class UnsupportedChainError extends Error {}
+    class UnusedAuthorizationError extends Error {}
     class DepositOwnerMismatchError extends Error {}
     class DepositSpenderMismatchError extends Error {}
     class DepositAssetMismatchError extends Error {}
@@ -1148,6 +1149,7 @@ describe("classifyError", () => {
       "revert",
     );
     expect(classifyError(new UnsupportedChainError())).toBe("config");
+    expect(classifyError(new UnusedAuthorizationError())).toBe("auth");
     class MissingContractCodeError extends Error {}
     expect(classifyError(new MissingContractCodeError())).toBe("config");
     class BlacklistViolationError extends Error {}

@@ -1,4 +1,5 @@
 import {
+  MarketParams as BlueMarketParams,
   MarketUtils as BlueMarketUtils,
   type MarketId,
 } from "@morpho-org/blue-sdk";
@@ -40,6 +41,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -206,6 +208,11 @@ const createBlueMarket = async (
     functionName: "supply",
     args: [params.market, params.seedAssets, 0n, client.account.address, "0x"],
   });
+  await seededMarketData(
+    // Base's chain type narrows block fields the generic Anvil client does not.
+    client as unknown as AnvilTestClient,
+    new BlueMarketParams(params.market),
+  );
 };
 
 const parkingTransaction = async (

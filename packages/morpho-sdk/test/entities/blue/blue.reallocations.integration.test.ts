@@ -17,6 +17,7 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import {
   encodeAbiParameters,
   encodeFunctionData,
+  erc20Abi,
   keccak256,
   maxUint128,
   parseUnits,
@@ -204,6 +205,16 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
         vaultAddresses: [vault],
         block,
       });
+      const blueBalance = await client.readContract({
+        address: baseTargetMarket.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [getChainAddresses(base.id).blue],
+        blockNumber: block.number,
+      });
+      expect(reallocationData.blueBalances[baseTargetMarket.loanToken]).toBe(
+        blueBalance,
+      );
       const vaultData = reallocationData.getVault(vault);
       const targetMarketParamsId = keccak256(targetIdData[2]);
       const targetAllocation = reallocationData.getAllocation(

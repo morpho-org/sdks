@@ -1,4 +1,4 @@
-import { blueAbi } from "@morpho-org/morpho-sdk/abis";
+import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
 import type { SimulationAuthorization } from "../authorizations.js";
@@ -40,6 +40,8 @@ export interface PlannedPreparation {
  *   no change to the nonce bitmap.
  * - `blueAuthorization` / `blueAuthorizationSignature` →
  *   `setAuthorization(authorized, isAuthorized)`.
+ * - `midnightAuthorizationSignature` → Midnight
+ *   `setIsAuthorized(authorized, isAuthorized, sender)`.
  *
  * Final mode produces no preparations. Successful execution proves only the
  * simulated permissions, not the validity of a future signature.
@@ -50,8 +52,9 @@ export function prepareAuthorizations(params: {
   readonly authorizations: readonly SimulationAuthorization[];
   readonly owner: Address;
   readonly morpho: Address;
+  readonly midnight: Address;
 }): readonly PlannedPreparation[] {
-  const { authorizations, owner, morpho } = params;
+  const { authorizations, owner, morpho, midnight } = params;
 
   const preparations: PlannedPreparation[] = [];
 
@@ -97,6 +100,20 @@ export function prepareAuthorizations(params: {
             abi: blueAbi,
             functionName: "setAuthorization",
             args: [authorized, isAuthorized],
+          }),
+          value: 0n,
+        });
+        break;
+      }
+      case "midnightAuthorizationSignature": {
+        const { authorized, isAuthorized } = auth.typedData.message;
+        calls.push({
+          from: getAddress(owner),
+          to: getAddress(midnight),
+          data: encodeFunctionData({
+            abi: midnightAbi,
+            functionName: "setIsAuthorized",
+            args: [authorized, isAuthorized, owner],
           }),
           value: 0n,
         });

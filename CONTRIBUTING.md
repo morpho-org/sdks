@@ -54,6 +54,11 @@ E2E_CHAINS=BaseMainnet pnpm test:e2e             # one chain (or E2E_CHAINS=8453
 pnpm test:e2e -t e2e/vaultV2                     # one scenario family
 ```
 
+Keep one E2E scenario per action untagged, and tag each further variant with
+`test("...", { tags: ["nightly"] }, async (...) => ...)`: the maintainers' push CI skips `nightly`
+tests and their scheduled run covers them. Reproduce that selection locally with
+`--tags-filter='!nightly'`.
+
 Other useful commands:
 
 ```bash

@@ -1,5 +1,17 @@
 # @morpho-org/midnight-sdk
 
+## 2.3.0
+
+### Minor Changes
+
+- Add optional `taker` to `fetchBookQuote` so quotes leave out the taker's own offers.
+- Check sender-granted Midnight `setIsAuthorized` grants against `limits.approvals` in `evm-simulation`, throwing `UnexpectedMidnightAuthorizationError` for grants outside the derived and explicit allowlist. Add `midnightEventsAbi` to `midnight-sdk` and the `morpho-sdk/abis` facade.
+- Support EcrecoverAuthorizer authorization signatures in EVM simulation.
+
+### Patch Changes
+
+- Offer no longer memoizes group/hash/onchainHash; getters compute from the offer's readonly fields on each access
+
 ## 2.2.1
 
 ### Patch Changes

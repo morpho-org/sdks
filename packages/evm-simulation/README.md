@@ -33,7 +33,8 @@ try {
     {
       chainId: 1,
       // mode: "final" (default) executes the signed calldata against actual
-      // permissions; mode: "preview" accepts typed authorization descriptors.
+      // permissions and checks supplied signed authorization descriptors.
+      // mode: "preview" prepares the descriptors as simulated permissions.
       transactions: [{ from: user, to: vault, data: encodedDeposit }],
       // limits is required: quote the deposit's pay-in cap and minimum
       // minted shares. ("none" is reserved for transactions no operation
@@ -77,13 +78,14 @@ All symbols below are re-exported from the package root.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
-- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote`, `BluePositionBounds`, `MidnightPositionBounds`, `MidnightDebtPositionBounds`, `MidnightMarketStruct`, and `MidnightCollateralAmount`.
+- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`, `MidnightAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `ApprovalLimit`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote`, `BluePositionBounds`, `MidnightPositionBounds`, `MidnightDebtPositionBounds`, `MidnightMarketStruct`, and `MidnightCollateralAmount`.
 - `toSimulationLimits(action, { owner, onBehalf?, receiver?, slippageTolerance?, market?, expected? })` — build the `SimulationLimits` of a morpho-sdk action transaction (`tx.action`), deriving quote sides the encoded args fix and merging the caller's `expected` quote over them.
   `market` is forwarded for `midnightSupplyCollateral`, `midnightTakeLend`,
   `midnightTakeBorrow`, and `midnightSupplyCollateralTakeBorrow`; it is also
-  forwarded for `midnightCancelAndMake` when collateral supplies are present
-  and `blueSupply` is absent. The Midnight `MarketUtils.toId(market)` must
-  equal the action's market id. `receiver` applies to `vaultV2ForceRedeem`,
+  forwarded for `midnightCancelAndMake` with collateral supplies and no
+  `blueSupply`, whose non-zero roots emit `midnightSupplyCollateralMakeBorrow`
+  limits. The Midnight `MarketUtils.toId(market)` must equal the action's
+  market id. `receiver` applies to `vaultV2ForceRedeem`,
   Midnight redeem/sell actions, `midnightSupplyCollateralTakeBorrow`,
   `midnightTakeBorrow`, `midnightTakeWithdraw`, and repayment-withdraw actions
   with collateral withdrawals; for the latter, it must match
@@ -92,14 +94,15 @@ All symbols below are re-exported from the package root.
   allow an external receiver. `onBehalf` applies only to
   `midnightSupplyCollateral` and `midnightRedeem`; eligible maker bundles act
   for `owner`. Midnight sells, `midnightTakeLend` and repay-withdraw always
-  measure `msg.sender` and reject any explicit `account`; Blue parking measures
-  the bundle sender, so `account` must equal `owner` or be omitted; Midnight
+  measure `msg.sender` and reject any explicit `account`; Blue parking and
+  `midnightSupplyCollateralMakeBorrow` measure the bundle sender, so `account`
+  must equal `owner` or be omitted; Midnight
   take bundles act for `owner`/`msg.sender`.
 
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Input-based limits: `InputOperationLimit`, `OperationInputs`, `AssetsOrShares`, `RepayInputs`, `SimulationInputLimits` and `SimulateInputParams`; checked input outputs use `CheckedInputOperationLimit`, `CheckedSimulationInputLimits`, `SimulationInputVerification` and `VerifiedSimulationInputResult`. `ScalarQuoteField` names the keys of `fieldChecks`; `FeelessInputType` names the input operation types that reject `referralFee`, and `ReallocationPenaltyInputType` names those that accept `reallocationPenalty`. Existing `SimulateParams`, `SimulationLimits`, `CheckedOperationLimit` and quote-only result types remain unchanged; `simulate()` accepts both forms and preserves its quote-only return overload, including wrappers typed with `SimulateParams`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `AuthorizationRequestMismatchError`, `UnusedAuthorizationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject`, `MidnightBuySubject`, `MidnightBlueParkingSubject`, `MidnightCollateralOperationSubject`, `MidnightRedeemSubject`, `MidnightSellSubject`, and `MidnightRepayWithdrawCollateralSubject` (operation groups and the operation-keyed subject union used by verification results).
 
@@ -209,8 +212,9 @@ takes precedence over its `assertAfter` assertions.
 
 `limits` is required on every call: pass quote-only `SimulationLimits`,
 `SimulationInputLimits` for typed inputs or mixed operations (via
-`SimulateInputParams`), or the literal `"none"` to explicitly skip all checks and
-state reads — `"none"` is
+`SimulateInputParams`), or the literal `"none"` to skip limit and approval checks
+and their state reads. Final-mode signed-authorization use checks still run.
+`"none"` is
 reserved for transactions that no operation type covers (Merkl reward claims,
 unsupported Midnight actions and `midnightCancelAndMake` bundles that combine
 a Blue supply with collateral supplies, contain unfunded publications, or
@@ -321,7 +325,8 @@ required-caps lists below — the per-operation table lives in
   withdraw, redeem and force-exit); supply/vault `sharesMinted` (`blueSupply`,
   `vaultV1Deposit`, `vaultV2Deposit`, `vaultV1MigrateToV2`); debt
   `sharesBurned` (`blueRepay`, `blueRefinance`); `collateralSupplied` on
-  `blueSupplyCollateral` and `midnightSupplyCollateral`; `unitsBought` on
+  `blueSupplyCollateral`, `midnightSupplyCollateral`, and
+  `midnightSupplyCollateralMakeBorrow`; `unitsBought` on
   `midnightTakeLend`; `debtRepaid` when quoted and `collateralWithdrawals`
   delivery on `midnightRepayWithdrawCollateral` and
   `midnightTakeRepayWithdrawCollateral`; `collateralSupplies`, `unitsSold`, and
@@ -348,6 +353,7 @@ required-caps lists below — the per-operation table lives in
   position reads.
 - Required caps: `assetsPaid` on every pay-in op (`blueSupply`,
   `blueSupplyCollateral`, `midnightSupplyCollateral`,
+  `midnightSupplyCollateralMakeBorrow`,
   `midnightSupplyBlueMakeLend`, `midnightTakeLend`, `blueRepay`, `vaultV1Deposit`, `vaultV2Deposit`,
   and unconditionally on both combined ops, on an active repay leg of
   `midnightRepayWithdrawCollateral`, and on `midnightTakeRepayWithdrawCollateral`); supply/vault `sharesBurned`
@@ -372,8 +378,9 @@ requires `collateralSupplied` on `blueSupplyCollateralBorrow` and
 or `assetsReceived` for the idle wallet portion, on top of the `sharesBurned`
 cap.
 The collateral a refinance moves between markets is not verified.
-`midnightSupplyCollateral` limits name the Midnight market (`marketId`, from
-morpho-sdk's `MidnightMarketUtils.toId`) and the `collateralIndex` they supply; `collateralSupplied`
+`midnightSupplyCollateral` and `midnightSupplyCollateralMakeBorrow` limits
+name the Midnight market (`marketId`, from morpho-sdk's
+`MidnightMarketUtils.toId`) and the `collateralIndex` they supply; `collateralSupplied`
 is the `Midnight.collateral(marketId, account, collateralIndex)` delta, and
 `assetsPaid` is the sender's balance delta in the collateral token, resolved
 from `Midnight.toMarket(marketId)` or the supplied market struct at that index.
@@ -382,13 +389,16 @@ quote. The chain must have a registered `midnight` address; otherwise
 `UnsupportedChainError` is thrown. A market that does not exist yet at the
 state block has no `toMarket` entry. For a first `midnightTakeLend`,
 `midnightTakeBorrow`,
-`midnightSupplyCollateralTakeBorrow`, or `midnightSupplyCollateral` into a
+`midnightSupplyCollateralTakeBorrow`, `midnightSupplyCollateral`, or
+`midnightSupplyCollateralMakeBorrow` into a
 market created in the bundle, pass its struct via `market`; the Midnight
 `MarketUtils.toId(market)` must equal `marketId`. For a first
-`midnightSupplyCollateral` only, `assetPaid` is a fallback when no `market` is
-passed: set it to `collateralParams[collateralIndex].token`. The override is
+`midnightSupplyCollateral` or `midnightSupplyCollateralMakeBorrow`,
+`assetPaid` is a fallback when no `market` is passed: set it to
+`collateralParams[collateralIndex].token`. The override is
 not checked, and a wrong address lets the `assetsPaid` cap pass without
-measuring anything.
+measuring anything. It is also the token the approval check allows to Midnight
+and MidnightBundlesV2.
 `midnightSupplyBlueMakeLend` checks both the sender's exact debit of the full
 parked amount and the BlueBuyCallback's supply-share increase over the whole
 bundle. For wNative loan tokens, the debit measurement adds ETH sent to the net
@@ -406,8 +416,10 @@ throws `SlippageCheckUnavailableError`.
 `toSimulationLimits` also supports a funded maker publication produced by
 `supplyCollateralMakeBorrow`: `tx.action.type` must be `midnightCancelAndMake`,
 `collateralSupplies` must be non-empty, and `blueSupply` must be `undefined`.
-It emits one `midnightSupplyCollateral` operation per distinct index, preserving
-first-seen order and summing repeated indices. MidnightBundlesV2 acts for
+It emits one operation per distinct collateral index, preserving first-seen
+order and summing repeated indices: a non-zero root uses
+`midnightSupplyCollateralMakeBorrow`, while a zero root uses
+`midnightSupplyCollateral`. MidnightBundlesV2 acts for
 `msg.sender`, so each operation uses `owner` as its collateral account;
 `onBehalf` cannot change that. If the maker publishes supplies at more than one
 index, omit `expected` because its quote cannot be assigned to an individual
@@ -422,16 +434,13 @@ Blue parking with collateral supplies, contain unfunded publications, or
 contain cancellations only—remain unsupported; pass `limits: "none"` only
 when no covered operation is present.
 
-The action records `nativeAmount`. The collateral-only
-(`supplyCollateralMakeBorrow`) path ignores it: MidnightBundlesV2 wraps any
-native value into wNative before pulling the collateral, so `assetsPaid` caps
-only the sender's wNative debit; these limits do not bound ETH sent as
-`tx.value`. To bound it separately, add a caller-supplied
-`nativeBalanceAssertion` to the maker transaction's `assertAfter`, using a bound
-derived from the sender's pre-transaction native balance. No
-`assetPaid: ethAddress` is added. For Blue parking, the helper quotes the full
-amount parked. When the loan token is wNative, the check adds the sender's ETH
-sent to the net wNative change, so native funding needs no quote adjustment.
+When supplied collateral is wNative, the check counts ETH sent plus the
+sender's net wNative change against `assetsPaid`, so native funding needs no
+quote adjustment. Sending value when no supplied collateral is wNative, or on
+a chain without registered wNative, throws `SlippageCheckUnavailableError`.
+For Blue parking, the helper quotes the full amount parked. When the loan token
+is wNative, the check adds the sender's ETH sent to the net wNative change, so
+native funding needs no quote adjustment.
 
 After fulfilling the maker output's token-approval and Midnight-authorization
 requirements, pass its action through the helper before simulation:
@@ -560,10 +569,101 @@ an in-kind redeem delivers per market, and `penalty`/`deallocations` bound a
 Vault V2 force exit's realized economics — `penalty` and `deallocations` are
 checked only when quoted and never zero-rejected.
 
-Preview authorizations and every operation type require a Morpho Blue address
+Preview authorizations, final-mode Blue authorization signatures, and every operation type require a Morpho Blue address
 registered in blue-sdk's `getChainAddresses`; otherwise
 `UnsupportedChainError` is thrown. Blue parking also requires registered
 Midnight and `midnightBlueBuyCallbackFactory` addresses.
+`midnightAuthorizationSignature` additionally requires registered Midnight and
+EcrecoverAuthorizer addresses.
+A missing required approval-registry address throws
+`ApprovalCheckUnavailableError`. Bundler spenders (`vaultBundlesV1`,
+`vaultExitBundlesV1`, `blueBundlesV1`) are allowed only where the registry lists
+them; on other chains, grants to them need a `limits.approvals` entry. Preview authorizations and final-mode Blue signatures with `limits: "none"`
+still require a registered Morpho Blue address and otherwise throw
+`UnsupportedChainError`.
+
+#### Approval allowlist
+
+With `SimulationLimits` or `SimulationInputLimits`, the simulator derives allowed approvals from each
+declared operation, its real vault or market token, the simulation sender, and
+spender addresses in the chain registry. `limits.approvals` adds entries to
+that set; it does not replace the derived entries. For example:
+
+```ts
+limits: {
+  operations: [operationLimit],
+  approvals: [
+    {
+      type: "token",
+      token: USDC,
+      owner: user,
+      spender: trustedContract,
+    },
+    {
+      type: "morphoAuthorization",
+      authorizer: user,
+      authorized: trustedContract,
+    },
+    {
+      type: "midnightAuthorization",
+      onBehalf: user,
+      authorized: trustedContract,
+    },
+  ],
+}
+```
+
+The check rejects sender-granted ERC-20 allowances, ERC-721 token/operator
+approvals, Permit2 approvals and permits, Morpho authorizations, and Midnight
+`setIsAuthorized` grants on the registered Midnight contract that are outside the derived-plus-explicit set. It checks events across preparation and
+user calls, and checks pending preview authorization requests before
+`eth_simulateV1`, including permits that may be used outside this bundle.
+Permit2 is optional: chains without a registered address do not derive Permit2
+spenders, but Permit2-topic events are still decoded from any emitter and
+checked against the allowlist.
+Approvals of zero amount and revocations are allowed. The simulator does not
+bound approval amounts, restrict call targets or recipients, or infer allowed
+spenders from transaction calldata. Vault deposits additionally allow the
+subject token directly to the vault; Blue pay-in legs additionally allow it
+directly to Morpho Blue. Midnight pay-ins allow the paid token, read from
+the pinned Midnight market or, for Blue parking (`midnightSupplyBlueMakeLend`),
+from its declared `loanToken`, to Midnight and MidnightBundlesV2. For a first
+`midnightSupplyCollateral` or `midnightSupplyCollateralMakeBorrow` into a
+market the bundle creates, with no `market` struct, the explicit `assetPaid` is
+the allowed token. Sender ERC-721
+`Approval` and `ApprovalForAll` grants are always rejected and cannot be
+allowlisted. Every Midnight operation allows a grant to `midnightBundlesV2`;
+`midnightSupplyCollateralMakeBorrow` (emitted for
+`supplyCollateralMakeBorrow`) and `midnightSupplyBlueMakeLend` also allow
+`priceRatifierV1` and `rateRatifierV1`; direct `midnightSupplyCollateral`
+allows only `midnightBundlesV2` and its token approvals.
+Grants are checked whenever the sender is either `onBehalf` or `caller`,
+whichever contract calls Midnight, including `MidnightBundlesV2` and
+`EcrecoverAuthorizer`; a sender-called grant for another account needs an
+explicit matching `midnightAuthorization` entry.
+Ratifier root ratification (`SetIsRootRatified*` on `priceRatifierV1` /
+`rateRatifierV1`) is not checked by `limits.approvals`.
+ERC-777 operator grants (`authorizeOperator`) are not checked.
+`limits: "none"` opts out of this check as
+well as all limit checks.
+
+Unexpected grants throw `UnexpectedTokenApprovalError` with `token`, `owner`,
+`spender`, `source` (`"event"` or `"authorization"`), and `allowlistable`, or
+`UnexpectedMorphoAuthorizationError` with `authorizer`, `authorized`, `source`,
+and `allowlistable`, or `UnexpectedMidnightAuthorizationError` with `onBehalf`,
+`authorized`, and `allowlistable`. These errors instruct the consumer not to
+sign the request. A Midnight grant, or a token or Morpho grant whose
+`allowlistable` is `true`, can be added to `limits.approvals`; ERC-721 grants,
+Permit2 or Morpho signatures that name another verifying contract, and
+EcrecoverAuthorizer signatures that name another verifying contract are never
+allowlistable. If the subject token or
+required chain registry address cannot be resolved, the RPC response omits logs
+for a preparation or user call, or an approval-topic event cannot be decoded,
+`ApprovalCheckUnavailableError` fails the simulation closed.
+A missing or zero `midnightBundlesV2` address throws `ApprovalCheckUnavailableError`, while
+missing Morpho Blue or Midnight addresses still throw `UnsupportedChainError`.
+Missing `priceRatifierV1` or `rateRatifierV1` addresses required by an operation
+also throw `ApprovalCheckUnavailableError`.
 
 Minimums — `assetsReceived`, supply/vault `sharesMinted`, debt `sharesBurned`,
 `collateralSupplied`, `debtRepaid`, `unitsBought` (net Midnight position units,
@@ -574,7 +674,8 @@ supply/vault `sharesBurned`, debt `sharesMinted`, `collateralWithdrawn`,
 units, on `midnightTakeBorrow`) and the `collateralWithdrawals` position
 decrease — must be at most `floor(quote * (1 + tolerance))`.
 `collateralSupplied` and `collateralWithdrawn` are measured on the Blue
-position's `collateral`, except on `midnightSupplyCollateral`, where
+position's `collateral`, except on `midnightSupplyCollateral` and
+`midnightSupplyCollateralMakeBorrow`, where
 `collateralSupplied` is the Midnight collateral slot delta. Equality and
 favorable movement pass.
 
@@ -763,6 +864,10 @@ For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`;
 `simulate()` rejects a raw limit whose `account` is not the bundle sender with
 `SlippageCheckUnavailableError`, because MidnightBundlesV2 creates the
 BlueBuyCallback for `msg.sender`.
+The same applies to `midnightSupplyCollateralMakeBorrow`: its helper `account`
+is `owner`, and `simulate()` rejects a raw limit whose `account` is not the
+bundle sender with `SlippageCheckUnavailableError` (omit it or use the sender),
+because MidnightBundlesV2 `cancelAndMake` supplies collateral for `msg.sender`.
 
 Derived limits catch on-chain divergence from the encoded calldata, not wrong
 inputs; pass the UI's quote through `expected`.
@@ -780,8 +885,8 @@ inputs; pass the UI's quote through `expected`.
 | `blueWithdraw` | `assetsReceived` net of penalty and fee (assets mode); `sharesBurned` in shares mode | `sharesBurned` (assets mode), `assetsReceived` (shares mode) | — |
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
-| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner` | — | — |
-| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One `midnightSupplyCollateral` operation per distinct collateral index; repeated indices are summed in first-seen order | — | — |
+| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
 | `midnightCancelAndMake` with `blueSupply` and no `collateralSupplies` (emits `midnightSupplyBlueMakeLend`) | exact `assetsPaid` (`blueSupply.assets`): sender debit of the full parked amount; for wNative, counts ETH sent plus net wNative change; combining with collateral supplies is unsupported | `sharesMinted` (the BlueBuyCallback's expected Blue supply-share increase) | Offer fillability |
 | `midnightRedeem` | `assetsReceived`, `creditRedeemed` (`units`); `account` is `options.onBehalf ?? owner`, `receiver` is `options.receiver ?? owner` | — | — |
 | `midnightTakeLend` | `assetsPaid` and `unitsBought`; always measures the sender, rejects any explicit `account` or `receiver`; a non-owner `options.receiver` throws `LimitAccountMismatchError` | — | — |
@@ -878,6 +983,9 @@ Preview authorizations remain an adapter from `getRequirements()` through
 `toSimulationAuthorizations` into preparation calls. No permission or nonce
 read-back policy runs. Successful execution establishes success under the
 simulated permissions; it does not prove that a future signature is valid.
+`midnightAuthorizationSignature` prepares
+`Midnight.setIsAuthorized(authorized, isAuthorized, sender)` from the sender;
+the signed EcrecoverAuthorizer payload is not submitted in preview.
 Preparation and user-transaction failures still propagate. A preparation that
 emits asset transfers fails closed with `SimulationValidationError`; simulate
 that authorization as a transaction in final mode to check its asset flows.
@@ -887,6 +995,29 @@ rejected because they carry the ERC-20 Transfer topic.
 Tokens that move value without emitting logs remain outside this check.
 Final mode executes actual calldata without preparation. State reads and preparation calls do not
 receive public transaction indices.
+
+Pass the same `authorizations` descriptors in final mode to require signature-use
+evidence: each ERC-2612 permit needs a token `Approval(owner, spender, value)`;
+each Blue signature needs a registered Morpho `IncrementNonce` for its authorizer
+and signed nonce; each EcrecoverAuthorizer signature needs a registered
+`SetIsAuthorized` event matching the verifying contract, `authorizer`,
+`authorized`, `isAuthorized`, and signed `nonce`. Its signer field is not
+checked. Missing evidence throws `UnusedAuthorizationError` with the zero-based
+`authorizationIndex` and request. These checks run even with
+`limits: "none"` and use only user-transaction logs, not reads or preparations.
+Permit2 signature transfers have no use check: invalid signatures revert when
+submitted, but an omitted signature transfer is not detected and its signature
+can remain valid until its deadline. Direct approval descriptors add no final-mode preparation or use check.
+The events establish use evidence, not independent cryptographic verification:
+ERC-2612 Approval events do not identify a signature or nonce. A token can also
+emit Approval during `transferFrom`: if the remaining allowance equals the
+permit's value, that event can satisfy the check even when the permit was skipped.
+Conversely, a token that emits a clamped allowance instead of the signed value
+fails this exact-value check, even when its permit ran successfully.
+Blue IncrementNonce
+events identify consumption of an authorizer's nonce, not the signed `authorized`
+operator or `isAuthorized` value. Another signed grant or revoke at that nonce
+would supply the same evidence; this check does not distinguish those requests.
 
 ### Revert messages and bytes
 

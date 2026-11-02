@@ -24,7 +24,10 @@ import {
   VaultAssetMismatchError,
   type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
-import { MaximumFeeExceededError } from "@tetherto/wdk-wallet";
+import {
+  MaximumFeeExceededError,
+  UnsupportedOperationError,
+} from "@tetherto/wdk-wallet";
 import type {
   BorrowResult,
   RepayResult,
@@ -386,6 +389,8 @@ export interface PreparedMorphoSupply {
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -536,6 +541,8 @@ export interface PreparedMorphoWithdraw {
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -959,23 +966,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   private _chainContext: ChainContext | undefined = undefined;
   private _latestChainObservation: Promise<ChainContext> | undefined =
     undefined;
-  private _viemClient:
-    | {
-        readonly chainId: number;
-        readonly account: Address;
-        readonly value: ViemPublicClient;
-      }
-    | undefined = undefined;
-  private _morphoClient:
-    | {
-        readonly chainId: number;
-        readonly viemClient: ViemPublicClient;
-        readonly value: MorphoClientType;
-      }
-    | undefined = undefined;
-  private _marketParams:
-    | { readonly chainId: number; readonly value: MarketParams }
-    | undefined = undefined;
 
   /**
    * Creates a new interface to the Morpho protocol for EVM blockchains.
@@ -1239,6 +1229,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
+   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
+   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
+   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
@@ -1250,6 +1243,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -1298,6 +1293,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
+   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
+   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
+   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {Error} when configuration or quoting fails.
    * @example
@@ -1537,6 +1535,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -1786,6 +1786,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -2000,6 +2002,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -2248,6 +2252,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -2507,6 +2513,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   include a hint when the user operation may already be in flight.
    * @throws {PaymasterApprovalSpenderMismatchError} when an ERC-4337 token-paymaster quote names a
    *   fee-token spender other than the configured `paymasterAddress`.
+   * @throws {UnsupportedOperationError} when the installed WDK lacks the signing hook
+   *   needed to revalidate the chain before ERC-4337 signing and submission.
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
@@ -2931,10 +2939,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getMarketParams(context: ChainContext): Promise<MarketParams> {
-    if (this._marketParams?.chainId === context.chainId) {
-      return this._marketParams.value;
-    }
-
     const target = this._resolveMarketTarget();
 
     this._assertTargetChain(target, context);
@@ -2944,7 +2948,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         target.marketParams instanceof MarketParams
           ? target.marketParams
           : new MarketParams(target.marketParams);
-      this._marketParams = { chainId: context.chainId, value };
       return value;
     }
 
@@ -2958,7 +2961,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       market.params instanceof MarketParams
         ? market.params
         : new MarketParams(market.params);
-    this._marketParams = { chainId: context.chainId, value };
 
     return value;
   }
@@ -2968,21 +2970,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<MorphoClientType> {
     const viemClient = await this._getViemClient(context);
 
-    if (
-      this._morphoClient?.chainId !== context.chainId ||
-      this._morphoClient.viemClient !== viemClient
-    ) {
-      const value = viemClient.extend(
-        morphoViemExtension({
-          supportSignature: this._options.supportSignature ?? false,
-          supportDeployless: this._options.supportDeployless,
-          metadata: this._options.metadata,
-        }),
-      ).morpho;
-      this._morphoClient = { chainId: context.chainId, viemClient, value };
-    }
-
-    return this._morphoClient.value;
+    return viemClient.extend(
+      morphoViemExtension({
+        supportSignature: this._options.supportSignature ?? false,
+        supportDeployless: this._options.supportDeployless,
+        metadata: this._options.metadata,
+      }),
+    ).morpho;
   }
 
   private _getViemTransport(): Transport {
@@ -3010,22 +3004,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<ViemPublicClient> {
     const address = (await this._evmAccount.getAddress()) as Address;
 
-    if (
-      this._viemClient &&
-      this._viemClient.chainId === context.chainId &&
-      isAddressEqual(this._viemClient.account, address)
-    ) {
-      return this._viemClient.value;
-    }
-
-    const value = createClient({
+    return createClient({
       account: address,
       chain: this._getViemChain(context.chainId),
       transport: this._getViemTransport(),
     }).extend(publicActions) as ViemPublicClient;
-    this._viemClient = { chainId: context.chainId, account: address, value };
-
-    return value;
   }
 
   private async _getChainContext(): Promise<ChainContext> {
@@ -3305,6 +3288,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<SupplyResult> {
     if (this._evmAccount instanceof WalletAccountEvmErc4337) {
       const account = this._evmAccount;
+      if (typeof Reflect.get(account, "_signUserOperation") !== "function")
+        throw new UnsupportedOperationError(
+          "_signUserOperation (install the pinned @tetherto/wdk-wallet-evm-erc-4337 version to restore chain revalidation before signing and submission)",
+        );
       const walletConfig: unknown = Reflect.get(account, "_config");
       const effectiveConfig = {
         ...(typeof walletConfig === "object" && walletConfig !== null
@@ -3341,10 +3328,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       // domain, and the fee-token approval to the configured paymaster.
       const chainBoundAccount = new Proxy(account, {
         // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
-        get(target, property, receiver) {
+        get: (target, property, receiver) => {
           if (property === "_getChainId")
             return async () => BigInt(prepared.context.chainId);
           const value: unknown = Reflect.get(target, property, receiver);
+          if (property === "_signUserOperation" && typeof value === "function")
+            return async (...args: unknown[]) => {
+              // Reject switches during WDK's build before it signs.
+              await this._revalidate(prepared.context);
+              const signed: unknown = await Reflect.apply(
+                value,
+                receiver,
+                args,
+              );
+              // WDK calls the bundler immediately after this hook returns.
+              await this._revalidate(prepared.context);
+              return signed;
+            };
           if (property !== "_getSmartAccount" || typeof value !== "function")
             return value;
           return async (...args: unknown[]) => {

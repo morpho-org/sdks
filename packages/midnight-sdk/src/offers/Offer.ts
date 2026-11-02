@@ -16,10 +16,10 @@ import { OfferUtils } from "./OfferUtils.js";
  * flow into `Offer.from`, `Group.create`, `Tree.create`, or
  * take-side conversion helpers. Use {@link Offer.create} instead for new maker
  * offers so deterministic fields are validated before grouping or signing.
- * The `group` field is optional. When omitted, {@link Offer.group} lazily
- * derives the content-addressed singleton group id from this offer's
- * zero-group hash. `Group.create` copies offers into a shared group and
- * overrides this field on the copies it owns.
+ * The `group` field is optional. When omitted, the `Offer.group` getter derives
+ * the content-addressed singleton group id from this offer's zero-group hash.
+ * `Group.create` copies offers into a shared group and overrides this field on
+ * the copies it owns.
  *
  * @example
  * ```ts
@@ -99,11 +99,11 @@ export interface IOffer {
  * `Group.create` for shared-consumption ladders or directly to `Tree.create`
  * for standalone offers. API/take-side code can convert a plain `IOffer`
  * into this class before ABI encoding. The class resolves the onchain `group`
- * field lazily. Standalone offers derive their content-addressed singleton
- * group id from the offer's zero-group hash; `Group.create` copies offers and
- * overrides the group on those copies when several offers share one
- * consumption bucket. Offers hydrated from API or decoded data may also carry
- * a known group id.
+ * field when accessed. Standalone offers derive their
+ * content-addressed singleton group id from the offer's zero-group hash;
+ * `Group.create` copies offers and overrides the group on those copies when
+ * several offers share one consumption bucket. Offers hydrated from API or
+ * decoded data may also carry a known group id.
  *
  * @example
  * ```ts
@@ -163,11 +163,7 @@ export class Offer {
   /** Midnight tick. */
   public readonly tick: bigint;
 
-  private cachedGroup: Hash | undefined;
-
-  private cachedHash: Hash | undefined;
-
-  private cachedOnchainHash: Hash | undefined;
+  private readonly explicitGroup: Hash | undefined;
 
   /**
    * Whether the group id was supplied at construction rather than derived.
@@ -218,7 +214,6 @@ export class Offer {
       offer instanceof Offer
         ? offer.hasExplicitGroup
         : offer.group !== undefined;
-    this.cachedGroup = this.hasExplicitGroup ? offer.group : undefined;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;
@@ -227,6 +222,7 @@ export class Offer {
     this.maxUnits = BigInt(offer.maxUnits);
     this.maxAssets = BigInt(offer.maxAssets);
     this.continuousFeeCap = BigInt(offer.continuousFeeCap);
+    this.explicitGroup = this.hasExplicitGroup ? offer.group : undefined;
   }
 
   /**
@@ -285,12 +281,11 @@ export class Offer {
   /**
    * Consumption group id encoded into this offer.
    *
-   * When no group id was provided, the value is computed on first access by
-   * hashing this offer with the protocol zero group id, then hashing that
-   * result as a singleton group. The computed value is cached because offer
-   * hashing is resource-intensive. This is equivalent to
-   * `GroupUtils.hash([offer])`, but is computed directly to keep the offers
-   * layer from importing signature helpers and creating a circular dependency.
+   * When no group id was provided, the value is derived on access by hashing
+   * this offer with the protocol zero group id, then hashing that result as a
+   * singleton group. This is equivalent to `GroupUtils.hash([offer])`, but is
+   * computed directly to keep the offers layer from importing signature
+   * helpers and creating a circular dependency.
    *
    * @returns Consumption group id.
    * @example
@@ -335,15 +330,13 @@ export class Offer {
    * ```
    */
   public get group(): Hash {
-    this.cachedGroup ??= keccak256(OfferUtils.groupHash(this));
-    return this.cachedGroup;
+    return this.explicitGroup ?? keccak256(OfferUtils.groupHash(this));
   }
 
   /**
    * Canonical protocol offer hash for this offer.
    *
-   * The hash includes {@link Offer.group}. It is computed lazily and cached
-   * because hashing includes market hashing and ABI encoding.
+   * The hash includes {@link Offer.group} and is computed when accessed.
    *
    * @returns Offer hash.
    * @example
@@ -388,8 +381,7 @@ export class Offer {
    * ```
    */
   public get hash(): Hash {
-    this.cachedHash ??= OfferUtils.hash(this);
-    return this.cachedHash;
+    return OfferUtils.hash(this);
   }
 
   /**
@@ -402,7 +394,7 @@ export class Offer {
    * `offers`: `buildDescriptor` replaces both the default group and a
    * `Group.create` group.
    *
-   * @returns The cached on-chain offer hash.
+   * @returns The on-chain offer hash.
    * @throws {viem.InvalidAddressError} when an address has an invalid mixed-case checksum.
    * @throws {viem.IntegerOutOfRangeError} when a uint field overflows its ABI size.
    * @example
@@ -441,8 +433,7 @@ export class Offer {
    * ```
    */
   public get onchainHash(): Hash {
-    this.cachedOnchainHash ??= OfferUtils.onchainHash(this);
-    return this.cachedOnchainHash;
+    return OfferUtils.onchainHash(this);
   }
 
   /**

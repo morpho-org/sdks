@@ -11,6 +11,7 @@ export type {
   Erc20ApprovalAuthorization,
   Erc2612PermitAuthorization,
   Erc2612PermitTypedData,
+  MidnightAuthorizationSignature,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
   SimulationAuthorization,
@@ -22,6 +23,7 @@ export type {
 // Errors (for instanceof checks by consumers)
 export {
   AmbiguousExpectedQuoteError,
+  ApprovalCheckUnavailableError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
@@ -38,12 +40,17 @@ export {
   SimulationRevertedError,
   SimulationValidationError,
   SlippageCheckUnavailableError,
+  UnexpectedMidnightAuthorizationError,
+  UnexpectedMorphoAuthorizationError,
   UnexpectedSimulationError,
+  UnexpectedTokenApprovalError,
   UnsupportedChainError,
   UnsupportedLimitActionError,
   UnsupportedOperationError,
+  UnusedAuthorizationError,
 } from "./errors.js";
 export type {
+  ApprovalLimit,
   AssetsOrShares,
   BlueMarketOperationSubject,
   BlueMarketOperationType,

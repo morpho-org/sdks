@@ -1,4 +1,4 @@
-import { blueAbi } from "@morpho-org/morpho-sdk/abis";
+import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { type Address, decodeFunctionData, erc20Abi, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
@@ -8,13 +8,21 @@ const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const MORPHO: Address = getAddress(
   "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
 );
+const MIDNIGHT: Address = getAddress(
+  "0x7777777777777777777777777777777777777777",
+);
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
 
 const prepare = (authorizations: SimulationAuthorization[]) =>
-  prepareAuthorizations({ authorizations, owner: OWNER, morpho: MORPHO });
+  prepareAuthorizations({
+    authorizations,
+    owner: OWNER,
+    morpho: MORPHO,
+    midnight: MIDNIGHT,
+  });
 
 describe("prepareAuthorizations", () => {
   test("erc20Approval → approve(spender, amount)", () => {
@@ -146,6 +154,42 @@ describe("prepareAuthorizations", () => {
         args: [typedData.message.authorized, typedData.message.isAuthorized],
       },
     );
+  });
+
+  test("midnightAuthorizationSignature prepares setIsAuthorized from the sender", () => {
+    const typedData = {
+      domain: { chainId: 1, verifyingContract: MORPHO },
+      primaryType: "Authorization" as const,
+      types: {
+        Authorization: [
+          { name: "authorizer", type: "address" },
+          { name: "authorized", type: "address" },
+          { name: "isAuthorized", type: "bool" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      message: {
+        authorizer: OWNER,
+        authorized: SPENDER,
+        isAuthorized: true,
+        nonce: 5n,
+        deadline: 102n,
+      },
+    };
+    const call = prepare([
+      { type: "midnightAuthorizationSignature", typedData },
+    ])[0]!.calls[0]!;
+
+    expect(call.from).toBe(OWNER);
+    expect(call.to).toBe(MIDNIGHT);
+    expect(call.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: midnightAbi, data: call.data }),
+    ).toMatchObject({
+      functionName: "setIsAuthorized",
+      args: [SPENDER, true, OWNER],
+    });
   });
 
   test("multiple authorizations keep their indices", () => {

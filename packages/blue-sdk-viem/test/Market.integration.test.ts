@@ -1,7 +1,14 @@
-import { addressesRegistry, ChainId, MarketParams } from "@morpho-org/blue-sdk";
+import {
+  addressesRegistry,
+  ChainId,
+  DEAD_ADDRESS,
+  MarketParams,
+} from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
+import { parseUnits } from "viem";
+import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { Market } from "../src/augment/Market.js";
 import { blueAbi } from "../src/index.js";
@@ -14,6 +21,7 @@ const { usdc_wstEth, usdc_idle, eth_wstEth, crvUsd_stkcvx2BTC } =
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
     const expectedData = new Market({
+      deadSupplyShares: 0n,
       params: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
@@ -32,6 +40,7 @@ describe("augment/Market", () => {
 
   test("should fetch price and rate if idle market", async ({ client }) => {
     const expectedData = new Market({
+      deadSupplyShares: 0n,
       params: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -83,6 +92,7 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
+      deadSupplyShares: 0n,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -112,6 +122,7 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
+      deadSupplyShares: 0n,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -125,5 +136,37 @@ describe("augment/Market", () => {
     const value = await Market.fetch(params.id, client);
 
     expect(value).toStrictEqual(expectedData);
+  });
+
+  test("behavior: reads the dead deposit's supply shares in both fetch paths", async ({
+    client,
+  }) => {
+    const assets = parseUnits("10", 6);
+    await client.deal({ erc20: usdc_wstEth.loanToken, amount: assets });
+    await client.approve({
+      address: usdc_wstEth.loanToken,
+      args: [blue, assets],
+    });
+    await client.writeContract({
+      address: blue,
+      abi: blueAbi,
+      functionName: "supply",
+      args: [usdc_wstEth, assets, 0n, DEAD_ADDRESS, "0x"],
+    });
+
+    const [forced, multicall, [deadSupplyShares]] = await Promise.all([
+      Market.fetch(usdc_wstEth.id, client, { deployless: "force" }),
+      Market.fetch(usdc_wstEth.id, client, { deployless: false }),
+      readContract(client, {
+        address: blue,
+        abi: blueAbi,
+        functionName: "position",
+        args: [usdc_wstEth.id, DEAD_ADDRESS],
+      }),
+    ]);
+
+    expect(deadSupplyShares).toBeGreaterThan(0n);
+    expect(forced.deadSupplyShares).toBe(deadSupplyShares);
+    expect(forced).toStrictEqual(multicall);
   });
 });

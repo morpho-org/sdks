@@ -186,6 +186,12 @@ function mockMarketReads(
     result: marketTuple,
   });
   mockRead(handle, {
+    address: ADDRESSES.blue,
+    abi: blueAbi,
+    functionName: "position",
+    result: positionTuple,
+  });
+  mockRead(handle, {
     address: params.oracle,
     abi: blueOracleAbi,
     functionName: "price",
@@ -276,6 +282,12 @@ function mockVaultMulticallReads(
     abi: metaMorphoFactoryIsMetaMorphoAbi,
     functionName: "isMetaMorpho",
     result: isMetaMorphoV1_1,
+  });
+  mockRead(handle, {
+    address: VAULT,
+    abi: metaMorphoAbi,
+    functionName: "balanceOf",
+    result: 56n,
   });
 }
 
@@ -602,6 +614,7 @@ describe("fetchMarket", () => {
       hasPrice: true,
       price: 123n,
       rateAtTarget: 456n,
+      deadSupplyShares: 1_000_000_000n,
     });
 
     const market = await fetchMarket(ID, handle.client);
@@ -610,6 +623,7 @@ describe("fetchMarket", () => {
     expect(market.params.id).toBe(ID);
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
+    expect(market.deadSupplyShares).toBe(1_000_000_000n);
   });
 
   test("error: deployless mismatch does not fall back to multicall", async () => {
@@ -621,6 +635,7 @@ describe("fetchMarket", () => {
       hasPrice: true,
       price: 123n,
       rateAtTarget: 456n,
+      deadSupplyShares: 1_000_000_000n,
     });
     mockMarketReads(handle);
 
@@ -638,6 +653,7 @@ describe("fetchMarket", () => {
       hasPrice: true,
       price: 123n,
       rateAtTarget: 456n,
+      deadSupplyShares: 1_000_000_000n,
     });
     mockMarketReads(handle);
 
@@ -661,6 +677,12 @@ describe("fetchMarket", () => {
       functionName: "market",
       result: marketTuple,
     });
+    mockRead(handle, {
+      address: ADDRESSES.blue,
+      abi: blueAbi,
+      functionName: "position",
+      result: positionTuple,
+    });
 
     await expect(
       fetchMarket(ID, handle.client, { deployless: false }),
@@ -682,6 +704,7 @@ describe("fetchMarket", () => {
           hasPrice: false,
           price: 0n,
           rateAtTarget: 0n,
+          deadSupplyShares: 1_000_000_000n,
         });
       } else {
         mockRead(handle, {
@@ -695,6 +718,12 @@ describe("fetchMarket", () => {
           abi: blueAbi,
           functionName: "market",
           result: marketTuple,
+        });
+        mockRead(handle, {
+          address: ADDRESSES.blue,
+          abi: blueAbi,
+          functionName: "position",
+          result: positionTuple,
         });
       }
 
@@ -717,6 +746,7 @@ describe("fetchMarket", () => {
       hasPrice: false,
       price: 0n,
       rateAtTarget: 0n,
+      deadSupplyShares: 1_000_000_000n,
     });
 
     const market = await fetchMarket(idle.id, handle.client, {});
@@ -744,6 +774,7 @@ describe("fetchMarket", () => {
       hasPrice: true,
       price: 123n,
       rateAtTarget: 456n,
+      deadSupplyShares: 1_000_000_000n,
     });
     const deploylessMarket = await fetchMarket(ID, deploylessHandle.client);
     expect(deploylessMarket.rateAtTarget).toBe(456n);
@@ -821,6 +852,12 @@ describe("fetchMarket", () => {
       abi: blueAbi,
       functionName: "market",
       result: marketTuple,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.blue,
+      abi: blueAbi,
+      functionName: "position",
+      result: positionTuple,
     });
 
     const market = await fetchMarket(idle.id, handle.client, {
@@ -1429,6 +1466,7 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
+      deadShares: 1_000_000_000n,
     });
 
     const vault = await fetchVault(VAULT, handle.client);
@@ -1437,6 +1475,7 @@ describe("vault fetchers", () => {
     expect(vault.address).toBe(VAULT);
     expect(vault.withdrawQueue).toEqual([ID]);
     expect(vault.lostAssets).toBe(55n);
+    expect(vault.deadShares).toBe(1_000_000_000n);
   });
 
   test("fetchVault throws UnknownFactory when the chain has no MetaMorpho factory", async () => {
@@ -1606,6 +1645,12 @@ describe("vault fetchers", () => {
     mockRead(handle, {
       address: VAULT,
       abi: metaMorphoAbi,
+      functionName: "balanceOf",
+      result: 56n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
       functionName: "supplyQueue",
       result: ID,
     });
@@ -1742,6 +1787,12 @@ describe("vault fetchers", () => {
       functionName: "isMetaMorpho",
       result: false,
     });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "balanceOf",
+      result: 56n,
+    });
 
     await expect(fetchVault(VAULT, handle.client, {})).rejects.toThrow(
       UnknownOfFactory,
@@ -1795,6 +1846,7 @@ describe("vault fetchers", () => {
         lostAssets: 55n,
         supplyQueue: [ID],
         withdrawQueue: [ID],
+        deadShares: 1_000_000_000n,
       }),
       encodeReadResult(marketQueryAbi, "query", {
         marketParams: marketParamsTuple(),
@@ -1802,6 +1854,7 @@ describe("vault fetchers", () => {
         hasPrice: true,
         price: 123n,
         rateAtTarget: 456n,
+        deadSupplyShares: 1_000_000_000n,
       }),
     ]);
     mockVaultMarketConfigReads(handle);

@@ -5,9 +5,14 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   ChainIdMismatchError as SdkChainIdMismatchError,
+  InsufficientDeadSharesError as SdkInsufficientDeadSharesError,
   MissingContractCodeError as SdkMissingContractCodeError,
+  MissingDeadSharesDataError as SdkMissingDeadSharesDataError,
 } from "@morpho-org/morpho-sdk";
-import { MaximumFeeExceededError as WdkMaximumFeeExceededError } from "@tetherto/wdk-wallet";
+import {
+  MaximumFeeExceededError as WdkMaximumFeeExceededError,
+  UnsupportedOperationError as WdkUnsupportedOperationError,
+} from "@tetherto/wdk-wallet";
 import { expect, test } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError as SourceBlueBundlesV1DeadlineExceedsWindowError,
@@ -21,21 +26,29 @@ import {
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   ChainIdMismatchError,
+  InsufficientDeadSharesError,
   InvalidTransactionHashError,
   InvalidTransactionMaxFeeError,
   MalformedTokenMetadataError,
   MaximumFeeExceededError,
   MissingContractCodeError,
+  MissingDeadSharesDataError,
   MissingPermitDomainNameError,
   MissingWalletProviderError,
   PaymasterApprovalGuardUnavailableError,
   PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
   UnknownTokenError,
+  UnsupportedOperationError,
 } from "./index.js";
 
 test("re-exports ChainIdMismatchError by identity", () => {
   expect(ChainIdMismatchError).toBe(SdkChainIdMismatchError);
+});
+
+test("re-exports the dead-deposit errors by identity", () => {
+  expect(InsufficientDeadSharesError).toBe(SdkInsufficientDeadSharesError);
+  expect(MissingDeadSharesDataError).toBe(SdkMissingDeadSharesDataError);
 });
 
 test("re-exports MissingContractCodeError by identity", () => {
@@ -83,6 +96,10 @@ test("re-exports InvalidTransactionMaxFeeError by identity", () => {
 
 test("re-exports MaximumFeeExceededError by identity", () => {
   expect(MaximumFeeExceededError).toBe(WdkMaximumFeeExceededError);
+});
+
+test("re-exports UnsupportedOperationError by identity", () => {
+  expect(UnsupportedOperationError).toBe(WdkUnsupportedOperationError);
 });
 
 test("re-exports PaymasterApprovalSpenderMismatchError by identity", () => {

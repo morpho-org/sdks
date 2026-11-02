@@ -1,9 +1,11 @@
 import {
+  AccrualVaultV2MorphoMarketV1AdapterV2,
   getChainAddresses,
   type MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import type { E2eScenario } from "@morpho-org/morpho-test";
+import { wrapE2eNative } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import {
   type Address,
@@ -20,7 +22,7 @@ import {
 } from "../../src/index.js";
 import { satisfyBlueBundlesV1Requirements } from "../helpers/blueBundlesV1.js";
 import { setUpSingleAdapterVaultV2 } from "../helpers/vaultV2.js";
-import { createE2eMarket, describeE2e, wrapE2eNative } from "./setup.js";
+import { createE2eMarket, describeE2e, seedE2eDeadDeposits } from "./setup.js";
 
 const scenario: E2eScenario = {
   name: "vaultV2",
@@ -38,7 +40,7 @@ const allocatedAssets = parseEther("6");
 const forceDeallocatePenalty = parseUnits("0.01", 18);
 
 /**
- * Deploys a Vault V2 over a fresh market and deposits `depositAssets`, `allocatedAssets`
+ * Deploys a Vault V2 over a fresh market, seeds both with a dead deposit, and deposits `depositAssets`, `allocatedAssets`
  * of which sit in the market. With `liquidityAdapter`, the vault pulls missing withdraw liquidity
  * from that market. `forceDeallocatePenalty` sets the adapter's force-deallocation penalty.
  */
@@ -58,13 +60,19 @@ const setUpVault = async (
       liquidityMarket: params.liquidityAdapter ? market : undefined,
       forceDeallocatePenalty: params.forceDeallocatePenalty,
     });
+  await seedE2eDeadDeposits(client, { chainId: params.chainId, market, vault });
+  const deadAssets = await client.readContract({
+    address: vault,
+    abi: erc4626Abi,
+    functionName: "totalAssets",
+  });
   await depositAndAllocate({
     assets: depositAssets,
     perMarket: [{ market, assets: allocatedAssets }],
   });
   const shares = await client.balanceOf({ erc20: vault });
 
-  return { market, vault, adapter, shares };
+  return { market, vault, adapter, shares, deadAssets };
 };
 
 const getState = async (
@@ -235,11 +243,10 @@ describeE2e(scenario, (test, { chainId }) => {
   test("redeem: force-deallocates the market position under a penalty, then redeems the remaining shares", async ({
     client,
   }) => {
-    const { market, vault, adapter, shares } = await setUpVault(client, {
-      chainId,
-      liquidityAdapter: false,
-      forceDeallocatePenalty,
-    });
+    const { market, vault, adapter, shares, deadAssets } = await setUpVault(
+      client,
+      { chainId, liquidityAdapter: false, forceDeallocatePenalty },
+    );
     const vaultV2 = client
       .extend(morphoViemExtension())
       .morpho.vaultV2(vault, chainId);
@@ -275,7 +282,47 @@ describeE2e(scenario, (test, { chainId }) => {
     expect(after.userAssets).toBe(depositAssets - penaltyAssets);
     expect(after.blueAssets).toBe(before.blueAssets - allocatedAssets);
     // The withdrawn penalty stays in the vault as an uncounted donation.
-    expect(after.vaultIdle).toBe(penaltyAssets);
-    expect(after.totalAssets).toBe(0n);
+    expect(after.vaultIdle).toBe(deadAssets + penaltyAssets);
+    expect(after.totalAssets).toBe(deadAssets);
+  });
+
+  test("deposit: builds when the liquidity market has no allocation yet", async ({
+    client,
+  }) => {
+    const market = await createE2eMarket(client, chainId);
+    const { vault, adapter, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: market.loanToken,
+        markets: [market],
+        liquidityMarket: market,
+      });
+    await seedE2eDeadDeposits(client, { chainId, market, vault });
+    await depositAndAllocate({ assets: depositAssets, perMarket: [] });
+    const assets = parseEther("1");
+    await wrapE2eNative(client, { wNative: market.loanToken, amount: assets });
+    const vaultV2 = client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(vault, chainId);
+    const before = await getState(client, { vault, market });
+
+    const vaultData = await vaultV2.getData();
+    const liquidityAdapter = vaultData.accrualLiquidityAdapter;
+    expect(liquidityAdapter?.address).toBe(adapter);
+    expect(
+      liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
+        liquidityAdapter.markets.map(({ id }) => id),
+    ).toStrictEqual([market.id]);
+    const deposit = vaultV2.deposit({
+      amount: assets,
+      userAddress: client.account.address,
+      vaultData,
+    });
+    await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await deposit.getRequirements(),
+    });
+    await client.sendTransaction(deposit.buildTx());
+
+    const after = await getState(client, { vault, market });
+    expect(after.blueAssets).toBe(before.blueAssets + assets);
   });
 });

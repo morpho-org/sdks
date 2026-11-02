@@ -1,4 +1,5 @@
 import type { Address, Hex } from "viem";
+import type { SimulationAuthorization } from "./authorizations.js";
 import type { OperationType, SlippageQuote } from "./limits.js";
 import type { Assertion, LogAssertion, RawLog } from "./types.js";
 
@@ -20,6 +21,11 @@ export const SIMULATION_ERROR_CODES = [
   "MISSING_EXPECTED_QUOTE",
   "AMBIGUOUS_EXPECTED_QUOTE",
   "UNSUPPORTED_LIMIT_ACTION",
+  "UNEXPECTED_TOKEN_APPROVAL",
+  "UNEXPECTED_MORPHO_AUTHORIZATION",
+  "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
+  "APPROVAL_CHECK_UNAVAILABLE",
+  "UNUSED_AUTHORIZATION",
 ] as const;
 
 /** Stable string discriminator for log aggregation and external mapping. */
@@ -36,6 +42,34 @@ export abstract class SimulationPackageError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = new.target.name;
+  }
+}
+
+/** A final-mode signed request has no matching use event in the user transactions. */
+export class UnusedAuthorizationError extends SimulationPackageError {
+  override readonly name = "UnusedAuthorizationError";
+  readonly code = "UNUSED_AUTHORIZATION";
+
+  /**
+   * Identify the signed request whose event evidence is missing.
+   * @param authorizationIndex - Zero-based index in the caller's authorizations.
+   * @param authorization - Signed request that was not used.
+   */
+  constructor(
+    public readonly authorizationIndex: number,
+    public readonly authorization: Extract<
+      SimulationAuthorization,
+      {
+        type:
+          | "erc2612Permit"
+          | "blueAuthorizationSignature"
+          | "midnightAuthorizationSignature";
+      }
+    >,
+  ) {
+    super(
+      `Authorization "${authorizationIndex}" (${authorization.type}) has no matching ${authorization.type === "erc2612Permit" ? "Approval" : authorization.type === "blueAuthorizationSignature" ? "IncrementNonce" : "SetIsAuthorized"} event in the bundle. Include and execute the signed request in the final transactions.`,
+    );
   }
 }
 
@@ -316,6 +350,112 @@ export class SlippageCheckUnavailableError extends SimulationPackageError {
   readonly code = "SLIPPAGE_CHECK_UNAVAILABLE";
 }
 
+/** A sender-granted token approval or permit is not allowed by the request. */
+export class UnexpectedTokenApprovalError extends SimulationPackageError {
+  override readonly name = "UnexpectedTokenApprovalError";
+  readonly code = "UNEXPECTED_TOKEN_APPROVAL";
+  /** Token or NFT collection that emitted or would receive the approval. */
+  readonly token: Address;
+  /** Account granting the approval. */
+  readonly owner: Address;
+  /** Account receiving approval authority. */
+  readonly spender: Address;
+  /** `"event"` is a grant in simulated logs; `"authorization"` is a pending preview request checked before `eth_simulateV1`. */
+  readonly source: "event" | "authorization";
+  /** Whether callers may add this permission to `limits.approvals`. */
+  readonly allowlistable: boolean;
+
+  constructor(params: {
+    readonly token: Address;
+    readonly owner: Address;
+    readonly spender: Address;
+    readonly source: "event" | "authorization";
+    readonly allowlistable?: boolean;
+  }) {
+    super(
+      params.allowlistable === false
+        ? `Approval for "${params.token}" from "${params.owner}" to "${params.spender}" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`
+        : `Token approval for "${params.token}" from "${params.owner}" to "${params.spender}" is not part of the requested operation. Do not sign this request; if the approval is intended, add it to limits.approvals.`,
+    );
+    this.token = params.token;
+    this.owner = params.owner;
+    this.spender = params.spender;
+    this.source = params.source;
+    this.allowlistable = params.allowlistable ?? true;
+  }
+}
+
+/** A sender-granted Morpho authorization is not allowed by the request. */
+export class UnexpectedMorphoAuthorizationError extends SimulationPackageError {
+  override readonly name = "UnexpectedMorphoAuthorizationError";
+  readonly code = "UNEXPECTED_MORPHO_AUTHORIZATION";
+  /** Account granting Morpho authorization. */
+  readonly authorizer: Address;
+  /** Account receiving Morpho authorization. */
+  readonly authorized: Address;
+  /** `"event"` is a grant in simulated logs; `"authorization"` is a pending preview request checked before `eth_simulateV1`. */
+  readonly source: "event" | "authorization";
+  /** Whether callers may add this permission to `limits.approvals`. */
+  readonly allowlistable: boolean;
+
+  constructor(params: {
+    readonly authorizer: Address;
+    readonly authorized: Address;
+    readonly source: "event" | "authorization";
+    readonly allowlistable?: boolean;
+  }) {
+    super(
+      params.allowlistable === false
+        ? `Morpho authorization from "${params.authorizer}" to "${params.authorized}" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`
+        : `Morpho authorization from "${params.authorizer}" to "${params.authorized}" is not part of the requested operation. Do not sign this request; if the authorization is intended, add it to limits.approvals.`,
+    );
+    this.authorizer = params.authorizer;
+    this.authorized = params.authorized;
+    this.source = params.source;
+    this.allowlistable = params.allowlistable ?? true;
+  }
+}
+
+/** A sender-granted Midnight authorization is not allowed by the request. */
+export class UnexpectedMidnightAuthorizationError extends SimulationPackageError {
+  override readonly name = "UnexpectedMidnightAuthorizationError";
+  readonly code = "UNEXPECTED_MIDNIGHT_AUTHORIZATION";
+  /** Midnight account whose control is granted. */
+  readonly onBehalf: Address;
+  /** Account receiving full control of `onBehalf`'s Midnight account. */
+  readonly authorized: Address;
+  /** Whether callers may add this permission to `limits.approvals`. */
+  readonly allowlistable: boolean;
+
+  constructor(params: {
+    readonly onBehalf: Address;
+    readonly authorized: Address;
+    readonly allowlistable?: boolean;
+  }) {
+    super(
+      params.allowlistable === false
+        ? `Midnight authorization from "${params.onBehalf}" to "${params.authorized}" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`
+        : `Midnight authorization from "${params.onBehalf}" to "${params.authorized}" is not part of the requested operation. Do not sign this request; if the authorization is intended, add it to limits.approvals.`,
+    );
+    this.onBehalf = params.onBehalf;
+    this.authorized = params.authorized;
+    this.allowlistable = params.allowlistable ?? true;
+  }
+}
+
+/** An approval or authorization could not be resolved or decoded safely. */
+export class ApprovalCheckUnavailableError extends SimulationPackageError {
+  override readonly name = "ApprovalCheckUnavailableError";
+  readonly code = "APPROVAL_CHECK_UNAVAILABLE";
+
+  constructor(
+    message = "Approval checks could not be completed. Confirm the chain registry and token contracts are available, then try again.",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
+
 /** A pending authorization does not match the request it was prepared for. */
 export class AuthorizationRequestMismatchError extends SimulationPackageError {
   override readonly name = "AuthorizationRequestMismatchError";
@@ -522,6 +662,11 @@ const ERROR_NAME_BY_CODE: Readonly<
   MISSING_EXPECTED_QUOTE: ["MissingExpectedQuoteError"],
   AMBIGUOUS_EXPECTED_QUOTE: ["AmbiguousExpectedQuoteError"],
   UNSUPPORTED_LIMIT_ACTION: ["UnsupportedLimitActionError"],
+  UNEXPECTED_TOKEN_APPROVAL: ["UnexpectedTokenApprovalError"],
+  UNEXPECTED_MORPHO_AUTHORIZATION: ["UnexpectedMorphoAuthorizationError"],
+  UNEXPECTED_MIDNIGHT_AUTHORIZATION: ["UnexpectedMidnightAuthorizationError"],
+  APPROVAL_CHECK_UNAVAILABLE: ["ApprovalCheckUnavailableError"],
+  UNUSED_AUTHORIZATION: ["UnusedAuthorizationError"],
 });
 
 /**

@@ -41,16 +41,22 @@ import { runSimulation } from "./run-simulation.js";
  * resolves. Every rejection blocks transaction return, including RPC failures.
  *
  * **Modes.** `mode` defaults to `"final"`, which executes the signed calldata
- * against actual permissions and accepts no `authorizations`. `mode:
- * "preview"` accepts typed authorization descriptors, which the pipeline
- * prepares as simulated approval calls. No authorization read-back checks run.
+ * against actual permissions. Supplied ERC-2612, Blue, and EcrecoverAuthorizer
+ * signature requests must have matching use events in the user transactions,
+ * even with `limits: "none"`. The EcrecoverAuthorizer event must match the
+ * signed `authorizer`, `authorized`, `isAuthorized`, and `nonce`.
+ * `mode: "preview"` accepts typed authorization descriptors, which the pipeline
+ * prepares as simulated approval calls. Pending permissions are checked before
+ * execution and sender-granted permissions are checked in all preparation and
+ * user-call logs.
  * Preparations emitting asset-transfer logs fail closed; simulate those
  * authorizations as transactions in final mode to check their asset flows.
  * `limits` is required: per-operation quotes, typed `inputs` or both, or the
- * explicit `"none"` opt-out, which skips every limit read and check. Typed
- * inputs derive their sides from pinned-block state in the simulated block and
- * check them with no percentage tolerance; only explicitly quoted sides use
- * `slippageTolerance`. Violations throw `ConsumerLimitViolationError`.
+ * explicit `"none"` opt-out, which skips limit and approval reads and checks
+ * but not final-mode signed-request use checks. Typed inputs derive their
+ * sides from pinned-block state in the simulated block and check them with no
+ * percentage tolerance; only explicitly quoted sides use `slippageTolerance`.
+ * Violations throw `ConsumerLimitViolationError`.
  *
  * **Funding.** `value` transfers are funded by the sender's real native
  * balance — no balance inflation — so under-funded bundles revert exactly as
@@ -66,8 +72,9 @@ import { runSimulation } from "./run-simulation.js";
  *   `eth_simulateV1`, so nodes that check it reject a wrong-chain endpoint. A
  *   successful simulation sends no `eth_chainId`; one probe follows an
  *   `RpcTransportError`, a `SlippageCheckUnavailableError` from
- *   quoted-asset resolution or a failed planned state read, or a code-less
- *   calldata target (`SimulationValidationError`).
+ *   quoted-asset resolution or a failed planned state read, an
+ *   `ApprovalCheckUnavailableError` from approval-token resolution, or a
+ *   code-less calldata target (`SimulationValidationError`).
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`. Each transaction may include caller-supplied
  *   `assertBefore` and `assertAfter` arrays. Each assertion is a caller-supplied
@@ -79,12 +86,20 @@ import { runSimulation } from "./run-simulation.js";
  *   `erc20BalanceAssertion`, `nativeBalanceAssertion`, and `maxDepositAssertion`
  *   are optional helpers for common checks.
  * @param params.mode - `"final"` (default) or `"preview"`.
- * @param params.authorizations - Preview-only typed authorization descriptors.
+ * @param params.authorizations - Typed wallet requests. Preview prepares
+ *   permissions; final requires use events for ERC-2612 and Blue signatures,
+ *   and an EcrecoverAuthorizer `SetIsAuthorized` event matching the signed
+ *   `authorizer`, `authorized`, `isAuthorized`, and `nonce`, without preparations.
  * @param params.limits - Required quotes or typed input-based limits, or `"none"`
- *   to skip every limit read and check. Inputs use hidden before-bundle previews
- *   and accrued Blue state; direct amounts and deterministic subject shares are
- *   exact, converted sides have zero-tolerance adverse bounds. Only explicit
- *   quote sides use percentage tolerance.
+ *   to skip limit and approval reads and checks, but not final signed-request
+ *   use checks. Inputs use hidden
+ *   before-bundle previews and accrued Blue state; direct amounts and
+ *   deterministic subject shares are exact, converted sides have zero-tolerance
+ *   adverse bounds. Only explicit quote sides use percentage tolerance. The
+ *   simulator derives an approval allowlist from the operations and pinned
+ *   subject-token reads, then unions it with `limits.approvals`. Pending
+ *   preview authorizations and sender-granted approval events are checked
+ *   against that allowlist.
  * @param params.blockNumber - Optional pinned block number or `BlockTag` other
  *   than `"pending"`.
  *   Defaults to `latest` (`finalized` on Monad, whose `latest` block is not
@@ -96,7 +111,7 @@ import { runSimulation } from "./run-simulation.js";
  *   `blockNumber`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed assertions or authorizations,
- *   final-mode authorizations, missing or malformed limits, an empty
+ *   missing or malformed limits, an empty
  *   `limits.operations`, a non-positive or unmeasurable quote field, a
  *   `slippageTolerance` at or above 1e18, a missing required quote side for an
  *   operation, unknown fields, a `"pending"` block tag,
@@ -120,11 +135,31 @@ import { runSimulation } from "./run-simulation.js";
  *   violated by the observed effects, including when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
  *   without a `debtRepaid` quote increases the sender's debt.
+ * @throws {UnusedAuthorizationError} when a final-mode ERC-2612 permit has no
+ *   matching token Approval(owner, spender, value), a Blue signature has no
+ *   matching Morpho IncrementNonce event for its authorizer and signed nonce,
+ *   or an EcrecoverAuthorizer signature has no `SetIsAuthorized` event matching
+ *   the signed `authorizer`, `authorized`, `isAuthorized`, and `nonce`.
+ * @throws {UnexpectedTokenApprovalError} when a sender-granted token, permit,
+ *   Permit2, or NFT approval is outside the derived and explicit allowlist.
+ * @throws {UnexpectedMorphoAuthorizationError} when a sender-granted Morpho
+ *   authorization is outside the derived and explicit allowlist.
+ * @throws {UnexpectedMidnightAuthorizationError} when a sender-granted Midnight
+ *   authorization is outside the derived and explicit allowlist, or a Midnight
+ *   signature's `verifyingContract` is not the registered EcrecoverAuthorizer
+ *   (`allowlistable: false`).
+ * @throws {ApprovalCheckUnavailableError} when a subject token or required
+ *   approval-registry address cannot be resolved at the pinned block, when
+ *   the RPC response omits logs for a preparation or user call, or when an
+ *   approval-topic event cannot be decoded. When the endpoint serves another
+ *   chain, it surfaces as {@link InvalidChainIdError}.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
- *   endpoint configured, preview authorizations or a limit require a Morpho
- *   Blue address absent from blue-sdk's `getChainAddresses`, a Midnight limit
- *   requires a Midnight address it lacks, or Blue parking requires a
- *   `midnightBlueBuyCallbackFactory` address it lacks.
+ *   endpoint configured, preview authorizations, final-mode Blue signatures
+ *   (even with `limits: "none"`), or a limit require a Morpho Blue address
+ *   absent from blue-sdk's `getChainAddresses`, a Midnight limit
+ *   requires a Midnight address it lacks, a Midnight signature requires a
+ *   Midnight or EcrecoverAuthorizer address it lacks, or Blue parking requires
+ *   a `midnightBlueBuyCallbackFactory` address it lacks.
  * @throws {SimulationRevertedError} when a preparation or user transaction
  *   reverts, or the node reports a bundle-level revert (code 3 or an
  *   `execution reverted` / `VM execution error` message, or insufficient funds).
@@ -157,10 +192,15 @@ import { runSimulation } from "./run-simulation.js";
  *   cap (the quoted wNative collateral; `0n` when the owner receives wNative
  *   loan proceeds without quoted wNative collateral), or when native value is
  *   sent on a chain without registered wNative. Native value is not checked
- *   when the operation has no owner wNative wallet bound.
+ *   when the operation has no owner wNative wallet bound. `midnightSupplyCollateral`
+ *   and `midnightSupplyCollateralMakeBorrow` also fail closed when native value
+ *   is sent without a registered wNative or without any supplied wNative collateral.
  *   `midnightSupplyBlueMakeLend` also fails closed when its limit's `account`
  *   is not the bundle sender (MidnightBundlesV2 creates the BlueBuyCallback
  *   for `msg.sender`) or no BlueBuyCallback address is resolved for it.
+ *   `midnightSupplyCollateralMakeBorrow` also fails closed when its limit's
+ *   `account` is not the bundle sender (MidnightBundlesV2 `cancelAndMake`
+ *   supplies collateral for `msg.sender`).
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
@@ -176,8 +216,9 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {InvalidChainIdError} when the node rejects the request `chainId`
  *   because the endpoint serves another chain, or when an RPC failure, missing
  *   evidence from quoted-asset resolution or a failed planned state read, or a
- *   code-less calldata target (`SimulationValidationError`) is followed by an
- *   `eth_chainId` answer for another chain (a subclass of
+ *   code-less calldata target (`SimulationValidationError`), or an
+ *   `ApprovalCheckUnavailableError` from approval-token resolution, is followed
+ *   by an `eth_chainId` answer for another chain (a subclass of
  *   `InvalidSimulationResponseError` sharing its `name`/`code`;
  *   `instanceof InvalidChainIdError` tells them apart).
  * @throws {BlacklistViolationError} when the simulation leaves value retained

@@ -191,6 +191,7 @@ export async function takeAskQuoteAtomically(params: {
   const quote = await MidnightApi.fetchBookQuote({
     marketId: params.marketId,
     side: "asks",
+    taker: params.taker,
     units: targetUnits,
     slippage: "0.5",
   });

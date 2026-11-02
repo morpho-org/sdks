@@ -47,7 +47,10 @@ struct MarketResponse {
     bool hasPrice;
     uint256 price;
     uint256 rateAtTarget;
+    uint256 deadSupplyShares;
 }
+
+address constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
 /// @dev MetaMorpho V1 configuration, including the EIP-5267 domain to stay at parity with the
 /// multicall `fetchAccrualVault` path.
@@ -81,6 +84,7 @@ struct VaultV1Response {
     uint256 lostAssets;
     Id[] supplyQueue;
     Id[] withdrawQueue;
+    uint256 deadShares;
 }
 
 /// @dev One MetaMorpho V1 market allocation: cap config, the vault's position, and market state.
@@ -100,6 +104,8 @@ struct MarketV1Position {
     MarketParams marketParams;
     Position position;
     MarketResponse market;
+    /// @dev Parent vault's absolute cap for this market's `adapterMarketCapId`.
+    uint256 absoluteCap;
 }
 
 /// @dev One `MorphoMarketV1AdapterV2` market: the adapter's supply shares and the market state.
@@ -107,6 +113,8 @@ struct MarketV1V2Allocation {
     bytes32 marketId;
     uint256 supplyShares;
     MarketResponse market;
+    /// @dev Parent vault's absolute cap for this market's `adapterMarketCapId`.
+    uint256 absoluteCap;
 }
 
 /// @dev Full accrued state for one VaultV2 adapter. Only the branch matching `adapterType` is populated.
@@ -122,6 +130,8 @@ struct AdapterResponse {
     VaultV1MarketAllocation[] vaultV1Allocations;
     uint256 vaultV1Shares;
     uint256 vaultV1ParentAllocation;
+    /// @dev Parent vault's absolute cap for the adapter's own `adapterCapId`.
+    uint256 adapterAbsoluteCap;
     // AdapterType.MorphoMarketV1
     MarketV1Position[] marketV1Positions;
     // AdapterType.MorphoMarketV1AdapterV2
@@ -151,6 +161,8 @@ struct AccrualVaultV2Response {
     bool hasLiquidityAdapter;
     AdapterResponse liquidityAdapterInfo;
     AdapterResponse[] adapters;
+    uint256 deadShares;
+    uint256 deadAssets;
 }
 
 /// @dev Aggregates the full `AccrualVaultV2` tree — VaultV2 accounting, liquidity caps, asset balance,
@@ -189,6 +201,8 @@ contract GetAccrualVaultV2 {
         res.managementFeeRecipientCanReceiveShares =
             res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
         res.assetBalance = IERC20(res.asset).balanceOf(address(vault));
+        res.deadShares = vault.balanceOf(DEAD_ADDRESS);
+        res.deadAssets = vault.convertToAssets(res.deadShares);
 
         _queryLiquidityAllocations(
             res, vault, morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory
@@ -281,6 +295,7 @@ contract GetAccrualVaultV2 {
     ) private view returns (AdapterResponse memory res) {
         res.adapter = adapter;
         res.forceDeallocatePenalty = parentVault.forceDeallocatePenalty(adapter);
+        res.adapterAbsoluteCap = parentVault.absoluteCap(keccak256(abi.encode("this", adapter)));
 
         if (
             address(morphoVaultV1AdapterFactory) != address(0)
@@ -321,6 +336,7 @@ contract GetAccrualVaultV2 {
                 res.marketV1Positions[i].marketParams = marketParams;
                 res.marketV1Positions[i].position = morpho.position(id, adapter);
                 res.marketV1Positions[i].market = _queryMarket(morpho, id, adaptiveCurveIrm);
+                res.marketV1Positions[i].absoluteCap = parentVault.absoluteCap(_adapterMarketCapId(adapter, marketParams));
             }
         } else if (
             address(morphoMarketV1AdapterV2Factory) != address(0)
@@ -339,6 +355,9 @@ contract GetAccrualVaultV2 {
                 res.marketV1V2Allocations[i].marketId = marketId;
                 res.marketV1V2Allocations[i].supplyShares = typed.supplyShares(marketId);
                 res.marketV1V2Allocations[i].market = _queryMarket(morpho, Id.wrap(marketId), adaptiveCurveIrm);
+                res.marketV1V2Allocations[i].absoluteCap = parentVault.absoluteCap(
+                    _adapterMarketCapId(adapter, res.marketV1V2Allocations[i].market.marketParams)
+                );
             }
         } else {
             revert UnsupportedVaultV2Adapter(adapter);
@@ -367,6 +386,7 @@ contract GetAccrualVaultV2 {
         res.skimRecipient = vault.skimRecipient();
         res.totalSupply = vault.totalSupply();
         res.lastTotalAssets = vault.lastTotalAssets();
+        res.deadShares = vault.balanceOf(DEAD_ADDRESS);
 
         // `lostAssets` only exists on MetaMorpho V1.1; the staticcall reverts on V1.0 vaults, leaving
         // `hasLostAssets` false so the SDK reports `undefined` (matching the multicall path).
@@ -414,6 +434,7 @@ contract GetAccrualVaultV2 {
     {
         res.marketParams = morpho.idToMarketParams(id);
         res.market = morpho.market(id);
+        res.deadSupplyShares = morpho.position(id, DEAD_ADDRESS).supplyShares;
 
         if (res.marketParams.oracle != address(0)) {
             try IOracle(res.marketParams.oracle).price() returns (uint256 price) {
@@ -425,6 +446,11 @@ contract GetAccrualVaultV2 {
         if (res.marketParams.irm == address(adaptiveCurveIrm)) {
             res.rateAtTarget = uint256(adaptiveCurveIrm.rateAtTarget(id));
         }
+    }
+
+    /// @dev Vault V2 cap id of one market on a market adapter (`adapterMarketCapId` in the SDK).
+    function _adapterMarketCapId(address adapter, MarketParams memory marketParams) private pure returns (bytes32) {
+        return keccak256(abi.encode("this/marketParams", adapter, marketParams));
     }
 
     /// @dev Morpho Blue market id: keccak256 of the ABI-encoded market params (5 static words).

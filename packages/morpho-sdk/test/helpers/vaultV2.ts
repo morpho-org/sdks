@@ -1,10 +1,14 @@
 import {
+  type AccrualVaultV2,
+  DEAD_ADDRESS,
   getChainAddresses,
+  type MarketId,
   type MarketParams,
   MathLib,
   marketParamsAbi,
 } from "@morpho-org/blue-sdk";
 import {
+  fetchMarketParams,
   morphoMarketV1AdapterV2FactoryAbi,
   vaultV2Abi,
   vaultV2FactoryAbi,
@@ -15,12 +19,22 @@ import {
   decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
+  erc4626Abi,
   type Hex,
+  isAddress,
   maxUint128,
+  maxUint256,
   parseEther,
   parseEventLogs,
   toHex,
 } from "viem";
+import {
+  InsufficientDeadSharesError,
+  MIN_DEAD_SHARES,
+  MIN_VAULT_V2_DEAD_ASSETS,
+  validateVaultV2DeadShares,
+} from "../../src/index.js";
+import { seedDeadSupply } from "./blue.js";
 
 export async function createVaultV2(params: {
   client: AnvilTestClient;
@@ -307,3 +321,53 @@ export const deployMorphoMarketV1AdapterV2 = async (
 
   return event.args.morphoMarketV1AdapterV2;
 };
+
+/**
+ * Seeds the dead deposits a forked Vault V2, and every market or Vault V1 it can allocate to, lacks
+ * to pass `validateVaultV2DeadShares`, then returns the passing snapshot. Restores the caller's token
+ * balances afterwards.
+ */
+export async function seedVaultV2DeadDeposits(
+  client: AnvilTestClient,
+  vault: { readonly getData: () => Promise<AccrualVaultV2> },
+) {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const data = await vault.getData();
+    try {
+      // Throws to identify the next missing dead deposit.
+      validateVaultV2DeadShares(data);
+      return data;
+    } catch (error) {
+      if (!(error instanceof InsufficientDeadSharesError)) throw error;
+      const failing = error.entity.at(-1)!;
+      if (isAddress(failing)) {
+        const asset = await client.readContract({
+          address: failing,
+          abi: erc4626Abi,
+          functionName: "asset",
+        });
+        const balance = await client.balanceOf({ erc20: asset });
+        await client.deal({ erc20: asset, amount: maxUint128 });
+        await client.approve({ address: asset, args: [failing, maxUint256] });
+        await client.writeContract({
+          address: failing,
+          abi: erc4626Abi,
+          ...(error.reason === "deadShares"
+            ? { functionName: "mint", args: [MIN_DEAD_SHARES, DEAD_ADDRESS] }
+            : {
+                functionName: "deposit",
+                args: [MIN_VAULT_V2_DEAD_ASSETS, DEAD_ADDRESS],
+              }),
+        });
+        await client.approve({ address: asset, args: [failing, 0n] });
+        await client.deal({ erc20: asset, amount: balance });
+      } else
+        await seedDeadSupply({
+          client,
+          chainId: client.chain.id,
+          market: await fetchMarketParams(failing as MarketId, client),
+        });
+    }
+  }
+  throw new Error("could not seed the vault's dead deposits");
+}

@@ -11,6 +11,7 @@ import {
   VaultAddressMismatchError,
 } from "../../../src/types/index.js";
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
+import { seedVaultV2DeadDeposits } from "../../helpers/vaultV2.js";
 import { test } from "../../setup.js";
 
 describe("MorphoVaultV2 entity tests", () => {
@@ -28,7 +29,7 @@ describe("MorphoVaultV2 entity tests", () => {
         mainnet.id,
       );
 
-      const vaultData = await vault.getData();
+      const vaultData = await seedVaultV2DeadDeposits(client, vault);
       const result = vault.deposit({
         amount: parseUnits("100", 6),
         userAddress: client.account.address,
@@ -57,7 +58,7 @@ describe("MorphoVaultV2 entity tests", () => {
         mainnet.id,
       );
 
-      const vaultData = await vault.getData();
+      const vaultData = await seedVaultV2DeadDeposits(client, vault);
       const result = vault.deposit({
         amount: parseUnits("100", 6),
         userAddress: client.account.address,
@@ -86,7 +87,7 @@ describe("MorphoVaultV2 entity tests", () => {
         mainnet.id,
       );
 
-      const vaultData = await vault.getData();
+      const vaultData = await seedVaultV2DeadDeposits(client, vault);
       expect(() =>
         vault.deposit({
           amount: parseUnits("100", 6),
@@ -110,7 +111,7 @@ describe("MorphoVaultV2 entity tests", () => {
         mainnet.id,
       );
 
-      const vaultData = await vault.getData();
+      const vaultData = await seedVaultV2DeadDeposits(client, vault);
       expect(() =>
         vault.deposit({
           amount: parseUnits("100", 6),

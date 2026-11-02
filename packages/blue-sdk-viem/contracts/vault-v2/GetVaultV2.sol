@@ -44,7 +44,11 @@ struct VaultV2Response {
     address managementFeeRecipient;
     bool performanceFeeRecipientCanReceiveShares;
     bool managementFeeRecipientCanReceiveShares;
+    uint256 deadShares;
+    uint256 deadAssets;
 }
+
+address constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
 contract GetVaultV2 {
     function query(
@@ -75,6 +79,8 @@ contract GetVaultV2 {
             res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
         res.managementFeeRecipientCanReceiveShares =
             res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
+        res.deadShares = vault.balanceOf(DEAD_ADDRESS);
+        res.deadAssets = vault.convertToAssets(res.deadShares);
 
         uint256 adaptersLength = vault.adaptersLength();
         res.adapters = new address[](adaptersLength);

@@ -1,5 +1,27 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.2.0
+
+### Minor Changes
+
+- Rejects snapshot-taking supply and deposit flows into targets without a sufficient dead deposit, to protect against share-price inflation in nearly empty markets and vaults.
+
+  - Blue `supply` adds a protected overload taking `marketData` (fetch it with `getMarketData()`); it throws `MarketIdMismatchError` when the snapshot belongs to another market. The snapshot-free overload is deprecated but keeps working without dead-deposit protection for one minor; removal requires the next major.
+  - Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, Vault V1 `migrateToV2` (target vault) and Midnight `supplyBlueMakeLend` (parking market) throw `InsufficientDeadSharesError` when the target, or a market or Vault V1 it can allocate to, fails the rule, and `MissingDeadSharesDataError` when the snapshot lacks dead-share data. Hand-built or API-sourced snapshots now fail closed; fetch them with `@morpho-org/blue-sdk-viem`.
+  - `supplyBlueMakeLend` no longer throws `EmptyBlueParkingMarketError`; the class stays exported and is deprecated.
+  - Adds the pure validators `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` and `validateVaultV2DeadShares`, and the thresholds `MIN_DEAD_SHARES` (1e9) and `MIN_VAULT_V2_DEAD_ASSETS` (1e6).
+  - `@morpho-org/wdk-protocol-lending-morpho-evm` re-exports `InsufficientDeadSharesError` and `MissingDeadSharesDataError`, which `supply` now throws.
+
+- Revalidate the wallet chain before ERC-4337 UserOperation signing and again before bundler submission. Chain switches during WDK's build or signing now abort with `ChainIdMismatchError` instead of submitting the prepared operation. Fail closed with WDK's `UnsupportedOperationError` if its signing hook is unavailable, and re-export that error for integrators to handle.
+
+### Patch Changes
+
+- Morpho WDK protocol no longer caches viem/Morpho clients or market params across calls; each operation builds clients for the current account and chain and resolves market params fresh.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.2.0
+  - @morpho-org/blue-sdk-viem@7.2.0
+  - @morpho-org/blue-sdk@8.1.0
+
 ## 4.1.0
 
 ### Minor Changes

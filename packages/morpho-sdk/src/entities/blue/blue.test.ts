@@ -21,6 +21,7 @@ import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   DEFAULT_LLTV_BUFFER,
+  MIN_DEAD_SHARES,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
 } from "../../helpers/index.js";
@@ -31,11 +32,13 @@ import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InsufficientDeadSharesError,
   isRequirementSignature,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
   MissingContractCodeError,
+  MissingDeadSharesDataError,
   NegativeInputError,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
@@ -47,6 +50,7 @@ import {
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../../types/index.js";
+import type { BlueActions } from "./blue.js";
 
 const userAddress: Address = "0x00000000000000000000000000000000000000A1";
 const otherUserAddress: Address = "0x00000000000000000000000000000000000000A2";
@@ -96,8 +100,11 @@ const makePosition = (
       fee: 0n,
       price: ORACLE_PRICE_SCALE,
       rateAtTarget: overrides.rateAtTarget ?? 0n,
+      deadSupplyShares: MIN_DEAD_SHARES,
     }),
   );
+
+const supplyMarketData = makePosition(marketParams).market;
 
 const makeEntity = (entityChainId: number = mainnet.id) =>
   createMockClient(mainnet)
@@ -119,7 +126,16 @@ const getCommonWriteCalls = (
   });
 
   return [
-    ["supply", () => entity.supply({ userAddress, assets: 1n, ...common })],
+    [
+      "supply",
+      () =>
+        entity.supply({
+          marketData: supplyMarketData,
+          userAddress,
+          assets: 1n,
+          ...common,
+        }),
+    ],
     [
       "withdraw",
       () =>
@@ -348,6 +364,7 @@ describe("MorphoBlue write surface", () => {
 
     const tokenRequirements = await entity
       .supply({
+        marketData: supplyMarketData,
         userAddress,
         assets: 1n,
         deadline: maxUint256,
@@ -397,7 +414,12 @@ describe("MorphoBlue write surface", () => {
       .morpho.blue(marketParams, mainnet.id);
 
     const requirements = await market
-      .supply({ assets: 1n, userAddress, deadline: maxUint256 })
+      .supply({
+        marketData: supplyMarketData,
+        assets: 1n,
+        userAddress,
+        deadline: maxUint256,
+      })
       .getRequirements();
 
     expect(requirements).toMatchObject([
@@ -424,6 +446,7 @@ describe("MorphoBlue write surface", () => {
 
     const assets = 10n ** 18n;
     const action = market.supply({
+      marketData: makePosition(nativeMarketParams).market,
       userAddress,
       assets,
       nativeAmount: assets,
@@ -541,7 +564,12 @@ describe("MorphoBlue common write validation", () => {
     // and keeps that behaviour.
     const { handle: supplyHandle, entity: supplyEntity } = makeBlue();
     const supply = withChainTimestamp(now, () =>
-      supplyEntity.supply({ userAddress, assets: 1n, deadline: now + 1n }),
+      supplyEntity.supply({
+        marketData: supplyMarketData,
+        userAddress,
+        assets: 1n,
+        deadline: now + 1n,
+      }),
     );
     expect(() =>
       withChainTimestamp(now + 1n, () => supply.getRequirements()),
@@ -600,7 +628,12 @@ describe("MorphoBlue common write validation", () => {
         method: "supply",
         token: marketParams.loanToken,
         createAction: (entity: ReturnType<typeof makeEntity>) =>
-          entity.supply({ userAddress, assets: 1n, deadline }),
+          entity.supply({
+            marketData: supplyMarketData,
+            userAddress,
+            assets: 1n,
+            deadline,
+          }),
       },
       {
         method: "repay",
@@ -1169,7 +1202,12 @@ describe("MorphoBlue position validation", () => {
       method: "supply",
       expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.supply({ userAddress: signerAddress, assets: 1_000n, deadline }),
+        entity.supply({
+          marketData: supplyMarketData,
+          userAddress: signerAddress,
+          assets: 1_000n,
+          deadline,
+        }),
     },
     {
       method: "supplyCollateralBorrow",
@@ -1403,7 +1441,12 @@ describe("MorphoBlue missing contract code", () => {
       .extend(morphoViemExtension())
       .morpho.blue(marketParams, mainnet.id);
     const promise = entity
-      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .supply({
+        marketData: supplyMarketData,
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
       .getRequirements();
     await expectFailClosed(promise, "config");
     await expect(promise).rejects.toBeInstanceOf(MissingContractCodeError);
@@ -1431,6 +1474,7 @@ describe("MorphoBlue missing contract code", () => {
       .morpho.blue(nativeMarketParams, mainnet.id);
     const promise = entity
       .supply({
+        marketData: makePosition(nativeMarketParams).market,
         userAddress,
         assets: 1n,
         nativeAmount: 1n,
@@ -1458,7 +1502,12 @@ describe("MorphoBlue missing contract code", () => {
       .extend(morphoViemExtension())
       .morpho.blue(marketParams, mainnet.id);
     const promise = entity
-      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .supply({
+        marketData: supplyMarketData,
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
       .getRequirements();
     await expectFailClosed(promise, "chain");
     await expect(promise).rejects.toBeInstanceOf(ChainIdMismatchError);
@@ -1545,12 +1594,73 @@ describe("MorphoBlue missing contract code", () => {
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(marketParams, mainnet.id);
     await entity
-      .supply({ userAddress, assets: 1n, deadline: maxUint256 })
+      .supply({
+        marketData: supplyMarketData,
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
       .getRequirements();
     expect(
       handle.request.mock.calls.filter(
         ([call]) => call.method === "eth_chainId",
       ),
     ).toHaveLength(1);
+  });
+});
+
+describe("MorphoBlue supply dead-share guard", () => {
+  const withDeadSupplyShares = (deadSupplyShares: bigint | undefined) =>
+    new Market({ ...supplyMarketData, deadSupplyShares });
+
+  test("keeps snapshot-free supply compatible on the entity and public interface", () => {
+    const { client, request } = createMockClient(mainnet);
+    const entity = client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    const actions: BlueActions = entity;
+    const params = { userAddress, assets: 1n, deadline: maxUint256 };
+    const protectedTx = entity
+      .supply({ ...params, marketData: supplyMarketData })
+      .buildTx();
+
+    expect(entity.supply(params).buildTx()).toEqual(protectedTx);
+    expect(actions.supply(params).buildTx()).toEqual(protectedTx);
+    expect(
+      actions.supply({ ...params, marketData: supplyMarketData }).buildTx(),
+    ).toEqual(protectedTx);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      name: "a snapshot of another market",
+      marketData: makePosition(destinationMarketParams).market,
+      error: MarketIdMismatchError,
+    },
+    {
+      name: "a snapshot without dead-share data",
+      marketData: withDeadSupplyShares(undefined),
+      error: MissingDeadSharesDataError,
+    },
+    {
+      name: "one dead share below the threshold",
+      marketData: withDeadSupplyShares(MIN_DEAD_SHARES - 1n),
+      error: InsufficientDeadSharesError,
+    },
+  ])("error: rejects $name before any RPC request", ({ marketData, error }) => {
+    const { client, request } = createMockClient(mainnet);
+    const entity = client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    expect(() =>
+      entity.supply({
+        marketData,
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      }),
+    ).toThrow(error);
+    expect(request).not.toHaveBeenCalled();
   });
 });

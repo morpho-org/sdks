@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 
 import {
   blueBuyCallbackFactoryAbi,
+  ecrecoverAuthorizerAbi,
   midnightBundlesV2Abi,
+  midnightEventsAbi,
   priceRatifierV1Abi,
   rateRatifierV1Abi,
 } from "./abis.js";
@@ -114,6 +116,72 @@ describe("blueBuyCallbackFactoryAbi", () => {
       "callbackOf",
       "createBlueBuyCallback",
       "isBlueBuyCallback",
+    ]);
+  });
+});
+
+describe("ecrecoverAuthorizerAbi", () => {
+  test("behavior: exposes the pinned interface and authorization event", () => {
+    const names = ecrecoverAuthorizerAbi.map((entry) => entry.name);
+
+    expect(names).toEqual([
+      "MIDNIGHT",
+      "nonce",
+      "setIsAuthorized",
+      "SetIsAuthorized",
+      "Expired",
+      "InvalidNonce",
+      "InvalidSignature",
+      "Unauthorized",
+    ]);
+    expect(
+      ecrecoverAuthorizerAbi.find(
+        (entry) => entry.type === "event" && entry.name === "SetIsAuthorized",
+      ),
+    ).toMatchObject({
+      inputs: [
+        { name: "caller", indexed: true },
+        { name: "authorizer", indexed: true },
+        { name: "authorized", indexed: true },
+        { name: "isAuthorized", indexed: false },
+        { name: "nonce", indexed: false },
+        { name: "signer", indexed: false },
+      ],
+    });
+  });
+});
+
+describe("midnightEventsAbi", () => {
+  test("behavior: types SetIsAuthorized with indexed caller, authorized and onBehalf", () => {
+    const event = midnightEventsAbi.find(
+      (entry) => entry.name === "SetIsAuthorized",
+    );
+
+    expect(event?.inputs).toEqual([
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "authorized",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newIsAuthorized",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ]);
   });
 });

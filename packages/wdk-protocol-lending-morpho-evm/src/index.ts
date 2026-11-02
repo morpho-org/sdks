@@ -6,7 +6,9 @@ export type {
 export {
   AddressMismatchError,
   ChainIdMismatchError,
+  InsufficientDeadSharesError,
   MissingContractCodeError,
+  MissingDeadSharesDataError,
   VaultAssetMismatchError,
 } from "@morpho-org/morpho-sdk";
 export {
@@ -15,7 +17,10 @@ export {
   UnknownTokenError,
 } from "@morpho-org/morpho-sdk/blue/errors";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
-export { MaximumFeeExceededError } from "@tetherto/wdk-wallet";
+export {
+  MaximumFeeExceededError,
+  UnsupportedOperationError,
+} from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
   BorrowResult,

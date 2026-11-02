@@ -4,8 +4,10 @@ import {
   MarketParams,
   marketParamsAbi,
 } from "../../market/index.js";
+import { MathLib } from "../../math/MathLib.js";
 import type { BigIntish, Hash, MarketId } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
+import type { IVaultV2Allocation } from "./VaultV2.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
@@ -226,6 +228,54 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
       value: BigInt(assets),
       limiter: CapacityLimitReason.balance,
     };
+  }
+
+  /**
+   * Returns unbooked supply interest for the routed market at its accrued state.
+   * For deposit quotes, accrue to the expected inclusion time plus a caller-chosen delay
+   * margin; the current block's state omits interest earned before inclusion.
+   * @param data - Encoded market parameters.
+   * @param allocations - Recorded liquidity allocations.
+   * @returns Nonnegative pending increase, or zero when the cap allocation, routed market
+   *   snapshot, or supply shares are absent, or the position is not above the recorded allocation.
+   * @throws {InvalidMarketParamsError} When the routing data cannot be decoded as market parameters.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const fetched = await fetchAccrualVaultV2(
+   *   "0x91C056B6d4311a743614FBc03ac32d4E6A2d3a3c",
+   *   client,
+   * );
+   * const { timestamp } = await client.getBlock();
+   * // Illustrative delays; choose both for the chain and transaction submission path.
+   * const expectedInclusionTimestamp = timestamp + 30n;
+   * const inclusionMargin = 30n;
+   * const { vault } = fetched.accrueInterest(expectedInclusionTimestamp + inclusionMargin);
+   * const pending = vault.accrualLiquidityAdapter?.pendingAllocationIncrease?.(
+   *   vault.liquidityData,
+   *   vault.liquidityAllocations ?? [],
+   * ) ?? 0n;
+   * ```
+   */
+  pendingAllocationIncrease(
+    data: Hex,
+    allocations: readonly IVaultV2Allocation[],
+  ): bigint {
+    const params = MarketParams.fromHex(data);
+    const id = VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+      this.address,
+      params,
+    );
+    const recorded = allocations.find((allocation) => allocation.id === id);
+    if (recorded == null) return 0n;
+    const currentMarket = this.markets.find((entry) => entry.id === params.id);
+    const assets =
+      currentMarket?.toSupplyAssets(this.supplyShares[params.id] ?? 0n) ?? 0n;
+    return MathLib.zeroFloorSub(assets, recorded.allocation);
   }
 
   maxWithdraw(data: Hex) {

@@ -1,6 +1,7 @@
 import type { Address, Hex } from "viem";
 import type { BigIntish, Hash } from "../../types.js";
 import type { CapacityLimit } from "../../utils.js";
+import type { IVaultV2Allocation } from "./VaultV2.js";
 
 /** Plain input shape for a Morpho Vault V2 adapter. */
 export interface IVaultV2Adapter {
@@ -36,6 +37,40 @@ export abstract class VaultV2Adapter implements IVaultV2Adapter {
 
 /** Adapter interface with accrued asset and capacity methods. */
 export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
+  /**
+   * Returns the nonnegative allocation increase booked before a deposit's cap checks.
+   * For deposit quotes, first accrue to the expected inclusion time plus a caller-chosen
+   * delay margin. Accruing only to the current block omits interest earned before inclusion.
+   * @param data - Adapter routing data.
+   * @param allocations - Recorded liquidity allocations.
+   * @returns Pending increase at the adapter's accrued state, or zero if its id is absent.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const fetched = await fetchAccrualVaultV2(
+   *   "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
+   *   client,
+   * );
+   * const { timestamp } = await client.getBlock();
+   * // Illustrative delays; choose both for the chain and transaction submission path.
+   * const expectedInclusionTimestamp = timestamp + 30n;
+   * const inclusionMargin = 30n;
+   * const { vault } = fetched.accrueInterest(expectedInclusionTimestamp + inclusionMargin);
+   * const pending = vault.accrualLiquidityAdapter?.pendingAllocationIncrease?.(
+   *   vault.liquidityData,
+   *   vault.liquidityAllocations ?? [],
+   * ) ?? 0n;
+   * ```
+   */
+  pendingAllocationIncrease?(
+    data: Hex,
+    allocations: readonly IVaultV2Allocation[],
+  ): bigint;
+
   /**
    * Returns the adapter's assets after accruing its underlying markets.
    * Markets at or beyond the requested timestamp keep their snapshots without backward accrual.

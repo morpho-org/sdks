@@ -20,9 +20,14 @@ import {
   parseAbi,
   zeroAddress,
 } from "viem";
-import { base } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import type {
+  Erc2612PermitAuthorization,
+  MidnightAuthorizationSignature,
+} from "../authorizations.js";
 import {
+  ApprovalCheckUnavailableError,
   ConsumerLimitViolationError,
   InvalidChainIdError,
   InvalidSimulationResponseError,
@@ -30,6 +35,7 @@ import {
   SimulationValidationError,
   SlippageCheckUnavailableError,
   UnsupportedChainError,
+  UnusedAuthorizationError,
 } from "../errors.js";
 import type { StateBlock } from "../params.js";
 import { encodeUint256, padAddress } from "../test-helpers/index.js";
@@ -69,6 +75,29 @@ const TRANSACTION: SimulationTransaction = {
   to: TARGET,
   data: "0x12345678" as Hex,
 };
+const PERMIT: Erc2612PermitAuthorization = {
+  type: "erc2612Permit",
+  typedData: {
+    domain: { chainId: 1, verifyingContract: TARGET },
+    primaryType: "Permit",
+    types: {
+      Permit: [
+        { name: "owner", type: "address" },
+        { name: "spender", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+      ],
+    },
+    message: {
+      owner: OWNER,
+      spender: TARGET,
+      value: 1n,
+      nonce: 0n,
+      deadline: 2_000_000_000n,
+    },
+  },
+};
 
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
@@ -107,6 +136,44 @@ const execution = (
     stateReads: [],
   }) as unknown as SimulationExecution;
 
+const executeWithMissingLogs =
+  (
+    omitted: "transaction" | "preparation" | "assertion",
+    transactionLogs: readonly RawLog[] = [],
+  ) =>
+  async (
+    params: Parameters<typeof executePlan>[0],
+  ): Promise<SimulationExecution> => {
+    const handle = createMockClient(mainnet);
+    const defaultRequest = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async ({ method, params: rpcParams }) => {
+      if (method !== "eth_simulateV1")
+        return defaultRequest?.({ method, params: rpcParams });
+      return [
+        {
+          number: numberToHex(STATE_BLOCK),
+          timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+          hash: STATE_BLOCK_HASH,
+          calls: params.plan.calls.map((call) => ({
+            status: "0x1",
+            returnData: "0x",
+            gasUsed: "0x5208",
+            ...(call.type === omitted
+              ? {}
+              : { logs: call.type === "transaction" ? transactionLogs : [] }),
+          })),
+        },
+      ];
+    });
+    const actual = await vi.importActual<typeof import("./backends/index.js")>(
+      "./backends/index.js",
+    );
+    return actual.executePlan({
+      ...params,
+      client: handle.client as unknown as typeof params.client,
+    });
+  };
+
 function pinnedBlockParam(fetch: ReturnType<typeof stubFetch>["fetch"]) {
   return fetch.mock.calls
     .map(
@@ -137,6 +204,10 @@ function stubFetch(
       return rpc(numberToHex(servedChainId ?? CHAIN_ID));
     }
     if (method === "eth_getCode") return rpc(code);
+    if (method === "eth_call")
+      return rpc(
+        `0x${"c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".padStart(64, "0")}`,
+      );
     if (method === "eth_getBlockByNumber")
       return rpc({
         number: numberToHex(STATE_BLOCK),
@@ -172,6 +243,247 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
+  test.each([
+    { chainId: CHAIN_ID, omitAssertionLogs: false },
+    { chainId: 1, omitAssertionLogs: true },
+  ])(
+    "behavior: final permits work on chain $chainId with omitted assertion logs $omitAssertionLogs",
+    async ({ chainId, omitAssertionLogs }) => {
+      stubFetch([], "0x6000", chainId);
+      mockExecutePlan.mockImplementationOnce(
+        executeWithMissingLogs("assertion", [
+          {
+            address: TARGET,
+            topics: encodeEventTopics({
+              abi: erc20Abi,
+              eventName: "Approval",
+              args: { owner: OWNER, spender: TARGET },
+            }) as readonly Hex[],
+            data: encodeAbiParameters([{ type: "uint256" }], [1n]),
+          },
+        ]),
+      );
+      const result = await simulate(
+        { chains: new Map([[chainId, { simulateV1Url: RPC_URL }]]) },
+        {
+          chainId,
+          mode: "final",
+          limits: "none",
+          authorizations: [
+            {
+              ...PERMIT,
+              typedData: {
+                ...PERMIT.typedData,
+                domain: { ...PERMIT.typedData.domain, chainId },
+              },
+            },
+          ],
+          transactions: [
+            {
+              ...TRANSACTION,
+              assertBefore: omitAssertionLogs
+                ? [{ to: TARGET, data: "0x12345678", check: () => undefined }]
+                : [],
+            },
+          ],
+        },
+      );
+      expect(result.calls).toHaveLength(1);
+      expect(result.calls[0]?.logs).toHaveLength(1);
+      const plan = mockExecutePlan.mock.calls[0]?.[0].plan;
+      expect(
+        plan?.calls.filter((call) => call.type === "assertion"),
+      ).toHaveLength(omitAssertionLogs ? 1 : 0);
+    },
+  );
+
+  test("error: final signature-use checks require transaction logs with limits none", async () => {
+    stubFetch([], "0x6000", 1);
+    mockExecutePlan.mockImplementationOnce(
+      executeWithMissingLogs("transaction"),
+    );
+    await expect(
+      simulate(
+        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chainId: 1,
+          limits: "none",
+          authorizations: [PERMIT],
+          transactions: [TRANSACTION],
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "APPROVAL_CHECK_UNAVAILABLE",
+      message: expect.stringContaining("omitted user-transaction logs"),
+    });
+  });
+
+  test("behavior: final unsigned descriptors do not require transaction logs", async () => {
+    stubFetch([], "0x6000", 1);
+    mockExecutePlan.mockImplementationOnce(
+      executeWithMissingLogs("transaction"),
+    );
+    await expect(
+      simulate(
+        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chainId: 1,
+          limits: "none",
+          authorizations: [
+            {
+              type: "erc20Approval",
+              token: TARGET,
+              owner: OWNER,
+              spender: TARGET,
+              amount: 1n,
+            },
+          ],
+          transactions: [TRANSACTION],
+        },
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  test("error: truncated user calls fail before final signature-use checks", async () => {
+    stubFetch([], "0x6000", 1);
+    userCallCount = 0;
+    await expect(
+      simulate(
+        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chainId: 1,
+          limits: "none",
+          authorizations: [PERMIT],
+          transactions: [TRANSACTION],
+        },
+      ),
+    ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
+  });
+
+  test("behavior: final permits bypass pending approval policy with real limits", async () => {
+    stubFetch([], "0x6000", 1);
+    await expect(
+      simulate(
+        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chainId: 1,
+          authorizations: [PERMIT],
+          transactions: [TRANSACTION],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: TARGET,
+                assetPaid: TARGET,
+                quote: { assetsPaid: 1n, sharesMinted: 1n },
+              },
+            ],
+            approvals: [],
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnusedAuthorizationError);
+    expect(mockExecutePlan).toHaveBeenCalledOnce();
+  });
+
+  test("error: final Blue signatures need registered Morpho addresses", async () => {
+    const { fetch } = stubFetch([]);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        limits: "none",
+        transactions: [TRANSACTION],
+        authorizations: [
+          {
+            type: "blueAuthorizationSignature",
+            typedData: {
+              domain: { chainId: CHAIN_ID, verifyingContract: TARGET },
+              primaryType: "Authorization",
+              types: {
+                Authorization: [
+                  { name: "authorizer", type: "address" },
+                  { name: "authorized", type: "address" },
+                  { name: "isAuthorized", type: "bool" },
+                  { name: "nonce", type: "uint256" },
+                  { name: "deadline", type: "uint256" },
+                ],
+              },
+              message: {
+                authorizer: OWNER,
+                authorized: TARGET,
+                isAuthorized: true,
+                nonce: 0n,
+                deadline: 2_000_000_000n,
+              },
+            },
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each(["ecrecoverAuthorizer", "midnight"] as const)(
+    "error: Midnight authorization signatures require a registered %s address",
+    async (missingAddress) => {
+      const { fetch } = stubFetch([]);
+      const registeredAddresses = getChainAddresses(ChainId.BaseMainnet);
+      const addresses = {
+        ...registeredAddresses,
+        [missingAddress]: undefined,
+      };
+      const authorization: MidnightAuthorizationSignature = {
+        type: "midnightAuthorizationSignature",
+        typedData: {
+          domain: {
+            chainId: ChainId.BaseMainnet,
+            verifyingContract: registeredAddresses.ecrecoverAuthorizer!,
+          },
+          primaryType: "Authorization",
+          types: {
+            Authorization: [
+              { name: "authorizer", type: "address" },
+              { name: "authorized", type: "address" },
+              { name: "isAuthorized", type: "bool" },
+              { name: "nonce", type: "uint256" },
+              { name: "deadline", type: "uint256" },
+            ],
+          },
+          message: {
+            authorizer: OWNER,
+            authorized: TARGET,
+            isAuthorized: true,
+            nonce: 0n,
+            deadline: 2_000_000_000n,
+          },
+        },
+      };
+      const getChainAddressesSpy = vi
+        .spyOn(blueSdk, "getChainAddresses")
+        .mockReturnValueOnce(addresses);
+      try {
+        await expect(
+          simulate(
+            {
+              chains: new Map([
+                [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+              ]),
+            },
+            {
+              chainId: ChainId.BaseMainnet,
+              transactions: [TRANSACTION],
+              limits: "none",
+              authorizations: [authorization],
+            },
+          ),
+        ).rejects.toBeInstanceOf(UnsupportedChainError);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        getChainAddressesSpy.mockRestore();
+      }
+    },
+  );
+
   test.each([
     "erc20",
     "native",
@@ -241,6 +553,7 @@ describe.sequential("runSimulation", () => {
                       },
                     ],
             },
+            logsMissing: false,
           },
           ...baseExecution.calls,
         ],
@@ -497,7 +810,7 @@ describe.sequential("runSimulation", () => {
     expect(fetch).toHaveBeenCalled();
   });
 
-  test("error: an unregistered chain requires Morpho addresses for limits", async () => {
+  test("error: limits on an unregistered chain use UnsupportedChainError", async () => {
     const { fetch } = stubFetch([]);
     await expect(
       simulate(config, {
@@ -567,33 +880,39 @@ describe.sequential("runSimulation", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test("error: midnightSupplyCollateral on a chain without a Midnight address", async () => {
-    const { fetch } = stubFetch([]);
-    await expect(
-      simulate(
-        {
-          chains: new Map([
-            [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
-          ]),
-        },
-        {
-          chainId: ChainId.ArbitrumMainnet,
-          transactions: [TRANSACTION],
-          limits: {
-            operations: [
-              {
-                type: "midnightSupplyCollateral",
-                marketId: `0x${"11".repeat(32)}` as MarketId,
-                collateralIndex: 0n,
-                quote: { assetsPaid: 1n, collateralSupplied: 1n },
-              },
-            ],
+  test.each([
+    "midnightSupplyCollateral",
+    "midnightSupplyCollateralMakeBorrow",
+  ] as const)(
+    "error: %s on a chain without a Midnight address",
+    async (type) => {
+      const { fetch } = stubFetch([]);
+      await expect(
+        simulate(
+          {
+            chains: new Map([
+              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+            ]),
           },
-        },
-      ),
-    ).rejects.toBeInstanceOf(UnsupportedChainError);
-    expect(fetch).not.toHaveBeenCalled();
-  });
+          {
+            chainId: ChainId.ArbitrumMainnet,
+            transactions: [TRANSACTION],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: `0x${"11".repeat(32)}` as MarketId,
+                  collateralIndex: 0n,
+                  quote: { assetsPaid: 1n, collateralSupplied: 1n },
+                },
+              ],
+            },
+          },
+        ),
+      ).rejects.toBeInstanceOf(UnsupportedChainError);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
 
   test("error: midnightRedeem on a chain without a Midnight address", async () => {
     const { fetch } = stubFetch([]);
@@ -733,6 +1052,95 @@ describe.sequential("runSimulation", () => {
     expect(mockExecutePlan.mock.calls[0]?.[0].blockGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].callGasLimit).toBeUndefined();
     expect(mockExecutePlan.mock.calls[0]?.[0].parentHashCheck).toBe(true);
+  });
+
+  test("error: approval checks fail closed when an execution call omits logs", async () => {
+    const mainnetConfig: SimulationConfig = {
+      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+    };
+    stubFetch([], "0x6000", 1);
+    mockExecutePlan.mockImplementationOnce(
+      executeWithMissingLogs("transaction"),
+    );
+
+    const error = await simulate(mainnetConfig, {
+      chainId: 1,
+      transactions: [TRANSACTION],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
+    expect(error).toMatchObject({
+      message: `Simulation response omitted logs for transaction 0; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
+    });
+  });
+
+  test("error: approval checks fail closed when a preparation call omits logs", async () => {
+    const mainnetConfig: SimulationConfig = {
+      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+    };
+    stubFetch([], "0x6000", 1);
+    mockExecutePlan.mockImplementationOnce(
+      executeWithMissingLogs("preparation"),
+    );
+
+    const error = await simulate(mainnetConfig, {
+      chainId: 1,
+      mode: "preview",
+      transactions: [TRANSACTION],
+      authorizations: [
+        {
+          type: "erc20Approval",
+          token: TARGET,
+          owner: OWNER,
+          spender: TARGET,
+          amount: 1n,
+        },
+      ],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+            slippageTolerance: 0n,
+          },
+        ],
+        approvals: [
+          { type: "token", token: TARGET, owner: OWNER, spender: TARGET },
+        ],
+      },
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
+    expect(error).toMatchObject({
+      message: expect.stringContaining("authorization 0"),
+    });
+  });
+
+  test("behavior: missing execution logs are allowed when limits are none", async () => {
+    const mainnetConfig: SimulationConfig = {
+      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+    };
+    stubFetch([], "0x6000", 1);
+    mockExecutePlan.mockImplementationOnce(
+      executeWithMissingLogs("transaction"),
+    );
+
+    const result = await simulate(mainnetConfig, {
+      chainId: 1,
+      limits: "none",
+      transactions: [TRANSACTION],
+    });
+    expect(result.verification.limits).toBe("none");
+    expect(result.calls[0]?.logs).toEqual([]);
   });
 
   test("behavior: deduplicates a mirror wrapper on a registered chain outside the no-mirror map", async () => {

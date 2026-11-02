@@ -82,5 +82,7 @@ signed-authorization structs. It stays synchronous and performs no reads.
 `borrow`, `supplyCollateralBorrow`, `withdraw`, and `refinance` accept only
 `VaultV2BlueReallocation` inputs. The entity validates and normalizes them before the lazy output is
 returned. BlueBundlesV1 executes their `PublicAllocations` unconditionally; allocator penalties are
-accounted for in contract proceeds or destination debt, so they do not create a separate funding
-requirement.
+accounted for in contract proceeds or destination debt. Penalties add no native value, but
+BlueBundlesV1 flash-loans the aggregate penalty from Blue, so Blue's loan-token balance must cover
+the operation transfer and any earlier market-leg withdrawals while that loan is outstanding;
+`getVaultV2BlueReallocationData` supplies `blueBalances` for this check.

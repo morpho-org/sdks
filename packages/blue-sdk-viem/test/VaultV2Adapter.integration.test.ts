@@ -1,5 +1,6 @@
 import {
   AccrualVaultV2,
+  AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   CapacityLimitReason,
   MarketParams,
@@ -12,6 +13,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import {
   encodeAbiParameters,
   encodeFunctionData,
+  erc4626Abi,
   parseEther,
   parseUnits,
   zeroAddress,
@@ -232,9 +234,19 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const depositAmount = parseUnits("2000000", 6); // 1M
       const result = accrualVaultV2.maxDeposit(depositAmount);
+      const adapter = accrualVaultV2.accrualLiquidityAdapter;
+      expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+      const vaultV1Adapter = adapter as AccrualVaultV2MorphoVaultV1Adapter;
+      const currentAssets = await readContract(client, {
+        address: vaultV1Adapter.morphoVaultV1,
+        abi: erc4626Abi,
+        functionName: "previewRedeem",
+        args: [vaultV1Adapter.shares],
+      });
+      expect(currentAssets).toBeGreaterThan(allocation);
 
       expect(result).toStrictEqual({
-        value: absoluteCap - allocation,
+        value: absoluteCap - currentAssets,
         limiter: CapacityLimitReason.vaultV2_absoluteCap,
       });
     });

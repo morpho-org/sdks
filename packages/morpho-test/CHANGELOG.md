@@ -1,5 +1,18 @@
 # @morpho-org/morpho-test
 
+## 4.2.0
+
+### Minor Changes
+
+- Expose shared Midnight E2E market, wallet funding and readonly offer fixtures through `@morpho-org/morpho-test/midnight`, requiring the optional midnight-sdk ^2.2.0 peer. Share asset setup helpers through the root entrypoint without loading Midnight SDK.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.3.0
+  - @morpho-org/blue-sdk@8.1.0
+  - @morpho-org/test@2.12.0
+
 ## 4.1.0
 
 ### Minor Changes

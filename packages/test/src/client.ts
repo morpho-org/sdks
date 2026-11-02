@@ -47,6 +47,7 @@ import {
   traceActions,
   traced,
 } from "viem-tracer";
+import { setFeeTokenBalance as setFeeTokenBalanceForClient } from "./feeToken.js";
 import { testAccount } from "./fixtures.js";
 import {
   type FunctionCall,
@@ -65,6 +66,27 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
     PublicActions<TracedTransport<HttpTransport>, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
       timestamp(): Promise<bigint>;
+
+      /**
+       * Sets an account's gas fee-token balance on chains that pay gas in an ERC-20 fee token.
+       *
+       * This is a no-op on chains that pay gas in the native token.
+       *
+       * @param params.account - Account whose fee-token balance is set.
+       * @param params.amount - Desired fee-token balance.
+       * @throws {AnvilFeeTokenFundingError} when the resulting balance differs from `amount`.
+       * @example
+       * ```ts
+       * await client.setFeeTokenBalance({
+       *   account: client.account.address,
+       *   amount: maxUint128,
+       * });
+       * ```
+       */
+      setFeeTokenBalance(params: {
+        readonly account: Address;
+        readonly amount: bigint;
+      }): Promise<void>;
 
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
       balanceOf(args?: { erc20?: Address; owner?: Address }): Promise<bigint>;
@@ -288,6 +310,18 @@ export const createAnvilTestClient = <chain extends Chain>(
           const latestBlock = await client.getBlock();
 
           return latestBlock.timestamp;
+        },
+
+        /**
+         * Sets an account's gas fee-token balance on chains that require an ERC-20 fee token.
+         *
+         * @param params - Account and desired fee-token balance.
+         */
+        async setFeeTokenBalance(params: {
+          readonly account: Address;
+          readonly amount: bigint;
+        }) {
+          await setFeeTokenBalanceForClient(client, params);
         },
 
         async approve<chainOverride extends Chain | undefined = undefined>(

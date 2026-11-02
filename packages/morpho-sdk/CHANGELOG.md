@@ -1,5 +1,32 @@
 # @morpho-org/morpho-sdk
 
+## 9.2.0
+
+### Minor Changes
+
+- Penalized Vault V2 reallocation plans now account for BlueBundlesV1 flash-loaning the penalty from Blue's loan-token balance. The optional `blueBalances` input is populated by `getVaultV2BlueReallocationData`. Hand-built data without it uses summed snapshot-market liquidity as a conservative lower bound for sizing only and may make plans larger.
+  When Blue's balance is supplied, plans that cannot fund the penalty flash loan, an earlier market-sourced withdrawal, or the final transfer now throw `InsufficientSharedLiquidityError` instead of returning a plan that reverts.
+  Borrow and withdraw plans that otherwise cover their shortfall but whose planned penalty exceeds the operation amount now throw `InputExceedsMaxError`.
+  `InsufficientSharedLiquidityError.params.shortfall` now reports the reallocated assets the operation requires, comparable to `available`, and includes Blue's balance deficit when `blueBalances` is supplied.
+- Check sender-granted Midnight `setIsAuthorized` grants against `limits.approvals` in `evm-simulation`, throwing `UnexpectedMidnightAuthorizationError` for grants outside the derived and explicit allowlist. Add `midnightEventsAbi` to `midnight-sdk` and the `morpho-sdk/abis` facade.
+- Support EcrecoverAuthorizer authorization signatures in EVM simulation.
+- Re-exports `DEAD_ADDRESS` from `@morpho-org/morpho-sdk/constants` and `@morpho-org/morpho-sdk/blue/constants`.
+- Rejects snapshot-taking supply and deposit flows into targets without a sufficient dead deposit, to protect against share-price inflation in nearly empty markets and vaults.
+
+  - Blue `supply` adds a protected overload taking `marketData` (fetch it with `getMarketData()`); it throws `MarketIdMismatchError` when the snapshot belongs to another market. The snapshot-free overload is deprecated but keeps working without dead-deposit protection for one minor; removal requires the next major.
+  - Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, Vault V1 `migrateToV2` (target vault) and Midnight `supplyBlueMakeLend` (parking market) throw `InsufficientDeadSharesError` when the target, or a market or Vault V1 it can allocate to, fails the rule, and `MissingDeadSharesDataError` when the snapshot lacks dead-share data. Hand-built or API-sourced snapshots now fail closed; fetch them with `@morpho-org/blue-sdk-viem`.
+  - `supplyBlueMakeLend` no longer throws `EmptyBlueParkingMarketError`; the class stays exported and is deprecated.
+  - Adds the pure validators `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` and `validateVaultV2DeadShares`, and the thresholds `MIN_DEAD_SHARES` (1e9) and `MIN_VAULT_V2_DEAD_ASSETS` (1e6).
+  - `@morpho-org/wdk-protocol-lending-morpho-evm` re-exports `InsufficientDeadSharesError` and `MissingDeadSharesDataError`, which `supply` now throws.
+
+### Patch Changes
+
+- Add the optional `IAccrualVaultV2Adapter.pendingAllocationIncrease` method, implemented by the Morpho Market V1 adapters and the Vault V1 adapter. Vault V2 `maxDeposit` now counts pending liquidity-adapter interest in cap headroom as of the vault's accrual timestamp.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.3.0
+  - @morpho-org/blue-sdk-viem@7.2.0
+  - @morpho-org/blue-sdk@8.1.0
+
 ## 9.1.0
 
 ### Minor Changes

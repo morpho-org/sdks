@@ -6,6 +6,7 @@ import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { simulate, toSimulationLimits } from "../../src/index.js";
+import { seededMarketData } from "../setup.js";
 
 /**
  * Pinned after the bundles contracts (BlueBundlesV1, VaultBundlesV1,
@@ -104,6 +105,7 @@ describe.sequential("toSimulationLimits — real builder round-trips", () => {
     });
 
     const supply = market.supply({
+      marketData: await seededMarketData(client, market),
       userAddress: user,
       assets: supplyAssets,
       deadline,

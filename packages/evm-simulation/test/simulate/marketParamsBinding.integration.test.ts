@@ -14,6 +14,7 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { SlippageCheckUnavailableError, simulate } from "../../src/index.js";
+import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL ?? "https://eth.drpc.org",
@@ -54,6 +55,7 @@ test("rejects a foreign Blue market tuple during public simulation", async ({
   const assets = parseUnits("10", 6);
   const quotedMaximum = parseUnits("1", 6);
   const action = morpho.supply({
+    marketData: await seededMarketData(client, morpho),
     userAddress: client.account.address,
     assets,
     deadline: maxUint256,

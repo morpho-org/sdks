@@ -47,6 +47,7 @@ import {
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import { seededMarketData, seededVaultData } from "../setup.js";
 
 /**
  * Pinned after the bundles contracts (BlueBundlesV1, VaultBundlesV1,
@@ -153,6 +154,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
 
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -212,6 +214,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
 
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -272,6 +275,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
 
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -697,6 +701,7 @@ describe.sequential("simulate pipeline — negatives", () => {
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -734,6 +739,7 @@ describe.sequential("simulate pipeline — negatives", () => {
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -764,6 +770,7 @@ describe.sequential("simulate pipeline — negatives", () => {
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -835,6 +842,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     // Approved but unfunded supply — the pull reverts for balance.
     const assets = parseUnits("1000000000", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -1054,6 +1062,10 @@ describe.sequential("simulate pipeline — vault V2", () => {
     const assets = parseUnits("10", 6);
     const recipient: Address = "0x0000000000000000000000000000000000000123";
     await client.deal({ erc20: USDC, amount: assets });
+    await seededVaultData(
+      client,
+      client.extend(morphoViemExtension()).morpho.vaultV2(KEYROCK, mainnet.id),
+    );
     await client.writeContract({
       account: client.account,
       address: USDC,
@@ -1158,7 +1170,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
     // Deposit to acquire vault shares.
     const assets = parseUnits("10", 6);
     await client.deal({ erc20: USDC, amount: assets });
-    const vaultData = await vault.getData();
+    const vaultData = await seededVaultData(client, vault);
     const deposit = vault.deposit({
       amount: assets,
       userAddress: client.account.address,
@@ -1434,7 +1446,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
     const deposit = vault.deposit({
       amount: assets,
       userAddress: client.account.address,
-      vaultData: await vault.getData(),
+      vaultData: await seededVaultData(client, vault),
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
       deadline,
     });
@@ -1468,7 +1480,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
       assets: parseUnits("5", 6),
       userAddress: client.account.address,
       sourceVault: await source.getData(),
-      targetVault: await target.getData(),
+      targetVault: await seededVaultData(client, target),
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
       deadline,
     });
@@ -2505,6 +2517,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
     ).morpho;
     const market = morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const action = market.supply({
+      marketData: await seededMarketData(client, market),
       userAddress: client.account.address,
       assets,
       deadline: nextHour(),
@@ -2565,6 +2578,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
     ).morpho;
     const market = morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const action = market.supply({
+      marketData: await seededMarketData(client, market),
       userAddress: client.account.address,
       assets,
       deadline: nextHour(),
@@ -2616,7 +2630,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
       morphoViemExtension({ supportSignature: true }),
     ).morpho;
     const vault = morpho.vaultV2(RE7_USDT, mainnet.id);
-    const vaultData = await vault.getData();
+    const vaultData = await seededVaultData(client, vault);
     const action = vault.deposit({
       userAddress: client.account.address,
       amount: assets,

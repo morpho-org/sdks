@@ -16,7 +16,8 @@ import {
   getChainAddresses,
   Time,
 } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, maxUint256 } from "viem";
+import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
+import { readContract } from "viem/actions";
 import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1PublicAllocations,
@@ -38,6 +39,7 @@ import {
   getBlueAuthorizationRequirement,
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { validateBlueMarketDeadShares } from "../../helpers/deadShares.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -66,6 +68,7 @@ import {
   type BlueWithdrawCollateralAction,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
   type MorphoClientType,
@@ -245,6 +248,8 @@ export interface BlueActions {
    * share-price bound or `slippageTolerance`.
    *
    * @param params.userAddress - User funding and receiving the supply position.
+   * @param params.marketData - Snapshot of this market from `getMarketData()` (or `fetchMarket` in
+   *   `@morpho-org/blue-sdk-viem`), used to check its dead deposit before building.
    * @param params.assets - Gross loan-token assets funded before the referral fee.
    * @param params.nativeAmount - Optional full native funding; must equal `assets` and requires wNative.
    * @param params.deadline - Final call deadline in Unix seconds.
@@ -272,6 +277,9 @@ export interface BlueActions {
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
+   * @throws {MarketIdMismatchError} when `marketData` belongs to another market.
+   * @throws {MissingDeadSharesDataError} when `marketData` has no `deadSupplyShares`.
+   * @throws {InsufficientDeadSharesError} when the market holds fewer than `MIN_DEAD_SHARES` supply shares at `DEAD_ADDRESS`.
    * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
@@ -293,6 +301,7 @@ export interface BlueActions {
    * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
    * const action = market.supply({
    *   userAddress,
+   *   marketData: await market.getMarketData(),
    *   assets: 1_000_000n,
    *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
    * });
@@ -301,18 +310,37 @@ export interface BlueActions {
    * // tx satisfies Readonly<Transaction<BlueSupplyAction>>
    * ```
    */
-  supply: (params: {
-    readonly userAddress: Address;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueSupplyAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+  supply: {
+    (params: {
+      readonly userAddress: Address;
+      readonly marketData: Market;
+      readonly assets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    }): ActionOutput<
+      BlueSupplyAction,
+      readonly RequirementSignature[],
+      BlueTokenRequirementsParams
+    >;
+    /**
+     * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
+     * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+     */
+    (params: {
+      readonly userAddress: Address;
+      readonly assets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    }): ActionOutput<
+      BlueSupplyAction,
+      readonly RequirementSignature[],
+      BlueTokenRequirementsParams
+    >;
+  };
 
   /**
    * Prepares a direct BlueBundlesV1 loan-asset withdrawal by assets or shares.
@@ -980,6 +1008,13 @@ export interface BlueActions {
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
    * vault's BluePublicAllocator permissions and allocation caps at one block.
    * The snapshot keeps the fetched block's timestamp as its default planning time.
+   * It always records Blue's loan-token balance in `blueBalances` at that
+   * block, so balance-based rejection applies to plans from this fetcher.
+   * Sizing has zero margin over that snapshot balance; activity on other Blue
+   * markets with the same loan token can make a plan revert. Refetch close to
+   * submission; there is no balance-buffer option.
+   * Hand-built data without a balance uses summed snapshot-market liquidity
+   * only to size plans and may add about the penalty in extra paid assets.
    *
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
@@ -1019,6 +1054,11 @@ export interface BlueActions {
    * persist across every leg of a plan. Operation plans keep
    * `allocatorCapHeadroom` (1% of the cap by default) free under each target
    * BluePublicAllocator cap unless the operation shortfall needs it.
+   * With an explicit `blueBalances` value, plans are rejected when Blue cannot
+   * fund the penalty flash loan, an earlier market-sourced withdrawal, or the
+   * final transfer. A missing balance uses summed snapshot-market liquidity
+   * only to size plans and may make them larger; it cannot cause a balance-based
+   * rejection.
    * For `refinance`, compute the plan on the destination-market handle (for
    * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
    * source-market handle. Pass the source position's `borrowAssets` accrued to
@@ -1034,7 +1074,7 @@ export interface BlueActions {
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
-   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
+   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD, or a selected borrow/withdraw plan otherwise covers its shortfall but its planned penalty exceeds the operation amount.
    * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
@@ -1045,7 +1085,7 @@ export interface BlueActions {
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
-   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall and, for refinance, its planned allocator penalties.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the operation shortfall or refinance penalties, or an explicit Blue balance cannot fund a required transfer.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
    * ```ts
@@ -1217,6 +1257,36 @@ export class MorphoBlue implements BlueActions {
   /** {@inheritDoc BlueActions.supply} */
   supply(params: {
     readonly userAddress: Address;
+    readonly marketData: Market;
+    readonly assets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+  }): ActionOutput<
+    BlueSupplyAction,
+    readonly RequirementSignature[],
+    BlueTokenRequirementsParams
+  >;
+  /**
+   * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
+   * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+   */
+  supply(params: {
+    readonly userAddress: Address;
+    readonly assets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+  }): ActionOutput<
+    BlueSupplyAction,
+    readonly RequirementSignature[],
+    BlueTokenRequirementsParams
+  >;
+  supply(params: {
+    readonly userAddress: Address;
+    readonly marketData?: Market;
     readonly assets: bigint;
     readonly nativeAmount?: bigint;
     readonly deadline: bigint;
@@ -1239,6 +1309,17 @@ export class MorphoBlue implements BlueActions {
       fundedAmount: assets,
       nativeAmount,
     });
+
+    if (params.marketData != null) {
+      if (params.marketData.id !== this.marketParams.id) {
+        throw new MarketIdMismatchError(
+          params.marketData.id,
+          this.marketParams.id,
+        );
+      }
+      // Throws when the market lacks a sufficient dead deposit; nothing to return.
+      validateBlueMarketDeadShares(params.marketData);
+    }
 
     return {
       getRequirements: (
@@ -2073,6 +2154,13 @@ export class MorphoBlue implements BlueActions {
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
    * vault's BluePublicAllocator permissions and allocation caps at one block.
    * The snapshot keeps the fetched block's timestamp as its default planning time.
+   * It always records Blue's loan-token balance in `blueBalances` at that
+   * block, so balance-based rejection applies to plans from this fetcher.
+   * Sizing has zero margin over that snapshot balance; activity on other Blue
+   * markets with the same loan token can make a plan revert. Refetch close to
+   * submission; there is no balance-buffer option.
+   * Hand-built data without a balance uses summed snapshot-market liquidity
+   * only to size plans and may add about the penalty in extra paid assets.
    *
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
@@ -2131,7 +2219,7 @@ export class MorphoBlue implements BlueActions {
       chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     };
-    const [targetMarket, vaultEntries] = await Promise.all([
+    const [targetMarket, vaultEntries, blueBalance] = await Promise.all([
       fetchMarket(this.marketParams.id, client, fetchParams),
       Promise.all(
         vaultAddresses.map(async (address) => {
@@ -2147,11 +2235,19 @@ export class MorphoBlue implements BlueActions {
           return { publicAllocatorData, vault };
         }),
       ),
+      readContract(client, {
+        address: this.marketParams.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [getChainAddresses(this.chainId).blue],
+        blockNumber: block.number,
+      }),
     ]);
 
     return new VaultV2BlueReallocationData({
       chainId: this.chainId,
       timestamp: block.timestamp,
+      blueBalances: { [this.marketParams.loanToken]: blueBalance },
       markets: { [targetMarket.id]: targetMarket },
       vaults: Object.fromEntries(
         vaultEntries.map(({ vault }) => [vault.address, vault]),
@@ -2193,6 +2289,11 @@ export class MorphoBlue implements BlueActions {
    * persist across every leg of a plan. Operation plans keep
    * `allocatorCapHeadroom` (1% of the cap by default) free under each target
    * BluePublicAllocator cap unless the operation shortfall needs it.
+   * With an explicit `blueBalances` value, plans are rejected when Blue cannot
+   * fund the penalty flash loan, an earlier market-sourced withdrawal, or the
+   * final transfer. A missing balance uses summed snapshot-market liquidity
+   * only to size plans and may make them larger; it cannot cause a balance-based
+   * rejection.
    * For `refinance`, compute the plan on the destination-market handle (for
    * example, `client.morpho.blue(destination.marketParams, chainId)`), not the
    * source-market handle. Pass the source position's `borrowAssets` accrued to
@@ -2208,7 +2309,7 @@ export class MorphoBlue implements BlueActions {
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when the cap-accrual buffer, allocator cap headroom, utilization, penalty limit, or referral-fee percentage is negative.
-   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD.
+   * @throws {InputExceedsMaxError} when the allocator cap headroom, a utilization, or a penalty limit exceeds WAD, or a selected borrow/withdraw plan otherwise covers its shortfall but its planned penalty exceeds the operation amount.
    * @throws {ReferralFeePctExceededError} when the referral-fee percentage is at least WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
@@ -2219,7 +2320,7 @@ export class MorphoBlue implements BlueActions {
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
-   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall and, for refinance, its planned allocator penalties.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the operation shortfall or refinance penalties, or an explicit Blue balance cannot fund a required transfer.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
    * ```ts

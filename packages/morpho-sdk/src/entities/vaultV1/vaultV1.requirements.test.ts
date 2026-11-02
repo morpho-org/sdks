@@ -30,7 +30,11 @@ import {
 } from "../../../test/helpers/signer.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { computeVaultMaxShareAllowance } from "../../helpers/index.js";
+import {
+  computeVaultMaxShareAllowance,
+  MIN_DEAD_SHARES,
+  MIN_VAULT_V2_DEAD_ASSETS,
+} from "../../helpers/index.js";
 import {
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
@@ -1037,6 +1041,13 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
       asset: IN_KIND_ASSET,
       toShares: () => shares,
       accrueInterest: () => ({ toShares: () => shares }),
+      deadShares: MIN_DEAD_SHARES,
+      deadAssets: MIN_VAULT_V2_DEAD_ASSETS,
+      absoluteCaps: {},
+      _totalAssets: 1n,
+      totalSupply: 0n,
+      virtualShares: 1n,
+      accrualAdapters: [],
     }) as never;
 
   const prepareMigration = (handle: ReturnType<typeof createMockClient>) =>

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-test",
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures and registry-driven E2E chain selection for tests on forks.",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -14,6 +14,17 @@
     "email": "contact@morpho.org"
   },
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./midnight": "./src/midnight.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "midnight": [
+        "src/midnight.ts"
+      ]
+    }
+  },
   "files": [
     "lib"
   ],
@@ -29,23 +40,42 @@
     "@morpho-org/blue-sdk": "^6.0.0 || ^7.0.0 || ^8.0.0",
     "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0 || ^4.0.0",
     "@morpho-org/test": "^2.11.0",
-    "viem": "^2.21.10"
+    "viem": "^2.21.10",
+    "@morpho-org/midnight-sdk": "^2.2.0"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "typescript": "catalog:",
-    "viem": "^2.55.10"
+    "viem": "^2.55.10",
+    "@morpho-org/midnight-sdk": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@morpho-org/midnight-sdk": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",
     "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "midnight": [
+          "lib/esm/midnight.d.ts"
+        ]
+      }
+    },
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",
         "import": "./lib/esm/index.js",
         "require": "./lib/cjs/index.js"
+      },
+      "./midnight": {
+        "types": "./lib/esm/midnight.d.ts",
+        "import": "./lib/esm/midnight.js",
+        "require": "./lib/cjs/midnight.js"
       }
     }
   }

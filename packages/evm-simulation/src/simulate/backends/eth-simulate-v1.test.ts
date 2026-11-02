@@ -278,7 +278,7 @@ describe.sequential("executePlan", () => {
   });
 
   test.each(["absent", "null"])(
-    "behavior: %s per-call logs are treated as no transfers",
+    "behavior: %s per-call logs are returned empty and marked missing",
     async (variant) => {
       const calls = okCalls(3);
       if (variant === "absent") delete calls[1]?.logs;
@@ -286,6 +286,7 @@ describe.sequential("executePlan", () => {
       respondHappy(calls);
       const execution = await executePlan(params);
       expect(execution.calls[1]?.result.logs).toEqual([]);
+      expect(execution.calls[1]?.logsMissing).toBe(true);
     },
   );
 

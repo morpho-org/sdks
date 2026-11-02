@@ -30,6 +30,7 @@ import {
   toSimulationAuthorizations,
   type VerifiedSimulationResult,
 } from "../../src/index.js";
+import { seededMarketData, seededVaultData } from "../setup.js";
 import {
   createE2eMarket,
   describeE2e,
@@ -185,6 +186,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(market, chainId)
       .supply({
+        marketData: await seededMarketData(client, market),
         userAddress: client.account.address,
         assets,
         deadline: maxUint256,
@@ -261,6 +263,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
         .extend(morphoViemExtension({ supportSignature: false }))
         .morpho.blue(market, chainId)
         .supply({
+          marketData: await seededMarketData(client, market),
           userAddress: client.account.address,
           assets,
           nativeAmount: assets,
@@ -344,6 +347,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(market, chainId)
       .supply({
+        marketData: await seededMarketData(client, market),
         userAddress: client.account.address,
         assets,
         deadline: maxUint256,
@@ -402,7 +406,7 @@ describeActors(vaultV2Scenario, (test, chainId) => {
     const deposit = vaultV2.deposit({
       amount: assets,
       userAddress: user,
-      vaultData: await vaultV2.getData(),
+      vaultData: await seededVaultData(client, vaultV2),
     });
     const depositRequirements = await deposit.getRequirements();
     const blockNumber = await client.getBlockNumber({ cacheTime: 0 });

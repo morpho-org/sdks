@@ -1,5 +1,6 @@
 import {
   AccrualVaultV2,
+  DEAD_ADDRESS,
   getChainAddresses,
   Holding,
   Market,
@@ -207,6 +208,20 @@ const createRpc = ({
         abi: blueAbi,
         functionName: "market",
         result: [0n, 0n, 0n, 0n, 0n, 0n],
+      }),
+    ],
+    [
+      `${blue.toLowerCase()}|${
+        encodeFunctionData({
+          abi: blueAbi,
+          functionName: "position",
+          args: [marketId, DEAD_ADDRESS],
+        }).slice(0, 10) as Hex
+      }`,
+      encodeFunctionResult({
+        abi: blueAbi,
+        functionName: "position",
+        result: [0n, 0n, 0n],
       }),
     ],
     [

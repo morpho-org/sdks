@@ -1,5 +1,12 @@
 # @morpho-org/blue-sdk
 
+## 8.1.0
+
+### Minor Changes
+
+- Adds `DEAD_ADDRESS` (`0x…dEaD`, where protocol dead deposits are minted) and optional dead-share fields on fetched snapshots: `Market.deadSupplyShares`, `Vault.deadShares`, and `VaultV2.deadShares` / `VaultV2.deadAssets`. `VaultV2.absoluteCaps` holds absolute caps keyed by cap id. All fields are `undefined` on hand-built or API-sourced snapshots.
+- Add the optional `IAccrualVaultV2Adapter.pendingAllocationIncrease` method, implemented by the Morpho Market V1 adapters and the Vault V1 adapter. Vault V2 `maxDeposit` now counts pending liquidity-adapter interest in cap headroom as of the vault's accrual timestamp.
+
 ## 8.0.2
 
 ### Patch Changes

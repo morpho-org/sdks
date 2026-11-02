@@ -158,11 +158,11 @@ describe.sequential("simulate — pipeline delegation", () => {
     expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
-  it("final mode with authorizations throws SimulationValidationError", async () => {
+  it("final mode accepts authorization descriptors", async () => {
     await expect(
       simulate(makeConfig(), makeParams({ authorizations: [] } as never)),
-    ).rejects.toThrow(SimulationValidationError);
-    expect(mockRunSimulation).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
+    expect(mockRunSimulation).toHaveBeenCalled();
   });
 });
 

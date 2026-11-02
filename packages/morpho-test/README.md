@@ -25,6 +25,8 @@
 
 Framework-agnostic extension of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports test fixtures useful for E2E tests on forks, and registry-driven helpers (`getE2eRuns`, `getE2eMatrix`) that decide which chains an E2E scenario runs on from the deployments it requires.
 
+Registry-matrix helpers are pure; fork-setup helpers mutate fork state through an injected `AnvilTestClient`. Shared Midnight fixtures are available separately from `@morpho-org/morpho-test/midnight` and require the optional `@morpho-org/midnight-sdk` peer. Root imports do not load Midnight SDK.
+
 ## Installation
 
 ```bash

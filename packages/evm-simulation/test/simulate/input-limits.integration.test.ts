@@ -39,6 +39,7 @@ import {
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import { seededMarketData, seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -54,6 +55,7 @@ const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const CBBTC: Address = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
 const V1: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
 const V2: Address = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+const VAULT_BUNDLES_V1 = getChainAddresses(1).bundles!.vaultBundlesV1!;
 const marketParams = new MarketParams({
   collateralToken: CBBTC,
   loanToken: USDC,
@@ -173,8 +175,23 @@ async function check(
       : operation.type === "vaultV1MigrateToV2"
         ? { ...operation, targetVault: V1 }
         : { ...operation, vault: operation.vault === V1 ? V2 : V1 };
+  // Allow the bundle's real share approval so the operation check, not the approval check, rejects.
+  const approvals =
+    "vault" in operation
+      ? [
+          {
+            type: "token" as const,
+            token: operation.vault,
+            owner: client.account.address,
+            spender: VAULT_BUNDLES_V1,
+          },
+        ]
+      : [];
   await expect(
-    simulate(config, { ...params, limits: { operations: [wrongSubject] } }),
+    simulate(config, {
+      ...params,
+      limits: { operations: [wrongSubject], approvals },
+    }),
   ).rejects.toBeInstanceOf(
     operation.type === "vaultV1MigrateToV2"
       ? SlippageCheckUnavailableError
@@ -203,7 +220,7 @@ async function check(
     await expect(
       simulate(config, {
         ...params,
-        limits: { operations: [{ ...wrongSubject, quote }] },
+        limits: { operations: [{ ...wrongSubject, quote }], approvals },
       }),
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   }
@@ -247,7 +264,12 @@ test("same-token combined Blue operations derive net wallets, including on-behal
   });
   await execute(
     client,
-    market.supply({ userAddress, deadline, assets: 100_000_000n }),
+    market.supply({
+      marketData: await seededMarketData(client, market),
+      userAddress,
+      deadline,
+      assets: 100_000_000n,
+    }),
   );
   const borrow = market.supplyCollateralBorrow({
     userAddress,
@@ -390,7 +412,12 @@ test("full and share-mode Blue repayments derive from live debt", async ({
   await client.deal({ erc20: CBBTC, amount: 10_000_000n });
   await execute(
     client,
-    market.supply({ userAddress, deadline, assets: 20_000_000n }),
+    market.supply({
+      marketData: await seededMarketData(client, market),
+      userAddress,
+      deadline,
+      assets: 20_000_000n,
+    }),
   );
   await execute(
     client,
@@ -517,7 +544,14 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   const common = { userAddress, deadline: maxUint256 };
   await client.deal({ erc20: USDC, amount: 100_000_000n });
   await client.deal({ erc20: CBBTC, amount: 10_000_000n });
-  await execute(client, market.supply({ ...common, assets: 20_000_000n }));
+  await execute(
+    client,
+    market.supply({
+      marketData: await seededMarketData(client, market),
+      ...common,
+      assets: 20_000_000n,
+    }),
+  );
   await execute(
     client,
     market.supplyCollateralBorrow({
@@ -531,7 +565,11 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   const subject = { marketId: marketParams.id };
   const cases: readonly [Action, InputOperationLimit, InputOperationLimit][] = [
     [
-      market.supply({ ...common, assets: 1_000_000n }),
+      market.supply({
+        marketData: await seededMarketData(client, market),
+        ...common,
+        assets: 1_000_000n,
+      }),
       { ...subject, type: "blueSupply", inputs: { assets: 1_000_000n } },
       { ...subject, type: "blueSupply", inputs: { assets: 1_000_001n } },
     ],
@@ -745,6 +783,7 @@ test("native input aliases verify real SDK wrapping and reject mismatched amount
     .extend(morphoViemExtension({ supportSignature: false }))
     .morpho.blue(nativeMarket, 1)
     .supply({
+      marketData: await seededMarketData(client, nativeMarket),
       userAddress,
       assets,
       nativeAmount: assets,
@@ -832,7 +871,11 @@ test("borrows and withdrawals split across same-token markets fail while honest 
     await client.deal({ erc20: params.collateralToken, amount: 10_000_000n });
     await execute(
       client,
-      markets[index]!.supply({ ...common, assets: 20_000_000n }),
+      markets[index]!.supply({
+        marketData: await seededMarketData(client, markets[index]!),
+        ...common,
+        assets: 20_000_000n,
+      }),
     );
     await execute(
       client,
@@ -973,7 +1016,7 @@ test("V1/V2 inputs derive without builder metadata; overlapping redemption walle
             amount: 10_000_000n,
             userAddress,
             deadline,
-            vaultData: await morpho.vaultV2(vault, 1).getData(),
+            vaultData: await seededVaultData(client, morpho.vaultV2(vault, 1)),
           });
     const depositType = version === "v1" ? "vaultV1Deposit" : "vaultV2Deposit";
     await check(client, [
@@ -1045,7 +1088,7 @@ test("assets-mode migration rejects a different V1 source vault", async ({
     userAddress,
     deadline,
     sourceVault: await source.getData(),
-    targetVault: await target.getData(),
+    targetVault: await seededVaultData(client, target),
   });
   const tx = action.buildTx();
   const params = {
@@ -1078,7 +1121,17 @@ test("assets-mode migration rejects a different V1 source vault", async ({
   await expect(
     simulate(config, {
       ...params,
-      limits: { operations: [{ ...operation, sourceVault: V1 }] },
+      limits: {
+        operations: [{ ...operation, sourceVault: V1 }],
+        approvals: [
+          {
+            type: "token",
+            token: actualSource,
+            owner: userAddress,
+            spender: VAULT_BUNDLES_V1,
+          },
+        ],
+      },
     }),
   ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
 }, 180_000);
@@ -1117,7 +1170,7 @@ test("migration derives both assets and shares modes, net of referral fee", asyn
       userAddress,
       deadline,
       sourceVault: await source.getData(),
-      targetVault: await target.getData(),
+      targetVault: await seededVaultData(client, target),
       referralFeePct: referralFee,
       referralFeeRecipient: "0x000000000000000000000000000000000000dEaD",
     });
@@ -1257,7 +1310,7 @@ test("migration into a target holding the source fails closed on any adverse con
     userAddress,
     deadline,
     sourceVault: await source.getData(),
-    targetVault: await morpho.vaultV2(targetVault, 1).getData(),
+    targetVault: await seededVaultData(client, morpho.vaultV2(targetVault, 1)),
   });
   const tx = action.buildTx();
   const authorizations = toSimulationAuthorizations({

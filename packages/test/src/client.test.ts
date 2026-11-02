@@ -1,6 +1,9 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
+  type Chain,
+  encodeFunctionResult,
+  erc20Abi,
   type Hex,
   http,
   InternalRpcError,
@@ -9,7 +12,7 @@ import {
   zeroAddress,
   zeroHash,
 } from "viem";
-import { mainnet } from "viem/chains";
+import { mainnet, tempo } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import { createAnvilTestClient } from "./client.js";
 
@@ -41,7 +44,8 @@ const startNode = async (
   {
     replyToTxpool = false,
     timeout,
-  }: { replyToTxpool?: boolean; timeout?: number } = {},
+    chain = mainnet,
+  }: { replyToTxpool?: boolean; timeout?: number; chain?: Chain } = {},
 ) => {
   const methods: string[] = [];
   const server = createServer((req, res) => {
@@ -70,7 +74,7 @@ const startNode = async (
         retryCount: 0,
         timeout,
       }),
-      mainnet,
+      chain,
     ),
     close: () => server.close(),
   };
@@ -81,6 +85,35 @@ describe.sequential("createAnvilTestClient", () => {
     const client = createAnvilTestClient(http("http://127.0.0.1:0"), mainnet);
 
     expect(client.pollingInterval).toBe(50);
+  });
+
+  test("sets Tempo's fee-token balance through the client method", async () => {
+    const amount = 123n;
+    const node = await startNode(
+      async (method) => ({
+        result:
+          method === "eth_call"
+            ? encodeFunctionResult({
+                abi: erc20Abi,
+                functionName: "balanceOf",
+                result: amount,
+              })
+            : null,
+      }),
+      { chain: tempo },
+    );
+
+    try {
+      await expect(
+        node.client.setFeeTokenBalance({
+          account: zeroAddress,
+          amount,
+        }),
+      ).resolves.toBeUndefined();
+      expect(node.methods).toEqual(["anvil_setStorageAt", "eth_call"]);
+    } finally {
+      node.close();
+    }
   });
 
   // Mines the transaction while a slow eth_getTransactionReceipt is in flight,
@@ -280,14 +313,12 @@ describe.sequential("createAnvilTestClient", () => {
   test.each(["pending", "queued"] as const)(
     "skips the receipt lookup while the transaction is %s",
     async (pool) => {
-      let pooled = true;
-      setTimeout(() => {
-        pooled = false;
-      }, 200);
+      let poolReads = 0;
 
       const node = await startNode(
         async (method) => {
-          if (method === "txpool_content")
+          if (method === "txpool_content") {
+            const pooled = poolReads++ === 0;
             return {
               result: {
                 pending: {},
@@ -295,6 +326,7 @@ describe.sequential("createAnvilTestClient", () => {
                 ...(pooled && { [pool]: { [zeroAddress]: { "0": { hash } } } }),
               },
             };
+          }
           if (method === "eth_getTransactionReceipt")
             return { result: receipt };
           return { result: null };
@@ -305,12 +337,11 @@ describe.sequential("createAnvilTestClient", () => {
         await expect(
           node.client.waitForTransactionReceipt({ hash, timeout: 3_000 }),
         ).resolves.toMatchObject({ transactionHash: hash });
-        expect(node.methods.length).toBeGreaterThan(2);
-        expect(
-          node.methods.filter(
-            (method) => method === "eth_getTransactionReceipt",
-          ),
-        ).toEqual(["eth_getTransactionReceipt"]);
+        expect(node.methods).toEqual([
+          "txpool_content",
+          "txpool_content",
+          "eth_getTransactionReceipt",
+        ]);
       } finally {
         node.close();
       }

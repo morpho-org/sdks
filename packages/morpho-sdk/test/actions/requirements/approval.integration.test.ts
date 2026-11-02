@@ -9,6 +9,7 @@ import {
 import { Re7UsdtVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
+import { seedVaultV2DeadDeposits } from "../../helpers/vaultV2.js";
 
 describe("Approval", () => {
   test("should approve once for USDT vaultV2 with allowance 0", async ({
@@ -21,6 +22,12 @@ describe("Approval", () => {
       erc20: Re7UsdtVaultV2.asset,
       amount: amount,
     });
+    await seedVaultV2DeadDeposits(
+      client,
+      client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id),
+    );
 
     const vaultBundlesV1 = getChainAddress(
       mainnet.id,
@@ -71,6 +78,12 @@ describe("Approval", () => {
       erc20: Re7UsdtVaultV2.asset,
       amount: amount,
     });
+    await seedVaultV2DeadDeposits(
+      client,
+      client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id),
+    );
 
     const vaultBundlesV1 = getChainAddress(
       mainnet.id,

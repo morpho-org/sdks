@@ -302,7 +302,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
 
     expect(result.verification.operations).toEqual([
       {
-        operation: "midnightSupplyCollateral",
+        operation: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 0n,
         account: user,
@@ -316,6 +316,74 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
         },
       },
     ]);
+  });
+
+  test("rejects native value above the collateral quote when the surplus is transferred away", async ({
+    client,
+  }) => {
+    const user = await setUp(client);
+    const assets = parseEther("1");
+    const extra = parseEther("0.1");
+    const output = await makeOutput(client, {
+      group: groupA,
+      supplies: [{ collateralIndex: 0n, assets }],
+      nativeAmount: assets,
+    });
+    await fulfilRequirements(client, output);
+    const tx = output.buildTx();
+
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [
+          {
+            from: user,
+            to: tx.to,
+            data: tx.data,
+            value: assets + extra,
+          },
+          {
+            from: user,
+            to: wNative,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [other, extra],
+            }),
+          },
+        ],
+        limits: toSimulationLimits(tx.action, { owner: user }),
+      }),
+    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+  });
+
+  test("accepts exact native value and surplus retained as sender wNative", async ({
+    client,
+  }) => {
+    const user = await setUp(client);
+    const assets = parseEther("1");
+    const output = await makeOutput(client, {
+      group: groupA,
+      supplies: [{ collateralIndex: 0n, assets }],
+      nativeAmount: assets,
+    });
+    await fulfilRequirements(client, output);
+    const tx = output.buildTx();
+
+    for (const extra of [0n, parseEther("0.1")]) {
+      await simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [
+          {
+            from: user,
+            to: tx.to,
+            data: tx.data,
+            value: assets + extra,
+          },
+        ],
+        limits: toSimulationLimits(tx.action, { owner: user }),
+      });
+    }
   });
 
   test("aggregates repeated collateral supplies and permits partial native wrapping", async ({
@@ -344,7 +412,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
 
     expect(result.verification.operations).toEqual([
       {
-        operation: "midnightSupplyCollateral",
+        operation: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 0n,
         account: user,
@@ -387,7 +455,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
 
     expect(result.verification.operations).toEqual([
       {
-        operation: "midnightSupplyCollateral",
+        operation: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 1n,
         account: user,
@@ -401,7 +469,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
         },
       },
       {
-        operation: "midnightSupplyCollateral",
+        operation: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 0n,
         account: user,
@@ -451,7 +519,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     expect(error).toHaveProperty(
       "message",
       expect.stringContaining(
-        'Limit operation 0 (midnightSupplyCollateral): slippage for "collateralSupplied"',
+        'Limit operation 0 (midnightSupplyCollateralMakeBorrow): slippage for "collateralSupplied"',
       ),
     );
 
@@ -501,7 +569,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     expect(error).toHaveProperty(
       "message",
       expect.stringContaining(
-        'Limit operation 1 (midnightSupplyCollateral): slippage for "collateralSupplied"',
+        'Limit operation 1 (midnightSupplyCollateralMakeBorrow): slippage for "collateralSupplied"',
       ),
     );
 

@@ -361,6 +361,8 @@ export interface TakeableOfferContext {
   readonly marketId?: Hash;
   readonly side?: MidnightApiBookSide;
   readonly maker?: Address;
+  /** Taker address whose own offers must not appear in the response. */
+  readonly taker?: Address;
   readonly marketIds?: readonly Hash[];
   readonly groups?: readonly Hash[];
 }
@@ -455,13 +457,20 @@ export function mapBoundTakeableOffers(
       );
     }
     if (
-      context.groups != null &&
-      context.groups.length > 0 &&
-      !context.groups.some((group) => isHexEqual(group, take.offer.group))
+      context.taker != null &&
+      isAddressEqual(take.offer.maker, context.taker)
     ) {
       throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer group "${take.offer.group}" is outside the requested groups filter.`,
+        `Midnight API takeable offer maker "${take.offer.maker}" matches the requested taker "${context.taker}".`,
       );
+    }
+    if (context.groups != null && context.groups.length > 0) {
+      const offerGroup = take.offer.group;
+      if (!context.groups.some((group) => isHexEqual(group, offerGroup))) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer group "${offerGroup}" is outside the requested groups filter.`,
+        );
+      }
     }
 
     return take;

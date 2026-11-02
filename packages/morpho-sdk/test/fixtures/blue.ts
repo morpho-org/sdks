@@ -1,4 +1,5 @@
-import { MarketParams } from "@morpho-org/blue-sdk";
+import { Market, MarketParams, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+import { MIN_DEAD_SHARES } from "../../src/index.js";
 
 export const CbbtcUsdcBlue = new MarketParams({
   collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
@@ -32,3 +33,20 @@ export const WstethWethBlue = new MarketParams({
   irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
   lltv: 945000000000000000n,
 });
+
+/**
+ * Hand-built market snapshot that passes the dead-deposit check, for tests whose subject fails
+ * before market state matters (wrong chain, missing code).
+ */
+export const deadSeededMarketData = (params: MarketParams) =>
+  new Market({
+    params,
+    totalSupplyAssets: 10n ** 12n,
+    totalBorrowAssets: 0n,
+    totalSupplyShares: 10n ** 18n,
+    totalBorrowShares: 0n,
+    lastUpdate: 0n,
+    fee: 0n,
+    price: ORACLE_PRICE_SCALE,
+    deadSupplyShares: MIN_DEAD_SHARES,
+  });

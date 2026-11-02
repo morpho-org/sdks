@@ -11,7 +11,7 @@ import { type Chain, createClient, http, maxUint256, parseUnits } from "viem";
 import { base, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { ChainIdMismatchError, morphoViemExtension } from "../../src/index.js";
-import { CbbtcUsdcBlue } from "../fixtures/blue.js";
+import { CbbtcUsdcBlue, deadSeededMarketData } from "../fixtures/blue.js";
 import { KeyrockUsdcVaultV2 } from "../fixtures/vaultV2.js";
 import { test as mainnetTest } from "../setup.js";
 
@@ -61,6 +61,7 @@ describe("chaos: S5 wrong chain", () => {
       );
       const action = client.morpho.blue(CbbtcUsdcBlue, mainnet.id).supply({
         userAddress: USER,
+        marketData: deadSeededMarketData(CbbtcUsdcBlue),
         assets: parseUnits("10", 6),
         deadline: maxUint256,
       });

@@ -1914,7 +1914,7 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
     expect(limits.operations).toHaveLength(2);
     for (const operation of limits.operations) {
       expect(operation).toMatchObject({
-        type: "midnightSupplyCollateral",
+        type: "midnightSupplyCollateralMakeBorrow",
         marketId: MidnightMarketUtils.toId(market),
         market: MidnightMarketUtils.toStruct(market),
       });
@@ -2089,7 +2089,7 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
     const limits = toSimulationLimits(tx.action, { owner: OWNER });
     expect(limits.operations).toEqual([
       {
-        type: "midnightSupplyCollateral",
+        type: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 1n,
         account: OWNER,
@@ -2141,14 +2141,14 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
     const limits = toSimulationLimits(tx.action, { owner: OWNER });
     expect(limits.operations).toEqual([
       {
-        type: "midnightSupplyCollateral",
+        type: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 1n,
         account: OWNER,
         quote: { assetsPaid: 2_000n, collateralSupplied: 2_000n },
       },
       {
-        type: "midnightSupplyCollateral",
+        type: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 0n,
         account: OWNER,
@@ -2166,11 +2166,30 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
     const limits = toSimulationLimits(tx.action, { owner: OWNER });
     expect(limits.operations).toEqual([
       {
-        type: "midnightSupplyCollateral",
+        type: "midnightSupplyCollateralMakeBorrow",
         marketId: tx.action.args.market,
         collateralIndex: 1n,
         account: OWNER,
         quote: { assetsPaid: 5_000n, collateralSupplied: 5_000n },
+      },
+    ]);
+    expect(() => parse(limits)).not.toThrow();
+  });
+
+  it("keeps zero-root collateral-only maker limits as midnightSupplyCollateral", () => {
+    const tx = maker([{ collateralIndex: 1n, assets: 2_000n }]);
+    const action = {
+      ...tx.action,
+      args: { ...tx.action.args, root: zeroHash },
+    };
+    const limits = toSimulationLimits(action, { owner: OWNER });
+    expect(limits.operations).toEqual([
+      {
+        type: "midnightSupplyCollateral",
+        marketId: tx.action.args.market,
+        collateralIndex: 1n,
+        account: OWNER,
+        quote: { assetsPaid: 2_000n, collateralSupplied: 2_000n },
       },
     ]);
     expect(() => parse(limits)).not.toThrow();

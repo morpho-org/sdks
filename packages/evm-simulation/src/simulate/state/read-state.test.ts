@@ -887,14 +887,205 @@ describe("decodeStateRead", () => {
 
 describe("planStateReads — Midnight collateral", () => {
   const midnight: Address = "0x0000000000000000000000000000000000000005";
-  const midnightLimit: ParsedOperationLimit = {
+  const midnightLimit = {
     type: "midnightSupplyCollateral",
     marketId,
     collateralIndex: 1n,
     account: receiver,
     quote: { assetsPaid: 10n, collateralSupplied: 10n },
     slippageTolerance: 0n,
-  };
+  } satisfies ParsedOperationLimit;
+  const midnightLimitForType = (
+    type: "midnightSupplyCollateral" | "midnightSupplyCollateralMakeBorrow",
+  ) =>
+    type === "midnightSupplyCollateral"
+      ? ({
+          ...midnightLimit,
+          type: "midnightSupplyCollateral",
+        } satisfies ParsedOperationLimit)
+      : ({
+          ...midnightLimit,
+          type: "midnightSupplyCollateralMakeBorrow",
+          account: owner,
+        } satisfies ParsedOperationLimit);
+  test("error: maker collateral rejects an account other than the bundle sender", () => {
+    expect(() =>
+      planStateReads({
+        operations: [
+          {
+            limit: {
+              type: "midnightSupplyCollateralMakeBorrow",
+              marketId,
+              collateralIndex: 1n,
+              account: receiver,
+              quote: { assetsPaid: 10n, collateralSupplied: 10n },
+              slippageTolerance: 0n,
+            },
+            assetsPaid: asset,
+          },
+        ],
+        owner,
+        morpho: zeroAddress,
+        midnight,
+      }),
+    ).toThrow(SlippageCheckUnavailableError);
+  });
+  test("behavior: maker collateral accepts an account equal to the bundle sender", () => {
+    expect(() =>
+      planStateReads({
+        operations: [
+          {
+            limit: {
+              type: "midnightSupplyCollateralMakeBorrow",
+              marketId,
+              collateralIndex: 1n,
+              account: owner,
+              quote: { assetsPaid: 10n, collateralSupplied: 10n },
+              slippageTolerance: 0n,
+            },
+            assetsPaid: asset,
+          },
+        ],
+        owner,
+        morpho: zeroAddress,
+        midnight,
+      }),
+    ).not.toThrow();
+  });
+  test("behavior: wNative collateral payment includes native traces", () => {
+    const plan = planStateReads({
+      operations: [{ limit: midnightLimit, assetsPaid: asset }],
+      owner,
+      morpho: zeroAddress,
+      midnight,
+      wNative: asset,
+      nativeValueSent: true,
+    });
+    const paymentRead = plan.reads.find(
+      (read) => read.kind === "erc20.balance" && read.token === asset,
+    );
+    expect(paymentRead).toBeDefined();
+    expect(plan.operations[0]?.measurements).toContainEqual({
+      field: "assetsPaid",
+      type: "native",
+      account: owner,
+      readId: paymentRead?.id,
+    });
+  });
+  test("behavior: wNative collateral without native value remains a balance measurement", () => {
+    const plan = planStateReads({
+      operations: [{ limit: midnightLimit, assetsPaid: asset }],
+      owner,
+      morpho: zeroAddress,
+      midnight,
+      wNative: asset,
+      nativeValueSent: false,
+    });
+    expect(
+      plan.operations[0]?.measurements.find(
+        (measurement) => measurement.field === "assetsPaid",
+      ),
+    ).toMatchObject({
+      field: "assetsPaid",
+      type: "balance",
+      readId: `balance:${asset}:${owner}`,
+    });
+  });
+  test("behavior: non-wNative collateral payment remains a balance measurement", () => {
+    const plan = planStateReads({
+      operations: [{ limit: midnightLimit, assetsPaid: vault }],
+      owner,
+      morpho: zeroAddress,
+      midnight,
+      wNative: asset,
+    });
+    expect(
+      plan.operations[0]?.measurements.find(
+        (measurement) => measurement.field === "assetsPaid",
+      ),
+    ).toMatchObject({
+      field: "assetsPaid",
+      type: "balance",
+    });
+  });
+  test("behavior: native value only measures the wNative collateral operation", () => {
+    const plan = () =>
+      planStateReads({
+        operations: [
+          { limit: midnightLimit, assetsPaid: asset },
+          {
+            limit: { ...midnightLimit, collateralIndex: 2n },
+            assetsPaid: vault,
+          },
+        ],
+        owner,
+        morpho: zeroAddress,
+        midnight,
+        wNative: asset,
+        nativeValueSent: true,
+      });
+    expect(plan).not.toThrow();
+    const result = plan();
+    expect(
+      result.operations[0]?.measurements.find(
+        (measurement) => measurement.field === "assetsPaid",
+      ),
+    ).toMatchObject({
+      field: "assetsPaid",
+      type: "native",
+    });
+    expect(
+      result.operations[1]?.measurements.find(
+        (measurement) => measurement.field === "assetsPaid",
+      ),
+    ).toMatchObject({
+      field: "assetsPaid",
+      type: "balance",
+    });
+  });
+  test.each([
+    "midnightSupplyCollateral",
+    "midnightSupplyCollateralMakeBorrow",
+  ] as const)(
+    "error: native-funded collateral supply without registered wNative fails closed (%s)",
+    (type) => {
+      const plan = () =>
+        planStateReads({
+          operations: [
+            { limit: midnightLimitForType(type), assetsPaid: asset },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight,
+          nativeValueSent: true,
+        });
+      expect(plan).toThrow(SlippageCheckUnavailableError);
+      expect(plan).toThrow(
+        "native-funded collateral supply cannot be measured",
+      );
+    },
+  );
+  test.each([
+    "midnightSupplyCollateral",
+    "midnightSupplyCollateralMakeBorrow",
+  ] as const)(
+    "error: native value with only non-wNative collateral fails closed (%s)",
+    (type) => {
+      const plan = () =>
+        planStateReads({
+          operations: [
+            { limit: midnightLimitForType(type), assetsPaid: vault },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight,
+          wNative: asset,
+          nativeValueSent: true,
+        });
+      expect(plan).toThrow(SlippageCheckUnavailableError);
+      expect(plan).toThrow(nativeValueCoverageErrorMessage);
+    },
+  );
   test("behavior: reads sender spending and the onBehalf collateral slot, deduplicated", () => {
     const operation = {
       limit: midnightLimit,

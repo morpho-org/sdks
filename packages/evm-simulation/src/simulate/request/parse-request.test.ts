@@ -144,6 +144,170 @@ const limitsOperations = (request: ParsedRequest) =>
   request.limits === "none" ? undefined : request.limits.operations;
 
 describe("parseRequest", () => {
+  test("parses token and Morpho approval limits", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2Deposit",
+            vault: TARGET,
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+          },
+        ],
+        approvals: [
+          { type: "token", token: TOKEN, owner: OWNER, spender: SPENDER },
+          {
+            type: "morphoAuthorization",
+            authorizer: OWNER,
+            authorized: SPENDER,
+          },
+          {
+            type: "midnightAuthorization",
+            onBehalf: OWNER,
+            authorized: SPENDER,
+          },
+        ],
+      },
+    });
+    expect(request.limits).not.toBe("none");
+    if (request.limits === "none") return;
+    expect(request.limits.approvals).toEqual([
+      { type: "token", token: TOKEN, owner: OWNER, spender: SPENDER },
+      {
+        type: "morphoAuthorization",
+        authorizer: OWNER,
+        authorized: SPENDER,
+      },
+      {
+        type: "midnightAuthorization",
+        onBehalf: OWNER,
+        authorized: SPENDER,
+      },
+    ]);
+  });
+
+  test("rejects non-array approval limits", () => {
+    let error: unknown;
+    try {
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+          approvals: {},
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect((error as SimulationValidationError).fieldErrors).toContain(
+      "limits.approvals: must be an array",
+    );
+  });
+
+  test.each([
+    {
+      name: "non-object entry",
+      approval: null,
+      path: "limits.approvals[0].type",
+    },
+    {
+      name: "missing type",
+      approval: { token: TOKEN, owner: OWNER, spender: SPENDER },
+      path: "limits.approvals[0].type",
+    },
+    {
+      name: "unknown type",
+      approval: { type: "unknown" },
+      path: "limits.approvals[0].type",
+    },
+    {
+      name: "extra token key",
+      approval: {
+        type: "token",
+        token: TOKEN,
+        owner: OWNER,
+        spender: SPENDER,
+        extra: 1,
+      },
+      path: "limits.approvals[0].extra",
+    },
+    {
+      name: "extra Morpho authorization key",
+      approval: {
+        type: "morphoAuthorization",
+        authorizer: OWNER,
+        authorized: SPENDER,
+        extra: true,
+      },
+      path: "limits.approvals[0].extra",
+    },
+    {
+      name: "invalid address",
+      approval: { type: "token", token: "bad", owner: OWNER, spender: SPENDER },
+      path: "limits.approvals[0].token",
+    },
+    {
+      name: "invalid Midnight authorization address",
+      approval: {
+        type: "midnightAuthorization",
+        onBehalf: "bad",
+        authorized: SPENDER,
+      },
+      path: "limits.approvals[0].onBehalf",
+    },
+    {
+      name: "missing Midnight authorization address",
+      approval: { type: "midnightAuthorization", onBehalf: OWNER },
+      path: "limits.approvals[0].authorized",
+    },
+    {
+      name: "extra Midnight authorization key",
+      approval: {
+        type: "midnightAuthorization",
+        onBehalf: OWNER,
+        authorized: SPENDER,
+        authorizer: OWNER,
+      },
+      path: "limits.approvals[0].authorizer",
+    },
+  ])("rejects malformed approval limits: $name", ({ approval, path }) => {
+    let error: unknown;
+    try {
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            },
+          ],
+          approvals: [approval],
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors?.some((fieldError) =>
+        fieldError.includes(path),
+      ),
+    ).toBe(true);
+  });
+
   test.each([
     {
       type: "blueWithdraw",
@@ -2032,18 +2196,6 @@ describe("parseRequest", () => {
     ["bad chainId", { chainId: 0, transactions: [tx()] }],
     ["malformed from", { transactions: [tx({ from: "0xnotanaddress" })] }],
     [
-      "final mode with authorizations",
-      {
-        mode: "final",
-        transactions: [tx()],
-        authorizations: [erc20Approval],
-      },
-    ],
-    [
-      "default mode with authorizations",
-      { transactions: [tx()], authorizations: [] },
-    ],
-    [
       "authorization owner mismatch",
       {
         mode: "preview",
@@ -2402,6 +2554,30 @@ describe("parseRequest", () => {
     },
   };
 
+  const midnightSigAuth: SimulationAuthorization = {
+    type: "midnightAuthorizationSignature",
+    typedData: {
+      domain: { chainId: 1, verifyingContract: TARGET },
+      primaryType: "Authorization",
+      types: {
+        Authorization: [
+          { name: "authorizer", type: "address" },
+          { name: "authorized", type: "address" },
+          { name: "isAuthorized", type: "bool" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      message: {
+        authorizer: OWNER,
+        authorized: SPENDER,
+        isAuthorized: true,
+        nonce: 1n,
+        deadline: 9_999_999n,
+      },
+    },
+  };
+
   test("behavior: input objects are not returned or frozen", () => {
     const input = {
       chainId: 1,
@@ -2531,6 +2707,22 @@ describe("parseRequest", () => {
             typedData: {
               ...blueSigAuth.typedData,
               domain: { ...blueSigAuth.typedData.domain, chainId: 42 },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "midnightAuthorizationSignature typedData chainId mismatch",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...midnightSigAuth,
+            typedData: {
+              ...midnightSigAuth.typedData,
+              domain: { ...midnightSigAuth.typedData.domain, chainId: 42 },
             },
           },
         ],
@@ -2847,6 +3039,25 @@ describe("parseRequest", () => {
     expect(request.authorizations).toHaveLength(2);
   });
 
+  test.each([undefined, "final"] as const)(
+    "behavior: retains final signed requests in mode %s",
+    (mode) => {
+      const request = parseRequest({
+        chainId: 1,
+        mode,
+        limits: "none",
+        transactions: [{ ...tx(), data: "0x12345678" }],
+        authorizations: [permitAuth, blueSigAuth, midnightSigAuth],
+      });
+      expect(request.authorizations).toEqual([
+        permitAuth,
+        blueSigAuth,
+        midnightSigAuth,
+      ]);
+      expect(Object.isFrozen(request.authorizations[0])).toBe(true);
+    },
+  );
+
   test.each([
     [
       "erc2612Permit",
@@ -2876,6 +3087,19 @@ describe("parseRequest", () => {
           ...blueSigAuth.typedData,
           message: {
             ...blueSigAuth.typedData.message,
+            authorizer: SPENDER,
+          },
+        },
+      },
+    ],
+    [
+      "midnightAuthorizationSignature",
+      {
+        type: "midnightAuthorizationSignature",
+        typedData: {
+          ...midnightSigAuth.typedData,
+          message: {
+            ...midnightSigAuth.typedData.message,
             authorizer: SPENDER,
           },
         },
@@ -3228,6 +3452,50 @@ describe("parseRequest — midnightSupplyCollateral", () => {
         quote: { assetsPaid: 5n, collateralSupplied: 5n },
       }),
     ).toContain("limits.operations[0].collateralIndex: unknown field");
+  });
+});
+describe("parseRequest — midnightSupplyCollateralMakeBorrow", () => {
+  const valid = {
+    type: "midnightSupplyCollateralMakeBorrow",
+    marketId: _MARKET_ID,
+    collateralIndex: 1n,
+    account: TARGET,
+    quote: { assetsPaid: 5n, collateralSupplied: 5n },
+  };
+  const fieldErrors = (operation: object): readonly string[] => {
+    try {
+      parse({
+        chainId: 8453,
+        transactions: [tx()],
+        limits: { operations: [operation] },
+      });
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(SimulationValidationError);
+      return (caught as SimulationValidationError).fieldErrors ?? [];
+    }
+    return [];
+  };
+
+  test("behavior: parses its market id and collateral index", () => {
+    const request = parse({
+      chainId: 8453,
+      transactions: [tx()],
+      limits: { operations: [valid] },
+    });
+    expect(limitsOperations(request)?.[0]).toMatchObject(valid);
+  });
+  test("error: requires collateralIndex", () => {
+    const { collateralIndex: _, ...rest } = valid;
+    expect(fieldErrors(rest)).toContain(
+      "limits.operations[0].collateralIndex: must be a bigint",
+    );
+  });
+  test("error: rejects unknown fields", () => {
+    expect(
+      fieldErrors({ ...valid, vault: TARGET }).some((error) =>
+        error.includes("vault: unknown field"),
+      ),
+    ).toBe(true);
   });
 });
 describe("parseRequest — midnightSupplyBlueMakeLend", () => {

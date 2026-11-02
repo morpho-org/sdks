@@ -142,10 +142,7 @@ const buildBlocks = (
   },
 ];
 
-const parse = (
-  plan: ReturnType<typeof makePlan>,
-  blocks: ReturnType<typeof buildBlocks>,
-) =>
+const parse = (plan: ReturnType<typeof makePlan>, blocks: unknown) =>
   parseSimulationResponse({
     plan,
     blocks,
@@ -157,7 +154,7 @@ const parse = (
 
 const parseWithoutParentHashCheck = (
   plan: ReturnType<typeof makePlan>,
-  blocks: ReturnType<typeof buildBlocks>,
+  blocks: unknown,
 ) =>
   parseSimulationResponse({
     plan,
@@ -204,6 +201,37 @@ const userRevertError = (
 };
 
 describe("parseSimulationResponse", () => {
+  test.each(["absent", "null"])(
+    "behavior: records %s per-call logs while returning an empty list",
+    (variant) => {
+      const plan = makePlan();
+      const block = buildBlocks(plan)[0]!;
+      const transactionIndex = plan.calls.findIndex(
+        (call) => call.type === "transaction",
+      );
+      const blocks = [
+        {
+          ...block,
+          calls: block.calls.map((call, index) => {
+            if (index !== transactionIndex) return call;
+            const withoutLogs = Object.fromEntries(
+              Object.entries(call).filter(([key]) => key !== "logs"),
+            );
+            return variant === "absent"
+              ? withoutLogs
+              : { ...withoutLogs, logs: null };
+          }),
+        },
+      ];
+      const execution = parse(plan, blocks);
+      const transaction = execution.calls.find(
+        (call) => call.planned.type === "transaction",
+      );
+      expect(transaction?.result.logs).toEqual([]);
+      expect(transaction?.logsMissing).toBe(true);
+    },
+  );
+
   test("default: state reads grouped by phase, preparations carried", () => {
     const plan = makePlan([
       {
@@ -615,7 +643,7 @@ describe("parseSimulationResponse", () => {
   });
 
   test("behavior: checks receive a frozen lowercase copy without changing calls or transfers", () => {
-    const recipient = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+    const recipient = getAddress("0xABcdEFABcdEFabcdEfAbCdefabcdeFABcDEFabCD");
     const mixedCaseLog: RawLog = {
       address: TOKEN,
       topics: [

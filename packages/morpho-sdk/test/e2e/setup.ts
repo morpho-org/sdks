@@ -1,16 +1,12 @@
-import {
-  getChainAddresses,
-  MarketParams,
-  ORACLE_PRICE_SCALE,
-} from "@morpho-org/blue-sdk";
+import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
-  E2E_ASSET_BYTECODE,
-  E2E_ASSET_STORAGE,
   type E2eScenario,
   type E2eTarget,
   getE2eAsset,
   getE2eRuns,
+  installE2eAsset,
+  installE2eOracle,
 } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -20,12 +16,19 @@ import {
   defineChain,
   encodeFunctionData,
   erc20Abi,
-  numberToHex,
-  parseEther,
+  erc4626Abi,
+  maxUint128,
+  maxUint256,
   parseUnits,
 } from "viem";
 import * as viemChains from "viem/chains";
 import { describe, expect, type TestAPI } from "vitest";
+import {
+  DEAD_ADDRESS,
+  MIN_DEAD_SHARES,
+  MIN_VAULT_V2_DEAD_ASSETS,
+} from "../../src/constants.js";
+import { seedDeadSupply } from "../helpers/blue.js";
 
 /** Test context of a registry-driven E2E scenario. */
 export interface E2eTestContext {
@@ -55,7 +58,19 @@ export const describeE2e = (
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
           rpcUrls: { default: { http: [] } },
         });
-      const test = createViemTest(chain, {
+      const testChain =
+        chain.contracts?.multicall3 === undefined
+          ? defineChain({
+              ...chain,
+              contracts: {
+                ...chain.contracts,
+                multicall3: {
+                  address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+                },
+              },
+            })
+          : chain;
+      const test = createViemTest(testChain, {
         forkUrl: run.status === "run" ? run.forkUrl : undefined,
         forkBlockNumber,
         // HyperEVM small blocks cap gas at 3M, below a Vault V2 deployment.
@@ -84,33 +99,8 @@ export const describeE2e = (
     }
   });
 
-/** Address of the fixed-price oracle `createE2eMarket` installs on every fork. */
-const E2E_ORACLE: Address = "0xE2E0000000000000000000000000000000000001";
-
 /** LLTV of the market `createE2eMarket` creates. It is enabled on every registered Blue deployment. */
 const E2E_LLTV = parseUnits("0.86", 18);
-
-/**
- * Installs the E2E test asset code and storage at `address`.
- *
- * @param client - Anvil client used to install the asset.
- * @param address - Address where the E2E asset should be installed.
- */
-export const installE2eAsset = async (
-  client: AnvilTestClient<Chain>,
-  address: Address,
-) => {
-  await client.setCode({
-    address,
-    bytecode: E2E_ASSET_BYTECODE,
-  });
-  for (const { slot, value } of E2E_ASSET_STORAGE)
-    await client.setStorageAt({
-      address,
-      index: slot,
-      value,
-    });
-};
 
 /**
  * Creates a fresh Blue market with the registered wNative or a fork-installed test asset and a
@@ -132,15 +122,11 @@ export const createE2eMarket = async (
       }),
     ).toBe(18);
   }
-  // PUSH15 price; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN: answers `price()` with 1e36.
-  await client.setCode({
-    address: E2E_ORACLE,
-    bytecode: `0x6e${numberToHex(ORACLE_PRICE_SCALE, { size: 15 }).slice(2)}60005260206000f3`,
-  });
+  const oracle = await installE2eOracle(client);
   const market = new MarketParams({
     loanToken: asset.address,
     collateralToken: asset.address,
-    oracle: E2E_ORACLE,
+    oracle,
     irm: adaptiveCurveIrm,
     lltv: E2E_LLTV,
   });
@@ -156,40 +142,44 @@ export const createE2eMarket = async (
   return market;
 };
 
-const wNativeDepositAbi = [
-  {
-    type: "function",
-    name: "deposit",
-    stateMutability: "payable",
-    inputs: [],
-    outputs: [],
-  },
-] as const;
-
 /**
- * Funds the test account with `amount` wNative. Fork-installed assets use `client.deal` because
- * chains like Tempo reject native value transfers; real wNative is funded by wrapping native
- * tokens. A second ERC-20 `client.deal` after `setUpVault` fails on Robinhood with "cannot find
- * valid balanceOf storage slot", so wrapping remains for real wNative.
+ * Gives a fresh E2E market, and optionally a vault over it, the `MIN_DEAD_SHARES` dead deposit
+ * the SDK requires before a supply or deposit. The account's loan-token balance is unchanged.
  */
-export const wrapE2eNative = async (
+export const seedE2eDeadDeposits = async (
   client: AnvilTestClient<Chain>,
-  params: { readonly wNative: Address; readonly amount: bigint },
+  params: {
+    readonly chainId: number;
+    readonly market: MarketParams;
+    readonly vault?: Address;
+  },
 ) => {
-  if (getE2eAsset(client.chain.id).requiresInstall) {
-    await client.deal({
-      erc20: params.wNative,
-      amount:
-        (await client.balanceOf({ erc20: params.wNative })) + params.amount,
-    });
-    return;
-  }
-
-  await client.deal({ amount: params.amount + parseEther("1") });
-  await client.writeContract({
-    address: params.wNative,
-    abi: wNativeDepositAbi,
-    functionName: "deposit",
-    value: params.amount,
+  await seedDeadSupply({
+    client,
+    chainId: params.chainId,
+    market: params.market,
   });
+  if (params.vault == null) return;
+  const { loanToken } = params.market;
+  const balance = await client.balanceOf({ erc20: loanToken });
+  await client.deal({ erc20: loanToken, amount: maxUint128 });
+  await client.approve({
+    address: loanToken,
+    args: [params.vault, maxUint256],
+  });
+  await client.writeContract({
+    address: params.vault,
+    abi: erc4626Abi,
+    functionName: "mint",
+    args: [MIN_DEAD_SHARES, DEAD_ADDRESS],
+  });
+  // Vault V2 also requires the dead shares to be worth `MIN_VAULT_V2_DEAD_ASSETS`.
+  await client.writeContract({
+    address: params.vault,
+    abi: erc4626Abi,
+    functionName: "deposit",
+    args: [MIN_VAULT_V2_DEAD_ASSETS, DEAD_ADDRESS],
+  });
+  await client.approve({ address: loanToken, args: [params.vault, 0n] });
+  await client.deal({ erc20: loanToken, amount: balance });
 };

@@ -64,6 +64,7 @@ import {
   getMidnightBlueBuyCallbackAddress,
   getMidnightBlueBuyCallbackData,
 } from "../../helpers/callback.js";
+import { MIN_DEAD_SHARES } from "../../helpers/constant.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -75,6 +76,7 @@ import {
   EmptyMidnightTakeableOffersError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InsufficientDeadSharesError,
   InsufficientMidnightWithdrawableLiquidityError,
   InvalidMidnightHexInputError,
   MarketIdMismatchError,
@@ -612,6 +614,7 @@ const mockBlueReads = (
     lastUpdate = 1n,
     fee = 0n,
     rateAtTarget = 3_170_979_198n,
+    deadSupplyShares = MIN_DEAD_SHARES,
   }: {
     readonly marketParams?: typeof blueMarket;
     readonly totalSupplyAssets?: bigint;
@@ -621,6 +624,7 @@ const mockBlueReads = (
     readonly lastUpdate?: bigint;
     readonly fee?: bigint;
     readonly rateAtTarget?: bigint;
+    readonly deadSupplyShares?: bigint;
   } = {},
 ) => {
   mockRead(handle, {
@@ -647,6 +651,12 @@ const mockBlueReads = (
       lastUpdate,
       fee,
     ],
+  });
+  mockRead(handle, {
+    address: blue,
+    abi: blueAbi,
+    functionName: "position",
+    result: [deadSupplyShares, 0n, 0n],
   });
   mockRead(handle, {
     address: marketParams.oracle,
@@ -3355,16 +3365,29 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(NonPositiveInputError);
     });
 
-    test("error: EmptyBlueParkingMarketError", async () => {
+    test("error: InsufficientDeadSharesError for an empty parking market", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockBlueReads(handle, { totalSupplyShares: 0n });
+      mockBlueReads(handle, { totalSupplyShares: 0n, deadSupplyShares: 0n });
       const promise = prepare(handle);
 
-      await expect(promise).rejects.toBeInstanceOf(EmptyBlueParkingMarketError);
-      await expect(promise).rejects.toThrow(
-        new EmptyBlueParkingMarketError({
-          marketId: BlueMarketUtils.getMarketId(blueMarket),
-        }),
+      await expect(promise).rejects.toBeInstanceOf(InsufficientDeadSharesError);
+      await expect(promise).rejects.not.toBeInstanceOf(
+        EmptyBlueParkingMarketError,
+      );
+      await expect(promise).rejects.toMatchObject({
+        entity: [BlueMarketUtils.getMarketId(blueMarket)],
+        reason: "deadShares",
+        observed: 0n,
+        required: MIN_DEAD_SHARES,
+      });
+    });
+
+    test("error: InsufficientDeadSharesError one share below the threshold", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle, { deadSupplyShares: MIN_DEAD_SHARES - 1n });
+
+      await expect(prepare(handle)).rejects.toBeInstanceOf(
+        InsufficientDeadSharesError,
       );
     });
 

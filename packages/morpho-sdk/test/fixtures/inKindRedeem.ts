@@ -8,10 +8,13 @@ import {
   Market,
   MarketParams,
   marketParamsAbi,
+  VaultV2MorphoMarketV1Adapter,
+  VaultV2MorphoMarketV1AdapterV2,
 } from "@morpho-org/blue-sdk";
 import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { type Address, encodeAbiParameters, type Hex } from "viem";
 import { mainnet } from "viem/chains";
+import { MIN_DEAD_SHARES, MIN_VAULT_V2_DEAD_ASSETS } from "../../src/index.js";
 
 export const IN_KIND_VAULT =
   "0x0000000000000000000000000000000000001001" as const;
@@ -45,6 +48,8 @@ export const secondInKindMarketParams = new MarketParams({
 const snapshotTimestamp = () => Time.timestamp();
 
 export const inKindVaultV1Data = (params?: {
+  /** Supply shares each market holds at `DEAD_ADDRESS`. Defaults to `MIN_DEAD_SHARES`. */
+  readonly deadSupplyShares?: bigint;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly enabled?: boolean;
@@ -60,6 +65,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    deadSupplyShares: params?.deadSupplyShares ?? MIN_DEAD_SHARES,
     rateAtTarget: 0n,
   });
   const secondMarket = new Market({
@@ -70,6 +76,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    deadSupplyShares: params?.deadSupplyShares ?? MIN_DEAD_SHARES,
     rateAtTarget: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
@@ -94,6 +101,7 @@ export const inKindVaultV1Data = (params?: {
       supplyQueue: markets.map(({ id }) => id),
       totalSupply: totalAssets,
       lastTotalAssets: params?.lastTotalAssets ?? totalAssets,
+      deadShares: MIN_DEAD_SHARES,
     },
     [
       {
@@ -147,6 +155,8 @@ export const IN_KIND_FOREIGN_ADAPTER =
   "0x0000000000000000000000000000000000001005" as const;
 
 export const inKindVaultV2Data = (params?: {
+  /** Supply shares each market holds at `DEAD_ADDRESS`. Defaults to `MIN_DEAD_SHARES`. */
+  readonly deadSupplyShares?: bigint;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
@@ -157,7 +167,7 @@ export const inKindVaultV2Data = (params?: {
    * withdraw leg's `toShares(_, "Up")` rounds up independently.
    */
   readonly totalSupply?: bigint;
-  /** Vault V2 virtual shares, `10 ** max(0, 18 - asset decimals)` onchain. Defaults to `0n`. */
+  /** Vault V2 virtual shares, `10 ** max(0, 18 - asset decimals)` onchain. Defaults to `1n`. */
   readonly virtualShares?: bigint;
   readonly marketTotalAssets?: bigint;
   readonly marketTotalBorrowAssets?: bigint;
@@ -194,6 +204,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    deadSupplyShares: params?.deadSupplyShares ?? MIN_DEAD_SHARES,
     rateAtTarget: params?.rateAtTarget ?? 0n,
   });
   const secondMarket = new Market({
@@ -204,6 +215,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    deadSupplyShares: params?.deadSupplyShares ?? MIN_DEAD_SHARES,
     rateAtTarget: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
@@ -281,7 +293,27 @@ export const inKindVaultV2Data = (params?: {
       asset: IN_KIND_ASSET,
       _totalAssets: totalAssets,
       totalSupply: params?.totalSupply ?? totalAssets,
-      virtualShares: params?.virtualShares ?? 0n,
+      virtualShares: params?.virtualShares ?? 1n,
+      deadShares: MIN_DEAD_SHARES,
+      deadAssets: MIN_VAULT_V2_DEAD_ASSETS,
+      absoluteCaps: Object.fromEntries(
+        markets.flatMap(({ params: marketParams }) => [
+          [
+            VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+              IN_KIND_ADAPTER,
+              marketParams,
+            ),
+            1n,
+          ],
+          [
+            VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+              IN_KIND_ADAPTER,
+              marketParams,
+            ),
+            1n,
+          ],
+        ]),
+      ),
       maxRate: params?.maxRate ?? 0n,
       lastUpdate: snapshotTimestamp(),
       liquidityAdapter,

@@ -1,4 +1,5 @@
 import {
+  DEAD_ADDRESS,
   getChainAddresses,
   type MarketParams,
   MathLib,
@@ -6,6 +7,7 @@ import {
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { encodeFunctionData } from "viem";
+import { MIN_DEAD_SHARES } from "../../src/index.js";
 
 export async function supplyCollateral(params: {
   client: AnvilTestClient;
@@ -63,6 +65,35 @@ export async function supplyLoan(params: {
     }),
     value: 0n,
   });
+}
+
+/**
+ * Mints `MIN_DEAD_SHARES` supply shares to `DEAD_ADDRESS` so the market passes the SDK's dead-deposit
+ * check. Restores the caller's loan-token balance afterwards.
+ */
+export async function seedDeadSupply(params: {
+  client: AnvilTestClient;
+  chainId: number;
+  market: MarketParams;
+}) {
+  const { client, chainId, market } = params;
+  const { blue: morpho } = getChainAddresses(chainId);
+  const balance = await client.balanceOf({ erc20: market.loanToken });
+  await client.deal({ erc20: market.loanToken, amount: MathLib.WAD });
+  await client.approve({
+    address: market.loanToken,
+    args: [morpho, MathLib.MAX_UINT_256],
+  });
+  await client.sendTransaction({
+    to: morpho,
+    data: encodeFunctionData({
+      abi: blueAbi,
+      functionName: "supply",
+      args: [market, 0n, MIN_DEAD_SHARES, DEAD_ADDRESS, "0x"],
+    }),
+    value: 0n,
+  });
+  await client.deal({ erc20: market.loanToken, amount: balance });
 }
 
 /**

@@ -1,8 +1,15 @@
-import { ChainId, Eip5267Domain, type MarketId } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  DEAD_ADDRESS,
+  Eip5267Domain,
+  type MarketId,
+} from "@morpho-org/blue-sdk";
 import { vaults } from "@morpho-org/morpho-test";
-import { zeroAddress, zeroHash } from "viem";
+import { parseUnits, zeroAddress, zeroHash } from "viem";
+import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { Vault } from "../src/augment/Vault.js";
+import { metaMorphoAbi } from "../src/index.js";
 import { test, test2 } from "./setup.js";
 
 const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
@@ -10,6 +17,7 @@ const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
 describe("augment/Vault", () => {
   test("should fetch vault data", async ({ client }) => {
     const expectedData = new Vault({
+      deadShares: 0n,
       ...steakUsdc,
       curator: zeroAddress,
       fee: 50000000000000000n,
@@ -59,6 +67,7 @@ describe("augment/Vault", () => {
 
   test2("should fetch vault v1.1 data", async ({ client }) => {
     const expectedData = new Vault({
+      deadShares: 0n,
       ...steakPaxg,
       curator: zeroAddress,
       fee: 50000000000000000n,
@@ -128,6 +137,39 @@ describe("augment/Vault", () => {
         Vault.fetch(steakPaxg.address, client, { deployless: false }),
       ]);
 
+      expect(forced).toStrictEqual(multicall);
+    },
+  );
+
+  test2(
+    "behavior: reads the dead deposit's shares in both fetch paths",
+    async ({ client }) => {
+      const assets = parseUnits("10", 6);
+      await client.deal({ erc20: steakUsdc.asset, amount: assets });
+      await client.approve({
+        address: steakUsdc.asset,
+        args: [steakUsdc.address, assets],
+      });
+      await client.writeContract({
+        address: steakUsdc.address,
+        abi: metaMorphoAbi,
+        functionName: "deposit",
+        args: [assets, DEAD_ADDRESS],
+      });
+
+      const [forced, multicall, deadShares] = await Promise.all([
+        Vault.fetch(steakUsdc.address, client, { deployless: "force" }),
+        Vault.fetch(steakUsdc.address, client, { deployless: false }),
+        readContract(client, {
+          address: steakUsdc.address,
+          abi: metaMorphoAbi,
+          functionName: "balanceOf",
+          args: [DEAD_ADDRESS],
+        }),
+      ]);
+
+      expect(deadShares).toBeGreaterThan(0n);
+      expect(forced.deadShares).toBe(deadShares);
       expect(forced).toStrictEqual(multicall);
     },
   );

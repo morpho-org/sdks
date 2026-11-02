@@ -34,7 +34,10 @@ struct VaultResponse {
     uint256 lostAssets;
     Id[] supplyQueue;
     Id[] withdrawQueue;
+    uint256 deadShares;
 }
+
+address constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
 error UnknownOfFactory(address factory, address vault);
 
@@ -76,6 +79,7 @@ contract GetVault {
         res.totalSupply = vault.totalSupply();
         res.totalAssets = vault.totalAssets();
         res.lastTotalAssets = vault.lastTotalAssets();
+        res.deadShares = vault.balanceOf(DEAD_ADDRESS);
 
         // `lostAssets` only exists on MetaMorpho V1.1; the staticcall reverts on V1.0 vaults,
         // leaving `hasLostAssets` false so the SDK reports `undefined` (matching the multicall path).

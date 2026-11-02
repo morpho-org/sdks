@@ -6,7 +6,7 @@ import type { SimulationTransaction } from "./types.js";
 /** Every simulation mode; source of `SimulationMode`. */
 export const SIMULATION_MODES = ["preview", "final"] as const;
 
-/** Simulation mode: `"preview"` accepts pending authorizations, `"final"` does not. */
+/** Preview prepares pending permissions; final executes calldata and checks signed-request use. */
 export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
 /** A mined block the simulation runs on top of. */
@@ -20,15 +20,19 @@ export interface StateBlock {
 }
 
 /**
- * Input to `simulate()`. `authorizations` is accepted only in "preview";
- * `mode` defaults to "final".
+ * Input to `simulate()`. `mode` defaults to "final".
  */
 export interface SimulateParams {
   readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
   /** Defaults to "final". */
   readonly mode?: SimulationMode;
-  /** Pending wallet requests, in order. Preview only; rejected in final. */
+  /**
+   * Wallet requests, in order. Preview prepares permissions; final requires
+   * use events for ERC-2612 and Blue signatures, and an EcrecoverAuthorizer
+   * `SetIsAuthorized` event matching the signed `authorizer`, `authorized`,
+   * `isAuthorized`, and `nonce`, without preparing calls.
+   */
   readonly authorizations?: readonly SimulationAuthorization[];
   /** Resolved once; defaults to "latest" ("finalized" on Monad, whose
    * "latest" block is not final). Only canonical (mined) blocks can be
@@ -46,7 +50,7 @@ export interface SimulateParams {
   readonly block?: StateBlock;
   /**
    * Required caller-selected quotes, or the explicit
-   * `"none"` opt-out, which skips every limit read and check. Omitted `limits`
+   * `"none"` opt-out, which skips limit reads and checks, but not final signed-request use checks. Omitted `limits`
    * is rejected rather than silently unchecked.
    */
   readonly limits: SimulationLimits | "none";

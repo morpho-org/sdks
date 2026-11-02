@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   AmbiguousExpectedQuoteError,
+  ApprovalCheckUnavailableError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
@@ -17,10 +18,14 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
   SlippageCheckUnavailableError,
+  UnexpectedMidnightAuthorizationError,
+  UnexpectedMorphoAuthorizationError,
   UnexpectedSimulationError,
+  UnexpectedTokenApprovalError,
   UnsupportedChainError,
   UnsupportedLimitActionError,
   UnsupportedOperationError,
+  UnusedAuthorizationError,
 } from "./errors.js";
 import {
   AmbiguousExpectedQuoteError as EntryAmbiguousExpectedQuoteError,
@@ -39,6 +44,30 @@ const ASSERTION_FAILURE = {
 } as const;
 
 const errors = [
+  new UnusedAuthorizationError(0, {
+    type: "erc2612Permit",
+    typedData: {
+      domain: { chainId: 1, verifyingContract: A },
+      primaryType: "Permit",
+      types: { Permit: [] },
+      message: { owner: A, spender: A, value: 1n, nonce: 0n, deadline: 1n },
+    },
+  }),
+  new UnusedAuthorizationError(1, {
+    type: "midnightAuthorizationSignature",
+    typedData: {
+      domain: { chainId: 1, verifyingContract: A },
+      primaryType: "Authorization",
+      types: { Authorization: [] },
+      message: {
+        authorizer: A,
+        authorized: A,
+        isAuthorized: true,
+        nonce: 1n,
+        deadline: 1n,
+      },
+    },
+  }),
   new SimulationRevertedError("reverted"),
   new SimulationAssertError("assertion failed", ASSERTION_FAILURE),
   new SimulationLogAssertError("log assertion failed", {
@@ -54,6 +83,22 @@ const errors = [
   new UnsupportedOperationError("unsupported"),
   new InvalidSimulationResponseError("malformed"),
   new SlippageCheckUnavailableError("missing"),
+  new ApprovalCheckUnavailableError("unavailable"),
+  new UnexpectedMorphoAuthorizationError({
+    authorizer: A,
+    authorized: A,
+    source: "event",
+  }),
+  new UnexpectedMidnightAuthorizationError({
+    onBehalf: A,
+    authorized: A,
+  }),
+  new UnexpectedTokenApprovalError({
+    token: A,
+    owner: A,
+    spender: A,
+    source: "event",
+  }),
   new AuthorizationRequestMismatchError("mismatch"),
   new ConsumerLimitViolationError("limit"),
   new UnexpectedSimulationError("unexpected"),
@@ -103,6 +148,7 @@ describe("SimulationPackageError", () => {
         InvalidSimulationResponseError,
         InvalidChainIdError,
         SlippageCheckUnavailableError,
+        ApprovalCheckUnavailableError,
         AuthorizationRequestMismatchError,
         ConsumerLimitViolationError,
         UnexpectedSimulationError,
@@ -137,6 +183,97 @@ describe("SimulationPackageError", () => {
       assertion: ASSERTION_FAILURE.assertion,
       returnData: "0x",
     });
+  });
+
+  test("behavior: unexpected approval messages instruct consumers not to sign", () => {
+    expect(
+      new UnexpectedTokenApprovalError({
+        token: A,
+        owner: A,
+        spender: "0x0000000000000000000000000000000000000002",
+        source: "event",
+      }).message,
+    ).toBe(
+      `Token approval for "${A}" from "${A}" to "0x0000000000000000000000000000000000000002" is not part of the requested operation. Do not sign this request; if the approval is intended, add it to limits.approvals.`,
+    );
+    expect(
+      new UnexpectedMorphoAuthorizationError({
+        authorizer: A,
+        authorized: "0x0000000000000000000000000000000000000002",
+        source: "authorization",
+      }).message,
+    ).toBe(
+      `Morpho authorization from "${A}" to "0x0000000000000000000000000000000000000002" is not part of the requested operation. Do not sign this request; if the authorization is intended, add it to limits.approvals.`,
+    );
+    expect(
+      new UnexpectedMidnightAuthorizationError({
+        onBehalf: A,
+        authorized: "0x0000000000000000000000000000000000000002",
+      }).message,
+    ).toBe(
+      `Midnight authorization from "${A}" to "0x0000000000000000000000000000000000000002" is not part of the requested operation. Do not sign this request; if the authorization is intended, add it to limits.approvals.`,
+    );
+    const unexpectedMidnight = new UnexpectedMidnightAuthorizationError({
+      onBehalf: A,
+      authorized: "0x0000000000000000000000000000000000000002",
+      allowlistable: false,
+    });
+    expect(unexpectedMidnight.allowlistable).toBe(false);
+    expect(unexpectedMidnight.message).toBe(
+      `Midnight authorization from "${A}" to "0x0000000000000000000000000000000000000002" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`,
+    );
+    expect(
+      new UnexpectedMidnightAuthorizationError({
+        onBehalf: A,
+        authorized: A,
+      }).allowlistable,
+    ).toBe(true);
+    const nft = new UnexpectedTokenApprovalError({
+      token: A,
+      owner: A,
+      spender: "0x0000000000000000000000000000000000000002",
+      source: "event",
+      allowlistable: false,
+    });
+    expect(nft.allowlistable).toBe(false);
+    expect(nft.message).toBe(
+      `Approval for "${A}" from "${A}" to "0x0000000000000000000000000000000000000002" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`,
+    );
+    expect(
+      new UnexpectedTokenApprovalError({
+        token: A,
+        owner: A,
+        spender: A,
+        source: "event",
+      }).allowlistable,
+    ).toBe(true);
+    const foreignDomain = new UnexpectedMorphoAuthorizationError({
+      authorizer: A,
+      authorized: A,
+      source: "authorization",
+      allowlistable: false,
+    });
+    expect(foreignDomain.allowlistable).toBe(false);
+    expect(foreignDomain.message).toBe(
+      `Morpho authorization from "${A}" to "${A}" is not part of any supported operation and cannot be added to limits.approvals. Do not sign this request.`,
+    );
+    expect(
+      new UnusedAuthorizationError(0, {
+        type: "midnightAuthorizationSignature",
+        typedData: {
+          domain: { chainId: 1, verifyingContract: A },
+          primaryType: "Authorization",
+          types: { Authorization: [] },
+          message: {
+            authorizer: A,
+            authorized: A,
+            isAuthorized: true,
+            nonce: 1n,
+            deadline: 1n,
+          },
+        },
+      }).message,
+    ).toContain("SetIsAuthorized");
   });
 
   test("behavior: wrong-chain errors retain their non-bypassable identity", () => {
@@ -259,6 +396,22 @@ describe("SimulationRevertedError", () => {
 });
 
 describe("isSimulationPackageError", () => {
+  test("behavior: unused authorization identity survives a renamed constructor", () => {
+    class Renamed extends UnusedAuthorizationError {}
+    const error = new Renamed(
+      0,
+      (errors[0] as UnusedAuthorizationError).authorization,
+    );
+    expect(error.name).toBe("UnusedAuthorizationError");
+    expect(
+      isSimulationPackageError({
+        name: error.name,
+        code: error.code,
+        message: error.message,
+      }),
+    ).toBe(true);
+  });
+
   test.each(errors)("behavior: recognizes $name across bundles", (error) => {
     expect(isSimulationPackageError(error)).toBe(true);
     expect(

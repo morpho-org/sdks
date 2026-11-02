@@ -29,6 +29,7 @@ export interface ExecutionBlock {
 interface ExecutedCall {
   readonly planned: PlannedCall;
   readonly result: SimulationCall;
+  readonly logsMissing: boolean;
 }
 
 /** One executed state read with its raw return data. @internal */
@@ -178,24 +179,27 @@ export function parseSimulationResponse(params: {
           `eth_simulateV1 returned a malformed call result at position ${index}.`,
         );
       result = {
-        logs: (call.logs ?? []).map((log): RawLog => {
-          if (
-            !isAddress(log.address) ||
-            !Array.isArray(log.topics) ||
-            log.topics.some(
-              (topic: unknown) => !isHex(topic) || topic.length !== 66,
-            ) ||
-            (log.data !== undefined && !isHex(log.data))
-          )
-            throw new InvalidSimulationResponseError(
-              `eth_simulateV1 returned a malformed log at call position ${index}.`,
-            );
-          return {
-            address: log.address,
-            topics: log.topics,
-            data: log.data ?? "0x",
-          };
-        }),
+        logs:
+          call.logs == null
+            ? []
+            : call.logs.map((log): RawLog => {
+                if (
+                  !isAddress(log.address) ||
+                  !Array.isArray(log.topics) ||
+                  log.topics.some(
+                    (topic: unknown) => !isHex(topic) || topic.length !== 66,
+                  ) ||
+                  (log.data !== undefined && !isHex(log.data))
+                )
+                  throw new InvalidSimulationResponseError(
+                    `eth_simulateV1 returned a malformed log at call position ${index}.`,
+                  );
+                return {
+                  address: log.address,
+                  topics: log.topics,
+                  data: log.data ?? "0x",
+                };
+              }),
         status: call.status === "0x1",
         returnData: call.returnData,
         gasUsed: BigInt(call.gasUsed),
@@ -212,7 +216,13 @@ export function parseSimulationResponse(params: {
       isHex(call.error?.data) && call.error.data !== "0x"
         ? call.error.data
         : call.returnData;
-    return { planned, result, call, revertData };
+    return {
+      planned,
+      result,
+      call,
+      revertData,
+      logsMissing: call.logs == null,
+    };
   });
 
   // A preparation call that reverted did not produce its promised state —
@@ -353,7 +363,11 @@ export function parseSimulationResponse(params: {
     // Every failure was classified above: only successful calls remain.
     calls: calls
       .filter((entry) => entry.result.status)
-      .map(({ planned, result }) => ({ planned, result })),
+      .map(({ planned, result, logsMissing }) => ({
+        planned,
+        result,
+        logsMissing,
+      })),
     stateReads,
   });
 }

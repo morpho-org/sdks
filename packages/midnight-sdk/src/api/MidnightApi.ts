@@ -341,6 +341,8 @@ export class MidnightApi {
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
    * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.taker - Account that will execute the take (the `taker` passed to Midnight `take`).
+   *   The API leaves out offers made by this account, since Midnight rejects self-takes.
    * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
@@ -355,7 +357,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -391,6 +393,7 @@ export class MidnightApi {
         slippage: input.slippage,
         units: input.units,
         assets: input.assets,
+        taker: input.taker,
       },
     });
 
@@ -399,6 +402,7 @@ export class MidnightApi {
       {
         marketId: input.marketId,
         side: input.side,
+        taker: input.taker,
       },
     );
     const averageWorstPrice =
@@ -817,6 +821,8 @@ export class MidnightApi {
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
    * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.taker - Account that will execute the take (the `taker` passed to Midnight `take`).
+   *   The API leaves out offers made by this account, since Midnight rejects self-takes.
    * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @returns Quote and ABI-ready take caps. `averageWorstPrice` equals the caller's guard when provided,
    *   otherwise the API's guard. Offers are returned as the API sends them. An `asks` quote by
@@ -828,7 +834,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when an offer's maker matches the requested `taker`, when its `receiverIfMakerIsSeller` is not a well-formed address or is the zero address on a sell offer, when its caps or buy-side receiver are not executable, when its units exceed its offer `maxUnits`, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts

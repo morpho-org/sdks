@@ -24,6 +24,7 @@ export const OPERATION_TYPES = [
   "vaultV2InKindRedeem",
   "vaultV1MigrateToV2",
   "midnightSupplyCollateral",
+  "midnightSupplyCollateralMakeBorrow",
   "midnightSupplyBlueMakeLend",
   "midnightRedeem",
   "midnightTakeLend",
@@ -137,9 +138,12 @@ export interface VaultV1MigrateToV2Subject {
   readonly targetVault: Address;
 }
 
-/** Subject of a direct Midnight collateral supply: one collateral slot of one Midnight market. */
+/** Subject of a Midnight collateral supply: one collateral slot of one Midnight market. */
 export interface MidnightCollateralOperationSubject {
-  readonly operation: "midnightSupplyCollateral";
+  /** `midnightSupplyCollateralMakeBorrow` is the per-index limit for a MidnightBundlesV2 maker bundle that publishes a borrow offer root through a ratifier. */
+  readonly operation:
+    | "midnightSupplyCollateral"
+    | "midnightSupplyCollateralMakeBorrow";
   /** Midnight market id (`MidnightMarketUtils.toId(marketParams)`), not a Blue market id. */
   readonly marketId: Hex;
   /** Index of the collateral in the market's `collateralParams`. */
@@ -243,8 +247,8 @@ export interface SlippageQuote {
    * Expected net collateral added to the position. This is a minimum:
    * supplying less collateral than quoted is adverse. Measurable only on
    * `blueSupplyCollateral` and `blueSupplyCollateralBorrow` (the Blue
-   * position's `collateral`) and `midnightSupplyCollateral` (Midnight
-   * `collateral(marketId, account, collateralIndex)`).
+   * position's `collateral`) and Midnight collateral supplies
+   * (`collateral(marketId, account, collateralIndex)`).
    */
   readonly collateralSupplied?: bigint;
   /**
@@ -484,7 +488,11 @@ export type CheckedOperationLimit = OperationLimit & CheckedSlippageLimits;
 export type CheckedInputOperationLimit = InputOperationLimit &
   CheckedSlippageLimits;
 
-/** Checked limits for requests that may contain input-based operations. */
+/**
+ * Checked limits for requests that may contain input-based operations.
+ * Approval limits (`limits.approvals` and the derived allowlist) are checked
+ * but not reported here.
+ */
 export interface CheckedSimulationInputLimits {
   readonly operations: readonly (
     | CheckedOperationLimit
@@ -492,18 +500,55 @@ export interface CheckedSimulationInputLimits {
   )[];
 }
 
-/** The limits a simulation checked, as reported in `SimulationVerification.limits`. */
+/**
+ * The limits a simulation checked, as reported in `SimulationVerification.limits`.
+ * Approval limits (`limits.approvals` and the derived allowlist) are checked
+ * but not reported here.
+ */
 export interface CheckedSimulationLimits {
   readonly operations: readonly CheckedOperationLimit[];
 }
 
+/** One approval, Morpho authorization, or Midnight authorization explicitly permitted by the caller. */
+export type ApprovalLimit =
+  | {
+      readonly type: "token";
+      readonly token: Address;
+      readonly owner: Address;
+      readonly spender: Address;
+    }
+  | {
+      readonly type: "morphoAuthorization";
+      readonly authorizer: Address;
+      readonly authorized: Address;
+    }
+  | {
+      /** Midnight `setIsAuthorized(authorized, true, onBehalf)`: full control of `onBehalf`'s Midnight account. */
+      readonly type: "midnightAuthorization";
+      readonly onBehalf: Address;
+      readonly authorized: Address;
+    };
+
 /** Midnight operation limits that accept a supplied market struct. @internal */
 export const MIDNIGHT_MARKET_INPUT_OPERATION_TYPES = [
   "midnightSupplyCollateral",
+  "midnightSupplyCollateralMakeBorrow",
   "midnightTakeLend",
   "midnightTakeBorrow",
   "midnightSupplyCollateralTakeBorrow",
 ] as const satisfies readonly OperationType[];
+
+type MidnightCollateralLimitFields = {
+  /** Midnight market id (`MidnightMarketUtils.toId(marketParams)`). */
+  readonly marketId: Hex;
+  /**
+   * `Midnight.toMarket` struct for a market this bundle creates on first
+   * use. Its id must equal `marketId`.
+   */
+  readonly market?: MidnightMarketStruct;
+  /** Index of the supplied collateral in the market's `collateralParams`. */
+  readonly collateralIndex: bigint;
+};
 
 /** Caller-selected action and subject with the same quote/tolerance shape for every action.
  * Prefer `InputOperationLimit` for types covered by `OperationInputs`. Quotes
@@ -524,8 +569,9 @@ export type OperationLimit = SlippageLimits & {
   readonly account?: Address;
   /**
    * Explicit asset paid; defaults to the action underlying. For
-   * `midnightSupplyCollateral` with a supplied `market`, omit this override or
-   * set it to `market.collateralParams[collateralIndex].token`; otherwise
+   * `midnightSupplyCollateral` or `midnightSupplyCollateralMakeBorrow` with a
+   * supplied `market`, omit this override or set it to
+   * `market.collateralParams[collateralIndex].token`; otherwise
    * `simulate()` throws `SlippageCheckUnavailableError`. In other cases, the
    * quote-only override is trusted as given and never checked against the subject's
    * token: a wrong address measures a token the bundle does not move, so the
@@ -538,9 +584,10 @@ export type OperationLimit = SlippageLimits & {
    * input measurements include ETH plus net wNative wallet changes.
    * Typed sender-side wNative measurements also include native value sent by
    * the request without an explicit alias.
-   * For a first `midnightSupplyCollateral` into a market not yet created at the
-   * state block, pass its market struct via `market` on the operation limit, or
-   * set this to `collateralParams[collateralIndex].token`.
+   * For a first `midnightSupplyCollateral` or
+   * `midnightSupplyCollateralMakeBorrow` into a market not yet created at the
+   * state block, pass its market struct via `market` on the operation limit,
+   * or set this to `collateralParams[collateralIndex].token`.
    * `midnightTakeLend`, `midnightRepayWithdrawCollateral`,
    * `midnightTakeRepayWithdrawCollateral`, and `midnightSupplyBlueMakeLend`
    * reject `assetPaid` because they measure the market's loan token; on
@@ -583,18 +630,14 @@ export type OperationLimit = SlippageLimits & {
         readonly sourceVault: Address;
         readonly targetVault: Address;
       }
-    | {
+    | (MidnightCollateralLimitFields & {
+        /** Direct Midnight collateral supply limit. */
         readonly type: "midnightSupplyCollateral";
-        /** Midnight market id (`MidnightMarketUtils.toId(marketParams)`). */
-        readonly marketId: Hex;
-        /**
-         * `Midnight.toMarket` struct for a market this bundle creates on first
-         * use. Its id must equal `marketId`.
-         */
-        readonly market?: MidnightMarketStruct;
-        /** Index of the supplied collateral in the market's `collateralParams`. */
-        readonly collateralIndex: bigint;
-      }
+      })
+    | (MidnightCollateralLimitFields & {
+        /** Per-index maker collateral-supply limit that publishes a borrow offer root through a ratifier. */
+        readonly type: "midnightSupplyCollateralMakeBorrow";
+      })
     | {
         /**
          * Limit for Midnight `supplyBlueMakeLend`: checks both the sender's
@@ -820,9 +863,19 @@ export type InputOperationLimit = {
  */
 export interface SimulationLimits {
   readonly operations: readonly OperationLimit[];
+  /**
+   * Additional sender approvals, Morpho authorizations and Midnight authorizations allowed by the
+   * simulation. These are unioned with the entries derived from `operations`.
+   */
+  readonly approvals?: readonly ApprovalLimit[];
 }
 
 /** Caller-selected quoted or input-based operations; input sides derive at the pinned block. */
 export interface SimulationInputLimits {
   readonly operations: readonly (OperationLimit | InputOperationLimit)[];
+  /**
+   * Additional sender approvals, Morpho authorizations and Midnight authorizations allowed by the
+   * simulation. These are unioned with the entries derived from `operations`.
+   */
+  readonly approvals?: readonly ApprovalLimit[];
 }

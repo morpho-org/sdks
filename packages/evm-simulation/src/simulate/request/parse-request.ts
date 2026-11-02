@@ -23,6 +23,7 @@ import type {
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import {
+  type ApprovalLimit,
   type CheckedInputOperationLimit,
   type CheckedOperationLimit,
   type ForceExitDeallocationQuote,
@@ -86,7 +87,7 @@ export interface ParsedRequest {
   readonly chainId: number;
   readonly mode: SimulationMode;
   readonly transactions: readonly ParsedTransaction[];
-  /** Always empty in final mode. */
+  /** Pending preview permissions or final-mode signed requests to check. */
   readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly block?: StateBlock;
@@ -177,6 +178,7 @@ interface FieldChecks {
     value: unknown,
     path: string,
   ): SimulationAuthorization | undefined;
+  approvalLimit(value: unknown, path: string): ApprovalLimit | undefined;
   operation(value: unknown, path: string): ParsedOperationLimit | undefined;
 }
 
@@ -214,13 +216,14 @@ const MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS = [
   "maxCollateral",
 ] as const;
 const BLOCK_KEYS = ["number", "hash", "timestamp"] as const;
-const LIMITS_KEYS = ["operations"] as const;
+const LIMITS_KEYS = ["operations", "approvals"] as const;
 const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
   erc20Approval: ["type", "token", "owner", "spender", "amount"],
   erc2612Permit: ["type", "typedData"],
   permit2SignatureTransfer: ["type", "owner", "typedData"],
   blueAuthorization: ["type", "authorizer", "authorized", "isAuthorized"],
   blueAuthorizationSignature: ["type", "typedData"],
+  midnightAuthorizationSignature: ["type", "typedData"],
 };
 
 /** Field validators closing over one `errors` accumulator. @internal */
@@ -642,7 +645,8 @@ const createChecks = (): FieldChecks => {
             isAuthorized,
           };
         }
-        case "blueAuthorizationSignature": {
+        case "blueAuthorizationSignature":
+        case "midnightAuthorizationSignature": {
           const envelope = typedDataEnvelope({
             value: readField(authorization, "typedData"),
             path,
@@ -688,7 +692,10 @@ const createChecks = (): FieldChecks => {
           )
             return undefined;
           return {
-            type: "blueAuthorizationSignature",
+            type:
+              type === "midnightAuthorizationSignature"
+                ? "midnightAuthorizationSignature"
+                : "blueAuthorizationSignature",
             typedData: {
               domain,
               primaryType: "Authorization",
@@ -709,6 +716,71 @@ const createChecks = (): FieldChecks => {
           errors.push(`${path}.type: unsupported authorization type "${type}"`);
           return undefined;
       }
+    },
+
+    approvalLimit: (approval, path) => {
+      const type = isRecord(approval) ? readField(approval, "type") : undefined;
+      if (!isRecord(approval) || typeof type !== "string") {
+        errors.push(`${path}.type: must name an approval limit type`);
+        return undefined;
+      }
+      if (type === "token") {
+        check.keys(approval, {
+          allow: ["type", "token", "owner", "spender"],
+          path,
+        });
+        const token = check.address(
+          readField(approval, "token"),
+          `${path}.token`,
+        );
+        const owner = check.address(
+          readField(approval, "owner"),
+          `${path}.owner`,
+        );
+        const spender = check.address(
+          readField(approval, "spender"),
+          `${path}.spender`,
+        );
+        if (token === undefined || owner === undefined || spender === undefined)
+          return undefined;
+        return { type, token, owner, spender };
+      }
+      if (type === "morphoAuthorization") {
+        check.keys(approval, {
+          allow: ["type", "authorizer", "authorized"],
+          path,
+        });
+        const authorizer = check.address(
+          readField(approval, "authorizer"),
+          `${path}.authorizer`,
+        );
+        const authorized = check.address(
+          readField(approval, "authorized"),
+          `${path}.authorized`,
+        );
+        if (authorizer === undefined || authorized === undefined)
+          return undefined;
+        return { type, authorizer, authorized };
+      }
+      if (type === "midnightAuthorization") {
+        check.keys(approval, {
+          allow: ["type", "onBehalf", "authorized"],
+          path,
+        });
+        const onBehalf = check.address(
+          readField(approval, "onBehalf"),
+          `${path}.onBehalf`,
+        );
+        const authorized = check.address(
+          readField(approval, "authorized"),
+          `${path}.authorized`,
+        );
+        if (onBehalf === undefined || authorized === undefined)
+          return undefined;
+        return { type, onBehalf, authorized };
+      }
+      errors.push(`${path}.type: unsupported approval limit type "${type}"`);
+      return undefined;
     },
 
     operation: (operation, path) => {
@@ -736,7 +808,10 @@ const createChecks = (): FieldChecks => {
           ...spec.markets,
           ...spec.addresses,
           ...(acceptsMarket ? ["market"] : []),
-          ...(type === "midnightSupplyCollateral" ? ["collateralIndex"] : []),
+          ...(type === "midnightSupplyCollateral" ||
+          type === "midnightSupplyCollateralMakeBorrow"
+            ? ["collateralIndex"]
+            : []),
           ...(type === "midnightSupplyBlueMakeLend" ? ["callbackSalt"] : []),
           "quote",
           "slippageTolerance",
@@ -798,7 +873,10 @@ const createChecks = (): FieldChecks => {
         if (callbackSalt !== undefined)
           Reflect.set(out, "callbackSalt", callbackSalt);
       }
-      if (type === "midnightSupplyCollateral") {
+      if (
+        type === "midnightSupplyCollateral" ||
+        type === "midnightSupplyCollateralMakeBorrow"
+      ) {
         const collateralIndex = check.uint256(
           readField(operation, "collateralIndex"),
           `${path}.collateralIndex`,
@@ -1516,6 +1594,10 @@ const OPERATION_SPECS: Record<
     ["collateralSupplied"],
     ["assetsPaid"],
   ]),
+  midnightSupplyCollateralMakeBorrow: marketSpec([
+    ["collateralSupplied"],
+    ["assetsPaid"],
+  ]),
   midnightSupplyBlueMakeLend: {
     requiredQuotes: [["assetsPaid"], ["sharesMinted"]],
     markets: ["marketId"],
@@ -1667,7 +1749,7 @@ export function requiredQuoteErrors({
  * `PermitSingle` payloads rather than silently reinterpreting them. Cross-field
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
- * must bind to `chainId`, and `mode: "final"` rejects authorizations outright.
+ * must bind to `chainId`. Final-mode signed requests are retained for use-event checks.
  *
  * @param input - Caller input (`SimulateInputParams`-shaped, including quote-only requests).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
@@ -1836,11 +1918,6 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
     if (!Array.isArray(rawAuthorizations)) {
       fieldErrors.push("authorizations: must be an array");
     } else {
-      if (mode === "final") {
-        fieldErrors.push(
-          "authorizations: are only accepted in preview mode; sign them and submit mode 'final' without authorizations",
-        );
-      }
       for (const [i, authorization] of rawAuthorizations.entries()) {
         const parsed = check.authorization(
           authorization,
@@ -1881,7 +1958,26 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
         if (parsedOperation !== undefined) operations.push(parsedOperation);
       }
     }
-    normalizedLimits = { operations };
+    const rawApprovals = readField(limits, "approvals");
+    let approvals: ApprovalLimit[] | undefined;
+    if (rawApprovals !== undefined) {
+      if (!Array.isArray(rawApprovals)) {
+        fieldErrors.push("limits.approvals: must be an array");
+      } else {
+        approvals = [];
+        for (const [i, approval] of rawApprovals.entries()) {
+          const parsedApproval = check.approvalLimit(
+            approval,
+            `limits.approvals[${i}]`,
+          );
+          if (parsedApproval !== undefined) approvals.push(parsedApproval);
+        }
+      }
+    }
+    normalizedLimits = {
+      operations,
+      ...(approvals !== undefined ? { approvals } : {}),
+    };
   }
 
   // ─── Cross-field rules ──────────────────────────────────────────────────
@@ -1915,6 +2011,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
         case "blueAuthorization":
           return { owner: authorization.authorizer, domainChainId: undefined };
         case "blueAuthorizationSignature":
+        case "midnightAuthorizationSignature":
           return {
             owner: authorization.typedData.message.authorizer,
             domainChainId: authorization.typedData.domain.chainId,
@@ -1955,7 +2052,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
     chainId: chainId as number,
     mode,
     transactions,
-    authorizations: mode === "preview" ? authorizations : [],
+    authorizations,
     ...(blockNumber !== undefined ? { blockNumber } : {}),
     ...(block !== undefined ? { block } : {}),
     limits: normalizedLimits,

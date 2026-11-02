@@ -11,7 +11,10 @@ struct MarketResponse {
     bool hasPrice;
     uint256 price;
     uint256 rateAtTarget;
+    uint256 deadSupplyShares;
 }
+
+address constant DEAD_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
 contract GetMarket {
     function query(IMorpho morpho, Id id, IAdaptiveCurveIrm adaptiveCurveIrm)
@@ -21,6 +24,7 @@ contract GetMarket {
     {
         res.marketParams = morpho.idToMarketParams(id);
         res.market = morpho.market(id);
+        res.deadSupplyShares = morpho.position(id, DEAD_ADDRESS).supplyShares;
 
         if (res.marketParams.oracle != address(0)) {
             try IOracle(res.marketParams.oracle).price() returns (uint256 price) {

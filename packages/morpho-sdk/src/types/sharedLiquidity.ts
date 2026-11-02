@@ -62,9 +62,11 @@ export interface VaultV2BluePublicAllocatorOptions {
 
   /**
    * Maximum utilization source markets may reach during friendly discovery,
-   * scaled by WAD. Within each penalty tier, the amount-aware planner falls
-   * back to 100% only when that tier's friendly pass leaves an absolute
-   * shortfall.
+   * scaled by WAD. Within each penalty tier, the planner tries this friendly
+   * utilization before falling back to 100% when required coverage remains.
+   * Positive-penalty tiers cover the remaining absolute shortfall or, when
+   * larger, Blue's loan-token balance deficit while BlueBundlesV1 flash-loans
+   * the penalty.
    *
    * @default 90% (900000000000000000n)
    */
@@ -73,9 +75,11 @@ export interface VaultV2BluePublicAllocatorOptions {
   /**
    * Maximum proportional vault-asset penalty accepted per call, scaled by
    * WAD; higher-penalty vaults are ignored. Must not exceed WAD. Operation
-   * plans consider penalty tiers ascending, free first. Each tier uses friendly
-   * source utilization (90% by default) before 100%; positive tiers cover only
-   * the remaining absolute shortfall. Free capacity inside
+   * plans consider penalty tiers ascending, free first. Each tier tries
+   * friendly source utilization (90% by default) before falling back to 100%
+   * when required coverage remains. Positive-penalty tiers cover the remaining
+   * absolute shortfall or, when larger, Blue's loan-token balance deficit while
+   * BlueBundlesV1 flash-loans the penalty. Free capacity inside
    * `allocatorCapHeadroom` stays unused, so a penalized leg can cover it.
    * Getters count all vaults up to this limit. For `refinance`, compute the
    * plan on the destination-market handle (for example,

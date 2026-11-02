@@ -1,5 +1,15 @@
 # @morpho-org/test
 
+## 2.12.0
+
+### Minor Changes
+
+- Add `client.setFeeTokenBalance` to fund local test accounts on chains that charge gas in an ERC-20 fee token.
+
+### Patch Changes
+
+- Accept authorization descriptors in final mode and require matching user-call Approval events for ERC-2612 permits and IncrementNonce events for Blue signatures. Throw UnusedAuthorizationError with the request index when the evidence is missing, even with limits disabled. Preview preparation is unchanged.
+
 ## 2.11.0
 
 ### Minor Changes

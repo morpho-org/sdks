@@ -834,6 +834,7 @@ const ERROR_CATEGORY_RULES: readonly {
   { name: "AbiDecodingDataSizeTooSmallError", category: "integrity" },
   { name: "InvalidHexValueError", category: "integrity" },
   { name: "InvalidSignatureError", category: "auth" },
+  { name: "UnusedAuthorizationError", category: "auth" },
   { name: "AddressMismatchError", category: "auth" },
   { name: "ExpiredDeadlineError", category: "auth" },
   { name: "UnsupportedErc20ApprovalSpenderError", category: "auth" },

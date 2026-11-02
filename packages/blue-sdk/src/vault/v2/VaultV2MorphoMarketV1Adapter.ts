@@ -4,9 +4,11 @@ import {
   MarketParams,
   marketParamsAbi,
 } from "../../market/index.js";
+import { MathLib } from "../../math/MathLib.js";
 import type { AccrualPosition } from "../../position/index.js";
 import type { BigIntish, Hash } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
+import type { IVaultV2Allocation } from "./VaultV2.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
@@ -235,6 +237,72 @@ export class AccrualVaultV2MorphoMarketV1Adapter
       value: BigInt(assets),
       limiter: CapacityLimitReason.balance,
     };
+  }
+
+  /**
+   * Returns unbooked supply interest for the routed market at its accrued state.
+   * For deposit quotes, accrue to the expected inclusion time plus a caller-chosen delay
+   * margin; the current block's state omits interest earned before inclusion.
+   * @param data - Encoded market parameters.
+   * @param allocations - Recorded liquidity allocations.
+   * @returns Nonnegative pending increase, or zero when the cap allocation or routed position
+   *   is absent, or the position is not above the recorded allocation.
+   * @throws {InvalidMarketParamsError} When the routing data cannot be decoded as market parameters.
+   * @example
+   * ```ts
+   * import {
+   *   AccrualPosition, AccrualVaultV2MorphoMarketV1Adapter,
+   *   MarketParams, marketParamsAbi, VaultV2MorphoMarketV1Adapter,
+   * } from "@morpho-org/blue-sdk";
+   * import { createPublicClient, encodeAbiParameters, http, zeroAddress } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const { timestamp } = await client.getBlock();
+   * // Illustrative delays; choose both for the chain and transaction submission path.
+   * const expectedInclusionTimestamp = timestamp + 30n;
+   * const inclusionMargin = 30n;
+   * // Illustrative snapshot; use real adapter and vault allocation data in practice.
+   * const adapterAddress = zeroAddress;
+   * const marketParams = MarketParams.idle(zeroAddress);
+   * const position = new AccrualPosition(
+   *   { user: adapterAddress, supplyShares: 500_000_000n, borrowShares: 0n, collateral: 0n },
+   *   { params: marketParams, totalSupplyAssets: 1_000_000n, totalSupplyShares: 1_000_000_000_000n,
+   *     totalBorrowAssets: 0n, totalBorrowShares: 0n, lastUpdate: timestamp, fee: 0n },
+   * );
+   * const adapter = new AccrualVaultV2MorphoMarketV1Adapter({
+   *   address: adapterAddress, parentVault: zeroAddress, skimRecipient: zeroAddress,
+   *   marketParamsList: [marketParams],
+   * }, [position]).accrueInterest(expectedInclusionTimestamp + inclusionMargin);
+   * const recordedAllocation = 480n;
+   * const data = encodeAbiParameters([marketParamsAbi], [marketParams]);
+   * const pending = adapter.pendingAllocationIncrease(data, [{
+   *   id: VaultV2MorphoMarketV1Adapter.adapterMarketCapId(adapterAddress, marketParams),
+   *   allocation: recordedAllocation,
+   *   absoluteCap: 0n,
+   *   relativeCap: 0n,
+   * }]);
+   * // pending === 20n (position worth 500n, recorded allocation 480n)
+   * ```
+   */
+  pendingAllocationIncrease(
+    data: Hex,
+    allocations: readonly IVaultV2Allocation[],
+  ): bigint {
+    const params = MarketParams.fromHex(data);
+    const id = VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+      this.address,
+      params,
+    );
+    const recorded = allocations.find((allocation) => allocation.id === id);
+    if (recorded == null) return 0n;
+    const position = this.positions.find(
+      (entry) => entry.marketId === params.id,
+    );
+    return MathLib.zeroFloorSub(
+      position?.supplyAssets ?? 0n,
+      recorded.allocation,
+    );
   }
 
   maxWithdraw(data: Hex) {

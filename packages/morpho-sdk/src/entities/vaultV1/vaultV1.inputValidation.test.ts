@@ -15,7 +15,11 @@ import { inKindVaultV1Data } from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import {
+  MAX_SLIPPAGE_TOLERANCE,
+  MIN_DEAD_SHARES,
+  MIN_VAULT_V2_DEAD_ASSETS,
+} from "../../helpers/constant.js";
 import {
   type Erc2612RequirementSignature,
   ExcessiveSlippageToleranceError,
@@ -99,6 +103,8 @@ describe("MorphoVaultV1 deposit input validation", () => {
         asset: SteakhouseUsdcVaultV1.asset,
         toShares: () => 1n,
         accrueInterest: () => ({ toShares: () => 1n }),
+        deadShares: MIN_DEAD_SHARES,
+        withdrawQueue: [],
       } as never,
     });
 
@@ -178,6 +184,13 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       asset: SteakhouseUsdcVaultV1.asset,
       toShares: () => 100n,
       accrueInterest: () => ({ toShares: () => 100n }),
+      deadShares: MIN_DEAD_SHARES,
+      deadAssets: MIN_VAULT_V2_DEAD_ASSETS,
+      absoluteCaps: {},
+      _totalAssets: 1n,
+      totalSupply: 0n,
+      virtualShares: 1n,
+      accrualAdapters: [],
     } as never;
     const migration = vault.migrateToV2({
       assets: 100n,

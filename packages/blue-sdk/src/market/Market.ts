@@ -40,6 +40,11 @@ export interface IMarket {
   fee: bigint;
   price?: bigint;
   rateAtTarget?: bigint;
+  /**
+   * Supply shares held by `DEAD_ADDRESS` (the market's dead deposit). `fetchMarket` reads it;
+   * `undefined` when the snapshot was not fetched with it (hand-built or API-sourced).
+   */
+  readonly deadSupplyShares?: bigint;
 }
 
 /**
@@ -89,6 +94,12 @@ export class Market implements IMarket {
    */
   public rateAtTarget?: bigint;
 
+  /**
+   * Supply shares held by `DEAD_ADDRESS` (the market's dead deposit).
+   * `undefined` when the snapshot was not fetched with it.
+   */
+  public readonly deadSupplyShares?: bigint;
+
   constructor({
     params,
     totalSupplyAssets,
@@ -99,6 +110,7 @@ export class Market implements IMarket {
     fee,
     price,
     rateAtTarget,
+    deadSupplyShares,
   }: IMarket) {
     this.params =
       params instanceof MarketParams ? params : new MarketParams(params);
@@ -111,6 +123,7 @@ export class Market implements IMarket {
     this.price = price;
 
     if (rateAtTarget != null) this.rateAtTarget = rateAtTarget;
+    if (deadSupplyShares != null) this.deadSupplyShares = deadSupplyShares;
   }
 
   /**
