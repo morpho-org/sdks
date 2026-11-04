@@ -44,8 +44,9 @@ Ask one question:
 > year?**
 
 If yes, it is a decision and gets an ADR. If no, it belongs in the Technical Project Plan. An ADR
-is accepted through its own PR and is frozen after merge. Status is the only field that changes. A
-changed decision gets a new ADR that supersedes the old one.
+is accepted by merging its own PR and is frozen after merge; it has no Status field. A changed
+decision gets a new ADR that supersedes the old one, and the old record gains a References bullet
+naming it.
 
 An ADR never contains file paths, private symbols, phases, milestones, owners, dates other than the
 header, or links to anything that changes. The plan links its ADRs. An ADR never links the plan.

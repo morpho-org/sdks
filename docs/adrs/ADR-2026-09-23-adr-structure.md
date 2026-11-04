@@ -2,12 +2,11 @@
 
 | Field      | Value        |
 | ---------- | ------------ |
-| **Status** | accepted     |
 | **Date**   | 2026-09-23   |
 | **Author** | @Foulks-Plb  |
 | **Scope**  | Repo-wide    |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -127,3 +126,4 @@ prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fe
 - Supersedes none; this is the first record written to this structure.
 - morpho-org/morpho-apps ADR-2026-09-23 — the application-monorepo structure this adapts.
 - Accepted in the PR that added this file.
+- Status header, Status-only edits and the Status-row invariant superseded by ADR-2026-11-02-adrs-without-status.

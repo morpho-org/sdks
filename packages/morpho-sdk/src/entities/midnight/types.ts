@@ -296,6 +296,17 @@ export interface SupplyCollateralParams extends MarketActionParams {
   readonly collateralIndex?: bigint;
 }
 
+/** Parameters for a direct Midnight collateral withdrawal. */
+export interface WithdrawCollateralParams
+  extends MarketActionParams,
+    MidnightPositionHealthParams {
+  readonly collateralIndex?: bigint;
+  /** Collateral assets to withdraw; maxUint256 resolves the snapshot's whole balance. */
+  readonly assets: bigint;
+  /** Defaults to accountAddress. */
+  readonly receiver?: Address;
+}
+
 /** Parameters for the Midnight redeem flow. */
 export interface RedeemParams {
   readonly accountAddress: Address;

@@ -24,9 +24,9 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Read [Adopting dead-share protection](./DEAD-SHARE-PROTECTION.md) for the protected Blue `supply`
-overload and the dead-deposit checks on supply and deposit flows. Snapshot-free Blue `supply`
-is deprecated but remains unprotected during the deprecation minor.
+Read [Dead-share validators](./DEAD-SHARE-PROTECTION.md) for the exported checks. Builders do not
+enforce the dead-deposit rule; integrators should validate their snapshot before building.
+Snapshot-free Blue `supply` remains deprecated.
 
 Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
 API removals and the new unlimited-approval behavior.
@@ -55,7 +55,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
-| | `supplyCollateral`, `redeem` | Direct call |
+| | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and

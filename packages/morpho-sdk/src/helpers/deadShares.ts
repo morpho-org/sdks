@@ -110,15 +110,16 @@ export function validateVaultV1DeadShares(
 /**
  * Checks a Vault V2 against the dead-deposit rule: at least `MIN_DEAD_SHARES` shares at
  * `DEAD_ADDRESS` worth at least `MIN_VAULT_V2_DEAD_ASSETS` assets, a share price above
- * `1 / (10 * virtualShares)`, and every Blue market or Vault V1 it can allocate to (non-zero
- * absolute cap) passing its own rule. Zero-cap entries are skipped.
+ * `1 / (10 * virtualShares)`, and each currently allocated Blue market or Vault V1 with a non-zero
+ * absolute cap passing its own rule. A market with a positive cap but no current allocation is not
+ * checked; a later reallocation can reach it.
  *
  * @param vault - Fetched vault snapshot with its adapters and `absoluteCaps`.
  * @param path - Vaults leading to this vault, outermost first; empty for a direct deposit.
- * @returns Nothing; returns normally when the vault and everything it can allocate to pass.
+ * @returns Nothing; returns normally when the vault and its checked allocations pass.
  * @throws {MissingDeadSharesDataError} when a dead-share field, an adapter cap, or the data of an
  * adapter the SDK cannot hydrate is missing.
- * @throws {InsufficientDeadSharesError} when the vault or an allocatable market or Vault V1 fails the rule.
+ * @throws {InsufficientDeadSharesError} when the vault or a checked market or Vault V1 fails the rule.
  * @example
  * ```ts
  * import { validateVaultV2DeadShares } from "@morpho-org/morpho-sdk";

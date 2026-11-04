@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-09-17 |
 | **Author** | @foulques |
 | **Scope**  | `morpho-sdk` 6.0.0, `wdk-protocol-lending-morpho-evm` 2.0.0, `morpho-ts` 3.0.0, `blue-sdk` 7.0.0, `blue-sdk-viem` 6.0.0 |
 
-_Migrated from TIB-2026-09-17-remove-bundler3-primitives-without-deprecation. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-09-17-remove-bundler3-primitives-without-deprecation. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

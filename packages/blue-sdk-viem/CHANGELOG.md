@@ -127,8 +127,6 @@
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the documented augmentation subpaths: `package.json` now exports `./augment` and `./augment/*` (dev exports map to `src/augment`, `publishConfig.exports` and `publishConfig.typesVersions` to `lib/{esm,cjs}/augment`), so `import "@morpho-org/blue-sdk-viem/augment/Market"` and friends resolve instead of throwing `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `sideEffects` manifest field now protects the augmentation modules from tree-shaking, and the README uses the new subpaths (dropping the non-existent `augment/AccrualPosition` entry — `augment/Position` augments `Position` and `AccrualPosition` — and adding the missing `augment/User`).
 
-  Refs SDK-1100
-
 - [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
 
   `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
@@ -159,8 +157,6 @@
 ### Patch Changes
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the documented augmentation subpaths: `package.json` now exports `./augment` and `./augment/*` (dev exports map to `src/augment`, `publishConfig.exports` and `publishConfig.typesVersions` to `lib/{esm,cjs}/augment`), so `import "@morpho-org/blue-sdk-viem/augment/Market"` and friends resolve instead of throwing `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `sideEffects` manifest field now protects the augmentation modules from tree-shaking, and the README uses the new subpaths (dropping the non-existent `augment/AccrualPosition` entry — `augment/Position` augments `Position` and `AccrualPosition` — and adding the missing `augment/User`).
-
-  Refs SDK-1100
 
 - [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
 

@@ -34,7 +34,6 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
-import { validateVaultV2DeadShares } from "../../helpers/deadShares.js";
 import {
   computeMinForceWithdrawSharePrice,
   computeVaultMaxShareAllowance,
@@ -206,10 +205,6 @@ export interface VaultV2Actions {
    * const tx = action.buildTx(); // For a client configured with supportSignature: false.
    * // tx satisfies Readonly<Transaction<VaultV2DepositAction>>
    * ```
-   * @throws {MissingDeadSharesDataError} when `vaultData` lacks the dead-share, cap or adapter data
-   * the dead-deposit check needs, such as a hand-built or API-sourced snapshot.
-   * @throws {InsufficientDeadSharesError} when the vault, or a market or vault it can allocate to,
-   * holds less than the required dead deposit.
    */
   deposit: (
     params: {
@@ -753,8 +748,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
       // The native path must target the chain's registered wrapped-native asset.
       validateNativeVaultAsset(this.chainId, vaultAsset);
     }
-    // Throws when the vault, or a market it can allocate to, lacks a sufficient dead deposit.
-    validateVaultV2DeadShares(vaultData);
     const referralFeeAssets = getBundlesReferralFeeAssets(
       funding.assets,
       common.referralFeePct,

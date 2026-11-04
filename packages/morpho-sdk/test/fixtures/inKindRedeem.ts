@@ -50,6 +50,7 @@ const snapshotTimestamp = () => Time.timestamp();
 export const inKindVaultV1Data = (params?: {
   /** Supply shares each market holds at `DEAD_ADDRESS`. Defaults to `MIN_DEAD_SHARES`. */
   readonly deadSupplyShares?: bigint;
+  readonly deadShares?: bigint;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly enabled?: boolean;
@@ -101,7 +102,7 @@ export const inKindVaultV1Data = (params?: {
       supplyQueue: markets.map(({ id }) => id),
       totalSupply: totalAssets,
       lastTotalAssets: params?.lastTotalAssets ?? totalAssets,
-      deadShares: MIN_DEAD_SHARES,
+      deadShares: params?.deadShares ?? MIN_DEAD_SHARES,
     },
     [
       {
@@ -157,6 +158,7 @@ export const IN_KIND_FOREIGN_ADAPTER =
 export const inKindVaultV2Data = (params?: {
   /** Supply shares each market holds at `DEAD_ADDRESS`. Defaults to `MIN_DEAD_SHARES`. */
   readonly deadSupplyShares?: bigint;
+  readonly deadShares?: bigint;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
@@ -294,7 +296,7 @@ export const inKindVaultV2Data = (params?: {
       _totalAssets: totalAssets,
       totalSupply: params?.totalSupply ?? totalAssets,
       virtualShares: params?.virtualShares ?? 1n,
-      deadShares: MIN_DEAD_SHARES,
+      deadShares: params?.deadShares ?? MIN_DEAD_SHARES,
       deadAssets: MIN_VAULT_V2_DEAD_ASSETS,
       absoluteCaps: Object.fromEntries(
         markets.flatMap(({ params: marketParams }) => [

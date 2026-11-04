@@ -2,12 +2,11 @@
 
 | Field      | Value                                |
 | ---------- | ------------------------------------ |
-| **Status** | accepted; `ExternalServiceError` on failed requests superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation |
 | **Date**   | 2026-10-01                           |
 | **Author** | @jinmel                              |
 | **Scope**  | `evm-simulation` 5.0.0               |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -62,3 +61,4 @@ or continued availability of `evm-simulation` 4.x. No other removal inherits it.
   [ADR-2026-09-18: EVM simulation — calldata verification and result constraints](./ADR-2026-09-18-evm-simulation-calldata-verification.md).
 - [ADR-2026-05-13: SDK package deprecation lifecycle](./ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)
 - Accepted in https://github.com/morpho-org/sdks/pull/1204.
+- `ExternalServiceError` on failed requests superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.

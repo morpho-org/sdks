@@ -67,10 +67,10 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /**
- * Decides whether release.yml publishes a tarball. A version already on npm is skipped, so
- * reruns are idempotent. A version npm would refuse, or one that would move the dist-tag it
- * publishes under back (a rerun of an older release after a newer one shipped), fails the
- * job before any upload.
+ * Decides whether release.yml publishes a tarball. A version already on npm is skipped unless
+ * its dist-tag points to an older version. A version npm would refuse, one whose dist-tag
+ * lags behind it, or one that would move the dist-tag it publishes under back (a rerun of an
+ * older release after a newer one shipped), fails the job before any upload.
  *
  * @param tarball - Identity read from the tarball, and the dist-tag it publishes under
  *   (`latest` by default).
@@ -78,6 +78,9 @@ export function compareVersions(a: string, b: string): number {
  * @returns `true` to publish, `false` to skip.
  * @throws If a package without a `latest` version on npm would publish under `next`: npm
  *   would also point `latest` at that prerelease.
+ * @throws If the version is already on npm but the dist-tag it publishes under points to an
+ *   older version: a maintainer can point the tag at the version, or release a newer version
+ *   if the tag was moved back on purpose.
  */
 export function shouldPublish(
   {
@@ -93,13 +96,20 @@ export function shouldPublish(
     );
   }
   if (state == null) return true;
-  if (state.versions.includes(version)) return false;
+  const current = state[tag];
+  if (state.versions.includes(version)) {
+    if (current != null && compareVersions(version, current) > 0) {
+      throw new Error(
+        `${name}@${version} is already on npm, but ${tag} still points to the older ${current}, so installs keep resolving ${current}. If the tag was left behind, run "npm dist-tag add ${name}@${version} ${tag}" and rerun. If ${tag} was moved back on purpose, release a new version of ${name} instead.`,
+      );
+    }
+    return false;
+  }
   if (state.everPublished.includes(version)) {
     throw new Error(
       `${name}@${version} was published and then removed; npm refuses to reuse it. Release a new version.`,
     );
   }
-  const current = state[tag];
   if (current != null && compareVersions(version, current) <= 0) {
     throw new Error(
       `${name}@${version} is not newer than ${tag} ${current}; publishing it would move ${tag} back. Release a new version.`,

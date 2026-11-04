@@ -1,5 +1,18 @@
 # @morpho-org/morpho-sdk
 
+## 9.3.0
+
+### Minor Changes
+
+- Add direct Midnight collateral withdrawals without bundle authorization or token pulls, with snapshot balance and health checks.
+- Deposit, migration, protected Blue supply and Midnight parking-supply builders no longer reject targets without a sufficient dead deposit; the validators, thresholds and error classes stay exported so integrators can run the check themselves; `supplyBlueMakeLend` throws `EmptyBlueParkingMarketError` again on an empty parking market.
+
+  If you moved empty-parking-market handling to `InsufficientDeadSharesError` for 9.2.0, catch `EmptyBlueParkingMarketError` again.
+
+### Patch Changes
+
+- Fix Midnight maker offer-state reads on Tempo and Arc by reading contracts without requiring Multicall3 metadata in the viem chain definition. All reads remain pinned to one block and propagate failures.
+
 ## 9.2.0
 
 ### Minor Changes
@@ -1501,7 +1514,7 @@ slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }`
   recently the accrued price rose past the default 0.03% `slippageTolerance`
   ceiling and the bundle reverted on `maxSharePrice` — e.g. at ~10% APR / 90%
   utilization, ~0.03% is only a few days of accrual, so a quiet market reverted
-  systematically. This is the supply counterpart of the repay fix (VAU-1206); the
+  systematically. This is the supply counterpart of the repay fix; the
   `withdraw` / `borrow` paths use a lower `minSharePrice` bound that accrual only
   relaxes, so they were unaffected.
 

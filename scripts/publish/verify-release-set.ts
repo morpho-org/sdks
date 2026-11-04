@@ -70,8 +70,8 @@ export function selectChannelTarballs(
 }
 
 /**
- * Checks an npm tarball's layout: one `package/` root, canonical paths, only
- * regular files and directories, and a single regular `package/package.json`.
+ * Checks an npm tarball's layout: one `package/` root, canonical forward-slash
+ * paths, only regular files and directories, and a single regular `package/package.json`.
  *
  * @param file - Tarball name, for messages.
  * @param entries - Entries as node-tar lists them.
@@ -84,6 +84,7 @@ export function verifyTarballStructure(
   for (const { path, type } of entries) {
     const segments = path.replace(/\/$/, "").split("/");
     if (
+      path.includes("\\") ||
       segments[0] !== "package" ||
       segments.some(
         (segment) => segment === "" || segment === "." || segment === "..",

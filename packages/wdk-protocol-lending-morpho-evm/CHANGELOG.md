@@ -1,5 +1,18 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.3.0
+
+### Minor Changes
+
+- Deposit, migration, protected Blue supply and Midnight parking-supply builders no longer reject targets without a sufficient dead deposit; the validators, thresholds and error classes stay exported so integrators can run the check themselves; `supplyBlueMakeLend` throws `EmptyBlueParkingMarketError` again on an empty parking market.
+
+  If you moved empty-parking-market handling to `InsufficientDeadSharesError` for 9.2.0, catch `EmptyBlueParkingMarketError` again.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.3.0
+
 ## 4.2.0
 
 ### Minor Changes

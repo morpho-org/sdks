@@ -30,7 +30,6 @@ import {
   parseEther,
   zeroAddress,
 } from "viem";
-import * as viemChains from "viem/chains";
 import { expect } from "vitest";
 import {
   type ActionRequirement,
@@ -78,6 +77,8 @@ const setUpMarket = async (
     },
   );
   await fundE2eMidnightWallets(client, { market, wallets: params.wallets });
+  for (const account of [A, B, C, D])
+    await client.setFeeTokenBalance({ account, amount: units });
 
   return {
     client,
@@ -248,15 +249,7 @@ const loanWallets = {
   B: { collateralAssets },
 } as const satisfies Partial<Record<E2eMidnightWallet, object>>;
 
-describeE2e(scenario, (test, { chainId }) => {
-  // Maker flows call viem `multicall` without an address, which throws on chains whose viem
-  // definition lists no Multicall3 (Tempo, Arc). Remove this skip once the SDK passes one.
-  const it = test.skipIf(
-    (Object.values(viemChains) as readonly Chain[]).find(
-      ({ id }) => id === chainId,
-    )?.contracts?.multicall3 == null,
-  );
-
+describeE2e(scenario, (it, { chainId }) => {
   it("L2-10: B borrows across A's and D's lend offers and the better-priced offer fills first", async ({
     client,
   }) => {

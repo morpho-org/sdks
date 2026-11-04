@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; bounded vault-share allowance superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-08-28 |
 | **Author** | @foulques |
 | **Scope**  | Packages: `morpho-sdk` |
 
-_Migrated from TIB-2026-08-28-vault-exit-force-withdraw. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-08-28-vault-exit-force-withdraw. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 
@@ -616,6 +615,7 @@ the in-kind TIB, so no downstream peer-range audit is required.
 - [`VaultV2ExitBundlesTest.sol`](https://github.com/morpho-org/bundles/blob/main/test/VaultV2ExitBundlesTest.sol) — `testForceWithdrawTightPriceBound` is the source of the dust term
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `exit`, `forceDeallocate`, `previewWithdraw`, the gates
 - [`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
+- bounded vault-share allowance superseded by ADR-2026-10-21-unlimited-sdk-approvals.
 
 ## Addenda
 

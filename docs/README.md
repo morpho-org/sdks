@@ -33,10 +33,10 @@ The test: would this still be true if the project were cancelled tomorrow and th
 next year? If not, it belongs in the Technical Project Plan.
 
 ADRs are small and focused — one decision per ADR. An ADR is accepted through its own PR, needs
-at least one developer review, ships no changeset, and is never edited after merge. Status is the
-only field that changes, and takes one of three forms: `accepted`, `superseded by <ADR stem>`, or
-— when a later record replaces only part of the decision — `accepted; <part> superseded by <ADR
-stem>`. A changed decision gets a new ADR that supersedes the old one.
+at least one developer review, ships no changeset, and is never edited after merge: merging the PR
+accepts it, and ADRs have no Status field. A changed decision gets a new ADR that supersedes the
+old one; the old record gains a References bullet, `Superseded by <ADR stem>.` or, when only part
+is replaced, `<part> superseded by <ADR stem>.`
 
 > **Before writing an ADR**, read [`DEVELOPMENT-LIFECYCLE.md`](./DEVELOPMENT-LIFECYCLE.md) and the
 > preamble of [`templates/ADR.md`](./templates/ADR.md). Agents must follow these rules when
@@ -93,8 +93,8 @@ for f in $(records); do prose "$f" | grep -q 'linear\.app' && echo "$f"; done
 # The retired TIB convention is gone — prints nothing
 git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)tibs/*' ':(top)*/tibs/*'
 
-# Every record has a Status row — prints nothing
-for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' || echo "$f"; done
+# No record has a Status row — prints nothing
+for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' && echo "$f"; done
 
 # Every record filename matches the convention — prints nothing
 for f in $(records); do basename "$f" | grep -vqE '^ADR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+\.md$' && echo "$f"; done

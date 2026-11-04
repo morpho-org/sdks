@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; Alternative 4 superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-07-27 |
 | **Author** | @foulques |
 | **Scope**  | Packages: `morpho-sdk`, `morpho-ts` |
 
-_Migrated from TIB-2026-07-27-vault-exit-in-kind-redemption. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-07-27-vault-exit-in-kind-redemption. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 
@@ -759,3 +758,4 @@ TIB conventions:
   the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
   not override it.
 -->
+- Alternative 4 superseded by ADR-2026-10-21-unlimited-sdk-approvals.

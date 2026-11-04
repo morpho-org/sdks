@@ -2110,12 +2110,7 @@ export class MidnightOfferCallbackDataMismatchError extends Error {
   }
 }
 
-/**
- * Thrown when loan assets would be parked in a Morpho Blue market with no existing supply.
- *
- * @deprecated `supplyBlueMakeLend` now throws `InsufficientDeadSharesError` or
- * `MissingDeadSharesDataError` instead; kept exported so existing `instanceof` checks compile.
- */
+/** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
 export class EmptyBlueParkingMarketError extends Error {
   constructor(params: { readonly marketId: MarketId }) {
     super(

@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-07-02 |
 | **Author** | @foulques |
 | **Scope**  | Package: `morpho-sdk` |
 
-_Migrated from TIB-2026-07-02-blue-repay-native-wrapping. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-07-02-blue-repay-native-wrapping. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

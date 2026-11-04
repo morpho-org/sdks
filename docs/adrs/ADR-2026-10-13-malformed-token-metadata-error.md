@@ -2,12 +2,11 @@
 
 | Field      | Value                                                                                                     |
 | ---------- | --------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                  |
 | **Date**   | 2026-10-13                                                                                                |
 | **Author** | @Foulks-Plb                                                                                               |
 | **Scope**  | `blue-sdk-viem` 7.0.0, `morpho-sdk` 8.0.0, `wdk-protocol-lending-morpho-evm` 3.0.0: `MalformedTokenMetadataError` on the exports ADR-2026-10-09 covers through `fetchToken`, and ADR-2026-10-09's `morpho-sdk` target moved from 7.0.0 to 8.0.0 for every error it lists |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 

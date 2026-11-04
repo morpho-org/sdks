@@ -1156,6 +1156,54 @@ describe("Midnight requirements on fork", () => {
     });
   });
 
+  test("withdraws collateral directly without bundle authorization", async ({
+    client,
+  }) => {
+    const assets = parseEther("1");
+    await installTestOracle(client);
+    await client.deal({ erc20: wNative, amount: assets });
+    const entity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id);
+    const accountAddress = client.account.address;
+    const supply = entity.supplyCollateral({
+      marketData,
+      accountAddress,
+      collateralAssets: assets,
+    });
+    for (const requirement of await supply.getRequirements()) {
+      if (!("to" in requirement))
+        throw new Error("expected approval transaction");
+      await client.sendTransaction(requirement);
+    }
+    await client.sendTransaction(supply.buildTx());
+    const output = entity.withdrawCollateral({
+      marketData,
+      accountAddress,
+      assets: maxUint256,
+      ...(await positionHealthParams({ client, entity, accountAddress })),
+    });
+    await expect(output.getRequirements()).resolves.toEqual([]);
+    expect(output.buildTx().to).toBe(midnight);
+    await client.sendTransaction(output.buildTx());
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        args: [marketId, accountAddress, 0n],
+      }),
+    ).resolves.toBe(0n);
+    await expect(
+      client.readContract({
+        address: wNative,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [accountAddress],
+      }),
+    ).resolves.toBe(assets);
+  });
+
   test("executes supply-collateral and take-borrow outputs", async ({
     client,
   }) => {

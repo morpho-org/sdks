@@ -3,7 +3,8 @@ name: Release
 # Every push to main or next is a release: the repository only receives release
 # snapshots. main publishes stable versions under the `latest` dist-tag; next
 # publishes only its prerelease versions, under `next`. Publishing is
-# idempotent, so a rerun only publishes, tags and releases what is missing.
+# idempotent: an existing version is skipped unless its dist-tag points to an
+# older version; a lagging tag fails so a maintainer can repair it.
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
@@ -121,8 +122,9 @@ jobs:
       - name: Verify tarballs
         run: node scripts/publish/verify-release-set.ts --channel "$RELEASE_CHANNEL" "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
 
-      # Skips versions already on npm and fails on any that npm would refuse or
-      # that would move the run's dist-tag back, before anything is uploaded.
+      # Skips versions already on npm unless the run's dist-tag points to an older
+      # version; fails when the tag lags, npm would refuse, or publishing
+      # would move the run's dist-tag back, before anything is uploaded.
       - name: Plan publish
         run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
 
@@ -275,11 +277,17 @@ jobs:
           /usr/bin/git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap '/usr/bin/git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
           while IFS=$'\t' read -r -u 3 tag commit; do
-            # Released already: nothing to create. The legacy pipeline tagged some
-            # versions on commits outside main's first-parent history.
-            if found=$(/usr/bin/gh release view "$tag" --json isDraft --jq .isDraft 2>&1); then
-              if [ "$found" = "false" ]; then
+            # A non-draft Release by github-actions[bot] is trusted and skipped without
+            # re-checking its tag. Legacy Releases and ones moved with `gh release edit`
+            # share that author, so removing human write stays required (see
+            # docs/release/public-repo-setup.md §1).
+            if found=$(/usr/bin/gh release view "$tag" --json isDraft,author --jq '"\(.isDraft) \(.author.login)"' 2>&1); then
+              if [ "$found" = "false github-actions[bot]" ]; then
                 continue
+              fi
+              if [ "${found%% *}" = "false" ]; then
+                echo "::error::Release ${tag} was created by ${found#* }, not by this workflow, so its tag was never checked against ${commit}. Delete the Release but keep its tag (gh release delete without --cleanup-tag) and re-run: the job checks the tag and recreates the Release. If the tag isn't on ${commit}, an admin must also remove the tag; the tag ruleset blocks deleting it."
+                exit 1
               fi
               echo "::error::Release ${tag} is a draft. Delete it and re-run: the job tags ${commit} and creates the Release. Publishing the draft would skip that tag check."
               exit 1

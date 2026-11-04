@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; maker mempool route, `MidnightBundlesV1` taker routes, `buildTx(MidnightActionSignatures)`, offer-root signature types, the cancel-offer action (`cancelOffer` / `midnightCancelOffer`), the exact-amount approval policy of `getMidnightApprovalRequirements` and the `MidnightBundles` authorization-target list superseded by ADR-2026-10-02-midnight-bundles-v2-sdk-actions |
 | **Date**   | 2026-06-03 |
 | **Author** | Romain / Carapulse draft |
 | **Scope**  | Package: `morpho-sdk` / Midnight SDK |
 
-_Migrated from TIB-2026-06-03-midnight-action-output-interface. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-06-03-midnight-action-output-interface. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 
@@ -954,3 +953,4 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 - `morpho-org/bundles/src/midnight/MidnightBundlesV1.sol` and `src/midnight/IMidnightBundlesV1.sol` — latest bundled taker and repay / withdraw entry points used by the markets app.
 - `morpho-org/midnight/src/ratifiers/EcrecoverRatifier.sol` and `src/ratifiers/SetterRatifier.sol` — maker root-signature and ratify-root consent paths.
 - Root [`AGENTS.md`](../../AGENTS.md) §1 (layering), §2 (forbidden patterns), §3 (types), §5 (testing), §6 (JSDoc), §7 (release).
+- maker mempool route, `MidnightBundlesV1` taker routes, `buildTx(MidnightActionSignatures)`, offer-root signature types, the cancel-offer action (`cancelOffer` / `midnightCancelOffer`), the exact-amount approval policy of `getMidnightApprovalRequirements` and the `MidnightBundles` authorization-target list superseded by ADR-2026-10-02-midnight-bundles-v2-sdk-actions.

@@ -58,19 +58,7 @@ export const describeE2e = (
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
           rpcUrls: { default: { http: [] } },
         });
-      const testChain =
-        chain.contracts?.multicall3 === undefined
-          ? defineChain({
-              ...chain,
-              contracts: {
-                ...chain.contracts,
-                multicall3: {
-                  address: "0xcA11bde05977b3631167028862bE2a173976CA11",
-                },
-              },
-            })
-          : chain;
-      const test = createViemTest(testChain, {
+      const test = createViemTest(chain, {
         forkUrl: run.status === "run" ? run.forkUrl : undefined,
         forkBlockNumber,
         // HyperEVM small blocks cap gas at 3M, below a Vault V2 deployment.

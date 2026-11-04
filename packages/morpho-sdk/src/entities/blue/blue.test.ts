@@ -32,13 +32,11 @@ import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
-  InsufficientDeadSharesError,
   isRequirementSignature,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
   MissingContractCodeError,
-  MissingDeadSharesDataError,
   NegativeInputError,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
@@ -81,6 +79,7 @@ const makePosition = (
     supplyShares?: bigint;
     lastUpdate?: bigint;
     rateAtTarget?: bigint;
+    deadSupplyShares?: bigint;
   } = {},
 ) =>
   new AccrualPosition(
@@ -100,7 +99,7 @@ const makePosition = (
       fee: 0n,
       price: ORACLE_PRICE_SCALE,
       rateAtTarget: overrides.rateAtTarget ?? 0n,
-      deadSupplyShares: MIN_DEAD_SHARES,
+      deadSupplyShares: overrides.deadSupplyShares ?? MIN_DEAD_SHARES,
     }),
   );
 
@@ -1609,10 +1608,7 @@ describe("MorphoBlue missing contract code", () => {
   });
 });
 
-describe("MorphoBlue supply dead-share guard", () => {
-  const withDeadSupplyShares = (deadSupplyShares: bigint | undefined) =>
-    new Market({ ...supplyMarketData, deadSupplyShares });
-
+describe("MorphoBlue supply snapshot checks", () => {
   test("keeps snapshot-free supply compatible on the entity and public interface", () => {
     const { client, request } = createMockClient(mainnet);
     const entity = client
@@ -1632,21 +1628,29 @@ describe("MorphoBlue supply dead-share guard", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  test("builds from a market snapshot with no dead supply shares", () => {
+    const { client } = createMockClient(mainnet);
+    const entity = client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+
+    const tx = entity
+      .supply({
+        marketData: makePosition(marketParams, { deadSupplyShares: 0n }).market,
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .buildTx();
+
+    expect(tx).toBeDefined();
+  });
+
   test.each([
     {
       name: "a snapshot of another market",
       marketData: makePosition(destinationMarketParams).market,
       error: MarketIdMismatchError,
-    },
-    {
-      name: "a snapshot without dead-share data",
-      marketData: withDeadSupplyShares(undefined),
-      error: MissingDeadSharesDataError,
-    },
-    {
-      name: "one dead share below the threshold",
-      marketData: withDeadSupplyShares(MIN_DEAD_SHARES - 1n),
-      error: InsufficientDeadSharesError,
     },
   ])("error: rejects $name before any RPC request", ({ marketData, error }) => {
     const { client, request } = createMockClient(mainnet);

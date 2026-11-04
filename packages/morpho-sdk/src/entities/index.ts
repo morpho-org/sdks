@@ -142,6 +142,7 @@ export type {
   TakeLendParams as MidnightTakeLendParams,
   TakeRepayWithdrawCollateralParams as MidnightTakeRepayWithdrawCollateralParams,
   TakeWithdrawParams as MidnightTakeWithdrawParams,
+  WithdrawCollateralParams as MidnightWithdrawCollateralParams,
 } from "./midnight/index.js";
 export {
   type MidnightActionOutput,

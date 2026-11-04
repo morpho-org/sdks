@@ -101,6 +101,26 @@ describe("MorphoVaultV2 deposit input validation", () => {
 
     expect(action).toBeDefined();
   });
+
+  test("behavior: deposit builds from a vault snapshot with no dead shares", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    const tx = vault
+      .deposit({
+        amount: 100n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: inKindVaultV2Data({
+          address: KeyrockUsdcVaultV2.address,
+          deadShares: 0n,
+        }),
+      })
+      .buildTx();
+
+    expect(tx).toBeDefined();
+  });
 });
 
 describe("MorphoVaultV2 withdraw input validation", () => {

@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-05-13 |
 | **Author** | @Rubilmax |
 | **Scope**  | Repo-wide |
 
-_Migrated from TIB-0003-sdk-package-deprecation-lifecycle. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-0003-sdk-package-deprecation-lifecycle. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

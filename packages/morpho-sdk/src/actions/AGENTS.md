@@ -26,7 +26,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
    `MidnightBundlesV2` entrypoint call directly (see
    [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
-   collateral supply / redeem) encode their target contract call directly. Vault `inKindRedeem` and
+   collateral supply / withdrawCollateral / redeem) encode their target contract call directly. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.

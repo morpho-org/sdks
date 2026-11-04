@@ -106,15 +106,16 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 
 - Bugs in `viem`, `wagmi` or other third-party dependencies; report them upstream. A way the SDK misuses a dependency is in scope.
 - Bugs in deployed smart contracts; see [SDK or protocol?](#sdk-or-protocol).
+- Findings whose only precondition is malicious code in the GitHub runner, a pinned action, the pinned Node and npm, or a script of the release commit while the npm `publish` job holds its publishing credential. See [`THREAT_MODEL.md`](./THREAT_MODEL.md#npm-publishing-credential).
 - Findings whose only precondition is a malicious or compromised RPC, simulation, bundler or paymaster endpoint, unless the report shows a check the SDK could make against a source the endpoint cannot forge.
 - The accepted unlimited approvals to registered Bundles/Midnight spenders and the lack of an on-chain share-burn bound for asset-mode Vault V1/V2 withdrawals, the asset-mode `migrateToV2` source leg, and in-kind redemptions, as documented in the unlimited-approvals ADR (`ADR-2026-10-21-unlimited-sdk-approvals`) and the threat model.
 - Findings whose only precondition is a malicious integrator: a wrong client-to-chain pairing, an attacker-chosen address passed in or registered by the integrator, or a modified SDK.
-- Findings whose only precondition is malicious code in the release `pack` job rewriting file contents and manifest fields other than identity and `publishConfig`. A bypass of the publish job's checksum, layout or collision checks stays in scope. See [`THREAT_MODEL.md`](./THREAT_MODEL.md#pack-job-tarball-contents-bin-lib-manifest-fields).
+- Findings whose only precondition is malicious dependency code already running in the release `pack` job and rewriting file contents or manifest fields other than identity and `publishConfig`. Getting malicious code into the lockfile, changing package identity or `publishConfig`, or bypassing the publish job's checksum, layout or collision checks stays in scope. See [`THREAT_MODEL.md`](./THREAT_MODEL.md#pack-job-tarball-contents-bin-lib-manifest-fields).
 - Social engineering, denial of service against npm or GitHub, and physical attacks.
 
 ### Trust boundaries in short
 
-The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id.
+The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id. They also trust the build dependencies locked in `pnpm-lock.yaml`.
 
 ## Security invariants
 

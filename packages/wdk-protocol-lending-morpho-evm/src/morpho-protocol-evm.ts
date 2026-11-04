@@ -1229,9 +1229,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
-   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
-   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
-   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
@@ -1293,9 +1290,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
-   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
-   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
-   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {Error} when configuration or quoting fails.
    * @example

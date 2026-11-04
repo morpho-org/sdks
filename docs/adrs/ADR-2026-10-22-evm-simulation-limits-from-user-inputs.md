@@ -2,12 +2,11 @@
 
 | Field      | Value                            |
 | ---------- | -------------------------------- |
-| **Status** | accepted                         |
 | **Date**   | 2026-10-22                       |
 | **Author** | @Foulks-Plb                      |
 | **Scope**  | `evm-simulation` 8.1.0 (minor)     |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 

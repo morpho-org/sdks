@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-06-19 |
 | **Author** | @0xbulma  |
 | **Scope**  | Repo-wide |
 
-_Migrated from TIB-2026-06-19-adopt-latest-facets-review-mechanism. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-06-19-adopt-latest-facets-review-mechanism. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

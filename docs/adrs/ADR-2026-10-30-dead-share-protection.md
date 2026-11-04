@@ -2,12 +2,11 @@
 
 | Field      | Value                  |
 | ---------- | ---------------------- |
-| **Status** | proposed               |
 | **Date**   | 2026-10-30             |
 | **Author** | @Foulks-Plb            |
 | **Scope**  | Packages: `morpho-sdk`, `wdk-protocol-lending-morpho-evm` |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 

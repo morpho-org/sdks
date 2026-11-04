@@ -1984,3 +1984,114 @@ describe("MidnightApi.fetchTakeableOffers", () => {
     expect(url.searchParams.has("groups")).toBe(false);
   });
 });
+
+describe("MidnightApi transport faults", () => {
+  const fetchers: readonly (readonly [
+    string,
+    (fetch: MidnightApiFetch) => Promise<unknown>,
+  ])[] = [
+    ["fetchBooks", (fetch) => MidnightApi.fetchBooks({ fetch })],
+    [
+      "fetchBook",
+      (fetch) => MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ],
+    [
+      "fetchBookPriceLevels",
+      (fetch) =>
+        MidnightApi.fetchBookPriceLevels({
+          marketId: MARKET_ID,
+          side: "asks",
+          fetch,
+        }),
+    ],
+    [
+      "fetchBookTakeableOffers",
+      (fetch) =>
+        MidnightApi.fetchBookTakeableOffers({
+          marketId: MARKET_ID,
+          side: "asks",
+          fetch,
+        }),
+    ],
+    [
+      "fetchBookQuote",
+      (fetch) =>
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          units: 1_000000000000000000n,
+          fetch,
+        }),
+    ],
+    [
+      "fetchTakeableOffers",
+      (fetch) => MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ],
+    [
+      "validateMempoolPayload",
+      (fetch) =>
+        MidnightApi.validateMempoolPayload({
+          chainId: 8453,
+          payload: "0x0100000000" as Hex,
+          fetch,
+        }),
+    ],
+    [
+      "validateMempoolItems",
+      (fetch) =>
+        MidnightApi.validateMempoolItems({
+          chainId: 8453,
+          items: [
+            {
+              offer: apiValidOffer({ group: GROUP_ID }),
+              ratifierData: "0x1234" as Hex,
+            },
+          ],
+          fetch,
+        }),
+    ],
+  ];
+
+  test.each(fetchers)(
+    "error: %s throws MidnightApiError on HTTP 503",
+    async (_, call) => {
+      const { fetch } = createJsonFetch(
+        { error: { code: "SERVICE_UNAVAILABLE", message: "Unavailable." } },
+        503,
+      );
+
+      await expect(call(fetch)).rejects.toBeInstanceOf(MidnightApiError);
+    },
+  );
+
+  test.each(fetchers)(
+    "error: %s rejects with the fetch TimeoutError",
+    async (_, call) => {
+      const timeout = new DOMException(
+        "The operation was aborted due to timeout",
+        "TimeoutError",
+      );
+      const fetch: MidnightApiFetch = async () => {
+        throw timeout;
+      };
+
+      // `requestMidnightApi` does not wrap fetch rejections, so the raw error propagates.
+      await expect(call(fetch)).rejects.toBe(timeout);
+    },
+  );
+
+  test.each(fetchers)(
+    "error: %s throws InvalidMidnightApiResponseError on a non-JSON 200 body",
+    async (_, call) => {
+      const fetch: MidnightApiFetch = async () =>
+        new Response("<html>Bad Gateway</html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        });
+
+      await expect(call(fetch)).rejects.toBeInstanceOf(
+        InvalidMidnightApiResponseError,
+      );
+    },
+  );
+});

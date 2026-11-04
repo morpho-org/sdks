@@ -2,12 +2,11 @@
 
 | Field      | Value                   |
 | ---------- | ----------------------- |
-| **Status** | accepted; `evm-simulation` 7.0.0 target superseded by ADR-2026-10-21-evm-simulation-fail-closed-limits-ships-in-v8; derivation of limits from action args superseded for the input-based form by ADR-2026-10-22-evm-simulation-limits-from-user-inputs |
 | **Date**   | 2026-10-15              |
 | **Author** | @jinmel                 |
 | **Scope**  | `evm-simulation` 7.0.0  |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -138,3 +137,5 @@ reachable).
   — specifically its optional `limits`, required `slippageTolerance`,
   single-side sufficiency, tolerance range including `1e18`, absence of any
   default bound, and its quote-field table.
+- `evm-simulation` 7.0.0 target superseded by ADR-2026-10-21-evm-simulation-fail-closed-limits-ships-in-v8.
+- derivation of limits from action args superseded for the input-based form by ADR-2026-10-22-evm-simulation-limits-from-user-inputs.

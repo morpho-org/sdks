@@ -39,7 +39,6 @@ import {
   getBlueAuthorizationRequirement,
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
-import { validateBlueMarketDeadShares } from "../../helpers/deadShares.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -249,7 +248,8 @@ export interface BlueActions {
    *
    * @param params.userAddress - User funding and receiving the supply position.
    * @param params.marketData - Snapshot of this market from `getMarketData()` (or `fetchMarket` in
-   *   `@morpho-org/blue-sdk-viem`), used to check its dead deposit before building.
+   *   `@morpho-org/blue-sdk-viem`), checked only for `MarketIdMismatchError`. To check the dead-deposit
+   *   rule, call `validateBlueMarketDeadShares` on the snapshot yourself before building.
    * @param params.assets - Gross loan-token assets funded before the referral fee.
    * @param params.nativeAmount - Optional full native funding; must equal `assets` and requires wNative.
    * @param params.deadline - Final call deadline in Unix seconds.
@@ -278,8 +278,6 @@ export interface BlueActions {
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {MarketIdMismatchError} when `marketData` belongs to another market.
-   * @throws {MissingDeadSharesDataError} when `marketData` has no `deadSupplyShares`.
-   * @throws {InsufficientDeadSharesError} when the market holds fewer than `MIN_DEAD_SHARES` supply shares at `DEAD_ADDRESS`.
    * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
@@ -325,8 +323,7 @@ export interface BlueActions {
       BlueTokenRequirementsParams
     >;
     /**
-     * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
-     * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+     * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
      */
     (params: {
       readonly userAddress: Address;
@@ -1269,8 +1266,7 @@ export class MorphoBlue implements BlueActions {
     BlueTokenRequirementsParams
   >;
   /**
-   * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
-   * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+   * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
    */
   supply(params: {
     readonly userAddress: Address;
@@ -1317,8 +1313,6 @@ export class MorphoBlue implements BlueActions {
           this.marketParams.id,
         );
       }
-      // Throws when the market lacks a sufficient dead deposit; nothing to return.
-      validateBlueMarketDeadShares(params.marketData);
     }
 
     return {

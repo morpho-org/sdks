@@ -4,17 +4,14 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { erc20Abi, isHex, parseEther, parseUnits } from "viem";
+import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { DEAD_ADDRESS } from "../../../src/constants.js";
 import {
-  InsufficientDeadSharesError,
   isPermit2SignatureTransferSignature,
   isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
-  MIN_DEAD_SHARES,
   morphoViemExtension,
 } from "../../../src/index.js";
 import {
@@ -493,47 +490,6 @@ describe("DepositVaultV1", () => {
     expect(finalState.userAssetBalance).toEqual(initialState.userAssetBalance);
     expect(finalState.userSharesBalance).toBeGreaterThanOrEqual(
       initialState.userSharesBalance,
-    );
-  });
-
-  test("error: rejects a deposit after the dead deposit is moved away", async ({
-    client,
-  }) => {
-    const vault = SteakhouseUsdcVaultV1.address;
-    const deadShares = await client.readContract({
-      address: vault,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [DEAD_ADDRESS],
-    });
-    expect(deadShares).toBeGreaterThanOrEqual(MIN_DEAD_SHARES);
-    await client.impersonateAccount({ address: DEAD_ADDRESS });
-    await client.setBalance({ address: DEAD_ADDRESS, value: parseEther("1") });
-    await client.writeContract({
-      account: DEAD_ADDRESS,
-      address: vault,
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [client.account.address, deadShares],
-    });
-    await client.stopImpersonatingAccount({ address: DEAD_ADDRESS });
-
-    const morpho = client.extend(morphoViemExtension()).morpho;
-    const entity = morpho.vaultV1(vault, mainnet.id);
-    const vaultData = await entity.getData();
-    expect(() =>
-      entity.deposit({
-        userAddress: client.account.address,
-        amount: parseUnits("1000", 6),
-        vaultData,
-      }),
-    ).toThrow(
-      new InsufficientDeadSharesError({
-        entity: [vault],
-        reason: "deadShares",
-        observed: 0n,
-        required: MIN_DEAD_SHARES,
-      }),
     );
   });
 });

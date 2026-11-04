@@ -174,19 +174,17 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 
 A nearly empty Blue market or vault lets the first depositor inflate the share price by donation, so later deposits round to few or zero shares. Protocol and curators mint a dead deposit at `DEAD_ADDRESS` (`0x…dEaD`) to close this.
 
-### What the SDK checks
+### Integrator checks
 
-- Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, the Vault V2 target of `migrateToV2`, and the parking market of Midnight `supplyBlueMakeLend` throw `InsufficientDeadSharesError` when the target holds fewer than `MIN_DEAD_SHARES` (1e9) shares at `DEAD_ADDRESS`. Only `DEAD_ADDRESS` counts: Vault V1.1 uses `address(1)` for loss coverage, so its shares are not a dead deposit.
-- A Vault V1 also needs every withdraw-queue market to pass. A Vault V2 also needs its dead shares worth at least `MIN_VAULT_V2_DEAD_ASSETS` (1e6) assets, a share price above `1 / (10 * virtualShares)`, and every Blue market or Vault V1 with a non-zero absolute cap that the snapshot holds to pass, recursively. Zero-cap entries are skipped. The snapshot must hold the liquidity market, where the deposit is allocated, even before it has an allocation.
-- The checks fail closed: a snapshot without dead-share or cap data, or with an adapter the SDK cannot hydrate, throws `MissingDeadSharesDataError`. Snapshots from the `blue-sdk-viem` fetchers carry the data; hand-built or API-sourced ones do not.
-- Accepted gap: market adapters list only markets they currently supply to, so a Vault V2 market with a positive cap but no allocation is not checked. A deposit does not reach it; a later allocator reallocation can. The liquidity market, which deposits do reach, is the exception: `fetchAccrualVaultV2` adds it and its cap to a market-adapter liquidity adapter, and the validator fails closed when it is absent.
+Builders do not enforce the dead-deposit rule. Integrators should call the exported
+`validateBlueMarketDeadShares`, `validateVaultV1DeadShares`, or `validateVaultV2DeadShares`
+validator on their snapshot before building.
 
-### Accepted gaps
-
-- Snapshot-free Blue `supply` is deprecated but preserves its previous, unprotected behavior for one minor before removal in the next major. Callers only gain dead-deposit protection by passing `marketData`; the legacy overload does not fetch a snapshot implicitly.
-- The check reads the snapshot passed in. A dead deposit withdrawn between fetch and inclusion, or a forged RPC read, is not caught; the check runs offchain and nothing enforces it onchain.
-- The thresholds are a Protocol rule, not a proof that a market cannot be inflated; a large donation can still move the share price of a small market.
-
+- Only shares at `DEAD_ADDRESS` count; Vault V1.1 shares at `address(1)` do not.
+- A Vault V2 market with a positive cap but no current allocation is not checked; a later
+  reallocation can reach it.
+- The snapshot can change between fetch and inclusion, and nothing enforces the check onchain.
+- The thresholds are a Protocol rule, not proof that a market cannot be inflated.
 
 ## Approvals and vault exits
 
@@ -231,7 +229,7 @@ Each item below requires the API to lie. Checking it would need a source the API
 
 ## Pack-job tarball contents (bin, lib, manifest fields)
 
-Reports whose only precondition is malicious code in the `pack` job of the public
+Reports whose only precondition is malicious dependency code already running in the `pack` job of the public
 [`release.yml`](https://github.com/morpho-org/sdks/blob/main/.github/workflows/release.yml)
 are out of scope for file contents and manifest fields other than identity and `publishConfig`.
 A bypass of the publish job's checksum, layout or collision checks stays in scope.
@@ -251,6 +249,16 @@ the three-day minimum release age (`minimumReleaseAge: 4320`, `minimumReleaseAge
 and the dependency lifecycle-script allowlist (`allowBuilds`), both in
 [`pnpm-workspace.yaml`](./pnpm-workspace.yaml). See also the
 [dependency policy](./SECURITY.md#dependency-policy).
+
+### Deployless artifact verification and Git index flags
+
+The release workflow's `pack` job runs `build:ci`, which first runs `verify:deployless-artifacts` from `package.json`. It recompiles Solidity under `packages/blue-sdk-viem/contracts` and `packages/midnight-sdk/contracts`; compilation removes stale generated query files whose source was removed and rejects unexpected files under `src/queries`. The gate then fails if tracked query files differ from `HEAD` or untracked files remain. The `pack` job starts from a fresh checkout with no `assume-unchanged` or `skip-worktree` flags in its index.
+
+Clearing or rejecting those flags would not add protection against code already running in `pack`: setting them already requires that code, which has write access to `.git` and can rewrite `lib/` or the tarballs after the gate. The gate catches drift in honest builds; it does not independently verify build output.
+
+### What the publish job checks
+
+The npm publish job installs nothing and treats packed tarballs as untrusted input. `scripts/publish/verify-release-set.ts` checks tarball checksums against the `SHA256SUMS` written by `pack` (transport integrity only), checks archive layout and path collisions, and checks package names, versions, identity and `publishConfig` against the packages declared at the commit before `npm publish --ignore-scripts`. A bypass of those checks remains in scope, as described above.
 
 ## Secret and internal-reference scan
 
@@ -422,6 +430,13 @@ The `release` job of the public [`release.yml`](https://github.com/morpho-org/sd
 ### Out of our threat model
 
 - A forged plan row: a tag on another ancestor commit, or an omitted or extra package row. Changing the plan means changing `github.sha`, which also defines `release.yml`, or a pinned action misbehaving. The `only the bot` ruleset of `morpho-org/sdks` blocks creating, updating, force-pushing and deleting public `main` and `next`, so only accounts on its bypass list can push them. Accounts on that list and the admins who manage it are trusted, because whoever pushes `github.sha` already controls the `release` job. Recomputing the plan in the `release` job would run the same code from the same commit. Consumers identify a version's source from npm provenance ([`SECURITY.md`](./SECURITY.md#verifying-a-release)), not from its git tag.
+
+## npm publishing credential
+
+The `publish` job of the public [`release.yml`](https://github.com/morpho-org/sdks/blob/main/.github/workflows/release.yml) is the only job with `id-token: write`, the npm trusted-publishing (OIDC) credential. Each package's trusted publisher accepts only `morpho-org/sdks`, `release.yml` and the `npm` environment, which deploys from `main` and `next` only; only accounts on the bypass list of the `only the bot` ruleset may update those branches, with signed commits (see [Release plan](#release-plan)). These settings live in the GitHub and npm configuration rather than in this repository; the internal sync checks the GitHub ones, except the ruleset bypass lists, and refuses to push while one is missing.
+
+- **Every step of the `publish` job can request the credential.** GitHub grants `id-token: write` per job, not per step, so the steps before the tarball checks hold it too. They run on a GitHub-hosted runner, which the job trusts like GitHub Actions itself, and they are GitHub's `checkout`, `setup-node` and `download-artifact` actions pinned by commit SHA, one exact Node release and the npm bundled with it, and scripts of the release commit (`scripts/publish/*.ts`, `scripts/workflow.ts` and `scripts/paths.ts`, which import only `node:` builtins, each other and the pacote and node-tar bundled with that npm). The job installs no dependencies and runs no code from the tarballs, which [`verify-release-set.ts`](./scripts/publish/verify-release-set.ts) checks before `npm publish --ignore-scripts`.
+- **Out of our threat model:** a finding whose precondition is that the runner, one of those pinned actions, the Node release, its npm or a script of the release commit runs malicious code in the `publish` job. Whoever can change them can change the checks too. Moving the tarball checks to a job without `id-token` would not take any of them out of the credentialed job, which still needs Node and npm, an artifact download and a script that re-checks the verified digests. A report is in scope when it shows the `publish` job loading code from outside that set, or code taken from the tarballs.
 
 ## Release job token before the plan checks
 
