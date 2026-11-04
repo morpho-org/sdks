@@ -36,6 +36,7 @@ import {
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
   midnightTakeWithdraw,
+  midnightWithdrawCollateral,
 } from "../../actions/midnight/index.js";
 import {
   getMidnightApprovalRequirements,
@@ -47,6 +48,7 @@ import {
   getMidnightBlueBuyCallbackData,
 } from "../../helpers/callback.js";
 import { MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS } from "../../helpers/constant.js";
+import { validateBlueMarketDeadShares } from "../../helpers/deadShares.js";
 import {
   encodeMidnightMarketId,
   wrapMidnightEncoding,
@@ -69,7 +71,6 @@ import {
   AccrualPositionUserMismatchError,
   type ActionRequirement,
   BorrowExceedsSafeLtvError,
-  EmptyBlueParkingMarketError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
@@ -98,6 +99,7 @@ import {
   type MidnightTakeRepayWithdrawCollateralAction,
   MidnightTakeTargetUnreachableError,
   type MidnightTakeWithdrawAction,
+  type MidnightWithdrawCollateralAction,
   MidnightZeroOnBehalfError,
   MissingAccrualPositionError,
   NegativeInputError,
@@ -133,6 +135,7 @@ import type {
   TakeLendParams,
   TakeRepayWithdrawCollateralParams,
   TakeWithdrawParams,
+  WithdrawCollateralParams,
 } from "./types.js";
 
 const validatePositionBinding = (params: {
@@ -204,6 +207,7 @@ export type MidnightActions = Pick<
   | "supplyCollateralTakeBorrow"
   | "takeRepayWithdrawCollateral"
   | "supplyCollateral"
+  | "withdrawCollateral"
   | "makeLend"
   | "makeBorrow"
   | "supplyBlueMakeLend"
@@ -474,7 +478,7 @@ export class MorphoMidnight {
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightZeroAccountError} when `accountAddress` is the zero address.
    * @throws {MidnightCalldataEncodingError} when an offer cannot be ABI-encoded, such as an out-of-range integer, or `accountAddress` is not a well-formed address.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {MidnightOfferExpiredError} when an offer expiry is not later than the pinned block timestamp.
    * @throws {MidnightOfferExpiryAfterMaturityError} when an offer expiry exceeds its market maturity.
    * @throws {MidnightOfferGroupConsumedError} when an offer group has no remaining capacity.
@@ -552,6 +556,7 @@ export class MorphoMidnight {
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {MidnightTakeableOfferZeroSellerReceiverError} when a sell offer routes seller proceeds to the zero address.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {MidnightReferralFeePctExceededError} when `referralFeePct` exceeds 10% (`WAD / 10n`).
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
@@ -1194,6 +1199,7 @@ export class MorphoMidnight {
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
+   * @throws {MidnightTakeableOfferZeroSellerReceiverError} when a sell offer routes seller proceeds to the zero address.
    * @throws {ExpiredDeadlineError} when `deadline` has expired.
    * @throws {MidnightTakeDeadlineTooFarError} when `deadline` is more than one hour from now.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
@@ -1351,6 +1357,103 @@ export class MorphoMidnight {
   }
 
   /**
+   * Withdraws collateral directly from Midnight without bundle authorization or token pulls.
+   *
+   * Uses the supplied position snapshot to resolve maxUint256 and check collateral health.
+   * No requirements or RPC reads are needed. The signing account must be accountAddress.
+   *
+   * @param params - Market, owner-bound position, collateral prices and withdrawal amount.
+   * @param params.accountAddress - Collateral owner. This account must send the transaction.
+   * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
+   * @param params.positionData - Owner-bound position snapshot returned by getPositionData.
+   * @param params.collateralPrices - Oracle prices indexed like positionData.collateral and scaled by
+   *   ORACLE_PRICE_SCALE; required when the position has debt, otherwise an empty array is safe.
+   * @param params.collateralIndex - Optional collateral index; defaults to 0n. Indexes follow the
+   *   market's collateral parameters, which Midnight sorts by token address, not the order they were
+   *   listed in when the market was built; check marketData.getCollateralByIndex(index).token.
+   * @param params.assets - Collateral assets to withdraw. maxUint256 resolves the whole balance of
+   *   the selected collateral from positionData before building the transaction.
+   * @param params.receiver - Account receiving the withdrawn collateral; defaults to accountAddress.
+   * @returns Lazy handles for a direct Midnight withdrawal.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
+   * @throws {MidnightCalldataEncodingError} when accountAddress is malformed or an input cannot be ABI-encoded.
+   * @throws {MidnightZeroAccountError} when accountAddress is zero.
+   * @throws {MidnightMarketAddressMismatchError} when marketData targets another Midnight deployment.
+   * @throws {MissingMarketPriceError} when debt is positive and held collateral has no supplied price.
+   * @throws {MarketIdMismatchError} when positionData belongs to another market.
+   * @throws {AccrualPositionUserMismatchError} when positionData belongs to another account.
+   * @throws {UnknownCollateralIndexError} when collateralIndex is not configured.
+   * @throws {NonPositiveInputError} when the resolved amount is not positive.
+   * @throws {InputExceedsMaxError} when assets exceeds uint128.
+   * @throws {WithdrawExceedsCollateralError} when assets exceeds the collateral balance.
+   * @throws {WithdrawMakesPositionUnhealthyError} when remaining collateral cannot safely cover debt.
+   * @throws {MidnightZeroReceiverError} when receiver is zero.
+   * @throws {MidnightContractReceiverError} when receiver cannot safely receive collateral.
+   * @example
+   * ```ts
+   * const output = midnight.withdrawCollateral({
+   *   accountAddress: user,
+   *   marketData,
+   *   positionData,
+   *   collateralPrices,
+   *   assets: 1_000n,
+   * });
+   * const tx = output.buildTx();
+   * ```
+   */
+  withdrawCollateral(
+    params: WithdrawCollateralParams,
+  ): MidnightActionOutput<MidnightWithdrawCollateralAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject invalid owners before preparing the direct call.
+    validateMidnightAccount("accountAddress", params.accountAddress);
+    validateMarketData(params.marketData, this.chainId);
+    validatePositionBinding(params);
+    const collateralIndex = params.collateralIndex ?? 0n;
+    // Reject unconfigured indexes before reading the position balance.
+    MarketUtils.getCollateralByIndex(params.marketData.params, collateralIndex);
+    const index = Number(collateralIndex);
+    const available = params.positionData.collateral[index] ?? 0n;
+    const assets = params.assets === maxUint256 ? available : params.assets;
+    const tx = midnightWithdrawCollateral({
+      chainId: this.chainId,
+      market: params.marketData.params,
+      collateralIndex,
+      assets,
+      onBehalf: params.accountAddress,
+      receiver: params.receiver ?? params.accountAddress,
+      metadata: this.client.options.metadata,
+    });
+    if (assets > available) {
+      throw new WithdrawExceedsCollateralError({
+        withdrawAmount: assets,
+        available,
+        market: params.marketData.id,
+      });
+    }
+    if (params.positionData.debt > 0n) {
+      const collateral = Array.from(
+        { length: params.marketData.params.collateralParams.length },
+        (_, i) => params.positionData.collateral[i] ?? 0n,
+      );
+      collateral[index] = available - assets;
+      const maxSafeDebt = getMidnightMaxSafeDebt({
+        market: params.marketData,
+        collateral,
+        collateralPrices: params.collateralPrices,
+      });
+      if (params.positionData.debt > maxSafeDebt) {
+        throw new WithdrawMakesPositionUnhealthyError({
+          withdrawAmount: assets,
+          borrowAssets: params.positionData.debt,
+          maxSafeBorrow: maxSafeDebt,
+        });
+      }
+    }
+    return { getRequirements: async () => [], buildTx: () => tx };
+  }
+
+  /**
    * Prepares a direct collateral supply using a caller-provided market snapshot.
    *
    * @param params - Supplier, market snapshot, collateral amount, reserve, and optional collateral index.
@@ -1445,14 +1548,14 @@ export class MorphoMidnight {
    * for a new publication. Calls the Midnight mempool validation API while preparing the tree;
    * `validation: false` skips that call.
    *
-   * @param params - Maker, lend-side offers, loan reserve, cancellations, and deadline.
+   * @param params - Maker, lend-side offers, `loanAssets` and `reservedLoanAssets` allowance thresholds, cancellations, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
    * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @param params.loanToken - Loan token shared by every offer market.
-   * @param params.loanAssets - New loan reserve assigned to the published groups.
+   * @param params.loanAssets - Minimum Midnight allowance (with `reservedLoanAssets`) that `getRequirements()` checks; the approval it returns is unlimited. The signed offer caps bound fills.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups, excluding groups in `cancellations`.
    * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
@@ -1491,7 +1594,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
    * @example
    * ```ts
@@ -1563,7 +1666,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
@@ -1740,8 +1843,9 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
-   * @throws {EmptyBlueParkingMarketError} when `blueMarket` has no supply shares.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
+   * @throws {MissingDeadSharesDataError} when the fetched `blueMarket` snapshot has no `deadSupplyShares`.
+   * @throws {InsufficientDeadSharesError} when `blueMarket` holds fewer than `MIN_DEAD_SHARES` supply shares at `DEAD_ADDRESS`.
    * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price (checked at preparation time only).
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group or `callbackSalt` is not 32-byte hex.
@@ -1808,9 +1912,8 @@ export class MorphoMidnight {
           ),
         UnsupportedMarketIrmError,
       ) ?? fetched;
-    if (market.totalSupplyShares === 0n) {
-      throw new EmptyBlueParkingMarketError({ marketId: blueMarketId });
-    }
+    // Throws when the parking market lacks a sufficient dead deposit; nothing to return.
+    validateBlueMarketDeadShares(fetched);
     if (market.toSupplyShares(params.assetsToPark, "Down") === 0n) {
       throw new ZeroBlueParkingSharesError({
         marketId: blueMarketId,
@@ -1967,7 +2070,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {MidnightMempoolValidationError} when the Midnight mempool API rejects the offer tree
    *   (not thrown when `validation` is `false`).
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
@@ -2008,7 +2111,7 @@ export class MorphoMidnight {
    *
    * Shares the lend-side publication and requirement handling of {@link MorphoMidnight.makeLend}.
    * Loan assets are pulled by Midnight when the offers fill, not during publication.
-   * The loan reserve uses the same approval sizing as `makeLend`.
+   * `loanAssets` is only the allowance threshold `getRequirements()` checks, as in `makeLend`; the signed offer caps bound fills.
    * A partially consumed offer group remains publishable with its shared remaining cap reduced.
    * No repay offer can be live after market maturity; late borrowers should repay directly with
    * {@link MorphoMidnight.repayWithdrawCollateral}.
@@ -2016,14 +2119,14 @@ export class MorphoMidnight {
    * Every offer must already have `buy = true` and `reduceOnly = true`.
    * The supplied tree, group caps and prices are preserved; no separate root signature is needed.
    *
-   * @param params - Maker, reduce-only offers, optional cancellations, loan reserve, and deadline.
+   * @param params - Maker, reduce-only offers, optional cancellations, `loanAssets` and `reservedLoanAssets` allowance thresholds, and deadline.
    * @param params.accountAddress - Maker expected on every offer; must send the transaction.
    * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
    * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
    * @param params.deadline - Bundle execution deadline timestamp.
    * @param params.validation - Midnight mempool API request controls, or `false` to skip the API call.
    * @param params.loanToken - Loan token shared by every offer market.
-   * @param params.loanAssets - New loan reserve assigned to the published groups.
+   * @param params.loanAssets - Minimum Midnight allowance (with `reservedLoanAssets`) that `getRequirements()` checks; the approval it returns is unlimited. The signed offer caps bound fills.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
    * @returns Prepared root and groups, lazy requirements, and a synchronous publication builder.
    * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId` during `getOffersData()` or `getRequirements`, another chain than this entity's.
@@ -2056,7 +2159,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {MidnightMempoolValidationError} when the Midnight mempool API rejects the offer tree
    *   (not thrown when `validation` is `false`).
    * @throws {MidnightOfferMarketLoanTokenMismatchError} when an offer uses another loan token.
@@ -2156,7 +2259,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLltvNotEnabledError} when an uncreated market uses a disabled LLTV.
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
-   * @throws {viem.BaseError} when a pinned block, multicall, or oracle-code read fails.
+   * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
    * @throws {MarketIdMismatchError} when an offer targets another market than `collateral.market`, including a `collateral.market` on another chain or Midnight deployment.
    * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.

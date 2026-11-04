@@ -23,6 +23,7 @@ import {
   SlippageCheckUnavailableError,
   simulate,
   toSimulationLimits,
+  UnexpectedTokenApprovalError,
 } from "../../src/index.js";
 
 /** Pinned after the Base Midnight deployment, matching morpho-sdk's Midnight fork tests. */
@@ -148,6 +149,37 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
         },
       },
     ]);
+  });
+
+  test("an in-bundle collateral approval to Midnight passes; one to another spender is rejected", async ({
+    client,
+  }) => {
+    const user = await setUp(client);
+    const tx = supply(parseEther("1"), user);
+    const approve = (spender: Address) => ({
+      from: user,
+      to: wNative,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [spender, maxUint256],
+      }),
+    });
+    const limits = toSimulationLimits(tx.action, { owner: user });
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [approve(midnight), asTransaction(user, tx)],
+        limits,
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [approve(OTHER), asTransaction(user, tx)],
+        limits,
+      }),
+    ).rejects.toBeInstanceOf(UnexpectedTokenApprovalError);
   });
 
   test("two supplies in one bundle verify their aggregate delta", async ({

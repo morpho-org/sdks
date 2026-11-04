@@ -3,6 +3,7 @@ import { type Address, numberToHex } from "viem";
 import { base, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
+  ApprovalCheckUnavailableError,
   InvalidChainIdError,
   RpcTransportError,
   SimulationRevertedError,
@@ -57,6 +58,20 @@ describe("toServedChainError", () => {
 
     expect(relabeled).toBeInstanceOf(InvalidChainIdError);
     expect(relabeled).not.toBeInstanceOf(SlippageCheckUnavailableError);
+    expect((relabeled as InvalidChainIdError).cause).toBe(error);
+  });
+
+  test("error: InvalidChainIdError when approval-token evidence is missing on another chain", async () => {
+    const { client } = createMockClient(base);
+    const error = new ApprovalCheckUnavailableError("approval token missing", {
+      cause: nodeError,
+    });
+    const relabeled = await toServedChainError({
+      client,
+      chainId: mainnet.id,
+      error,
+    });
+    expect(relabeled).toBeInstanceOf(InvalidChainIdError);
     expect((relabeled as InvalidChainIdError).cause).toBe(error);
   });
 

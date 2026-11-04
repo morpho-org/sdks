@@ -1,21 +1,27 @@
 import { metaMorphoAbi } from "@morpho-org/morpho-sdk/abis";
 import {
   type Address,
+  decodeEventLog,
   encodeFunctionData,
   erc20Abi,
   erc4626Abi,
+  type Hex,
   hexToBigInt,
+  isAddressEqual,
   parseEther,
   parseUnits,
+  toEventSelector,
 } from "viem";
 import { generatePrivateKey, privateKeyToAddress } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
   erc20BalanceAssertion,
+  type LogAssertion,
   maxDepositAssertion,
   nativeBalanceAssertion,
   SimulationAssertError,
+  SimulationLogAssertError,
   SimulationRevertedError,
   simulate,
 } from "../../src/index.js";
@@ -24,6 +30,7 @@ import { test } from "../setup.js";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const STEAKHOUSE: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
 const RECIPIENT: Address = "0x3333333333333333333333333333333333333333";
+const APPROVAL_TOPIC = toEventSelector("Approval(address,address,uint256)");
 
 const configFor = (client: { transport: { url?: string } }) => ({
   timeoutMs: 30_000,
@@ -274,5 +281,112 @@ describe.sequential("simulate — transaction assertions", () => {
     // `"none"` is reported back to the caller instead of an empty limit set.
     expect(withoutAssertions.verification.limits).toBe("none");
     expect(withAssertions).toStrictEqual(withoutAssertions);
+  }, 60_000);
+
+  test("behavior: assertLogs decodes an ERC-20 Approval event", async ({
+    client,
+  }) => {
+    const amount = 123n;
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      limits: "none",
+      transactions: [
+        {
+          from: client.account.address,
+          to: USDC,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [RECIPIENT, amount],
+          }),
+          assertLogs: [
+            {
+              check: (logs) => {
+                const approvalLog = logs.find(
+                  (log) =>
+                    isAddressEqual(log.address, USDC) &&
+                    log.topics[0] === APPROVAL_TOPIC,
+                );
+                if (!approvalLog) return "Approval event is missing.";
+                const [signature, ...indexedTopics] = approvalLog.topics;
+                if (!signature) return "Approval event is missing.";
+                const topics: [Hex, ...Hex[]] = [signature, ...indexedTopics];
+                const { args } = decodeEventLog({
+                  abi: erc20Abi,
+                  eventName: "Approval",
+                  data: approvalLog.data,
+                  topics,
+                });
+                return isAddressEqual(args.owner, client.account.address) &&
+                  isAddressEqual(args.spender, RECIPIENT) &&
+                  args.value === amount
+                  ? undefined
+                  : "Approval event has unexpected values.";
+              },
+            } satisfies LogAssertion,
+          ],
+        },
+      ],
+    });
+    expect(
+      result.calls[0]?.logs.some((log) => isAddressEqual(log.address, USDC)),
+    ).toBe(true);
+  }, 60_000);
+
+  test("error: assertLogs reports a matching prohibited Approval event", async ({
+    client,
+  }) => {
+    const error = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      limits: "none",
+      transactions: [
+        {
+          from: client.account.address,
+          to: USDC,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [RECIPIENT, 123n],
+          }),
+          assertLogs: [
+            {
+              check: (logs) => {
+                const approvalLog = logs.find(
+                  (log) =>
+                    isAddressEqual(log.address, USDC) &&
+                    log.topics[0] === APPROVAL_TOPIC,
+                );
+                if (!approvalLog) return undefined;
+                const [signature, ...indexedTopics] = approvalLog.topics;
+                if (!signature) return undefined;
+                const topics: [Hex, ...Hex[]] = [signature, ...indexedTopics];
+                const { args } = decodeEventLog({
+                  abi: erc20Abi,
+                  eventName: "Approval",
+                  data: approvalLog.data,
+                  topics,
+                });
+                return isAddressEqual(args.spender, RECIPIENT)
+                  ? "Approval to the prohibited spender was emitted."
+                  : undefined;
+              },
+            } satisfies LogAssertion,
+          ],
+        },
+      ],
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      message:
+        "Transaction 0 assertLogs[0] failed: Approval to the prohibited spender was emitted.",
+      transactionIndex: 0,
+      assertionIndex: 0,
+    });
+    expect(
+      (error as SimulationLogAssertError).logs.some((log) =>
+        isAddressEqual(log.address, USDC),
+      ),
+    ).toBe(true);
   }, 60_000);
 });

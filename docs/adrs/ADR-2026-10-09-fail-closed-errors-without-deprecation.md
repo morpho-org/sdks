@@ -2,12 +2,11 @@
 
 | Field      | Value                                                                                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Status** | accepted; `morpho-sdk` 7.0.0 target superseded by ADR-2026-10-13-malformed-token-metadata-error                                                                                                                                                     |
 | **Date**   | 2026-10-09                                                                                                                                                   |
 | **Author** | @Foulks-Plb                                                                                                                                                  |
 | **Scope**  | `blue-sdk-viem` 7.0.0, `morpho-sdk` 7.0.0, `wdk-protocol-lending-morpho-evm` 3.0.0, and the next major of maintained dependents such as `liquidity-sdk-viem` |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -85,3 +84,4 @@ the previous majors. No other break inherits it.
   (fund-safety precedent for skipping the coexistence minor)
 - [ADR-2026-05-13: SDK package deprecation lifecycle](./ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)
 - Accepted in the PR that added this file.
+- `morpho-sdk` 7.0.0 target superseded by ADR-2026-10-13-malformed-token-metadata-error.

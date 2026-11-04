@@ -1,5 +1,6 @@
 import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import type { E2eScenario } from "@morpho-org/morpho-test";
+import { wrapE2eNative } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import {
   type Address,
@@ -13,7 +14,7 @@ import { expect } from "vitest";
 import { metaMorphoAbi, metaMorphoFactoryAbi } from "../../src/blue/abis.js";
 import { isRequirementApproval, morphoViemExtension } from "../../src/index.js";
 import { satisfyBlueBundlesV1Requirements } from "../helpers/blueBundlesV1.js";
-import { createE2eMarket, describeE2e, wrapE2eNative } from "./setup.js";
+import { createE2eMarket, describeE2e, seedE2eDeadDeposits } from "./setup.js";
 
 const scenario: E2eScenario = {
   name: "vaultV1",
@@ -29,7 +30,7 @@ const depositAssets = parseEther("10");
 
 /**
  * Deploys a zero-timelock MetaMorpho vault owned by the test account and supplying into a fresh
- * market. With `seed`, the account also deposits `depositAssets` directly into it.
+ * market, both seeded with a dead deposit. With `seed`, the account also deposits `depositAssets` directly into it.
  */
 const setUpVault = async (
   client: AnvilTestClient<Chain>,
@@ -72,6 +73,12 @@ const setUpVault = async (
     functionName: "setSupplyQueue",
     args: [[market.id]],
   });
+  await seedE2eDeadDeposits(client, { chainId: params.chainId, market, vault });
+  const deadAssets = await client.readContract({
+    address: vault,
+    abi: erc4626Abi,
+    functionName: "totalAssets",
+  });
   if (params.seed) {
     await wrapE2eNative(client, {
       wNative: market.loanToken,
@@ -89,7 +96,7 @@ const setUpVault = async (
     });
   }
 
-  return { market, vault };
+  return { market, vault, deadAssets };
 };
 
 const getState = async (
@@ -109,7 +116,7 @@ describeE2e(scenario, (test, { chainId }) => {
   test("deposit: approves the market asset and supplies it through the supply queue", async ({
     client,
   }) => {
-    const { market, vault } = await setUpVault(client, {
+    const { market, vault, deadAssets } = await setUpVault(client, {
       chainId,
       seed: false,
     });
@@ -139,7 +146,7 @@ describeE2e(scenario, (test, { chainId }) => {
 
     const after = await getState(client, { vault, market });
     expect(after.userAssets).toBe(0n);
-    expect(after.totalAssets).toBe(depositAssets);
+    expect(after.totalAssets).toBe(deadAssets + depositAssets);
     expect(after.userShares).toBe(previewedShares);
   });
 
@@ -178,7 +185,10 @@ describeE2e(scenario, (test, { chainId }) => {
   test("redeem: approves vault shares and redeems all of them", async ({
     client,
   }) => {
-    const { market, vault } = await setUpVault(client, { chainId, seed: true });
+    const { market, vault, deadAssets } = await setUpVault(client, {
+      chainId,
+      seed: true,
+    });
     const vaultV1 = client
       .extend(morphoViemExtension())
       .morpho.vaultV1(vault, chainId);
@@ -196,6 +206,6 @@ describeE2e(scenario, (test, { chainId }) => {
     const after = await getState(client, { vault, market });
     expect(after.userShares).toBe(0n);
     expect(after.userAssets).toBe(before.userAssets + depositAssets);
-    expect(after.totalAssets).toBe(0n);
+    expect(after.totalAssets).toBe(deadAssets);
   });
 });

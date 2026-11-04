@@ -2,7 +2,6 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | accepted |
 | **Date** | 2026-10-12 |
 | **Author** | @jinmel |
 | **Scope** | `evm-simulation` 7.0.0 |

@@ -2,12 +2,11 @@
 
 | Field      | Value                                                     |
 | ---------- | --------------------------------------------------------- |
-| **Status** | accepted                                                  |
 | **Date**   | 2026-09-23                                                |
 | **Author** | @Foulks-Plb                                               |
 | **Scope**  | Packages and target versions: `morpho-sdk` 6.x (every `ActionOutput` handle), `wdk-protocol-lending-morpho-evm` consumers of those handles |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 

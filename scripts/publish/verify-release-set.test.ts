@@ -73,6 +73,14 @@ describe("verifyTarballStructure", () => {
     { name: "a dot segment", entry: { path: "package/./x", type: "File" } },
     { name: "a parent segment", entry: { path: "package/../x", type: "File" } },
     { name: "an empty segment", entry: { path: "package//x", type: "File" } },
+    {
+      name: "a unique backslash file",
+      entry: { path: "package/lib\\esm\\blue\\Market.js", type: "File" },
+    },
+    {
+      name: "a backslash directory",
+      entry: { path: "package/lib\\esm/", type: "Directory" },
+    },
     { name: "a symlink", entry: { path: "package/l", type: "SymbolicLink" } },
     { name: "a hard link", entry: { path: "package/l", type: "Link" } },
     {
@@ -195,6 +203,19 @@ describe("verifyReleaseSet", () => {
     await expect(run(dir)).resolves.toEqual([
       { file: join(dir, "a.tgz"), name: "@x/a", version: "1.0.0" },
     ]);
+  });
+
+  test("rejects a unique backslash runtime member in a checksummed tarball", async () => {
+    const dir = tarballs({
+      "a.tgz": {
+        "package/package.json": manifest({
+          type: "module",
+          exports: { "./blue/*": "./lib/esm/blue/*.js" },
+        }),
+        "package/lib\\esm\\blue\\Market.js": "export const runtime = 'test';",
+      },
+    });
+    await expect(run(dir)).rejects.toThrow("non-canonical entry");
   });
 
   test("rejects a checksummed file that is not a tarball", async () => {

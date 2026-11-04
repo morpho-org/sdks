@@ -56,6 +56,7 @@ export interface BlueSupplyCollateralParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueSupplyCollateralAction>>` whose calldata
  *   invokes the combined BlueBundlesV1 entrypoint with a zero borrow leg.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount or fee is negative.
  * @throws {NonPositiveInputError} when collateral or deadline is not positive.
  * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.

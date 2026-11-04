@@ -5,9 +5,11 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getMidnightBlueBuyCallbackAddress } from "@morpho-org/morpho-sdk";
 import { _try } from "@morpho-org/morpho-ts";
-import { isAddressEqual, zeroAddress } from "viem";
+import { type Address, isAddressEqual, zeroAddress } from "viem";
 import {
+  ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
+  SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
 import type {
@@ -16,6 +18,8 @@ import type {
 } from "../limits.js";
 import type { VerifiedSimulationInputResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
+import { resolveApprovalLimits } from "./approval-limits.js";
+import { assertApprovalEvents, assertPendingApprovals } from "./approvals.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
 import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
@@ -30,17 +34,66 @@ import {
 } from "./derivation-reads.js";
 import { deriveQuote } from "./derive-quote.js";
 import { parseTransfers } from "./parsing/index.js";
+import {
+  DEPOSIT_TOPIC,
+  TRANSFER_TOPIC,
+  WITHDRAWAL_TOPIC,
+} from "./parsing/transfers.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
 import { resolveChain } from "./pipeline/resolve-chain.js";
 import { planExecution } from "./plan/plan-execution.js";
 import { prepareAuthorizations } from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
+import { assertSignedAuthorizationsUsed } from "./signed-authorizations.js";
 import { decodeStateRead, planStateReads } from "./state/read-state.js";
 import { verifySlippage } from "./verify-slippage.js";
 
 /** Total execution budget for a single `simulate()` call. */
 const DEFAULT_TIMEOUT_MS = 5000;
+
+/**
+ * Registered wrapped-native wrappers whose recent on-chain
+ * `Deposit`/`Withdrawal` receipts showed no mirror `Transfer`.
+ *
+ * The map is keyed by chain ID and stores each measured wrapper address. If the
+ * registered wNative no longer matches, that chain falls back to one-to-one
+ * deduplication. If a listed wrapper starts mirroring, wraps/unwraps are
+ * double-counted, which can also hide wrapped-native assets held by a bundles
+ * contract in retention.
+ * See `packages/evm-simulation/AGENTS.md` for maintenance instructions.
+ *
+ * @internal
+ */
+export const NO_WNATIVE_MIRROR_WRAPPERS: ReadonlyMap<number, Address> = new Map<
+  number,
+  Address
+>([
+  [ChainId.EthMainnet, "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"],
+  [ChainId.BaseMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.OptimismMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.PolygonMainnet, "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"],
+  [ChainId.BscMainnet, "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"],
+  [ChainId.Unichain, "0x4200000000000000000000000000000000000006"],
+  [ChainId.SoneiumMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.MonadMainnet, "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"],
+  [ChainId.PharosMainnet, "0x52C48d4213107b20bC583832b0d951FB9CA8F0B0"],
+  [ChainId.HyperliquidMainnet, "0x5555555555555555555555555555555555555555"],
+  [ChainId.HemiMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.WorldChainMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.LineaMainnet, "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f"],
+  [ChainId.MegaEthMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.CronosMainnet, "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"],
+  [ChainId.XdcMainnet, "0x951857744785E80e2De051c32EE7b25f9c458C42"],
+  [ChainId.LiskMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.KaiaMainnet, "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432"],
+  [ChainId.InkMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.ZeroGMainnet, "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c"],
+  [ChainId.BitlayerMainnet, "0xfF204e2681A6fA0e2C3FaDe68a1B28fb90E4Fc5F"],
+  [ChainId.ModeMainnet, "0x4200000000000000000000000000000000000006"],
+  [ChainId.SeiMainnet, "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7"],
+  [ChainId.AbstractMainnet, "0x3439153EB7AF838Ad19d56E1571FBD09333C2809"],
+]);
 
 type PublicOperationField<T> = T extends unknown ? keyof T : never;
 
@@ -124,6 +177,9 @@ export async function runSimulation(params: {
   const nativeValueSent = nativeValue > 0n;
   const requiresMorpho =
     limits.operations.length > 0 ||
+    request.authorizations.some(
+      (authorization) => authorization.type === "blueAuthorizationSignature",
+    ) ||
     (preview && request.authorizations.length > 0);
   if (requiresMorpho && addresses?.blue == null)
     throw new UnsupportedChainError(request.chainId);
@@ -131,19 +187,30 @@ export async function runSimulation(params: {
   const requiresBlueBuyCallback = limits.operations.some(
     (operation) => operation.type === "midnightSupplyBlueMakeLend",
   );
-  const requiresMidnight = limits.operations.some(
-    (operation) =>
-      operation.type === "midnightSupplyCollateral" ||
-      operation.type === "midnightRedeem" ||
-      operation.type === "midnightTakeLend" ||
-      operation.type === "midnightTakeBorrow" ||
-      operation.type === "midnightTakeWithdraw" ||
-      operation.type === "midnightRepayWithdrawCollateral" ||
-      operation.type === "midnightSupplyCollateralTakeBorrow" ||
-      operation.type === "midnightSupplyBlueMakeLend" ||
-      operation.type === "midnightTakeRepayWithdrawCollateral",
-  );
+  const requiresMidnight =
+    limits.operations.some(
+      (operation) =>
+        operation.type === "midnightSupplyCollateral" ||
+        operation.type === "midnightSupplyCollateralMakeBorrow" ||
+        operation.type === "midnightRedeem" ||
+        operation.type === "midnightTakeLend" ||
+        operation.type === "midnightTakeBorrow" ||
+        operation.type === "midnightTakeWithdraw" ||
+        operation.type === "midnightRepayWithdrawCollateral" ||
+        operation.type === "midnightSupplyCollateralTakeBorrow" ||
+        operation.type === "midnightSupplyBlueMakeLend" ||
+        operation.type === "midnightTakeRepayWithdrawCollateral",
+    ) ||
+    request.authorizations.some(
+      (authorization) =>
+        authorization.type === "midnightAuthorizationSignature",
+    );
   if (requiresMidnight && addresses?.midnight == null)
+    throw new UnsupportedChainError(request.chainId);
+  const requiresEcrecoverAuthorizer = request.authorizations.some(
+    (authorization) => authorization.type === "midnightAuthorizationSignature",
+  );
+  if (requiresEcrecoverAuthorizer && addresses?.ecrecoverAuthorizer == null)
     throw new UnsupportedChainError(request.chainId);
   if (
     requiresBlueBuyCallback &&
@@ -151,6 +218,7 @@ export async function runSimulation(params: {
   )
     throw new UnsupportedChainError(request.chainId);
   const midnight = addresses?.midnight ?? zeroAddress;
+  const ecrecoverAuthorizer = addresses?.ecrecoverAuthorizer ?? zeroAddress;
 
   // Monad nodes reject `validation: false` and charge no gas in the simulated
   // block either way. Its `latest` block is not final: simulating at its number
@@ -192,6 +260,21 @@ export async function runSimulation(params: {
       blockNumber: pinnedBlock.number,
     }),
   );
+  const approvalLimits =
+    request.limits === "none"
+      ? undefined
+      : resolveApprovalLimits({
+          chainId: request.chainId,
+          owner,
+          operations: resolved,
+          explicit: request.limits.approvals,
+        });
+  if (preview && approvalLimits !== undefined)
+    assertPendingApprovals({
+      authorizations: request.authorizations,
+      allowed: approvalLimits.approvals,
+      addresses: approvalLimits.eventAddresses,
+    });
   const operations = resolved.map((operation) =>
     operation.limit.type === "midnightSupplyBlueMakeLend"
       ? {
@@ -219,6 +302,7 @@ export async function runSimulation(params: {
         authorizations: request.authorizations,
         owner,
         morpho,
+        midnight,
       })
     : [];
 
@@ -243,6 +327,45 @@ export async function runSimulation(params: {
         chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
     }),
   );
+  if (approvalLimits !== undefined) {
+    const missingLogs = execution.calls.find(
+      (
+        call,
+      ): call is (typeof execution.calls)[number] & {
+        planned: Extract<
+          (typeof execution.calls)[number]["planned"],
+          { type: "preparation" | "transaction" }
+        >;
+      } =>
+        (call.planned.type === "preparation" ||
+          call.planned.type === "transaction") &&
+        call.logsMissing,
+    )?.planned;
+    if (missingLogs !== undefined)
+      throw new ApprovalCheckUnavailableError(
+        `Simulation response omitted logs for ${missingLogs.type === "preparation" ? `authorization ${missingLogs.authorizationIndex}` : `transaction ${missingLogs.transactionIndex}`}; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
+      );
+    assertApprovalEvents({
+      logs: execution.calls.flatMap(({ result }) => result.logs),
+      owner,
+      allowed: approvalLimits.approvals,
+      addresses: approvalLimits.eventAddresses,
+    });
+  }
+
+  for (const { planned, result } of execution.calls) {
+    if (planned.type !== "preparation") continue;
+    if (
+      result.logs.some((log) =>
+        [TRANSFER_TOPIC, DEPOSIT_TOPIC, WITHDRAWAL_TOPIC].some(
+          (topic) => topic === log.topics[0]?.toLowerCase(),
+        ),
+      )
+    )
+      throw new SimulationValidationError(
+        `Preview authorization "${planned.authorizationIndex}" preparation call "${planned.callIndex}" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.`,
+      );
+  }
 
   const userCalls = execution.calls
     .filter((call) => call.planned.type === "transaction")
@@ -251,6 +374,19 @@ export async function runSimulation(params: {
     throw new InvalidSimulationResponseError(
       `Execution returned ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s)`,
     );
+
+  // Require final signature-use evidence independently of operation limits.
+  if (!preview)
+    assertSignedAuthorizationsUsed({
+      authorizations: request.authorizations,
+      logs: execution.calls.some(
+        (call) => call.planned.type === "transaction" && call.logsMissing,
+      )
+        ? undefined
+        : userCalls.flatMap((call) => call.logs),
+      morpho,
+      ecrecoverAuthorizer,
+    });
 
   const decodePhase = (phase: "before" | "after") =>
     new Map(
@@ -266,8 +402,14 @@ export async function runSimulation(params: {
             ] as const,
         ),
     );
+  const verified = NO_WNATIVE_MIRROR_WRAPPERS.get(request.chainId);
   const transfers = parseTransfers(userCalls, {
     wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
+    wNativeEmitsTransfer: !(
+      verified !== undefined &&
+      addresses?.wNative != null &&
+      isAddressEqual(addresses.wNative, verified)
+    ),
     logger: config.logger,
   });
 
@@ -302,7 +444,7 @@ export async function runSimulation(params: {
     limits: { operations: derivedOperations.map(({ limit }) => limit) },
   };
 
-  const authorizations = request.authorizations.map(
+  const authorizations = (preview ? request.authorizations : []).map(
     (authorization, authorizationIndex) => ({
       authorizationIndex,
       authorization,

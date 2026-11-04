@@ -26,13 +26,13 @@ const positions = [
     name: "pre-maturity",
     marketId:
       "0x6cb9f4a081803895ee5f8cb611c9a7ad7ccadd88d8a8343f478d9e5646efecac",
-    user: "0x5e77e718b97dac27474b78784966a449d2a3968a",
+    user: "0x5E77e718b97dAc27474b78784966A449d2A3968A",
   },
   {
     name: "pre-maturity with pending fee",
     marketId:
       "0x6cb9f4a081803895ee5f8cb611c9a7ad7ccadd88d8a8343f478d9e5646efecac",
-    user: "0x5e77e718b97dac27474b78784966a449d2a3968a",
+    user: "0x5E77e718b97dAc27474b78784966A449d2A3968A",
   },
   {
     name: "post-maturity",

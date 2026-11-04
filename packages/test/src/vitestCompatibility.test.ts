@@ -1,11 +1,4 @@
-import {
-  type Chain,
-  encodeAbiParameters,
-  erc20Abi,
-  keccak256,
-  maxUint128,
-  numberToHex,
-} from "viem";
+import { type Chain, maxUint128 } from "viem";
 import { mainnet, tempo } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AnvilTestClient } from "./client.js";
@@ -99,20 +92,18 @@ type VitestClientFixture<chain extends Chain = typeof mainnet> = (
 
 const originalCi = process.env.CI;
 const accountAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-const feeToken = "0x20C0000000000000000000000000000000000000";
 const stopAndWaitMock = vi.fn(async () => true);
 const setBlockTimestampIntervalMock = vi.fn().mockResolvedValue(undefined);
-const setStorageAtMock = vi.fn().mockResolvedValue(undefined);
-const readContractMock = vi.fn().mockResolvedValue(maxUint128);
+const setFeeTokenBalanceMock = vi.fn().mockResolvedValue(undefined);
 const getCodeMock = vi.fn().mockResolvedValue(undefined);
 const signAuthorizationMock = vi.fn();
 const sendTransactionMock = vi.fn();
 const fakeClient = {
   account: { address: accountAddress },
+  chain: mainnet,
   getCode: getCodeMock,
-  readContract: readContractMock,
   sendTransaction: sendTransactionMock,
-  setStorageAt: setStorageAtMock,
+  setFeeTokenBalance: setFeeTokenBalanceMock,
   setBlockTimestampInterval: setBlockTimestampIntervalMock,
   signAuthorization: signAuthorizationMock,
 } as unknown as AnvilTestClient<typeof mainnet>;
@@ -121,16 +112,16 @@ const fakeClient = {
 describe.sequential("createViemTest compatibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(fakeClient, { chain: mainnet });
     getCodeMock.mockReset();
-    readContractMock.mockReset();
+    setFeeTokenBalanceMock.mockReset();
+    setFeeTokenBalanceMock.mockResolvedValue(undefined);
     process.env.CI = "true";
     testState.afterAllHandlers.length = 0;
     testState.finishedHandlers.length = 0;
     testState.clientFixture = undefined;
     testState.createAnvilTestClientMock.mockReturnValue(fakeClient);
     setBlockTimestampIntervalMock.mockResolvedValue(undefined);
-    setStorageAtMock.mockResolvedValue(undefined);
-    readContractMock.mockResolvedValue(maxUint128);
     getCodeMock.mockResolvedValue(undefined);
     stopAndWaitMock.mockResolvedValue(true);
   });
@@ -186,6 +177,7 @@ describe.sequential("createViemTest compatibility", () => {
       stopAndWait: stopAndWaitMock,
     });
     createViemTest(tempo, { forkUrl: "https://rpc.example" });
+    Object.assign(fakeClient, { chain: tempo });
 
     const clientFixture = testState.clientFixture as VitestClientFixture<
       typeof tempo
@@ -194,36 +186,31 @@ describe.sequential("createViemTest compatibility", () => {
       expect(client).toBe(fakeClient);
     });
 
-    const index = keccak256(
-      encodeAbiParameters(
-        [{ type: "address" }, { type: "uint256" }],
-        [accountAddress, 9n],
-      ),
-    );
-    expect(setStorageAtMock).toHaveBeenCalledOnce();
-    expect(setStorageAtMock).toHaveBeenCalledWith({
-      address: feeToken,
-      index,
-      value: numberToHex(maxUint128, { size: 32 }),
-    });
-    expect(readContractMock).toHaveBeenCalledOnce();
-    expect(readContractMock).toHaveBeenCalledWith({
-      address: feeToken,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [accountAddress],
+    expect(setFeeTokenBalanceMock).toHaveBeenCalledOnce();
+    expect(setFeeTokenBalanceMock).toHaveBeenCalledWith({
+      account: accountAddress,
+      amount: maxUint128,
     });
   });
 
-  test("error: rejects when Tempo fee-token funding does not take", async () => {
+  test("error: propagates a Tempo fee-token funding failure", async () => {
     process.env.CI = "";
-    readContractMock.mockResolvedValueOnce(6n);
+    setFeeTokenBalanceMock.mockRejectedValueOnce(
+      new AnvilFeeTokenFundingError({
+        token: "0x20C0000000000000000000000000000000000000",
+        account: accountAddress,
+        actual: 6n,
+        expected: maxUint128,
+        balancesSlot: 9n,
+      }),
+    );
     testState.spawnAnvilMock.mockResolvedValue({
       rpcUrl: "http://localhost:31001",
       stop: vi.fn(),
       stopAndWait: stopAndWaitMock,
     });
     createViemTest(tempo, { forkUrl: "https://rpc.example" });
+    Object.assign(fakeClient, { chain: tempo });
 
     const clientFixture = testState.clientFixture as VitestClientFixture<
       typeof tempo
@@ -236,15 +223,14 @@ describe.sequential("createViemTest compatibility", () => {
     if (!(error instanceof AnvilFeeTokenFundingError)) throw error;
     expect(error.message).toContain('"6"');
     expect(error.message).toContain(`"${maxUint128}"`);
-    expect(setStorageAtMock).toHaveBeenCalledOnce();
-    expect(readContractMock).toHaveBeenCalledOnce();
+    expect(setFeeTokenBalanceMock).toHaveBeenCalledOnce();
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
     expect(getCodeMock).not.toHaveBeenCalled();
     expect(signAuthorizationMock).not.toHaveBeenCalled();
     expect(sendTransactionMock).not.toHaveBeenCalled();
   });
 
-  test("behavior: skips Tempo fee-token funding on mainnet", async () => {
+  test("behavior: calls the fee-token client method on mainnet", async () => {
     testState.spawnAnvilMock.mockResolvedValue({
       rpcUrl: "http://localhost:31001",
       stop: vi.fn(),
@@ -257,8 +243,11 @@ describe.sequential("createViemTest compatibility", () => {
       expect(client).toBe(fakeClient);
     });
 
-    expect(setStorageAtMock).not.toHaveBeenCalled();
-    expect(readContractMock).not.toHaveBeenCalled();
+    expect(setFeeTokenBalanceMock).toHaveBeenCalledOnce();
+    expect(setFeeTokenBalanceMock).toHaveBeenCalledWith({
+      account: accountAddress,
+      amount: maxUint128,
+    });
   });
 
   test("behavior: retries without a Vitest context signal", async () => {

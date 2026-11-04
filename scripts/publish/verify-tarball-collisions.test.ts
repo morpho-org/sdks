@@ -192,6 +192,18 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test.each(["File", "Directory"])(
+    "error: rejects a unique backslash member (%s)",
+    (type) => {
+      expect(() =>
+        verifyTarballEntries([
+          { path: "package/package.json", type: "File" },
+          { path: "package/lib\\esm\\blue\\Market.js", type },
+        ]),
+      ).toThrow(/backslash/);
+    },
+  );
+
   test("error: rejects case-colliding entries", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
@@ -216,7 +228,7 @@ describe("verifyTarballEntries", () => {
 
       await expect(
         listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-      ).rejects.toThrow(/collide/);
+      ).rejects.toThrow(/backslash/);
     });
   });
 
@@ -350,7 +362,7 @@ describe("verifyTarballEntries", () => {
         { path: "package/a\\b/.npmignore", type: "File" },
         { path: "package/a/b/.gitignore", type: "File" },
       ]),
-    ).toThrow(/collide/);
+    ).toThrow(/backslash/);
   });
 
   test.each([true, false])(
@@ -366,7 +378,7 @@ describe("verifyTarballEntries", () => {
 
         await expect(
           listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-        ).rejects.toThrow(/collide/);
+        ).rejects.toThrow(/backslash/);
       });
     },
   );
@@ -384,7 +396,7 @@ describe("verifyTarballEntries", () => {
 
         await expect(
           listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-        ).rejects.toThrow(/collide/);
+        ).rejects.toThrow(/backslash/);
       });
     },
   );
@@ -402,12 +414,12 @@ describe("verifyTarballEntries", () => {
 
         await expect(
           listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-        ).rejects.toThrow(/ancestor/);
+        ).rejects.toThrow(/backslash/);
       });
     },
   );
 
-  test("default: tolerates a backslash gitignore when npmignore comes first", async () => {
+  test("error: rejects a backslash gitignore when npmignore comes first", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
         entries: [
@@ -420,7 +432,7 @@ describe("verifyTarballEntries", () => {
 
       await expect(
         listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow(/backslash/);
     });
   });
 
@@ -437,7 +449,7 @@ describe("verifyTarballEntries", () => {
 
       await expect(
         listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-      ).rejects.toThrow(/collide/);
+      ).rejects.toThrow(/backslash/);
     });
   });
 

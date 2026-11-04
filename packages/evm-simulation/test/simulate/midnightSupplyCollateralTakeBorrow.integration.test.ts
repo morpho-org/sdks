@@ -35,6 +35,7 @@ import {
   ConsumerLimitViolationError,
   simulate,
   toSimulationLimits,
+  UnexpectedTokenApprovalError,
 } from "../../src/index.js";
 
 const test = createViemTest(base, {
@@ -446,6 +447,56 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
         slippageTolerance: 0n,
       },
     });
+  });
+
+  test("an in-bundle collateral approval to MidnightBundlesV2 passes; one to another spender is rejected", async ({
+    client,
+  }) => {
+    const owner = await seedUser(client);
+    await client.writeContract({
+      account: owner,
+      address: wNative,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [midnightBundlesV2, 0n],
+    });
+    const offers = await prepareBuyOffers(client);
+    const tx = build({
+      target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
+      takeableOffers: offers,
+    });
+    const approve = (spender: Address) => ({
+      from: owner,
+      to: wNative,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [spender, maxUint256],
+      }),
+    });
+    const limits = toSimulationLimits(tx.action, {
+      owner,
+      receiver,
+      slippageTolerance: 0n,
+    });
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [approve(midnightBundlesV2), asTransaction(owner, tx)],
+        limits,
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [
+          approve(midnightBundlesV2),
+          approve(OTHER),
+          asTransaction(owner, tx),
+        ],
+        limits,
+      }),
+    ).rejects.toBeInstanceOf(UnexpectedTokenApprovalError);
   });
 
   test("passes with an assets target", async ({ client }) => {

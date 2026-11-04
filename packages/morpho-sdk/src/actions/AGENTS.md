@@ -26,7 +26,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
    `MidnightBundlesV2` entrypoint call directly (see
    [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
-   collateral supply / redeem) encode their target contract call directly. Vault `inKindRedeem` and
+   collateral supply / withdrawCollateral / redeem) encode their target contract call directly. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
@@ -61,8 +61,9 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
 - **Requirements.** Token requirements are plain ERC-20 approvals from `accountAddress` to
   `midnightBundlesV2`, returned when the allowance is below the pulled assets and set to an
   unlimited allowance (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`), plus, for lend
-  makers, a likewise unlimited approval to `midnight` when the allowance is below the loan
-  reserve pulled when offers are taken (Blue-funded lend makers need none:
+  makers, a likewise unlimited approval to `midnight` when the allowance is below
+  `loanAssets + reservedLoanAssets`, a threshold not checked against the signed offer caps that
+  bound fills (Blue-funded lend makers need none:
   their `BlueBuyCallback` pays Midnight); V2 takes no inline permit, so never produce
   ERC-2612 or Permit2 requirements. Every V2 action requires Midnight authorization of
   `midnightBundlesV2`, resolved lazily at the entity layer.
@@ -96,8 +97,10 @@ BluePublicAllocator sources are not sorted and idle uses no synthetic zero-addre
 market. BlueBundlesV1 executes every allocation unconditionally; aggregate penalties reduce borrow
 or withdrawal proceeds, and those builders reject an aggregate penalty above `borrowAssets` (or, in
 withdraw assets mode, the withdrawn amount). Migration instead adds penalties to destination debt,
-which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
-separate funding requirement.
+which the entity health check and encoded `maxLtv` bound. Penalties add no native value, but
+BlueBundlesV1 flash-loans the aggregate penalty from Blue, so Blue's loan-token balance must cover
+the operation transfer and any earlier market-leg withdrawals while that loan is outstanding;
+`getVaultV2BlueReallocationData` supplies `blueBalances` for this check.
 
 ## Discriminated unions
 

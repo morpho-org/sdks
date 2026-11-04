@@ -45,7 +45,7 @@ export interface Permit2TransferTypedData {
   };
 }
 
-/** Morpho `Authorization` typed data consumed by `setAuthorizationWithSig`. */
+/** `Authorization` typed data consumed by Morpho `setAuthorizationWithSig` and Midnight `EcrecoverAuthorizer.setIsAuthorized`. */
 export interface BlueAuthorizationTypedData {
   readonly domain: Eip712Domain;
   readonly primaryType: "Authorization";
@@ -95,10 +95,17 @@ export interface BlueAuthorizationSignature {
   readonly typedData: BlueAuthorizationTypedData;
 }
 
-/** A pending wallet request passed to `simulate()` — the five typed variants. */
+/** EcrecoverAuthorizer `setIsAuthorized` signature request. */
+export interface MidnightAuthorizationSignature {
+  readonly type: "midnightAuthorizationSignature";
+  readonly typedData: BlueAuthorizationTypedData;
+}
+
+/** A wallet request passed to `simulate()` for preview preparation or final signature-use checks. */
 export type SimulationAuthorization =
   | Erc20ApprovalAuthorization
   | Erc2612PermitAuthorization
   | Permit2TransferAuthorization
   | BlueAuthorization
-  | BlueAuthorizationSignature;
+  | BlueAuthorizationSignature
+  | MidnightAuthorizationSignature;

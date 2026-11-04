@@ -1,18 +1,28 @@
 # @morpho-org/midnight-sdk
 
-## 2.3.0-next.0
+## 2.3.0
 
 ### Minor Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
+- Add optional `taker` to `fetchBookQuote` so quotes leave out the taker's own offers.
+- Check sender-granted Midnight `setIsAuthorized` grants against `limits.approvals` in `evm-simulation`, throwing `UnexpectedMidnightAuthorizationError` for grants outside the derived and explicit allowlist. Add `midnightEventsAbi` to `midnight-sdk` and the `morpho-sdk/abis` facade.
+- Support EcrecoverAuthorizer authorization signatures in EVM simulation.
 
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x, 4.0.x and 4.1.x are no longer accepted because they lack `MidnightPositionLib`.
+### Patch Changes
+
+- Offer no longer memoizes group/hash/onchainHash; getters compute from the offer's readonly fields on each access
+
+## 2.2.1
 
 ### Patch Changes
 
 - MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
-- Updated dependencies
-  - @morpho-org/morpho-ts@4.2.0-next.0
+- Reject Midnight sell offers that send seller proceeds to the zero address:
+
+  - `MidnightApi.fetchBookQuote`, `fetchBookTakeableOffers` and `fetchTakeableOffers` (static and instance) throw `InvalidMidnightApiResponseError` when a returned sell offer has `receiverIfMakerIsSeller` set to `zeroAddress`.
+  - `takeLend` and `takeRepayWithdrawCollateral` (entity methods and `midnightTakeLend` / `midnightTakeRepayWithdrawCollateral` builders) throw the new `MidnightTakeableOfferZeroSellerReceiverError` for such an offer.
+
+  With a token that accepts transfers to the zero address, taking such an offer burned the taker's principal while the protocol still recorded the position.
 
 ## 2.2.0
 
@@ -145,8 +155,6 @@
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`047e86c`](https://github.com/morpho-org/sdks/commit/047e86cf02c2a4bdd2ef11d47510b8762b4f5447) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Correct `Offer.create` JSDoc for `continuousFeeCap`: the actual default is `0n` (fail-closed — no market continuous fee is accepted unless set explicitly), not `MAX_CONTINUOUS_FEE` as previously documented. No behavior change.
 
-  Refs SDK-1009
-
 - [#1122](https://github.com/morpho-org/sdks/pull/1122) [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject `MidnightApi.fetchBooks` results outside the requested filters. `fetchBooks` now throws `InvalidMidnightApiResponseError` when a returned book falls outside any supplied `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filter, extending the existing `marketIds` binding so a hostile or compromised API cannot return a coherent foreign market for a filtered listing. `morpho-sdk` re-exports this API via its `/midnight-api` facade and takes a matching patch.
 
 - [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
@@ -209,8 +217,6 @@
   `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`047e86c`](https://github.com/morpho-org/sdks/commit/047e86cf02c2a4bdd2ef11d47510b8762b4f5447) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Correct `Offer.create` JSDoc for `continuousFeeCap`: the actual default is `0n` (fail-closed — no market continuous fee is accepted unless set explicitly), not `MAX_CONTINUOUS_FEE` as previously documented. No behavior change.
-
-  Refs SDK-1009
 
 - [#1122](https://github.com/morpho-org/sdks/pull/1122) [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject `MidnightApi.fetchBooks` results outside the requested filters. `fetchBooks` now throws `InvalidMidnightApiResponseError` when a returned book falls outside any supplied `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filter, extending the existing `marketIds` binding so a hostile or compromised API cannot return a coherent foreign market for a filtered listing. `morpho-sdk` re-exports this API via its `/midnight-api` facade and takes a matching patch.
 

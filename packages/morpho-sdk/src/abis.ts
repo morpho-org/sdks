@@ -34,9 +34,11 @@ export {
 } from "@morpho-org/blue-sdk-viem";
 export {
   blueBuyCallbackFactoryAbi as midnightBlueBuyCallbackFactoryAbi,
+  ecrecoverAuthorizerAbi as midnightEcrecoverAuthorizerAbi,
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,
   midnightAbi,
   midnightBundlesV2Abi,
+  midnightEventsAbi,
   priceRatifierV1Abi as midnightPriceRatifierV1Abi,
   rateRatifierV1Abi as midnightRateRatifierV1Abi,
   setterRatifierAbi as midnightSetterRatifierAbi,

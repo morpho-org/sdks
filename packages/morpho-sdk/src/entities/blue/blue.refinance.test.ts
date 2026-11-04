@@ -10,6 +10,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  MarketIdMismatchError,
   NonPositiveInputError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
@@ -107,6 +108,29 @@ describe("MorphoBlue.refinance", () => {
       ).toThrow(NonPositiveInputError);
     },
   );
+
+  test("error: MarketIdMismatchError on a stale destination id", () => {
+    const staleDestination: MarketParams = Object.assign(
+      Object.create(MarketParams.prototype),
+      destinationMarketParams,
+      { id: sourceMarketParams.id },
+    );
+
+    expect(() =>
+      makeEntity().refinance({
+        userAddress,
+        positionData: makePosition(sourceMarketParams, {
+          borrowShares: 10n ** 18n,
+          collateral: 10n ** 24n,
+        }),
+        destination: {
+          marketParams: staleDestination,
+          positionData: makePosition(destinationMarketParams),
+        },
+        deadline: maxUint256,
+      }),
+    ).toThrow(MarketIdMismatchError);
+  });
 
   test("error: RefinanceSameMarketError", () => {
     const source = makePosition(sourceMarketParams, {

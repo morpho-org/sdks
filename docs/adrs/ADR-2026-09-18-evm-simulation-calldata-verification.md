@@ -2,12 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | accepted; Tenderly migration superseded by ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation; legacy-authorization migration superseded by ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation; calldata decoding, route rejection, request freshness, effect verification, simulation limits, verification output, preview request validation, Migration route restrictions, error catalog apart from the existing classes' rows, the requirement for execution reverts to carry a typed context, descriptor verification and the preview authorization rule, and the Invariants depending on them superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits; error context, revert-error surface, `ExternalServiceError` bypass and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation; VaultBundlesV1 exit share-allowance rule superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date** | 2026-09-18; revised 2026-09-25 |
 | **Author** | @foulques, @jinmel |
 | **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -452,3 +451,8 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 - [SDK v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/2e2595d59e9db8e3d7533b54d6fbffcf8107c274/packages/morpho-sdk/MIGRATION-v5-to-v6.md)
 - [BlueBundlesV1 route decision](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md)
 - [Vault exit in-kind redemption](./ADR-2026-07-27-vault-exit-in-kind-redemption.md)
+- Tenderly migration superseded by ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation.
+- legacy-authorization migration superseded by ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation.
+- calldata decoding, route rejection, request freshness, effect verification, simulation limits, verification output, preview request validation, Migration route restrictions, error catalog apart from the existing classes' rows, the requirement for execution reverts to carry a typed context, descriptor verification and the preview authorization rule, and the Invariants depending on them superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits.
+- error context, revert-error surface, `ExternalServiceError` bypass and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.
+- VaultBundlesV1 exit share-allowance rule superseded by ADR-2026-10-21-unlimited-sdk-approvals.

@@ -15,7 +15,15 @@ export interface IVaultV2Allocation {
   allocation: bigint;
 }
 
-/** Plain input shape for a Morpho Vault V2. */
+/**
+ * Plain input shape for a Morpho Vault V2.
+ *
+ * Build it with `fetchVaultV2` or `fetchAccrualVaultV2` from `@morpho-org/blue-sdk-viem` (or
+ * `getData()` on a `@morpho-org/morpho-sdk` Vault V2 entity) and don't edit its fields afterwards:
+ * `@morpho-org/morpho-sdk` derives the deposit share-price bound, the withdrawal and in-kind
+ * redemption share allowances, the force-withdraw share-price floor and the Vault V1 `migrateToV2`
+ * destination share-price bound from them and does not check them against the chain.
+ */
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
@@ -37,10 +45,34 @@ export interface IVaultV2 extends IToken {
   managementFee: bigint;
   performanceFeeRecipient: Address;
   managementFeeRecipient: Address;
-  /** Whether the performance fee recipient can receive vault shares. Defaults to `true`. */
+  /**
+   * Whether the performance fee recipient can receive vault shares. Defaults to `true`;
+   * `fetchVaultV2` reads it with `canReceiveShares` when the performance fee is nonzero. Set it
+   * explicitly when building a snapshot by hand.
+   */
   performanceFeeRecipientCanReceiveShares?: boolean;
-  /** Whether the management fee recipient can receive vault shares. Defaults to `true`. */
+  /**
+   * Whether the management fee recipient can receive vault shares. Defaults to `true`;
+   * `fetchVaultV2` reads it with `canReceiveShares` when the management fee is nonzero. Set it
+   * explicitly when building a snapshot by hand.
+   */
   managementFeeRecipientCanReceiveShares?: boolean;
+  /**
+   * Vault shares held by `DEAD_ADDRESS` (the vault's dead deposit). `fetchVaultV2` and
+   * `fetchAccrualVaultV2` read it; `undefined` when the snapshot was not fetched with it.
+   */
+  readonly deadShares?: bigint;
+  /**
+   * `deadShares` converted to assets by the vault's `convertToAssets` at the fetched block (rounded
+   * down). `undefined` when the snapshot was not fetched with it.
+   */
+  readonly deadAssets?: bigint;
+  /**
+   * Absolute caps keyed by cap id. `fetchAccrualVaultV2` fills it for every adapter's own cap id
+   * (`adapterCapId`) and, for market adapters, every market's `adapterMarketCapId`, so validators
+   * can skip zero-cap entries. `undefined` when the snapshot was not fetched with it.
+   */
+  readonly absoluteCaps?: Readonly<Record<Hash, bigint>>;
 }
 
 /** Represents a Morpho Vault V2 and its fee, adapter, and accounting state. */
@@ -67,6 +99,12 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   public performanceFeeRecipientCanReceiveShares;
   /** Whether the management fee recipient can receive vault shares. */
   public managementFeeRecipientCanReceiveShares;
+  /** Vault shares held by `DEAD_ADDRESS`; `undefined` when not fetched. */
+  public readonly deadShares?: bigint;
+  /** `deadShares` converted to assets at the fetched block; `undefined` when not fetched. */
+  public readonly deadAssets?: bigint;
+  /** Absolute caps keyed by cap id; `undefined` when not fetched. */
+  public readonly absoluteCaps?: Readonly<Record<Hash, bigint>>;
 
   constructor({
     asset,
@@ -85,6 +123,9 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     managementFeeRecipient,
     performanceFeeRecipientCanReceiveShares = true,
     managementFeeRecipientCanReceiveShares = true,
+    deadShares,
+    deadAssets,
+    absoluteCaps,
     ...config
   }: IVaultV2) {
     super(config, asset);
@@ -107,6 +148,9 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
       performanceFeeRecipientCanReceiveShares;
     this.managementFeeRecipientCanReceiveShares =
       managementFeeRecipientCanReceiveShares;
+    if (deadShares != null) this.deadShares = deadShares;
+    if (deadAssets != null) this.deadAssets = deadAssets;
+    if (absoluteCaps != null) this.absoluteCaps = absoluteCaps;
   }
 
   /**
@@ -184,7 +228,15 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 /** Plain input shape for a Morpho Vault V2 paired with accrued adapter state. */
 export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 
-/** Represents a Morpho Vault V2 with accrued adapter and liquidity state. */
+/**
+ * Represents a Morpho Vault V2 with accrued adapter and liquidity state.
+ *
+ * Build it with `fetchAccrualVaultV2` from `@morpho-org/blue-sdk-viem` (or `getData()` on a
+ * `@morpho-org/morpho-sdk` Vault V2 entity) and don't edit its state afterwards, including
+ * `accrualLiquidityAdapter`, `accrualAdapters`, `assetBalance` and `forceDeallocatePenalties`:
+ * `@morpho-org/morpho-sdk` derives its slippage and share-price bounds from this state and does not
+ * check it against the chain.
+ */
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
@@ -202,6 +254,18 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
   /**
    * Returns the vault's deposit capacity for a requested underlying asset amount.
+   * Headroom accounts for interest accrued since the last allocation, as of the vault's
+   * accrual timestamp, not the eventual inclusion time. Accruing only to the current block
+   * is insufficient for cap-limited MAX deposits: interest earned before inclusion can
+   * make them revert. Callers must project to their expected inclusion time plus a margin
+   * for delays, and refresh the quote if that horizon expires. No buffer is added internally;
+   * changes to rates, allocations or caps can still invalidate the quote.
+   * Uses the liquidity adapter's optional `pendingAllocationIncrease` before cap checks.
+   * Pending interest uses the liquidity adapter's nested market or Vault V1 snapshot, so
+   * first call `accrueInterest` at that buffered inclusion timestamp; if it is not after
+   * the vault's `lastUpdate`, nested adapters are not accrued and pending may be understated.
+   * A Vault V1 liquidity adapter with zero parent allocation also skips accrual, so residual
+   * shares are valued at its unaccrued Vault V1 snapshot.
    *
    * Returns the requested amount when no liquidity adapter is configured. Otherwise, applies the
    * liquidity adapter's capacity and every hydrated absolute and relative allocation cap.
@@ -210,6 +274,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * @returns A capacity limit containing the depositable asset amount and its binding reason.
    * @throws {VaultV2Errors.UnsupportedLiquidityAdapter} when a nonzero liquidity adapter lacks
    *   hydrated adapter state or allocation-cap state.
+   * @throws {InvalidMarketParamsError} when a configured Morpho Blue market liquidity adapter's
+   *   liquidity data cannot be decoded.
    * @example
    * ```ts
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
@@ -218,7 +284,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    *
    * const client = createPublicClient({ chain: base, transport: http() });
    * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
-   * const vault = await fetchAccrualVaultV2(vaultV2Address, client);
+   * const fetched = await fetchAccrualVaultV2(vaultV2Address, client);
+   * const { timestamp } = await client.getBlock();
+   * // Illustrative delays; choose both for the chain and transaction submission path.
+   * const expectedInclusionTimestamp = timestamp + 30n;
+   * const inclusionMargin = 30n;
+   * const { vault } = fetched.accrueInterest(expectedInclusionTimestamp + inclusionMargin);
    * const limit = vault.maxDeposit(1_000_000n);
    * // limit satisfies CapacityLimit
    * ```
@@ -241,9 +312,14 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     // At this stage: `liquidityAdapterLimit.value <= assets`
 
+    const pending =
+      this.accrualLiquidityAdapter?.pendingAllocationIncrease?.(
+        this.liquidityData,
+        this.liquidityAllocations,
+      ) ?? 0n;
     for (const allocation of this.liquidityAllocations) {
       const allocationLimit = VaultV2Utils.allocationHeadroom(
-        allocation,
+        { ...allocation, allocation: allocation.allocation + pending },
         this._totalAssets,
       );
       if (liquidityAdapterLimit.value > allocationLimit.value)

@@ -41,6 +41,15 @@ export const DEFAULT_CAP_ACCRUAL_BUFFER = Time.s.from.h(2n);
  */
 export const DEFAULT_ALLOCATOR_CAP_HEADROOM = MathLib.WAD / 100n;
 
+/**
+ * Minimum shares a Morpho Blue market, Vault V1 or Vault V2 must hold at `DEAD_ADDRESS` to count as
+ * protected against share-price inflation (1e9, Protocol team rule).
+ */
+export const MIN_DEAD_SHARES = 1_000_000_000n;
+
+/** Minimum assets, in the vault asset's smallest unit, a Vault V2's dead shares must be worth (1e6). */
+export const MIN_VAULT_V2_DEAD_ASSETS = 1_000_000n;
+
 /** Maximum absolute share price cap (100 RAY). Prevents absurd maxSharePrice values in repay. */
 export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 

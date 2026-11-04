@@ -56,6 +56,7 @@ export interface BlueWithdrawCollateralParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueWithdrawCollateralAction>>` whose calldata
  *   invokes the combined BlueBundlesV1 entrypoint with a zero repay leg.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when collateral, LTV, or fee is negative.
  * @throws {NonPositiveInputError} when collateral or deadline is not positive.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.

@@ -1,5 +1,6 @@
 import {
   AccrualVault,
+  DEAD_ADDRESS,
   Eip5267Domain,
   getChainAddresses,
   type MarketId,
@@ -96,6 +97,7 @@ export async function fetchVault(
         lostAssets,
         supplyQueue,
         withdrawQueue,
+        deadShares,
       } = await readContract(client, {
         ...parameters,
         abi,
@@ -126,6 +128,7 @@ export async function fetchVault(
         totalAssets,
         lastTotalAssets,
         lostAssets: hasLostAssets ? lostAssets : undefined,
+        deadShares,
       });
     } catch (error) {
       if (deployless === "force" || isTransportError(error)) throw error;
@@ -152,6 +155,7 @@ export async function fetchVault(
     supplyQueueSize,
     withdrawQueueSize,
     isMetaMorphoV1_1,
+    deadShares,
   ] = await Promise.all([
     fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
@@ -257,6 +261,13 @@ export async function fetchVault(
       functionName: "isMetaMorpho",
       args: [address],
     }).catch(catchRevertOnly(false)),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: metaMorphoAbi,
+      functionName: "balanceOf",
+      args: [DEAD_ADDRESS],
+    }),
   ]);
 
   // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
@@ -324,6 +335,7 @@ export async function fetchVault(
     totalAssets,
     lastTotalAssets,
     lostAssets,
+    deadShares,
   });
 }
 

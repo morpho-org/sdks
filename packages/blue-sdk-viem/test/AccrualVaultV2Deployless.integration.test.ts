@@ -1,11 +1,15 @@
 import {
   type AccrualVaultV2,
   AccrualVaultV2MidnightAdapter,
+  AccrualVaultV2MorphoMarketV1Adapter,
+  AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
+  DEAD_ADDRESS,
   type IAccrualVaultV2Adapter,
   MarketParams,
   MathLib,
+  VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
 import {
   MarketUtils,
@@ -27,6 +31,7 @@ import {
 } from "@morpho-org/test/fixtures";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
+  type Address,
   concatHex,
   erc20Abi,
   type Hex,
@@ -36,11 +41,14 @@ import {
   toHex,
   zeroAddress,
 } from "viem";
+import { readContract } from "viem/actions";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  blueAbi,
   fetchAccrualVaultV2,
   fetchVault,
+  metaMorphoAbi,
   midnightAdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
@@ -129,7 +137,30 @@ function vaultV1Fields(adapter: IAccrualVaultV2Adapter | undefined) {
   return {
     parentAllocation: adapter.parentAllocation,
     eip5267Domain: vault.eip5267Domain,
+    deadShares: vault.deadShares,
   };
+}
+
+/**
+ * Lists the dead supply shares of every Blue market nested under an adapter, keyed by market id:
+ * the adapter's own markets, or the nested MetaMorpho V1 vault's withdraw-queue markets.
+ */
+function nestedDeadSupplyShares(adapter: IAccrualVaultV2Adapter | undefined) {
+  if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)
+    return [...adapter.accrualVaultV1.allocations.values()].map(
+      ({ position }) => [position.market.id, position.market.deadSupplyShares],
+    );
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter)
+    return adapter.positions.map(({ market }) => [
+      market.id,
+      market.deadSupplyShares,
+    ]);
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)
+    return adapter.markets.map((market) => [
+      market.id,
+      market.deadSupplyShares,
+    ]);
+  return undefined;
 }
 
 /**
@@ -162,6 +193,9 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.forceDeallocatePenalties).toStrictEqual(
     expected.forceDeallocatePenalties,
   );
+  expect(actual.deadShares).toBe(expected.deadShares);
+  expect(actual.deadAssets).toBe(expected.deadAssets);
+  expect(actual.absoluteCaps).toStrictEqual(expected.absoluteCaps);
 
   expect(actual.accrualAdapters.map(adapterIdentity)).toStrictEqual(
     expected.accrualAdapters.map(adapterIdentity),
@@ -173,10 +207,16 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
     expect(vaultV1Fields(adapter)).toStrictEqual(
       vaultV1Fields(expected.accrualAdapters[i]),
     );
+    expect(nestedDeadSupplyShares(adapter)).toStrictEqual(
+      nestedDeadSupplyShares(expected.accrualAdapters[i]),
+    );
   });
 
   expect(vaultV1Fields(actual.accrualLiquidityAdapter)).toStrictEqual(
     vaultV1Fields(expected.accrualLiquidityAdapter),
+  );
+  expect(nestedDeadSupplyShares(actual.accrualLiquidityAdapter)).toStrictEqual(
+    nestedDeadSupplyShares(expected.accrualLiquidityAdapter),
   );
 
   expect(
@@ -225,6 +265,112 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
 }
 
 describe("fetchAccrualVaultV2 deployless path", () => {
+  vaultV2Test(
+    "reads dead deposits and absolute caps matching direct onchain reads",
+    async ({ client }) => {
+      const { blue, usdc } = addressesRegistry[client.chain.id];
+      const before = await fetchAccrualVaultV2(vaultV2VaultV1, client, {
+        deployless: false,
+      });
+      const liquidityAdapter = before.accrualLiquidityAdapter;
+      if (!(liquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter))
+        throw new TypeError("expected a MorphoVaultV1 liquidity adapter");
+      const vaultV1 = liquidityAdapter.accrualVaultV1.address;
+      const [firstAllocation] =
+        liquidityAdapter.accrualVaultV1.allocations.values();
+      if (firstAllocation === undefined)
+        throw new TypeError("expected a nested withdraw-queue market");
+      const { market } = firstAllocation.position;
+      const deposit = parseUnits("10", 6);
+
+      const fundDeadDeposit = async (spender: Address) => {
+        await client.deal({ erc20: usdc, amount: deposit });
+        await client.approve({ address: usdc, args: [spender, deposit] });
+      };
+      await fundDeadDeposit(vaultV2VaultV1);
+      await client.writeContract({
+        address: vaultV2VaultV1,
+        abi: vaultV2Abi,
+        functionName: "deposit",
+        args: [deposit, DEAD_ADDRESS],
+      });
+      await fundDeadDeposit(vaultV1);
+      await client.writeContract({
+        address: vaultV1,
+        abi: metaMorphoAbi,
+        functionName: "deposit",
+        args: [deposit, DEAD_ADDRESS],
+      });
+      await fundDeadDeposit(blue);
+      await client.writeContract({
+        address: blue,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [market.params, deposit, 0n, DEAD_ADDRESS, "0x"],
+      });
+
+      const [deployless, multicall] = await Promise.all([
+        fetchAccrualVaultV2(vaultV2VaultV1, client, { deployless: "force" }),
+        fetchAccrualVaultV2(vaultV2VaultV1, client, { deployless: false }),
+      ]);
+      expectEquivalent(deployless, multicall);
+
+      const [v2DeadShares, v1DeadShares, [deadSupplyShares]] =
+        await Promise.all([
+          readContract(client, {
+            address: vaultV2VaultV1,
+            abi: vaultV2Abi,
+            functionName: "balanceOf",
+            args: [DEAD_ADDRESS],
+          }),
+          readContract(client, {
+            address: vaultV1,
+            abi: metaMorphoAbi,
+            functionName: "balanceOf",
+            args: [DEAD_ADDRESS],
+          }),
+          readContract(client, {
+            address: blue,
+            abi: blueAbi,
+            functionName: "position",
+            args: [market.id, DEAD_ADDRESS],
+          }),
+        ]);
+      const v2DeadAssets = await readContract(client, {
+        address: vaultV2VaultV1,
+        abi: vaultV2Abi,
+        functionName: "convertToAssets",
+        args: [v2DeadShares],
+      });
+
+      expect(v2DeadShares).toBeGreaterThan(0n);
+      expect(v1DeadShares).toBeGreaterThan(0n);
+      expect(deadSupplyShares).toBeGreaterThan(0n);
+      expect(deployless.deadShares).toBe(v2DeadShares);
+      expect(deployless.deadAssets).toBe(v2DeadAssets);
+      expect(
+        vaultV1Fields(deployless.accrualLiquidityAdapter)?.deadShares,
+      ).toBe(v1DeadShares);
+      expect(
+        nestedDeadSupplyShares(deployless.accrualLiquidityAdapter),
+      ).toContainEqual([market.id, deadSupplyShares]);
+
+      const capIds = Object.keys(deployless.absoluteCaps ?? {}) as Hex[];
+      expect(capIds).toContain(
+        VaultV2MorphoVaultV1Adapter.adapterCapId(liquidityAdapter.address),
+      );
+      for (const id of capIds)
+        expect(deployless.absoluteCaps?.[id]).toBe(
+          await readContract(client, {
+            address: vaultV2VaultV1,
+            abi: vaultV2Abi,
+            functionName: "absoluteCap",
+            args: [id],
+          }),
+        );
+    },
+  );
+
   vaultV2Test(
     "skips a reverting shares gate when both fees are zero",
     async ({ client }) => {
@@ -321,7 +467,6 @@ describe("fetchAccrualVaultV2 deployless path", () => {
       });
       await client.setNextBlockTimestamp({ timestamp: ACCRUAL_TIMESTAMP });
       await client.mine({ blocks: 1 });
-      const block = await client.getBlock({ blockTag: "latest" });
 
       const scenarios = [
         {
@@ -344,10 +489,14 @@ describe("fetchAccrualVaultV2 deployless path", () => {
           address: rejectingSharesGate,
           bytecode: gateBytecode,
         });
+        const block = await client.getBlock({ blockTag: "latest" });
 
         const [deployless, multicall, onchainAccrual] = await Promise.all([
           fetchAccrualVaultV2(vaultAddress, client),
-          fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+          fetchAccrualVaultV2(vaultAddress, client, {
+            deployless: false,
+            blockTag: "pending",
+          }),
           client.readContract({
             address: vaultAddress,
             abi: vaultV2Abi,

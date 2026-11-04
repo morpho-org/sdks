@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-08-18 |
 | **Author** | @Rubilmax |
 | **Scope**  | Package: `morpho-sdk` |
 
-_Migrated from TIB-2026-08-18-vault-v2-blue-reallocation-api. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-08-18-vault-v2-blue-reallocation-api. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

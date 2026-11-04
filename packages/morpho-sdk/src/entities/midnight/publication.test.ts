@@ -18,7 +18,7 @@ import {
   maxUint256,
   parseAbi,
 } from "viem";
-import { base } from "viem/chains";
+import { arc, base, tempo } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -98,9 +98,6 @@ const rateTree = (entryOffer: Offer, rate: bigint) =>
     entries: [{ offer: entryOffer, rate }],
   });
 
-const aggregate3Abi = parseAbi([
-  "function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)",
-]);
 const defaultContinuousFeeAbi = parseAbi([
   "function defaultContinuousFee(address loanToken) view returns (uint32)",
 ]);
@@ -485,7 +482,7 @@ describe("fetchMidnightMakerOfferStates", () => {
     ]);
   });
 
-  test("decodes interleaved collateral reads across created and uncreated markets", async () => {
+  test.for([base, arc, tempo])("reads pinned state on $name", async (chain) => {
     const secondCursor = 300_000_000_000_000_000n;
     const twoCollateralMarket = new MarketParams({
       ...midnightMarket,
@@ -506,7 +503,9 @@ describe("fetchMidnightMakerOfferStates", () => {
     const createdOffer = offer({ market: marketParams() });
     const tree = priceTree(uncreatedOffer, createdOffer);
     const uncreatedMarketId = MarketUtils.toId(twoCollateralMarket);
-    const handle = createMockClient(base);
+    const handle = createMockClient(chain);
+    if (chain.id !== base.id)
+      expect(chain.contracts?.multicall3).toBeUndefined();
     const block = {
       baseFeePerGas: "0x0",
       difficulty: "0x0",
@@ -528,111 +527,84 @@ describe("fetchMidnightMakerOfferStates", () => {
       transactions: [],
       transactionsRoot: `0x${"07".repeat(32)}`,
     };
+    let failReads = false;
     handle.request.mockImplementation(async ({ method, params }) => {
-      if (method === "eth_chainId") return `0x${base.id.toString(16)}`;
+      if (method === "eth_chainId") return `0x${chain.id.toString(16)}`;
       if (method === "eth_blockNumber") return "0x1396";
       if (method === "eth_getBlockByNumber") return block;
       if (method === "eth_getCode") return "0x01";
       if (method === "eth_call") {
+        if (failReads) throw new Error("Midnight read unavailable");
         const transaction = params?.[0] as { data: Hex };
-        const aggregate = decodeFunctionData({
-          abi: aggregate3Abi,
+        const call = decodeFunctionData({
+          abi: midnightAbi,
           data: transaction.data,
         });
-        if (aggregate.functionName !== "aggregate3") {
-          throw new Error(`unexpected multicall ${aggregate.functionName}`);
-        }
-        const results = aggregate.args[0].map(({ callData }) => {
-          const call = decodeFunctionData({ abi: midnightAbi, data: callData });
-          switch (call.functionName) {
-            case "marketState": {
-              const uncreated =
-                call.args[0].toLowerCase() === uncreatedMarketId.toLowerCase();
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: midnightAbi,
-                  functionName: "marketState",
-                  result: [
-                    1n,
-                    0n,
-                    0n,
-                    0n,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    uncreated ? 0 : 4,
-                  ],
-                }),
-              };
-            }
-            case "defaultContinuousFee":
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: defaultContinuousFeeAbi,
-                  functionName: "defaultContinuousFee",
-                  result: 37,
-                }),
-              };
-            case "consumed":
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: midnightAbi,
-                  functionName: "consumed",
-                  result: 0n,
-                }),
-              };
-            case "credit":
-            case "debt":
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: midnightAbi,
-                  functionName: call.functionName,
-                  result: 1n,
-                }),
-              };
-            case "isLltvEnabled":
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: midnightAbi,
-                  functionName: "isLltvEnabled",
-                  result: true,
-                }),
-              };
-            case "isLiquidationCursorEnabled":
-              return {
-                success: true,
-                returnData: encodeFunctionResult({
-                  abi: midnightAbi,
-                  functionName: "isLiquidationCursorEnabled",
-                  result: call.args[0] !== secondCursor,
-                }),
-              };
-            default:
-              throw new Error(`unexpected Midnight read ${call.functionName}`);
+        switch (call.functionName) {
+          case "marketState": {
+            const uncreated =
+              call.args[0].toLowerCase() === uncreatedMarketId.toLowerCase();
+            return encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "marketState",
+              result: [
+                1n,
+                0n,
+                0n,
+                0n,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                uncreated ? 0 : 4,
+              ],
+            });
           }
-        });
-        return encodeFunctionResult({
-          abi: aggregate3Abi,
-          functionName: "aggregate3",
-          result: results,
-        });
+          case "defaultContinuousFee":
+            return encodeFunctionResult({
+              abi: defaultContinuousFeeAbi,
+              functionName: "defaultContinuousFee",
+              result: 37,
+            });
+          case "consumed":
+            return encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "consumed",
+              result: 0n,
+            });
+          case "credit":
+          case "debt":
+            return encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: call.functionName,
+              result: 1n,
+            });
+          case "isLltvEnabled":
+            return encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "isLltvEnabled",
+              result: true,
+            });
+          case "isLiquidationCursorEnabled":
+            return encodeFunctionResult({
+              abi: midnightAbi,
+              functionName: "isLiquidationCursorEnabled",
+              result: call.args[0] !== secondCursor,
+            });
+          default:
+            throw new Error(`unexpected Midnight read ${call.functionName}`);
+        }
       }
       throw new Error(`unexpected RPC ${method}`);
     });
 
     const { states, now } = await fetchMidnightMakerOfferStates({
       client: handle.client,
-      chainId: midnightChainId,
+      chainId: chain.id,
       tree,
       blockNumber: 5_022n,
     });
@@ -652,6 +624,13 @@ describe("fetchMidnightMakerOfferStates", () => {
       ([{ method }]) => method === "eth_getCode",
     );
     expect(ethCalls).not.toHaveLength(0);
+    expect(
+      ethCalls.every(
+        ([{ params }]) =>
+          (params as [{ to: string }])[0].to.toLowerCase() ===
+          getChainAddress(chain.id, "midnight").toLowerCase(),
+      ),
+    ).toBe(true);
     expect(ethGetCodeCalls).not.toHaveLength(0);
     expect(
       [...ethCalls, ...ethGetCodeCalls].every(
@@ -667,6 +646,18 @@ describe("fetchMidnightMakerOfferStates", () => {
     expect(error).toBeInstanceOf(
       MidnightMarketLiquidationCursorNotEnabledError,
     );
-    expect(error).toMatchObject({ index: 0, liquidationCursor: secondCursor });
+    expect(error).toMatchObject({
+      index: 0,
+      liquidationCursor: secondCursor,
+    });
+    failReads = true;
+    await expect(
+      fetchMidnightMakerOfferStates({
+        client: handle.client,
+        chainId: chain.id,
+        tree,
+        blockNumber: 5_022n,
+      }),
+    ).rejects.toThrow("Midnight read unavailable");
   });
 });

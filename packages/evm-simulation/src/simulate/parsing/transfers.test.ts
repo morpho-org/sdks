@@ -25,6 +25,8 @@ const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const DAI: Address = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
+const NON_MIRRORING_WARN =
+  "kept zero-address wNative Transfer matching a same-call Deposit/Withdrawal; chain is listed as non-mirroring — if this repeats for every wrap/unwrap the wrapper now mirrors and must be removed from the list";
 
 const parseTransfers = (
   calls: Parameters<typeof parseRawTransfers>[0],
@@ -200,6 +202,270 @@ describe("parseTransfers", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.from).toBe(zeroAddress);
     expect(result[0]!.to).toBe(getAddress(USER));
+  });
+
+  it("pairs one unwrap Transfer with one Withdrawal", () => {
+    const amount = 1000000000000000000n;
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+
+    expect(result).toHaveLength(2);
+    expect(
+      result.every(
+        ({ from, to, amount: value }) =>
+          from === getAddress(USER) && to === zeroAddress && value === amount,
+      ),
+    ).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("pairs one mint Transfer with one Deposit", () => {
+    const amount = 1000000000000000000n;
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+
+    expect(result).toHaveLength(2);
+    expect(
+      result.every(
+        ({ from, to, amount: value }) =>
+          from === zeroAddress && to === getAddress(USER) && value === amount,
+      ),
+    ).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("keeps one independent unwrap Transfer without a registered wNative", () => {
+    const amount = 1000000000000000000n;
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseRawTransfers([makeCall(logs)]);
+
+    expect(result).toHaveLength(2);
+    expect(
+      result.every(
+        ({ from, to, amount: value }) =>
+          from === getAddress(USER) && to === zeroAddress && value === amount,
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    { kind: "burn", from: USER, to: zeroAddress },
+    { kind: "mint", from: zeroAddress, to: USER },
+  ])(
+    "keeps an unpaired non-mirroring $kind Transfer without logging",
+    ({ from, to }) => {
+      const amount = 1000000000000000000n;
+      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const result = parseRawTransfers(
+        [
+          makeCall([
+            {
+              address: WETH,
+              topics: [TRANSFER_TOPIC, padAddress(from), padAddress(to)],
+              data: encodeUint256(amount),
+            },
+          ]),
+        ],
+        {
+          wNative: WETH,
+          wNativeEmitsTransfer: false,
+          logger,
+        },
+      );
+
+      expect(result).toEqual([
+        {
+          token: getAddress(WETH),
+          from: getAddress(from),
+          to: getAddress(to),
+          amount,
+          txIdx: 0,
+        },
+      ]);
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.info).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps zero-address WETH9-shaped unwrap transfers when the wrapper does not mirror", () => {
+    const amount = 1000000000000000000n;
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseRawTransfers([makeCall(logs)], {
+      wNative: WETH,
+      wNativeEmitsTransfer: false,
+      logger,
+    });
+
+    expect(result).toEqual([
+      {
+        token: getAddress(WETH),
+        from: getAddress(USER),
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+      {
+        token: getAddress(WETH),
+        from: getAddress(USER),
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(NON_MIRRORING_WARN, {
+      token: WETH,
+      kind: "burn",
+      txIdx: 0,
+      data: encodeUint256(amount),
+    });
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("keeps zero-address WETH9-shaped deposit transfers when the wrapper does not mirror", () => {
+    const amount = 1000000000000000000n;
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseRawTransfers([makeCall(logs)], {
+      wNative: WETH,
+      wNativeEmitsTransfer: false,
+      logger,
+    });
+
+    expect(result).toEqual([
+      {
+        token: getAddress(WETH),
+        from: zeroAddress,
+        to: getAddress(USER),
+        amount,
+        txIdx: 0,
+      },
+      {
+        token: getAddress(WETH),
+        from: zeroAddress,
+        to: getAddress(USER),
+        amount,
+        txIdx: 0,
+      },
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(NON_MIRRORING_WARN, {
+      token: WETH,
+      kind: "mint",
+      txIdx: 0,
+      data: encodeUint256(amount),
+    });
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.info).not.toHaveBeenCalled();
   });
 
   test("behavior: matches event signatures and pairs case-insensitively", () => {

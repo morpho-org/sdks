@@ -1,4 +1,5 @@
 import type { E2eScenario } from "@morpho-org/morpho-test";
+import { wrapE2eNative } from "@morpho-org/morpho-test";
 import {
   ContractFunctionExecutionError,
   ContractFunctionRevertedError,
@@ -13,8 +14,9 @@ import {
   isRequirementSignature,
   morphoViemExtension,
 } from "../../src/index.js";
+import { seedDeadSupply } from "../helpers/blue.js";
 import { satisfyBlueBundlesV1Requirements } from "../helpers/blueBundlesV1.js";
-import { createE2eMarket, describeE2e, wrapE2eNative } from "./setup.js";
+import { createE2eMarket, describeE2e } from "./setup.js";
 
 const blueRequires = [
   "blue",
@@ -43,7 +45,9 @@ describeE2e(blueScenario, (test, { chainId }) => {
     const blue = client
       .extend(morphoViemExtension())
       .morpho.blue(market, chainId);
+    await seedDeadSupply({ client, chainId: chainId, market: market });
     const supply = blue.supply({
+      marketData: await blue.getMarketData(),
       userAddress: client.account.address,
       assets: liquidity,
       deadline: maxUint256,
@@ -85,7 +89,9 @@ describeE2e(blueScenario, (test, { chainId }) => {
     const blue = client
       .extend(morphoViemExtension())
       .morpho.blue(market, chainId);
+    await seedDeadSupply({ client, chainId: chainId, market: market });
     const supply = blue.supply({
+      marketData: await blue.getMarketData(),
       userAddress: client.account.address,
       assets: liquidity,
       deadline: maxUint256,
@@ -162,7 +168,10 @@ describeE2e(blueSignedScenario, (test, { chainId }) => {
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.blue(market, chainId);
 
+    await seedDeadSupply({ client, chainId: chainId, market: market });
+
     const action = blue.supply({
+      marketData: await blue.getMarketData(),
       userAddress: client.account.address,
       assets: liquidity,
       deadline: maxUint256,

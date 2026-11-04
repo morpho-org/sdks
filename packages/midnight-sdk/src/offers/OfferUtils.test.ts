@@ -90,6 +90,42 @@ describe("Offer", () => {
       OfferUtils.getApr({ offer, timestamp: 1_000n }),
     );
   });
+
+  test("behavior: reads hashes through proxy wrappers", () => {
+    const offers = [
+      new Offer(baseOfferInput({ group })),
+      new Offer(baseOfferInput()),
+    ];
+
+    for (const offer of offers) {
+      const proxy = new Proxy(offer, {});
+
+      expect(proxy.group).toBe(offer.group);
+      expect(proxy.hash).toBe(offer.hash);
+      expect(proxy.onchainHash).toBe(offer.onchainHash);
+    }
+  });
+
+  test("behavior: recomputes hashes after readonly fields change", () => {
+    const offer = new Offer(baseOfferInput());
+    const originalValues = {
+      group: offer.group,
+      hash: offer.hash,
+      onchainHash: offer.onchainHash,
+    };
+    const tick = offer.tick + 1n;
+
+    (offer as unknown as { tick: bigint }).tick = tick;
+
+    const changedOffer = new Offer(baseOfferInput({ tick }));
+
+    expect(offer.group).toBe(changedOffer.group);
+    expect(offer.group).not.toBe(originalValues.group);
+    expect(offer.hash).toBe(changedOffer.hash);
+    expect(offer.hash).not.toBe(originalValues.hash);
+    expect(offer.onchainHash).toBe(changedOffer.onchainHash);
+    expect(offer.onchainHash).not.toBe(originalValues.onchainHash);
+  });
 });
 
 describe("Offer.from", () => {

@@ -45,6 +45,7 @@ import {
 } from "../../../src/index.js";
 import {
   deployMorphoMarketV1AdapterV2,
+  seedVaultV2DeadDeposits,
   submitAndAcceptVaultV2Call,
 } from "../../helpers/vaultV2.js";
 
@@ -108,11 +109,14 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
   }) => {
     const { vault } = await setUpMixedVault(client);
     const entity = vaultEntity(client, vault);
+    const vaultData = await seedVaultV2DeadDeposits(
+      client as AnvilTestClient,
+      entity,
+    );
     const userAddress = client.account.address;
     const amount = parseUnits("100", 6);
     await client.deal({ erc20: usdc, amount });
 
-    const vaultData = await entity.getData();
     expect(vaultData.accrualAdapters.map(({ type }) => type).sort()).toEqual([
       "VaultV2MidnightAdapter",
       "VaultV2MorphoMarketV1AdapterV2",
@@ -179,6 +183,10 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
       functionName: "setMaxRate",
       args: [MathLib.WAD / Time.s.from.y(1n)],
     });
+    const seededVaultData = await seedVaultV2DeadDeposits(
+      client as AnvilTestClient,
+      entity,
+    );
     const amount = parseUnits("100", 6);
     await client.deal({ erc20: usdc, amount: 2n * amount });
     await execute(
@@ -186,7 +194,7 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
       entity.deposit({
         amount,
         userAddress,
-        vaultData: await entity.getData(),
+        vaultData: seededVaultData,
       }),
     );
 

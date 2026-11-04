@@ -18,7 +18,7 @@ describe("isAddress", () => {
     expect(isAddress(EIP55_FIXTURES[0].toLowerCase())).toBe(true);
   });
 
-  test.each(["0x12", "abc", "0x" + "a".repeat(39), "0x" + "g".repeat(40), ""])(
+  test.each(["0x12", "abc", `0x${"a".repeat(39)}`, `0x${"g".repeat(40)}`, ""])(
     "behavior: rejects %s",
     (value) => {
       expect(isAddress(value)).toBe(false);
@@ -58,7 +58,7 @@ describe("getChecksumAddress", () => {
     expect(() => getChecksumAddress(bad)).toThrow(InvalidAddressError);
   });
 
-  test.each(["0x12", "abc", "0x" + "a".repeat(39), "0x" + "g".repeat(40)])(
+  test.each(["0x12", "abc", `0x${"a".repeat(39)}`, `0x${"g".repeat(40)}`])(
     "error: InvalidAddressError on %s",
     (value) => {
       expect(() => getChecksumAddress(value)).toThrow(InvalidAddressError);

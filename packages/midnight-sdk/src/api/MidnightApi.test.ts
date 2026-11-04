@@ -7,7 +7,7 @@ import {
   MathLib,
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, maxUint256 } from "viem";
+import { type Address, type Hex, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
@@ -712,6 +712,54 @@ describe("MidnightApi instance", () => {
     expect(url.pathname).toBe("/base/books");
     expect(url.searchParams.get("limit")).toBe("1");
   });
+
+  test("behavior: forwards taker to quote requests", async () => {
+    const { calls, fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: "1010000000000000000",
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+    const api = new MidnightApi({ fetch });
+
+    await api.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: 1_000000000000000000n,
+      taker: SECOND_MAKER,
+    });
+    await api.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: 1_000000000000000000n,
+    });
+
+    expect(getRequestUrl(calls[0]!).searchParams.get("taker")).toBe(
+      SECOND_MAKER,
+    );
+    expect(getRequestUrl(calls[1]!).searchParams.has("taker")).toBe(false);
+  });
+
+  test("error: rejects quote offers made by the requested taker", async () => {
+    const { fetch } = createQuoteFetch([apiTakeableOffer]);
+    const request = MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: 1n,
+      taker: MAKER,
+      fetch,
+    });
+
+    await expect(request).rejects.toBeInstanceOf(
+      InvalidMidnightApiResponseError,
+    );
+    await expect(request).rejects.toThrow(
+      `Midnight API takeable offer maker "${MAKER}" matches the requested taker "${MAKER}".`,
+    );
+  });
 });
 
 describe("MidnightApi.fetchBooks", () => {
@@ -1184,6 +1232,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(url.searchParams.get("average_worst_price")).toBe(
       "1010000000000000000",
     );
+    expect(url.searchParams.has("taker")).toBe(false);
     expect(call.init?.method).toBe("GET");
   });
 
@@ -1213,7 +1262,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
   });
 
-  test("behavior: serializes assets and slippage", async () => {
+  test("behavior: serializes assets, slippage, and taker", async () => {
     const { calls, fetch } = createJsonFetch({
       data: {
         average_best_price: "1000000000000000000",
@@ -1229,6 +1278,7 @@ describe("MidnightApi.fetchBookQuote", () => {
       side: "bids",
       assets: "1000000000000000000",
       slippage: "0.5",
+      taker: MAKER,
       fetch,
     });
 
@@ -1236,6 +1286,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/bids/quote`);
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
+    expect(url.searchParams.get("taker")).toBe(MAKER);
   });
 
   test("behavior: returns the API averageWorstPrice in slippage mode", async () => {
@@ -1674,6 +1725,7 @@ describe("MidnightApi.fetchBookQuote", () => {
   );
 
   test.each([
+    ["zero", zeroAddress],
     ["malformed", "invalid"],
     ["nullish", null],
   ])(
@@ -1894,6 +1946,23 @@ describe("MidnightApi.fetchTakeableOffers", () => {
     expect(
       result.data[0]?.offer.market.collateralParams.map(({ token }) => token),
     ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
+  });
+
+  test("error: InvalidMidnightApiResponseError for unmatched group filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: null,
+      data: [apiTakeableOffer],
+    });
+
+    await expect(
+      MidnightApi.fetchTakeableOffers({
+        maker: MAKER,
+        groups: [
+          "0x000000000000000000000000000000000000000000000000000000000008b8f5",
+        ],
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
   test("behavior: treats empty optional filters as unset", async () => {

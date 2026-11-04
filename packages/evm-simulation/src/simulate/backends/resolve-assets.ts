@@ -1,4 +1,8 @@
-import type { MarketParams } from "@morpho-org/blue-sdk";
+import {
+  type MarketId,
+  type MarketParams,
+  MarketUtils,
+} from "@morpho-org/blue-sdk";
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import {
@@ -18,6 +22,7 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  ApprovalCheckUnavailableError,
   RpcTransportError,
   SimulationValidationError,
   SlippageCheckUnavailableError,
@@ -48,11 +53,43 @@ export interface ResolvedSlippageOperation {
   }[];
 }
 
+/** Caller-selected operation with quoted assets and its subject approval token resolved. @internal */
+export interface ResolvedApprovalOperation extends ResolvedSlippageOperation {
+  readonly approvalToken?: Address;
+  /** Midnight pay-in tokens read from the pinned market, never from quote overrides. */
+  readonly midnightApprovalTokens?: readonly Address[];
+}
+
+const isTransportFailure = (cause: unknown): boolean => {
+  const reverted =
+    cause instanceof BaseError &&
+    cause.walk(
+      (error) =>
+        error instanceof ContractFunctionRevertedError ||
+        error instanceof ExecutionRevertedError,
+    ) !== null;
+  return (
+    !reverted &&
+    ((cause instanceof BaseError &&
+      cause.walk(
+        (error) =>
+          error instanceof HttpRequestError ||
+          error instanceof TimeoutError ||
+          error instanceof RpcRequestError ||
+          error instanceof RpcError ||
+          (error instanceof Error && error.name === "AbortError"),
+      ) !== null) ||
+      (cause instanceof Error && cause.name === "AbortError"))
+  );
+};
+
 /** Midnight market struct as returned by `toMarket`. @internal */
 type MidnightMarket = MidnightMarketStruct;
 
 /**
- * Resolve underlying tokens for typed inputs and quotes without explicit tokens.
+ * Resolve underlying tokens for typed inputs and quotes without explicit tokens,
+ * and the subject token needed for approval checks at the pinned block. Quote
+ * overrides do not replace the subject token.
  * Input overrides must match the subject token; native aliases require wNative
  * and are measured together with that token's net wallet change.
  * Share-only quotes need no RPC reads; vault versions and factories are not discovered.
@@ -64,14 +101,16 @@ type MidnightMarket = MidnightMarketStruct;
  * use a matching supplied struct when available because their credit reads
  * need it.
  * @param params - Caller operations, Morpho Blue and Midnight addresses, client, and pinned state block.
- * @returns Operations with the token addresses required by their asset quotes.
+ * @returns Operations with quote tokens and any required subject approval token resolved.
  * @throws {RpcTransportError} For transport failures during a required metadata read.
  * @throws {SimulationValidationError} For a typed-input asset override that is
  *   neither the canonical token nor its registered native alias.
  * @throws {SlippageCheckUnavailableError} For reverted, malformed, or empty
  *   metadata; a supplied market struct for another Midnight deployment; an
  *   explicit `assetPaid` that does not match its collateral token; or a
- *   collateral index the Midnight market does not configure.
+ *   collateral index the Midnight market does not configure; or Blue market
+ *   params that do not hash to the requested market id.
+ * @throws {ApprovalCheckUnavailableError} For unavailable approval-token metadata.
  * @internal
  */
 export async function resolveAssets(params: {
@@ -81,7 +120,7 @@ export async function resolveAssets(params: {
   readonly wNative?: Address;
   readonly operations: readonly ParsedOperationLimit[];
   readonly blockNumber: bigint;
-}): Promise<readonly ResolvedSlippageOperation[]> {
+}): Promise<readonly ResolvedApprovalOperation[]> {
   const {
     client,
     morpho,
@@ -96,7 +135,7 @@ export async function resolveAssets(params: {
     string,
     NonNullable<ResolvedSlippageOperation["marketParams"]>
   >();
-  const resolved: ResolvedSlippageOperation[] = [];
+  const resolved: ResolvedApprovalOperation[] = [];
   for (const limit of operations) {
     const acceptsMarket = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
       (acceptedType) => acceptedType === limit.type,
@@ -110,7 +149,10 @@ export async function resolveAssets(params: {
         `The supplied Midnight market struct for "${limit.type}" uses a different Midnight address. Pass this chain's Midnight market struct.`,
       );
     }
-    if (limit.type === "midnightSupplyCollateral") {
+    if (
+      limit.type === "midnightSupplyCollateral" ||
+      limit.type === "midnightSupplyCollateralMakeBorrow"
+    ) {
       const collateralToken =
         suppliedMarket.collateralParams[Number(limit.collateralIndex)]?.token;
       if (
@@ -236,14 +278,30 @@ export async function resolveAssets(params: {
               args: [source.marketId],
               blockNumber,
             });
-            pair = [values[0], values[1]];
-            blueMarkets.set(key, {
+            const marketParams = {
               loanToken: values[0],
               collateralToken: values[1],
               oracle: values[2],
               irm: values[3],
               lltv: values[4],
-            });
+            };
+            const receivedMarketId = MarketUtils.getMarketId(marketParams);
+            const isUncreatedMarket =
+              isAddressEqual(values[0], zeroAddress) &&
+              isAddressEqual(values[1], zeroAddress) &&
+              isAddressEqual(values[2], zeroAddress) &&
+              isAddressEqual(values[3], zeroAddress) &&
+              values[4] === 0n;
+            if (
+              !isUncreatedMarket &&
+              receivedMarketId.toLowerCase() !== source.marketId.toLowerCase()
+            ) {
+              throw new SlippageCheckUnavailableError(
+                `Cannot resolve the token for "${limit.type}": idToMarketParams("${source.marketId.toLowerCase()}") returned params for market "${receivedMarketId}". Check the RPC endpoint.`,
+              );
+            }
+            pair = [values[0], values[1]];
+            blueMarkets.set(key, marketParams);
           } else if (
             source.type === "midnightCollateral" ||
             source.type === "midnightLoan"
@@ -270,29 +328,8 @@ export async function resolveAssets(params: {
             pair = [asset, asset];
           }
         } catch (cause) {
-          const reverted =
-            cause instanceof BaseError &&
-            cause.walk(
-              (error) =>
-                error instanceof ContractFunctionRevertedError ||
-                error instanceof ExecutionRevertedError,
-            ) !== null;
-          // Revert-shaped chains (code 3, or -32000 "execution reverted")
-          // can nest an RpcRequestError, so a revert must win over the
-          // transport match.
-          if (
-            !reverted &&
-            ((cause instanceof BaseError &&
-              cause.walk(
-                (error) =>
-                  error instanceof HttpRequestError ||
-                  error instanceof TimeoutError ||
-                  error instanceof RpcRequestError ||
-                  error instanceof RpcError ||
-                  (error instanceof Error && error.name === "AbortError"),
-              ) !== null) ||
-              (cause instanceof Error && cause.name === "AbortError"))
-          ) {
+          if (cause instanceof SlippageCheckUnavailableError) throw cause;
+          if (isTransportFailure(cause)) {
             throw new RpcTransportError(
               "RPC request failed. Check the endpoint and try again.",
               { cause },
@@ -395,7 +432,279 @@ export async function resolveAssets(params: {
       else if (field === "assetsReceived") result.assetsReceived = asset;
       if (source.type === "market") result.marketParams = blueMarkets.get(key);
     }
-    resolved.push(result);
+    let approvalToken: Address | undefined;
+    const readPair = async (
+      key: string,
+      read: () => Promise<readonly Address[]>,
+    ): Promise<readonly Address[]> => {
+      const cached = tokens.get(key);
+      if (cached !== undefined) return cached;
+      try {
+        const pair = await read();
+        tokens.set(key, pair);
+        return pair;
+      } catch (cause) {
+        if (cause instanceof ApprovalCheckUnavailableError) throw cause;
+        if (isTransportFailure(cause))
+          throw new RpcTransportError(
+            "RPC request failed. Check the endpoint and try again.",
+            { cause },
+          );
+        throw new ApprovalCheckUnavailableError(
+          `Cannot resolve the token required by "${limit.type}" at the pinned block.`,
+          { cause },
+        );
+      }
+    };
+    const readMarketToken = async (
+      marketId: MarketId,
+      asset: "loan" | "collateral",
+    ): Promise<Address> => {
+      const pair = await readPair(
+        `market:${marketId.toLowerCase()}`,
+        async () => {
+          const values = await readContract(client, {
+            address: morpho,
+            abi: blueAbi,
+            functionName: "idToMarketParams",
+            args: [marketId],
+            blockNumber,
+          });
+          const marketParams = {
+            loanToken: values[0],
+            collateralToken: values[1],
+            oracle: values[2],
+            irm: values[3],
+            lltv: values[4],
+          };
+          const receivedMarketId = MarketUtils.getMarketId(marketParams);
+          // An uncreated market reads as all zeros and falls through to the zero-token error.
+          const isUncreatedMarket =
+            isAddressEqual(values[0], zeroAddress) &&
+            isAddressEqual(values[1], zeroAddress) &&
+            isAddressEqual(values[2], zeroAddress) &&
+            isAddressEqual(values[3], zeroAddress) &&
+            values[4] === 0n;
+          if (
+            !isUncreatedMarket &&
+            receivedMarketId.toLowerCase() !== marketId.toLowerCase()
+          )
+            throw new ApprovalCheckUnavailableError(
+              `idToMarketParams("${marketId.toLowerCase()}") returned params for market "${receivedMarketId}". Check the RPC endpoint.`,
+            );
+          // Later quote reads of this market reuse the cached pair and need its params.
+          blueMarkets.set(`market:${marketId.toLowerCase()}`, marketParams);
+          return [values[0], values[1]];
+        },
+      );
+      const token = pair[asset === "loan" ? 0 : 1] ?? zeroAddress;
+      if (isAddressEqual(token, zeroAddress))
+        throw new ApprovalCheckUnavailableError(
+          `Cannot resolve the token required by "${limit.type}": the market token address is zero.`,
+        );
+      return token;
+    };
+    switch (limit.type) {
+      case "vaultV1Deposit":
+      case "vaultV2Deposit": {
+        const [asset = zeroAddress] = await readPair(
+          `vault:${limit.vault.toLowerCase()}`,
+          async () => {
+            const token = await readContract(client, {
+              address: limit.vault,
+              abi: erc4626Abi,
+              functionName: "asset",
+              blockNumber,
+            });
+            return [token];
+          },
+        );
+        if (isAddressEqual(asset, zeroAddress))
+          throw new ApprovalCheckUnavailableError(
+            `Cannot resolve the token required by "${limit.type}": the vault asset address is zero.`,
+          );
+        approvalToken = asset;
+        break;
+      }
+      case "vaultV1Withdraw":
+      case "vaultV1Redeem":
+      case "vaultV1InKindRedeem":
+      case "vaultV2Withdraw":
+      case "vaultV2Redeem":
+      case "vaultV2InKindRedeem":
+      case "vaultV2ForceWithdraw":
+      case "vaultV1MigrateToV2": {
+        const subject =
+          limit.type === "vaultV1MigrateToV2" ? limit.sourceVault : limit.vault;
+        if (isAddressEqual(subject, zeroAddress))
+          throw new ApprovalCheckUnavailableError(
+            `Cannot resolve the token required by "${limit.type}": the subject token address is zero.`,
+          );
+        approvalToken = subject;
+        break;
+      }
+      case "vaultV2ForceRedeem":
+        break;
+      case "blueSupply":
+      case "blueRepay":
+      case "blueRepayWithdrawCollateral":
+        approvalToken = await readMarketToken(limit.marketId, "loan");
+        break;
+      case "blueSupplyCollateral":
+      case "blueSupplyCollateralBorrow":
+        approvalToken = await readMarketToken(limit.marketId, "collateral");
+        break;
+      case "blueWithdraw":
+      case "blueBorrow":
+      case "blueWithdrawCollateral":
+      case "blueRefinance":
+      case "midnightSupplyCollateral":
+      case "midnightSupplyCollateralMakeBorrow":
+      case "midnightRedeem":
+      case "midnightTakeLend":
+      case "midnightTakeBorrow":
+      case "midnightTakeWithdraw":
+      case "midnightRepayWithdrawCollateral":
+      case "midnightTakeRepayWithdrawCollateral":
+      case "midnightSupplyCollateralTakeBorrow":
+      case "midnightSupplyBlueMakeLend":
+        break;
+      default: {
+        const _exhaustive: never = limit;
+        void _exhaustive;
+        throw new ApprovalCheckUnavailableError(
+          `Unsupported operation limit "${(limit as { type: string }).type}"; approval checks cannot run.`,
+        );
+      }
+    }
+    const midnightKey =
+      "marketId" in limit
+        ? `midnight:${limit.marketId.toLowerCase()}`
+        : undefined;
+    let midnightPair =
+      midnightKey === undefined ? undefined : tokens.get(midnightKey);
+    let midnightMarketCreated = true;
+    // An explicit assetPaid skips the quote read, so read the market for its approval token.
+    if (
+      midnightPair === undefined &&
+      midnightKey !== undefined &&
+      (limit.type === "midnightSupplyCollateral" ||
+        limit.type === "midnightSupplyCollateralMakeBorrow")
+    ) {
+      try {
+        const market = await readContract(client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "toMarket",
+          args: [limit.marketId],
+          blockNumber,
+        });
+        markets.set(midnightKey, market);
+        midnightPair = [
+          market.loanToken,
+          ...market.collateralParams.map((entry) => entry.token),
+        ];
+        tokens.set(midnightKey, midnightPair);
+      } catch (cause) {
+        if (isTransportFailure(cause))
+          throw new RpcTransportError(
+            "RPC request failed. Check the endpoint and try again.",
+            { cause },
+          );
+        if (
+          !(cause instanceof BaseError) ||
+          cause.walk(
+            (error) =>
+              error instanceof ContractFunctionRevertedError &&
+              error.data?.errorName === "MarketNotCreated",
+          ) === null
+        )
+          throw new ApprovalCheckUnavailableError(
+            `Cannot read Midnight market "${limit.marketId}" at the pinned block. Pass the market struct via "market".`,
+            { cause },
+          );
+        midnightMarketCreated = false;
+      }
+    }
+    const midnightApprovalTokenError = `Cannot resolve the token approval required by "${limit.type}" at the pinned block. If this bundle creates the market, pass the market struct via "market".`;
+    const resolveMidnightApprovalToken = (
+      token: Address | undefined,
+    ): Address => {
+      if (token === undefined || isAddressEqual(token, zeroAddress))
+        throw new ApprovalCheckUnavailableError(midnightApprovalTokenError);
+      return token;
+    };
+    let midnightApprovalTokens: readonly Address[] | undefined;
+    switch (limit.type) {
+      case "vaultV1Deposit":
+      case "vaultV2Deposit":
+      case "vaultV1Withdraw":
+      case "vaultV1Redeem":
+      case "vaultV1InKindRedeem":
+      case "vaultV2Withdraw":
+      case "vaultV2Redeem":
+      case "vaultV2InKindRedeem":
+      case "vaultV2ForceWithdraw":
+      case "vaultV1MigrateToV2":
+      case "vaultV2ForceRedeem":
+      case "blueSupply":
+      case "blueRepay":
+      case "blueRepayWithdrawCollateral":
+      case "blueSupplyCollateral":
+      case "blueSupplyCollateralBorrow":
+      case "blueWithdraw":
+      case "blueBorrow":
+      case "blueWithdrawCollateral":
+      case "blueRefinance":
+      case "midnightRedeem":
+      case "midnightTakeBorrow":
+      case "midnightTakeWithdraw":
+        break;
+      case "midnightSupplyBlueMakeLend":
+        midnightApprovalTokens = [
+          resolveMidnightApprovalToken(limit.loanToken),
+        ];
+        break;
+      case "midnightSupplyCollateralTakeBorrow": {
+        const collateralTokens = result.midnightCollateralTokens?.map(
+          ({ token }) => resolveMidnightApprovalToken(token),
+        );
+        if (collateralTokens === undefined || collateralTokens.length === 0)
+          throw new ApprovalCheckUnavailableError(midnightApprovalTokenError);
+        midnightApprovalTokens = collateralTokens;
+        break;
+      }
+      case "midnightSupplyCollateral":
+      case "midnightSupplyCollateralMakeBorrow": {
+        // Only a market the bundle creates has no pinned token; use the caller's assetPaid.
+        const token = midnightMarketCreated
+          ? midnightPair?.[1 + Number(limit.collateralIndex)]
+          : limit.assetPaid;
+        midnightApprovalTokens = [resolveMidnightApprovalToken(token)];
+        break;
+      }
+      case "midnightTakeLend":
+      case "midnightRepayWithdrawCollateral":
+      case "midnightTakeRepayWithdrawCollateral": {
+        const token = midnightPair?.[0];
+        midnightApprovalTokens = [resolveMidnightApprovalToken(token)];
+        break;
+      }
+      default: {
+        const _exhaustive: never = limit;
+        void _exhaustive;
+        throw new ApprovalCheckUnavailableError(
+          `Unsupported operation limit "${(limit as { type: string }).type}"; approval checks cannot run.`,
+        );
+      }
+    }
+    resolved.push({
+      ...result,
+      ...(approvalToken === undefined ? {} : { approvalToken }),
+      ...(midnightApprovalTokens === undefined
+        ? {}
+        : { midnightApprovalTokens }),
+    });
   }
   return resolved;
 }

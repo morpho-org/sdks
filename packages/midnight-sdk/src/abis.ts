@@ -2505,6 +2505,179 @@ export const midnightAbi = [
 ] as const satisfies Abi;
 
 /**
+ * Pinned ABI JSON for the EcrecoverAuthorizer.
+ *
+ * Source: `morpho-org/midnight` commit `336b924a2bb378d810ef6d35b6dd3486759af8bd`,
+ * `src/periphery/interfaces/IEcrecoverAuthorizer.sol`, Forge artifact `out/IEcrecoverAuthorizer.sol/IEcrecoverAuthorizer.json`.
+ *
+ * @example
+ * ```ts
+ * import { ecrecoverAuthorizerAbi } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(ecrecoverAuthorizerAbi.length);
+ * ```
+ */
+export const ecrecoverAuthorizerAbi = [
+  {
+    type: "function",
+    name: "MIDNIGHT",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "nonce",
+    inputs: [
+      {
+        name: "authorizer",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setIsAuthorized",
+    inputs: [
+      {
+        name: "authorization",
+        type: "tuple",
+        internalType: "struct Authorization",
+        components: [
+          {
+            name: "authorizer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "authorized",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "isAuthorized",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+            internalType: "uint256",
+          },
+        ],
+      },
+      {
+        name: "signature",
+        type: "tuple",
+        internalType: "struct Signature",
+        components: [
+          {
+            name: "v",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "r",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "s",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "SetIsAuthorized",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "authorizer",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "authorized",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "isAuthorized",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "nonce",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "signer",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "Expired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidNonce",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSignature",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Unauthorized",
+    inputs: [],
+  },
+] as const satisfies Abi;
+
+/**
  * Pinned ABI JSON for the EcrecoverRatifier.
  *
  * Source: `morpho-org/midnight` commit `336b924a2bb378d810ef6d35b6dd3486759af8bd`,
@@ -5331,6 +5504,855 @@ export const blueBuyCallbackFactoryAbi = [
         name: "callback",
         type: "address",
         indexed: false,
+      },
+    ],
+    anonymous: false,
+  },
+] as const satisfies Abi;
+
+/**
+ * Pinned ABI JSON for the events emitted by the core Midnight contract.
+ *
+ * Source: `morpho-org/midnight` commit `336b924a2bb378d810ef6d35b6dd3486759af8bd`,
+ * `src/libraries/EventsLib.sol`, `forge inspect src/libraries/EventsLib.sol:EventsLib abi`.
+ *
+ * @example
+ * ```ts
+ * import { decodeEventLog, type Log } from "viem";
+ * import { midnightEventsAbi } from "@morpho-org/midnight-sdk";
+ *
+ * declare const log: Log; // e.g. from a transaction receipt
+ * const { eventName, args } = decodeEventLog({
+ *   abi: midnightEventsAbi,
+ *   data: log.data,
+ *   topics: log.topics,
+ * });
+ * ```
+ */
+export const midnightEventsAbi = [
+  {
+    type: "event",
+    name: "ClaimContinuousFee",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ClaimSettlementFee",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Constructor",
+    inputs: [
+      {
+        name: "configurator",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "EnableLiquidationCursor",
+    inputs: [
+      {
+        name: "liquidationCursor",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "EnableLltv",
+    inputs: [
+      {
+        name: "lltv",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "FlashLoan",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "tokens",
+        type: "address[]",
+        indexed: false,
+        internalType: "address[]",
+      },
+      {
+        name: "assets",
+        type: "uint256[]",
+        indexed: false,
+        internalType: "uint256[]",
+      },
+      {
+        name: "callback",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Liquidate",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "collateral",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "seizedAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "repaidUnits",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "borrower",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "postMaturityMode",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "payer",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "badDebt",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "latestLossFactor",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "latestContinuousFeeCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "MarketCreated",
+    inputs: [
+      {
+        name: "market",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct Market",
+        components: [
+          {
+            name: "chainId",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "midnight",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "loanToken",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "collateralParams",
+            type: "tuple[]",
+            internalType: "struct CollateralParams[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "liquidationCursor",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "oracle",
+                type: "address",
+                internalType: "address",
+              },
+            ],
+          },
+          {
+            name: "maturity",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "rcfThreshold",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "enterGate",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "liquidatorGate",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Repay",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "units",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "payer",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetConfigurator",
+    inputs: [
+      {
+        name: "configurator",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetConsumed",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "group",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetDefaultContinuousFee",
+    inputs: [
+      {
+        name: "loanToken",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newContinuousFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetDefaultSettlementFee",
+    inputs: [
+      {
+        name: "loanToken",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "index",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
+      {
+        name: "newSettlementFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetFeeClaimer",
+    inputs: [
+      {
+        name: "feeClaimer",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetFeeSetter",
+    inputs: [
+      {
+        name: "feeSetter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetIsAuthorized",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "authorized",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newIsAuthorized",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetMarketContinuousFee",
+    inputs: [
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newContinuousFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetMarketSettlementFee",
+    inputs: [
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "index",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
+      {
+        name: "newSettlementFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetMarketTickSpacing",
+    inputs: [
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newTickSpacing",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetTickSpacingSetter",
+    inputs: [
+      {
+        name: "tickSpacingSetter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SupplyCollateral",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "collateral",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Take",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "offerHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "offerIsBuy",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "maker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "group",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "ratifier",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "ratifierData",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+      {
+        name: "units",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "taker",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "buyerAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "sellerAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "consumed",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "buyerPendingFeeIncrease",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "sellerPendingFeeDecrease",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "totalUnitsDelta",
+        type: "int256",
+        indexed: false,
+        internalType: "int256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "payer",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "UpdatePosition",
+    inputs: [
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "user",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "creditDecrease",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "pendingFeeDecrease",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "accruedFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Withdraw",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "units",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "pendingFeeDecrease",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "WithdrawCollateral",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "id_",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "collateral",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        indexed: false,
+        internalType: "address",
       },
     ],
     anonymous: false,

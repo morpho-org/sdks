@@ -141,6 +141,7 @@ export function foldEntryPath(path: string): string {
 
 /**
  * Verifies that tarball entries are safe on case-insensitive or Windows filesystems.
+ * Rejects backslashes rather than accepting platform-dependent path separators.
  * It also models pacote's `.gitignore` to `.npmignore` rename during extraction.
  * Rename suppression is archive-order sensitive, like pacote: only a literal
  * `.npmignore` file that precedes the `.gitignore` suppresses it.
@@ -157,6 +158,12 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
       throw new Error(`Entry "${path}" is outside package/.`);
     }
 
+    if (path.includes("\\")) {
+      throw new Error(
+        `Entry "${path}" contains a backslash. Use forward slashes.`,
+      );
+    }
+
     const folded = foldEntryPath(path);
     if (folded !== "package" && !folded.startsWith("package/")) {
       throw new Error(`Entry "${path}" is outside package/.`);
@@ -169,11 +176,10 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
   const prefixes = new Set<string>();
   for (const { path, type, folded } of normalizedEntries) {
     const aliases = [folded];
-    const normalized = path.replaceAll("\\", "/");
-    const npmignoreSibling = normalized.replace(/\.gitignore$/, ".npmignore");
+    const npmignoreSibling = path.replace(/\.gitignore$/, ".npmignore");
     if (
       type === "File" &&
-      normalized.endsWith("/.gitignore") &&
+      path.endsWith("/.gitignore") &&
       !npmignoreFiles.has(npmignoreSibling)
     ) {
       aliases.push(foldEntryPath(npmignoreSibling));

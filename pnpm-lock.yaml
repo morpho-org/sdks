@@ -166,6 +166,9 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.9.0
+      solc:
+        specifier: 0.8.36
+        version: 0.8.36(debug@4.4.3(supports-color@7.2.0))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -297,6 +300,9 @@ importers:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
+      '@morpho-org/midnight-sdk':
+        specifier: workspace:^
+        version: link:../midnight-sdk
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
@@ -2653,8 +2659,8 @@ packages:
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
 
-  follow-redirects@1.16.1:
-    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
+  follow-redirects@1.16.2:
+    resolution: {integrity: sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -6465,7 +6471,7 @@ snapshots:
 
   flatted@3.4.4: {}
 
-  follow-redirects@1.16.1(debug@4.4.3(supports-color@7.2.0)):
+  follow-redirects@1.16.2(debug@4.4.3(supports-color@7.2.0)):
     optionalDependencies:
       debug: 4.4.3(supports-color@7.2.0)
 
@@ -7253,7 +7259,7 @@ snapshots:
     dependencies:
       command-exists: 1.2.9
       commander: 8.3.0
-      follow-redirects: 1.16.1(debug@4.4.3(supports-color@7.2.0))
+      follow-redirects: 1.16.2(debug@4.4.3(supports-color@7.2.0))
       js-sha3: 0.8.0
       memorystream: 0.3.1
       semver: 5.7.2

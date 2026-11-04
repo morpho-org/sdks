@@ -1,5 +1,11 @@
 import { defineConfig } from "vitest/config";
 
+const nightlyTag = {
+  name: "nightly",
+  description:
+    "Extra E2E variants that only the Nightly workflow runs; push CI filters them out with --tags-filter='!nightly'.",
+};
+
 // Bound fork RPC demand in CI while leaving local concurrency unrestricted.
 const forkTestConfig = {
   ...(process.env.CI
@@ -15,6 +21,7 @@ const forkTestConfig = {
 export default defineConfig({
   test: {
     setupFiles: ["./vitest.fast-check.setup.ts"],
+    tags: [nightlyTag],
     coverage: {
       reporter: ["text-summary", "lcov"],
       include: [
@@ -123,7 +130,9 @@ export default defineConfig({
             "packages/morpho-sdk/src/**/*.test.ts",
             // Unit tests for test-only support modules stay beside those modules.
             "packages/morpho-sdk/test/helpers/**/*.test.ts",
+            "packages/morpho-sdk/test/e2e/**/*.test.ts",
           ],
+          exclude: ["packages/morpho-sdk/test/e2e/**/*.integration.test.ts"],
         },
       },
       {
@@ -138,7 +147,13 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation",
-          include: ["packages/evm-simulation/src/**/*.test.ts"],
+          include: [
+            "packages/evm-simulation/src/**/*.test.ts",
+            "packages/evm-simulation/test/e2e/**/*.test.ts",
+          ],
+          exclude: [
+            "packages/evm-simulation/test/e2e/**/*.integration.test.ts",
+          ],
           globals: true,
           environment: "node",
         },

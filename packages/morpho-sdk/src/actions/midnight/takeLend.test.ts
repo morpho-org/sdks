@@ -25,6 +25,7 @@ import {
   MidnightOfferSideMismatchError,
   MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferZeroSellerReceiverError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
@@ -413,6 +414,40 @@ describe("midnightTakeLend", () => {
 
     expect(build).toThrow(MidnightTakeableOfferMarketMismatchError);
     expect(build).toThrow(/offer "2"/);
+  });
+
+  test("error: a malformed sell receiver throws a typed encoding error", () => {
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        takeableOffers: params.takeableOffers.map((take) => ({
+          ...take,
+          offer: { ...take.offer, receiverIfMakerIsSeller: "0x123" as Address },
+        })),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "MidnightCalldataEncodingError",
+        input: "takeableOffers[0].offer.receiverIfMakerIsSeller",
+      }),
+    );
+  });
+
+  test("error: MidnightTakeableOfferZeroSellerReceiverError", () => {
+    const build = () =>
+      midnightTakeLend({
+        ...params,
+        takeableOffers: [
+          midnightApiTake(),
+          midnightApiTake({
+            receiverIfMakerIsSeller: zeroAddress,
+            tick: 5_001n,
+          }),
+        ],
+      });
+
+    expect(build).toThrow(MidnightTakeableOfferZeroSellerReceiverError);
+    expect(build).toThrow(/offer "1"/);
   });
 
   test("error: MidnightContractReceiverError for a contract referralFeeRecipient", () => {

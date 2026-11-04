@@ -55,6 +55,21 @@ describe("shouldPublish", () => {
     expect(shouldPublish({ ...pkg, version: "7.1.0" }, state())).toBe(false);
   });
 
+  test("refuses a version already on npm that latest lags behind", () => {
+    const published = state({
+      versions: ["7.1.0", "7.2.0", "7.3.0"],
+      everPublished: ["7.1.0", "7.2.0", "7.3.0"],
+    });
+    expect(() => shouldPublish(pkg, published)).toThrow(
+      "is already on npm, but latest still points to the older 7.2.0",
+    );
+    expect(() => shouldPublish(pkg, published)).toThrow(
+      `If latest was moved back on purpose, release a new version of ${pkg.name} instead.`,
+    );
+    expect(shouldPublish({ ...pkg, version: "7.2.0" }, published)).toBe(false);
+    expect(shouldPublish({ ...pkg, version: "7.1.0" }, published)).toBe(false);
+  });
+
   test("refuses a version that was unpublished", () => {
     expect(() =>
       shouldPublish(pkg, state({ everPublished: ["7.1.0", "7.2.0", "7.3.0"] })),
@@ -77,6 +92,21 @@ describe("shouldPublish", () => {
     expect(() => shouldPublish(pre, state({ next: "7.3.0-next.2" }))).toThrow(
       "is not newer than next 7.3.0-next.2; publishing it would move next back",
     );
+  });
+
+  test("refuses an existing prerelease when next lags behind it", () => {
+    const pre = { ...pkg, version: "7.3.0-next.1", tag: "next" as const };
+    const published = state({
+      versions: ["7.3.0-next.1"],
+      everPublished: ["7.3.0-next.1"],
+    });
+    expect(() =>
+      shouldPublish(pre, { ...published, next: "7.3.0-next.0" }),
+    ).toThrow("but next still points to the older 7.3.0-next.0");
+    expect(shouldPublish(pre, { ...published, next: "7.3.0-next.1" })).toBe(
+      false,
+    );
+    expect(shouldPublish(pre, published)).toBe(false);
   });
 
   test("refuses a package's first publish under next", () => {
@@ -320,6 +350,25 @@ describe("main", () => {
     );
     expect(out.join("")).toBe("@morpho-org/morpho-ts\t1.0.0\tb.tgz\n");
     expect(err.join("")).toBe("Already on npm: @morpho-org/blue-sdk@7.3.0\n");
+  });
+
+  test("fails on an existing version ahead of latest without writing stdout", async () => {
+    const out: string[] = [];
+    await expect(
+      main([tsv("@morpho-org/blue-sdk\t7.3.0\ta.tgz\n")], {
+        fetchFn: async () =>
+          Response.json({
+            "dist-tags": { latest: "7.2.0" },
+            versions: { "7.2.0": {}, "7.3.0": {} },
+            time: { "7.2.0": "x", "7.3.0": "x" },
+          }),
+        stdout: (text) => out.push(text),
+        stderr: () => {},
+      }),
+    ).rejects.toThrow(
+      "is already on npm, but latest still points to the older 7.2.0",
+    );
+    expect(out).toEqual([]);
   });
 });
 

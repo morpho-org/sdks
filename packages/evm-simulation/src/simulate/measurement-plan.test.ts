@@ -194,6 +194,19 @@ const cases: {
     },
   },
   {
+    type: "midnightSupplyCollateralMakeBorrow",
+    expected: {
+      subject: {
+        operation: "midnightSupplyCollateralMakeBorrow",
+        marketId: midnightMarketId,
+        collateralIndex: 1n,
+      },
+      assetsPaid: midnightCollateral,
+      assetsReceived: midnightCollateral,
+      collateralSupplied: midnightCollateral,
+    },
+  },
+  {
     type: "midnightSupplyBlueMakeLend",
     expected: {
       subject: {
@@ -283,6 +296,7 @@ const limitFor = (type: OperationLimit["type"]): OperationLimit =>
     type,
     marketId:
       type === "midnightSupplyCollateral" ||
+      type === "midnightSupplyCollateralMakeBorrow" ||
       type === "midnightRedeem" ||
       type === "midnightTakeBorrow" ||
       type === "midnightTakeWithdraw" ||
@@ -316,6 +330,7 @@ describe("positionBoundsMarketField", () => {
     ["vaultV1Deposit", undefined],
     ["vaultV1MigrateToV2", undefined],
     ["midnightSupplyCollateral", undefined],
+    ["midnightSupplyCollateralMakeBorrow", undefined],
     ["midnightRedeem", undefined],
     ["midnightRepayWithdrawCollateral", undefined],
     ["midnightTakeRepayWithdrawCollateral", undefined],
@@ -370,6 +385,7 @@ describe("sharePriceMeasurement", () => {
     { type: "vaultV2InKindRedeem", expected: undefined },
     { type: "vaultV1MigrateToV2", expected: undefined },
     { type: "midnightSupplyCollateral", expected: undefined },
+    { type: "midnightSupplyCollateralMakeBorrow", expected: undefined },
     { type: "midnightSupplyBlueMakeLend", expected: undefined },
     { type: "midnightRedeem", expected: undefined },
     { type: "midnightTakeLend", expected: undefined },

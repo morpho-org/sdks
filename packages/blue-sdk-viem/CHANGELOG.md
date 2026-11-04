@@ -1,54 +1,33 @@
 # @morpho-org/blue-sdk-viem
 
-## 7.1.0-next.1
+## 7.2.0
 
 ### Minor Changes
 
-- Add deployless accrual support for Vault V2 Midnight adapters.
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
-
-  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
-
-- Add deployless reads for Vault V2 Midnight adapters.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x). Morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+- `fetchMarket`, `fetchVault`, `fetchVaultV2` and `fetchAccrualVaultV2` now read the dead-deposit state of what they fetch, in both the deployless query and the multicall fallback: the supply shares `DEAD_ADDRESS` holds in a Blue market, the vault shares it holds in Vault V1 and V2, and those V2 shares converted to assets. `fetchAccrualVaultV2` also returns the absolute cap of every adapter and adapter market, and fills the same dead-share fields on nested markets and Vault V1 snapshots. When a market-adapter liquidity adapter has no allocation in the liquidity market, `fetchAccrualVaultV2` adds that market (or the adapter's empty position in it) and its cap to the snapshot, since deposits are allocated there; those reads are pinned to the vault's block, so without a `blockNumber` the deployless query is repeated at the latest block. Otherwise the deployless query is still a single `eth_call`; the multicall fallback adds one read per field.
+  The `@morpho-org/blue-sdk` peer range is now `^8.1.0`, which has these fields. Projects that must stay on `@morpho-org/blue-sdk` 7 should pin `@morpho-org/blue-sdk-viem@~7.1`.
 
 ### Patch Changes
 
-- `fetchVaultV2MidnightAdapter` and `fetchAccrualVaultV2MidnightAdapter` now rethrow transport errors (rate limits, timeouts) from the deployless read instead of falling back to per-market reads.
 - Updated dependencies
-  - @morpho-org/morpho-ts@4.2.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.1
+  - @morpho-org/blue-sdk@8.1.0
 
-## 7.1.0-next.0
+## 7.1.0
 
 ### Minor Changes
 
-- Add deployless accrual support for Vault V2 Midnight adapters.
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
-
-  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
-
-- Add deployless reads for Vault V2 Midnight adapters.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.1.0-0` (4.1.0 and its `4.1.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+- `getPermit2PermitTypedData` now throws `Permit2ExpirationOutOfRangeError` when `expiration` is not an integer in the uint48 range, instead of silently capping it. Omitting `expiration` still signs the maximum uint48.
 
 ### Patch Changes
 
-- `fetchVaultV2MidnightAdapter` and `fetchAccrualVaultV2MidnightAdapter` now rethrow transport errors (rate limits, timeouts) from the deployless read instead of falling back to per-market reads.
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
 - Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.0
+  - @morpho-org/blue-sdk@8.0.2
 
 ## 7.0.0
 
@@ -148,8 +127,6 @@
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the documented augmentation subpaths: `package.json` now exports `./augment` and `./augment/*` (dev exports map to `src/augment`, `publishConfig.exports` and `publishConfig.typesVersions` to `lib/{esm,cjs}/augment`), so `import "@morpho-org/blue-sdk-viem/augment/Market"` and friends resolve instead of throwing `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `sideEffects` manifest field now protects the augmentation modules from tree-shaking, and the README uses the new subpaths (dropping the non-existent `augment/AccrualPosition` entry — `augment/Position` augments `Position` and `AccrualPosition` — and adding the missing `augment/User`).
 
-  Refs SDK-1100
-
 - [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
 
   `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
@@ -180,8 +157,6 @@
 ### Patch Changes
 
 - [#1125](https://github.com/morpho-org/sdks/pull/1125) [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the documented augmentation subpaths: `package.json` now exports `./augment` and `./augment/*` (dev exports map to `src/augment`, `publishConfig.exports` and `publishConfig.typesVersions` to `lib/{esm,cjs}/augment`), so `import "@morpho-org/blue-sdk-viem/augment/Market"` and friends resolve instead of throwing `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `sideEffects` manifest field now protects the augmentation modules from tree-shaking, and the README uses the new subpaths (dropping the non-existent `augment/AccrualPosition` entry — `augment/Position` augments `Position` and `AccrualPosition` — and adding the missing `augment/User`).
-
-  Refs SDK-1100
 
 - [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
 

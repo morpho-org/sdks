@@ -1,4 +1,4 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -18,6 +18,7 @@ import {
   BundlesRequirementSignatureMismatchError,
   DepositOwnerMismatchError,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   MutuallyExclusiveWithdrawAmountsError,
   ReallocationLoanTokenMismatchError,
   type VaultV2BlueReallocation,
@@ -535,5 +536,27 @@ describe("blueWithdraw — action metadata", () => {
       },
     });
     expect(transaction.action.args.referralFeeAssets).toBeUndefined();
+  });
+});
+
+describe("blueWithdraw market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+
+  test("error: rejects market params whose id does not hash from the tuple", () => {
+    const otherMarketParams = new MarketParams({
+      ...marketParamsInput,
+      oracle: getAddress("0x0000000000000000000000000000000000000023"),
+    });
+
+    expect(() =>
+      blueWithdraw({
+        market: {
+          chainId,
+          marketParams: withStaleId(otherMarketParams, marketParams.id),
+        },
+        args: { userAddress, withdrawAssets: 5n, withdrawShares: 0n, deadline },
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

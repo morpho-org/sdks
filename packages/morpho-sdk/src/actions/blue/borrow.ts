@@ -60,6 +60,7 @@ export interface BlueBorrowParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueBorrowAction>>` whose calldata invokes the
  *   combined BlueBundlesV1 entrypoint with a zero collateral leg.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, LTV, fee, or reallocation penalty is negative.
  * @throws {NonPositiveInputError} when the borrow, deadline, or reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its bound.

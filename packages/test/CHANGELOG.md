@@ -1,26 +1,14 @@
 # @morpho-org/test
 
-## 2.12.0-next.1
+## 2.12.0
 
 ### Minor Changes
 
-- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+- Add `client.setFeeTokenBalance` to fund local test accounts on chains that charge gas in an ERC-20 fee token.
 
 ### Patch Changes
 
-- Updated dependencies
-  - @morpho-org/morpho-ts@4.2.0-next.0
-
-## 2.12.0-next.0
-
-### Minor Changes
-
-- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
-
-### Patch Changes
-
-- Updated dependencies
-  - @morpho-org/morpho-ts@4.1.0-next.0
+- Accept authorization descriptors in final mode and require matching user-call Approval events for ERC-2612 permits and IncrementNonce events for Blue signatures. Throw UnusedAuthorizationError with the request index when the evidence is missing, even with limits disabled. Preview preparation is unchanged.
 
 ## 2.11.0
 

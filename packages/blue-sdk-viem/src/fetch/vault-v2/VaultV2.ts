@@ -5,6 +5,7 @@ import {
   AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
+  DEAD_ADDRESS,
   Eip5267Domain,
   getChainAddresses,
   type IAccrualVaultV2Adapter,
@@ -34,7 +35,7 @@ import {
   isAddressEqual,
   zeroAddress,
 } from "viem";
-import { getChainId, readContract } from "viem/actions";
+import { getBlockNumber, getChainId, readContract } from "viem/actions";
 import {
   midnightAdapterFactoryAbi,
   morphoMarketV1AdapterV2FactoryAbi,
@@ -45,6 +46,7 @@ import {
 import {
   getUnsupportedVaultV2Adapter,
   isUnknownOfFactoryError,
+  MarketParamsIdMismatchError,
 } from "../../error.js";
 import {
   abi as getAccrualVaultV2Abi,
@@ -56,6 +58,8 @@ import type {
   FetchParameters,
 } from "../../types.js";
 import { catchRevertOnly, isTransportError } from "../../utils.js";
+import { fetchMarket } from "../Market.js";
+import { fetchAccrualPosition } from "../Position.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 import {
@@ -192,6 +196,7 @@ export async function fetchVaultV2(
     adaptersLength,
     performanceFeeRecipient,
     managementFeeRecipient,
+    deadShares,
   ] = await Promise.all([
     fetchToken(address, client, { ...parameters, deployless }),
 
@@ -280,6 +285,13 @@ export async function fetchVaultV2(
       abi: vaultV2Abi,
       functionName: "managementFeeRecipient",
     }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: vaultV2Abi,
+      functionName: "balanceOf",
+      args: [DEAD_ADDRESS],
+    }),
   ]);
 
   if (!isVaultV2) {
@@ -289,6 +301,7 @@ export async function fetchVaultV2(
   const [
     performanceFeeRecipientCanReceiveShares,
     managementFeeRecipientCanReceiveShares,
+    deadAssets,
   ] = await Promise.all([
     performanceFee > 0n
       ? readContract(client, {
@@ -308,6 +321,13 @@ export async function fetchVaultV2(
           args: [managementFeeRecipient],
         })
       : true,
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: vaultV2Abi,
+      functionName: "convertToAssets",
+      args: [deadShares],
+    }),
   ]);
 
   const [
@@ -435,6 +455,8 @@ export async function fetchVaultV2(
     managementFeeRecipient,
     performanceFeeRecipientCanReceiveShares,
     managementFeeRecipientCanReceiveShares,
+    deadShares,
+    deadAssets,
   });
 }
 
@@ -443,10 +465,13 @@ export async function fetchVaultV2(
  *
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
  * configured liquidity adapter and every vault adapter (including `VaultV2MidnightAdapter`), and
- * force-deallocate penalties. By default it reads the entire tree in a single deployless call and
- * falls back to sequential multicall reads only for non-transport failures other than deterministic
- * factory or adapter errors; pass `deployless: "force"` to require the single call, or
- * `deployless: false` to use multicall reads directly.
+ * force-deallocate penalties. By default it
+ * reads the entire tree in a single deployless call and falls back to sequential multicall reads
+ * only for non-transport failures other than deterministic factory or adapter errors; pass
+ * `deployless: "force"` to require the deployless query, or `deployless: false` to use multicall
+ * reads directly. When a market-adapter liquidity adapter holds no allocation in the liquidity
+ * market, that market and its absolute cap are read separately, pinned to the same block as the
+ * vault: unless a `blockNumber` is given, the query is then repeated at the latest block number.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
  * that adapter as an accrual adapter, but liquidity cap allocations remain undefined because
@@ -455,8 +480,10 @@ export async function fetchVaultV2(
  * `AccrualVaultV2` therefore throws `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2
  * market adapter liquidity adapter.
  * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
- * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
- * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
+ * fallback or `deployless: false` first resolves the latest block number and pins every read to it,
+ * so the snapshot is block-consistent at the cost of one extra `eth_blockNumber` call. Other block
+ * tags are passed through unpinned; pass an explicit `blockNumber` for a block-consistent snapshot
+ * with them.
  *
  * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
  * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
@@ -471,7 +498,8 @@ export async function fetchVaultV2(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrual adapters, and
- *   force-deallocate penalties.
+ *   force-deallocate penalties. A market-adapter liquidity adapter also lists the liquidity market
+ *   (and the snapshot its absolute cap) when it holds no allocation there.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
@@ -510,77 +538,255 @@ export async function fetchAccrualVaultV2(
 ) {
   // The entire accrual tree can be read in a single deployless call. When it succeeds there is
   // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
+  // Deterministic errors would be raised identically by the multicall path, so they are not retried;
+  // remaining non-transport deployless failures fall back to sequential reads.
+  let queried: AccrualVaultV2 | undefined;
   if (deployless) {
     try {
       // The RPC is trusted: accounting and adapter data are not cross-checked. See THREAT_MODEL.md, RPC.
-      return await fetchAccrualVaultV2WithQuery(address, client, parameters);
+      const vault = await fetchAccrualVaultV2WithQuery(
+        address,
+        client,
+        parameters,
+      );
+      const adapter = vault.accrualLiquidityAdapter;
+      const markets =
+        adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
+          ? adapter.markets
+          : adapter instanceof AccrualVaultV2MorphoMarketV1Adapter
+            ? adapter.marketParamsList
+            : undefined;
+      if (markets == null || vault.liquidityData === "0x") return vault;
+      const liquidityMarketId = MarketParams.fromHex(vault.liquidityData).id;
+      if (markets.some(({ id }) => id === liquidityMarketId)) return vault;
+      queried = vault;
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
-      // Deterministic errors would be raised identically by the multicall path — do not retry.
       if (
+        deployless === "force" ||
+        isTransportError(error) ||
         error instanceof UnknownFactory ||
         error instanceof UnknownOfFactory ||
-        error instanceof UnsupportedVaultV2AdapterError
+        error instanceof UnsupportedVaultV2AdapterError ||
+        error instanceof MarketParamsIdMismatchError
       )
         throw error;
-      // Remaining non-transport deployless failures can fall back to sequential reads.
     }
   }
 
-  const vaultV2 = await fetchVaultV2(address, client, {
-    ...parameters,
-    deployless,
-  });
+  let readParameters = parameters;
+  if (
+    parameters.blockNumber == null &&
+    (parameters.blockTag ?? "latest") === "latest"
+  ) {
+    const { blockTag: _blockTag, ...rest } = parameters;
+    readParameters = {
+      ...rest,
+      blockNumber: await getBlockNumber(client, { cacheTime: 0 }),
+    };
+  }
 
-  const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
-    [
-      readContract(client, {
-        ...parameters,
-        address: vaultV2.asset,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [vaultV2.address],
-      }),
-      vaultV2.liquidityAdapter !== zeroAddress
-        ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, {
-            ...parameters,
-            deployless,
-          })
-        : undefined,
-      ...vaultV2.adapters.map(async (adapter) => {
-        const [accrualAdapter, forceDeallocatePenalty] = await Promise.all([
-          fetchAccrualVaultV2Adapter(adapter, client, {
-            ...parameters,
-            deployless,
-          }),
-          readContract(client, {
-            ...parameters,
-            address,
-            abi: vaultV2Abi,
-            functionName: "forceDeallocatePenalty",
-            args: [adapter],
-          }),
-        ]);
-        return { accrualAdapter, forceDeallocatePenalty };
-      }),
-    ],
-  );
+  // Retry an eligible query or liquidity-fill failure once using the sequential path.
+  for (let attempt = 0; ; attempt++) {
+    const useQuery = queried != null && attempt === 0;
+    try {
+      let vault: AccrualVaultV2;
+      if (queried != null && useQuery) {
+        // The query and its liquidity-market fill must use the same block.
+        vault =
+          readParameters === parameters
+            ? queried
+            : await fetchAccrualVaultV2WithQuery(
+                address,
+                client,
+                readParameters,
+              );
+      } else {
+        const vaultV2 = await fetchVaultV2(address, client, {
+          ...readParameters,
+          deployless,
+        });
 
-  const adapters = adapterResults.map((r) => r.accrualAdapter);
-  const forceDeallocatePenalties = Object.fromEntries(
-    adapterResults.map((r) => [
-      r.accrualAdapter.address,
-      r.forceDeallocatePenalty,
-    ]),
-  );
+        const [assetBalance, liquidityAdapter, ...adapterResults] =
+          await Promise.all([
+            readContract(client, {
+              ...readParameters,
+              address: vaultV2.asset,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [vaultV2.address],
+            }),
+            vaultV2.liquidityAdapter !== zeroAddress
+              ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, {
+                  ...readParameters,
+                  deployless,
+                })
+              : undefined,
+            ...vaultV2.adapters.map(async (adapter) => {
+              const [accrualAdapter, forceDeallocatePenalty] =
+                await Promise.all([
+                  fetchAccrualVaultV2Adapter(adapter, client, {
+                    ...readParameters,
+                    deployless,
+                  }),
+                  readContract(client, {
+                    ...readParameters,
+                    address,
+                    abi: vaultV2Abi,
+                    functionName: "forceDeallocatePenalty",
+                    args: [adapter],
+                  }),
+                ]);
+              return { accrualAdapter, forceDeallocatePenalty };
+            }),
+          ]);
 
-  return new AccrualVaultV2(
-    vaultV2,
-    liquidityAdapter,
-    adapters,
-    assetBalance,
-    forceDeallocatePenalties,
-  );
+        const adapters = adapterResults.map((r) => r.accrualAdapter);
+        const capIds = [
+          ...new Set(
+            [
+              ...adapters,
+              ...(liquidityAdapter != null ? [liquidityAdapter] : []),
+            ].flatMap((adapter) => {
+              const ids: Hash[] = [
+                VaultV2MorphoVaultV1Adapter.adapterCapId(adapter.address),
+              ];
+              if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter)
+                for (const params of adapter.marketParamsList)
+                  ids.push(
+                    VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+                      adapter.address,
+                      params,
+                    ),
+                  );
+              if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)
+                for (const { params } of adapter.markets)
+                  ids.push(
+                    VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+                      adapter.address,
+                      params,
+                    ),
+                  );
+              return ids;
+            }),
+          ),
+        ];
+        const absoluteCaps = Object.fromEntries(
+          await Promise.all(
+            capIds.map(
+              async (id) =>
+                [
+                  id,
+                  await readContract(client, {
+                    ...readParameters,
+                    address,
+                    abi: vaultV2Abi,
+                    functionName: "absoluteCap",
+                    args: [id],
+                  }),
+                ] as const,
+            ),
+          ),
+        );
+        const forceDeallocatePenalties = Object.fromEntries(
+          adapterResults.map((r) => [
+            r.accrualAdapter.address,
+            r.forceDeallocatePenalty,
+          ]),
+        );
+
+        vault = new AccrualVaultV2(
+          { ...vaultV2, absoluteCaps },
+          liquidityAdapter,
+          adapters,
+          assetBalance,
+          forceDeallocatePenalties,
+        );
+      }
+      const liquidityAdapter = vault.accrualLiquidityAdapter;
+      // A MorphoMarketV1Adapter keeps its configured params even for a market not created yet, whose
+      // position snapshot carries zeroed params.
+      const markets =
+        liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
+          ? liquidityAdapter.markets
+          : liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter
+            ? liquidityAdapter.marketParamsList
+            : undefined;
+      if (markets == null || vault.liquidityData === "0x") return vault;
+      const params = MarketParams.fromHex(vault.liquidityData);
+      if (markets.some(({ id }) => id === params.id)) return vault;
+      if (liquidityAdapter == null) return vault;
+
+      const isAdapterV2 =
+        liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2;
+      const capId = isAdapterV2
+        ? VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+            liquidityAdapter.address,
+            params,
+          )
+        : VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+            liquidityAdapter.address,
+            params,
+          );
+      const [entry, cap] = await Promise.all([
+        isAdapterV2
+          ? fetchMarket(params.id, client, { ...readParameters, deployless })
+          : fetchAccrualPosition(liquidityAdapter.address, params.id, client, {
+              ...readParameters,
+              deployless,
+            }),
+        readContract(client, {
+          ...readParameters,
+          address: vault.address,
+          abi: vaultV2Abi,
+          functionName: "absoluteCap",
+          args: [capId],
+        }),
+      ]);
+      const [enrichedLiquidityAdapter, ...accrualAdapters] = [
+        liquidityAdapter,
+        ...vault.accrualAdapters,
+      ].map((adapter) => {
+        if (!isAddressEqual(adapter.address, liquidityAdapter.address))
+          return adapter;
+        if (
+          adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
+          entry instanceof Market
+        )
+          return new AccrualVaultV2MorphoMarketV1AdapterV2(adapter, [
+            ...adapter.markets,
+            entry,
+          ]);
+        if (
+          adapter instanceof AccrualVaultV2MorphoMarketV1Adapter &&
+          entry instanceof AccrualPosition
+        )
+          return new AccrualVaultV2MorphoMarketV1Adapter(adapter, [
+            ...adapter.positions,
+            entry,
+          ]);
+        return adapter;
+      });
+
+      return new AccrualVaultV2(
+        { ...vault, absoluteCaps: { ...vault.absoluteCaps, [capId]: cap } },
+        enrichedLiquidityAdapter,
+        accrualAdapters,
+        vault.assetBalance,
+        vault.forceDeallocatePenalties,
+      );
+    } catch (error) {
+      if (
+        !useQuery ||
+        deployless === "force" ||
+        isTransportError(error) ||
+        error instanceof UnknownFactory ||
+        error instanceof UnknownOfFactory ||
+        error instanceof UnsupportedVaultV2AdapterError ||
+        error instanceof MarketParamsIdMismatchError
+      )
+        throw error;
+    }
+  }
 }
 
 /** @internal Decoded shape of the deployless `GetAccrualVaultV2.query` response. */
@@ -611,6 +817,7 @@ function toMarket(
     rateAtTarget: isAddressEqual(response.marketParams.irm, adaptiveCurveIrm)
       ? response.rateAtTarget
       : undefined,
+    deadSupplyShares: response.deadSupplyShares,
   });
 }
 
@@ -664,6 +871,7 @@ function toAccrualAdapter(
         totalAssets: 0n,
         lastTotalAssets: vaultV1.lastTotalAssets,
         lostAssets: vaultV1.hasLostAssets ? vaultV1.lostAssets : undefined,
+        deadShares: vaultV1.deadShares,
       });
 
       const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
@@ -829,6 +1037,29 @@ async function fetchAccrualVaultV2WithQuery(
     throw error;
   }
 
+  const absoluteCaps: Record<Hash, bigint> = {};
+  for (const adapter of [
+    ...response.adapters,
+    ...(response.hasLiquidityAdapter ? [response.liquidityAdapterInfo] : []),
+  ]) {
+    absoluteCaps[VaultV2MorphoVaultV1Adapter.adapterCapId(adapter.adapter)] =
+      adapter.adapterAbsoluteCap;
+    for (const entry of adapter.marketV1Positions)
+      absoluteCaps[
+        VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+          adapter.adapter,
+          new MarketParams(entry.marketParams),
+        )
+      ] = entry.absoluteCap;
+    for (const entry of adapter.marketV1V2Allocations)
+      absoluteCaps[
+        VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+          adapter.adapter,
+          new MarketParams(entry.market.marketParams),
+        )
+      ] = entry.absoluteCap;
+  }
+
   const vaultV2 = new VaultV2({
     ...response.token,
     asset: response.asset,
@@ -852,6 +1083,9 @@ async function fetchAccrualVaultV2WithQuery(
       response.performanceFeeRecipientCanReceiveShares,
     managementFeeRecipientCanReceiveShares:
       response.managementFeeRecipientCanReceiveShares,
+    deadShares: response.deadShares,
+    deadAssets: response.deadAssets,
+    absoluteCaps,
   });
 
   let accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined;

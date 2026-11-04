@@ -1,13 +1,50 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
-## 4.0.1-next.0
+## 4.2.0
+
+### Minor Changes
+
+- Rejects snapshot-taking supply and deposit flows into targets without a sufficient dead deposit, to protect against share-price inflation in nearly empty markets and vaults.
+
+  - Blue `supply` adds a protected overload taking `marketData` (fetch it with `getMarketData()`); it throws `MarketIdMismatchError` when the snapshot belongs to another market. The snapshot-free overload is deprecated but keeps working without dead-deposit protection for one minor; removal requires the next major.
+  - Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, Vault V1 `migrateToV2` (target vault) and Midnight `supplyBlueMakeLend` (parking market) throw `InsufficientDeadSharesError` when the target, or a market or Vault V1 it can allocate to, fails the rule, and `MissingDeadSharesDataError` when the snapshot lacks dead-share data. Hand-built or API-sourced snapshots now fail closed; fetch them with `@morpho-org/blue-sdk-viem`.
+  - `supplyBlueMakeLend` no longer throws `EmptyBlueParkingMarketError`; the class stays exported and is deprecated.
+  - Adds the pure validators `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` and `validateVaultV2DeadShares`, and the thresholds `MIN_DEAD_SHARES` (1e9) and `MIN_VAULT_V2_DEAD_ASSETS` (1e6).
+  - `@morpho-org/wdk-protocol-lending-morpho-evm` re-exports `InsufficientDeadSharesError` and `MissingDeadSharesDataError`, which `supply` now throws.
+
+- Revalidate the wallet chain before ERC-4337 UserOperation signing and again before bundler submission. Chain switches during WDK's build or signing now abort with `ChainIdMismatchError` instead of submitting the prepared operation. Fail closed with WDK's `UnsupportedOperationError` if its signing hook is unavailable, and re-export that error for integrators to handle.
 
 ### Patch Changes
 
+- Morpho WDK protocol no longer caches viem/Morpho clients or market params across calls; each operation builds clients for the current account and chain and resolves market params fresh.
 - Updated dependencies
-  - @morpho-org/morpho-sdk@9.1.0-next.0
-  - @morpho-org/blue-sdk-viem@7.1.0-next.1
-  - @morpho-org/blue-sdk@8.1.0-next.1
+  - @morpho-org/morpho-sdk@9.2.0
+  - @morpho-org/blue-sdk-viem@7.2.0
+  - @morpho-org/blue-sdk@8.1.0
+
+## 4.1.0
+
+### Minor Changes
+
+- Reject ERC-4337 token-paymaster operations whose fee-token approval targets a spender other than the configured `paymasterAddress`. Write methods now throw the new `PaymasterApprovalSpenderMismatchError` before signing. If the installed WDK or AbstractionKit no longer exposes the hooks this check relies on, token-paymaster writes throw `PaymasterApprovalGuardUnavailableError` instead of skipping it.
+
+  WDK checked only the paymaster in the final paymaster response, while the approval spender came from the earlier paymaster quote, so a quote naming another address could still receive the Safe's fee-token allowance.
+
+- On Optimism and Base, EOA submissions whose execution, L1 data, and operator fees exceed `transactionMaxFee` throw the re-exported `MaximumFeeExceededError`. Invalid `transactionMaxFee` configuration is rejected with `InvalidTransactionMaxFeeError`.
+
+### Patch Changes
+
+- Concurrent EOA writes from the same account are now sent one at a time so each gets its own nonce instead of reusing the pending one.
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.1.0
+  - @morpho-org/blue-sdk-viem@7.1.0
+  - @morpho-org/blue-sdk@8.0.2
 
 ## 4.0.0
 

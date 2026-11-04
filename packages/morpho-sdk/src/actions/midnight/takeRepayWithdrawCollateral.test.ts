@@ -31,6 +31,7 @@ import {
   MidnightOfferSideMismatchError,
   MidnightReferralFeePctExceededError,
   MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferZeroSellerReceiverError,
   MidnightZeroReceiverError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
@@ -524,6 +525,17 @@ describe("midnightTakeRepayWithdrawCollateral", () => {
         takeableOffers: [midnightApiTake({ market: midnightOtherMarket })],
       }),
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
+  });
+
+  test("error: MidnightTakeableOfferZeroSellerReceiverError", () => {
+    expect(() =>
+      midnightTakeRepayWithdrawCollateral({
+        ...params,
+        takeableOffers: [
+          midnightApiTake({ receiverIfMakerIsSeller: zeroAddress }),
+        ],
+      }),
+    ).toThrow(MidnightTakeableOfferZeroSellerReceiverError);
   });
 
   test("error: ReferralFeePctExceededError", () => {

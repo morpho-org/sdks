@@ -16,7 +16,10 @@ import {
 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
-import { createVaultV2 } from "../../helpers/vaultV2.js";
+import {
+  createVaultV2,
+  seedVaultV2DeadDeposits,
+} from "../../helpers/vaultV2.js";
 
 describe("Permit2", () => {
   const { dai, permit2 } = addressesRegistry[mainnet.id];
@@ -30,6 +33,12 @@ describe("Permit2", () => {
       erc20: Re7UsdtVaultV2.asset,
       amount: amount,
     });
+    await seedVaultV2DeadDeposits(
+      client,
+      client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id),
+    );
 
     await client.approve({
       address: Re7UsdtVaultV2.asset,
@@ -131,6 +140,12 @@ describe("Permit2", () => {
       erc20: Re7UsdtVaultV2.asset,
       amount: amount,
     });
+    await seedVaultV2DeadDeposits(
+      client,
+      client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id),
+    );
 
     const {
       vaults: {
@@ -328,6 +343,7 @@ describe("Permit2", () => {
       morphoViemExtension({ supportSignature: true }),
     ).morpho;
     const vault = morpho.vaultV2(address, mainnet.id);
+    await seedVaultV2DeadDeposits(client, vault);
 
     const {
       vaults: {

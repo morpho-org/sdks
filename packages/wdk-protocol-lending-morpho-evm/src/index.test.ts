@@ -5,29 +5,50 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   ChainIdMismatchError as SdkChainIdMismatchError,
+  InsufficientDeadSharesError as SdkInsufficientDeadSharesError,
   MissingContractCodeError as SdkMissingContractCodeError,
+  MissingDeadSharesDataError as SdkMissingDeadSharesDataError,
 } from "@morpho-org/morpho-sdk";
+import {
+  MaximumFeeExceededError as WdkMaximumFeeExceededError,
+  UnsupportedOperationError as WdkUnsupportedOperationError,
+} from "@tetherto/wdk-wallet";
 import { expect, test } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError as SourceBlueBundlesV1DeadlineExceedsWindowError,
   InvalidTransactionHashError as SourceInvalidTransactionHashError,
+  InvalidTransactionMaxFeeError as SourceInvalidTransactionMaxFeeError,
   MissingWalletProviderError as SourceMissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError as SourcePaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError as SourcePaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError as SourceUnconfirmedBroadcastError,
 } from "./errors.js";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   ChainIdMismatchError,
+  InsufficientDeadSharesError,
   InvalidTransactionHashError,
+  InvalidTransactionMaxFeeError,
   MalformedTokenMetadataError,
+  MaximumFeeExceededError,
   MissingContractCodeError,
+  MissingDeadSharesDataError,
   MissingPermitDomainNameError,
   MissingWalletProviderError,
+  PaymasterApprovalGuardUnavailableError,
+  PaymasterApprovalSpenderMismatchError,
   UnconfirmedBroadcastError,
   UnknownTokenError,
+  UnsupportedOperationError,
 } from "./index.js";
 
 test("re-exports ChainIdMismatchError by identity", () => {
   expect(ChainIdMismatchError).toBe(SdkChainIdMismatchError);
+});
+
+test("re-exports the dead-deposit errors by identity", () => {
+  expect(InsufficientDeadSharesError).toBe(SdkInsufficientDeadSharesError);
+  expect(MissingDeadSharesDataError).toBe(SdkMissingDeadSharesDataError);
 });
 
 test("re-exports MissingContractCodeError by identity", () => {
@@ -65,4 +86,30 @@ test("re-exports UnconfirmedBroadcastError by identity", () => {
 
 test("re-exports InvalidTransactionHashError by identity", () => {
   expect(InvalidTransactionHashError).toBe(SourceInvalidTransactionHashError);
+});
+
+test("re-exports InvalidTransactionMaxFeeError by identity", () => {
+  expect(InvalidTransactionMaxFeeError).toBe(
+    SourceInvalidTransactionMaxFeeError,
+  );
+});
+
+test("re-exports MaximumFeeExceededError by identity", () => {
+  expect(MaximumFeeExceededError).toBe(WdkMaximumFeeExceededError);
+});
+
+test("re-exports UnsupportedOperationError by identity", () => {
+  expect(UnsupportedOperationError).toBe(WdkUnsupportedOperationError);
+});
+
+test("re-exports PaymasterApprovalSpenderMismatchError by identity", () => {
+  expect(PaymasterApprovalSpenderMismatchError).toBe(
+    SourcePaymasterApprovalSpenderMismatchError,
+  );
+});
+
+test("re-exports PaymasterApprovalGuardUnavailableError by identity", () => {
+  expect(PaymasterApprovalGuardUnavailableError).toBe(
+    SourcePaymasterApprovalGuardUnavailableError,
+  );
 });

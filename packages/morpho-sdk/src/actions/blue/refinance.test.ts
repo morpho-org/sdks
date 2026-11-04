@@ -1,4 +1,4 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { type MarketId, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -15,6 +15,7 @@ import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
   InputExceedsMaxError,
+  MarketIdMismatchError,
   NegativeInputError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
@@ -314,5 +315,45 @@ describe("blueRefinance", () => {
         args: { userAddress, maxLtv: maxUint256 + 1n, deadline },
       }),
     ).toThrow(InputExceedsMaxError);
+  });
+});
+
+describe("blueRefinance market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+
+  test("error: rejects a source or destination whose id does not hash from the tuple", () => {
+    const args = {
+      userAddress,
+      maxLtv: MathLib.WAD / 2n,
+      deadline: 1_900_000_000n,
+    };
+
+    expect(() =>
+      blueRefinance({
+        market: {
+          chainId,
+          sourceMarketParams: withStaleId(
+            destinationMarketParams,
+            sourceMarketParams.id,
+          ),
+          destinationMarketParams,
+        },
+        args,
+      }),
+    ).toThrow(MarketIdMismatchError);
+    expect(() =>
+      blueRefinance({
+        market: {
+          chainId,
+          sourceMarketParams,
+          destinationMarketParams: withStaleId(
+            sourceMarketParams,
+            destinationMarketParams.id,
+          ),
+        },
+        args,
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

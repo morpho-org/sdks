@@ -203,6 +203,11 @@ export type FetchBookQuoteParams = MidnightApiConfig & {
   readonly marketId: Hash;
   /** Book side to quote. */
   readonly side: MidnightApiBookSide;
+  /**
+   * Account that will execute the take (the `taker` passed to Midnight `take`). The API leaves out
+   * offers made by this account, since Midnight rejects self-takes.
+   */
+  readonly taker?: Address;
   /** Current WAD-scaled settlement fee used for local guard validation. Defaults to zero. */
   readonly settlementFee?: BigIntish;
 } & (MidnightApiQuoteAssetsTarget | MidnightApiQuoteUnitsTarget) &

@@ -25,6 +25,42 @@ export class MissingWalletProviderError extends Error {
   }
 }
 
+/**
+ * Thrown when an ERC-4337 token-paymaster operation would approve the fee token to a
+ * spender other than the configured `paymasterAddress`. The paymaster quote chose the
+ * spender; the operation is rejected before signing.
+ */
+export class PaymasterApprovalSpenderMismatchError extends Error {
+  /**
+   * @param spender - Spender the fee-token approval would target, if it is a string.
+   * @param paymasterAddress - Configured paymaster address, if any.
+   */
+  constructor(
+    readonly spender: string | undefined,
+    readonly paymasterAddress: string | undefined,
+  ) {
+    super(
+      `The paymaster quote names "${spender}" as the fee-token spender, but the configured paymasterAddress is "${paymasterAddress}". Check the paymaster configuration before retrying the operation.`,
+    );
+  }
+}
+
+/** Thrown when WDK or AbstractionKit no longer exposes a hook the fee-token approval check relies on. */
+export class PaymasterApprovalGuardUnavailableError extends Error {
+  /** @param hook - Missing WDK or AbstractionKit method. */
+  constructor(
+    readonly hook:
+      | "_getSmartAccount"
+      | "prependTokenPaymasterApproveToCallData",
+  ) {
+    super(
+      hook === "_getSmartAccount"
+        ? 'The installed @tetherto/wdk-wallet-evm-erc-4337 no longer exposes "_getSmartAccount", so the fee-token approval spender cannot be checked. Install the version this package pins before retrying the operation.'
+        : 'The installed abstractionkit no longer exposes "prependTokenPaymasterApproveToCallData", so the fee-token approval spender cannot be checked. Remove any abstractionkit override so the version @tetherto/wdk-wallet-evm-erc-4337 pins is installed before retrying the operation.',
+    );
+  }
+}
+
 /** Thrown when a broadcast or its reconciliation lookup leaves delivery uncertain. */
 export class UnconfirmedBroadcastError extends Error {
   /**
@@ -41,6 +77,18 @@ export class UnconfirmedBroadcastError extends Error {
     super(
       `Broadcast of transaction "${hash}" could not be confirmed; it may still be included. Look up the hash, or rebroadcast serializedTransaction, before retrying the operation.`,
       { cause },
+    );
+  }
+}
+
+/** Thrown when the wallet's transaction maximum fee configuration is invalid. */
+export class InvalidTransactionMaxFeeError extends Error {
+  /**
+   * @param value - Invalid wallet configuration or transactionMaxFee value.
+   */
+  constructor(readonly value: unknown) {
+    super(
+      `Invalid transactionMaxFee configuration value "${String(value)}". Use null or undefined to disable the cap, or a non-negative bigint or integer number.`,
     );
   }
 }

@@ -84,7 +84,14 @@ export interface MakeOffersParams {
 /** Parameters for a Midnight lend maker flow. */
 export interface MakeLendParams extends MakeOffersParams {
   readonly loanToken: Address;
-  /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
+  /**
+   * Minimum Midnight loan-token allowance, together with `reservedLoanAssets`, that `getRequirements()` checks.
+   * When the allowance is lower, it returns an unlimited approval (`maxUint256`, capped per token by `MAX_TOKEN_APPROVALS`).
+   * Not checked against the offers: their signed `maxAssets`/`maxUnits` caps, the maker's balance and the
+   * allowance bound what takers can fill, so size those caps to what you mean to lend
+   * (`maxAssets` counts loan assets, `maxUnits` counts position units).
+   * For grouped OCA offers, pass the group amount once instead of summing every leg.
+   */
   readonly loanAssets: bigint;
   /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. Leave out groups listed in `cancellations`; this transaction cancels them. */
   readonly reservedLoanAssets?: bigint;
@@ -287,6 +294,17 @@ export interface SupplyCollateralParams extends MarketActionParams {
   /** Existing collateral assets reserved across the maker's open groups, including consumed amounts when available. */
   readonly reservedCollateralAssets?: bigint;
   readonly collateralIndex?: bigint;
+}
+
+/** Parameters for a direct Midnight collateral withdrawal. */
+export interface WithdrawCollateralParams
+  extends MarketActionParams,
+    MidnightPositionHealthParams {
+  readonly collateralIndex?: bigint;
+  /** Collateral assets to withdraw; maxUint256 resolves the snapshot's whole balance. */
+  readonly assets: bigint;
+  /** Defaults to accountAddress. */
+  readonly receiver?: Address;
 }
 
 /** Parameters for the Midnight redeem flow. */

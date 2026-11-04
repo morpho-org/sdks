@@ -15,7 +15,14 @@ export {
   MAX_SLIPPAGE_TOLERANCE,
   MAX_TOKEN_APPROVALS,
   MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS,
+  MIN_DEAD_SHARES,
+  MIN_VAULT_V2_DEAD_ASSETS,
 } from "./constant.js";
+export {
+  validateBlueMarketDeadShares,
+  validateVaultV1DeadShares,
+  validateVaultV2DeadShares,
+} from "./deadShares.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
   type PreviewVaultV2ForceWithdrawParams,

@@ -33,7 +33,12 @@ import {
   WethUsdsBlue,
   WstethWethBlue,
 } from "../../fixtures/blue.js";
-import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
+import {
+  borrow,
+  seedDeadSupply,
+  supplyCollateral,
+  supplyLoan,
+} from "../../helpers/blue.js";
 import {
   satisfyBlueBundlesV1Requirements,
   blueBundlesV1Test as test,
@@ -131,7 +136,13 @@ describe("BlueBundlesV1 Blue writes", () => {
     const beforeBalances = await getBlueBundlesBalances(client, [
       CbbtcUsdcBlue,
     ]);
+    await seedDeadSupply({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+    });
     const action = market.supply({
+      marketData: await market.getMarketData(),
       userAddress: client.account.address,
       assets: amount,
       deadline: maxUint256,
@@ -170,7 +181,13 @@ describe("BlueBundlesV1 Blue writes", () => {
     const beforeBalances = await getBlueBundlesBalances(client, [
       CbbtcUsdcBlue,
     ]);
+    await seedDeadSupply({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+    });
     const action = market.supply({
+      marketData: await market.getMarketData(),
       userAddress: client.account.address,
       assets: amount,
       deadline: maxUint256,
@@ -215,7 +232,13 @@ describe("BlueBundlesV1 Blue writes", () => {
     const beforeBalances = await getBlueBundlesBalances(client, [
       WstethWethBlue,
     ]);
+    await seedDeadSupply({
+      client,
+      chainId: mainnet.id,
+      market: WstethWethBlue,
+    });
     const action = market.supply({
+      marketData: await market.getMarketData(),
       userAddress: client.account.address,
       assets: amount,
       nativeAmount: amount,
@@ -260,7 +283,13 @@ describe("BlueBundlesV1 Blue writes", () => {
     // Positive referral fee: BlueBundlesV1 carves it out of the funded `assets`,
     // credits the recipient, and supplies the remainder — accounting that
     // calldata-only unit tests cannot verify against the deployed contract.
+    await seedDeadSupply({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+    });
     const action = market.supply({
+      marketData: await market.getMarketData(),
       userAddress: client.account.address,
       assets: amount,
       referralFeePct,
@@ -947,10 +976,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         }
       }
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({
@@ -1280,10 +1309,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         }
       }
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({
@@ -1612,10 +1641,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         bytecode: `0x7f${destinationPrice.toString(16).padStart(64, "0")}60005260206000f3`,
       });
 
-      const vault = await deployVaultV2(
-        anvilClient,
-        baseTargetMarket.loanToken,
-      );
+      const vault = await deployVaultV2({
+        client: anvilClient,
+        asset: baseTargetMarket.loanToken,
+      });
       await submitAndAcceptVaultV2Call(anvilClient, {
         vault,
         data: encodeFunctionData({

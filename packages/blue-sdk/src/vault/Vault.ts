@@ -35,6 +35,11 @@ export interface IVault extends IVaultConfig {
   totalAssets: bigint;
   lastTotalAssets: bigint;
   lostAssets?: bigint;
+  /**
+   * Vault shares held by `DEAD_ADDRESS` (the vault's dead deposit). `fetchVault` reads it;
+   * `undefined` when the snapshot was not fetched with it (hand-built or API-sourced).
+   */
+  readonly deadShares?: bigint;
 }
 
 /** Represents a MetaMorpho vault and its governance, queue, and accounting state. */
@@ -112,6 +117,12 @@ export class Vault extends VaultToken implements IVault {
    */
   public lostAssets?: bigint;
 
+  /**
+   * Vault shares held by `DEAD_ADDRESS` (the vault's dead deposit).
+   * `undefined` when the snapshot was not fetched with it.
+   */
+  public readonly deadShares?: bigint;
+
   constructor({
     curator,
     owner,
@@ -129,6 +140,7 @@ export class Vault extends VaultToken implements IVault {
     totalAssets,
     lastTotalAssets,
     lostAssets,
+    deadShares,
     ...config
   }: IVault) {
     super(config, { totalAssets, totalSupply });
@@ -150,6 +162,7 @@ export class Vault extends VaultToken implements IVault {
     this.withdrawQueue = withdrawQueue;
     this.lastTotalAssets = lastTotalAssets;
     this.lostAssets = lostAssets;
+    if (deadShares != null) this.deadShares = deadShares;
   }
 
   /**

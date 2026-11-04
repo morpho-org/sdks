@@ -1,12 +1,12 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Hex, isAddress, isHex } from "viem";
+import { type Address, type Hex, isAddress, isHex } from "viem";
 import {
   InvalidSimulationResponseError,
   SimulationRevertedError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import { evaluateAssertion } from "../assertions.js";
+import { evaluateAssertion, evaluateLogAssertion } from "../assertions.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
 import { formatRevert } from "./decode-revert.js";
@@ -29,6 +29,7 @@ export interface ExecutionBlock {
 interface ExecutedCall {
   readonly planned: PlannedCall;
   readonly result: SimulationCall;
+  readonly logsMissing: boolean;
 }
 
 /** One executed state read with its raw return data. @internal */
@@ -100,9 +101,12 @@ const isSimulateV1Response = (
  *   {@link ExecutedStateRead} per planned state read.
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
  *   block, on a call-count mismatch, a malformed per-call result, or on a
- *   simulated block that is neither the pinned state block nor its immediate successor.
+ *   transaction with `assertLogs` whose logs are omitted, or on a simulated
+ *   block that is neither the pinned state block nor its immediate successor.
  * @throws {SimulationAssertError} When an assertion fails or its check throws;
  *   a thrown check error is preserved as `cause`.
+ * @throws {SimulationLogAssertError} When an `assertLogs` check returns a
+ *   failure message or throws; a thrown check error is kept as `cause`.
  * @throws {SimulationRevertedError} When a preparation or user-transaction
  *   call failed; the error preserves the failing call's original revert bytes.
  * @throws {SlippageCheckUnavailableError} When a planned state read fails.
@@ -175,24 +179,27 @@ export function parseSimulationResponse(params: {
           `eth_simulateV1 returned a malformed call result at position ${index}.`,
         );
       result = {
-        logs: (call.logs ?? []).map((log): RawLog => {
-          if (
-            !isAddress(log.address) ||
-            !Array.isArray(log.topics) ||
-            log.topics.some(
-              (topic: unknown) => !isHex(topic) || topic.length !== 66,
-            ) ||
-            (log.data !== undefined && !isHex(log.data))
-          )
-            throw new InvalidSimulationResponseError(
-              `eth_simulateV1 returned a malformed log at call position ${index}.`,
-            );
-          return {
-            address: log.address,
-            topics: log.topics,
-            data: log.data ?? "0x",
-          };
-        }),
+        logs:
+          call.logs == null
+            ? []
+            : call.logs.map((log): RawLog => {
+                if (
+                  !isAddress(log.address) ||
+                  !Array.isArray(log.topics) ||
+                  log.topics.some(
+                    (topic: unknown) => !isHex(topic) || topic.length !== 66,
+                  ) ||
+                  (log.data !== undefined && !isHex(log.data))
+                )
+                  throw new InvalidSimulationResponseError(
+                    `eth_simulateV1 returned a malformed log at call position ${index}.`,
+                  );
+                return {
+                  address: log.address,
+                  topics: log.topics,
+                  data: log.data ?? "0x",
+                };
+              }),
         status: call.status === "0x1",
         returnData: call.returnData,
         gasUsed: BigInt(call.gasUsed),
@@ -209,7 +216,13 @@ export function parseSimulationResponse(params: {
       isHex(call.error?.data) && call.error.data !== "0x"
         ? call.error.data
         : call.returnData;
-    return { planned, result, call, revertData };
+    return {
+      planned,
+      result,
+      call,
+      revertData,
+      logsMissing: call.logs == null,
+    };
   });
 
   // A preparation call that reverted did not produce its promised state —
@@ -259,6 +272,36 @@ export function parseSimulationResponse(params: {
               transactionIndex,
             },
           );
+        }
+        if (userCall?.planned.type !== "transaction") {
+          throw new InvalidSimulationResponseError(
+            `eth_simulateV1 plan is missing transaction result ${transactionIndex}.`,
+          );
+        }
+        const logAssertions = transaction.assertLogs;
+        if (logAssertions?.length) {
+          if (!Array.isArray(userCall.call.logs)) {
+            throw new InvalidSimulationResponseError(
+              `eth_simulateV1 omitted logs for transaction ${transactionIndex}. Log assertions cannot be evaluated.`,
+            );
+          }
+          const logs = deepFreeze(
+            userCall.result.logs.map(
+              (log): RawLog => ({
+                address: log.address.toLowerCase() as Address,
+                topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
+                data: log.data.toLowerCase() as Hex,
+              }),
+            ),
+          );
+          for (const [assertionIndex, assertion] of logAssertions.entries()) {
+            evaluateLogAssertion({
+              assertion,
+              logs,
+              transactionIndex,
+              assertionIndex,
+            });
+          }
         }
       }
 
@@ -320,7 +363,11 @@ export function parseSimulationResponse(params: {
     // Every failure was classified above: only successful calls remain.
     calls: calls
       .filter((entry) => entry.result.status)
-      .map(({ planned, result }) => ({ planned, result })),
+      .map(({ planned, result, logsMissing }) => ({
+        planned,
+        result,
+        logsMissing,
+      })),
     stateReads,
   });
 }

@@ -22,6 +22,7 @@ import {
   SimulationRevertedError,
   simulate,
 } from "../../src/index.js";
+import { seededMarketData } from "../setup.js";
 
 // Pinned with the bundles deployments the verified pipeline routes through —
 // the shared 24_593_903 pin in `test/setup.ts` predates them.
@@ -81,6 +82,7 @@ describe.sequential("simulate — real revert propagation", () => {
 
     const assets = parseUnits("10", 6);
     const action = morpho.supply({
+      marketData: await seededMarketData(client, morpho),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,
@@ -133,6 +135,7 @@ describe.sequential("simulate — real native funding", () => {
     const assets = 10n ** 18n;
     const tx = morpho
       .supply({
+        marketData: await seededMarketData(client, morpho),
         userAddress: client.account.address,
         assets,
         nativeAmount: assets,
@@ -173,6 +176,7 @@ describe.sequential("simulate — real native funding", () => {
     const assets = 10n ** 18n;
     const tx = morpho
       .supply({
+        marketData: await seededMarketData(client, morpho),
         userAddress: client.account.address,
         assets,
         nativeAmount: assets,
@@ -246,6 +250,7 @@ describe.sequential("simulate — sequential state and stable indices", () => {
       const tx = morpho
         .blue(marketParams, mainnet.id)
         .supply({
+          marketData: await seededMarketData(client, marketParams),
           userAddress: client.account.address,
           assets,
           deadline: maxUint256,

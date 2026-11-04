@@ -3,6 +3,7 @@ import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { morphoViemExtension } from "../../../src/index.js";
 import { CbbtcUsdcBlue } from "../../fixtures/blue.js";
+import { seedDeadSupply } from "../../helpers/blue.js";
 import {
   satisfyBlueBundlesV1Requirements,
   blueBundlesV1Test as test,
@@ -16,7 +17,9 @@ test("supply executes through BlueBundlesV1", async ({ client }) => {
     .extend(morphoViemExtension())
     .morpho.blue(CbbtcUsdcBlue, mainnet.id);
   const before = await market.getPositionData(client.account.address);
+  await seedDeadSupply({ client, chainId: mainnet.id, market: CbbtcUsdcBlue });
   const action = market.supply({
+    marketData: await market.getMarketData(),
     userAddress: client.account.address,
     assets,
     deadline: maxUint256,

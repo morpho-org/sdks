@@ -7,8 +7,8 @@ import {
   type Hex,
   multicall3Abi,
 } from "viem";
-import { SimulationAssertError } from "../errors.js";
-import type { Assertion } from "../types.js";
+import { SimulationAssertError, SimulationLogAssertError } from "../errors.js";
+import type { Assertion, LogAssertion, RawLog } from "../types.js";
 import { formatRevert } from "./backends/decode-revert.js";
 
 const MULTICALL3_ADDRESS: Address =
@@ -316,6 +316,52 @@ export function evaluateAssertion(params: {
       assertionIndex,
       assertion,
       returnData,
+    },
+  );
+}
+
+/**
+ * Evaluate a caller-supplied assertion over one transaction's frozen,
+ * lowercase log copy.
+ *
+ * @param params - Assertion, emitted logs, and transaction coordinates.
+ * @throws {SimulationLogAssertError} When the check returns a failure message
+ *   or throws; the error carries the transaction index, assertion index, a
+ *   copy of the assertion, and the lowercase logs passed to the check. A thrown
+ *   check error is retained as the error's cause.
+ * @internal
+ */
+export function evaluateLogAssertion(params: {
+  readonly assertion: LogAssertion;
+  readonly logs: readonly RawLog[];
+  readonly transactionIndex: number;
+  readonly assertionIndex: number;
+}): void {
+  const { assertion, logs, transactionIndex, assertionIndex } = params;
+  const assertionLocation = `Transaction ${transactionIndex} assertLogs[${assertionIndex}]`;
+  let failure: string | undefined;
+  try {
+    failure = assertion.check(logs);
+  } catch (error) {
+    throw new SimulationLogAssertError(
+      `${assertionLocation} check threw: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        transactionIndex,
+        assertionIndex,
+        assertion,
+        logs,
+      },
+      { cause: error },
+    );
+  }
+  if (failure === undefined) return;
+  throw new SimulationLogAssertError(
+    `${assertionLocation} failed: ${failure}`,
+    {
+      transactionIndex,
+      assertionIndex,
+      assertion,
+      logs,
     },
   );
 }

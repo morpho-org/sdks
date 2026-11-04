@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-08-28 |
 | **Author** | @Rubilmax |
 | **Scope**  | Packages: `morpho-sdk`, `wdk-protocol-lending-morpho-evm` |
 
-_Migrated from TIB-2026-08-28-retire-vault-v1-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-08-28-retire-vault-v1-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

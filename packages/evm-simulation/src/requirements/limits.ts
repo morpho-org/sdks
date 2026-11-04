@@ -2,7 +2,13 @@ import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { TransactionAction } from "@morpho-org/morpho-sdk";
 import { MarketUtils as MidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, ethAddress, isAddressEqual, maxUint256 } from "viem";
+import {
+  type Address,
+  ethAddress,
+  isAddressEqual,
+  maxUint256,
+  zeroHash,
+} from "viem";
 import {
   AmbiguousExpectedQuoteError,
   LimitAccountMismatchError,
@@ -540,12 +546,10 @@ const missingQuote = (
  * market, `toMarket` has no entry yet: pass its struct via `options.market` or, when no market is
  * passed, set `assetPaid` to `collateralParams[collateralIndex].token` on each returned operation,
  * or `simulate()` throws `SlippageCheckUnavailableError`.
- * The action records `nativeAmount`, but the collateral-only `supplyCollateralMakeBorrow` path
- * ignores it. MidnightBundlesV2 wraps native value before pulling wNative, so `assetsPaid` caps
- * only the sender's wNative debit; these limits do not bound ETH sent as `tx.value`. Bound that
- * separately with a caller-supplied `nativeBalanceAssertion` in the transaction's `assertAfter`,
- * using a bound derived from the sender's pre-transaction native balance. No `assetPaid: ethAddress`
- * is added.
+ * When supplied collateral is wNative, the check counts ETH sent plus the sender's net wNative
+ * change against `assetsPaid`, so native funding needs no quote adjustment. Sending value when no
+ * supplied collateral is wNative, or on a chain without registered wNative, throws
+ * `SlippageCheckUnavailableError`.
  *
  * `midnightRedeem` derives `assetsReceived` and `creditRedeemed` from `args.units`: Midnight
  * removes exactly `units` of `onBehalf`'s fee- and loss-adjusted credit and pays exactly `units`
@@ -627,6 +631,10 @@ const missingQuote = (
  * {@link OperationType} throw {@link UnsupportedLimitActionError};
  * `limits: "none"` remains the opt-out for transactions no operation type covers.
  *
+ * For `midnightCancelAndMake` collateral supplies, a non-zero root uses
+ * `midnightSupplyCollateralMakeBorrow`; a zero root keeps
+ * `midnightSupplyCollateral`.
+ *
  * Prefer `InputOperationLimit` for types covered by `OperationInputs`; quote-based
  * limits remain required for refinance, in-kind redeems, force exits and
  * Midnight operations.
@@ -646,7 +654,7 @@ const missingQuote = (
  *   `DEFAULT_SLIPPAGE_TOLERANCE` (0.03%).
  * @param options.market - Midnight market struct for a market this bundle creates on first use.
  *   Its Midnight `MarketUtils.toId(options.market)` must match the action's market. Forwarded on
- *   the four supported Midnight limit types and on `midnightCancelAndMake` with collateral
+ *   the supported Midnight limit types and on `midnightCancelAndMake` with collateral
  *   supplies and no `blueSupply`.
  * @param options.expected - Caller-computed quote values, overriding derived ones;
  *   exact `collateralSupplies` cannot be overridden.
@@ -1239,7 +1247,11 @@ export const toSimulationLimits = (
           };
         case "midnightSupplyCollateral":
           return {
-            type: limitAction.type,
+            type:
+              action.type === "midnightCancelAndMake" &&
+              action.args.root !== zeroHash
+                ? ("midnightSupplyCollateralMakeBorrow" as const)
+                : limitAction.type,
             marketId: limitAction.args.market,
             collateralIndex: limitAction.args.collateralIndex,
           };
@@ -1370,7 +1382,9 @@ export const toSimulationLimits = (
     }
     return {
       ...subject,
-      ...(subject.type === "midnightSupplyCollateral" && market !== undefined
+      ...((subject.type === "midnightSupplyCollateral" ||
+        subject.type === "midnightSupplyCollateralMakeBorrow") &&
+      market !== undefined
         ? { market }
         : {}),
       account,

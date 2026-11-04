@@ -86,6 +86,7 @@ export interface MidnightTakeLendParams extends MidnightReferralFeeParams {
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @throws {MidnightTakeableOfferZeroSellerReceiverError} when any offer routes seller proceeds to the zero address.
  * @throws {NonPositiveInputError} when the target amount, `minUnits`, `maxBuyerAssets` or `deadline` is not positive.
  * @throws {NegativeInputError} when a takeable offer cap, `maxContinuousFee`,
  *   `referralFeePct` or `nativeAmount` is negative.

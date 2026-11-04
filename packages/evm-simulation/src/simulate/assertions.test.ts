@@ -9,12 +9,13 @@ import {
   multicall3Abi,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import { SimulationAssertError } from "../errors.js";
-import type { Assertion } from "../types.js";
+import { SimulationAssertError, SimulationLogAssertError } from "../errors.js";
+import type { Assertion, LogAssertion, RawLog } from "../types.js";
 import {
   type AssertionBounds,
   erc20BalanceAssertion,
   evaluateAssertion,
+  evaluateLogAssertion,
   maxDepositAssertion,
   nativeBalanceAssertion,
 } from "./assertions.js";
@@ -244,6 +245,62 @@ describe("evaluateAssertion", () => {
       ...coordinates,
       assertion,
       returnData: "0xabcd",
+      cause: thrown,
+    });
+  });
+});
+
+describe("evaluateLogAssertion", () => {
+  const logs: readonly RawLog[] = [{ address: TOKEN, topics: [], data: "0x" }];
+  const coordinates = { transactionIndex: 2, assertionIndex: 1 };
+
+  test("passes when the check returns undefined", () => {
+    const assertion: LogAssertion = { check: () => undefined };
+    expect(() =>
+      evaluateLogAssertion({ ...coordinates, assertion, logs }),
+    ).not.toThrow();
+  });
+
+  test("throws SimulationLogAssertError with coordinates, assertion, and logs", () => {
+    const assertion: LogAssertion = {
+      check: () => "Approval event is missing.",
+    };
+    let error: unknown;
+    try {
+      evaluateLogAssertion({ ...coordinates, assertion, logs });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({
+      code: "SIMULATION_ASSERT_FAILED",
+      message: "Transaction 2 assertLogs[1] failed: Approval event is missing.",
+      ...coordinates,
+      logs,
+    });
+    expect((error as SimulationLogAssertError).assertion).toEqual(assertion);
+    expect((error as SimulationLogAssertError).assertion).not.toBe(assertion);
+  });
+
+  test("wraps a caller check exception with its error as cause", () => {
+    const thrown = new Error("caller bug");
+    const assertion: LogAssertion = {
+      check: () => {
+        throw thrown;
+      },
+    };
+    let error: unknown;
+    try {
+      evaluateLogAssertion({ ...coordinates, assertion, logs });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(SimulationLogAssertError);
+    expect(error).toMatchObject({
+      message: "Transaction 2 assertLogs[1] check threw: caller bug",
+      ...coordinates,
+      assertion,
+      logs,
       cause: thrown,
     });
   });

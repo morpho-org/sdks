@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; Vault V1 planning and composition retention superseded by ADR-2026-08-28-retire-vault-v1-shared-liquidity; Bundler3-primitive retention superseded by ADR-2026-09-17-remove-bundler3-primitives-without-deprecation |
 | **Date**   | 2026-08-25 |
 | **Author** | @Rubilmax / Carapulse draft |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
 
-_Migrated from TIB-2026-08-25-blue-bundles-v1-sdk-actions. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-08-25-blue-bundles-v1-sdk-actions. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 
@@ -149,3 +148,5 @@ both routes.
 
 - [BlueBundlesV1 source at reviewed revision](https://github.com/morpho-org/bundles/blob/dceb05da1c730424e6b36caf445dff808a2d5007/src/blue/BlueBundlesV1.sol)
 - [BlueBundlesV1 interface at reviewed revision](https://github.com/morpho-org/bundles/blob/dceb05da1c730424e6b36caf445dff808a2d5007/src/blue/interfaces/IBlueBundlesV1.sol)
+- Vault V1 planning and composition retention superseded by ADR-2026-08-28-retire-vault-v1-shared-liquidity.
+- Bundler3-primitive retention superseded by ADR-2026-09-17-remove-bundler3-primitives-without-deprecation.

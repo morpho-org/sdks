@@ -138,6 +138,7 @@ describe("OPERATION_TYPES", () => {
       | "blueRefinance"
       | "vaultV1MigrateToV2"
       | "midnightSupplyCollateral"
+      | "midnightSupplyCollateralMakeBorrow"
       | "midnightSupplyBlueMakeLend"
       | "midnightRedeem"
       | "midnightTakeLend"
@@ -153,6 +154,7 @@ describe("OPERATION_TYPES", () => {
       | "blueRefinance"
       | "vaultV1MigrateToV2"
       | "midnightSupplyCollateral"
+      | "midnightSupplyCollateralMakeBorrow"
       | "midnightSupplyBlueMakeLend"
       | "midnightRedeem"
       | "midnightTakeLend"
@@ -169,6 +171,7 @@ describe("OPERATION_TYPES", () => {
         ...VAULT_OPERATION_TYPES,
         "vaultV1MigrateToV2",
         "midnightSupplyCollateral",
+        "midnightSupplyCollateralMakeBorrow",
         "midnightSupplyBlueMakeLend",
         "midnightRedeem",
         "midnightTakeLend",
@@ -201,6 +204,7 @@ describe("OPERATION_TYPES", () => {
       "vaultV2InKindRedeem",
       "vaultV1MigrateToV2",
       "midnightSupplyCollateral",
+      "midnightSupplyCollateralMakeBorrow",
       "midnightSupplyBlueMakeLend",
       "midnightRedeem",
       "midnightTakeLend",

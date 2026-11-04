@@ -2,12 +2,11 @@
 
 | Field      | Value                       |
 | ---------- | --------------------------- |
-| **Status** | accepted                    |
 | **Date**   | 2026-10-15                  |
 | **Author** | @jinmel                     |
 | **Scope**  | `morpho-sdk` 8.0.0          |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 

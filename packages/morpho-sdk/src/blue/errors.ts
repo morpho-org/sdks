@@ -35,6 +35,7 @@ export {
   MarketParamsIdMismatchError,
   MissingPermitDomainNameError,
   NonTupleReturnValueError,
+  Permit2ExpirationOutOfRangeError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
   UnresolvedBlockNumberError,

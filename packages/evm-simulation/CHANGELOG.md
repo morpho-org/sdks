@@ -1,13 +1,52 @@
 # @morpho-org/evm-simulation
 
-## 8.2.1-next.0
+## 8.4.0
+
+### Minor Changes
+
+- Add the `midnightSupplyCollateralMakeBorrow` operation limit. Ratifier grants
+  (`priceRatifierV1`, `rateRatifierV1`) are now allowed only for it and
+  `midnightSupplyBlueMakeLend`, so plain `midnightSupplyCollateral` limits reject
+  them with `UnexpectedMidnightAuthorizationError`. `toSimulationLimits` emits
+  the new type for maker bundles that publish a borrow offer; hand-written limits
+  for that flow must switch to it.
+
+  A supplied `account` on `midnightSupplyCollateralMakeBorrow` must equal the
+  bundle sender.
+
+- Reject sender-granted approvals and pending authorizations outside the derived and explicit allowlist.
+
+  - New optional `limits.approvals` field (`ApprovalLimit[]`) allows extra sender approvals.
+  - `simulate()` can throw `UnexpectedTokenApprovalError` (`UNEXPECTED_TOKEN_APPROVAL`), `UnexpectedMorphoAuthorizationError` (`UNEXPECTED_MORPHO_AUTHORIZATION`) and `ApprovalCheckUnavailableError` (`APPROVAL_CHECK_UNAVAILABLE`).
+  - `limits: "none"` skips the check.
+
+- Check sender-granted Midnight `setIsAuthorized` grants against `limits.approvals` in `evm-simulation`, throwing `UnexpectedMidnightAuthorizationError` for grants outside the derived and explicit allowlist. Add `midnightEventsAbi` to `midnight-sdk` and the `morpho-sdk/abis` facade.
+- Support EcrecoverAuthorizer authorization signatures in EVM simulation.
+- Accept authorization descriptors in final mode and require matching user-call Approval events for ERC-2612 permits and IncrementNonce events for Blue signatures. Throw UnusedAuthorizationError with the request index when the evidence is missing, even with limits disabled. Preview preparation is unchanged.
 
 ### Patch Changes
 
+- Native-funded Midnight collateral supply limits now count ETH sent plus the sender's net wNative change.
+  Sending native value with `midnightSupplyCollateral` limits now throws `SlippageCheckUnavailableError` when no supplied collateral is wNative or the chain has no registered wNative.
 - Updated dependencies
-  - @morpho-org/morpho-sdk@9.1.0-next.0
-  - @morpho-org/morpho-ts@4.2.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.1
+  - @morpho-org/morpho-sdk@9.2.0
+  - @morpho-org/blue-sdk@8.1.0
+
+## 8.3.0
+
+### Minor Changes
+
+- Add per-transaction log assertions to simulated EVM transactions.
+
+### Patch Changes
+
+- Reject Blue market params that do not hash to the requested market id before resolving quoted assets.
+- Run state and assertion reads from the bundle owner so caller-sensitive token views cannot hide debits from quoted slippage checks.
+- Reject preview authorization preparations that emit asset transfers with `SimulationValidationError`. Simulate such authorizations as transactions in final mode to check their flows; public transfer indices remain unchanged.
+- Zero-address wNative transfers are kept on verified non-mirroring wrappers. Elsewhere, each `Deposit`/`Withdrawal` now cancels at most one matching zero-address `Transfer`.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.1.0
+  - @morpho-org/blue-sdk@8.0.2
 
 ## 8.2.0
 

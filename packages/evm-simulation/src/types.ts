@@ -67,12 +67,28 @@ export interface SimulationConfig {
  * ```
  */
 export interface Assertion {
-  /** Contract to call. Must be a view call: it runs as an ordinary call, so any state it writes is seen by later calls. */
+  /** Contract to call. Must be a view call: it runs as an ordinary call from the bundle owner, so it acts with the owner's authority and any state it writes is seen by later calls. */
   readonly to: Address;
   /** Encoded call data. */
   readonly data: Hex;
   /** Receives the call's return data; returns a failure message, or `undefined` when the assertion holds. A thrown error becomes `SimulationAssertError` with the error as `cause`. */
   readonly check: (returnData: Hex) => string | undefined;
+}
+
+/**
+ * A caller-supplied assertion over the logs emitted by one simulated transaction.
+ */
+export interface LogAssertion {
+  /**
+   * Receives every log the transaction emitted, in emission order (including
+   * the synthetic native-transfer logs `traceTransfers` adds under viem's
+   * `ethAddress`), as the same recursively frozen copy shared with that
+   * transaction's other log checks. Each address, topic, and data value is
+   * lowercase hex. Returns a failure message, or `undefined` when the assertion
+   * holds. A thrown error becomes `SimulationLogAssertError` with the error as
+   * `cause`.
+   */
+  readonly check: (logs: readonly RawLog[]) => string | undefined;
 }
 
 /**
@@ -100,6 +116,18 @@ export interface SimulationTransaction {
    * `check`), and return data.
    */
   readonly assertAfter?: readonly Assertion[];
+  /**
+   * Caller-supplied assertions checked locally against the logs this
+   * transaction emitted in the `eth_simulateV1` response, after it succeeds and
+   * before `assertAfter`; they add no call to the simulation. All checks
+   * receive one shared, recursively frozen
+   * copy with lowercase hex `address`, `topics`, and `data`. Nothing is inferred
+   * from calldata; failure throws `SimulationLogAssertError` with the
+   * transaction index, assertion index, a copy of the assertion (`check`), and
+   * the transaction's logs. If the node omits the transaction's `logs`, parsing
+   * throws `InvalidSimulationResponseError`.
+   */
+  readonly assertLogs?: readonly LogAssertion[];
 }
 
 /**

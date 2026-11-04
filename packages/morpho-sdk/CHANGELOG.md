@@ -1,36 +1,64 @@
 # @morpho-org/morpho-sdk
 
-## 9.1.0-next.0
+## 9.2.0
 
 ### Minor Changes
 
-- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block.
+- Penalized Vault V2 reallocation plans now account for BlueBundlesV1 flash-loaning the penalty from Blue's loan-token balance. The optional `blueBalances` input is populated by `getVaultV2BlueReallocationData`. Hand-built data without it uses summed snapshot-market liquidity as a conservative lower bound for sizing only and may make plans larger.
+  When Blue's balance is supplied, plans that cannot fund the penalty flash loan, an earlier market-sourced withdrawal, or the final transfer now throw `InsufficientSharedLiquidityError` instead of returning a plan that reverts.
+  Borrow and withdraw plans that otherwise cover their shortfall but whose planned penalty exceeds the operation amount now throw `InputExceedsMaxError`.
+  `InsufficientSharedLiquidityError.params.shortfall` now reports the reallocated assets the operation requires, comparable to `available`, and includes Blue's balance deficit when `blueBalances` is supplied.
+- Check sender-granted Midnight `setIsAuthorized` grants against `limits.approvals` in `evm-simulation`, throwing `UnexpectedMidnightAuthorizationError` for grants outside the derived and explicit allowlist. Add `midnightEventsAbi` to `midnight-sdk` and the `morpho-sdk/abis` facade.
+- Support EcrecoverAuthorizer authorization signatures in EVM simulation.
+- Re-exports `DEAD_ADDRESS` from `@morpho-org/morpho-sdk/constants` and `@morpho-org/morpho-sdk/blue/constants`.
+- Rejects snapshot-taking supply and deposit flows into targets without a sufficient dead deposit, to protect against share-price inflation in nearly empty markets and vaults.
 
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.1.0-0` (8.1.0 and its `8.1.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x are no longer accepted because they lack the Midnight entities.
-
-  If you are still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x, pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
-
-- Add shared Midnight position accrual helpers and errors.
-- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
-- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), and `withdraw` and `redeem` (from `getRequirements()`) throw it when the exit exceeds the vault's idle assets, before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
-- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
-
-  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x). Morpho-ts 3.x, 4.0.x and 4.1.x are no longer accepted because they lack the new Midnight ABIs.
-
-  Projects still on `@morpho-org/blue-sdk` 7.x/8.0.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x should pin `@morpho-org/blue-sdk-viem@~7.0`. The 7.0.x line is the last to accept these ranges.
+  - Blue `supply` adds a protected overload taking `marketData` (fetch it with `getMarketData()`); it throws `MarketIdMismatchError` when the snapshot belongs to another market. The snapshot-free overload is deprecated but keeps working without dead-deposit protection for one minor; removal requires the next major.
+  - Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, Vault V1 `migrateToV2` (target vault) and Midnight `supplyBlueMakeLend` (parking market) throw `InsufficientDeadSharesError` when the target, or a market or Vault V1 it can allocate to, fails the rule, and `MissingDeadSharesDataError` when the snapshot lacks dead-share data. Hand-built or API-sourced snapshots now fail closed; fetch them with `@morpho-org/blue-sdk-viem`.
+  - `supplyBlueMakeLend` no longer throws `EmptyBlueParkingMarketError`; the class stays exported and is deprecated.
+  - Adds the pure validators `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` and `validateVaultV2DeadShares`, and the thresholds `MIN_DEAD_SHARES` (1e9) and `MIN_VAULT_V2_DEAD_ASSETS` (1e6).
+  - `@morpho-org/wdk-protocol-lending-morpho-evm` re-exports `InsufficientDeadSharesError` and `MissingDeadSharesDataError`, which `supply` now throws.
 
 ### Patch Changes
 
-- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major. morpho-sdk's `InvalidMidnightPosition*Error` facade exports and raw `/midnight/errors` names now come from `@morpho-org/morpho-ts` directly; they are the same classes.
-
-  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.2.0-0` (4.2.0 and its `4.2.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x, 4.0.x and 4.1.x are no longer accepted because they lack `MidnightPositionLib`.
-
-- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- Add the optional `IAccrualVaultV2Adapter.pendingAllocationIncrease` method, implemented by the Morpho Market V1 adapters and the Vault V1 adapter. Vault V2 `maxDeposit` now counts pending liquidity-adapter interest in cap headroom as of the vault's accrual timestamp.
 - Updated dependencies
-  - @morpho-org/midnight-sdk@2.3.0-next.0
-  - @morpho-org/blue-sdk-viem@7.1.0-next.1
-  - @morpho-org/morpho-ts@4.2.0-next.0
-  - @morpho-org/blue-sdk@8.1.0-next.1
+  - @morpho-org/midnight-sdk@2.3.0
+  - @morpho-org/blue-sdk-viem@7.2.0
+  - @morpho-org/blue-sdk@8.1.0
+
+## 9.1.0
+
+### Minor Changes
+
+- The `MorphoBlue` constructor and the Blue action builders (`blueSupply`, `blueSupplyCollateral`, `blueBorrow`, `blueSupplyCollateralBorrow`, `blueRepay`, `blueWithdrawCollateral`, `blueRepayWithdrawCollateral`, `blueWithdraw`, `blueRefinance`) now throw `MarketIdMismatchError` when a `MarketParams` `id` does not hash from its tuple fields, matching the existing check in `client.morpho.blue(...)`. Previously such an object made the action metadata name one market while the calldata targeted another.
+- Add an optional `timestamp` to `VaultV2BlueReallocationData` and keep the fetched block timestamp on snapshots from `getVaultV2BlueReallocationData`, so planning without `options.timestamp` runs at the fetched block by default.
+- Reject Midnight sell offers that send seller proceeds to the zero address:
+
+  - `MidnightApi.fetchBookQuote`, `fetchBookTakeableOffers` and `fetchTakeableOffers` (static and instance) throw `InvalidMidnightApiResponseError` when a returned sell offer has `receiverIfMakerIsSeller` set to `zeroAddress`.
+  - `takeLend` and `takeRepayWithdrawCollateral` (entity methods and `midnightTakeLend` / `midnightTakeRepayWithdrawCollateral` builders) throw the new `MidnightTakeableOfferZeroSellerReceiverError` for such an offer.
+
+  With a token that accepts transfers to the zero address, taking such an offer burned the taker's principal while the protocol still recorded the position.
+
+- Use free Vault V2 liquidity before penalized reallocations and size penalized legs to the remaining shortfall. Add a `refinance` operation (`amount`, optional WAD-scaled `referralFeePct`) to Vault V2 reallocation planning; destination debt includes the referral fee and planned allocator penalties.
+- `getPermit2PermitTypedData` now throws `Permit2ExpirationOutOfRangeError` when `expiration` is not an integer in the uint48 range, instead of silently capping it. Omitting `expiration` still signs the maximum uint48.
+
+### Patch Changes
+
+- Clarify that `loanAssets` in `makeLend` and `makeRepay` is only the minimum Midnight allowance `getRequirements()` checks; signed offer caps bound fills.
+- MidnightApi takeable offers (`fetchBookTakeableOffers`, `fetchTakeableOffers`, `fetchBookQuote`) now return the embedded offer market's collaterals in canonical order, so offers forwarded to MidnightBundlesV2 take actions no longer revert with InconsistentMarket when the API lists collaterals out of order.
+- `MorphoVaultV2.forceRedeem` now copies its `deallocations` and `redeem` inputs when the handle is created, so changes made before `buildTx()` are not encoded.
+- `fetchAccrualVaultV2` now pins its sequential fallback reads (`deployless: false`, or after an eligible deployless failure) to one block when no `blockNumber` and no non-`"latest"` `blockTag` is passed, so the returned `AccrualVaultV2` is block-consistent. This costs one extra `eth_blockNumber` call on that path; the default deployless read is unchanged.
+
+  `MorphoVaultV2.getData` with `supportDeployless: false` gets the same block-consistent snapshot, so `forceWithdraw` derives its `minSharePriceE27` from one block.
+
+  WDK Vault V2 flows with `supportDeployless: false` get the same block-consistent snapshot.
+
+- No-op Vault V2 operation planning now returns a post-state accrued to the requested timestamp instead of the input snapshot.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.2.1
+  - @morpho-org/blue-sdk-viem@7.1.0
+  - @morpho-org/blue-sdk@8.0.2
 
 ## 9.0.0
 
@@ -1473,7 +1501,7 @@ slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }`
   recently the accrued price rose past the default 0.03% `slippageTolerance`
   ceiling and the bundle reverted on `maxSharePrice` — e.g. at ~10% APR / 90%
   utilization, ~0.03% is only a few days of accrual, so a quiet market reverted
-  systematically. This is the supply counterpart of the repay fix (VAU-1206); the
+  systematically. This is the supply counterpart of the repay fix; the
   `withdraw` / `borrow` paths use a lower `minSharePrice` bound that accrual only
   relaxes, so they were unaffected.
 

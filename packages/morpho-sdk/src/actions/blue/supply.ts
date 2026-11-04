@@ -1,7 +1,10 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import {
+  validateMarketParamsId,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import type {
   BlueSupplyAction,
   BundlesTokenRequirementSignature,
@@ -65,6 +68,7 @@ export interface BlueSupplyParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueSupplyAction>>` whose `to` address is
  *   BlueBundlesV1 and whose `action` records the normalized supply inputs.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NonPositiveInputError} when `assets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `nativeAmount` or `referralFeePct` is negative.
  * @throws {InputExceedsMaxError} when `assets` exceeds `uint256` or `referralFeePct` is at least WAD.
@@ -103,6 +107,7 @@ export const blueSupply = (
   params: BlueSupplyParams,
 ): Readonly<Transaction<BlueSupplyAction>> => {
   const { chainId, marketParams } = params.market;
+  validateMarketParamsId(marketParams);
   const { assets, userAddress, requirementSignature } = params.args;
   if (assets <= 0n) {
     throw new NonPositiveInputError("assets", assets);

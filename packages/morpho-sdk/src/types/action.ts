@@ -554,6 +554,19 @@ export interface MidnightSupplyCollateralAction
     }
   > {}
 
+/** Metadata for a direct Midnight collateral withdrawal transaction. */
+export interface MidnightWithdrawCollateralAction
+  extends BaseAction<
+    "midnightWithdrawCollateral",
+    {
+      readonly market: Hex;
+      readonly collateralIndex: bigint;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly receiver: Address;
+    }
+  > {}
+
 /** Metadata for a direct Midnight credit redemption transaction. */
 export interface MidnightRedeemAction
   extends BaseAction<
@@ -666,6 +679,7 @@ export type TransactionAction =
   | MidnightTakeWithdrawAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
+  | MidnightWithdrawCollateralAction
   | MidnightRedeemAction
   | MidnightTakeRepayWithdrawCollateralAction
   | MidnightRepayWithdrawCollateralAction

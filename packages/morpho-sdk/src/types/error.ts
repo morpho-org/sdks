@@ -1457,11 +1457,16 @@ export class RepaySharesExceedDebtError extends Error {
 }
 
 /**
- * Thrown when shared liquidity selected by a Vault V2 reallocation planner cannot
- * cover the operation's absolute shortfall on the target market — the resulting
- * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
+ * Thrown when shared liquidity cannot cover the operation's required
+ * reallocated assets. When Blue's balance is explicit, it is also thrown if
+ * that balance cannot fund the penalty flash loan, an earlier market-sourced
+ * withdrawal, or the final operation transfer. A borrow or withdraw plan that
+ * otherwise covers its shortfall but whose planned penalty exceeds its amount
+ * instead throws `InputExceedsMaxError`.
  *
- * Pattern-match on the class and inspect `params` to surface the gap to users.
+ * `shortfall` is the reallocated assets required by the operation and is
+ * comparable to `available`. Pattern-match on the class and inspect `params`
+ * to surface the gap to users.
  */
 export class InsufficientSharedLiquidityError extends Error {
   constructor(
@@ -2105,7 +2110,12 @@ export class MidnightOfferCallbackDataMismatchError extends Error {
   }
 }
 
-/** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
+/**
+ * Thrown when loan assets would be parked in a Morpho Blue market with no existing supply.
+ *
+ * @deprecated `supplyBlueMakeLend` now throws `InsufficientDeadSharesError` or
+ * `MissingDeadSharesDataError` instead; kept exported so existing `instanceof` checks compile.
+ */
 export class EmptyBlueParkingMarketError extends Error {
   constructor(params: { readonly marketId: MarketId }) {
     super(
@@ -2131,6 +2141,80 @@ export class ZeroBlueParkingSharesError extends Error {
   }
 }
 
+/** Which dead-deposit condition an entity failed. */
+export type DeadSharesFailureReason =
+  | "deadShares"
+  | "deadAssets"
+  | "sharePrice";
+
+/**
+ * Thrown when a Morpho Blue market or vault, or a market or Vault V1 it can allocate to, fails the
+ * dead-deposit rule that protects deposits against share-price inflation.
+ */
+export class InsufficientDeadSharesError extends Error {
+  /** Failing entity, outermost vault first; the last element is the market id or vault address. */
+  readonly entity: readonly (Address | Hash)[];
+  /** Failed condition. */
+  readonly reason: DeadSharesFailureReason;
+  /** Observed dead shares or assets; for `sharePrice`, `(totalAssets + 1) * 10 * virtualShares`. */
+  readonly observed: bigint;
+  /** Required minimum; for `sharePrice`, `totalSupply + virtualShares + 1`. */
+  readonly required: bigint;
+
+  constructor(params: {
+    readonly entity: readonly (Address | Hash)[];
+    readonly reason: DeadSharesFailureReason;
+    readonly observed: bigint;
+    readonly required: bigint;
+  }) {
+    const target = params.entity.join(" > ");
+    super(
+      params.reason === "sharePrice"
+        ? `Vault V2 "${target}" share price is at or below 1 / (10 * virtualShares) ("${params.observed}" < "${params.required}"), so it may have been deflated before its dead deposit. Choose another vault.`
+        : `"${target}" holds "${params.observed}" dead ${params.reason === "deadShares" ? "shares" : "assets"} at 0x000000000000000000000000000000000000dEaD, below the required "${params.required}". Choose a market or vault with a sufficient dead deposit.`,
+    );
+    this.name = "InsufficientDeadSharesError";
+    this.entity = params.entity;
+    this.reason = params.reason;
+    this.observed = params.observed;
+    this.required = params.required;
+  }
+}
+
+/** Snapshot field the dead-deposit check needs but the snapshot does not carry. */
+export type DeadSharesDataField =
+  | "deadSupplyShares"
+  | "deadShares"
+  | "deadAssets"
+  | "absoluteCaps"
+  | "allocation"
+  | "adapter"
+  | "liquidityMarket";
+
+/**
+ * Thrown when a market or vault snapshot lacks the data the dead-deposit check needs, such as a
+ * snapshot built by hand, from the Morpho API or by an older fetcher, or a Vault V2 adapter the
+ * SDK cannot hydrate. The check fails closed rather than pass unverified data.
+ */
+export class MissingDeadSharesDataError extends Error {
+  /** Entity missing the data, outermost vault first. */
+  readonly entity: readonly (Address | Hash)[];
+  /** Missing field. */
+  readonly field: DeadSharesDataField;
+
+  constructor(params: {
+    readonly entity: readonly (Address | Hash)[];
+    readonly field: DeadSharesDataField;
+  }) {
+    super(
+      `"${params.entity.join(" > ")}" has no "${params.field}" data for the dead-deposit check. Fetch the snapshot with the @morpho-org/blue-sdk-viem fetchers before building the transaction.`,
+    );
+    this.name = "MissingDeadSharesDataError";
+    this.entity = params.entity;
+    this.field = params.field;
+  }
+}
+
 /** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
 export class MidnightTakeableOfferMarketMismatchError extends Error {
   constructor(params: {
@@ -2142,6 +2226,16 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
       `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
     );
     this.name = "MidnightTakeableOfferMarketMismatchError";
+  }
+}
+
+/** Thrown when a quoted Midnight sell offer routes its seller proceeds to the zero address. */
+export class MidnightTakeableOfferZeroSellerReceiverError extends Error {
+  constructor(params: { index: number }) {
+    super(
+      `Midnight takeable offer "${params.index}" routes seller proceeds to the zero address. Drop the offer or refresh the quote.`,
+    );
+    this.name = "MidnightTakeableOfferZeroSellerReceiverError";
   }
 }
 

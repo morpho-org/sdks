@@ -5,6 +5,7 @@ import {
   BlacklistViolationError,
   RpcTransportError,
   SimulationAssertError,
+  SimulationLogAssertError,
   SimulationRevertedError,
   UnexpectedSimulationError,
 } from "./errors.js";
@@ -107,6 +108,22 @@ describe("toSimulationErrorResponse", () => {
     ).toEqual({
       code: "SIMULATION_ASSERT_FAILED",
       message: "assertion failed",
+      transactionIndex: 2,
+    });
+  });
+
+  test("behavior: forwards log assertion transaction index", () => {
+    const error = new SimulationLogAssertError("log assertion failed", {
+      transactionIndex: 2,
+      assertionIndex: 0,
+      assertion: { check: () => "log assertion failed" },
+      logs: [],
+    });
+    expect(
+      JSON.parse(JSON.stringify(toSimulationErrorResponse(error))),
+    ).toEqual({
+      code: "SIMULATION_ASSERT_FAILED",
+      message: "log assertion failed",
       transactionIndex: 2,
     });
   });

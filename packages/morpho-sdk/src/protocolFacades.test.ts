@@ -5,7 +5,9 @@ import {
   midnightAdapterPriceRatifierV1Abi,
   midnightAdapterRateRatifierV1Abi,
   midnightBlueBuyCallbackFactoryAbi,
+  midnightEcrecoverAuthorizerAbi,
   midnightEcrecoverRatifierAbi,
+  midnightEventsAbi,
   midnightPriceRatifierV1Abi,
   midnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
@@ -53,6 +55,7 @@ import {
   MarketParamsIdMismatchError as RawBlueMarketParamsIdMismatchError,
   MissingPermitDomainNameError as RawBlueMissingPermitDomainNameError,
   NonTupleReturnValueError as RawBlueNonTupleReturnValueError,
+  Permit2ExpirationOutOfRangeError as RawBluePermit2ExpirationOutOfRangeError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownAbiFunctionError as RawBlueUnknownAbiFunctionError,
   UnknownDataError as RawBlueUnknownDataError,
@@ -151,6 +154,7 @@ import {
   MissingPermitDomainNameError,
   NegativeValueError,
   NonTupleReturnValueError,
+  Permit2ExpirationOutOfRangeError,
   RegistryValueAlreadyRegisteredError,
   UnknownAbiFunctionError,
   UnknownBlueDataError,
@@ -171,7 +175,9 @@ import {
 } from "@morpho-org/morpho-sdk/fetch";
 import {
   blueBuyCallbackFactoryAbi as rawMidnightBlueBuyCallbackFactoryAbi,
+  ecrecoverAuthorizerAbi as rawMidnightEcrecoverAuthorizerAbi,
   ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi,
+  midnightEventsAbi as rawMidnightEventsAbi,
   priceRatifierV1Abi as rawMidnightPriceRatifierV1Abi,
   rateRatifierV1Abi as rawMidnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/midnight/abis";
@@ -308,6 +314,7 @@ describe("protocol facades", () => {
     [MissingPermitDomainNameError, RawBlueMissingPermitDomainNameError],
     [UnknownAbiFunctionError, RawBlueUnknownAbiFunctionError],
     [NonTupleReturnValueError, RawBlueNonTupleReturnValueError],
+    [Permit2ExpirationOutOfRangeError, RawBluePermit2ExpirationOutOfRangeError],
     [UnnamedAbiOutputsError, RawBlueUnnamedAbiOutputsError],
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
@@ -351,7 +358,9 @@ describe("protocol facades", () => {
     [midnightAdapterPriceRatifierV1Abi, rawMidnightAdapterPriceRatifierV1Abi],
     [midnightAdapterRateRatifierV1Abi, rawMidnightAdapterRateRatifierV1Abi],
     [midnightBlueBuyCallbackFactoryAbi, rawMidnightBlueBuyCallbackFactoryAbi],
+    [midnightEcrecoverAuthorizerAbi, rawMidnightEcrecoverAuthorizerAbi],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
+    [midnightEventsAbi, rawMidnightEventsAbi],
     [midnightPriceRatifierV1Abi, rawMidnightPriceRatifierV1Abi],
     [midnightRateRatifierV1Abi, rawMidnightRateRatifierV1Abi],
     [MIDNIGHT_CBP, rawMidnightCbp],

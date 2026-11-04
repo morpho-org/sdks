@@ -194,10 +194,12 @@ collateral supplies and no Blue supply derives one `midnightSupplyCollateral`
 operation per distinct `collateralIndex`, summing repeated indices in
 first-seen order and crediting `owner`. An `onBehalf` other than `owner` throws
 `LimitAccountMismatchError`, and an `expected` quote on a multi-index action
-throws `AmbiguousExpectedQuoteError`. These limits cap the sender's wNative
-debit but not ETH sent as `tx.value`; bound that with a `nativeBalanceAssertion`
-in `assertAfter`. A `midnightCancelAndMake` action with a Blue supply and no
-collateral supplies maps to the
+throws `AmbiguousExpectedQuoteError`. When supplied collateral is wNative, the
+check counts ETH sent plus the sender's net wNative change against `assetsPaid`,
+so native funding needs no quote adjustment. Sending value when no supplied
+collateral is wNative, or on a chain without registered wNative, throws
+`SlippageCheckUnavailableError`. A `midnightCancelAndMake` action with a Blue
+supply and no collateral supplies maps to the
 `midnightSupplyBlueMakeLend` operation; its `assetsPaid` is derived from the
 parked amount, and `expected.sharesMinted` supplies the callback's expected
 Blue supply-share increase. Combining Blue parking with collateral supplies is

@@ -1,7 +1,10 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import {
+  validateMarketParamsId,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
@@ -76,6 +79,7 @@ export interface BlueRefinanceParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueRefinanceAction>>` whose
  *   `to` address is BlueBundlesV1 and whose `action` records the normalized migration inputs.
+ * @throws {MarketIdMismatchError} when either market's `id` does not hash from its tuple fields.
  * @throws {RefinanceSameMarketError} when source and destination IDs match.
  * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
  * @throws {NegativeInputError} when `maxLtv`, a referral fee, or a reallocation penalty is negative.
@@ -117,6 +121,8 @@ export const blueRefinance = (
 ): Readonly<Transaction<BlueRefinanceAction>> => {
   const { chainId, sourceMarketParams, destinationMarketParams } =
     params.market;
+  validateMarketParamsId(sourceMarketParams);
+  validateMarketParamsId(destinationMarketParams);
   const { userAddress, maxLtv, authorizationSignature } = params.args;
   if (sourceMarketParams.id === destinationMarketParams.id) {
     throw new RefinanceSameMarketError(sourceMarketParams.id);

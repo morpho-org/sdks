@@ -25,7 +25,7 @@ import {
   Tree,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { getChainAddress, MathLib, Time } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -64,6 +64,10 @@ import {
   getMidnightBlueBuyCallbackAddress,
   getMidnightBlueBuyCallbackData,
 } from "../../helpers/callback.js";
+import {
+  DEFAULT_LLTV_BUFFER,
+  MIN_DEAD_SHARES,
+} from "../../helpers/constant.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
@@ -75,6 +79,7 @@ import {
   EmptyMidnightTakeableOffersError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InsufficientDeadSharesError,
   InsufficientMidnightWithdrawableLiquidityError,
   InvalidMidnightHexInputError,
   MarketIdMismatchError,
@@ -98,7 +103,9 @@ import {
   MidnightReplacementGroupCancelledError,
   MidnightTakeableOfferMarketMismatchError,
   MidnightTakeableOffersNotFillableError,
+  MidnightTakeableOfferZeroSellerReceiverError,
   MidnightTakeTargetUnreachableError,
+  MidnightZeroAccountError,
   MidnightZeroOnBehalfError,
   MidnightZeroReceiverError,
   MissingAccrualPositionError,
@@ -611,6 +618,7 @@ const mockBlueReads = (
     lastUpdate = 1n,
     fee = 0n,
     rateAtTarget = 3_170_979_198n,
+    deadSupplyShares = MIN_DEAD_SHARES,
   }: {
     readonly marketParams?: typeof blueMarket;
     readonly totalSupplyAssets?: bigint;
@@ -620,6 +628,7 @@ const mockBlueReads = (
     readonly lastUpdate?: bigint;
     readonly fee?: bigint;
     readonly rateAtTarget?: bigint;
+    readonly deadSupplyShares?: bigint;
   } = {},
 ) => {
   mockRead(handle, {
@@ -646,6 +655,12 @@ const mockBlueReads = (
       lastUpdate,
       fee,
     ],
+  });
+  mockRead(handle, {
+    address: blue,
+    abi: blueAbi,
+    functionName: "position",
+    result: [deadSupplyShares, 0n, 0n],
   });
   mockRead(handle, {
     address: marketParams.oracle,
@@ -735,6 +750,17 @@ describe("MorphoMidnight", () => {
         ]),
       ).toThrow(MidnightTakeableOfferMarketMismatchError);
     });
+
+    test.skipIf(takeFlow.expectedBuy)(
+      "error: MidnightTakeableOfferZeroSellerReceiverError",
+      () => {
+        expect(() =>
+          takeFlow.createOutput([
+            midnightApiTake({ receiverIfMakerIsSeller: zeroAddress }),
+          ]),
+        ).toThrow(MidnightTakeableOfferZeroSellerReceiverError);
+      },
+    );
   });
 
   test.each([
@@ -3343,16 +3369,29 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(NonPositiveInputError);
     });
 
-    test("error: EmptyBlueParkingMarketError", async () => {
+    test("error: InsufficientDeadSharesError for an empty parking market", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockBlueReads(handle, { totalSupplyShares: 0n });
+      mockBlueReads(handle, { totalSupplyShares: 0n, deadSupplyShares: 0n });
       const promise = prepare(handle);
 
-      await expect(promise).rejects.toBeInstanceOf(EmptyBlueParkingMarketError);
-      await expect(promise).rejects.toThrow(
-        new EmptyBlueParkingMarketError({
-          marketId: BlueMarketUtils.getMarketId(blueMarket),
-        }),
+      await expect(promise).rejects.toBeInstanceOf(InsufficientDeadSharesError);
+      await expect(promise).rejects.not.toBeInstanceOf(
+        EmptyBlueParkingMarketError,
+      );
+      await expect(promise).rejects.toMatchObject({
+        entity: [BlueMarketUtils.getMarketId(blueMarket)],
+        reason: "deadShares",
+        observed: 0n,
+        required: MIN_DEAD_SHARES,
+      });
+    });
+
+    test("error: InsufficientDeadSharesError one share below the threshold", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle, { deadSupplyShares: MIN_DEAD_SHARES - 1n });
+
+      await expect(prepare(handle)).rejects.toBeInstanceOf(
+        InsufficientDeadSharesError,
       );
     });
 
@@ -4149,6 +4188,96 @@ describe("MorphoMidnight", () => {
           },
         }),
       ).rejects.toThrow(UnknownCollateralIndexError);
+    });
+  });
+
+  describe("withdrawCollateral", () => {
+    const params = (debt = 0n) => {
+      const market = marketData();
+      return {
+        marketData: market,
+        ...positionHealthParams(market, { debt }),
+        accountAddress: midnightAddresses.taker,
+        assets: 1_000n,
+      };
+    };
+    test.each([0n, 1_000n])(
+      "withdraws safely with debt %s and no requirements",
+      async (debt) => {
+        const output = midnight().withdrawCollateral(params(debt));
+        await expect(output.getRequirements()).resolves.toEqual([]);
+        const tx = output.buildTx();
+        expect(tx.to).toBe(midnightAddresses.midnight);
+        expect(tx.action.args.assets).toBe(1_000n);
+        expect(tx.action.args.receiver).toBe(midnightAddresses.taker);
+        expect(tx.action.args.onBehalf).toBe(midnightAddresses.taker);
+        expect(tx.action.type).toBe("midnightWithdrawCollateral");
+      },
+    );
+    test("resolves full balance and explicit receiver", () => {
+      const tx = midnight()
+        .withdrawCollateral({
+          ...params(),
+          assets: maxUint256,
+          receiver: midnightAddresses.maker,
+        })
+        .buildTx();
+      expect(tx.action.args.assets).toBe(10_000n);
+      expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
+    });
+    test("rejects withdrawals exceeding collateral", () => {
+      expect(() =>
+        midnight().withdrawCollateral({
+          ...params(),
+          assets: 10_001n,
+        }),
+      ).toThrow(WithdrawExceedsCollateralError);
+    });
+    test("rejects unhealthy withdrawals", () => {
+      expect(() =>
+        midnight().withdrawCollateral({
+          ...params(1_000n),
+          assets: maxUint256,
+        }),
+      ).toThrow(WithdrawMakesPositionUnhealthyError);
+    });
+    test("rejects a zero account", () => {
+      expect(() =>
+        midnight().withdrawCollateral({
+          ...params(),
+          accountAddress: zeroAddress,
+        }),
+      ).toThrow(MidnightZeroAccountError);
+    });
+    test("rejects a partial withdrawal that only the LLTV buffer makes unhealthy", () => {
+      const input = params(6_900n);
+      const remainingCollateral =
+        input.positionData.collateral[0]! - input.assets;
+      const lltv = input.marketData.params.collateralParams[0]!.lltv;
+      expect(remainingCollateral).toBe(9_000n);
+      expect(
+        MathLib.mulDivDown(remainingCollateral, lltv, MathLib.WAD),
+      ).toBeGreaterThanOrEqual(input.positionData.debt);
+      expect(
+        MathLib.mulDivDown(
+          remainingCollateral,
+          lltv - DEFAULT_LLTV_BUFFER,
+          MathLib.WAD,
+        ),
+      ).toBeLessThan(input.positionData.debt);
+      expect(() => midnight().withdrawCollateral(input)).toThrow(
+        WithdrawMakesPositionUnhealthyError,
+      );
+    });
+    test("rejects an empty full withdrawal", () => {
+      const market = marketData();
+      expect(() =>
+        midnight().withdrawCollateral({
+          ...params(),
+          ...positionHealthParams(market, { collateral: [0n] }),
+          assets: maxUint256,
+        }),
+      ).toThrow(NonPositiveInputError);
     });
   });
 

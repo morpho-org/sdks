@@ -1,7 +1,10 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import {
+  validateMarketParamsId,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
@@ -87,6 +90,7 @@ export interface BlueRepayWithdrawCollateralParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueRepayWithdrawCollateralAction>>`
  *   whose `to` address is BlueBundlesV1 and whose `action` records the normalized inputs.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, `maxLtv`, native value, or fee is negative.
  * @throws {MutuallyExclusiveRepayAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when both operation legs are zero, repay funding is absent, or the deadline is invalid.
@@ -131,6 +135,7 @@ export const blueRepayWithdrawCollateral = (
   params: BlueRepayWithdrawCollateralParams,
 ): Readonly<Transaction<BlueRepayWithdrawCollateralAction>> => {
   const { chainId, marketParams } = params.market;
+  validateMarketParamsId(marketParams);
   const {
     userAddress,
     repayAssets,

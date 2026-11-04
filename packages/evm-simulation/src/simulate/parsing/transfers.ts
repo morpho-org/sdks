@@ -38,8 +38,9 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * `Deposit(to, amount)` / `Withdrawal(from, amount)` from the registered
  * wrapped-native token. Known chains without a wrapped-native token ignore
  * WETH9 events and skip wrapped-native deduplication; chains without registry
- * metadata retain legacy signature-based parsing. On enabled paths, paired
- * mint/burn Transfer events are deduplicated. ERC721 and ERC1155 transfer
+ * metadata retain legacy signature-based parsing. On enabled paths, each
+ * `Deposit`/`Withdrawal` cancels at most one matching zero-address `Transfer`
+ * (none when `wNativeEmitsTransfer` is `false`). ERC721 and ERC1155 transfer
  * events are **not** parsed — consumers with NFT flows will see an incomplete
  * transfer list.
  *
@@ -50,21 +51,18 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * `0xeee…eee`. These are parsed like any ERC20 transfer, with `token`
  * collapsed to viem's `ethAddress` so native deltas key consistently.
  *
- * **WETH9 dedup assumption — canonical atomic emission.** Dedup for the
- * registered wrapped-native token is scoped to the same tx: a zero-address
- * `Transfer` is suppressed only if its paired `Deposit`/`Withdrawal` appears
- * in the same `calls[txIdx].logs` slice. This is correct for canonical WETH9,
- * which always emits the `Deposit`/
- * `Withdrawal` and the matching `Transfer(0x0, …)` / `Transfer(…, 0x0)`
- * atomically inside a single call frame. A **non-canonical wrapped-native**
- * that splits these emissions across two txs in the same bundle would leave
- * a phantom zero-address `Transfer` in the parsed output, which can be summed
- * by `assertNoBundlesRetention` and produce a false `BlacklistViolationError`.
- * When its zero-address `Transfer` misses same-tx dedup, the parser emits a
- * `warn` so the assumption break is observable before it reaches retention.
- * None of `morpho-sdk`'s currently supported chains require cross-tx dedup;
- * the assumption is rechecked when onboarding a new chain (see
- * `evm-simulation/CLAUDE.md`).
+ * **Wrapped-native dedup assumption — wrapper-dependent emission.** Dedup for
+ * the registered wrapped-native token is scoped to the same tx: a zero-address
+ * `Transfer` is suppressed only once for each matching `Deposit`/`Withdrawal`
+ * in the same `calls[txIdx].logs` slice. Some wrappers emit these mirror
+ * `Transfer` events; canonical WETH9 does not. Set
+ * `wNativeEmitsTransfer: false` for verified chains whose wrapper emits no
+ * mirror, keeping zero-address transfers alongside the `Deposit`/`Withdrawal`
+ * mint/burn. The "WETH9 dedup miss" `warn` fires only when the transaction has
+ * no matching same-tx `Deposit`/`Withdrawal` at all; a surplus equal-value
+ * transfer after one-to-one pairing is kept silently. With
+ * `wNativeEmitsTransfer: false`, a kept transfer matching a same-call event is
+ * logged at `warn`.
  *
  * **Hex casing.** JSON-RPC `DATA` is case-insensitive, so `topics` and `data`
  * are lowercased before signature dispatch and pair matching; a backend that
@@ -79,7 +77,8 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * @param calls - Per-transaction call results to parse.
  * @param options - Wrapped-native metadata and optional logger. Pass `null` for
  *   a known chain without a wrapped-native token; omit it for legacy parsing on
- *   an unknown chain.
+ *   an unknown chain. `wNativeEmitsTransfer` defaults to `true` and controls
+ *   pairing for a registered wrapped-native token.
  * @returns Canonically sorted transfers with their originating transaction index.
  * @internal
  */
@@ -87,11 +86,13 @@ export function parseTransfers(
   calls: readonly RawCall[],
   options: {
     readonly wNative?: Address | null;
+    readonly wNativeEmitsTransfer?: boolean;
     readonly logger?: SimulationLogger;
   } = {},
 ): Transfer[] {
   const transfers: Transfer[] = [];
-  const { logger, wNative } = options;
+  const { logger, wNative, wNativeEmitsTransfer = true } = options;
+  const shouldPairWnative = wNativeEmitsTransfer || wNative === undefined;
   // Lowercase `topics`/`data` so signature dispatch and pair matching are case-insensitive.
   const normalizedCalls = calls.map((call) =>
     call.logs.map(
@@ -109,6 +110,7 @@ export function parseTransfers(
 
   for (let txIdx = 0; txIdx < normalizedCalls.length; txIdx++) {
     const logs = normalizedCalls[txIdx]!;
+    const consumedWnativeEventLogs = new Set<number>();
     for (const log of logs) {
       try {
         const topic0 = log.topics[0];
@@ -178,44 +180,64 @@ export function parseTransfers(
               continue;
             }
 
-            // WETH9 unwrap dedup: Transfer to zero paired with a Withdrawal of
-            // equal amount in the SAME tx.
-            if (toTopic === zeroHash && acceptsWnativeEvent(log.address)) {
-              const paired = logs.some(
-                (other) =>
-                  other.topics[0] === WITHDRAWAL_TOPIC &&
+            const sides = [
+              ...(toTopic === zeroHash
+                ? [{ kind: "burn" as const, accountTopic: fromTopic }]
+                : []),
+              ...(fromTopic === zeroHash
+                ? [{ kind: "mint" as const, accountTopic: toTopic }]
+                : []),
+            ];
+            if (sides.length > 0 && acceptsWnativeEvent(log.address)) {
+              let paired = false;
+              for (const { kind, accountTopic } of sides) {
+                const matches = logs.flatMap((other, otherIndex) =>
+                  other.topics[0] ===
+                    (kind === "burn" ? WITHDRAWAL_TOPIC : DEPOSIT_TOPIC) &&
                   isAddressEqual(other.address, log.address) &&
                   other.data === log.data &&
                   other.topics.length === 2 &&
-                  other.topics[1] === fromTopic,
-              );
-              if (paired) continue;
-              if (
-                wNative !== undefined ||
-                wnativeShapedTokens.has(log.address.toLowerCase())
-              ) {
-                warnNonCanonicalWnative(logger, log, "burn", txIdx);
-              }
-            }
+                  other.topics[1] === accountTopic
+                    ? [otherIndex]
+                    : [],
+                );
 
-            // WETH9 wrap dedup: Transfer from zero paired with a Deposit of
-            // equal amount in the SAME tx.
-            if (fromTopic === zeroHash && acceptsWnativeEvent(log.address)) {
-              const paired = logs.some(
-                (other) =>
-                  other.topics[0] === DEPOSIT_TOPIC &&
-                  isAddressEqual(other.address, log.address) &&
-                  other.data === log.data &&
-                  other.topics.length === 2 &&
-                  other.topics[1] === toTopic,
-              );
-              if (paired) continue;
-              if (
-                wNative !== undefined ||
-                wnativeShapedTokens.has(log.address.toLowerCase())
-              ) {
-                warnNonCanonicalWnative(logger, log, "mint", txIdx);
+                if (matches.length === 0) {
+                  if (
+                    shouldPairWnative &&
+                    (wNative !== undefined ||
+                      wnativeShapedTokens.has(log.address.toLowerCase()))
+                  ) {
+                    warnNonCanonicalWnative(logger, log, kind, txIdx);
+                  }
+                  continue;
+                }
+
+                if (!shouldPairWnative) {
+                  const token = log.address;
+                  const data = log.data;
+                  logger?.warn(
+                    "kept zero-address wNative Transfer matching a same-call Deposit/Withdrawal; chain is listed as non-mirroring — if this repeats for every wrap/unwrap the wrapper now mirrors and must be removed from the list",
+                    {
+                      token,
+                      kind,
+                      txIdx,
+                      data,
+                    },
+                  );
+                  continue;
+                }
+
+                const pairedIndex = matches.find(
+                  (otherIndex) => !consumedWnativeEventLogs.has(otherIndex),
+                );
+                if (pairedIndex !== undefined) {
+                  consumedWnativeEventLogs.add(pairedIndex);
+                  paired = true;
+                  break;
+                }
               }
+              if (paired) continue;
             }
 
             transfers.push({

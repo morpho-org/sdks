@@ -1,4 +1,7 @@
-import { MarketUtils as BlueMarketUtils } from "@morpho-org/blue-sdk";
+import {
+  MarketParams as BlueMarketParams,
+  MarketUtils as BlueMarketUtils,
+} from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   blueBuyCallbackFactoryAbi,
@@ -39,11 +42,12 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import {
-  EmptyBlueParkingMarketError,
+  InsufficientDeadSharesError,
   MidnightInvalidAccountAddressError,
   MidnightOfferNoCreditError,
   MidnightOfferNoDebtError,
 } from "../../../src/types/index.js";
+import { seedDeadSupply } from "../../helpers/blue.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -139,6 +143,12 @@ const createBlueMarket = async (
     abi: blueAbi,
     functionName: "supply",
     args: [blueMarket, seedAssets, 0n, client.account.address, "0x"],
+  });
+  await seedDeadSupply({
+    // Base's chain type narrows block fields the generic Anvil client does not.
+    client: client as unknown as AnvilTestClient,
+    chainId: base.id,
+    market: new BlueMarketParams(blueMarket),
   });
 };
 const installTestOracle = (client: AnvilTestClient<typeof base>) =>
@@ -1123,6 +1133,6 @@ describe("Midnight maker offers on fork", () => {
           deadline: maxUint256,
           validation,
         }),
-    ).rejects.toThrow(EmptyBlueParkingMarketError);
+    ).rejects.toThrow(InsufficientDeadSharesError);
   });
 });

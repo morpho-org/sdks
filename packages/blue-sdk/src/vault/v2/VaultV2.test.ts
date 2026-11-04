@@ -9,6 +9,7 @@ import {
   marketParams,
   RECIPIENT,
   vaultInput,
+  vaultMarketConfig,
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
@@ -208,6 +209,118 @@ describe("AccrualVaultV2.maxDeposit", () => {
     expect(vault.maxDeposit(1_000n)).toStrictEqual({
       value: 50n,
       limiter: CapacityLimitReason.balance,
+    });
+  });
+});
+
+describe("pending liquidity allocation interest", () => {
+  test("legacy market adapter includes pending interest in deposit caps", () => {
+    const position = accrualPosition(
+      { supplyShares: 500_000n },
+      { totalSupplyAssets: 1_000n, totalSupplyShares: 1_000_000n },
+    );
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+    const data = encodeAbiParameters(
+      [marketParamsAbi],
+      [position.market.params],
+    );
+    const allocations = adapter
+      .ids(position.market.params)
+      .map((id, index) => ({
+        id,
+        allocation: position.supplyAssets - 20n,
+        absoluteCap: index === 2 ? position.supplyAssets + 100n : 10_000n,
+        relativeCap: MathLib.WAD,
+      }));
+    expect(
+      accrualVaultV2(adapter, {
+        liquidityData: data,
+        liquidityAllocations: allocations,
+      }).maxDeposit(1_000n).value,
+    ).toBe(100n);
+  });
+
+  test.each([false, true])(
+    "market adapter caps include pending interest (relative: %s)",
+    (relative) => {
+      const m = market({
+        totalSupplyAssets: 1_000n,
+        totalSupplyShares: 1_000_000n,
+      });
+      const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+        {
+          ...adapterBaseInput(),
+          marketIds: [m.id],
+          adaptiveCurveIrm: ADAPTER,
+          supplyShares: { [m.id]: 500_000n },
+        },
+        [m],
+      );
+      const data = encodeAbiParameters([marketParamsAbi], [m.params]);
+      const assets = m.toSupplyAssets(500_000n);
+      const allocations = adapter.ids(m.params).map((id, index) => ({
+        id,
+        allocation: assets - 20n,
+        absoluteCap: index === 1 && !relative ? assets + 100n : 10_000n,
+        relativeCap: index === 1 && relative ? MathLib.WAD / 2n : MathLib.WAD,
+      }));
+      const vault = accrualVaultV2(adapter, {
+        liquidityData: data,
+        liquidityAllocations: allocations,
+      });
+      expect(vault.maxDeposit(10n ** 15n)).toStrictEqual({
+        value: relative ? 500n - assets : 100n,
+        limiter: relative
+          ? CapacityLimitReason.vaultV2_relativeCap
+          : CapacityLimitReason.vaultV2_absoluteCap,
+      });
+      expect(allocations[1]?.allocation).toBe(assets - 20n);
+      const abovePosition = allocations.map((allocation) => ({
+        ...allocation,
+        allocation: assets + 10n,
+      }));
+      const unchanged = accrualVaultV2(adapter, {
+        liquidityData: data,
+        liquidityAllocations: abovePosition,
+      });
+      expect(unchanged.maxDeposit(10n ** 15n).value).toBe(
+        relative ? 490n - assets : 90n,
+      );
+    },
+  );
+
+  test("Vault V1 share appreciation reduces liquidity headroom", () => {
+    const position = accrualPosition({ supplyShares: 100_000n });
+    const nested = new AccrualVault(
+      vaultInput({ supplyQueue: [position.marketId] }),
+      [
+        {
+          config: vaultMarketConfig(position.marketId, { cap: 10n ** 18n }),
+          position,
+        },
+      ],
+    );
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      nested,
+      100n,
+    );
+    const assets = nested.toAssets(adapter.shares);
+    const allocation = {
+      id: adapter.adapterId,
+      allocation: assets - 1n,
+      absoluteCap: assets + 50n,
+      relativeCap: MathLib.WAD,
+    };
+    const vault = accrualVaultV2(adapter, {
+      liquidityAllocations: [allocation],
+    });
+    expect(vault.maxDeposit(10n ** 15n)).toStrictEqual({
+      value: 50n,
+      limiter: CapacityLimitReason.vaultV2_absoluteCap,
     });
   });
 });

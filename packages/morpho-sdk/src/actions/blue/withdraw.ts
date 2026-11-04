@@ -1,7 +1,10 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
-import { validateUint256Field } from "../../helpers/validate.js";
+import {
+  validateMarketParamsId,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueWithdrawAction,
@@ -73,6 +76,7 @@ export interface BlueWithdrawParams {
  * @param params.metadata - Optional transaction metadata.
  * @returns A deep-frozen `Readonly<Transaction<BlueWithdrawAction>>` whose `to` address is
  *   BlueBundlesV1 and whose `action` records the normalized withdrawal inputs.
+ * @throws {MarketIdMismatchError} when `marketParams.id` does not hash from its tuple fields.
  * @throws {NegativeInputError} when an amount, fee, or reallocation penalty is negative.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
@@ -113,6 +117,7 @@ export const blueWithdraw = (
   params: BlueWithdrawParams,
 ): Readonly<Transaction<BlueWithdrawAction>> => {
   const { chainId, marketParams } = params.market;
+  validateMarketParamsId(marketParams);
   const {
     userAddress,
     withdrawAssets,

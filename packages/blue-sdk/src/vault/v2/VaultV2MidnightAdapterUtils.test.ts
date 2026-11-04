@@ -183,7 +183,7 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
   test("error: rejects short and bad-checksum addresses", () => {
     // Built at runtime: `pnpm lint:address` rewrites mixed-case address literals to valid checksums.
     const checksummed = getAddress(
-      "0xabcdef0000000000000000000000000000000001",
+      "0xaBCdEf0000000000000000000000000000000001",
     );
     expect(checksummed.startsWith("0xa")).toBe(true);
     const badChecksum = `0xA${checksummed.slice(3)}`;

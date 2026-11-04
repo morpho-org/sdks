@@ -24,6 +24,13 @@ export const ORACLE_PRICE_SCALE = SHARED_ORACLE_PRICE_SCALE;
 export const DEFAULT_SLIPPAGE_TOLERANCE = 3_00000000000000n;
 
 /**
+ * The address protocol dead deposits are minted to (`0x…dEaD`), so their shares can never be
+ * withdrawn. Fetchers read its Blue supply shares and vault share balances as `deadSupplyShares`
+ * and `deadShares`.
+ */
+export const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+
+/**
  * The number of seconds in a year.
  */
 export const SECONDS_PER_YEAR = Time.s.from.y(1n);

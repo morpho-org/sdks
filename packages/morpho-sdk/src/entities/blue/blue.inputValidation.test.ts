@@ -1,6 +1,7 @@
 import {
   AccrualPosition,
   Market,
+  type MarketId,
   MarketParams,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
@@ -10,12 +11,14 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  MarketIdMismatchError,
   MutuallyExclusiveRepayAmountsError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationsRequireBorrowError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { MorphoBlue } from "./blue.js";
 
 const userAddress: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const marketParams = new MarketParams({
@@ -152,5 +155,29 @@ describe("MorphoBlue write input validation", () => {
         deadline: maxUint256,
       }),
     ).toThrow(ReallocationsRequireBorrowError);
+  });
+});
+
+describe("MorphoBlue market identity", () => {
+  const withStaleId = (tuple: MarketParams, id: MarketId): MarketParams =>
+    Object.assign(Object.create(MarketParams.prototype), tuple, { id });
+
+  test("error: constructor rejects market params whose id does not hash from the tuple", () => {
+    const { morpho } = createMockClient(mainnet).client.extend(
+      morphoViemExtension(),
+    );
+    const otherMarketParams = new MarketParams({
+      ...marketParams,
+      oracle: "0x2222222222222222222222222222222222222222",
+    });
+
+    expect(
+      () =>
+        new MorphoBlue(
+          morpho,
+          withStaleId(otherMarketParams, marketParams.id),
+          mainnet.id,
+        ),
+    ).toThrow(MarketIdMismatchError);
   });
 });

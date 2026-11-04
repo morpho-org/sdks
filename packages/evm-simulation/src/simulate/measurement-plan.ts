@@ -176,7 +176,8 @@ export function operationMeasurementPlan(
         sharesMinted: balance(limit.targetVault),
         sharesBurned: balance(limit.sourceVault),
       };
-    case "midnightSupplyCollateral": {
+    case "midnightSupplyCollateral":
+    case "midnightSupplyCollateralMakeBorrow": {
       const collateral = {
         type: "midnightCollateral",
         marketId: limit.marketId,
@@ -322,6 +323,7 @@ const SHARE_PRICE_MEASUREMENTS = {
   vaultV2InKindRedeem: null,
   vaultV1MigrateToV2: null,
   midnightSupplyCollateral: null,
+  midnightSupplyCollateralMakeBorrow: null,
   midnightSupplyBlueMakeLend: null,
   midnightRedeem: null,
   midnightTakeLend: null,
@@ -375,6 +377,7 @@ export function positionBoundsMarketField(
     case "vaultV2InKindRedeem":
     case "vaultV1MigrateToV2":
     case "midnightSupplyCollateral":
+    case "midnightSupplyCollateralMakeBorrow":
     case "midnightSupplyBlueMakeLend":
     case "midnightRedeem":
     case "midnightTakeLend":
@@ -404,6 +407,7 @@ export function positionBoundsMarketId(
   if (marketField === "marketId")
     return "marketId" in limit &&
       limit.type !== "midnightSupplyCollateral" &&
+      limit.type !== "midnightSupplyCollateralMakeBorrow" &&
       limit.type !== "midnightRedeem" &&
       limit.type !== "midnightTakeLend" &&
       limit.type !== "midnightTakeBorrow" &&

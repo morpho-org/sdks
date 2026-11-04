@@ -10,7 +10,7 @@ import {
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { type Address, type Client, maxUint256, zeroAddress } from "viem";
-import { getBlock, getBlockNumber, getCode, multicall } from "viem/actions";
+import { getBlock, getBlockNumber, getCode, readContract } from "viem/actions";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   MidnightMarketLiquidationCursorNotEnabledError,
@@ -255,6 +255,7 @@ export function validateMidnightMakerOfferStates(params: {
  *
  * The reader uses a single block for contract reads and returns that block's
  * timestamp as `now`; oracle code checks use the same block number.
+ * Contract reads do not require a Multicall3 deployment or viem chain metadata.
  *
  * @internal
  * @param params.client - Viem client used for state reads.
@@ -264,7 +265,7 @@ export function validateMidnightMakerOfferStates(params: {
  * @returns Per-offer states plus the timestamp of the pinned block.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
- * @throws {viem.BaseError} when block, multicall, or oracle-code reads fail.
+ * @throws {viem.BaseError} when block, contract, or oracle-code reads fail.
  * @example
  * ```ts
  * const { states, now } = await fetchMidnightMakerOfferStates({
@@ -340,76 +341,83 @@ export async function fetchMidnightMakerOfferStates(params: {
     lltvEnabledByCollateral,
     liquidationCursorEnabledByCollateral,
   ] = await Promise.all([
-    multicall(params.client, {
-      contracts: markets.map(({ id }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "marketState" as const,
-        args: [id] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: groups.map(({ maker, group }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "consumed" as const,
-        args: [maker, group] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: owners.map(({ id, maker }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "credit" as const,
-        args: [id, maker] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: owners.map(({ id, maker }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "debt" as const,
-        args: [id, maker] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: defaultFeeTokens.map((loanToken) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "defaultContinuousFee" as const,
-        args: [loanToken] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: collaterals.map(({ collateral }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "isLltvEnabled" as const,
-        args: [collateral.lltv] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
-    multicall(params.client, {
-      contracts: collaterals.map(({ collateral }) => ({
-        address: midnight,
-        abi: midnightAbi,
-        functionName: "isLiquidationCursorEnabled" as const,
-        args: [collateral.liquidationCursor] as const,
-      })),
-      allowFailure: false,
-      blockNumber,
-    }),
+    Promise.all(
+      markets.map(({ id }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "marketState" as const,
+          args: [id] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      groups.map(({ maker, group }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "consumed" as const,
+          args: [maker, group] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      owners.map(({ id, maker }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "credit" as const,
+          args: [id, maker] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      owners.map(({ id, maker }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "debt" as const,
+          args: [id, maker] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      defaultFeeTokens.map((loanToken) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "defaultContinuousFee" as const,
+          args: [loanToken] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      collaterals.map(({ collateral }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "isLltvEnabled" as const,
+          args: [collateral.lltv] as const,
+          blockNumber,
+        }),
+      ),
+    ),
+    Promise.all(
+      collaterals.map(({ collateral }) =>
+        readContract(params.client, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "isLiquidationCursorEnabled" as const,
+          args: [collateral.liquidationCursor] as const,
+          blockNumber,
+        }),
+      ),
+    ),
   ]);
   const defaultFeeByLoanToken = new Map(
     defaultFeeTokens.map((loanToken, index) => [

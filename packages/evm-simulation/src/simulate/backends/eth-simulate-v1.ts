@@ -188,6 +188,8 @@ export const rpc = async <T>(
  * @throws {SlippageCheckUnavailableError} When a planned state read fails.
  * @throws {SimulationAssertError} When an assertion fails, its read reverts,
  *   or its check throws (the thrown error is preserved as `cause`).
+ * @throws {SimulationLogAssertError} When an `assertLogs` check returns a
+ *   failure message or throws; a thrown check error is kept as `cause`.
  * @throws {SimulationRevertedError} When a preparation or user transaction
  *   reverts or the node reports a bundle-level revert (code 3, an
  *   `execution reverted` / `VM execution error` message, or insufficient funds).

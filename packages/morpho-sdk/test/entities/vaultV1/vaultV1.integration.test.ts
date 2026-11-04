@@ -22,12 +22,14 @@ import {
   VaultAddressMismatchError,
   VaultAssetMismatchError,
 } from "../../../src/types/index.js";
+import { inKindVaultV2Data } from "../../fixtures/inKindRedeem.js";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
 import { vaultBundlesV1Test } from "../../helpers/vaultBundlesV1.js";
+import { seedVaultV2DeadDeposits } from "../../helpers/vaultV2.js";
 import { test } from "../../setup.js";
 
 describe("MorphoVaultV1 entity tests", () => {
@@ -388,14 +390,15 @@ describe("MorphoVaultV1 entity tests", () => {
         vault.migrateToV2({
           userAddress: client.account.address,
           sourceVault,
-          targetVault: {
-            address: KeyrockUsdcVaultV2.address,
-            asset: sourceVault.asset,
-            lastUpdate: 0n,
-            accrueInterest: () => ({
-              vault: { toShares: () => 0n },
-            }),
-          } as never,
+          targetVault: Object.assign(
+            inKindVaultV2Data({ address: KeyrockUsdcVaultV2.address }),
+            {
+              asset: sourceVault.asset,
+              accrueInterest: () => ({
+                vault: { toShares: () => 0n },
+              }),
+            },
+          ) as never,
           shares: 1n,
         }),
       ).toThrow(NonPositiveInputError);
@@ -413,10 +416,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       const result = vault.migrateToV2({
         userAddress: client.account.address,
@@ -450,10 +452,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       expect(() =>
         vault.migrateToV2({
@@ -480,10 +481,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       expect(() =>
         vault.migrateToV2({
@@ -510,10 +510,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KpkWETHVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KpkWETHVaultV2.address, client),
+      });
 
       expect(() =>
         vault.migrateToV2({
@@ -539,10 +538,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       const result = vault.migrateToV2({
         userAddress: client.account.address,
@@ -571,10 +569,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       const result = vault.migrateToV2({
         userAddress: client.account.address,
@@ -609,6 +606,10 @@ describe("MorphoVaultV1 entity tests", () => {
         );
 
         const sourceVault = await vault.getData();
+        await seedVaultV2DeadDeposits(client, {
+          getData: () =>
+            fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+        });
         const targetVault = await fetchAccrualVaultV2(
           KeyrockUsdcVaultV2.address,
           client,
@@ -652,6 +653,10 @@ describe("MorphoVaultV1 entity tests", () => {
         );
 
         const sourceVault = await vault.getData();
+        await seedVaultV2DeadDeposits(client, {
+          getData: () =>
+            fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+        });
         const targetVault = await fetchAccrualVaultV2(
           KeyrockUsdcVaultV2.address,
           client,
@@ -688,10 +693,9 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-      );
+      const targetVault = await seedVaultV2DeadDeposits(client, {
+        getData: () => fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      });
 
       const result = vault.migrateToV2({
         userAddress: OTHER_USER,
@@ -721,6 +725,10 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const sourceVault = await vault.getData();
+      await seedVaultV2DeadDeposits(client, {
+        getData: () =>
+          fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, publicClient),
+      });
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         publicClient,

@@ -27,6 +27,7 @@ import {
   SlippageCheckUnavailableError,
   simulate,
 } from "../../src/index.js";
+import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -67,6 +68,7 @@ async function buildFundedSupply(client: AnvilTestClient<typeof mainnet>) {
     .extend(morphoViemExtension({ supportSignature: false }))
     .morpho.blue(CbbtcUsdcBlue, mainnet.id)
     .supply({
+      marketData: await seededMarketData(client, CbbtcUsdcBlue),
       userAddress: client.account.address,
       assets,
       deadline: maxUint256,

@@ -1,4 +1,4 @@
-import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import {
@@ -7,11 +7,7 @@ import {
   MorphoVaultV1,
   MorphoVaultV2,
 } from "../entities/index.js";
-import {
-  MarketIdMismatchError,
-  type Metadata,
-  type MorphoClientType,
-} from "../types/index.js";
+import type { Metadata, MorphoClientType } from "../types/index.js";
 
 /**
  * Builds the stateless `morpho` namespace exposed on an extended viem client. Wraps the supplied
@@ -49,11 +45,7 @@ function createMorphoNamespace(
     },
 
     blue(marketParams: MarketParams, chainId: number) {
-      const derivedId = MarketUtils.getMarketId(marketParams);
-      // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
-      if (marketParams.id !== derivedId) {
-        throw new MarketIdMismatchError(marketParams.id, derivedId);
-      }
+      // The constructor rejects one-time/hardcoded/agent-written market params whose id does not hash from the tuple.
       return new MorphoBlue(namespace, marketParams, chainId);
     },
 

@@ -1,7 +1,9 @@
 import type { Address, Hex } from "viem";
+import { MathLib } from "../../math/MathLib.js";
 import type { BigIntish, Hash } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
 import type { AccrualVault } from "../Vault.js";
+import type { IVaultV2Allocation } from "./VaultV2.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
@@ -230,6 +232,52 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    */
   maxDeposit(_data: Hex, assets: BigIntish) {
     return this.accrualVaultV1.maxDeposit(assets);
+  }
+
+  /**
+   * Returns unbooked Vault V1 share appreciation at the adapter's accrued state.
+   * For deposit quotes, accrue to the expected inclusion time plus a caller-chosen delay
+   * margin; the current block's state omits interest earned before inclusion.
+   * Residual shares use the nested snapshot, which `accrueInterest` leaves unaccrued
+   * when parent allocation is zero.
+   * @param _data - Adapter routing data; ignored.
+   * @param allocations - Recorded liquidity allocations.
+   * @returns Nonnegative pending increase, or zero when the adapter allocation is absent,
+   *   the adapter holds no Vault V1 shares, or the shares' current value does not exceed the recorded allocation.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const fetched = await fetchAccrualVaultV2(
+   *   "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
+   *   client,
+   * );
+   * const { timestamp } = await client.getBlock();
+   * // Illustrative delays; choose both for the chain and transaction submission path.
+   * const expectedInclusionTimestamp = timestamp + 30n;
+   * const inclusionMargin = 30n;
+   * const { vault } = fetched.accrueInterest(expectedInclusionTimestamp + inclusionMargin);
+   * const pending = vault.accrualLiquidityAdapter?.pendingAllocationIncrease?.(
+   *   vault.liquidityData,
+   *   vault.liquidityAllocations ?? [],
+   * ) ?? 0n;
+   * ```
+   */
+  pendingAllocationIncrease(
+    _data: Hex,
+    allocations: readonly IVaultV2Allocation[],
+  ): bigint {
+    const recorded = allocations.find(
+      (allocation) => allocation.id === this.adapterId,
+    );
+    if (recorded == null || this.shares === 0n) return 0n;
+    return MathLib.zeroFloorSub(
+      this.accrualVaultV1.toAssets(this.shares),
+      recorded.allocation,
+    );
   }
 
   /**

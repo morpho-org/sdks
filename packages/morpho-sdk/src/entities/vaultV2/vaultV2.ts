@@ -2,7 +2,7 @@ import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  type MarketParams,
+  MarketParams,
   MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
@@ -34,6 +34,7 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
+import { validateVaultV2DeadShares } from "../../helpers/deadShares.js";
 import {
   computeMinForceWithdrawSharePrice,
   computeVaultMaxShareAllowance,
@@ -213,6 +214,10 @@ export interface VaultV2Actions {
    * const tx = action.buildTx(); // For a client configured with supportSignature: false.
    * // tx satisfies Readonly<Transaction<VaultV2DepositAction>>
    * ```
+   * @throws {MissingDeadSharesDataError} when `vaultData` lacks the dead-share, cap or adapter data
+   * the dead-deposit check needs, such as a hand-built or API-sourced snapshot.
+   * @throws {InsufficientDeadSharesError} when the vault, or a market or vault it can allocate to,
+   * holds less than the required dead deposit.
    */
   deposit: (
     params: {
@@ -652,6 +657,8 @@ export interface VaultV2Actions {
    * This is the share-based counterpart to forceWithdraw, useful for maximum withdrawal scenarios
    * where specifying an exact asset amount is impractical.
    *
+   * Inputs are copied when the handle is created, so later changes to them are not encoded.
+   *
    * The total assets passed to forceDeallocate calls must be greater than or equal to the
    * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
    * amounts to account for share-price drift between submission and execution.
@@ -784,6 +791,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
         max: 0n,
       });
     }
+    // Throws when the vault, or a market it can allocate to, lacks a sufficient dead deposit.
+    validateVaultV2DeadShares(vaultData);
     const referralFeeAssets = getBundlesReferralFeeAssets(
       funding.assets,
       common.referralFeePct,
@@ -1574,16 +1583,22 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
+    const shares = redeem.shares;
+    const deallocationsSnapshot: Deallocation[] = deallocations.map(
+      ({ adapter, marketParams, amount }) => ({
+        adapter,
+        amount,
+        ...(marketParams && { marketParams: new MarketParams(marketParams) }),
+      }),
+    );
+
     return {
       buildTx: () =>
         vaultV2ForceRedeem({
           vault: { address: this.vault },
           args: {
-            deallocations,
-            redeem: {
-              shares: redeem.shares,
-              recipient: userAddress,
-            },
+            deallocations: deallocationsSnapshot,
+            redeem: { shares, recipient: userAddress },
             onBehalf: userAddress,
           },
           metadata: this.client.options.metadata,

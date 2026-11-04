@@ -2,12 +2,11 @@
 
 | Field      | Value                                                                                                                                    |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted; approvalAmount allowance-bound rationale superseded by ADR-2026-10-21-unlimited-sdk-approvals |
 | **Date**   | 2026-10-02                                                                                                                               |
 | **Author** | @jinmel                                                                                                                                  |
 | **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` 2.0.0, `morpho-ts` 4.0.0, `blue-sdk` 8.0.0, `evm-simulation` next major |
 
-_Status is the only field that changes after acceptance._
+_Frozen after merge; only superseded-by entries in References change._
 
 ## Context
 
@@ -566,3 +565,4 @@ quote and offer selection, or any `evm-simulation` change beyond the bundle-rete
 - [`ADR-2026-09-17-remove-bundler3-primitives-without-deprecation`](./ADR-2026-09-17-remove-bundler3-primitives-without-deprecation.md)
   — precedent for removing an unsupported route without a coexistence minor.
 - Accepted in the PR that added this file.
+- approvalAmount allowance-bound rationale superseded by ADR-2026-10-21-unlimited-sdk-approvals.

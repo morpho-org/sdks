@@ -234,7 +234,9 @@ function planMidnightCollateralRead(params: {
  *   parking callback is not resolved for a measurement, or a
  *   native-funded Blue parking or takeLend has no registered wNative token.
  *   Native value sent alongside typed inputs also requires a planned native
- *   measurement for the owner.
+ *   measurement for the owner. Native value sent with `midnightSupplyCollateral`
+ *   or `midnightSupplyCollateralMakeBorrow` requires a registered wNative and
+ *   an owner-side wNative collateral measurement.
  *   `midnightSupplyCollateralTakeBorrow` also throws if native value is sent
  *   without a registered wNative, the owner's native value exceeds the quoted
  *   wNative collateral pull cap, or a collateral token or loan-token/proceeds
@@ -292,6 +294,14 @@ export function planStateReads(params: {
         throw new SlippageCheckUnavailableError(
           `Blue parking is measured on the bundle sender "${params.owner}" because MidnightBundlesV2 creates the BlueBuyCallback for msg.sender; account must equal the sender or be omitted.`,
         );
+      if (
+        limit.type === "midnightSupplyCollateralMakeBorrow" &&
+        limit.account !== undefined &&
+        !isAddressEqual(limit.account, params.owner)
+      )
+        throw new SlippageCheckUnavailableError(
+          `Maker collateral is measured on the bundle sender "${params.owner}" because MidnightBundlesV2 cancelAndMake supplies collateral for msg.sender; account must equal the sender or be omitted.`,
+        );
       const measurements: SlippageMeasurement[] = [];
       const paidIsNative =
         limit.assetPaid !== undefined &&
@@ -319,14 +329,18 @@ export function planStateReads(params: {
       }
       if (
         (limit.type === "midnightSupplyBlueMakeLend" ||
-          limit.type === "midnightTakeLend") &&
+          limit.type === "midnightTakeLend" ||
+          limit.type === "midnightSupplyCollateral" ||
+          limit.type === "midnightSupplyCollateralMakeBorrow") &&
         params.nativeValueSent &&
         params.wNative === undefined
       ) {
         const operation =
           limit.type === "midnightSupplyBlueMakeLend"
             ? "native-funded Blue parking"
-            : "a native-funded take";
+            : limit.type === "midnightTakeLend"
+              ? "a native-funded take"
+              : "native-funded collateral supply";
         throw new SlippageCheckUnavailableError(
           `${label}: native value is sent but no wNative is registered for this chain, so ${operation} cannot be measured. Send no native value.`,
         );
@@ -654,7 +668,10 @@ export function planStateReads(params: {
           (limit.type === "midnightRepayWithdrawCollateral" ||
             limit.type === "midnightTakeRepayWithdrawCollateral" ||
             limit.type === "midnightTakeLend" ||
-            limit.type === "midnightSupplyBlueMakeLend");
+            limit.type === "midnightSupplyBlueMakeLend" ||
+            ((limit.type === "midnightSupplyCollateral" ||
+              limit.type === "midnightSupplyCollateralMakeBorrow") &&
+              params.nativeValueSent === true));
         const nativeAndWrapped =
           params.wNative !== undefined &&
           isAddressEqual(token, params.wNative) &&
@@ -752,7 +769,12 @@ export function planStateReads(params: {
   );
   if (
     params.nativeValueSent === true &&
-    operations.some(({ limit }) => limit.inputs !== undefined) &&
+    operations.some(
+      ({ limit }) =>
+        limit.inputs !== undefined ||
+        limit.type === "midnightSupplyCollateral" ||
+        limit.type === "midnightSupplyCollateralMakeBorrow",
+    ) &&
     !operations.some(({ measurements }) =>
       measurements.some(
         (measurement) =>

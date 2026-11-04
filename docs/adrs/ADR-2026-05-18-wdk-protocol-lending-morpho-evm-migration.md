@@ -2,12 +2,11 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
 | **Date**   | 2026-05-18 |
 | **Author** | @foulques |
 | **Scope**  | Repo-wide / Package: `wdk-protocol-lending-morpho-evm` |
 
-_Migrated from TIB-2026-05-18-wdk-protocol-lending-morpho-evm-migration. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-05-18-wdk-protocol-lending-morpho-evm-migration. Historical record: its implementation-time sections and instructions are kept as written; only superseded-by entries in References are maintained._
 
 ---
 

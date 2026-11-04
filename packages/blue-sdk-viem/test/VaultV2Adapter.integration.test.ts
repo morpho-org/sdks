@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2,
   AccrualVaultV2MidnightAdapter,
+  AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   CapacityLimitReason,
   MarketParams,
@@ -37,6 +38,7 @@ import {
   encodeDeployData,
   encodeFunctionData,
   erc20Abi,
+  erc4626Abi,
   padHex,
   parseAbi,
   parseEther,
@@ -676,9 +678,19 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const depositAmount = parseUnits("2000000", 6); // 1M
       const result = accrualVaultV2.maxDeposit(depositAmount);
+      const adapter = accrualVaultV2.accrualLiquidityAdapter;
+      expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+      const vaultV1Adapter = adapter as AccrualVaultV2MorphoVaultV1Adapter;
+      const currentAssets = await readContract(client, {
+        address: vaultV1Adapter.morphoVaultV1,
+        abi: erc4626Abi,
+        functionName: "previewRedeem",
+        args: [vaultV1Adapter.shares],
+      });
+      expect(currentAssets).toBeGreaterThan(allocation);
 
       expect(result).toStrictEqual({
-        value: absoluteCap - allocation,
+        value: absoluteCap - currentAssets,
         limiter: CapacityLimitReason.vaultV2_absoluteCap,
       });
     });

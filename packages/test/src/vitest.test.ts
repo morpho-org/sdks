@@ -33,7 +33,9 @@ const retryForkBlockNumber = 1n;
 const timeoutForkBlockNumber = 2n;
 const fakeClient = {
   account: { address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" },
+  chain: mainnet,
   getCode: vi.fn().mockResolvedValue(undefined),
+  setFeeTokenBalance: vi.fn().mockResolvedValue(undefined),
   setBlockTimestampInterval: vi.fn().mockResolvedValue(undefined),
 } as unknown as AnvilTestClient<typeof mainnet>;
 

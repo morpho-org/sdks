@@ -1,4 +1,5 @@
 import {
+  DEAD_ADDRESS,
   getChainAddresses,
   Market,
   type MarketId,
@@ -78,6 +79,7 @@ export async function fetchMarket(
         hasPrice,
         price,
         rateAtTarget,
+        deadSupplyShares,
       } = await readContract(client, {
         ...parameters,
         abi,
@@ -102,6 +104,7 @@ export async function fetchMarket(
         rateAtTarget: isAddressEqual(marketParams.irm, adaptiveCurveIrm)
           ? rateAtTarget
           : undefined,
+        deadSupplyShares,
       });
     } catch (error) {
       if (
@@ -114,22 +117,30 @@ export async function fetchMarket(
     }
   }
 
-  const [params, market] = await Promise.all([
-    readContractRestructured(client, {
-      ...parameters,
-      address: blue,
-      abi: blueAbi,
-      functionName: "idToMarketParams",
-      args: [id],
-    }),
-    readContractRestructured(client, {
-      ...parameters,
-      address: blue,
-      abi: blueAbi,
-      functionName: "market",
-      args: [id],
-    }),
-  ]);
+  const [params, market, { supplyShares: deadSupplyShares }] =
+    await Promise.all([
+      readContractRestructured(client, {
+        ...parameters,
+        address: blue,
+        abi: blueAbi,
+        functionName: "idToMarketParams",
+        args: [id],
+      }),
+      readContractRestructured(client, {
+        ...parameters,
+        address: blue,
+        abi: blueAbi,
+        functionName: "market",
+        args: [id],
+      }),
+      readContractRestructured(client, {
+        ...parameters,
+        address: blue,
+        abi: blueAbi,
+        functionName: "position",
+        args: [id, DEAD_ADDRESS],
+      }),
+    ]);
 
   // Throws before reading the oracle if the RPC returned another market's params.
   validateMarketParamsId(id, params);
@@ -159,5 +170,6 @@ export async function fetchMarket(
     ...market,
     price,
     rateAtTarget,
+    deadSupplyShares,
   });
 }

@@ -24,6 +24,10 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
+Read [Adopting dead-share protection](./DEAD-SHARE-PROTECTION.md) for the protected Blue `supply`
+overload and the dead-deposit checks on supply and deposit flows. Snapshot-free Blue `supply`
+is deprecated but remains unprotected during the deprecation minor.
+
 Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
 API removals and the new unlimited-approval behavior.
 
@@ -51,14 +55,16 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
-| | `supplyCollateral`, `redeem` | Direct call |
+| | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.
 
 `makeWithdraw` publishes reduce-only sell offers for lend limit exits. `makeRepay` publishes
-reduce-only buy offers for borrow limit exits and uses the same loan reserve inputs as `makeLend`.
+reduce-only buy offers for borrow limit exits; its `loanAssets` input only sets the
+minimum Midnight allowance that `getRequirements()` checks (the approval it returns is
+unlimited), while the signed offer caps bound fills.
 Both preserve the supplied offer tree and use `midnightCancelAndMake`; neither executes a fill
 or withdraws collateral during publication. Send their approval/authorization requirements first,
 then call `buildTx()` without a separate root signature.
