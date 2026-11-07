@@ -1,30 +1,35 @@
-import type { Address, Client } from "viem";
+import { type Address, type Client, getAddress } from "viem";
 import { getBytecode } from "viem/actions";
 import { RpcTransportError, SimulationValidationError } from "../../errors.js";
+import type { SimulationStateOverrides } from "../../params.js";
 import type { ParsedTransaction } from "../request/parse-request.js";
 import { rpc } from "./eth-simulate-v1.js";
 
 /**
  * Stage between block pinning and `eth_simulateV1`: every distinct transaction
- * target carrying calldata must hold contract code at the pinned state block.
+ * target carrying calldata must hold contract code at the pinned state block,
+ * or in its explicit caller code override. EIP-7702 delegation requires the
+ * delegate to hold code too, from its override or the pinned state block.
  *
  * A call to a code-less address succeeds on-chain as a no-op, so a missing
  * contract must fail non-bypassably before execution instead of producing a
  * `SimulationResult`. Value-only transfers to an EOA (empty calldata) stay
  * allowed — they are legitimate native transfers.
  *
- * A `to` deployed by an earlier transaction in the same simulated batch has no
- * code at the state block and is rejected; the pipeline does not model
- * in-bundle contract creations.
+ * Without an explicit code override, a `to` deployed by an earlier transaction
+ * in the same simulated batch has no code at the state block and is rejected;
+ * the pipeline does not model in-bundle contract creations.
  *
  * @param params - Check parameters.
  * @param params.client - Shared simulation client (created by `createSimulationClient`).
  * @param params.transactions - Parsed caller transactions, in execution order.
  * @param params.chainId - Request chain id, named in the validation error.
  * @param params.blockNumber - Pinned state block the `eth_getCode` reads run at.
- * @returns Nothing when every calldata target holds code.
+ * @param params.stateOverrides - Caller code overrides, checked instead of onchain code when present.
+ * @returns Nothing when every calldata target and its EIP-7702 delegate hold code.
  * @throws {SimulationValidationError} when a transaction with calldata targets
- *   a code-less address; `fieldErrors` names each offending `transactions[i].to`.
+ *   a code-less address or EIP-7702 delegate, in overrides or at the pinned block;
+ *   `fieldErrors` names each offending `transactions[i].to`.
  * @throws {RpcTransportError} when an `eth_getCode` read fails.
  * @throws {InvalidSimulationResponseError} when an `eth_getCode` reply has a
  *   2xx status and a body that is not JSON or is the JSON value `null`. Other
@@ -37,20 +42,45 @@ export async function assertTransactionTargetsHaveCode(params: {
   readonly transactions: readonly ParsedTransaction[];
   readonly chainId: number;
   readonly blockNumber: bigint;
+  readonly stateOverrides?: SimulationStateOverrides;
 }): Promise<void> {
-  const { client, transactions, chainId, blockNumber } = params;
+  const { client, transactions, chainId, blockNumber, stateOverrides } = params;
+  const overrides = new Map(
+    Object.entries(stateOverrides ?? {}).map(([address, account]) => [
+      address.toLowerCase(),
+      account,
+    ]),
+  );
   const checked = new Map<Address, Promise<`0x${string}` | undefined>>();
   // Start every distinct target's read up front so the RPCs run concurrently.
   for (const transaction of transactions) {
     if (transaction.data === "0x" || checked.has(transaction.to)) continue;
+    const code = overrides.get(transaction.to.toLowerCase())?.code;
     checked.set(
       transaction.to,
-      rpc("eth_getCode", () =>
-        getBytecode(client, {
-          address: transaction.to,
-          blockNumber,
-        }),
-      ),
+      (code !== undefined
+        ? Promise.resolve(code)
+        : rpc("eth_getCode", () =>
+            getBytecode(client, {
+              address: transaction.to,
+              blockNumber,
+            }),
+          )
+      ).then((resolvedCode) => {
+        if (
+          resolvedCode === undefined ||
+          !/^0xef0100[0-9a-f]{40}$/i.test(resolvedCode)
+        )
+          return resolvedCode;
+        // EIP-7702 follows one delegation; a code-less delegate is still a no-op.
+        const delegate = getAddress(`0x${resolvedCode.slice(8)}`);
+        const delegateCode = overrides.get(delegate.toLowerCase())?.code;
+        return delegateCode !== undefined
+          ? delegateCode
+          : rpc("eth_getCode", () =>
+              getBytecode(client, { address: delegate, blockNumber }),
+            );
+      }),
     );
   }
   // Settle every read before walking transactions: a fast rejection must not
@@ -86,7 +116,7 @@ export async function assertTransactionTargetsHaveCode(params: {
       continue;
     }
     const bytecode = outcome.value;
-    if (bytecode == null || bytecode === "0x") {
+    if (bytecode == null || bytecode.length <= 2) {
       fieldErrors.push(
         `transactions[${index}].to: no contract code at ${transaction.to}`,
       );

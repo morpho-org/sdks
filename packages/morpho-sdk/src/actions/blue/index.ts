@@ -6,4 +6,5 @@ export * from "./supply.js";
 export * from "./supplyCollateral.js";
 export * from "./supplyCollateralBorrow.js";
 export * from "./withdraw.js";
+export * from "./withdrawBuyCallback.js";
 export * from "./withdrawCollateral.js";

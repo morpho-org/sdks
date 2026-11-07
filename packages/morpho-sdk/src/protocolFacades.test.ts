@@ -1,5 +1,7 @@
 import {
   blueMarketParamsAbi,
+  erc3643Abi,
+  erc3643IdentityRegistryAbi,
   midnightBlueBuyCallbackFactoryAbi,
   midnightEcrecoverAuthorizerAbi,
   midnightEcrecoverRatifierAbi,
@@ -8,7 +10,11 @@ import {
   midnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
 import { addresses } from "@morpho-org/morpho-sdk/addresses";
-import { marketParamsAbi as rawBlueMarketParamsAbi } from "@morpho-org/morpho-sdk/blue/abis";
+import {
+  erc3643Abi as rawBlueErc3643Abi,
+  erc3643IdentityRegistryAbi as rawBlueErc3643IdentityRegistryAbi,
+  marketParamsAbi as rawBlueMarketParamsAbi,
+} from "@morpho-org/morpho-sdk/blue/abis";
 import { addresses as rawBlueAddresses } from "@morpho-org/morpho-sdk/blue/addresses";
 import {
   ERC20_ALLOWANCE_RECIPIENTS as rawBlueErc20AllowanceRecipients,
@@ -100,6 +106,8 @@ import {
   NonTupleReturnValueError,
   Permit2ExpirationOutOfRangeError,
   RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
   UnknownAbiFunctionError,
   UnknownBlueDataError,
   UnknownBlueFactory,
@@ -197,7 +205,11 @@ import {
   MidnightSetterRatifierUtils,
   validateClientChainId,
 } from "@morpho-org/morpho-sdk/utils";
-import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
+import {
+  NegativeValueError as RawNegativeValueError,
+  RetriesExhaustedError as RawRetriesExhaustedError,
+  RetryStoppedError as RawRetryStoppedError,
+} from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { validateClientChainId as rawValidateClientChainId } from "./actions/requirements/validateClientChainId.js";
 
@@ -216,6 +228,8 @@ describe("protocol facades", () => {
     [isUndecodableResultError, rawIsUndecodableResultError],
     [validateClientChainId, rawValidateClientChainId],
     [blueMarketParamsAbi, rawBlueMarketParamsAbi],
+    [erc3643Abi, rawBlueErc3643Abi],
+    [erc3643IdentityRegistryAbi, rawBlueErc3643IdentityRegistryAbi],
     [addresses, rawBlueAddresses],
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
     [ERC20_ALLOWANCE_RECIPIENTS, rawBlueErc20AllowanceRecipients],
@@ -240,6 +254,8 @@ describe("protocol facades", () => {
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],
+    [RetriesExhaustedError, RawRetriesExhaustedError],
+    [RetryStoppedError, RawRetryStoppedError],
     [
       RegistryValueAlreadyRegisteredError,
       RawBlueRegistryValueAlreadyRegisteredError,

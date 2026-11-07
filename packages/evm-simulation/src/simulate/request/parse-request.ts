@@ -43,6 +43,7 @@ import {
   SIMULATION_MODES,
   type SimulateInputParams,
   type SimulationMode,
+  type SimulationStateOverrides,
   type StateBlock,
 } from "../../params.js";
 import type { Assertion, LogAssertion } from "../../types.js";
@@ -91,6 +92,7 @@ export interface ParsedRequest {
   readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly block?: StateBlock;
+  readonly stateOverrides?: SimulationStateOverrides;
   /** `"none"` when the caller explicitly opted out of every check. */
   readonly limits:
     | (Omit<SimulationLimits, "operations"> & {
@@ -1750,6 +1752,7 @@ export function requiredQuoteErrors({
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
  * must bind to `chainId`. Final-mode signed requests are retained for use-event checks.
+ * Caller `stateOverrides` are copied without validation or normalization.
  *
  * @param input - Caller input (`SimulateInputParams`-shaped, including quote-only requests).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
@@ -1773,12 +1776,15 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
       "transactions",
       "blockNumber",
       "block",
+      "stateOverrides",
       "mode",
       "authorizations",
       "limits",
     ],
     path: "input",
   });
+
+  const stateOverrides = structuredClone(input.stateOverrides);
 
   // chainId
   const chainId = input.chainId;
@@ -2055,6 +2061,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
     authorizations,
     ...(blockNumber !== undefined ? { blockNumber } : {}),
     ...(block !== undefined ? { block } : {}),
+    ...(stateOverrides !== undefined ? { stateOverrides } : {}),
     limits: normalizedLimits,
   });
 }

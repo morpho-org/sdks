@@ -92,6 +92,60 @@ const tx = (overrides: object = {}) => ({
   ...overrides,
 });
 
+describe("state overrides", () => {
+  const parse = (stateOverrides?: unknown) =>
+    parseRequest({
+      chainId: 1,
+      transactions: [tx()],
+      limits: "none",
+      stateOverrides,
+    } as unknown as SimulateParams);
+
+  test("copies and freezes overrides without changing keys or freezing the input", () => {
+    const address = TOKEN.toLowerCase() as Address;
+    const slot = `0x${"00".repeat(32)}` as const;
+    const value = `0x${"ab".repeat(32)}`;
+    const input = {
+      [address]: {
+        balance: "0x0",
+        nonce: "0x1",
+        code: "0x",
+        stateDiff: { [slot]: value },
+      },
+      [OWNER]: { state: {} },
+    };
+    const parsed = parse(input);
+    expect(parsed.stateOverrides).toEqual(input);
+    expect(Object.isFrozen(parsed.stateOverrides)).toBe(true);
+    expect(Object.isFrozen(parsed.stateOverrides?.[address]?.stateDiff)).toBe(
+      true,
+    );
+    expect(Object.isFrozen(input[address]?.stateDiff)).toBe(false);
+    input[address]!.stateDiff![slot] = slot;
+    expect(parsed.stateOverrides?.[address]?.stateDiff?.[slot]).toBe(value);
+  });
+
+  test("keeps omission distinct from an explicit empty map", () => {
+    expect(parse()).not.toHaveProperty("stateOverrides");
+    expect(parse({}).stateOverrides).toEqual({});
+  });
+
+  test("leaves override validation and normalization to the consumer", () => {
+    const input = {
+      [TOKEN]: {},
+      [TOKEN.toLowerCase()]: {
+        balance: "0x01",
+        nonce: "0x10000000000000000",
+        code: "0x1",
+        state: { "0xAB": "0x00" },
+        stateDiff: {},
+        unknown: "0x",
+      },
+    };
+    expect(parse(input).stateOverrides).toEqual(input);
+  });
+});
+
 const erc20Approval: SimulationAuthorization = {
   type: "erc20Approval",
   token: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
@@ -2647,7 +2701,7 @@ describe("parseRequest", () => {
       },
     ],
     ["unknown transaction field", { transactions: [tx({ gasPrice: 1n })] }],
-    ["unknown input field", { transactions: [tx()], stateOverrides: {} }],
+    ["unknown input field", { transactions: [tx()], unknownField: {} }],
     [
       "unknown authorization field",
       {

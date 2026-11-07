@@ -91,6 +91,8 @@ const tickArb = fc.oneof(
   fc.constantFrom(0n, 1n, MAX_TICK / 2n, MAX_TICK - 1n, MAX_TICK),
   fc.bigInt({ min: 0n, max: MAX_TICK }),
 );
+// Midnight `take` only accepts ticks on the market's spacing (4 in `marketFor`).
+const spacedTickArb = tickArb.map((tick) => tick - (tick % 4n));
 const capArb = fc.oneof(
   fc.constantFrom(1n, MAX_OFFER_CAP),
   fc.bigInt({ min: 1n, max: MAX_OFFER_CAP }),
@@ -141,7 +143,7 @@ describe("OfferUtils.onchainHash", () => {
     fc.record({
       market: marketArb,
       buy: fc.boolean(),
-      tick: tickArb.map((tick) => tick - (tick % 4n)),
+      tick: spacedTickArb,
       maxUnits: capArb,
       group: fc.uint8Array({ minLength: 32, maxLength: 32 }).map(bytesToHex),
     }),
@@ -205,7 +207,7 @@ describe("OfferUtils.getConsumableUnits", () => {
       fc.record({
         market: marketArb,
         buy: fc.boolean(),
-        tick: tickArb,
+        tick: spacedTickArb,
         maxUnits: capArb,
         consumed: consumedArb,
         window: windowArb,
@@ -247,7 +249,7 @@ describe("OfferUtils.getConsumableUnits", () => {
     [
       fc.record({
         market: marketArb,
-        tick: tickArb.filter((tick) => TickLib.tickToPrice(tick) > 0n),
+        tick: spacedTickArb.filter((tick) => TickLib.tickToPrice(tick) > 0n),
         maxAssets: capArb,
         consumed: consumedArb,
         window: windowArb,
@@ -297,7 +299,7 @@ describe("OfferUtils.getConsumableUnits", () => {
     [
       fc.record({
         market: marketArb,
-        tick: tickArb,
+        tick: spacedTickArb,
         maxAssets: capArb,
         consumed: consumedArb,
         window: windowArb,
@@ -352,7 +354,7 @@ describe("OfferUtils.getConsumableUnits", () => {
     [
       fc.record({
         market: marketArb,
-        tick: tickArb,
+        tick: spacedTickArb,
         maxAssets: capArb,
         consumed: consumedArb,
         window: windowArb,
@@ -431,7 +433,7 @@ describe("OfferUtils.getConsumableUnits", () => {
       fc.record({
         market: marketArb,
         buy: fc.boolean(),
-        tick: tickArb,
+        tick: spacedTickArb,
         cap: capArb,
         a: fc.bigInt({ min: 0n, max: 1_000_000n }),
         b: fc.bigInt({ min: 0n, max: 1_000_000n }),
@@ -472,7 +474,7 @@ describe("OfferUtils.getConsumableUnits", () => {
           )
           .map(([maturity, cbps, cf]) => marketFor(maturity, cbps, cf)),
         buy: fc.boolean(),
-        tick: tickArb,
+        tick: spacedTickArb,
         cap: capArb,
         window: windowArb,
       }),

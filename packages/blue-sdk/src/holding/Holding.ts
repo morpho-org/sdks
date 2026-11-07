@@ -39,6 +39,7 @@ export class Holding implements IHolding {
 
   /**
    * Whether the user is allowed to transfer this holding's balance.
+   * For ERC-3643 tokens, reflects whether the user is a verified recipient, not permission to send.
    */
   public canTransfer?: boolean;
 

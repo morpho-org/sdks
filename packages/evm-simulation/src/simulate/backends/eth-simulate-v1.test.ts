@@ -111,6 +111,40 @@ const FUNDING_MESSAGE =
   "Sender native balance cannot fund transaction value. Fund the sender or reduce value.";
 
 describe.sequential("executePlan", () => {
+  test("passes RPC-shaped state overrides alongside block overrides", async () => {
+    const stateOverrides = {
+      [OWNER]: {
+        code: `0xef0100${USDC.slice(2)}` as const,
+        balance: "0x123" as const,
+        nonce: "0x2" as const,
+      },
+      [USDC]: {
+        code: "0x60005460005260206000f3" as const,
+        stateDiff: { [encodeUint256(0n)]: encodeUint256(42n) },
+      },
+      [VAULT]: { state: {} },
+    };
+    params.plan = planExecution({
+      request: parseRequest({
+        chainId: 1,
+        transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+        limits: "none",
+        stateOverrides,
+      }),
+      owner: OWNER,
+      preparations: [],
+      reads: [],
+    });
+    params.blockGasLimit = 30_000_000n;
+    respondHappy(okCalls(1));
+    await executePlan(params);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(request.params[0].blockStateCalls[0]).toMatchObject({
+      stateOverrides,
+      blockOverrides: { gasLimit: numberToHex(30_000_000n) },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   test("default", async () => {
     respondHappy(okCalls(3));
     const evidence = await executePlan(params);

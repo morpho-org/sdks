@@ -25,8 +25,9 @@
 - `withdrawCollateral`
 - `repayWithdrawCollateral`
 - `refinance`
+- `withdrawBuyCallback`
 
-Each lazy action delegates to a pure encoder for one direct BlueBundlesV1 call. The entity does not
+Each lazy action except `withdrawBuyCallback` delegates to a pure encoder for one direct BlueBundlesV1 call. The entity does not
 offer a route flag or parallel BlueBundlesV1 factory. Blue write inputs do not
 include `slippageTolerance`, `minSharePrice`, or `maxSharePrice`.
 
@@ -61,6 +62,10 @@ required snapshot cannot prove the buffered position safe.
 - `withdrawCollateral` delegates to the repay path with no repay leg, so it funds no loan token; it
   requests only Morpho authorization.
 - `withdraw` and `refinance` request Morpho authorization.
+- `withdrawBuyCallback` returns no requirement. It sends a direct Morpho Blue withdrawal of a
+  BlueBuyCallback's whole supply position to its owner. The handle rejects an empty position or one
+  larger than market liquidity; `getRequirements()` throws unless the registered factory created
+  the callback, its `OWNER()` is the sender, and Blue still authorizes the sender for it.
 
 Classic approvals name BlueBundlesV1 and request the unlimited token maximum, capped by
 `MAX_TOKEN_APPROVALS`. ERC-2612 token permits and Permit2 SignatureTransfer remain exact because

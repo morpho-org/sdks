@@ -4,6 +4,8 @@ export {
   blueAbi,
   blueOracleAbi,
   erc2612Abi,
+  erc3643Abi,
+  erc3643IdentityRegistryAbi,
   erc5267Abi,
   metaMorphoAbi,
   metaMorphoFactoryAbi,

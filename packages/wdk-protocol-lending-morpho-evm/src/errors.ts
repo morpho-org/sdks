@@ -13,6 +13,7 @@ export class BlueBundlesV1DeadlineExceedsWindowError extends Error {
     super(
       `Signature deadline "${deadline}" exceeds the maximum "${maxDeadline}". Re-sign the requirement with a shorter deadline.`,
     );
+    this.name = "BlueBundlesV1DeadlineExceedsWindowError";
   }
 }
 
@@ -22,6 +23,7 @@ export class MissingWalletProviderError extends Error {
     super(
       'The wallet account has no usable provider. Configure "provider" with at least one RPC URL or EIP-1193 provider.',
     );
+    this.name = "MissingWalletProviderError";
   }
 }
 
@@ -42,6 +44,7 @@ export class PaymasterApprovalSpenderMismatchError extends Error {
     super(
       `The paymaster quote names "${spender}" as the fee-token spender, but the configured paymasterAddress is "${paymasterAddress}". Check the paymaster configuration before retrying the operation.`,
     );
+    this.name = "PaymasterApprovalSpenderMismatchError";
   }
 }
 
@@ -58,6 +61,7 @@ export class PaymasterApprovalGuardUnavailableError extends Error {
         ? 'The installed @tetherto/wdk-wallet-evm-erc-4337 no longer exposes "_getSmartAccount", so the fee-token approval spender cannot be checked. Install the version this package pins before retrying the operation.'
         : 'The installed abstractionkit no longer exposes "prependTokenPaymasterApproveToCallData", so the fee-token approval spender cannot be checked. Remove any abstractionkit override so the version @tetherto/wdk-wallet-evm-erc-4337 pins is installed before retrying the operation.',
     );
+    this.name = "PaymasterApprovalGuardUnavailableError";
   }
 }
 
@@ -78,6 +82,7 @@ export class UnconfirmedBroadcastError extends Error {
       `Broadcast of transaction "${hash}" could not be confirmed; it may still be included. Look up the hash, or rebroadcast serializedTransaction, before retrying the operation.`,
       { cause },
     );
+    this.name = "UnconfirmedBroadcastError";
   }
 }
 
@@ -90,6 +95,7 @@ export class InvalidTransactionMaxFeeError extends Error {
     super(
       `Invalid transactionMaxFee configuration value "${String(value)}". Use null or undefined to disable the cap, or a non-negative bigint or integer number.`,
     );
+    this.name = "InvalidTransactionMaxFeeError";
   }
 }
 
@@ -115,5 +121,99 @@ export class InvalidTransactionHashError extends Error {
           : ` The node may have received the transaction; look up "${eoa.localHash}" before retrying the operation.`
       }`,
     );
+    this.name = "InvalidTransactionHashError";
+  }
+}
+
+/** Thrown when an amount is neither a number nor a bigint. */
+export class InvalidAmountTypeError extends Error {
+  /** @param field - Invalid input field. */
+  constructor(field: string) {
+    super(`'${field}' must be a number or bigint.`);
+    this.name = "InvalidAmountTypeError";
+  }
+}
+
+/** Thrown when a numeric amount is not a safe integer. */
+export class UnsafeAmountError extends Error {
+  /** @param field - Invalid input field. */
+  constructor(field: string) {
+    super(
+      `'${field}' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.`,
+    );
+    this.name = "UnsafeAmountError";
+  }
+}
+
+/** Thrown when an address input is malformed or a forbidden zero address. */
+export class InvalidAddressError extends Error {
+  /**
+   * @param field - Invalid input field.
+   * @param nonZero - Whether the address must also be nonzero.
+   */
+  constructor(field: string, nonZero = false) {
+    super(
+      `'${field}' must be a valid address${nonZero ? " (not zero address)" : ""}.`,
+    );
+    this.name = "InvalidAddressError";
+  }
+}
+
+/** Thrown when a protocol option is invalid or required configuration is absent. */
+export class InvalidProtocolOptionError extends Error {
+  /** @param message - Validation failure and corrective configuration. */
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidProtocolOptionError";
+  }
+}
+
+/** Thrown when an operation has no configured vault or market target. */
+export class MissingMorphoTargetError extends Error {
+  /** @param message - Validation failure and corrective configuration. */
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingMorphoTargetError";
+  }
+}
+
+/** Thrown when an operation requires a writable wallet account. */
+export class ReadOnlyAccountError extends Error {
+  /** @param message - Validation failure and corrective configuration. */
+  constructor(message: string) {
+    super(message);
+    this.name = "ReadOnlyAccountError";
+  }
+}
+
+/** Thrown when the supplied token differs from the configured market token. */
+export class MarketTokenMismatchError extends Error {
+  /**
+   * @param params - Token mismatch details.
+   * @param params.token - Supplied token address.
+   * @param params.expectedToken - Configured market token address.
+   * @param params.kind - Market token role.
+   */
+  constructor({
+    token,
+    expectedToken,
+    kind,
+  }: {
+    readonly token: string;
+    readonly expectedToken: string;
+    readonly kind: "loan" | "collateral";
+  }) {
+    super(
+      `Token '${token}' does not match configured market ${kind} token '${expectedToken}'.`,
+    );
+    this.name = "MarketTokenMismatchError";
+  }
+}
+
+/** Thrown when the wallet token balance cannot fund an operation. */
+export class InsufficientTokenBalanceError extends Error {
+  constructor() {
+    super("Not enough funds to fulfill the operation.");
+    this.name = "InsufficientTokenBalanceError";
   }
 }

@@ -1,5 +1,20 @@
 # @morpho-org/midnight-sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- `new AccrualPosition(position, market)` now throws `InvalidMarketParameterError` when `position` carries a `marketId` that differs from `market.id`, instead of silently rebinding the position to `market`. Inputs without a `marketId`, or with the same id in any letter case, behave as before.
+- `MidnightApi` fetchers (`fetchBooks`, `fetchBook`, `fetchBookPriceLevels`, `fetchBookTakeableOffers`, `fetchBookQuote` and `fetchTakeableOffers`) now throw `InvalidMidnightApiResponseError` when a success response has a missing or non-object `data`, a non-string cursor, malformed price levels or takeable offers, or quote aggregates that are not integer strings. These responses previously surfaced as raw `TypeError` or `SyntaxError`, or passed through unchecked.
+- Add `blueBuyCallbackAbi`, the ABI of the per-owner BlueBuyCallback contract (`OWNER`, `setAuthorization`, `skim`, `onBuy` and the rest).
+- Add an optional `limit` to `MidnightApi.fetchBookQuote`, sent as the `limit` query param on `GET /books/{marketId}/{side}/quote`. It caps the offers the API walks (1 to 10,000, default 10,000). Omitting it sends no `limit`, as before.
+
+### Patch Changes
+
+- `OfferUtils.getConsumableUnits` and `Offer.getConsumableUnits` now return `0n` for offers Midnight `take` always rejects: an offer whose tick is not a multiple of the market's tick spacing, or a market whose loss factor is maxed out. They previously returned the offer's remaining cap, so quote and routing code could pick offers that revert onchain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 2.3.0
 
 ### Minor Changes

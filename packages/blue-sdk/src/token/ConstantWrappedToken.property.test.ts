@@ -53,8 +53,7 @@ describe("ConstantWrappedToken", () => {
     },
   );
 
-  // Exact-amount-out rounding diverges. Flip to test.prop once the SDK matches.
-  test.fails.prop(
+  test.prop(
     [
       fc.bigInt({ min: 0n, max: MAX_UINT_128 }),
       fc.integer({ min: 0, max: 36 }),
@@ -84,9 +83,7 @@ describe("ConstantWrappedToken", () => {
     },
   );
 
-  // Confirms this expected failure is the tracked divergence; flip it together
-  // with the fails.prop.
-  test("behavior: pinned exact-amount-out examples return the current rounded values", () => {
+  test("behavior: pinned exact-amount-out examples round up to receive the target", () => {
     const value = 1_000_000_000_001n;
     const wrapped18Underlying6 = new ConstantWrappedToken(
       { address: WRAPPED, decimals: 18 },
@@ -97,9 +94,9 @@ describe("ConstantWrappedToken", () => {
     const wrappedRoundTrip =
       wrapped18Underlying6.toWrappedExactAmountIn(wrappedAmount);
 
-    expect(wrappedAmount).toBe(1n);
-    expect(wrappedRoundTrip).toBeLessThan(value);
-    expect(wrappedRoundTrip).toBe(1_000_000_000_000n);
+    expect(wrappedAmount).toBe(2n);
+    expect(wrappedRoundTrip).toBeGreaterThanOrEqual(value);
+    expect(wrappedRoundTrip).toBe(2_000_000_000_000n);
 
     const wrapped6Underlying18 = new ConstantWrappedToken(
       { address: WRAPPED, decimals: 6 },
@@ -111,8 +108,8 @@ describe("ConstantWrappedToken", () => {
     const unwrappedRoundTrip =
       wrapped6Underlying18.toUnwrappedExactAmountIn(unwrappedAmount);
 
-    expect(unwrappedAmount).toBe(1n);
-    expect(unwrappedRoundTrip).toBeLessThan(value);
-    expect(unwrappedRoundTrip).toBe(1_000_000_000_000n);
+    expect(unwrappedAmount).toBe(2n);
+    expect(unwrappedRoundTrip).toBeGreaterThanOrEqual(value);
+    expect(unwrappedRoundTrip).toBe(2_000_000_000_000n);
   });
 });

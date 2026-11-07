@@ -19,6 +19,11 @@ import {
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  blueAbi,
+  midnightBlueBuyCallbackAbi,
+  midnightBlueBuyCallbackFactoryAbi,
+} from "../../abis.js";
+import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1PublicAllocations,
   getBlueBundlesV1ReferralFeeAssets,
@@ -35,6 +40,7 @@ import {
   blueSupplyCollateral,
   blueSupplyCollateralBorrow,
   blueWithdraw,
+  blueWithdrawBuyCallback,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
 } from "../../actions/index.js";
@@ -57,6 +63,8 @@ import {
   type ActionRequirement,
   type AssetsOrSharesArgs,
   type BlueBorrowAction,
+  BlueBuyCallbackOwnerMismatchError,
+  BlueBuyCallbackUnauthorizedError,
   type BlueRefinanceAction,
   type BlueRepayAction,
   type BlueRepayWithdrawCollateralAction,
@@ -64,9 +72,12 @@ import {
   type BlueSupplyCollateralAction,
   type BlueSupplyCollateralBorrowAction,
   type BlueWithdrawAction,
+  type BlueWithdrawBuyCallbackAction,
   type BlueWithdrawCollateralAction,
+  EmptyBlueSupplyPositionError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InsufficientBlueLiquidityError,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
@@ -75,6 +86,7 @@ import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
+  NotBlueBuyCallbackError,
   ReallocationsRequireBorrowError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
@@ -110,7 +122,10 @@ export interface BlueTokenRequirementsParams {
   readonly permit2Nonce?: bigint;
 }
 
-/** Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1. */
+/**
+ * Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1, except
+ * `withdrawBuyCallback`, which calls Morpho Blue directly.
+ */
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
@@ -426,6 +441,77 @@ export interface BlueActions {
     readonly RequirementSignature[],
     undefined
   >;
+
+  /**
+   * Prepares a direct Morpho Blue withdrawal of a BlueBuyCallback's whole supply position to its
+   * owner.
+   *
+   * A BlueBuyCallback parks a maker's Midnight buy-offer funds as Blue supply owned by the
+   * callback. After the offer is cancelled or expires, its owner recovers them with
+   * `withdraw(marketParams, 0, supplyShares, callbackAddress, userAddress)` sent straight to Morpho
+   * Blue: BlueBundlesV1 cannot act for the callback. The callback's constructor authorizes its
+   * owner on Blue, so no requirement is returned.
+   *
+   * The handle checks the snapshot synchronously: it must be the callback's position on this
+   * market, hold supply shares, and the market's liquidity must cover their assets.
+   * `getRequirements()` then reads the chain and throws unless the registered
+   * `midnightBlueBuyCallbackFactory` created the callback, its `OWNER()` is `userAddress`, and Blue
+   * still authorizes `userAddress` for the callback. Await it before submitting the transaction.
+   *
+   * @param params.userAddress - Callback owner, who sends the transaction and receives the assets.
+   * @param params.callbackAddress - BlueBuyCallback whose supply position is withdrawn.
+   * @param params.positionData - Fresh snapshot of the callback's position on this market, for
+   *   example from `getPositionData(callbackAddress)`. Every supply share in it is withdrawn.
+   * @returns Lazy owner and authorization checks with no requirements, and a synchronous
+   *   deep-frozen transaction targeting Morpho Blue.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {viem.InvalidAddressError} when `callbackAddress` is malformed.
+   * @throws {MissingAccrualPositionError} when no position snapshot is provided.
+   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
+   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another account than
+   *   `callbackAddress`.
+   * @throws {EmptyBlueSupplyPositionError} when the callback holds no supply shares.
+   * @throws {InsufficientBlueLiquidityError} when the position's assets exceed market liquidity.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when Morpho Blue or `midnightBlueBuyCallbackFactory` is not
+   *   registered.
+   * @throws {MissingContractCodeError} from `getRequirements()` when Morpho Blue or the factory has
+   *   no code at its registered address.
+   * @throws {NotBlueBuyCallbackError} from `getRequirements()` when the factory did not create
+   *   `callbackAddress`.
+   * @throws {BlueBuyCallbackOwnerMismatchError} from `getRequirements()` when the callback's
+   *   `OWNER()` is not `userAddress`.
+   * @throws {BlueBuyCallbackUnauthorizedError} from `getRequirements()` when Blue does not
+   *   authorize `userAddress` for the callback.
+   * @throws {viem.BaseError} from `getRequirements()` when a read fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const userAddress = zeroAddress;
+   * const callbackAddress = zeroAddress;
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const action = market.withdrawBuyCallback({
+   *   userAddress,
+   *   callbackAddress,
+   *   positionData: await market.getPositionData(callbackAddress),
+   * });
+   * await action.getRequirements(); // throws unless userAddress owns the callback
+   * const tx = action.buildTx();
+   * // tx satisfies Readonly<Transaction<BlueWithdrawBuyCallbackAction>>
+   * ```
+   */
+  withdrawBuyCallback: (params: {
+    readonly userAddress: Address;
+    readonly callbackAddress: Address;
+    readonly positionData: AccrualPosition;
+  }) => ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined>;
 
   /**
    * Prepares a direct BlueBundlesV1 loan-asset borrow.
@@ -1458,6 +1544,99 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
+    };
+  }
+
+  /** {@inheritDoc BlueActions.withdrawBuyCallback} */
+  withdrawBuyCallback(params: {
+    readonly userAddress: Address;
+    readonly callbackAddress: Address;
+    readonly positionData: AccrualPosition;
+  }): ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined> {
+    const { userAddress, callbackAddress, positionData } = params;
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (positionData == null) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: callbackAddress,
+    });
+    const shares = positionData.supplyShares;
+    if (shares === 0n) {
+      throw new EmptyBlueSupplyPositionError({
+        market: this.marketParams.id,
+        user: callbackAddress,
+      });
+    }
+    const assets = positionData.supplyAssets;
+    const liquidity = positionData.market.liquidity;
+    if (assets > liquidity) {
+      throw new InsufficientBlueLiquidityError({
+        market: this.marketParams.id,
+        assets,
+        liquidity,
+      });
+    }
+    const blue = getChainAddress(this.chainId, "blue");
+    const factory = getChainAddress(
+      this.chainId,
+      "midnightBlueBuyCallbackFactory",
+    );
+    const tx = blueWithdrawBuyCallback({
+      market: { chainId: this.chainId, marketParams: this.marketParams },
+      args: { callbackAddress, userAddress, shares },
+      metadata: this.client.options.metadata,
+    });
+
+    return {
+      getRequirements: async () => {
+        const viemClient = this.client.viemClient;
+        await validateClientChainId(viemClient, this.chainId);
+        await assertRegistryTargetsHaveCode(viemClient, this.chainId, [
+          { role: "blue", address: blue },
+          { role: "midnightBlueBuyCallbackFactory", address: factory },
+        ]);
+        // Check the factory first: OWNER() on an arbitrary address can revert or lie.
+        const isBlueBuyCallback = await readContract(viemClient, {
+          address: factory,
+          abi: midnightBlueBuyCallbackFactoryAbi,
+          functionName: "isBlueBuyCallback",
+          args: [callbackAddress],
+        });
+        if (!isBlueBuyCallback) {
+          throw new NotBlueBuyCallbackError(callbackAddress);
+        }
+        const [owner, isAuthorized] = await Promise.all([
+          readContract(viemClient, {
+            address: callbackAddress,
+            abi: midnightBlueBuyCallbackAbi,
+            functionName: "OWNER",
+          }),
+          readContract(viemClient, {
+            address: blue,
+            abi: blueAbi,
+            functionName: "isAuthorized",
+            args: [callbackAddress, userAddress],
+          }),
+        ]);
+        if (!isAddressEqual(owner, userAddress)) {
+          throw new BlueBuyCallbackOwnerMismatchError({
+            callback: callbackAddress,
+            owner,
+            userAddress,
+          });
+        }
+        if (!isAuthorized) {
+          throw new BlueBuyCallbackUnauthorizedError({
+            callback: callbackAddress,
+            userAddress,
+          });
+        }
+        return [];
+      },
+      buildTx: () => tx,
     };
   }
 

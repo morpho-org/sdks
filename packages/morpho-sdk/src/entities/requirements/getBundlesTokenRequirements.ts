@@ -64,10 +64,11 @@ export interface GetBundlesTokenRequirementsParams {
  * Resolves direct approval, ERC-2612, or Permit2 SignatureTransfer prerequisites for
  * a registered fixed bundles contract.
  *
- * Reads only the allowance and nonce state required by the selected path. Permit2 keeps the
- * ERC-20 allowance on canonical Permit2 while the one-time signed transfer names the bundles contract
- * as spender. The resolver picks the lowest unused unordered nonce by default; concurrent flows for
- * the same owner should pass explicit nonces.
+ * Returns no requirements when the direct bundles allowance covers the amount, even when
+ * signatures are supported. Otherwise reads only the state required by the selected path.
+ * Permit2 keeps the ERC-20 allowance on canonical Permit2 while the one-time signed transfer
+ * names the bundles contract as spender. The resolver picks the lowest unused unordered nonce
+ * by default; concurrent flows for the same owner should pass explicit nonces.
  *
  * @param viemClient - Connected viem client used for allowance and nonce reads.
  * @param params - Token requirement parameters.
@@ -178,6 +179,14 @@ export const getBundlesTokenRequirements = async (
   if (params.amount === 0n) return [];
   await validateClientChainId(viemClient, params.chainId);
 
+  const allowance = await readContract(viemClient, {
+    abi: erc20Abi,
+    address: params.token,
+    functionName: "allowance",
+    args: [params.owner, params.spender],
+  });
+  if (allowance >= params.amount) return [];
+
   const { permit2, dai } = getChainAddresses(params.chainId);
 
   if (params.supportSignature) {
@@ -236,7 +245,7 @@ export const getBundlesTokenRequirements = async (
         });
       }
       const wordPosition = permit2Nonce >> 8n;
-      const [allowance, nonceBitmap] = await Promise.all([
+      const [permit2Allowance, nonceBitmap] = await Promise.all([
         readContract(viemClient, {
           abi: erc20Abi,
           address: params.token,
@@ -261,7 +270,7 @@ export const getBundlesTokenRequirements = async (
         now: timestamp,
         state: {
           type: "permit2SignatureTransfer",
-          permit2Allowance: allowance,
+          permit2Allowance,
           permit2Nonce,
           nonceBitmap,
         },
@@ -269,12 +278,6 @@ export const getBundlesTokenRequirements = async (
     }
   }
 
-  const allowance = await readContract(viemClient, {
-    abi: erc20Abi,
-    address: params.token,
-    functionName: "allowance",
-    args: [params.owner, params.spender],
-  });
   return resolveBundlesTokenRequirements({
     token: params.token,
     spender: params.spender,

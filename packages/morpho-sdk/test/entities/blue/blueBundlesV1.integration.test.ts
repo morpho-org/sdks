@@ -557,62 +557,101 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
-  test("repayWithdrawCollateral: saturates a full close", async ({
-    client,
-  }) => {
-    const collateralAssets = parseUnits("10", 18);
-    const borrowAssets = parseUnits("1000", 18);
-    await supplyLoan({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      supplyAmount: borrowAssets * 2n,
-    });
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount: collateralAssets,
-    });
-    await borrow({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      borrowAmount: borrowAssets,
-    });
+  test.for([false, true])(
+    "repayWithdrawCollateral: saturates a full close (covered allowance: %s)",
+    async (coveredAllowance, { client }) => {
+      const collateralAssets = parseUnits("10", 18);
+      const borrowAssets = parseUnits("1000", 18);
+      await supplyLoan({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        supplyAmount: borrowAssets * 2n,
+      });
+      await supplyCollateral({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        collateralAmount: collateralAssets,
+      });
+      await borrow({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        borrowAmount: borrowAssets,
+      });
 
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(WethUsdsBlue, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-    const beforeBalances = await getBlueBundlesBalances(client, [WethUsdsBlue]);
-    const chainTimestamp = await client.timestamp();
-    const deadline = chainTimestamp + 60n * 60n;
-    const action = withChainTimestamp(chainTimestamp, () =>
-      market.repayWithdrawCollateral({
+      const market = client
+        .extend(morphoViemExtension({ supportSignature: coveredAllowance }))
+        .morpho.blue(WethUsdsBlue, mainnet.id);
+      const positionData = await market.getPositionData(client.account.address);
+      const beforeBalances = await getBlueBundlesBalances(client, [
+        WethUsdsBlue,
+      ]);
+      const chainTimestamp = await client.timestamp();
+      const deadline = chainTimestamp + 60n * 60n;
+      const params = {
         userAddress: client.account.address,
         positionData,
         repayShares: maxUint256,
         collateralAssets: positionData.collateral,
         deadline,
-      }),
-    );
-
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements: await withChainTimestamp(chainTimestamp, () =>
+      };
+      const action = withChainTimestamp(chainTimestamp, () =>
+        market.repayWithdrawCollateral(params),
+      );
+      const fundingCap = action.buildTx().action.args.maxRepayAssets;
+      if (coveredAllowance) {
+        const spender = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+        expect(
+          await client.readContract({
+            address: getChainAddress(mainnet.id, "blue"),
+            abi: blueAbi,
+            functionName: "isAuthorized",
+            args: [client.account.address, spender],
+          }),
+        ).toBe(false);
+        await client.deal({
+          erc20: WethUsdsBlue.loanToken,
+          amount: fundingCap,
+        });
+        await client.approve({
+          address: WethUsdsBlue.loanToken,
+          args: [spender, fundingCap],
+        });
+      }
+      const requirements = await withChainTimestamp(chainTimestamp, () =>
         action.getRequirements(),
-      ),
-      approvalFundingToken: WethUsdsBlue.loanToken,
-    });
-    await client.sendTransaction(action.buildTx(signatures));
+      );
+      if (coveredAllowance)
+        expect(
+          requirements.map(({ action: requirement }) => requirement.type),
+        ).toEqual(["authorization"]);
+      const signatures = await satisfyBlueBundlesV1Requirements(client, {
+        requirements,
+        approvalFundingToken: WethUsdsBlue.loanToken,
+      });
+      const freshAction = withChainTimestamp(chainTimestamp, () =>
+        client
+          .extend(morphoViemExtension({ supportSignature: coveredAllowance }))
+          .morpho.blue(WethUsdsBlue, mainnet.id)
+          .repayWithdrawCollateral(params),
+      );
+      const transaction = freshAction.buildTx(signatures);
+      expect(transaction).toEqual(action.buildTx(signatures));
+      expect(transaction.action.args.maxRepayAssets).toBe(fundingCap);
+      await client.sendTransaction(transaction);
 
-    const afterPosition = await market.getPositionData(client.account.address);
-    expect(afterPosition.borrowShares).toBe(0n);
-    expect(afterPosition.collateral).toBe(0n);
-    expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
-      beforeBalances,
-    );
-  });
+      const afterPosition = await market.getPositionData(
+        client.account.address,
+      );
+      expect(afterPosition.borrowShares).toBe(0n);
+      expect(afterPosition.collateral).toBe(0n);
+      expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
+        beforeBalances,
+      );
+    },
+  );
 
   test("repay: improves an unhealthy position without authorization", async ({
     client,

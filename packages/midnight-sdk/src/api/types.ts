@@ -208,6 +208,11 @@ export type FetchBookQuoteParams = MidnightApiConfig & {
    * offers made by this account, since Midnight rejects self-takes.
    */
   readonly taker?: Address;
+  /**
+   * Maximum number of offers the API walks to build the quote. The API accepts 1 to 10,000 and
+   * defaults to 10,000. Set it to cap the offers a quote can return, e.g. to fit one bundle.
+   */
+  readonly limit?: number;
   /** Current WAD-scaled settlement fee used for local guard validation. Defaults to zero. */
   readonly settlementFee?: BigIntish;
 } & (MidnightApiQuoteAssetsTarget | MidnightApiQuoteUnitsTarget) &

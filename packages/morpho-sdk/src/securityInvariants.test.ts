@@ -12,7 +12,7 @@ import {
   ORACLE_PRICE_SCALE,
   Token,
 } from "@morpho-org/blue-sdk";
-import { addressesRegistry } from "@morpho-org/morpho-ts";
+import { addressesRegistry, getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import fc from "fast-check";
 import {
@@ -37,6 +37,7 @@ import {
   blueSupplyCollateral,
   blueSupplyCollateralBorrow,
   blueWithdraw,
+  blueWithdrawBuyCallback,
   blueWithdrawCollateral,
 } from "./actions/blue/index.js";
 import { encodeBlueSignatureAuthorization } from "./actions/requirements/encode/encodeBlueSignatureAuthorization.js";
@@ -245,6 +246,18 @@ describe("[INV-01] Deposit routing", () => {
       for (const transaction of transactions) {
         expect(transaction.to, `chain ${chainId}`).toBe(periphery);
       }
+    }
+  });
+
+  test("Blue withdrawBuyCallback targets Morpho Blue directly on every registered chain", () => {
+    for (const { chainId } of blueChains) {
+      const transaction = blueWithdrawBuyCallback({
+        market: { chainId, marketParams },
+        args: { callbackAddress: userAddress, userAddress, shares: 1n },
+      });
+      expect(transaction.to, `chain ${chainId}`).toBe(
+        getChainAddress(chainId, "blue"),
+      );
     }
   });
 

@@ -54,6 +54,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
+| **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
@@ -76,7 +77,8 @@ Robinhood Chain, Arc, and X Layer. Custom deployments can still be configured wi
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
-writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits,
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call, except
+`withdrawBuyCallback`, which encodes one direct Morpho Blue `withdraw`. Vault deposits,
 `withdraw`, and `redeem` use the same shape for token or vault-share authorization to
 VaultBundlesV1. Vault `inKindRedeem` and `forceWithdraw` use it so callers can await
 `getRequirements()` to check share authorization to VaultExitBundlesV1 — and, for `inKindRedeem`,

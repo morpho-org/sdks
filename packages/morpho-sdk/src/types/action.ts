@@ -350,6 +350,24 @@ export interface BlueWithdrawAction
     }
   > {}
 
+/**
+ * Metadata for a direct Morpho Blue withdrawal of a BlueBuyCallback's whole supply position,
+ * sent by the callback's owner.
+ */
+export interface BlueWithdrawBuyCallbackAction
+  extends BaseAction<
+    "blueWithdrawBuyCallback",
+    {
+      readonly market: Hex;
+      /** Supply shares burned: the callback's whole position. */
+      readonly shares: bigint;
+      /** BlueBuyCallback whose supply position is withdrawn. */
+      readonly onBehalf: Address;
+      /** Account receiving the withdrawn loan assets: the callback's owner. */
+      readonly receiver: Address;
+    }
+  > {}
+
 type BlueSupplyCollateralBorrowActionArgs = {
   readonly market: Hex;
   readonly collateralAssets: bigint;
@@ -671,6 +689,7 @@ export type TransactionAction =
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
   | BlueWithdrawAction
+  | BlueWithdrawBuyCallbackAction
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction

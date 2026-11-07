@@ -311,14 +311,17 @@ resolves only the prerequisites consumed by the selected route.
 Vault deposits flow: **user → VaultBundlesV1 → vault**. Requirements cover the gross funding
 amount, before the referral fee. Native deposits return no token requirements.
 
-For ERC-20 deposits, `getBundlesTokenRequirements` resolves the selected route:
+For ERC-20 deposits, `getBundlesTokenRequirements` checks the direct allowance to VaultBundlesV1
+first. An allowance to canonical Permit2 does not count toward this check. The first applicable
+route below determines the requirements:
 
 | Route | Prerequisites |
 | --- | --- |
-| `supportSignature: false` (default) | Check ERC-20 allowance to VaultBundlesV1. Return an unlimited approval if insufficient, preceded by a zero reset for tokens that require it. |
+| Direct allowance to VaultBundlesV1 covers the gross funding amount, with any signature options | Return `[]`: no token approval or signature is required. |
+| Insufficient direct allowance, `supportSignature: false` (default) | Return an unlimited approval, preceded by a zero reset for tokens that require it. |
 | `supportSignature: true`, `useSimplePermit: true`, compatible ERC-2612 token | Read the token nonce and metadata; return a signable permit naming VaultBundlesV1. |
 | Signature support with canonical Permit2 available | Check the ERC-20 allowance to Permit2 and the owner nonce bitmap. Return any required Permit2 approval and a SignatureTransfer requirement naming VaultBundlesV1. The SDK resolves the lowest unused `permit2Nonce` by default; pass one explicitly to override. |
-| No available signature route | Fall back to the classic VaultBundlesV1 approval check. |
+| No available signature route | Fall back to a classic VaultBundlesV1 approval. |
 
 Concurrent `getRequirements()` calls share one in-flight read and its first caller's options.
 After that read settles, the next call refreshes allowance and nonce state using its own options.
@@ -346,8 +349,10 @@ the requested number of shares, and deposit and migration-destination legs retai
 
 Blue token requirements resolve against the direct contract route:
 
-- Without signature support, check the ERC-20 allowance to BlueBundlesV1 and return a classic
-  approval only when it is insufficient.
+- First check the direct ERC-20 allowance to BlueBundlesV1. If it covers the required amount,
+  return `[]`, even with signature support enabled. An allowance to canonical Permit2 does not
+  count toward this check. The remaining routes apply only when the direct allowance is insufficient.
+- Without signature support, return a classic BlueBundlesV1 approval.
 - With `useSimplePermit`, use ERC-2612 when the token supports the standard permit shape; its
   spender is BlueBundlesV1.
 - Otherwise, use Permit2 SignatureTransfer when canonical Permit2 is configured. The prerequisite

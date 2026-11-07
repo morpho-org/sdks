@@ -2,7 +2,20 @@ export * from "./address.js";
 export * from "./addresses.js";
 export * from "./chain.js";
 export * from "./constants.js";
-export * from "./errors.js";
+export {
+  _try,
+  DivisionByZeroError,
+  type ErrorClass,
+  IncompleteChainRegistryError,
+  InvalidAddressError,
+  InvalidBitLengthError,
+  NegativeValueError,
+  RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
+  UnknownAddressError,
+  UnsupportedChainIdError,
+} from "./errors.js";
 export * from "./format/index.js";
 export * from "./math.js";
 export * from "./time/index.js";

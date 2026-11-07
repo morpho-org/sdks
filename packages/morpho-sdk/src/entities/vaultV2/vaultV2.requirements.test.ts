@@ -120,7 +120,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       address: IN_KIND_ASSET,
       abi: erc20Abi,
       functionName: "allowance",
-      result: amount,
+      result: 0n,
     });
     mockRead(handle, {
       address: permit2,
@@ -142,7 +142,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       deposit.getRequirements({ useSimplePermit: true, permit2Nonce: 1n }),
     ]);
     expect(concurrent).toBe(first);
-    expect(countAllowanceReads(handle)).toBe(1);
+    expect(countAllowanceReads(handle)).toBe(2);
     const requirement = first.find(isRequirementSignature);
     if (requirement?.action.type !== "permit2SignatureTransfer") {
       throw new Error("Permit2 SignatureTransfer requirement not found");
@@ -179,7 +179,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
     }
     const nextAction = nextRequirement.action;
     expect(nextAction.args.nonce).toBe(1n);
-    expect(countAllowanceReads(handle)).toBe(2);
+    expect(countAllowanceReads(handle)).toBe(4);
     // The nonce is onchain state Permit2 verifies at execution, so the earlier
     // signature still finalizes.
     expect(() => deposit.buildTx([signature])).not.toThrow();
@@ -295,8 +295,11 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
         address: IN_KIND_ASSET,
         abi: erc20Abi,
         functionName: "allowance",
-      })[0]?.args,
-    ).toEqual([IN_KIND_USER, permit2]);
+      }).map(({ args }) => args),
+    ).toEqual([
+      [IN_KIND_USER, getChainAddress(mainnet.id, "bundles.vaultBundlesV1")],
+      [IN_KIND_USER, permit2],
+    ]);
 
     const requirementSignature = {
       args: {

@@ -1,6 +1,9 @@
 import { _try, type BigIntish, MathLib } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
-import { UnknownCollateralIndexError } from "../errors.js";
+import {
+  InvalidMarketParameterError,
+  UnknownCollateralIndexError,
+} from "../errors.js";
 import { type IMarket, Market } from "../market/Market.js";
 import { PositionUtils } from "./PositionUtils.js";
 
@@ -198,8 +201,24 @@ export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
 export class AccrualPosition extends Position implements IAccrualPosition {
   protected readonly _market: Market;
 
+  /**
+   * @throws {InvalidMarketParameterError} when `position` carries a `marketId` that differs from `market.id`.
+   */
   public constructor(position: IAccrualPosition, market: IMarket | Market) {
     const _market = Market.from(market);
+    const carriedMarketId =
+      "marketId" in position ? position.marketId : undefined;
+    if (
+      carriedMarketId !== undefined &&
+      (typeof carriedMarketId !== "string" ||
+        carriedMarketId.toLowerCase() !== _market.id.toLowerCase())
+    ) {
+      throw new InvalidMarketParameterError({
+        parameter: "marketId",
+        value: carriedMarketId,
+        instruction: "Pair the position with the market it was read from.",
+      });
+    }
     super({ ...position, marketId: _market.id });
     this._market = _market;
   }

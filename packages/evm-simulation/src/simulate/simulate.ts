@@ -58,8 +58,8 @@ import { runSimulation } from "./run-simulation.js";
  * percentage tolerance; only explicitly quoted sides use `slippageTolerance`.
  * Violations throw `ConsumerLimitViolationError`.
  *
- * **Funding.** `value` transfers are funded by the sender's real native
- * balance — no balance inflation — so under-funded bundles revert exactly as
+ * **Funding.** Without caller balance overrides, `value` transfers are funded
+ * by the sender's real native balance, so under-funded bundles revert exactly as
  * they would on-chain. `validation: false` keeps gas from being charged,
  * separating gas from economic effects. Monad nodes reject `false`, so Monad
  * simulations send `true`; its simulated block charges no gas either way.
@@ -107,8 +107,13 @@ import { runSimulation } from "./run-simulation.js";
  * @param params.block - Optional caller-supplied state block (`number`,
  *   `hash`, `timestamp`). Skips the block lookup, so a simulation without
  *   asset metadata reads makes a single `eth_simulateV1` request plus one
- *   `eth_getCode` per distinct calldata target. Cannot be combined with
+ *   `eth_getCode` per distinct calldata target without a code override (and
+ *   a delegate lookup for EIP-7702 targets without overridden delegate code). Cannot be combined with
  *   `blockNumber`.
+ * @param params.stateOverrides - Optional caller-controlled JSON-RPC account
+ *   state, applied once before all simulated calls, including checks. None is
+ *   added automatically. Results describe hypothetical state, not broadcast
+ *   guarantees; metadata reads outside `eth_simulateV1` still use onchain state.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed assertions or authorizations,
  *   missing or malformed limits, an empty
@@ -119,7 +124,8 @@ import { runSimulation } from "./run-simulation.js";
  *   `blockOverrides.gasLimit` or `callGasLimit` that is not a positive bigint,
  *   a `parentHashCheck` that is not a boolean, or share quotes for
  *   `blueSupplyCollateral` / `blueWithdrawCollateral`), or a transaction
- *   whose calldata target holds no contract code at the state block. Also thrown
+ *   whose calldata target (or EIP-7702 delegate) holds no contract code in the
+ *   caller overrides or at the state block. Also thrown
  *   for malformed typed inputs, invalid declared fees or penalties, inputs on
  *   quote-only operations, missing required sides after derivation, or a
  *   `midnightSupplyCollateralTakeBorrow` limit whose wallet bounds overlap

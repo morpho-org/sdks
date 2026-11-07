@@ -108,6 +108,7 @@ describe("resolveAssets", () => {
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[1]?.assetsReceived).toBe(loan);
+    expect(result[1]?.approvalToken).toBe(collateral);
     for (const resolved of result)
       expect(resolved.marketParams).toEqual({
         loanToken: loan,
@@ -939,7 +940,7 @@ describe("resolveAssets", () => {
             quote: { assetsReceived: 1n, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
-          undefined,
+          collateral,
         ],
         [
           "blueWithdraw",
@@ -1158,6 +1159,7 @@ describe("resolveAssets", () => {
       blockNumber: 1n,
     });
     expect(result[0]?.approvalToken).toBe(collateral);
+    expect(result[1]?.approvalToken).toBe(collateral);
     expect(result[1]?.marketParams).toEqual({
       loanToken: loan,
       collateralToken: collateral,

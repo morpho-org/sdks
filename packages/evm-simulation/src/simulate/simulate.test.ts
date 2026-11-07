@@ -91,6 +91,21 @@ describe.sequential("simulate — pipeline delegation", () => {
     );
   });
 
+  it.each(["preview", "final"] as const)(
+    "passes caller state overrides through in %s mode without freezing inputs",
+    async (mode) => {
+      const stateOverrides = {
+        [USER]: { code: `0xef0100${SPENDER.slice(2)}` },
+        [SPENDER]: { code: "0x60005460005260206000f3" },
+      };
+      await simulate(makeConfig(), makeParams({ mode, stateOverrides }));
+      const request = mockRunSimulation.mock.calls[0]![0].request;
+      expect(request).toMatchObject({ stateOverrides });
+      expect(Object.isFrozen(stateOverrides)).toBe(false);
+      expect(Object.isFrozen(stateOverrides[USER])).toBe(false);
+    },
+  );
+
   it("preview without authorizations executes", async () => {
     const result = await simulate(
       makeConfig(),
@@ -167,6 +182,20 @@ describe.sequential("simulate — pipeline delegation", () => {
 });
 
 describe.sequential("simulate — error propagation", () => {
+  it("wraps non-cloneable override failures at the public boundary", async () => {
+    const error = await simulate(
+      makeConfig(),
+      makeParams({
+        stateOverrides: { [USDC]: { code: () => "0x6000" } } as never,
+      }),
+    ).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(UnexpectedSimulationError);
+    expect((error as UnexpectedSimulationError).cause).toBeInstanceOf(
+      DOMException,
+    );
+    expect(mockRunSimulation).not.toHaveBeenCalled();
+  });
+
   it("propagates SimulationRevertedError from the pipeline", async () => {
     mockRunSimulation.mockRejectedValueOnce(
       new SimulationRevertedError("ERC20: transfer amount exceeds balance"),

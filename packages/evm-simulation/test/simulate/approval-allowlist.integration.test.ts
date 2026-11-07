@@ -1,10 +1,13 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
+import { markets } from "@morpho-org/morpho-test";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
   encodeFunctionData,
   erc20Abi,
   isAddressEqual,
@@ -280,6 +283,110 @@ describe.sequential("simulate approval allowlist", () => {
       authorized: UNKNOWN_SPENDER,
       source: "event",
     });
+  }, 120_000);
+
+  test("allows the collateral Approval re-emitted by a zero-collateral borrow", async ({
+    client,
+  }) => {
+    const addresses = getChainAddresses(mainnet.id)!;
+    const blueBundles = addresses.bundles!.blueBundlesV1!;
+    const marketParams = markets[mainnet.id].usdt_wstEth;
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+    const collateralAssets = parseUnits("0.1", 18);
+    const borrowAssets = parseUnits("5", 6);
+
+    await client.deal({
+      erc20: marketParams.collateralToken,
+      amount: collateralAssets,
+    });
+    await client.writeContract({
+      account: client.account,
+      address: marketParams.collateralToken,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [addresses.blue, maxUint256],
+    });
+    await client.writeContract({
+      account: client.account,
+      address: addresses.blue,
+      abi: blueAbi,
+      functionName: "supplyCollateral",
+      args: [marketParams, collateralAssets, client.account.address, "0x"],
+    });
+    await client.writeContract({
+      account: client.account,
+      address: marketParams.collateralToken,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [blueBundles, maxUint256],
+    });
+
+    const positionData = await market.getPositionData(client.account.address);
+    const action = market.borrow({
+      userAddress: client.account.address,
+      borrowAssets,
+      positionData,
+      deadline: maxUint256,
+    });
+    const requirements = await action.getRequirements();
+    const authorizations = toSimulationAuthorizations({
+      owner: client.account.address,
+      requirements,
+    });
+    const tx = action.buildTx();
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      mode: "preview",
+      authorizations,
+      limits: {
+        operations: [
+          {
+            type: "blueBorrow",
+            marketId: marketParams.id,
+            quote: {
+              assetsReceived: borrowAssets,
+              sharesMinted:
+                (await market.getMarketData()).toBorrowShares(
+                  borrowAssets,
+                  "Up",
+                ) * 2n,
+            },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+      transactions: [
+        {
+          from: client.account.address,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+        },
+      ],
+    });
+
+    const approvalTopics = encodeEventTopics({
+      abi: erc20Abi,
+      eventName: "Approval",
+      args: { owner: client.account.address, spender: blueBundles },
+    });
+    const approvalData = encodeAbiParameters([{ type: "uint256" }] as const, [
+      maxUint256,
+    ]);
+    expect(
+      result.calls
+        .flatMap(({ logs }) => logs)
+        .some(
+          (log) =>
+            isAddressEqual(log.address, marketParams.collateralToken) &&
+            log.topics[0] === approvalTopics[0] &&
+            log.topics[1] === approvalTopics[1] &&
+            log.topics[2] === approvalTopics[2] &&
+            log.data === approvalData,
+        ),
+    ).toBe(true);
   }, 120_000);
 
   test("allows approve(0) for the derived VaultBundlesV1 spender", async ({

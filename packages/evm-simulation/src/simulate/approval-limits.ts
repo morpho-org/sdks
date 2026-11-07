@@ -135,12 +135,17 @@ export function resolveApprovalLimits(params: {
       case "blueWithdraw":
       case "blueWithdrawCollateral":
       case "blueRefinance":
-        if (blueBundles !== undefined)
+        if (blueBundles !== undefined) {
+          if (limit.type === "blueBorrow") {
+            // BlueBundlesV1's zero-collateral transferFrom can re-emit Approval.
+            addToken(operationToken(operation), blueBundles);
+          }
           approvals.push({
             type: "morphoAuthorization",
             authorizer: owner,
             authorized: blueBundles,
           });
+        }
         break;
       case "midnightRedeem":
       case "midnightTakeLend":

@@ -1,5 +1,22 @@
 # @morpho-org/blue-sdk
 
+## 8.2.0
+
+### Minor Changes
+
+- Deprecate `BlueErrors.InvalidInterestAccrual` and `VaultV2Errors.InvalidInterestAccrual`. These errors are never thrown by the SDK and will be removed in the next major release.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 8.1.0
 
 ### Minor Changes

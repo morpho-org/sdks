@@ -1,5 +1,25 @@
 # @morpho-org/evm-simulation
 
+## 8.5.0
+
+### Minor Changes
+
+- Accept caller-provided `stateOverrides` on `simulate()` and forward them to `eth_simulateV1`. Overrides use JSON-RPC account maps for code, balance, nonce and storage; consumers validate their contents, which the SDK forwards without runtime validation or normalization. Calldata-target checks honor explicit code overrides. Targets with EIP-7702 delegation also require code at their delegate: existing onchain delegations trigger an additional pinned `eth_getCode` read and reject code-less delegates with `SimulationValidationError`, even without overrides.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Borrows through BlueBundlesV1 no longer fail simulation when the collateral token re-emits an Approval on a zero-amount transferFrom.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-sdk@9.4.0
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 8.4.0
 
 ### Minor Changes

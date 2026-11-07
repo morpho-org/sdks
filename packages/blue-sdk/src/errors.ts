@@ -110,6 +110,7 @@ export namespace BlueErrors {
   /**
    * Legacy market accrual error retained for compatibility.
    * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   * @deprecated Never thrown by the SDK and will be removed in the next major.
    */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
@@ -181,6 +182,7 @@ export namespace VaultV2Errors {
   /**
    * Legacy Vault V2 accrual error retained for compatibility.
    * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   * @deprecated Never thrown by the SDK and will be removed in the next major.
    */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params

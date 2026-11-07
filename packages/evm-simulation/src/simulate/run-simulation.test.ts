@@ -1519,6 +1519,7 @@ describe.sequential("runSimulation", () => {
       vi.fn<typeof globalThis.fetch>(async (_input, init) => {
         const { method } = JSON.parse(String(init?.body)) as { method: string };
         methods.push(method);
+        if (method === "eth_getCode") return rpc("0x6000");
         return rpc([
           {
             number: numberToHex(STATE_BLOCK + 1n),

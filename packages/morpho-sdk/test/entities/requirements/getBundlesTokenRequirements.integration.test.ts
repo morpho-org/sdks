@@ -18,7 +18,7 @@ const test = createViemTest(mainnet, {
   forkBlockNumber: 25_832_676n,
   stepsTracing: false,
 });
-const { usdc } = addressesRegistry[mainnet.id];
+const { usdc, dai } = addressesRegistry[mainnet.id];
 const permit2 = getChainAddress(mainnet.id, "permit2");
 
 describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
@@ -32,6 +32,74 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
       amount: 1_000_000n,
       deadline: maxUint256,
     } as const;
+
+    describe.each([
+      { token: usdc, useSimplePermit: true, signatureType: "permit" },
+      {
+        token: dai,
+        useSimplePermit: true,
+        signatureType: "permit2SignatureTransfer",
+      },
+      {
+        token: usdc,
+        useSimplePermit: false,
+        signatureType: "permit2SignatureTransfer",
+      },
+    ] as const)(
+      "direct allowance: $token, simple permit: $useSimplePermit",
+      (options) => {
+        test("skips covered pulls and preserves signatures for insufficient direct allowance", async ({
+          client,
+        }) => {
+          const request = {
+            ...params,
+            ...options,
+            owner: client.account.address,
+            supportSignature: true,
+            supportDeployless: false,
+          };
+          await client.approve({ address: options.token, args: [permit2, 0n] });
+          for (const allowance of [
+            params.amount,
+            params.amount + 1n,
+            maxUint256,
+          ]) {
+            await client.approve({
+              address: options.token,
+              args: [spender, allowance],
+            });
+            expect(await getBundlesTokenRequirements(client, request)).toEqual(
+              [],
+            );
+          }
+
+          await client.approve({
+            address: options.token,
+            args: [spender, params.amount - 1n],
+          });
+          expect(
+            (await getBundlesTokenRequirements(client, request)).map(
+              ({ action }) => action.type,
+            ),
+          ).toEqual(
+            options.signatureType === "permit"
+              ? ["permit"]
+              : ["erc20Approval", "permit2SignatureTransfer"],
+          );
+
+          await client.approve({ address: options.token, args: [spender, 0n] });
+          await client.approve({
+            address: options.token,
+            args: [permit2, maxUint256],
+          });
+          expect(
+            (await getBundlesTokenRequirements(client, request)).map(
+              ({ action }) => action.type,
+            ),
+          ).toEqual([options.signatureType]);
+        });
+      },
+    );
 
     test("default: approves the registered spender and skips a covered pull", async ({
       client,

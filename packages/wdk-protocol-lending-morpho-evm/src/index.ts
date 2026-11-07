@@ -9,6 +9,7 @@ export {
   InsufficientDeadSharesError,
   MissingContractCodeError,
   MissingDeadSharesDataError,
+  NonPositiveInputError,
   VaultAssetMismatchError,
 } from "@morpho-org/morpho-sdk";
 export {
@@ -33,12 +34,20 @@ export type {
 } from "@tetherto/wdk-wallet/protocols";
 export {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InsufficientTokenBalanceError,
+  InvalidAddressError,
+  InvalidAmountTypeError,
+  InvalidProtocolOptionError,
   InvalidTransactionHashError,
   InvalidTransactionMaxFeeError,
+  MarketTokenMismatchError,
+  MissingMorphoTargetError,
   MissingWalletProviderError,
   PaymasterApprovalGuardUnavailableError,
   PaymasterApprovalSpenderMismatchError,
+  ReadOnlyAccountError,
   UnconfirmedBroadcastError,
+  UnsafeAmountError,
 } from "./errors.js";
 export {
   type Market,

@@ -455,10 +455,37 @@ export namespace MarketUtils {
     );
     if (maxBorrowAssets == null) return;
 
-    return MathLib.zeroFloorSub(
+    const totalBorrowAssets = BigInt(market.totalBorrowAssets);
+    const totalBorrowShares = BigInt(market.totalBorrowShares);
+    const currentBorrowAssets = toBorrowAssets(borrowShares, market);
+    const upperBound = MathLib.zeroFloorSub(
       maxBorrowAssets,
-      toBorrowAssets(borrowShares, market),
+      currentBorrowAssets,
     );
+    const isHealthyAfterBorrow = (assets: bigint) => {
+      const shares = toBorrowShares(assets, market, "Up");
+      return (
+        toBorrowAssets(
+          BigInt(borrowShares) + shares,
+          {
+            totalBorrowAssets: totalBorrowAssets + assets,
+            totalBorrowShares: totalBorrowShares + shares,
+          },
+          "Up",
+        ) <= maxBorrowAssets
+      );
+    };
+    if (!isHealthyAfterBorrow(0n)) return 0n;
+
+    let low = 0n;
+    let high = upperBound + 1n;
+    while (low + 1n < high) {
+      const middle = (low + high) / 2n;
+      if (isHealthyAfterBorrow(middle)) low = middle;
+      else high = middle;
+    }
+
+    return low;
   }
 
   /**
@@ -495,8 +522,8 @@ export namespace MarketUtils {
   ) {
     if (market.price == null) return;
 
-    market.price = BigInt(market.price);
-    if (market.price === 0n) return 0n;
+    const price = BigInt(market.price);
+    if (price === 0n) return 0n;
 
     return MathLib.mulDivDown(
       MathLib.wMulDown(
@@ -504,7 +531,7 @@ export namespace MarketUtils {
         getLiquidationIncentiveFactor(config),
       ),
       ORACLE_PRICE_SCALE,
-      market.price,
+      price,
     );
   }
 
@@ -587,8 +614,8 @@ export namespace MarketUtils {
   ) {
     if (market.price == null) return; // Must be checked before calling `isHealthy`.
 
-    market.price = BigInt(market.price);
-    if (market.price === 0n || isHealthy(position, market, config)) return 0n;
+    const price = BigInt(market.price);
+    if (price === 0n || isHealthy(position, market, config)) return 0n;
 
     return MathLib.min(
       position.collateral,
@@ -634,8 +661,8 @@ export namespace MarketUtils {
   ) {
     if (market.price == null) return;
 
-    market.price = BigInt(market.price);
-    if (market.price === 0n) return 0n;
+    const price = BigInt(market.price);
+    if (price === 0n) return 0n;
 
     return MathLib.zeroFloorSub(
       collateral,
@@ -643,7 +670,7 @@ export namespace MarketUtils {
         MathLib.mulDivUp(
           toBorrowAssets(borrowShares, market),
           ORACLE_PRICE_SCALE,
-          market.price,
+          price,
         ),
         lltv,
       ),
@@ -728,15 +755,21 @@ export namespace MarketUtils {
     marketParams: { lltv: BigIntish },
   ) {
     borrowShares = BigInt(borrowShares);
-    market.totalBorrowShares = BigInt(market.totalBorrowShares);
-    if (borrowShares === 0n || market.totalBorrowShares === 0n) return null;
+    const totalBorrowShares = BigInt(market.totalBorrowShares);
+    if (borrowShares === 0n || totalBorrowShares === 0n) return null;
 
-    const collateralPower = getCollateralPower(collateral, marketParams);
-    if (collateralPower === 0n) return MathLib.MAX_UINT_256;
+    const collateralAmount = BigInt(collateral);
+    const lltv = BigInt(marketParams.lltv);
+    if (collateralAmount === 0n || lltv === 0n) return MathLib.MAX_UINT_256;
 
     const borrowAssets = toBorrowAssets(borrowShares, market);
+    const minCollateralValue = MathLib.wDivUp(borrowAssets, lltv);
 
-    return MathLib.mulDivUp(borrowAssets, ORACLE_PRICE_SCALE, collateralPower);
+    return MathLib.mulDivUp(
+      minCollateralValue,
+      ORACLE_PRICE_SCALE,
+      collateralAmount,
+    );
   }
 
   /**
@@ -773,8 +806,8 @@ export namespace MarketUtils {
   ) {
     if (market.price == null) return;
 
-    market.price = BigInt(market.price);
-    if (market.price === 0n) return null;
+    const price = BigInt(market.price);
+    if (price === 0n) return null;
 
     const liquidationPrice = getLiquidationPrice(
       position,
@@ -783,7 +816,7 @@ export namespace MarketUtils {
     );
     if (liquidationPrice == null) return null;
 
-    return MathLib.wDivUp(liquidationPrice, market.price) - MathLib.WAD;
+    return MathLib.wDivUp(liquidationPrice, price) - MathLib.WAD;
   }
 
   /**
@@ -870,8 +903,8 @@ export namespace MarketUtils {
     },
   ) {
     borrowShares = BigInt(borrowShares);
-    market.totalBorrowShares = BigInt(market.totalBorrowShares);
-    if (borrowShares === 0n || market.totalBorrowShares === 0n) return null;
+    const totalBorrowShares = BigInt(market.totalBorrowShares);
+    if (borrowShares === 0n || totalBorrowShares === 0n) return null;
 
     const collateralValue = getCollateralValue(collateral, market);
     if (collateralValue == null) return;

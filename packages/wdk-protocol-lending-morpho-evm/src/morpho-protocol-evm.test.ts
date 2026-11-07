@@ -20,11 +20,19 @@ import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InsufficientTokenBalanceError,
+  InvalidAddressError,
+  InvalidAmountTypeError,
+  InvalidProtocolOptionError,
   InvalidTransactionHashError,
+  MarketTokenMismatchError,
+  MissingMorphoTargetError,
   MissingWalletProviderError,
   PaymasterApprovalGuardUnavailableError,
   PaymasterApprovalSpenderMismatchError,
+  ReadOnlyAccountError,
   UnconfirmedBroadcastError,
+  UnsafeAmountError,
 } from "./errors.js";
 import type {
   AuthorizationOrSignatureRequirement,
@@ -279,6 +287,127 @@ describe.sequential("MorphoProtocolEvm", () => {
       chainId: 1,
       earnVaultAddress: VAULT,
       borrowMarketParams: MARKET_PARAMS,
+    });
+  });
+
+  describe("typed validation failures", () => {
+    test.each([
+      { amount: "1", errorClass: InvalidAmountTypeError },
+      { amount: Number.NaN, errorClass: UnsafeAmountError },
+      { amount: Number.MAX_SAFE_INTEGER + 1, errorClass: UnsafeAmountError },
+      { amount: 0n, errorClass: NonPositiveInputError },
+      { amount: -1n, errorClass: NonPositiveInputError },
+    ])("normalizes invalid amount $amount", async ({ amount, errorClass }) => {
+      const result = protocol.quoteBorrow({
+        token: TOKEN,
+        amount,
+      } as unknown as MorphoBorrowOptions);
+      await expect(result).rejects.toBeInstanceOf(errorClass);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test.each([
+      { chainId: 0 },
+      { earnVaultAddress: VAULT },
+      { chainId: 1, earnVaultAddress: "invalid" },
+      { chainId: 1, borrowMarketId: "invalid" },
+      { presets: { earn: "invalid" } },
+      { presets: { borrow: "invalid" } },
+      { slippageTolerance: -1n },
+      { slippageTolerance: 1 },
+    ])("rejects invalid options %s", async (options) => {
+      const create = () =>
+        new MorphoProtocolEvm(
+          account,
+          options as unknown as ConstructorParameters<
+            typeof MorphoProtocolEvm
+          >[1],
+        );
+      const result = Promise.resolve().then(create);
+      await expect(result).rejects.toBeInstanceOf(InvalidProtocolOptionError);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test.each(["getVaultPosition", "getMarketPosition"] as const)(
+      "rejects missing target in %s",
+      async (method) => {
+        const unconfigured = new MorphoProtocolEvm(account);
+        const result = unconfigured[method]();
+        await expect(result).rejects.toBeInstanceOf(MissingMorphoTargetError);
+        await expect(result).rejects.toBeInstanceOf(Error);
+      },
+    );
+
+    test.each([
+      "quoteBorrow",
+      "quoteRepay",
+      "quoteSupplyCollateral",
+      "quoteWithdrawCollateral",
+    ] as const)("rejects market token mismatch in %s", async (method) => {
+      const result = protocol[method]({ token: VAULT, amount: 1n });
+      await expect(result).rejects.toBeInstanceOf(MarketTokenMismatchError);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test("rejects collateral withdrawal to another wallet", async () => {
+      const result = protocol.quoteWithdrawCollateral({
+        token: COLLATERAL,
+        amount: 1n,
+        to: VAULT,
+      });
+      await expect(result).rejects.toBeInstanceOf(AddressMismatchError);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test("rejects a different operation owner", async () => {
+      const result = protocol.quoteBorrow({
+        token: TOKEN,
+        amount: 1n,
+        onBehalfOf: VAULT,
+      });
+      await expect(result).rejects.toBeInstanceOf(AddressMismatchError);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test("rejects malformed required addresses", async () => {
+      const result = protocol.prepareSupply({ token: "invalid", amount: 1n });
+      await expect(result).rejects.toBeInstanceOf(InvalidAddressError);
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test.each(["invalid", viem.zeroAddress])(
+      "rejects optional address %s",
+      async (address) => {
+        const result = protocol.getMarketPosition(address);
+        await expect(result).rejects.toBeInstanceOf(InvalidAddressError);
+        await expect(result).rejects.toBeInstanceOf(Error);
+      },
+    );
+
+    test("rejects insufficient token balance", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(0n);
+      const result = protocol.supply({ token: TOKEN, amount: 1n });
+      await expect(result).rejects.toBeInstanceOf(
+        InsufficientTokenBalanceError,
+      );
+      await expect(result).rejects.toBeInstanceOf(Error);
+    });
+
+    test("rejects read-only writes and the submission fallback", async () => {
+      const readOnly = new WalletAccountReadOnlyEvm(ADDRESS, {
+        provider: "https://dummy-rpc-url.com",
+      });
+      const readOnlyProtocol = new MorphoProtocolEvm(readOnly);
+      const write = readOnlyProtocol.borrow({ token: TOKEN, amount: 1n });
+      await expect(write).rejects.toBeInstanceOf(ReadOnlyAccountError);
+      await expect(write).rejects.toBeInstanceOf(Error);
+      const send = Reflect.get(
+        readOnlyProtocol,
+        "_sendTransaction",
+      ) as () => Promise<unknown>;
+      const submission = send.call(readOnlyProtocol);
+      await expect(submission).rejects.toBeInstanceOf(ReadOnlyAccountError);
+      await expect(submission).rejects.toBeInstanceOf(Error);
     });
   });
 
@@ -2609,9 +2738,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           amount: 100_000n,
           onBehalfOf: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
         }),
-      ).rejects.toThrow(
-        "'onBehalfOf' must equal the wallet account address for Morpho SDK-backed operations.",
-      );
+      ).rejects.toBeInstanceOf(AddressMismatchError);
     });
 
     test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {

@@ -22,6 +22,10 @@ direct calls on the chain's registered BlueBundlesV1 deployment:
 
 There is no second `client.morpho.blueBundlesV1(...)` extension.
 
+`withdrawBuyCallback` is outside this table: `blueWithdrawBuyCallback` encodes a direct Morpho Blue
+`withdraw(marketParams, 0, shares, callback, owner)` for a BlueBuyCallback's owner, who is
+authorized on Blue by the callback. It takes no deadline, referral fee, reallocation or signature.
+
 ## Contract-owned composition
 
 BlueBundlesV1 owns each operation's sequencing:

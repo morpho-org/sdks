@@ -11,7 +11,7 @@ import { type Address, type Hex, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
-import { MAX_OFFER_CAP } from "../constants.js";
+import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import {
   InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
@@ -730,6 +730,7 @@ describe("MidnightApi instance", () => {
       side: "asks",
       units: 1_000000000000000000n,
       taker: SECOND_MAKER,
+      limit: 64,
     });
     await api.fetchBookQuote({
       marketId: MARKET_ID,
@@ -740,6 +741,7 @@ describe("MidnightApi instance", () => {
     expect(getRequestUrl(calls[0]!).searchParams.get("taker")).toBe(
       SECOND_MAKER,
     );
+    expect(getRequestUrl(calls[0]!).searchParams.get("limit")).toBe("64");
     expect(getRequestUrl(calls[1]!).searchParams.has("taker")).toBe(false);
   });
 
@@ -1233,6 +1235,7 @@ describe("MidnightApi.fetchBookQuote", () => {
       "1010000000000000000",
     );
     expect(url.searchParams.has("taker")).toBe(false);
+    expect(url.searchParams.has("limit")).toBe(false);
     expect(call.init?.method).toBe("GET");
   });
 
@@ -1262,7 +1265,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).toEqual([SECOND_LOAN_TOKEN, COLLATERAL_TOKEN]);
   });
 
-  test("behavior: serializes assets, slippage, and taker", async () => {
+  test("behavior: serializes assets, slippage, taker, and limit", async () => {
     const { calls, fetch } = createJsonFetch({
       data: {
         average_best_price: "1000000000000000000",
@@ -1279,6 +1282,7 @@ describe("MidnightApi.fetchBookQuote", () => {
       assets: "1000000000000000000",
       slippage: "0.5",
       taker: MAKER,
+      limit: 64,
       fetch,
     });
 
@@ -1287,6 +1291,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
     expect(url.searchParams.get("taker")).toBe(MAKER);
+    expect(url.searchParams.get("limit")).toBe("64");
   });
 
   test("behavior: returns the API averageWorstPrice in slippage mode", async () => {
@@ -2088,6 +2093,238 @@ describe("MidnightApi transport faults", () => {
           status: 200,
           headers: { "Content-Type": "text/html" },
         });
+
+      await expect(call(fetch)).rejects.toBeInstanceOf(
+        InvalidMidnightApiResponseError,
+      );
+    },
+  );
+});
+
+describe("MidnightApi malformed responses", () => {
+  const quoteData = {
+    average_best_price: "1000000000000000000",
+    average_worst_price: "1010000000000000000",
+    available_assets: "1500000000000000000",
+    available_units: "1500000000000000000",
+    takeable_offers: [apiTakeableOffer],
+  };
+  const quote = (fetch: MidnightApiFetch) =>
+    MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: apiTakeableOffer.units,
+      slippage: "0.5",
+      fetch,
+    });
+  const priceLevels = (fetch: MidnightApiFetch) =>
+    MidnightApi.fetchBookPriceLevels({
+      marketId: MARKET_ID,
+      side: "asks",
+      fetch,
+    });
+  const fetchers: readonly (readonly [
+    string,
+    (fetch: MidnightApiFetch) => Promise<unknown>,
+  ])[] = [
+    ["fetchBooks", (fetch) => MidnightApi.fetchBooks({ fetch })],
+    [
+      "fetchBook",
+      (fetch) => MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ],
+    ["fetchBookPriceLevels", priceLevels],
+    [
+      "fetchBookTakeableOffers",
+      (fetch) =>
+        MidnightApi.fetchBookTakeableOffers({
+          marketId: MARKET_ID,
+          side: "asks",
+          fetch,
+        }),
+    ],
+    ["fetchBookQuote", quote],
+    [
+      "fetchTakeableOffers",
+      (fetch) => MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ],
+  ];
+  const cases: readonly (readonly [
+    string,
+    unknown,
+    (fetch: MidnightApiFetch) => Promise<unknown>,
+  ])[] = [
+    ...fetchers.map(
+      ([name, call]) => [`${name} null body`, null, call] as const,
+    ),
+    ...fetchers.map(
+      ([name, call]) => [`${name} null data`, { data: null }, call] as const,
+    ),
+    ["fetchBooks non-string cursor", { cursor: 5, data: [] }, fetchers[0]![1]],
+    [
+      "fetchTakeableOffers non-string cursor",
+      { cursor: {}, data: [] },
+      fetchers[5]![1],
+    ],
+    ["fetchBookPriceLevels non-array data", { data: {} }, priceLevels],
+    ["fetchBookPriceLevels null level", { data: [null] }, priceLevels],
+    [
+      "fetchBookPriceLevels non-numeric tick",
+      { data: [{ ...apiPriceLevel, tick: "5000" }] },
+      priceLevels,
+    ],
+    [
+      "fetchBook non-array asks",
+      { data: { ...apiBook, asks: {} } },
+      fetchers[1]![1],
+    ],
+    [
+      "fetchBookQuote invalid average_worst_price",
+      { data: { ...quoteData, average_worst_price: "invalid" } },
+      quote,
+    ],
+    [
+      "fetchBookQuote non-string available_units",
+      { data: { ...quoteData, available_units: 15 } },
+      quote,
+    ],
+    ...["", " ", " 5 ", "0x10", "-1"].map(
+      (units) =>
+        [
+          `fetchBookQuote available_units "${units}"`,
+          { data: { ...quoteData, available_units: units } },
+          quote,
+        ] as const,
+    ),
+    [
+      "fetchBookQuote unprintable available_units",
+      { data: { ...quoteData, available_units: { toString: null } } },
+      quote,
+    ],
+    [
+      "fetchBookPriceLevels unprintable tick",
+      { data: [{ ...apiPriceLevel, tick: { toString: null } }] },
+      priceLevels,
+    ],
+    ["fetchBookTakeableOffers null offer", { data: [null] }, fetchers[3]![1]],
+    ["fetchTakeableOffers null offer", { data: [null] }, fetchers[5]![1]],
+    [
+      "fetchBookQuote null takeable offer",
+      { data: { ...quoteData, takeable_offers: [null] } },
+      quote,
+    ],
+    [
+      "fetchBook unprintable market_id",
+      { data: { ...apiBook, market_id: { toString: null } } },
+      fetchers[1]![1],
+    ],
+    [
+      "fetchTakeableOffers unprintable market_id",
+      { data: [{ ...apiTakeableOffer, market_id: { toString: null } }] },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchTakeableOffers null group",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: { ...apiTakeableOffer.offer, group: null },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchTakeableOffers invalid maker",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: { ...apiTakeableOffer.offer, maker: "0x1234" },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchTakeableOffers unprintable receiver",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: {
+              ...apiTakeableOffer.offer,
+              receiver_if_maker_is_seller: { toString: null },
+            },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchBookTakeableOffers non-boolean buy",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: {
+              ...apiTakeableOffer.offer,
+              buy: { toString: null },
+              receiver_if_maker_is_seller:
+                "0x0000000000000000000000000000000000000000",
+            },
+          },
+        ],
+      },
+      fetchers[3]![1],
+    ],
+    [
+      "fetchTakeableOffers non-boolean reduce_only",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: { ...apiTakeableOffer.offer, reduce_only: "false" },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchTakeableOffers negative tick",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: { ...apiTakeableOffer.offer, tick: -1 },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchTakeableOffers tick above MAX_TICK",
+      {
+        data: [
+          {
+            ...apiTakeableOffer,
+            offer: { ...apiTakeableOffer.offer, tick: Number(MAX_TICK) + 1 },
+          },
+        ],
+      },
+      fetchers[5]![1],
+    ],
+    [
+      "fetchBookQuote non-array takeable_offers",
+      { data: { ...quoteData, takeable_offers: null } },
+      quote,
+    ],
+  ];
+
+  test.each(cases)(
+    "error: InvalidMidnightApiResponseError for %s",
+    async (...[, body, call]) => {
+      const { fetch } = createJsonFetch(body);
 
       await expect(call(fetch)).rejects.toBeInstanceOf(
         InvalidMidnightApiResponseError,

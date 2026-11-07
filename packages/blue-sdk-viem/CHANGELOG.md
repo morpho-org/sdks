@@ -1,5 +1,17 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.3.0
+
+### Minor Changes
+
+- Export ERC-3643 ABIs and report whether the account is a verified recipient in `fetchHolding`. Both deployless and individual reads reject malformed non-empty identity-registry responses and report undefined eligibility when a deployed registry's verification read reverts or returns no data.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 7.2.0
 
 ### Minor Changes

@@ -19,6 +19,28 @@ export {
   wstEthAbi,
 } from "@morpho-org/morpho-ts/abis";
 
+/** ERC-3643 token ABI with the identity-registry accessor. */
+export const erc3643Abi = [
+  {
+    type: "function",
+    name: "identityRegistry",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;
+
+/** ERC-3643 identity registry ABI for checking whether an account is verified. */
+export const erc3643IdentityRegistryAbi = [
+  {
+    type: "function",
+    name: "isVerified",
+    inputs: [{ name: "_userAddress", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const;
+
 /** Morpho Blue ABI used for market, position, authorization, and nonce reads. */
 export const blueAbi = [
   {

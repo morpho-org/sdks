@@ -1,5 +1,26 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.4.0
+
+### Minor Changes
+
+- Validation failures now expose named error classes: InvalidAmountTypeError, UnsafeAmountError, InvalidAddressError, InvalidProtocolOptionError, MissingMorphoTargetError, ReadOnlyAccountError, MarketTokenMismatchError, and InsufficientTokenBalanceError. Integrators can match these failures with instanceof instead of parsing messages. Existing adapter errors now also set their name property.
+
+  Owner and collateral-recipient mismatches use AddressMismatchError; nonpositive amounts use NonPositiveInputError. These reused SDK errors use their standard messages. Other validation messages are unchanged, and every error remains instanceof Error.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-sdk@9.4.0
+  - @morpho-org/blue-sdk-viem@7.3.0
+
 ## 4.3.0
 
 ### Minor Changes

@@ -552,10 +552,10 @@ export async function resolveAssets(params: {
         break;
       case "blueSupplyCollateral":
       case "blueSupplyCollateralBorrow":
+      case "blueBorrow":
         approvalToken = await readMarketToken(limit.marketId, "collateral");
         break;
       case "blueWithdraw":
-      case "blueBorrow":
       case "blueWithdrawCollateral":
       case "blueRefinance":
       case "midnightSupplyCollateral":

@@ -4,6 +4,6 @@ import { base } from "viem/chains";
 
 export const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 48_287_000n,
+  forkBlockNumber: 53_550_000n,
   stepsTracing: false,
 });

@@ -70,4 +70,6 @@ export {
   InvalidBitLengthError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
 } from "@morpho-org/morpho-ts";

@@ -49,6 +49,35 @@ describe("getBundlesTokenRequirements", () => {
     throw new Error("BlueBundlesV1 requirements are not registered");
   }
   const blueBundlesV1 = bundles.blueBundlesV1;
+
+  test.each([true, false])(
+    "reads only direct allowance when the pull is covered (simple permit: %s)",
+    async (useSimplePermit) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: usdc,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 1_000_000n,
+      });
+      expect(
+        await getBundlesTokenRequirements(handle.client, {
+          token: usdc,
+          spender: blueBundlesV1,
+          amount: 1_000_000n,
+          owner: account.address,
+          chainId: mainnet.id,
+          deadline: maxUint256,
+          supportSignature: true,
+          useSimplePermit,
+        }),
+      ).toEqual([]);
+      expect(handle.request.mock.calls.map(([{ method }]) => method)).toEqual([
+        "eth_chainId",
+        "eth_call",
+      ]);
+    },
+  );
   const rejectNonceProbeWithRevert = (
     handle: ReturnType<typeof createMockClient>,
   ) => {
@@ -273,6 +302,12 @@ describe("getBundlesTokenRequirements", () => {
   const mockMissingPermitDomain = (
     handle: ReturnType<typeof createMockClient>,
   ) => {
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
     mockRead(handle, {
       address: usdc,
       abi: erc2612Abi,
@@ -602,6 +637,12 @@ describe("getBundlesTokenRequirements", () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: usdc,
       abi: erc2612Abi,
       functionName: "nonces",
       result: 0n,
@@ -820,6 +861,12 @@ describe("getBundlesTokenRequirements", () => {
       }),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
 
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
     await expect(
       getBundlesTokenRequirements(handle.client, {
         token: usdc,
@@ -846,12 +893,6 @@ describe("getBundlesTokenRequirements", () => {
       }),
     ).rejects.toBeInstanceOf(InputExceedsMaxError);
 
-    mockRead(handle, {
-      address: usdc,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: maxUint256,
-    });
     mockRead(handle, {
       address: permit2,
       abi: permit2Abi,

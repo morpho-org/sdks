@@ -23,7 +23,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
 2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
    `VaultBundlesV1` entrypoint directly. **Blue write paths**
-   encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   encode one registered `BlueBundlesV1` entrypoint directly, except `withdrawBuyCallback`, a
+   direct Morpho Blue `withdraw` for a BlueBuyCallback's owner. **Midnight bundle paths** encode one
    `MidnightBundlesV2` entrypoint call directly (see
    [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
    collateral supply / withdrawCollateral / redeem) encode their target contract call directly. Vault `inKindRedeem` and

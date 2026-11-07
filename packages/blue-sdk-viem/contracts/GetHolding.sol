@@ -5,6 +5,8 @@ import {IERC20Permit} from "./interfaces/IERC20Permit.sol";
 import {IWrappedBackedToken} from "./interfaces/IWrappedBackedToken.sol";
 import {IWhitelistControllerAggregator} from "./interfaces/IWhitelistControllerAggregator.sol";
 import {IERC20Permissioned} from "./interfaces/IERC20Permissioned.sol";
+import {IERC3643} from "./interfaces/IERC3643.sol";
+import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
 
 struct ERC20Allowances {
     uint256 blue;
@@ -26,6 +28,8 @@ struct HoldingResponse {
 }
 
 contract GetHolding {
+    uint256 private constant GAS_RESERVE = 25_000;
+
     function query(
         IERC20Permit token,
         address account,
@@ -55,6 +59,29 @@ contract GetHolding {
             res.canTransfer = hasPermission ? OptionalBoolean.True : OptionalBoolean.False;
         } catch {
             res.canTransfer = isErc20Permissioned ? OptionalBoolean.False : OptionalBoolean.True;
+        }
+
+        uint256 availableGas = gasleft();
+        if (availableGas > GAS_RESERVE) {
+            (bool success, bytes memory data) = address(token).staticcall{gas: availableGas - GAS_RESERVE}(
+                abi.encodeCall(IERC3643.identityRegistry, ())
+            );
+            if (success && data.length != 0) {
+                address identityRegistry = abi.decode(data, (address));
+                if (identityRegistry.code.length > 0) {
+                    res.canTransfer = OptionalBoolean.Undefined;
+                    availableGas = gasleft();
+                    if (availableGas > GAS_RESERVE) {
+                        (success, data) = identityRegistry.staticcall{gas: availableGas - GAS_RESERVE}(
+                            abi.encodeCall(IIdentityRegistry.isVerified, (account))
+                        );
+                        if (success && data.length != 0) {
+                            res.canTransfer =
+                                abi.decode(data, (bool)) ? OptionalBoolean.True : OptionalBoolean.False;
+                        }
+                    }
+                }
+            }
         }
 
         if (isWrappedBackedToken) {

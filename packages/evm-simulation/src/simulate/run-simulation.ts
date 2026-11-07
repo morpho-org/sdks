@@ -244,6 +244,9 @@ export async function runSimulation(params: {
       transactions: request.transactions,
       chainId: request.chainId,
       blockNumber: pinnedBlock.number,
+      ...(request.stateOverrides !== undefined && {
+        stateOverrides: request.stateOverrides,
+      }),
     }),
   );
 
