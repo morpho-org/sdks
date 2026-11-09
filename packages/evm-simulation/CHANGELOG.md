@@ -1,5 +1,11 @@
 # @morpho-org/evm-simulation
 
+## 8.5.1
+
+### Patch Changes
+
+- Allow market loan-token approval events from the sender to BlueBundlesV1 during collateral withdrawals, including zero-amount repayment pulls. Resolve the loan token at the pinned block and continue rejecting unrelated tokens and spenders.
+
 ## 8.5.0
 
 ### Minor Changes

@@ -895,7 +895,7 @@ unchecked outcomes are economically verified.
 `toSimulationLimits(action, { owner, expected })` produces the
 `SimulationLimits` of a transaction built by a morpho-sdk action (`tx.action`),
 without touching the network. For operations that carry `account`, it is
-`owner`, except on `midnightSupplyCollateral` and `midnightRedeem`, where it is
+`owner`, except on `blueWithdrawBuyCallback`, `midnightSupplyCollateral` and `midnightRedeem`, where it is
 `options.onBehalf ?? owner`. Midnight sells always measure the sender and reject
 any explicit `account`. `midnightRepayWithdrawCollateral` and
 `midnightTakeRepayWithdrawCollateral` also always measure the sender and reject
@@ -907,6 +907,23 @@ encoded receivers on `midnightRedeem`, `midnightTakeBorrow`,
 `midnightRepayWithdrawCollateral` and `midnightTakeRepayWithdrawCollateral`,
 `args.collateralReceiver` must match the
 same value. Mismatches throw `LimitAccountMismatchError`.
+
+`blueWithdrawBuyCallback` maps to the existing `blueWithdraw` operation. Pass the
+intended callback as `onBehalf` and its payout quote as `expected.assetsReceived`:
+
+```ts
+const limits = toSimulationLimits(tx.action, {
+  owner: maker,
+  onBehalf: callbackAddress,
+  expected: { assetsReceived: expectedAssets },
+});
+```
+
+This checks the callback's supply-share burn separately from the maker's wallet
+proceeds. The action's callback must match `onBehalf`, and its receiver must match
+`owner`; omitting `onBehalf` does not infer the callback from the action. Callback
+registration, ownership and authorization checks remain in the SDK action's
+`getRequirements()`. Offer cancellation and confirmation still happen separately.
 
 For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`;
 `simulate()` rejects a raw limit whose `account` is not the bundle sender with
@@ -931,6 +948,7 @@ inputs; pass the UI's quote through `expected`.
 | `vaultV1MigrateToV2` | `sharesBurned` (shares mode), `sharesMinted` (when `netAssets` known) | either when not derivable | — |
 | `blueSupply` | `assetsPaid` (gross; fee deducted inside) | `sharesMinted` | — |
 | `blueWithdraw` | `assetsReceived` net of penalty and fee (assets mode); `sharesBurned` in shares mode | `sharesBurned` (assets mode), `assetsReceived` (shares mode) | — |
+| `blueWithdrawBuyCallback` (emits `blueWithdraw`) | `sharesBurned`; `account` is the intended callback in `onBehalf`, `receiver` is `owner` | `assetsReceived` | Callback ownership and offer cancellation |
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
 | `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |

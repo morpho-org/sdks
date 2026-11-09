@@ -1010,6 +1010,9 @@ export class VaultV2BlueReallocationData
    * Full-liquidity discovery omits a candidate when its non-shared maximum
    * violates a shared cap instead of scanning smaller base-unit amounts. These
    * bounds can understate executable liquidity in rounding-only edge cases.
+   * With an explicit Blue balance, a paid operation may retry the same search
+   * from a physical-funding budget and keep a strictly cheaper feasible plan.
+   * This bounded refinement does not guarantee globally minimal penalties.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
@@ -1222,7 +1225,13 @@ export class VaultV2BlueReallocationData
         ),
       ),
     ].sort(bigIntComparator((tier) => tier));
-    const plan = (maxAssets: bigint, headroom: bigint) => {
+    const plan = (
+      maxAssets: bigint,
+      {
+        headroom,
+        usePhysicalBalance = false,
+      }: { readonly headroom: bigint; readonly usePhysicalBalance?: boolean },
+    ) => {
       let reserves = createCapReserveState(this.mutableMarkets);
       const reallocations: VaultV2BlueReallocation[] = [];
       let data = this.clone();
@@ -1251,6 +1260,33 @@ export class VaultV2BlueReallocationData
               : isFreeFriendlyPass
                 ? maxAssets
                 : remainingShortfall;
+          if (usePhysicalBalance && penalty > 0n) {
+            const penaltyMultiplier = type === "refinance" ? 2n : 1n;
+            const physicalPenalty = penaltyMultiplier * penalty;
+            if (physicalPenalty < MathLib.WAD) {
+              const idleAssets = reallocations.reduce(
+                (total, { from, assets }) =>
+                  from.type === "idle" ? total + assets : total,
+                0n,
+              );
+              // Idle must fund both the operation and its penalty flash loan.
+              const physicalShortfall = MathLib.zeroFloorSub(
+                amount +
+                  feeAssets +
+                  penaltyMultiplier *
+                    getBlueBundlesV1PenaltyAssets(reallocations),
+                blueBalance + idleAssets,
+              );
+              passMaxAssets = MathLib.max(
+                passMaxAssets,
+                MathLib.mulDivUp(
+                  physicalShortfall,
+                  MathLib.WAD,
+                  MathLib.WAD - physicalPenalty,
+                ),
+              );
+            }
+          }
           const retryPaidPass = penalty > 0n;
           let lo = retryPaidPass ? passMaxAssets - 1n : 0n;
           let tryFullCapacityAttempt = false;
@@ -1503,6 +1539,8 @@ export class VaultV2BlueReallocationData
           ? reallocatedAssets >= absoluteShortfall + penaltyAssets
           : reallocatedAssets >= absoluteShortfall;
       return {
+        maxAssets,
+        headroom,
         reallocations,
         data,
         liquidityBound:
@@ -1522,14 +1560,14 @@ export class VaultV2BlueReallocationData
     // (nearly) all of a source vault's starting idle, revert once another
     // allocation lands first. A bound plan therefore moves only the operation's
     // shortfall, or what unbound legs moved.
-    const target = plan(requiredAssets, allocatorCapHeadroom);
+    const target = plan(requiredAssets, { headroom: allocatorCapHeadroom });
     let selected = target;
     if (allocatorCapHeadroom > 0n && target.liquidityBound) {
       selected = plan(
         absoluteShortfall > target.unboundAssets
           ? absoluteShortfall
           : target.unboundAssets,
-        allocatorCapHeadroom,
+        { headroom: allocatorCapHeadroom },
       );
       // Shared-cap fitting is not monotonic in the budget.
       if (!selected.coversShortfall && target.coversShortfall)
@@ -1544,7 +1582,7 @@ export class VaultV2BlueReallocationData
       allocatorCapHeadroom > 0n ? [absoluteShortfall, requiredAssets] : [];
     for (const maxAssets of fullCapBudgets) {
       if (selected.coversShortfall) break;
-      selected = plan(maxAssets, 0n);
+      selected = plan(maxAssets, { headroom: 0n });
       if (selected.reallocatedAssets > available)
         available = selected.reallocatedAssets;
     }
@@ -1585,6 +1623,31 @@ export class VaultV2BlueReallocationData
         ),
         available,
       });
+    }
+
+    const selectedPenaltyAssets = getBlueBundlesV1PenaltyAssets(
+      selected.reallocations,
+    );
+    if (
+      hasExplicitBlueBalance &&
+      selectedPenaltyAssets > 1n &&
+      blueBalance <
+        amount +
+          feeAssets +
+          (type === "refinance" ? 2n : 1n) * selectedPenaltyAssets
+    ) {
+      // Amount feasibility is not monotonic: retain the original plan unless
+      // the physical-balance seed finds a fully funded, strictly cheaper one.
+      const alternative = plan(selected.maxAssets, {
+        headroom: selected.headroom,
+        usePhysicalBalance: true,
+      });
+      if (
+        alternative.coversShortfall &&
+        getBlueBundlesV1PenaltyAssets(alternative.reallocations) <
+          getBlueBundlesV1PenaltyAssets(selected.reallocations)
+      )
+        selected = alternative;
     }
 
     return { reallocations: selected.reallocations, data: selected.data };

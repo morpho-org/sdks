@@ -42,6 +42,7 @@ const operationToken = (operation: ResolvedApprovalOperation): Address => {
 
 /**
  * Build the operation-derived allowlist and union it with caller-supplied entries.
+ * Collateral withdrawals allow the loan-token approval emitted by a zero repay pull to BlueBundlesV1.
  * @param params - Chain, sender, resolved operation tokens, and explicit limits.
  * @internal
  */
@@ -136,8 +137,11 @@ export function resolveApprovalLimits(params: {
       case "blueWithdrawCollateral":
       case "blueRefinance":
         if (blueBundles !== undefined) {
-          if (limit.type === "blueBorrow") {
-            // BlueBundlesV1's zero-collateral transferFrom can re-emit Approval.
+          if (
+            limit.type === "blueBorrow" ||
+            limit.type === "blueWithdrawCollateral"
+          ) {
+            // BlueBundlesV1's zero-amount transferFrom can re-emit Approval.
             addToken(operationToken(operation), blueBundles);
           }
           approvals.push({

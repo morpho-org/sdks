@@ -101,7 +101,8 @@ type MidnightMarket = MidnightMarketStruct;
  * use a matching supplied struct when available because their credit reads
  * need it.
  * @param params - Caller operations, Morpho Blue and Midnight addresses, client, and pinned state block.
- * @returns Operations with quote tokens and any required subject approval token resolved.
+ * @returns Operations with quote tokens and any required subject approval token resolved,
+ *   including the loan token for collateral withdrawals with a zero repay leg.
  * @throws {RpcTransportError} For transport failures during a required metadata read.
  * @throws {SimulationValidationError} For a typed-input asset override that is
  *   neither the canonical token nor its registered native alias.
@@ -548,6 +549,7 @@ export async function resolveAssets(params: {
       case "blueSupply":
       case "blueRepay":
       case "blueRepayWithdrawCollateral":
+      case "blueWithdrawCollateral":
         approvalToken = await readMarketToken(limit.marketId, "loan");
         break;
       case "blueSupplyCollateral":
@@ -556,7 +558,6 @@ export async function resolveAssets(params: {
         approvalToken = await readMarketToken(limit.marketId, "collateral");
         break;
       case "blueWithdraw":
-      case "blueWithdrawCollateral":
       case "blueRefinance":
       case "midnightSupplyCollateral":
       case "midnightSupplyCollateralMakeBorrow":
