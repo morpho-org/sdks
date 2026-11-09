@@ -28,7 +28,7 @@ const blueScenario: E2eScenario = { name: "blue", requires: blueRequires };
 
 const blueSignedScenario: E2eScenario = {
   name: "blueSignedSupply",
-  requires: [...blueRequires, "permit2"],
+  requires: blueRequires,
 };
 
 const liquidity = parseEther("10");
@@ -156,7 +156,7 @@ describeE2e(blueScenario, (test, { chainId }) => {
 });
 
 describeE2e(blueSignedScenario, (test, { chainId }) => {
-  test("supply: signs an ERC-2612 permit, or a Permit2 SignatureTransfer when the token has none", async ({
+  test("supply: signs an ERC-2612 permit, or approves when the token has none", async ({
     client,
   }) => {
     const market = await createE2eMarket(client, chainId);
@@ -181,7 +181,7 @@ describeE2e(blueSignedScenario, (test, { chainId }) => {
     });
     // The SDK picks ERC-2612 exactly when the loan token answers `nonces(owner)`. Only a contract-level
     // miss (a revert, or WETH9's fallback returning no data) means no ERC-2612; any other failure
-    // (RPC, transport) fails the test instead of silently expecting Permit2.
+    // (RPC, transport) fails the test instead of silently expecting approval.
     const hasErc2612 = await client
       .readContract({
         address: market.loanToken,
@@ -201,16 +201,15 @@ describeE2e(blueSignedScenario, (test, { chainId }) => {
           throw error;
         },
       );
-    const signature = requirements.at(-1);
-    if (signature == null || !isRequirementSignature(signature))
-      throw new Error("Expected a token-pull signature requirement");
-    expect(signature.action.type).toBe(
-      hasErc2612 ? "permit" : "permit2SignatureTransfer",
-    );
-    // A permit needs nothing else; Permit2 may first need its ERC-20 approval, unless the token
-    // already grants Permit2 an allowance.
-    expect(requirements.slice(0, -1).every(isRequirementApproval)).toBe(true);
-    if (hasErc2612) expect(requirements).toHaveLength(1);
+    if (hasErc2612) {
+      expect(requirements).toHaveLength(1);
+      const signature = requirements[0];
+      if (!isRequirementSignature(signature))
+        throw new Error("Expected an ERC-2612 requirement");
+      expect(signature.action.type).toBe("permit");
+    } else {
+      expect(requirements.every(isRequirementApproval)).toBe(true);
+    }
     const signatures = await satisfyBlueBundlesV1Requirements(client, {
       requirements,
     });

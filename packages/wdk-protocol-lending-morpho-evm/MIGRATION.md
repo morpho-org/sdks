@@ -1,3 +1,13 @@
+# Current funding behavior
+
+The SDK no longer requests Permit2 funding. Use ERC-2612 permits
+(`supportSignature: true`, with `useSimplePermit` defaulting to true) or direct ERC-20 approvals.
+Pass `useSimplePermit: false` to force approvals.
+All token funding routes check the bundles allowance first and return no token requirement
+when it already covers the amount, without probing ERC-2612 support.
+The legacy `permit2Nonce` option is deprecated and ignored. Builders still accept
+previously collected signatures. Permit2 descriptions below document historical behavior.
+
 # Migrating to 4.0
 
 Version 4 follows `@morpho-org/morpho-sdk` v9. Classic token approvals and vault-share approvals

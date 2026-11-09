@@ -13,7 +13,10 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeErc20Permit2SignatureTransfer}. */
+/**
+ * Parameters for {@link encodeErc20Permit2SignatureTransfer}.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export interface EncodeErc20Permit2SignatureTransferParams {
   /** ERC-20 token pulled through Permit2. */
   readonly token: Address;
@@ -76,6 +79,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * });
  * // requirement satisfies Requirement<Permit2SignatureTransferRequirementSignature>
  * ```
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
  */
 export const encodeErc20Permit2SignatureTransfer = (
   params: EncodeErc20Permit2SignatureTransferParams,

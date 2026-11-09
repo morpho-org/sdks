@@ -1,5 +1,17 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.5.0
+
+### Minor Changes
+
+- Stop requesting Permit2 funding: reuse sufficient bundles allowances first; otherwise `supportSignature: true` attempts ERC-2612 permits with a matching on-chain domain separator by default, while unsupported tokens or domains and `useSimplePermit: false` use direct ERC-20 approvals to the bundles contract.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.1
+  - @morpho-org/morpho-sdk@9.5.0
+
 ## 4.4.0
 
 ### Minor Changes

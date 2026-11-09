@@ -1,5 +1,12 @@
 # Migrating from morpho-sdk v8 to v9
 
+> Current funding behavior: the SDK no longer requests Permit2 funding. Use ERC-2612 permits
+> (`supportSignature: true`, with `useSimplePermit` defaulting to true) or direct ERC-20 approvals.
+> Pass `useSimplePermit: false` to force approvals. The legacy
+> `permit2Nonce` option is deprecated and ignored; builders still accept previously collected
+> signatures. Permit2 requirement descriptions below document historical behavior.
+
+
 Version 9 removes exact-amount approval controls. Classic ERC-20 approvals and vault-share
 approvals or permits now use `maxUint256` when the existing allowance is below the required amount.
 An allowance at or above the required amount satisfies the requirement; larger leftovers are

@@ -8,7 +8,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   computeVaultV2ForceWithdrawPlan,
-  isPermit2SignatureTransferSignature,
+  encodeErc20Permit2SignatureTransfer,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -2153,6 +2153,21 @@ describe.sequential("chaos: S11 invalid authorization", () => {
       slippageTolerance: 0n,
       deadline,
     });
+    if ("permit2Nonce" in options) {
+      await client.approve({ address: USDC, args: [PERMIT2, maxUint256] });
+      const requirement = encodeErc20Permit2SignatureTransfer({
+        token: USDC,
+        spender: addresses.bundles!.vaultBundlesV1!,
+        amount,
+        chainId: mainnet.id,
+        nonce: options.permit2Nonce,
+        deadline,
+      });
+      return {
+        deposit,
+        signature: await requirement.sign(client, client.account.address),
+      };
+    }
     const requirements = await deposit.getRequirements(options);
     for (const requirement of requirements.filter(isRequirementApproval)) {
       await client.sendTransaction(requirement);
@@ -2324,7 +2339,9 @@ describe.sequential("chaos: S11 invalid authorization", () => {
       positionData: await market.getPositionData(client.account.address),
       deadline: nextHour(),
     });
-    const requirements = await action.getRequirements({ permit2Nonce: 0n });
+    const requirements = await action.getRequirements({
+      useSimplePermit: false,
+    });
     for (const requirement of requirements.filter(isRequirementApproval)) {
       await client.sendTransaction(requirement);
     }
@@ -2504,7 +2521,6 @@ describe.sequential("chaos: S12 slippage drift between construction and executio
 describe.sequential("chaos: S13 balance / allowance drift between construction and execution", () => {
   const addresses = getChainAddresses(mainnet.id)!;
   const BLUE = addresses.blue;
-  const PERMIT2 = addresses.permit2!;
   const nextHour = () => BigInt(Math.floor(Date.now() / 1_000)) + 3_600n;
 
   test("allowance revoked after requirements are satisfied", async ({
@@ -2621,7 +2637,7 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
     expect(await action.getRequirements()).toEqual([]);
   }, 60_000);
 
-  test("Permit2 allowance revoked after signature is built", async ({
+  test("Legacy Permit2 allowance revoked after signature is built", async ({
     client,
   }) => {
     const assets = parseUnits("1000", 6);
@@ -2637,29 +2653,18 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
       vaultData,
       deadline: nextHour(),
     });
-    const requirements = await action.getRequirements({
-      permit2Nonce: 0n,
-    });
-    const approval = requirements.find(isRequirementApproval);
-    expect(approval).toBeDefined();
-    if (!approval) throw new Error("Permit2 approval requirement not found");
-    expect(approval.action.args.spender).toBe(PERMIT2);
-    await executeApprovals(client, requirements);
-
-    const signatureRequirement = (
-      await action.getRequirements({ permit2Nonce: 0n })
-    ).find(isRequirementSignature);
-    expect(signatureRequirement).toBeDefined();
-    if (!signatureRequirement)
-      throw new Error("Permit2 signature requirement not found");
-    const signature = await signatureRequirement.sign(
-      client,
-      client.account.address,
-    );
-    expect(isPermit2SignatureTransferSignature(signature)).toBe(true);
+    const permit2 = addresses.permit2!;
+    await client.approve({ address: USDT, args: [permit2, maxUint256] });
+    const signature = await encodeErc20Permit2SignatureTransfer({
+      token: USDT,
+      spender: addresses.bundles!.vaultBundlesV1!,
+      amount: assets,
+      chainId: mainnet.id,
+      nonce: 0n,
+      deadline: action.buildTx().action.args.deadline,
+    }).sign(client, client.account.address);
     const tx = action.buildTx([signature]);
-
-    await client.approve({ address: USDT, args: [PERMIT2, 0n] });
+    await client.approve({ address: USDT, args: [permit2, 0n] });
     const err = await expectFailClosed(
       simulateFinalTransaction(client, tx),
       "revert",
@@ -2689,7 +2694,10 @@ describe.sequential("chaos: S13 balance / allowance drift between construction a
       to: USDT,
       action: {
         type: "erc20Approval",
-        args: { spender: PERMIT2, amount: maxUint256 },
+        args: {
+          spender: addresses.bundles!.vaultBundlesV1!,
+          amount: maxUint256,
+        },
       },
     });
   }, 60_000);

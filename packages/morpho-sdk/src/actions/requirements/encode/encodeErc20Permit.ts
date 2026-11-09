@@ -67,6 +67,9 @@ interface EncodeErc20PermitParams {
  * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
  *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
  *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+ * @throws {InvalidPermitDomainChainIdError} when the EIP-5267 domain names another chain.
+ * @throws {InvalidPermitDomainVerifyingContractError} when the EIP-5267 domain names another token.
+ * @throws {UnsupportedPermitDomainExtensionsError} when the EIP-5267 domain has extensions.
  * @throws {MissingPermitDomainNameError} when the token exposes neither `name()` nor
  *   `eip712Domain()`, so its permit domain is unknown.
  * @throws {viem.BaseError} when the `eth_chainId` request or a token metadata read fails at the
@@ -83,7 +86,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: USDC, // Must implement standard ERC-2612. DAI is routed through Permit2 by requirement helpers.
+ *   token: USDC, // Must implement standard ERC-2612. DAI falls back to a direct ERC-20 approval in requirement helpers.
  *   owner,
  *   spender: blueBundlesV1,
  *   amount: 1_000_000n,

@@ -26,7 +26,7 @@ const DEPOSIT_AMOUNT = 1_000_000n;
 const maybeDescribe = process.env.ERPC_SECRET ? describe : describe.skip;
 
 maybeDescribe("MorphoProtocolEvm fork e2e", () => {
-  test.for(["approval", "permit2", "permit"] as const)(
+  test.for(["approval", "approvalWithSignatures", "permit"] as const)(
     "behavior: %s deposits with its matching requirements",
     async (route, { client }) => {
       const token = route === "permit" ? getChainAddress(1, "usdc") : USDT;
@@ -101,7 +101,7 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
       const morpho = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: vault,
-        supportSignature: route === "permit2" || route === "permit",
+        supportSignature: route !== "approval",
       });
       const options = { token, amount: DEPOSIT_AMOUNT };
       const prepared = await morpho.prepareSupply(options);
@@ -120,9 +120,7 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
 
       for (const requirement of requirements) {
         if ("sign" in requirement) {
-          expect(requirement.action.type).toBe(
-            route === "permit" ? "permit" : "permit2SignatureTransfer",
-          );
+          expect(requirement.action.type).toBe("permit");
           expect(requirement.action.args.spender).toBe(
             getChainAddress(1, "bundles.vaultBundlesV1"),
           );
@@ -132,9 +130,7 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
           );
         } else {
           expect(requirement.action.args.spender).toBe(
-            route === "permit2"
-              ? getChainAddress(1, "permit2")
-              : getChainAddress(1, "bundles.vaultBundlesV1"),
+            getChainAddress(1, "bundles.vaultBundlesV1"),
           );
           const { hash } = await account.sendTransaction({
             to: requirement.to,
@@ -148,8 +144,8 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
         }
       }
 
-      if (route === "permit" || route === "permit2")
-        expect(requirementSignature).toBeDefined();
+      if (route === "permit") expect(requirementSignature).toBeDefined();
+      else expect(requirementSignature).toBeUndefined();
       const result =
         route === "approval"
           ? await morpho.supply(options)

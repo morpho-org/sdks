@@ -86,7 +86,7 @@ live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directl
 RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
 prerequisites.
 
-- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, ERC-2612 permit signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 Every transaction carries `tx.action` — typed metadata describing the encoded call (`type` plus
@@ -111,7 +111,10 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ supportSignature: true })`.
+Enable off-chain approvals (ERC-2612 permits) with `morphoViemExtension({ supportSignature: true })`. Pass `getRequirements({ useSimplePermit: false })` to force direct ERC-20 approvals; unsupported tokens also fall back to direct approvals.
+
+Token funding checks the bundles allowance first on every route. If it already covers the amount,
+no token requirement is returned and ERC-2612 support is not probed.
 
 ### `userAddress` is the eventual submitter
 
@@ -152,8 +155,7 @@ Create an entity — every factory takes a chain ID as its last argument:
 ### Vault deposit / withdraw
 
 Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
-permits authorize VaultBundlesV1. Permit2 SignatureTransfer also names VaultBundlesV1 as spender,
-while the ERC-20 approval prerequisite targets canonical Permit2.
+permits authorize VaultBundlesV1. The SDK no longer requests Permit2 funding.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);

@@ -176,7 +176,7 @@ export type RequirementAuthorization = Readonly<
 export type RequirementSignatureRequest<
   TSignature extends RequirementSignature = RequirementSignature,
 > = Requirement<TSignature>;
-/** A bundle token approval or ERC-2612/Permit2 SignatureTransfer request. */
+/** A bundle token approval or ERC-2612 request. */
 export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
@@ -217,11 +217,10 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
 
 /** Controls token-signature selection for prepared vault deposits and Blue loan and collateral writes. */
 export interface RequirementOptions {
-  /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
+  /** Prefer ERC-2612 when signatures are supported (default true); false forces direct ERC-20 approvals. */
   readonly useSimplePermit?: boolean;
   /**
-   * Explicit unused Permit2 SignatureTransfer nonce. Defaults to the lowest unused nonce for the
-   * owner when omitted; set it only when concurrent flows must partition nonces themselves.
+   * @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
    */
   readonly permit2Nonce?: bigint;
 }
@@ -326,18 +325,13 @@ export interface PreparedMorphoSupply {
    * Each settled call refreshes the requirements; concurrent calls share the pending read.
    *
    * @param requirementOptions - Optional token requirement preferences.
-   * @param requirementOptions.useSimplePermit - Optional preference for ERC-2612; unsupported
-   *   tokens fall back to Permit2 or direct approval.
-   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce. Defaults to the
-   *   lowest unused nonce when omitted; allocate a distinct nonce per pending operation.
+   * @param requirementOptions.useSimplePermit - Defaults to true when signatures are supported; false forces approvals. Unsupported
+   *   tokens fall back to direct approval.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when the prepared deposit's execution deadline has passed.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
-   * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
    *   undecodable data, or is out of range.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
@@ -710,7 +704,7 @@ export interface MorphoProtocolOptions {
   chainId?: number | bigint;
   /** Optional Morpho SDK slippage tolerance in WAD precision for vault flows. */
   slippageTolerance?: bigint;
-  /** Enable Morpho SDK permit/permit2 requirements (default: false). */
+  /** Enable Morpho SDK ERC-2612 permit requirements (default: false). */
   supportSignature?: boolean;
   /** Use Morpho SDK deployless reads. When unset, the SDK's deployless default applies; set `false` for direct reads only. */
   supportDeployless?: boolean;
@@ -1382,10 +1376,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     supportSignature: true,
    *   });
    *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
-   *   // Optional: omit permit2Nonce to use the lowest unused nonce. USDT falls back to Permit2.
    *   const requirements = await prepared.getRequirements({
    *     useSimplePermit: true,
-   *     permit2Nonce: 42n,
    *   });
    *
    *   let signature: BundlesTokenRequirementSignature | undefined;
@@ -1429,7 +1421,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
             ? undefined
             : {
                 useSimplePermit: requirementOptions.useSimplePermit,
-                permit2Nonce: requirementOptions.permit2Nonce,
               };
         // Recheck the live chain before using the captured SDK action.
         await this._revalidate(context);
@@ -2121,11 +2112,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
-   *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
@@ -2398,13 +2386,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
-   *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
    *   undecodable data, or is out of range.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or

@@ -1,10 +1,10 @@
-import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isPermit2SignatureTransferSignature,
+  encodeErc20Permit2SignatureTransfer,
   isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
@@ -20,6 +20,50 @@ import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("DepositVaultV1", () => {
   const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+  test("deposit: executes a caller-supplied legacy Permit2 signature", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const token = SteakhouseUsdcVaultV1.asset;
+    const deadline = Time.timestamp() + 3_600n;
+    await client.deal({ erc20: token, amount });
+    await client.approve({
+      address: token,
+      args: [getChainAddresses(mainnet.id).permit2!, amount],
+    });
+    const vault = client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const before = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.address,
+      owner: client.account.address,
+    });
+    const action = vault.deposit({
+      userAddress: client.account.address,
+      amount,
+      vaultData: await vault.getData(),
+      deadline,
+    });
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      token,
+      spender: vaultBundlesV1,
+      amount,
+      chainId: mainnet.id,
+      nonce: 0n,
+      deadline,
+    });
+    const signature = await requirement.sign(client, client.account.address);
+    await client.sendTransaction(action.buildTx([signature]));
+    const after = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.address,
+      owner: client.account.address,
+    });
+    expect(after).toBeGreaterThan(before);
+    expect(
+      await client.balanceOf({ erc20: token, owner: client.account.address }),
+    ).toBe(0n);
+  });
+
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
@@ -178,9 +222,7 @@ describe("DepositVaultV1", () => {
           amount: amount,
           vaultData,
         });
-        const requirements = await deposit.getRequirements({
-          useSimplePermit: true,
-        });
+        const requirements = await deposit.getRequirements();
 
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -224,9 +266,9 @@ describe("DepositVaultV1", () => {
     expect(finalState.userSharesBalanceInAssets).toEqual(amount - 1n);
   });
 
-  test("should deposit USDC with permit2 in vaultV1", async ({ client }) => {
-    const { permit2 } = addressesRegistry[mainnet.id];
-
+  test("should deposit USDC with direct approval when signatures are enabled", async ({
+    client,
+  }) => {
     const amount = parseUnits("1000", 6);
 
     await client.deal({
@@ -261,52 +303,20 @@ describe("DepositVaultV1", () => {
           permit2Nonce: 0n,
         });
 
-        expect(requirements.length).toBe(2);
+        expect(requirements.length).toBe(1);
 
-        const approvalPermit2 = requirements[0];
-        if (!isRequirementApproval(approvalPermit2)) {
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
 
-        expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
-        expect(approvalPermit2.action.type).toBe("erc20Approval");
+        expect(approval.action.args.spender).toBe(vaultBundlesV1);
+        expect(approval.action.args.amount).toBe(MathLib.MAX_UINT_256);
+        expect(approval.action.type).toBe("erc20Approval");
 
-        const permit2Requirement = requirements[1];
+        await client.sendTransaction(approval);
 
-        if (!isRequirementSignature(permit2Requirement)) {
-          throw new Error("Requirement is not a signature requirement");
-        }
-
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
-          throw new Error("Unexpected requirement type");
-        }
-        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
-        expect(permit2Requirement.action.args.amount).toBe(amount);
-
-        const requirementSignature = await permit2Requirement.sign(
-          client,
-          client.account.address,
-        );
-
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
-          throw new Error("Unexpected requirement signature");
-        }
-
-        expect(requirementSignature.args.owner).toEqual(client.account.address);
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.args.asset).toBe(
-          SteakhouseUsdcVaultV1.asset,
-        );
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
-        );
-
-        await client.sendTransaction(approvalPermit2);
-
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = deposit.buildTx();
 
         await client.sendTransaction(tx);
       },
@@ -324,7 +334,7 @@ describe("DepositVaultV1", () => {
     expect(finalState.userSharesBalanceInAssets).toEqual(amount - 1n);
   });
 
-  test("should deposit WETH with pre-existing bundles approval without a signature", async ({
+  test("should deposit WETH with pre-existing bundles approval when signatures are enabled", async ({
     client,
   }) => {
     const amount = parseUnits("0.5", 18);
@@ -365,6 +375,7 @@ describe("DepositVaultV1", () => {
         });
 
         expect(requirements).toEqual([]);
+
         await client.sendTransaction(deposit.buildTx());
       },
     });

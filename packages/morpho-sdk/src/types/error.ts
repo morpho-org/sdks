@@ -761,7 +761,10 @@ export class BundlesRequirementSignatureMismatchError extends Error {
   }
 }
 
-/** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
+/**
+ * Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
    * @param owner - Permit2 token owner whose nonce is unavailable.
@@ -778,7 +781,10 @@ export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   }
 }
 
-/** Thrown when no unused Permit2 unordered nonce exists at or after the requested start nonce. */
+/**
+ * Thrown when no unused Permit2 unordered nonce exists at or after the requested start nonce.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export class NoUnusedPermit2NonceError extends Error {
   /**
    * @param owner - Permit2 token owner scanned for a free nonce.

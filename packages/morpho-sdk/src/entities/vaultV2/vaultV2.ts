@@ -11,7 +11,6 @@ import {
   _try,
   type AddressLabel,
   getChainAddress,
-  getChainAddresses,
   Time,
 } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
@@ -127,8 +126,8 @@ export interface VaultV2Actions {
    * Prepares a Vault V2 deposit through the registered VaultBundlesV1 contract.
    *
    * Uses the supplied vault snapshot to compute the deadline-accrued `maxSharePrice`.
-   * `getRequirements()` reads the asset allowance and, when enabled, the selected ERC-2612 or
-   * Permit2 nonce state. Native funding is exclusive and skips token requirements. Shares are
+   * `getRequirements()` reads the asset allowance and, when enabled, the selected ERC-2612
+   * nonce state. Native funding is exclusive and skips token requirements. Shares are
    * always minted to the transaction sender, which must be `userAddress`.
    * Concurrent requirement reads share the first caller's options; later calls refresh on-chain
    * state using their own options.
@@ -153,19 +152,14 @@ export interface VaultV2Actions {
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {NegativeInputError} when funding, slippage, the referral fee, or a Permit2 nonce is negative.
+   * @throws {NegativeInputError} when funding, slippage, or the referral fee is negative.
    * @throws {NonPositiveInputError} when funding or the previewed vault shares are not positive.
    * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
    * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the
-   *   owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
-   *   explicit Permit2 nonce is consumed.
-   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
-   *   `getRequirements()` when the Permit2 nonce exceeds uint256.
+   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
@@ -682,27 +676,17 @@ export class MorphoVaultV2 implements VaultV2Actions {
    * before any other requirement read. The `inKindRedeem` and `forceWithdraw` paths validate the
    * client chain before this code check.
    *
-   * @param roles - Registry labels to resolve and check; `permit2` is skipped when the
-   *   chain registers none.
+   * @param roles - Registry labels to resolve and check.
    */
   private async assertWriteTargets(
     roles: readonly [
       "bundles.vaultBundlesV1" | "bundles.vaultExitBundlesV1" | "blue",
-      ...(
-        | "bundles.vaultBundlesV1"
-        | "bundles.vaultExitBundlesV1"
-        | "blue"
-        | "permit2"
-      )[],
+      ...("bundles.vaultBundlesV1" | "bundles.vaultExitBundlesV1" | "blue")[],
     ],
   ): Promise<void> {
     const targets: { role: AddressLabel; address: Address }[] = [];
     for (const role of roles) {
-      const address =
-        role === "permit2"
-          ? getChainAddresses(this.chainId).permit2
-          : getChainAddress(this.chainId, role);
-      if (address == null) continue;
+      const address = getChainAddress(this.chainId, role);
       targets.push({ role, address });
     }
     await assertRegistryTargetsHaveCode(
@@ -770,11 +754,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
         // Memoize the in-flight promise so concurrent callers share one round of
         // allowance/nonce reads.
         const pending = (async (): Promise<readonly ActionRequirement[]> => {
-          await this.assertWriteTargets(
-            funding.value === 0n && this.client.options.supportSignature
-              ? ["bundles.vaultBundlesV1", "permit2"]
-              : ["bundles.vaultBundlesV1"],
-          );
+          await this.assertWriteTargets(["bundles.vaultBundlesV1"]);
           return funding.value > 0n
             ? []
             : getBundlesTokenRequirements(this.client.viemClient, {
@@ -787,7 +767,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
                 supportSignature: this.client.options.supportSignature,
                 supportDeployless: this.client.options.supportDeployless,
                 useSimplePermit: requirementOptions?.useSimplePermit,
-                permit2Nonce: requirementOptions?.permit2Nonce,
                 now,
               });
         })();

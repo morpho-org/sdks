@@ -1,12 +1,10 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { isHex, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isPermit2SignatureTransferSignature,
   isRequirementApproval,
-  isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
 import {
@@ -21,11 +19,11 @@ import {
   seedVaultV2DeadDeposits,
 } from "../../helpers/vaultV2.js";
 
-describe("Permit2", () => {
-  const { dai, permit2 } = addressesRegistry[mainnet.id];
+describe("Direct approvals with signatures enabled", () => {
+  const { dai } = addressesRegistry[mainnet.id];
   const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 
-  test("should deposit USDT with permit2 with prior reset", async ({
+  test("should deposit USDT with direct approval with prior reset", async ({
     client,
   }) => {
     const amount = parseUnits("1000", 18);
@@ -42,7 +40,7 @@ describe("Permit2", () => {
 
     await client.approve({
       address: Re7UsdtVaultV2.asset,
-      args: [permit2, 1n],
+      args: [vaultBundlesV1, 1n],
     });
 
     const {
@@ -70,54 +68,18 @@ describe("Permit2", () => {
           permit2Nonce: 0n,
         });
 
-        // USDT may require two signature requirements (reset approval permit2 + approve permit2 + set allowance)
-        expect(requirements.length).toBe(3);
-
-        const approvalResetPermit2 = requirements[0];
-        const approvalPermit2 = requirements[1];
-        if (
-          !isRequirementApproval(approvalResetPermit2) ||
-          !isRequirementApproval(approvalPermit2)
-        ) {
-          throw new Error(
-            "Approval requirement not found (reset permit2 or approve permit2)",
+        expect(requirements).toHaveLength(2);
+        for (const approval of requirements) {
+          if (!isRequirementApproval(approval)) {
+            throw new Error("Approval requirement not found");
+          }
+          expect(approval.action.args.spender).toBe(vaultBundlesV1);
+          expect(approval.action.args.amount).toBe(
+            approval === requirements[0] ? 0n : MathLib.MAX_UINT_256,
           );
+          await client.sendTransaction(approval);
         }
-
-        expect(approvalResetPermit2.action.args.spender).toBe(permit2);
-        expect(approvalResetPermit2.action.args.amount).toBe(0n);
-        expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
-
-        await client.sendTransaction(approvalResetPermit2);
-        await client.sendTransaction(approvalPermit2);
-
-        const signaturePermit2 = requirements[2];
-
-        if (!isRequirementSignature(signaturePermit2)) {
-          throw new Error("Permit2 requirement not found");
-        }
-
-        const requirementSignature = await signaturePermit2.sign(
-          client,
-          client.account.address,
-        );
-
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
-          throw new Error("Unexpected requirement signature");
-        }
-
-        expect(requirementSignature.args.owner).toEqual(client.account.address);
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.action.args.spender).toBe(vaultBundlesV1);
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
-        );
-
-        const tx = deposit.buildTx([requirementSignature]);
-
-        await client.sendTransaction(tx);
+        await client.sendTransaction(deposit.buildTx());
       },
     });
 
@@ -132,7 +94,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit USDT with permit2 with allowance 0", async ({
+  test("should deposit USDT with direct approval with allowance 0", async ({
     client,
   }) => {
     const amount = parseUnits("1000", 18);
@@ -172,42 +134,16 @@ describe("Permit2", () => {
           permit2Nonce: 0n,
         });
 
-        // USDT may require two signature requirements (approve permit2 + set allowance)
-        expect(requirements.length).toBe(2);
-
-        const approval = requirements[0];
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Approval requirement not found");
+        expect(requirements).toHaveLength(1);
+        for (const approval of requirements) {
+          if (!isRequirementApproval(approval)) {
+            throw new Error("Approval requirement not found");
+          }
+          expect(approval.action.args.spender).toBe(vaultBundlesV1);
+          expect(approval.action.args.amount).toBe(MathLib.MAX_UINT_256);
+          await client.sendTransaction(approval);
         }
-
-        await client.sendTransaction(approval);
-
-        // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
-        const permit2 = requirements[1];
-
-        if (!isRequirementSignature(permit2)) {
-          throw new Error("Permit2 requirement not found");
-        }
-
-        const requirementSignature = await permit2.sign(
-          client,
-          client.account.address,
-        );
-
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
-          throw new Error("Unexpected requirement signature");
-        }
-
-        expect(requirementSignature.args.owner).toEqual(client.account.address);
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
-        );
-
-        const tx = deposit.buildTx([requirementSignature]);
-
-        await client.sendTransaction(tx);
+        await client.sendTransaction(deposit.buildTx());
       },
     });
 
@@ -222,7 +158,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit WETH with pre-existing bundles approval without a signature", async ({
+  test("should deposit WETH with pre-existing bundles approval without additional approval", async ({
     client,
   }) => {
     const { wNative } = addressesRegistry[mainnet.id];
@@ -279,7 +215,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit DAI with permit2", async ({ client }) => {
+  test("should deposit DAI with direct approval", async ({ client }) => {
     const amount = parseUnits("10", 18);
 
     await client.deal({
@@ -324,52 +260,16 @@ describe("Permit2", () => {
           permit2Nonce: 0n,
         });
 
-        expect(requirements.length).toBe(2);
-
-        const approvalPermit2 = requirements[0];
-        if (!isRequirementApproval(approvalPermit2)) {
-          throw new Error("Approval requirement not found");
+        expect(requirements).toHaveLength(1);
+        for (const approval of requirements) {
+          if (!isRequirementApproval(approval)) {
+            throw new Error("Approval requirement not found");
+          }
+          expect(approval.action.args.spender).toBe(vaultBundlesV1);
+          expect(approval.action.args.amount).toBe(MathLib.MAX_UINT_256);
+          await client.sendTransaction(approval);
         }
-
-        expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
-        expect(approvalPermit2.action.type).toBe("erc20Approval");
-
-        await client.sendTransaction(approvalPermit2);
-
-        const permit2Requirement = requirements[1];
-
-        if (!isRequirementSignature(permit2Requirement)) {
-          throw new Error("Requirement is not a signature requirement");
-        }
-
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
-          throw new Error("Unexpected requirement type");
-        }
-        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
-        expect(permit2Requirement.action.args.amount).toBe(amount);
-
-        const requirementSignature = await permit2Requirement.sign(
-          client,
-          client.account.address,
-        );
-
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
-          throw new Error("Unexpected requirement signature");
-        }
-
-        expect(requirementSignature.args.owner).toEqual(client.account.address);
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.args.asset).toBe(dai);
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
-        );
-
-        const tx = deposit.buildTx([requirementSignature]);
-
-        await client.sendTransaction(tx);
+        await client.sendTransaction(deposit.buildTx());
       },
     });
 
@@ -382,7 +282,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit USDC with permit2 with useSimplePermit to false", async ({
+  test("should deposit USDC with direct approval with useSimplePermit to false", async ({
     client,
   }) => {
     const amount = parseUnits("1000", 6);
@@ -419,52 +319,16 @@ describe("Permit2", () => {
           permit2Nonce: 0n,
         });
 
-        expect(requirements.length).toBe(2);
-
-        const approvalPermit2 = requirements[0];
-        if (!isRequirementApproval(approvalPermit2)) {
-          throw new Error("Approval requirement not found");
+        expect(requirements).toHaveLength(1);
+        for (const approval of requirements) {
+          if (!isRequirementApproval(approval)) {
+            throw new Error("Approval requirement not found");
+          }
+          expect(approval.action.args.spender).toBe(vaultBundlesV1);
+          expect(approval.action.args.amount).toBe(MathLib.MAX_UINT_256);
+          await client.sendTransaction(approval);
         }
-
-        expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
-        expect(approvalPermit2.action.type).toBe("erc20Approval");
-
-        await client.sendTransaction(approvalPermit2);
-
-        const permit2Requirement = requirements[1];
-
-        if (!isRequirementSignature(permit2Requirement)) {
-          throw new Error("Requirement is not a signature requirement");
-        }
-
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
-          throw new Error("Unexpected requirement type");
-        }
-        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
-        expect(permit2Requirement.action.args.amount).toBe(amount);
-
-        const requirementSignature = await permit2Requirement.sign(
-          client,
-          client.account.address,
-        );
-
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
-          throw new Error("Unexpected requirement signature");
-        }
-
-        expect(requirementSignature.args.owner).toEqual(client.account.address);
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.args.asset).toBe(KeyrockUsdcVaultV2.asset);
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
-        );
-
-        const tx = deposit.buildTx([requirementSignature]);
-
-        await client.sendTransaction(tx);
+        await client.sendTransaction(deposit.buildTx());
       },
     });
 

@@ -443,10 +443,13 @@ is in scope.
   (`RegistryValueAlreadyRegisteredError`). Addresses an integrator registers are part of its trusted
   configuration. A wrong address in the shipped registry is in scope; see
   [`SECURITY.md`](./SECURITY.md#scope). Every Blue, VaultV1 and VaultV2 write's `getRequirements()`
-  verifies the fixed bundles contract (and Permit2 or Blue when the flow touches them) holds code at
+  verifies the fixed bundles contract (and Blue when the flow touches it) holds code at
   its registered address, rejecting a code-less entry as `MissingContractCodeError` before planning
-  any calldata that would no-op onchain; `buildTx` alone stays unchecked. On both the entity and the
-  simulation side, a wrong-chain endpoint surfaces as `ChainIdMismatchError` / `InvalidChainIdError`
+  any calldata that would no-op onchain; `buildTx` alone stays unchecked. Funding selection never
+  uses Permit2, and `assertWriteTargets` does not check its code. Legacy Permit2 signatures supplied
+  to `buildTx` are checked for validity and nonce use only by Permit2 and the bundles contract
+  onchain. On both the entity and simulation side, a wrong-chain endpoint surfaces as
+  `ChainIdMismatchError` / `InvalidChainIdError`
   before these missing-code errors. An entry that holds
   *unexpected* code — the wrong contract at the right address — passes this check and is caught only
   by simulation reverts or identity reads; that residual is accepted.

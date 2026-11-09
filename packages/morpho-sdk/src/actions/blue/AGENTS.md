@@ -48,8 +48,7 @@ builders stay synchronous and encode-only.
 ## Permit, native, and authorization rules
 
 - Classic ERC-20 approvals and ERC-2612 permits name BlueBundlesV1 as spender.
-- Permit2 SignatureTransfer keeps the ERC-20 approval on canonical Permit2, while the signed
-  transfer names BlueBundlesV1 as spender.
+- Permit2 funding is no longer requested. Builders still accept previously collected signatures.
 - Native funding is available only when the funded token is the chain's wNative. It is exclusive
   with an ERC-20 token permit, and `tx.value` must equal the funded amount.
 - Morpho authorization names BlueBundlesV1. A signed authorization is encoded

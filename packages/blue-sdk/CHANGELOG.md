@@ -1,5 +1,11 @@
 # @morpho-org/blue-sdk
 
+## 8.2.1
+
+### Patch Changes
+
+- Declare viem as a required peer dependency so package managers can resolve the runtime imports used by the SDK. The supported viem range is ^2.0.0.
+
 ## 8.2.0
 
 ### Minor Changes

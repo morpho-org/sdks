@@ -6,11 +6,18 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
+import { blueAbi, erc2612Abi, erc5267Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, maxUint256 } from "viem";
+import {
+  type Address,
+  erc20Abi,
+  getTypesForEIP712Domain,
+  hashDomain,
+  maxUint256,
+  type TypedData,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -27,6 +34,7 @@ import {
 } from "../../helpers/index.js";
 import {
   AccrualPositionUserMismatchError,
+  type ActionRequirement,
   BorrowExceedsSafeLtvError,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
@@ -1196,29 +1204,46 @@ describe("MorphoBlue position validation", () => {
     );
   });
 
+  const withSimplePermit = <
+    T extends {
+      getRequirements: (params?: {
+        useSimplePermit?: boolean;
+      }) => Promise<readonly ActionRequirement[]>;
+    },
+  >(
+    action: T,
+  ) => ({
+    ...action,
+    getRequirements: () => action.getRequirements({ useSimplePermit: true }),
+  });
+
   test.each([
     {
       method: "supply",
-      expectedSignatures: 1,
+      expectedSignatures: 0,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.supply({
-          marketData: supplyMarketData,
-          userAddress: signerAddress,
-          assets: 1_000n,
-          deadline,
-        }),
+        withSimplePermit(
+          entity.supply({
+            marketData: supplyMarketData,
+            userAddress: signerAddress,
+            assets: 1_000n,
+            deadline,
+          }),
+        ),
     },
     {
       method: "supplyCollateralBorrow",
-      expectedSignatures: 2,
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.supplyCollateralBorrow({
-          userAddress: signerAddress,
-          positionData: makePosition(marketParams, { user: signerAddress }),
-          collateralAssets: 1_000n,
-          borrowAssets: 1n,
-          deadline,
-        }),
+        withSimplePermit(
+          entity.supplyCollateralBorrow({
+            userAddress: signerAddress,
+            positionData: makePosition(marketParams, { user: signerAddress }),
+            collateralAssets: 1_000n,
+            borrowAssets: 1n,
+            deadline,
+          }),
+        ),
     },
     {
       method: "withdraw",
@@ -1237,27 +1262,31 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "repay",
-      expectedSignatures: 1,
+      expectedSignatures: 0,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.repay({
-          userAddress: signerAddress,
-          positionData: makePosition(marketParams, {
-            user: signerAddress,
-            lastUpdate: deadline - 3_600n,
+        withSimplePermit(
+          entity.repay({
+            userAddress: signerAddress,
+            positionData: makePosition(marketParams, {
+              user: signerAddress,
+              lastUpdate: deadline - 3_600n,
+            }),
+            repayShares: maxUint256,
+            deadline,
           }),
-          repayShares: maxUint256,
-          deadline,
-        }),
+        ),
     },
     {
       method: "supplyCollateral",
-      expectedSignatures: 1,
+      expectedSignatures: 0,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.supplyCollateral({
-          userAddress: signerAddress,
-          collateralAssets: 1_000n,
-          deadline,
-        }),
+        withSimplePermit(
+          entity.supplyCollateral({
+            userAddress: signerAddress,
+            collateralAssets: 1_000n,
+            deadline,
+          }),
+        ),
     },
     {
       method: "borrow",
@@ -1286,18 +1315,20 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "repayWithdrawCollateral",
-      expectedSignatures: 2,
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.repayWithdrawCollateral({
-          userAddress: signerAddress,
-          positionData: makePosition(marketParams, {
-            user: signerAddress,
-            lastUpdate: deadline - 3_600n,
+        withSimplePermit(
+          entity.repayWithdrawCollateral({
+            userAddress: signerAddress,
+            positionData: makePosition(marketParams, {
+              user: signerAddress,
+              lastUpdate: deadline - 3_600n,
+            }),
+            repayShares: maxUint256,
+            collateralAssets: 1n,
+            deadline,
           }),
-          repayShares: maxUint256,
-          collateralAssets: 1n,
-          deadline,
-        }),
+        ),
     },
     {
       method: "refinance",
@@ -1319,7 +1350,7 @@ describe("MorphoBlue position validation", () => {
     },
   ])(
     "behavior: $method signatures prepared on one handle finalize on a fresh handle",
-    async ({ expectedSignatures, prepare }) => {
+    async ({ method, expectedSignatures, prepare }) => {
       const now = 1_800_000_000n;
       const deadline = now + 3_600n;
       const makeSignatureEntity = () => {
@@ -1328,6 +1359,59 @@ describe("MorphoBlue position validation", () => {
           marketParams.loanToken,
           marketParams.collateralToken,
         ]) {
+          const domain = {
+            name: "Token",
+            version: "1",
+            chainId: mainnet.id,
+            verifyingContract: address,
+          };
+          mockRead(handle, {
+            address,
+            abi: erc2612Abi,
+            functionName: "DOMAIN_SEPARATOR",
+            result: hashDomain<TypedData>({
+              domain,
+              types: { EIP712Domain: getTypesForEIP712Domain({ domain }) },
+            }),
+          });
+          mockRead(handle, {
+            address,
+            abi: erc2612Abi,
+            functionName: "nonces",
+            result: 0n,
+          });
+          mockRead(handle, {
+            address,
+            abi: erc20Abi,
+            functionName: "decimals",
+            result: 18,
+          });
+          mockRead(handle, {
+            address,
+            abi: erc20Abi,
+            functionName: "name",
+            result: "Token",
+          });
+          mockRead(handle, {
+            address,
+            abi: erc20Abi,
+            functionName: "symbol",
+            result: "TKN",
+          });
+          mockRead(handle, {
+            address,
+            abi: erc5267Abi,
+            functionName: "eip712Domain",
+            result: [
+              "0x0f",
+              "Token",
+              "1",
+              BigInt(mainnet.id),
+              address,
+              `0x${"00".repeat(32)}`,
+              [],
+            ],
+          });
           mockRead(handle, {
             address,
             abi: erc20Abi,
@@ -1335,12 +1419,6 @@ describe("MorphoBlue position validation", () => {
             result: 0n,
           });
         }
-        mockRead(handle, {
-          address: getChainAddress(mainnet.id, "permit2"),
-          abi: permit2Abi,
-          functionName: "nonceBitmap",
-          result: 0n,
-        });
         mockRead(handle, {
           address: getChainAddress(mainnet.id, "blue"),
           abi: blueAbi,
@@ -1354,7 +1432,12 @@ describe("MorphoBlue position validation", () => {
           result: 0n,
         });
         return handle.client
-          .extend(morphoViemExtension({ supportSignature: true }))
+          .extend(
+            morphoViemExtension({
+              supportSignature: true,
+              supportDeployless: false,
+            }),
+          )
           .morpho.blue(marketParams, mainnet.id);
       };
 
@@ -1364,7 +1447,19 @@ describe("MorphoBlue position validation", () => {
       const requirements = (
         await withChainTimestamp(now, () => actionA.getRequirements())
       ).filter(isRequirementSignature);
-      expect(requirements).toHaveLength(expectedSignatures);
+      const tokenPermits = [
+        "supply",
+        "supplyCollateral",
+        "supplyCollateralBorrow",
+        "repay",
+        "repayWithdrawCollateral",
+      ].includes(method)
+        ? 1
+        : 0;
+      expect(
+        requirements.filter(({ action }) => action.type === "permit"),
+      ).toHaveLength(tokenPermits);
+      expect(requirements).toHaveLength(expectedSignatures + tokenPermits);
       const signatures = await Promise.all(
         requirements.map((requirement) =>
           requirement.sign(signerWalletClient, signerAddress),

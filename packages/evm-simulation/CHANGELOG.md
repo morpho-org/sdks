@@ -1,5 +1,17 @@
 # @morpho-org/evm-simulation
 
+## 8.6.0
+
+### Minor Changes
+
+- Support `blueWithdrawBuyCallback` in `toSimulationLimits` using Blue withdrawal verification. Pass the intended callback as `onBehalf` and `expected.assetsReceived` to check the callback's supply-share burn and the owner's wallet proceeds separately.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.1
+  - @morpho-org/morpho-sdk@9.5.0
+
 ## 8.5.1
 
 ### Patch Changes

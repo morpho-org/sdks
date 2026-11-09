@@ -725,9 +725,9 @@ export type BundlesFundingArgs =
 
 /** Controls token requirements generated for a bundles-funded action. */
 export interface BundlesTokenRequirementsOptions {
-  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce; defaults to true when signatures are supported. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
+  /** @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
   readonly permit2Nonce?: bigint;
 }
 
@@ -798,7 +798,10 @@ export interface PermitAction
   readonly typedData?: RequirementTypedData;
 }
 
-/** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
+/**
+ * Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export interface Permit2SignatureTransferAction
   extends BaseAction<
     "permit2SignatureTransfer",
@@ -843,7 +846,10 @@ export interface Erc2612RequirementSignature {
 /** A signed ERC-2612 permit requirement accepted by vault-share bundle calls. */
 export type PermitRequirementSignature = Erc2612RequirementSignature;
 
-/** A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts. */
+/**
+ * A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export interface Permit2SignatureTransferRequirementSignature {
   readonly args: Readonly<PermitArgs>;
   readonly action: Permit2SignatureTransferAction;
@@ -1189,6 +1195,7 @@ export function isPermitSignature(
  * const getPermit2Nonce = (signature: RequirementSignature): bigint | undefined =>
  *   isPermit2SignatureTransferSignature(signature) ? signature.args.nonce : undefined;
  * ```
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
  */
 export function isPermit2SignatureTransferSignature(
   signature: RequirementSignature,

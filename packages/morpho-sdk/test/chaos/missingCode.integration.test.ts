@@ -78,13 +78,10 @@ type RegistryRole =
   | "bundles.blueBundlesV1"
   | "bundles.vaultBundlesV1"
   | "bundles.vaultExitBundlesV1"
-  | "blue"
-  | "permit2";
+  | "blue";
 
 const roleAddress = (role: RegistryRole): Address =>
-  role === "permit2"
-    ? getChainAddresses(mainnet.id).permit2!
-    : getChainAddress(mainnet.id, role);
+  getChainAddress(mainnet.id, role);
 
 const wipeCode = (client: AnvilTestClient, address: Address) =>
   client.setCode({ address, bytecode: "0x" }).then(() => {});
@@ -106,7 +103,28 @@ const expectMissingCode = async (
 };
 
 describe("chaos: S8 missing contract", () => {
-  describe.each(["bundles.blueBundlesV1", "blue", "permit2"] as const)(
+  exitBundlesTest(
+    "Blue funding does not require Permit2 code",
+    async ({ client }) => {
+      await wipeCode(client, getChainAddresses(mainnet.id).permit2!);
+      const action = morphoOf(client)
+        .blue(CbbtcUsdcBlue, mainnet.id)
+        .supply({
+          userAddress: client.account.address,
+          marketData: deadSeededMarketData(CbbtcUsdcBlue),
+          assets: parseUnits("1", 6),
+          deadline: maxUint256,
+        });
+      const requirements = await action.getRequirements();
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action).toMatchObject({
+        type: "permit",
+        args: { spender: roleAddress("bundles.blueBundlesV1") },
+      });
+    },
+  );
+
+  describe.each(["bundles.blueBundlesV1", "blue"] as const)(
     "Blue supply: MissingContractCodeError when %s has no code",
     (role) => {
       exitBundlesTest("rejects at getRequirements", async ({ client }) => {
@@ -126,7 +144,7 @@ describe("chaos: S8 missing contract", () => {
     },
   );
 
-  describe.each(["bundles.vaultBundlesV1", "permit2"] as const)(
+  describe.each(["bundles.vaultBundlesV1"] as const)(
     "deposit ERC-20: MissingContractCodeError when %s has no code",
     (role) => {
       exitBundlesTest("VaultV1", async ({ client }) => {

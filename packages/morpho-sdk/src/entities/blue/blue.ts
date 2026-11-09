@@ -116,9 +116,9 @@ type VaultV2BlueReallocationsParams = {
 
 /** Options for resolving token-backed BlueBundlesV1 approval or signature prerequisites. */
 export interface BlueTokenRequirementsParams {
-  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce; defaults to true when signatures are supported. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
+  /** @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
   readonly permit2Nonce?: bigint;
 }
 
@@ -199,8 +199,6 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -253,10 +251,9 @@ export interface BlueActions {
   /**
    * Prepares a direct BlueBundlesV1 loan-asset supply.
    *
-   * `getRequirements()` first checks that BlueBundlesV1, Blue and, for ERC-20 funding with
-   * signatures enabled, Permit2 hold code at their registered addresses, then reads the loan-token
-   * allowance and selected ERC-2612 or Permit2 nonce state. Direct approvals and ERC-2612 name
-   * BlueBundlesV1 as spender; Permit2 keeps its ERC-20 approval on canonical Permit2. Native
+   * `getRequirements()` first checks that BlueBundlesV1 and Blue hold code, then
+   * reads the loan-token allowance and selected ERC-2612 nonce state. Direct approvals and
+   * ERC-2612 name BlueBundlesV1 as spender. Native
    * funding is exclusive and skips token requirements (the code check still runs).
    * The referral fee is deducted from the gross `assets` supplied. This route exposes no
    * share-price bound or `slippageTolerance`.
@@ -275,14 +272,12 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is not in the future at creation or requirement resolution.
    * @throws {NonPositiveInputError} when `assets` is not positive.
-   * @throws {NegativeInputError} when native funding or the referral fee is negative, or from `getRequirements()` when an explicit `permit2Nonce` is negative.
+   * @throws {NegativeInputError} when native funding or the referral fee is negative.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
+   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -631,8 +626,6 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an authorization signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -815,8 +808,6 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
@@ -924,8 +915,6 @@ export interface BlueActions {
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
    * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
@@ -1235,13 +1224,8 @@ export class MorphoBlue implements BlueActions {
    * spender/authorized operator holds code, with one `eth_getCode` per distinct address
    * before any other requirement read. Blue write flows probe `eth_chainId` only after a target
    * has no code and report a chain mismatch when the RPC serves another chain.
-   *
-   * @param params.erc20Funding - Whether the flow resolves an ERC-20 funding leg, which
-   *   may name canonical Permit2 when signatures are supported.
    */
-  private async assertWriteTargets(params?: {
-    readonly erc20Funding?: boolean;
-  }): Promise<void> {
+  private async assertWriteTargets(): Promise<void> {
     const targets: { role: AddressLabel; address: Address }[] = [
       {
         role: "bundles.blueBundlesV1",
@@ -1249,10 +1233,6 @@ export class MorphoBlue implements BlueActions {
       },
       { role: "blue", address: getChainAddress(this.chainId, "blue") },
     ];
-    if (params?.erc20Funding && this.client.options.supportSignature) {
-      const permit2 = getChainAddresses(this.chainId).permit2;
-      if (permit2 != null) targets.push({ role: "permit2", address: permit2 });
-    }
     await assertRegistryTargetsHaveCode(
       this.client.viemClient,
       this.chainId,
@@ -1274,7 +1254,6 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     deadline: bigint;
     useSimplePermit?: boolean;
-    permit2Nonce?: bigint;
     now?: bigint;
   }): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline, params.now);
@@ -1288,7 +1267,6 @@ export class MorphoBlue implements BlueActions {
       supportSignature: this.client.options.supportSignature,
       supportDeployless: this.client.options.supportDeployless,
       useSimplePermit: params.useSimplePermit,
-      permit2Nonce: params.permit2Nonce,
       now: params.now,
     });
   }
@@ -1407,9 +1385,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        return this.assertWriteTargets({
-          erc20Funding: nativeValue === 0n,
-        }).then(() => {
+        return this.assertWriteTargets().then(() => {
           if (nativeValue > 0n) return [];
           return this.getTokenRequirements({
             token: this.marketParams.loanToken,
@@ -1418,7 +1394,6 @@ export class MorphoBlue implements BlueActions {
             deadline,
             now,
             useSimplePermit: requirementsParams?.useSimplePermit,
-            permit2Nonce: requirementsParams?.permit2Nonce,
           });
         });
       },
@@ -1989,9 +1964,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets({
-          erc20Funding: hasRepay && nativeValue === 0n,
-        });
+        await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             hasRepay && nativeValue === 0n
@@ -2002,7 +1975,6 @@ export class MorphoBlue implements BlueActions {
                   deadline,
                   now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             collateralAssets > 0n
@@ -2135,9 +2107,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets({
-          erc20Funding: collateralAssets > 0n && nativeValue === 0n,
-        });
+        await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             collateralAssets > 0n && nativeValue === 0n
@@ -2148,7 +2118,6 @@ export class MorphoBlue implements BlueActions {
                   deadline,
                   now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             borrowAssets > 0n

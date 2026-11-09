@@ -68,10 +68,9 @@ required snapshot cannot prove the buffered position safe.
   the callback, its `OWNER()` is the sender, and Blue still authorizes the sender for it.
 
 Classic approvals name BlueBundlesV1 and request the unlimited token maximum, capped by
-`MAX_TOKEN_APPROVALS`. ERC-2612 token permits and Permit2 SignatureTransfer remain exact because
-the bundles contract submits the exact pull amount to each permit path. Permit2's ERC-20 allowance
-prerequisite names canonical Permit2, while the signed transfer names BlueBundlesV1. Native-only
-funding emits no token requirement and requires the funded token to be the chain's wNative.
+`MAX_TOKEN_APPROVALS`. ERC-2612 token permits remain exact because
+the bundles contract submits the exact pull amount. Permit2 funding is no longer requested.
+Native-only funding emits no token requirement and requires the funded token to be the chain's wNative.
 
 Morpho authorization also names BlueBundlesV1. When `supportSignature` is
 enabled, the entity returns a signable authorization `Requirement`; otherwise it returns the

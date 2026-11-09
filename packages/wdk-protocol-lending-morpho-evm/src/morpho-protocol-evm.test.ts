@@ -1839,7 +1839,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       const observedChain = Promise.withResolvers<number>();
       mockGetChainId.mockImplementationOnce(() => observedChain.promise);
       const options = { token: TOKEN, amount: 100_000n };
-      const requirementOptions = { useSimplePermit: true };
+      const requirementOptions = { useSimplePermit: true, permit2Nonce: 42n };
       const pending = protocol.prepareSupply(options);
       options.amount = 200_000n;
       observedChain.resolve(1);

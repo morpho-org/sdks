@@ -1,5 +1,17 @@
 # @morpho-org/morpho-sdk
 
+## 9.5.0
+
+### Minor Changes
+
+- Stop requesting Permit2 funding: reuse sufficient bundles allowances first; otherwise `supportSignature: true` attempts ERC-2612 permits with a matching on-chain domain separator by default, while unsupported tokens or domains and `useSimplePermit: false` use direct ERC-20 approvals to the bundles contract.
+
+### Patch Changes
+
+- Reduce avoidable rounded penalties in Blue reallocation plans by comparing the existing plan with a physical-balance-seeded retry when an explicit Blue balance is available. Keep the retry only when it passes the existing funding checks and charges a strictly smaller total penalty; preserve the original plan otherwise. This bounded refinement does not guarantee globally minimal penalties.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.1
+
 ## 9.4.0
 
 ### Minor Changes
