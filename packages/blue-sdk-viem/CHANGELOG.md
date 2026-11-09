@@ -1,5 +1,16 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.4.0
+
+### Minor Changes
+
+- Permit2 allowance and signature-transfer typed-data helpers now throw `UnknownAddressError` when a supported chain has no registered Permit2 contract, instead of returning a signable payload without a verifying contract. Unsupported chains continue to throw `UnsupportedChainIdError`. Use another approval path when Permit2 is unavailable.
+
+### Patch Changes
+
+- Return independent nested EIP-712 type schemas for Morpho authorization, ERC-2612 permits, Permit2 allowances, and Permit2 signature transfers. ERC-2612 permit domains are also copied from fetched token metadata. Modifying one signing payload no longer changes the domains, schemas, or signing hashes produced by later calls. These copies do not require a runtime `structuredClone` global.
+- Reject empty ABI output names in `restructure` and `readContractRestructured` with `UnnamedAbiOutputsError`, just like missing names. This prevents tuple values from being silently overwritten under an empty object key. Name every ABI output or read the tuple positionally instead.
+
 ## 7.3.0
 
 ### Minor Changes

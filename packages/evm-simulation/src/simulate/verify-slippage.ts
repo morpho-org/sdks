@@ -1,5 +1,5 @@
 import { MathLib } from "@morpho-org/blue-sdk";
-import { type Address, ethAddress, isAddressEqual } from "viem";
+import { type Address, ethAddress, isAddressEqual, zeroAddress } from "viem";
 import {
   ConsumerLimitViolationError,
   SlippageCheckUnavailableError,
@@ -21,6 +21,8 @@ import type { SlippageOperationReads, StateValue } from "./state/read-state.js";
 /**
  * Measure caller-quoted amounts and check their slippage, share-price bounds,
  * and absolute post-bundle Blue position bounds.
+ * Typed-input vault burns add back share mints to the account and reject its
+ * outgoing non-burn share transfers; quote-only limits retain net balances.
  * @param params - Planned observations, decoded before/after values, and user transfer traces.
  * @returns Each caller subject and its checked quote, tolerance, and optional bounds.
  * @throws {ConsumerLimitViolationError} When adverse slippage, a share-price or
@@ -224,9 +226,38 @@ export function verifySlippage(params: {
             measurement.type === "balance" &&
             typeof b === "bigint" &&
             typeof a === "bigint"
-          )
+          ) {
             delta = a - b;
-          else if (
+            if (
+              limit.inputs !== undefined &&
+              measurement.field === "sharesBurned" &&
+              measurement.token !== undefined &&
+              measurement.account !== undefined
+            ) {
+              const { token, account } = measurement;
+              if (
+                transfers.some(
+                  (transfer) =>
+                    isAddressEqual(transfer.token, token) &&
+                    isAddressEqual(transfer.from, account) &&
+                    !isAddressEqual(transfer.to, zeroAddress) &&
+                    !isAddressEqual(transfer.to, account),
+                )
+              )
+                throw new ConsumerLimitViolationError(
+                  `${label}: outgoing vault-share transfer for token "${token}" and account "${account}" cannot count toward exact "sharesBurned". Remove the share transfer or use quote-only limits for net balance changes.`,
+                );
+              delta -= transfers.reduce(
+                (total, transfer) =>
+                  isAddressEqual(transfer.token, token) &&
+                  isAddressEqual(transfer.from, zeroAddress) &&
+                  isAddressEqual(transfer.to, account)
+                    ? total + transfer.amount
+                    : total,
+                0n,
+              );
+            }
+          } else if (
             measurement.type === "position" &&
             typeof b === "object" &&
             typeof a === "object"

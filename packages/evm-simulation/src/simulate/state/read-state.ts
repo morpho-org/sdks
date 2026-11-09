@@ -81,7 +81,12 @@ type SlippageMeasurement = {
       readonly readId?: string;
     }
   /** A scalar read: an ERC-20 balance or a Midnight collateral amount. */
-  | { readonly type: "balance"; readonly readId: string }
+  | {
+      readonly type: "balance";
+      readonly readId: string;
+      readonly token?: Address;
+      readonly account?: Address;
+    }
   | {
       readonly type: "position";
       readonly readId: string;
@@ -637,6 +642,8 @@ export function planStateReads(params: {
           measurements.push({
             field,
             type: "balance",
+            token: source.token,
+            account,
             readId: planBalanceRead({
               reads,
               token: source.token,

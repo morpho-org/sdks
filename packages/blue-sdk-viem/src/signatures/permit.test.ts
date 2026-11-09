@@ -6,7 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { expectFailClosed } from "@morpho-org/test/chaos";
-import { zeroHash } from "viem";
+import { hashTypedData, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   InvalidPermitDomainChainIdError,
@@ -19,6 +19,35 @@ import { getPermitTypedData } from "./permit.js";
 const owner = randomAddress();
 
 const spender = randomAddress();
+
+test("getPermitTypedData isolates nested signing types between calls", () => {
+  const build = () =>
+    getPermitTypedData(
+      {
+        erc20: new Token({ address: owner, name: "Token" }),
+        owner,
+        spender,
+        allowance: 1n,
+        nonce: 0n,
+        deadline: 1n,
+      },
+      ChainId.EthMainnet,
+    );
+  const control = build();
+  const pristineTypes = structuredClone(control.types);
+  const pristineHash = hashTypedData(control);
+  const a = build();
+  const types = a.types as unknown as {
+    Permit: { name: string; type: string }[];
+  };
+  types.Permit[0]!.name = "spender";
+  types.Permit.reverse();
+  const b = build();
+
+  expect(b.types).toEqual(pristineTypes);
+  expect.soft(hashTypedData(b)).toBe(pristineHash);
+  expect.soft(a.types).not.toBe(b.types);
+});
 
 const permitArgs = (token: Token) => ({
   erc20: token,
@@ -57,6 +86,27 @@ const tokenWithDomain = ({
   });
 
 describe("getPermitTypedData", () => {
+  test("isolates fetched EIP-5267 domains between calls", () => {
+    const token = tokenWithDomain();
+    const build = () =>
+      getPermitTypedData(permitArgs(token), ChainId.EthMainnet);
+    const control = build();
+    const pristineDomain = { ...control.domain };
+    const pristineHash = hashTypedData(control);
+    const first = build();
+    const domain = first.domain as { name: string; version: string };
+    domain.name = "Mutated token";
+    domain.version = "99";
+    const second = build();
+
+    expect.soft(second.domain).toStrictEqual(pristineDomain);
+    expect.soft(hashTypedData(second)).toBe(pristineHash);
+    expect.soft(first.domain).not.toBe(second.domain);
+    expect
+      .soft(token.eip5267Domain?.eip712Domain)
+      .toStrictEqual(pristineDomain);
+  });
+
   test("uses fetched EIP-5267 domain when bound to the token and chain", () => {
     const token = tokenWithDomain();
 

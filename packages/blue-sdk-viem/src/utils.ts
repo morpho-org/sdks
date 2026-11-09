@@ -351,7 +351,7 @@ function zipParams<
  * @param parameters - ABI item lookup parameters matching the read that produced `outputs`.
  * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
  * @throws {UnknownAbiFunctionError} When `parameters.name` matches no function item in the ABI.
- * @throws {UnnamedAbiOutputsError} When the function's ABI outputs are not all named.
+ * @throws {UnnamedAbiOutputsError} When any function ABI output has a missing or empty name.
  */
 export function restructure<
   const abi extends Abi,
@@ -362,7 +362,11 @@ export function restructure<
   const x = getAbiItem(parameters);
   switch (x?.type) {
     case "function": {
-      if (x.outputs.some((output) => output.name === undefined)) {
+      if (
+        x.outputs.some(
+          (output) => output.name === undefined || output.name === "",
+        )
+      ) {
         throw new UnnamedAbiOutputsError(x.name);
       }
       return zipParams(
@@ -395,7 +399,7 @@ function isTuple<T>(x: T): x is T extends readonly unknown[] ? T : never {
  * @param parameters - Read contract parameters for a view or pure function with named tuple outputs.
  * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
  * @throws {NonTupleReturnValueError} When the read returns a single value instead of a tuple.
- * @throws {UnnamedAbiOutputsError} When the function's ABI outputs are not all named.
+ * @throws {UnnamedAbiOutputsError} When any function ABI output has a missing or empty name.
  * @example
  * ```ts
  * import { readContractRestructured } from "@morpho-org/blue-sdk-viem";

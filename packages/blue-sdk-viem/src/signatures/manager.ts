@@ -53,7 +53,11 @@ export const getAuthorizationTypedData = (
       chainId: chainId,
       verifyingContract: getChainAddresses(chainId).blue,
     },
-    types: authorizationTypes,
+    types: {
+      Authorization: authorizationTypes.Authorization.map((field) => ({
+        ...field,
+      })),
+    },
     message: {
       authorizer,
       authorized,

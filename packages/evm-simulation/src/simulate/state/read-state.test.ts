@@ -48,6 +48,33 @@ const nativeValueCoverageErrorMessage =
   "Native value sent by the request is not covered by any measured native side. Remove the transaction value, or declare the native or wNative asset on the operation it funds.";
 
 describe("planStateReads", () => {
+  test("behavior: vault share burn identifies its token and account", () => {
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "vaultV2Withdraw",
+            vault,
+            account: receiver,
+            quote: { sharesBurned: 100n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    expect(plan.operations[0]!.measurements).toEqual([
+      {
+        field: "sharesBurned",
+        type: "balance",
+        readId: plan.reads[0]!.id,
+        token: vault,
+        account: receiver,
+      },
+    ]);
+  });
   test.each([owner, receiver] as const)(
     "implicit native funding only applies to an owner-held payout (%s)",
     (payoutReceiver) => {

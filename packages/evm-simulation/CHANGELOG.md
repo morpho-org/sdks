@@ -1,5 +1,13 @@
 # @morpho-org/evm-simulation
 
+## 8.6.1
+
+### Patch Changes
+
+- Count vault shares minted to the measured account during the bundle (vault fee accrual) toward typed-input limits' observed `sharesBurned`. Reject outgoing vault-share transfers to other nonzero accounts, so neither an exact burn with an extra transfer nor a smaller burn supplemented by a transfer can pass. Quote-only limits keep the net balance change.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.5.1
+
 ## 8.6.0
 
 ### Minor Changes

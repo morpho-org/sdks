@@ -113,8 +113,16 @@ export const getPermitTypedData = (
   };
 
   return {
-    domain: permitDomain,
-    types: permitTypes,
+    domain: { ...permitDomain },
+    types: {
+      Permit: [
+        { ...permitTypes.Permit[0] },
+        { ...permitTypes.Permit[1] },
+        { ...permitTypes.Permit[2] },
+        { ...permitTypes.Permit[3] },
+        { ...permitTypes.Permit[4] },
+      ],
+    },
     message: {
       owner,
       spender,

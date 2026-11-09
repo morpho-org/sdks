@@ -15,7 +15,7 @@ import {
   InvalidSimulationResponseError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
-import type { RawLog } from "../types.js";
+import type { RawLog, Transfer } from "../types.js";
 import type { CheckContext } from "./context.js";
 import type { ParsedOperationLimit } from "./request/parse-request.js";
 import { planStateReads, type StateValue } from "./state/read-state.js";
@@ -56,6 +56,146 @@ const limit: ParsedOperationLimit = {
 };
 
 describe("verifySlippage", () => {
+  test("behavior: quote-only vault burn keeps net balance semantics", () => {
+    const operation: ParsedOperationLimit = {
+      type: "vaultV2Withdraw",
+      vault,
+      account: owner,
+      quote: { sharesBurned: 80n },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    expect(
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 100n]]),
+        after: new Map([[id, 20n]]),
+        transfers: [
+          { token: vault, from: zeroAddress, to: owner, amount: 20n, txIdx: 0 },
+          { token: vault, from: owner, to: receiver, amount: 10n, txIdx: 0 },
+        ],
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      })[0],
+    ).toMatchObject({ checkedLimits: { quote: { sharesBurned: 80n } } });
+  });
+  test("behavior: exact vault burn adds back shares minted to the account", () => {
+    const sharesBurned = 18790920560802140820882n;
+    const minted = 22073456256335329336n;
+    const operation: ParsedOperationLimit = {
+      type: "vaultV2Withdraw",
+      vault,
+      account: owner,
+      inputs: { assets: 100n },
+      quote: { sharesBurned },
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    const mint: Transfer = {
+      token: vault,
+      from: zeroAddress,
+      to: owner,
+      amount: minted,
+      txIdx: 0,
+    };
+    const check = (transfers: readonly Transfer[]) =>
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, sharesBurned]]),
+        after: new Map([[id, minted]]),
+        transfers,
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      });
+    expect(check([mint])[0]).toMatchObject({
+      checkedLimits: { quote: { sharesBurned } },
+    });
+    const outgoing: Transfer = {
+      token: vault,
+      from: owner,
+      to: receiver,
+      amount: 10n,
+      txIdx: 0,
+    };
+    expect(() => check([mint, outgoing])).toThrow(ConsumerLimitViolationError);
+    for (const transfer of [
+      { ...outgoing, to: zeroAddress },
+      { ...outgoing, to: owner },
+      { ...outgoing, from: receiver },
+      { ...outgoing, token: receiver },
+    ])
+      expect(check([mint, transfer])).toHaveLength(1);
+    for (const transfers of [
+      [],
+      [{ ...mint, to: receiver }],
+      [{ ...mint, token: receiver }],
+      [{ ...mint, from: receiver }],
+    ])
+      expect(() => check(transfers)).toThrow(ConsumerLimitViolationError);
+  });
+  test.each([
+    { name: "exact burn plus an extra transfer", balanceAfter: 10n },
+    { name: "smaller burn topped up by a transfer", balanceAfter: 20n },
+  ])("typed vault burn rejects $name", ({ balanceAfter }) => {
+    const operation: ParsedOperationLimit = {
+      type: "vaultV2Redeem",
+      vault,
+      account: owner,
+      inputs: { shares: 100n },
+      quote: { sharesBurned: 100n },
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    const check = () =>
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 100n]]),
+        after: new Map([[id, balanceAfter]]),
+        transfers: [
+          { token: vault, from: zeroAddress, to: owner, amount: 20n, txIdx: 0 },
+          {
+            token: vault,
+            from: owner,
+            to: zeroAddress,
+            amount: balanceAfter === 10n ? 100n : 90n,
+            txIdx: 0,
+          },
+          { token: vault, from: owner, to: receiver, amount: 10n, txIdx: 0 },
+        ],
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      });
+    expect(check).toThrow(ConsumerLimitViolationError);
+    expect(check).toThrow(/outgoing vault-share transfer/);
+  });
   test.each([
     "blueSupply",
     "blueWithdraw",
