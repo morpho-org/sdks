@@ -1,5 +1,20 @@
 # @morpho-org/midnight-sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- `new AccrualPosition(position, market)` now throws `InvalidMarketParameterError` when `position` carries a `marketId` that differs from `market.id`, instead of silently rebinding the position to `market`. Inputs without a `marketId`, or with the same id in any letter case, behave as before.
+- `MidnightApi` fetchers (`fetchBooks`, `fetchBook`, `fetchBookPriceLevels`, `fetchBookTakeableOffers`, `fetchBookQuote` and `fetchTakeableOffers`) now throw `InvalidMidnightApiResponseError` when a success response has a missing or non-object `data`, a non-string cursor, malformed price levels or takeable offers, or quote aggregates that are not integer strings. These responses previously surfaced as raw `TypeError` or `SyntaxError`, or passed through unchecked.
+- Add `blueBuyCallbackAbi`, the ABI of the per-owner BlueBuyCallback contract (`OWNER`, `setAuthorization`, `skim`, `onBuy` and the rest).
+- Add an optional `limit` to `MidnightApi.fetchBookQuote`, sent as the `limit` query param on `GET /books/{marketId}/{side}/quote`. It caps the offers the API walks (1 to 10,000, default 10,000). Omitting it sends no `limit`, as before.
+
+### Patch Changes
+
+- `OfferUtils.getConsumableUnits` and `Offer.getConsumableUnits` now return `0n` for offers Midnight `take` always rejects: an offer whose tick is not a multiple of the market's tick spacing, or a market whose loss factor is maxed out. They previously returned the offer's remaining cap, so quote and routing code could pick offers that revert onchain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 2.4.0-next.0
 
 ### Minor Changes
@@ -319,16 +334,6 @@
 - Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
   - @morpho-org/morpho-ts@2.14.0
 
-## 1.4.0-next.0
-
-### Minor Changes
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compute Midnight quote guards from rounded per-fill settlement amounts and an optional current settlement fee so returned offers cannot imply a worse aggregate price than the requested guard.
-
-### Patch Changes
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
-
 ## 1.4.0
 
 ### Minor Changes
@@ -343,6 +348,16 @@
 
 - Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2)]:
   - @morpho-org/morpho-ts@2.11.2
+
+## 1.4.0-next.0
+
+### Minor Changes
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compute Midnight quote guards from rounded per-fill settlement amounts and an optional current settlement fee so returned offers cannot imply a worse aggregate price than the requested guard.
+
+### Patch Changes
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
 
 ## 1.3.1
 

@@ -22,6 +22,7 @@ export type BundlesTokenRequirementsState =
       readonly allowance: bigint;
     }
   | {
+      /** @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
       readonly type: "permit2SignatureTransfer";
       readonly permit2Allowance: bigint;
       readonly permit2Nonce: bigint;

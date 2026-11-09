@@ -170,8 +170,8 @@ to be the chain's wrapped-native token, otherwise `NativeAmountOnNonWNativeVault
 It needs no token approval or permit; `tx.value` is the full gross native amount and wrapping
 happens inside VaultBundlesV1.
 
-Classic approvals and ERC-2612 permits name VaultBundlesV1 as spender. Permit2 SignatureTransfer
-keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the signed transfer.
+Classic approvals and ERC-2612 permits name VaultBundlesV1 as spender. Permit2 funding is no
+longer requested; builders retain support for previously collected signatures.
 Each chain must have a registered VaultBundlesV1 deployment; missing deployments throw
 `UnknownAddressError`. Check the [migration guide](./MIGRATION-v5-to-v6.md) for chain availability.
 
@@ -223,9 +223,8 @@ contract itself. It has no on-chain share-price bound, and the caller plans the 
 ### Blue writes: direct BlueBundlesV1 calls
 
 The Blue methods build direct BlueBundlesV1 transactions. Requirements authorize the actual
-puller/operator: classic approvals and ERC-2612 permits target BlueBundlesV1; Permit2 keeps its
-ERC-20 prerequisite on canonical Permit2 while its SignatureTransfer payload targets
-BlueBundlesV1; Morpho authorization grants BlueBundlesV1 operator rights.
+puller/operator: classic approvals and ERC-2612 permits target BlueBundlesV1;
+Morpho authorization grants BlueBundlesV1 operator rights.
 
 BlueBundlesV1 entrypoints own the atomic ordering. Vault V2 public allocations are encoded inside
 the fixed call. Blue writes therefore have no PublicAllocator V1 plan or share-price-bound input.
@@ -311,14 +310,16 @@ resolves only the prerequisites consumed by the selected route.
 Vault deposits flow: **user → VaultBundlesV1 → vault**. Requirements cover the gross funding
 amount, before the referral fee. Native deposits return no token requirements.
 
-For ERC-20 deposits, `getBundlesTokenRequirements` resolves the selected route:
+For ERC-20 deposits, `getBundlesTokenRequirements` checks the direct allowance to VaultBundlesV1
+first. An allowance to canonical Permit2 does not count toward this check. The first applicable
+route below determines the requirements:
 
 | Route | Prerequisites |
 | --- | --- |
-| `supportSignature: false` (default) | Check ERC-20 allowance to VaultBundlesV1. Return an unlimited approval if insufficient, preceded by a zero reset for tokens that require it. |
-| `supportSignature: true`, `useSimplePermit: true`, compatible ERC-2612 token | Read the token nonce and metadata; return a signable permit naming VaultBundlesV1. |
-| Signature support with canonical Permit2 available | Check the ERC-20 allowance to Permit2 and the owner nonce bitmap. Return any required Permit2 approval and a SignatureTransfer requirement naming VaultBundlesV1. The SDK resolves the lowest unused `permit2Nonce` by default; pass one explicitly to override. |
-| No available signature route | Fall back to the classic VaultBundlesV1 approval check. |
+| All routes | Check ERC-20 allowance to VaultBundlesV1 first; return no token requirement when it already covers the amount. |
+| Insufficient allowance, `supportSignature: false` (default) | Return an unlimited approval, preceded by a zero reset for tokens that require it. |
+| Insufficient allowance, `supportSignature: true`, `useSimplePermit` omitted or true, compatible ERC-2612 token | Read the token nonce and metadata; return a signable permit naming VaultBundlesV1 only when DOMAIN_SEPARATOR matches the signing domain. Missing, mismatched, or unsupported domains fall back to approval. |
+| Insufficient allowance, no available signature route | Return a classic VaultBundlesV1 approval using the allowance already read. |
 
 Concurrent `getRequirements()` calls share one in-flight read and its first caller's options.
 After that read settles, the next call refreshes allowance and nonce state using its own options.
@@ -332,9 +333,8 @@ Withdrawals, redemptions, and V1-to-V2 migrations resolve source-vault share aut
 allowance must meet or exceed the resolved share amount; any larger allowance is reused. Asset-mode
 withdrawals re-read allowance on every `getRequirements()` call while keeping their required amount
 fixed. Share approvals and permits use the same VaultBundlesV1 spender. ERC-2612 token permits remain
-exact because the bundle calls `permit` with the pull amount. Permit2 SignatureTransfer remains exact
-because the bundle derives both the signed permission and requested transfer amounts from the same
-pull amount. Vault-share permits are unlimited because the exit bundle passes `permit.value`
+exact because the bundle calls `permit` with the pull amount. Legacy Permit2 signatures remain
+accepted by builders with exact pull amounts. Vault-share permits are unlimited because the exit bundle passes `permit.value`
 separately from the exit operation.
 
 In-kind redemption and the asset-mode `migrateToV2` source leg also have no on-chain share-price or
@@ -346,13 +346,14 @@ the requested number of shares, and deposit and migration-destination legs retai
 
 Blue token requirements resolve against the direct contract route:
 
-- Without signature support, check the ERC-20 allowance to BlueBundlesV1 and return a classic
-  approval only when it is insufficient.
-- With `useSimplePermit`, use ERC-2612 when the token supports the standard permit shape; its
-  spender is BlueBundlesV1.
-- Otherwise, use Permit2 SignatureTransfer when canonical Permit2 is configured. The prerequisite
-  ERC-20 allowance targets Permit2, and the one-shot signature names BlueBundlesV1 as spender.
-- Fall back to a classic BlueBundlesV1 approval when neither signature path is available.
+- For all routes, check the ERC-20 allowance to BlueBundlesV1 first and return no token
+  requirement when it already covers the amount.
+- With insufficient allowance and no signature support, return a classic approval.
+- With insufficient allowance and signature support, use ERC-2612 by default unless `useSimplePermit: false`; its
+  spender is BlueBundlesV1. The token's DOMAIN_SEPARATOR must match the signing domain;
+  missing, mismatched, or unsupported domains fall back to approval.
+- Otherwise, fall back to a classic BlueBundlesV1 approval. Permit2 funding is no longer requested;
+  the legacy `permit2Nonce` option is deprecated and ignored.
 
 Loan-asset withdrawal, borrow, collateral-withdraw, and migration legs also check
 `Morpho.isAuthorized(userAddress, blueBundlesV1)`. Depending on `supportSignature`, the missing

@@ -12,6 +12,7 @@ import {
   IntegerOutOfRangeError,
   InvalidAddressError,
   keccak256,
+  maxUint128,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -514,6 +515,57 @@ describe("OfferUtils.getConsumableUnits", () => {
     ).toBe(0n);
   });
 
+  test("behavior: ticks off the market tick spacing return zero", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket({ tickSpacing: 4 }),
+      tick: 5_002n,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: untouched markets check ticks against the default spacing", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket({ tickSpacing: 0 }),
+      tick: 5_002n,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: markets with a maxed-out loss factor return zero", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket({ lossFactor: maxUint128 }),
+      tick: 5_000n,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(0n);
+  });
+
   test("behavior: buy max assets return max units accepted by buyer asset cap", () => {
     const offer = baseOffer({
       market: zeroFeeMarket(),
@@ -568,7 +620,9 @@ describe("OfferUtils.getConsumableUnits", () => {
         fc.record({
           maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
           consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
-          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+          tick: fc
+            .bigInt({ min: 0n, max: MAX_TICK })
+            .map((tick) => tick - (tick % 4n)),
         }),
         ({ maxAssets, consumed, tick }) => {
           const offer = baseOffer({
@@ -611,7 +665,9 @@ describe("OfferUtils.getConsumableUnits", () => {
         fc.record({
           maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
           consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
-          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+          tick: fc
+            .bigInt({ min: 0n, max: MAX_TICK })
+            .map((tick) => tick - (tick % 4n)),
         }),
         ({ maxAssets, consumed, tick }) => {
           const offer = baseOffer({

@@ -4,6 +4,7 @@ import {
   type Hash,
   isAddress,
   isAddressEqual,
+  isHex,
   maxUint256,
   zeroAddress,
 } from "viem";
@@ -13,6 +14,7 @@ import {
   MidnightApiError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
+import { TickLib } from "../math/index.js";
 import { OfferUtils } from "../offers/index.js";
 import {
   type ApiBookMarketResponse,
@@ -136,6 +138,13 @@ export function buildBookPath(params: {
  * the onchain `collateralIndex`.
  */
 function mapBookMarket(book: ApiBookMarketResponse): MidnightApiBookMarket {
+  // Validate the response shape before reading its fields.
+  requireObject(book, "book");
+  if (typeof book.market_id !== "string") {
+    throw new InvalidMidnightApiResponseError(
+      "Midnight API book market_id is not a string.",
+    );
+  }
   let derivedMarketId: Hash;
   let matchesAdvertisedId: boolean;
   try {
@@ -213,7 +222,7 @@ export function mapBoundBooks(
   books: readonly ApiBookMarketResponse[],
   context: BookFilterContext = {},
 ): MidnightApiBookMarket[] {
-  return books.map((book) => {
+  return requireArray(books, "books").map((book) => {
     const market = mapBookMarket(book);
     if (
       context.marketIds != null &&
@@ -287,11 +296,26 @@ function mapCollateral(
 
 /** @internal Maps a price-level API payload to the SDK response shape. */
 function mapPriceLevel(level: ApiPriceLevelResponse): MidnightApiPriceLevel {
+  // Validate the response shape before reading its fields.
+  requireObject(level, "price level");
+  if (typeof level.tick !== "number" || !Number.isSafeInteger(level.tick)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API price level tick (${typeof level.tick}) is not a safe integer.`,
+    );
+  }
+  const price = requireBigIntString(level.price, "price level price");
+  const units = requireBigIntString(level.units, "price level units");
+  const assets = requireBigIntString(level.assets, "price level assets");
+  if (typeof level.count !== "number" || !Number.isSafeInteger(level.count)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API price level count (${typeof level.count}) is not a safe integer.`,
+    );
+  }
   return {
     tick: level.tick,
-    price: level.price,
-    units: level.units,
-    assets: level.assets,
+    price,
+    units,
+    assets,
     count: level.count,
   };
 }
@@ -301,7 +325,7 @@ export function mapPriceLevels(
   levels: readonly ApiPriceLevelResponse[],
   side: MidnightApiBookSide,
 ): MidnightApiPriceLevel[] {
-  return levels
+  return requireArray(levels, "price levels")
     .map(mapPriceLevel)
     .sort((a, b) => (side === "asks" ? a.tick - b.tick : b.tick - a.tick));
 }
@@ -315,6 +339,32 @@ function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
 ): MidnightApiTake {
   const offer = takeableOffer.offer;
+  // The filters after mapping call viem helpers that throw their own errors on non-address values.
+  for (const [field, value] of [
+    ["maker", offer.maker],
+    ["receiver_if_maker_is_seller", offer.receiver_if_maker_is_seller],
+  ] as const) {
+    if (typeof value !== "string" || !isAddress(value, { strict: false })) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer ${field} (${typeof value}) is not an address.`,
+      );
+    }
+  }
+  if (typeof offer.group !== "string" || !isHex(offer.group)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API takeable offer group (${typeof offer.group}) is not a hex string.`,
+    );
+  }
+  for (const [field, value] of [
+    ["buy", offer.buy],
+    ["reduce_only", offer.reduce_only],
+  ] as const) {
+    if (typeof value !== "boolean") {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer ${field} (${typeof value}) is not a boolean.`,
+      );
+    }
+  }
 
   return {
     marketId: takeableOffer.market_id,
@@ -341,7 +391,7 @@ function mapTakeableOffer(
       maker: offer.maker,
       start: BigInt(offer.start),
       expiry: BigInt(offer.expiry),
-      tick: BigInt(offer.tick),
+      tick: TickLib.assertTickInRange(BigInt(offer.tick)),
       group: offer.group,
       callback: offer.callback,
       callbackData: offer.callback_data,
@@ -372,109 +422,121 @@ export function mapBoundTakeableOffers(
   takeableOffers: readonly ApiTakeableOfferResponse[],
   context: TakeableOfferContext,
 ): MidnightApiTake[] {
-  const mapped = takeableOffers.map((takeableOffer) => {
-    let take: MidnightApiTake;
-    let matchesAdvertisedId: boolean;
-    let embeddedMarketId: Hash;
-    try {
-      take = mapTakeableOffer(takeableOffer);
-      embeddedMarketId = MarketUtils.toId(take.offer.market);
-      matchesAdvertisedId = isHexEqual(embeddedMarketId, take.marketId);
-    } catch (cause) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer market_id "${takeableOffer.market_id}" could not be mapped or validated against its embedded offer market.`,
-        { cause },
-      );
-    }
-    if (!matchesAdvertisedId) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
-      );
-    }
-    const { maxUnits, maxAssets, buy, maker, receiverIfMakerIsSeller } =
-      take.offer;
-    if (!isAddress(receiverIfMakerIsSeller)) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer receiverIfMakerIsSeller "${receiverIfMakerIsSeller}" is not an address.`,
-      );
-    }
-    if (!buy && isAddressEqual(receiverIfMakerIsSeller, zeroAddress)) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API sell offer for market_id "${take.marketId}" routes seller proceeds to the zero address. Sell offers must use a non-zero receiverIfMakerIsSeller.`,
-      );
-    }
-    try {
-      // Return values unused: called only to enforce the cap-shape and buy-receiver invariants.
-      OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
-      OfferUtils.resolveReceiverIfMakerIsSeller({
-        buy,
-        maker,
-        receiverIfMakerIsSeller,
-      });
-    } catch (cause) {
-      if (!(cause instanceof InvalidOfferParameterError)) throw cause;
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
-        { cause },
-      );
-    }
-    if (maxUnits > 0n && take.units > maxUnits) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer for market_id "${take.marketId}" reports units "${take.units}" above offer maxUnits "${maxUnits}".`,
-      );
-    }
-    if (
-      context.marketId != null &&
-      !isHexEqual(take.marketId, context.marketId)
-    ) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer market_id "${take.marketId}" does not match requested market "${context.marketId}".`,
-      );
-    }
-    if (
-      context.marketIds != null &&
-      context.marketIds.length > 0 &&
-      !context.marketIds.some((marketId) => isHexEqual(marketId, take.marketId))
-    ) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer market_id "${take.marketId}" is outside the requested market_ids filter.`,
-      );
-    }
-    if (context.side != null) {
-      const expectedBuy = context.side === "bids";
-      if (take.offer.buy !== expectedBuy) {
+  const mapped = requireArray(takeableOffers, "takeable offers").map(
+    (takeableOffer) => {
+      // Validate the response shape before reading its fields.
+      requireObject(takeableOffer, "takeable offer");
+      // Rejects malformed entries before the catch below interpolates their market_id.
+      if (typeof takeableOffer.market_id !== "string") {
         throw new InvalidMidnightApiResponseError(
-          `Midnight API ${context.side} takeable offer returned offer.buy "${take.offer.buy}".`,
+          "Midnight API takeable offer market_id is not a string.",
         );
       }
-    }
-    if (
-      context.maker != null &&
-      !isAddressEqual(take.offer.maker, context.maker)
-    ) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer maker "${take.offer.maker}" does not match requested maker "${context.maker}".`,
-      );
-    }
-    if (
-      context.taker != null &&
-      isAddressEqual(take.offer.maker, context.taker)
-    ) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer maker "${take.offer.maker}" matches the requested taker "${context.taker}".`,
-      );
-    }
-    if (context.groups != null && context.groups.length > 0) {
-      const offerGroup = take.offer.group;
-      if (!context.groups.some((group) => isHexEqual(group, offerGroup))) {
+      let take: MidnightApiTake;
+      let matchesAdvertisedId: boolean;
+      let embeddedMarketId: Hash;
+      try {
+        take = mapTakeableOffer(takeableOffer);
+        embeddedMarketId = MarketUtils.toId(take.offer.market);
+        matchesAdvertisedId = isHexEqual(embeddedMarketId, take.marketId);
+      } catch (cause) {
         throw new InvalidMidnightApiResponseError(
-          `Midnight API takeable offer group "${offerGroup}" is outside the requested groups filter.`,
+          `Midnight API takeable offer market_id "${takeableOffer.market_id}" could not be mapped or validated against its embedded offer market.`,
+          { cause },
         );
       }
-    }
+      if (!matchesAdvertisedId) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
+        );
+      }
+      const { maxUnits, maxAssets, buy, maker, receiverIfMakerIsSeller } =
+        take.offer;
+      if (!isAddress(receiverIfMakerIsSeller)) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer receiverIfMakerIsSeller "${receiverIfMakerIsSeller}" is not an address.`,
+        );
+      }
+      if (!buy && isAddressEqual(receiverIfMakerIsSeller, zeroAddress)) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API sell offer for market_id "${take.marketId}" routes seller proceeds to the zero address. Sell offers must use a non-zero receiverIfMakerIsSeller.`,
+        );
+      }
+      try {
+        // Return values unused: called only to enforce the cap-shape and buy-receiver invariants.
+        OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
+        OfferUtils.resolveReceiverIfMakerIsSeller({
+          buy,
+          maker,
+          receiverIfMakerIsSeller,
+        });
+      } catch (cause) {
+        if (!(cause instanceof InvalidOfferParameterError)) throw cause;
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
+          { cause },
+        );
+      }
+      if (maxUnits > 0n && take.units > maxUnits) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer for market_id "${take.marketId}" reports units "${take.units}" above offer maxUnits "${maxUnits}".`,
+        );
+      }
+      if (
+        context.marketId != null &&
+        !isHexEqual(take.marketId, context.marketId)
+      ) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer market_id "${take.marketId}" does not match requested market "${context.marketId}".`,
+        );
+      }
+      if (
+        context.marketIds != null &&
+        context.marketIds.length > 0 &&
+        !context.marketIds.some((marketId) =>
+          isHexEqual(marketId, take.marketId),
+        )
+      ) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer market_id "${take.marketId}" is outside the requested market_ids filter.`,
+        );
+      }
+      if (context.side != null) {
+        const expectedBuy = context.side === "bids";
+        if (take.offer.buy !== expectedBuy) {
+          throw new InvalidMidnightApiResponseError(
+            `Midnight API ${context.side} takeable offer returned offer.buy "${take.offer.buy}".`,
+          );
+        }
+      }
+      if (
+        context.maker != null &&
+        !isAddressEqual(take.offer.maker, context.maker)
+      ) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer maker "${take.offer.maker}" does not match requested maker "${context.maker}".`,
+        );
+      }
+      if (
+        context.taker != null &&
+        isAddressEqual(take.offer.maker, context.taker)
+      ) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API takeable offer maker "${take.offer.maker}" matches the requested taker "${context.taker}".`,
+        );
+      }
+      if (context.groups != null && context.groups.length > 0) {
+        const offerGroup = take.offer.group;
+        if (!context.groups.some((group) => isHexEqual(group, offerGroup))) {
+          throw new InvalidMidnightApiResponseError(
+            `Midnight API takeable offer group "${offerGroup}" is outside the requested groups filter.`,
+          );
+        }
+      }
 
-    return take;
-  });
+      return take;
+    },
+  );
 
   if (context.side == null) return mapped;
 
@@ -551,6 +613,66 @@ export function parseValidationResponse(
   };
 }
 
+/** @internal Returns `value` when it is a non-null, non-array object. */
+export function requireObject<T extends object>(value: T, context: string): T {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API ${context} is malformed.`,
+    );
+  }
+  return value;
+}
+
+/** @internal Returns a Midnight API response envelope after checking it carries `data`. */
+export function requireResponseEnvelope<T extends { readonly data: object }>(
+  response: T,
+  context: string,
+): T {
+  // Validate the response shape before reading its fields.
+  requireObject(response, `${context} response`);
+  if (response.data == null) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API ${context} response is missing "data".`,
+    );
+  }
+  return response;
+}
+
+/** @internal Parses a paginated response cursor, treating a missing cursor as the last page. */
+export function parseResponseCursor(
+  cursor: string | null | undefined,
+  context: string,
+): string | null {
+  if (cursor == null) return null;
+  if (typeof cursor === "string") return cursor;
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${context} cursor is malformed.`,
+  );
+}
+
+/** @internal Returns `value` when it is a decimal string of a uint256. */
+export function requireBigIntString(value: string, context: string): string {
+  if (
+    typeof value === "string" &&
+    value.length <= MAX_UINT256_DECIMAL_LENGTH &&
+    /^\d+$/.test(value) &&
+    BigInt(value) <= maxUint256
+  ) {
+    return value;
+  }
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${context} (${typeof value}) is not a decimal uint256 string.`,
+  );
+}
+
+function requireArray<T>(value: readonly T[], context: string): readonly T[] {
+  if (Array.isArray(value)) return value;
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${context} is malformed.`,
+  );
+}
+
+/** @internal Returns `value` when it is a plain object, else throws `InvalidMidnightApiResponseError`. */
 function requireRecord(
   value: unknown,
   context: string,

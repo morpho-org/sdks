@@ -1,5 +1,16 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 4.2.2
+
+### Patch Changes
+
+- Republish under the `latest` dist-tag. 4.2.1 was published under `next` only, so installs without a tag still resolved 4.2.0. No code changes since 4.2.1.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-sdk@9.4.0
+  - @morpho-org/morpho-ts@4.2.0
+  - @morpho-org/blue-sdk-viem@7.3.0
+
 ## 4.2.1
 
 ### Patch Changes

@@ -81,12 +81,20 @@ import { readContract } from "viem/actions";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  InsufficientTokenBalanceError,
+  InvalidAddressError,
+  InvalidAmountTypeError,
+  InvalidProtocolOptionError,
   InvalidTransactionHashError,
   InvalidTransactionMaxFeeError,
+  MarketTokenMismatchError,
+  MissingMorphoTargetError,
   MissingWalletProviderError,
   PaymasterApprovalGuardUnavailableError,
   PaymasterApprovalSpenderMismatchError,
+  ReadOnlyAccountError,
   UnconfirmedBroadcastError,
+  UnsafeAmountError,
 } from "./errors.js";
 import {
   type MarketPresetKey,
@@ -168,7 +176,7 @@ export type RequirementAuthorization = Readonly<
 export type RequirementSignatureRequest<
   TSignature extends RequirementSignature = RequirementSignature,
 > = Requirement<TSignature>;
-/** A bundle token approval or ERC-2612/Permit2 SignatureTransfer request. */
+/** A bundle token approval or ERC-2612 request. */
 export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
@@ -209,11 +217,10 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
 
 /** Controls token-signature selection for prepared vault deposits and Blue loan and collateral writes. */
 export interface RequirementOptions {
-  /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
+  /** Prefer ERC-2612 when signatures are supported (default true); false forces direct ERC-20 approvals. */
   readonly useSimplePermit?: boolean;
   /**
-   * Explicit unused Permit2 SignatureTransfer nonce. Defaults to the lowest unused nonce for the
-   * owner when omitted; set it only when concurrent flows must partition nonces themselves.
+   * @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
    */
   readonly permit2Nonce?: bigint;
 }
@@ -318,18 +325,13 @@ export interface PreparedMorphoSupply {
    * Each settled call refreshes the requirements; concurrent calls share the pending read.
    *
    * @param requirementOptions - Optional token requirement preferences.
-   * @param requirementOptions.useSimplePermit - Optional preference for ERC-2612; unsupported
-   *   tokens fall back to Permit2 or direct approval.
-   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce. Defaults to the
-   *   lowest unused nonce when omitted; allocate a distinct nonce per pending operation.
+   * @param requirementOptions.useSimplePermit - Defaults to true when signatures are supported; false forces approvals. Unsupported
+   *   tokens fall back to direct approval.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when the prepared deposit's execution deadline has passed.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
-   * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
    *   undecodable data, or is out of range.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
@@ -377,8 +379,9 @@ export interface PreparedMorphoSupply {
    * @throws {DepositAssetMismatchError} when the signed asset is not the vault asset.
    * @throws {BundlesRequirementSignatureMismatchError} when the token signature is malformed.
    * @throws {viem.BaseError} when a required provider read or transaction encoding fails.
-   * @throws {Error} when the WDK account is read-only, the ERC-20 balance is insufficient,
-   *   or the wallet rejects or fails to submit the transaction.
+   * @throws {ReadOnlyAccountError} when the WDK account is read-only.
+   * @throws {InsufficientTokenBalanceError} when the ERC-20 balance is insufficient.
+   * @throws {Error} when the wallet rejects or fails to submit the transaction.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
@@ -530,7 +533,8 @@ export interface PreparedMorphoWithdraw {
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read or encoding fails.
-   * @throws {Error} when the account is read-only or the wallet rejects or fails to submit.
+   * @throws {ReadOnlyAccountError} when the account is read-only.
+   * @throws {Error} when the wallet rejects or fails to submit.
    * @throws {UnconfirmedBroadcastError} for EOA sends when a timeout, transport
    *   failure without an HTTP status, or HTTP 502/504/524 leaves delivery uncertain;
    *   also when a reconciliation lookup fails or a retrying failover provider's
@@ -700,7 +704,7 @@ export interface MorphoProtocolOptions {
   chainId?: number | bigint;
   /** Optional Morpho SDK slippage tolerance in WAD precision for vault flows. */
   slippageTolerance?: bigint;
-  /** Enable Morpho SDK permit/permit2 requirements (default: false). */
+  /** Enable Morpho SDK ERC-2612 permit requirements (default: false). */
   supportSignature?: boolean;
   /** Use Morpho SDK deployless reads. When unset, the SDK's deployless default applies; set `false` for direct reads only. */
   supportDeployless?: boolean;
@@ -789,17 +793,15 @@ function isMarketId(value: string): boolean {
 
 function normalizeAmount(amount: number | bigint, field = "amount"): bigint {
   if (typeof amount !== "bigint" && typeof amount !== "number") {
-    throw new Error(`'${field}' must be a number or bigint.`);
+    throw new InvalidAmountTypeError(field);
   }
 
   if (typeof amount === "number" && !Number.isSafeInteger(amount)) {
-    throw new Error(
-      `'${field}' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.`,
-    );
+    throw new UnsafeAmountError(field);
   }
 
   if (amount <= 0) {
-    throw new Error(`'${field}' should be greater than zero.`);
+    throw new NonPositiveInputError(field, BigInt(amount));
   }
 
   return BigInt(amount);
@@ -978,6 +980,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param account - The wallet account to use to interact with the protocol.
    * @param options - The Morpho target configuration.
    * @throws {MissingWalletProviderError} when the account has no provider or an empty provider list.
+   * @throws {InvalidProtocolOptionError} when protocol options are invalid.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1229,9 +1232,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
-   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
-   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
-   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
    * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
@@ -1248,7 +1248,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when configuration, the wallet balance, or submission is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {InsufficientTokenBalanceError} when the wallet cannot fund the operation.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1293,11 +1299,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
-   * @throws {MissingDeadSharesDataError} when the fetched vault snapshot lacks dead-deposit data.
-   * @throws {InsufficientDeadSharesError} when the vault, or a market or Vault V1 it can allocate
-   * to, holds too few shares at `DEAD_ADDRESS` to be protected against share-price inflation.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
-   * @throws {Error} when configuration or quoting fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1337,7 +1344,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
-   * @throws {Error} when the token, amount, vault, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import type { BundlesTokenRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -1365,10 +1376,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     supportSignature: true,
    *   });
    *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
-   *   // Optional: omit permit2Nonce to use the lowest unused nonce. USDT falls back to Permit2.
    *   const requirements = await prepared.getRequirements({
    *     useSimplePermit: true,
-   *     permit2Nonce: 42n,
    *   });
    *
    *   let signature: BundlesTokenRequirementSignature | undefined;
@@ -1412,7 +1421,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
             ? undefined
             : {
                 useSimplePermit: requirementOptions.useSimplePermit,
-                permit2Nonce: requirementOptions.permit2Nonce,
               };
         // Recheck the live chain before using the captured SDK action.
         await this._revalidate(context);
@@ -1540,9 +1548,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
    * @throws {MaximumFeeExceededError} when the wallet's transactionMaxFee is set and execution, L1 data, and operator fees on Optimism or Base exceed it.
    * @throws {InvalidTransactionMaxFeeError} when the EOA wallet's transaction fee configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1592,7 +1605,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingContractCodeError} when a fixed bundles or protocol contract has no code
    *   at its registered address during requirement resolution.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
-   * @throws {Error} when the withdrawal options or account configuration are invalid, or quoting fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -1657,7 +1674,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
-   * @throws {Error} when an address, token, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
@@ -1791,7 +1812,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1842,7 +1869,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   at its registered address.
    * @throws {viem.BaseError} when a market, position, or authorization read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1891,7 +1924,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1941,9 +1980,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
-      throw new Error(
-        `Token '${token}' does not match configured market loan token '${market.params.loanToken}'.`,
-      );
+      throw new MarketTokenMismatchError({
+        token,
+        expectedToken: market.params.loanToken,
+        kind: "loan",
+      });
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
@@ -2007,7 +2048,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
+   * @throws {InsufficientTokenBalanceError} when the wallet cannot fund the operation.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2063,11 +2112,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
-   *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
@@ -2081,7 +2127,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   at its registered address.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2139,7 +2191,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2183,9 +2241,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
-      throw new Error(
-        `Token '${token}' does not match configured market loan token '${market.params.loanToken}'.`,
-      );
+      throw new MarketTokenMismatchError({
+        token,
+        expectedToken: market.params.loanToken,
+        kind: "loan",
+      });
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
@@ -2257,7 +2317,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
+   * @throws {InsufficientTokenBalanceError} when the wallet cannot fund the operation.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2319,13 +2386,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
-   *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.permit2Nonce - Deprecated and ignored.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {UnknownTokenError} when the token's `decimals()` reverts, has no code, returns
    *   undecodable data, or is out of range.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
@@ -2336,7 +2400,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   at its registered address.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2396,7 +2466,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2455,9 +2531,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
-      throw new Error(
-        `Token '${token}' does not match configured market collateral token '${market.params.collateralToken}'.`,
-      );
+      throw new MarketTokenMismatchError({
+        token,
+        expectedToken: market.params.collateralToken,
+        kind: "collateral",
+      });
     }
 
     const collateralAssets =
@@ -2518,7 +2596,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {PaymasterApprovalGuardUnavailableError} when an ERC-4337 token-paymaster
    *   write runs against a WDK or AbstractionKit that no longer exposes the hook
    *   the approval check relies on.
-   * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
+   * @throws {ReadOnlyAccountError} when submission requires a writable account.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2578,7 +2663,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   at its registered address.
    * @throws {viem.BaseError} when a position or authorization read fails.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2632,7 +2723,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
-   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @throws {InvalidAmountTypeError} when an amount is not a number or bigint.
+   * @throws {UnsafeAmountError} when a numeric amount is not a safe integer.
+   * @throws {NonPositiveInputError} when an amount is zero or negative.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {AddressMismatchError} when the owner or collateral recipient differs from the wallet.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
+   * @throws {MarketTokenMismatchError} when a token differs from the configured market token.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2705,15 +2802,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
-      throw new Error(
-        `Token '${token}' does not match configured market collateral token '${market.params.collateralToken}'.`,
-      );
+      throw new MarketTokenMismatchError({
+        token,
+        expectedToken: market.params.collateralToken,
+        kind: "collateral",
+      });
     }
 
     if (to !== undefined && !isAddressEqual(to as Address, userAddress)) {
-      throw new Error(
-        "'to' must equal the wallet account address for Morpho collateral withdrawals.",
-      );
+      throw new AddressMismatchError(userAddress, to as Address);
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
@@ -2737,6 +2834,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -2794,6 +2893,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The market position.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -2850,6 +2951,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MalformedTokenMetadataError} when the share token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or, unless `supportDeployless` is `false`, when the
    *   deployless query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
+   * @throws {InvalidAddressError} when an address input is invalid.
+   * @throws {MissingMorphoTargetError} when the required vault or market is not configured.
    * @example
    * ```ts
    * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
@@ -2892,6 +2995,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Returns the configured vault address.
    *
    * @returns The configured vault address.
+   * @throws {MissingMorphoTargetError} when no earn vault is configured.
    */
   getVaultAddress(): Address {
     return this._resolveVaultTarget().address;
@@ -2901,6 +3005,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Returns the configured borrow market id, computed locally when possible.
    *
    * @returns The configured market id.
+   * @throws {MissingMorphoTargetError} when no borrow market is configured.
    */
   getBorrowMarketId(): string {
     const target = this._resolveMarketTarget();
@@ -3110,7 +3215,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       }
     }
 
-    throw new Error(
+    throw new MissingMorphoTargetError(
       "No Morpho earn vault configured. Set earnVaultAddress or presets.earn.",
     );
   }
@@ -3138,7 +3243,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       }
     }
 
-    throw new Error(
+    throw new MissingMorphoTargetError(
       "No Morpho borrow market configured. Set borrowMarketParams, borrowMarketId, or presets.borrow.",
     );
   }
@@ -3157,7 +3262,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       options.chainId !== undefined &&
       (!Number.isSafeInteger(options.chainId) || options.chainId <= 0)
     ) {
-      throw new Error("'chainId' must be a positive safe integer.");
+      throw new InvalidProtocolOptionError(
+        "'chainId' must be a positive safe integer.",
+      );
     }
 
     const hasExplicitTarget =
@@ -3166,7 +3273,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       options.borrowMarketParams !== undefined;
 
     if (hasExplicitTarget && options.chainId === undefined) {
-      throw new Error(
+      throw new InvalidProtocolOptionError(
         "'chainId' must be configured when using explicit Morpho targets.",
       );
     }
@@ -3175,28 +3282,34 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       options.earnVaultAddress !== undefined &&
       !isAddress(options.earnVaultAddress)
     ) {
-      throw new Error("'earnVaultAddress' must be a valid address.");
+      throw new InvalidProtocolOptionError(
+        "'earnVaultAddress' must be a valid address.",
+      );
     }
 
     if (
       options.borrowMarketId !== undefined &&
       !isMarketId(options.borrowMarketId)
     ) {
-      throw new Error("'borrowMarketId' must be a 66-character hex string.");
+      throw new InvalidProtocolOptionError(
+        "'borrowMarketId' must be a 66-character hex string.",
+      );
     }
 
     if (
       options.presets?.earn !== undefined &&
       !MORPHO_VAULT_PRESETS[options.presets.earn as VaultPresetKey]
     ) {
-      throw new Error(`Unknown Morpho earn preset '${options.presets.earn}'.`);
+      throw new InvalidProtocolOptionError(
+        `Unknown Morpho earn preset '${options.presets.earn}'.`,
+      );
     }
 
     if (
       options.presets?.borrow !== undefined &&
       !MORPHO_MARKET_PRESETS[options.presets.borrow as MarketPresetKey]
     ) {
-      throw new Error(
+      throw new InvalidProtocolOptionError(
         `Unknown Morpho borrow preset '${options.presets.borrow}'.`,
       );
     }
@@ -3206,7 +3319,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       (typeof options.slippageTolerance !== "bigint" ||
         options.slippageTolerance < 0n)
     ) {
-      throw new Error("'slippageTolerance' must be a non-negative bigint.");
+      throw new InvalidProtocolOptionError(
+        "'slippageTolerance' must be a non-negative bigint.",
+      );
     }
   }
 
@@ -3217,7 +3332,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         this._evmAccount instanceof WalletAccountEvmErc4337
       )
     ) {
-      throw new Error(
+      throw new ReadOnlyAccountError(
         `The '${method}' method requires the protocol to be initialized with a non read-only account.`,
       );
     }
@@ -3228,7 +3343,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     value: string | undefined,
   ): asserts value is Address {
     if (!value || !isAddress(value)) {
-      throw new Error(`'${field}' must be a valid address.`);
+      throw new InvalidAddressError(field);
     }
   }
 
@@ -3237,7 +3352,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     value: string | undefined,
   ): void {
     if (value !== undefined && !isNonZeroAddress(value)) {
-      throw new Error(`'${field}' must be a valid address (not zero address).`);
+      throw new InvalidAddressError(field, true);
     }
   }
 
@@ -3250,9 +3365,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       onBehalfOf !== undefined &&
       !isAddressEqual(onBehalfOf as Address, address)
     ) {
-      throw new Error(
-        "'onBehalfOf' must equal the wallet account address for Morpho SDK-backed operations.",
-      );
+      throw new AddressMismatchError(address, onBehalfOf as Address);
     }
 
     return address;
@@ -3278,7 +3391,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     if (balance < amount) {
-      throw new Error("Not enough funds to fulfill the operation.");
+      throw new InsufficientTokenBalanceError();
     }
   }
 
@@ -3612,7 +3725,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         if (eoaSendQueues.get(key) === entry) eoaSendQueues.delete(key);
       }
     }
-    throw new Error(
+    throw new ReadOnlyAccountError(
       "The method requires the protocol to be initialized with a non read-only account.",
     );
   }

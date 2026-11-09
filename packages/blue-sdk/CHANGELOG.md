@@ -1,5 +1,28 @@
 # @morpho-org/blue-sdk
 
+## 8.2.1
+
+### Patch Changes
+
+- Declare viem as a required peer dependency so package managers can resolve the runtime imports used by the SDK. The supported viem range is ^2.0.0.
+
+## 8.2.0
+
+### Minor Changes
+
+- Deprecate `BlueErrors.InvalidInterestAccrual` and `VaultV2Errors.InvalidInterestAccrual`. These errors are never thrown by the SDK and will be removed in the next major release.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 8.2.0-next.0
 
 ### Minor Changes
@@ -244,18 +267,6 @@
 - Updated dependencies [[`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e)]:
   - @morpho-org/morpho-ts@3.0.0-next.0
 
-## 6.10.0-next.0
-
-### Minor Changes
-
-- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
-
-  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
-
-  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
-
-  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
-
 ## 6.11.0
 
 ### Minor Changes
@@ -297,6 +308,18 @@
 
 - Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
   - @morpho-org/morpho-ts@2.14.0
+
+## 6.10.0-next.0
+
+### Minor Changes
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
 
 ## 6.9.0
 

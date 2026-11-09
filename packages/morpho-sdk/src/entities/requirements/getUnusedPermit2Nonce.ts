@@ -7,7 +7,10 @@ import { validateChainId } from "../../helpers/index.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import { NoUnusedPermit2NonceError } from "../../types/index.js";
 
-/** Parameters for {@link getUnusedPermit2Nonce}. */
+/**
+ * Parameters for {@link getUnusedPermit2Nonce}.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export interface GetUnusedPermit2NonceParams {
   /** Account that will sign the Permit2 SignatureTransfer. */
   readonly owner: Address;
@@ -21,8 +24,7 @@ export interface GetUnusedPermit2NonceParams {
 const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
 
 /**
- * Finds the lowest unused Permit2 unordered nonce for `owner`, ready to pass as `permit2Nonce` to
- * {@link getBundlesTokenRequirements} or as `nonce` to {@link encodeErc20Permit2SignatureTransfer}.
+ * Finds the lowest unused Permit2 unordered nonce for legacy SignatureTransfer integrations.
  *
  * Permit2 SignatureTransfer consumes an unordered 256-bit nonce; a nonce is free when its bit in
  * `nonceBitmap(owner, word)` is unset. This scans consecutive bitmap words starting at `startNonce`
@@ -57,6 +59,7 @@ const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
  * });
  * // permit2Nonce satisfies bigint
  * ```
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
  */
 export const getUnusedPermit2Nonce = async (
   viemClient: Client,

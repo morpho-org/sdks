@@ -2,6 +2,76 @@ import { describe, expect, test } from "vitest";
 import { createFormat, Format, format } from "../../index.js";
 
 describe("format", () => {
+  describe("numeric edge inputs", () => {
+    test.each([NaN, Infinity, -Infinity])(
+      "handles non-finite input %s explicitly",
+      (value) => {
+        expect(format.number.of(value)).toBe(String(value));
+        expect(format.number.default("N/A").of(value)).toBe("N/A");
+      },
+    );
+
+    test.each([
+      [1e-7, "0.0000001"],
+      [1.234e-100, `0.${"0".repeat(99)}1234`],
+      [Number.MIN_VALUE, `0.${"0".repeat(323)}5`],
+      [1e21, `1${"0".repeat(21)}`],
+      [1.234e21, `1234${"0".repeat(18)}`],
+    ] as const)("formats finite input %s as a decimal", (value, expected) => {
+      expect(format.number.of(value)).toBe(expected);
+      expect(format.number.of(-value)).toBe(`-${expected}`);
+    });
+
+    test("handles exponential bounds", () => {
+      expect(format.number.max(1e21).of(2e21)).toBe(`> 1${"0".repeat(21)}`);
+      expect(format.number.min(1e21).of(1e20)).toBe(`< 1${"0".repeat(21)}`);
+      expect(format.number.max(1e21).of(2n * 10n ** 21n, 0)).toBe(
+        `> 1${"0".repeat(21)}`,
+      );
+    });
+
+    test("scales and rounds bounds beyond the native fixed-point precision limit", () => {
+      expect(format.number.min(1.234e-100).of(1n, 101)).toBe(
+        `< 0.${"0".repeat(99)}12`,
+      );
+      expect(format.number.max(-1.25e-100).of(-1n, 101)).toBe(
+        `> -0.${"0".repeat(99)}13`,
+      );
+    });
+
+    test("applies non-finite defaults across formatter kinds", () => {
+      for (const formatter of [
+        format.number,
+        format.commas,
+        format.short,
+        format.percent,
+        format.hex,
+      ]) {
+        expect(formatter.default("N/A").of(NaN)).toBe("N/A");
+        expect(formatter.of(Infinity)).toBe("Infinity");
+      }
+    });
+
+    test.each([
+      { formatter: format.number.digits(0), value: -0.4, expected: "0" },
+      { formatter: format.number.digits(2), value: -0.0001, expected: "0.00" },
+      {
+        formatter: format.number.digits(2).trailingZero(false),
+        value: -0.004,
+        expected: "0",
+      },
+      {
+        formatter: format.number.digits(2).locale("fr-FR"),
+        value: -0.004,
+        expected: "0,00",
+      },
+    ] as const)(
+      "drops the negative sign for zero with options %s",
+      ({ formatter, value, expected }) => {
+        expect(formatter.of(value)).toBe(expected);
+      },
+    );
+  });
   const number = 12345.6789;
   const bigint = 123456789n;
   const decimals = 4;

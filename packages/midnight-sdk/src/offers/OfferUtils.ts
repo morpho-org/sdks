@@ -11,6 +11,7 @@ import {
   type Hash,
   isAddressEqual,
   keccak256,
+  maxUint128,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -1032,6 +1033,12 @@ export namespace OfferUtils {
    * continuous fee and settlement-fee buckets are available locally. Fetch the
    * current `consumed(maker, group)` value separately and pass it as input.
    *
+   * Returns `0n` when Midnight `take` rejects the offer regardless of the
+   * amount: outside its `start`/`expiry` window, above its `continuousFeeCap`,
+   * on a tick off the market's tick spacing (the default spacing on an
+   * untouched market), or on a market whose loss factor is maxed out. Taker-dependent checks (`SelfTake`, ratification) and the
+   * seller's post-maturity debt check are not mirrored.
+   *
    * @param params.offer - Offer to inspect. Its market must be hydrated.
    * @param params.consumed - Amount already consumed from the offer group.
    * @param params.timestamp - Timestamp used to compute market time to maturity.
@@ -1143,6 +1150,13 @@ export namespace OfferUtils {
     const market = Market.from(offer.market);
     if (timestamp < start || timestamp > expiry) return 0n;
     if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
+    if (market.lossFactor >= maxUint128) return 0n;
+    // A zero spacing marks an untouched market, which `take` creates with its default spacing.
+    const tickSpacing =
+      market.tickSpacing === 0
+        ? DEFAULT_TICK_SPACING
+        : BigInt(market.tickSpacing);
+    if (BigInt(offer.tick) % tickSpacing !== 0n) return 0n;
 
     const settlementFee = market.getSettlementFee(
       market.timeToMaturity(timestamp),

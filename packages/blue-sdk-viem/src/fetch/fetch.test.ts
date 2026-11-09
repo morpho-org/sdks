@@ -30,6 +30,7 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  ExecutionRevertedError,
   erc20Abi,
   erc20Abi_bytes32,
   maxUint256,
@@ -50,6 +51,7 @@ import {
   blueAbi,
   blueOracleAbi,
   erc2612Abi,
+  erc3643Abi,
   erc5267Abi,
   metaMorphoAbi,
   permissionedErc20WrapperAbi,
@@ -1075,6 +1077,11 @@ describe("fetchHolding", () => {
       functionName: "nonces",
       result: 25n,
     });
+    mockReadFailure(handle, {
+      address: token,
+      abi: erc3643Abi,
+      functionName: "identityRegistry",
+    });
     mockRead(handle, {
       address: token,
       abi: wrappedBackedTokenAbi,
@@ -1109,6 +1116,11 @@ describe("fetchHolding", () => {
     const token = ADDRESSES.wbIB01.toLowerCase() as Address;
     const whitelist = RECIPIENT;
 
+    mockReadFailure(handle, {
+      address: token,
+      abi: erc3643Abi,
+      functionName: "identityRegistry",
+    });
     mockRead(handle, {
       address: token,
       abi: erc20Abi,
@@ -1160,6 +1172,11 @@ describe("fetchHolding", () => {
     });
     const zeroGAddresses = addressesRegistry[ChainId.ZeroGMainnet];
 
+    mockReadFailure(handle, {
+      address: TOKEN,
+      abi: erc3643Abi,
+      functionName: "identityRegistry",
+    });
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -1232,6 +1249,11 @@ describe("fetchHolding", () => {
       abi: whitelistControllerAggregatorV2Abi,
       functionName: "isWhitelisted",
     });
+    mockReadFailure(handle, {
+      address: token,
+      abi: erc3643Abi,
+      functionName: "identityRegistry",
+    });
 
     const holding = await fetchHolding(USER, token, handle.client, {
       deployless: false,
@@ -1239,6 +1261,65 @@ describe("fetchHolding", () => {
 
     expect(holding.canTransfer).toBeUndefined();
   });
+
+  test.each([
+    { code: "0x01", canTransfer: undefined },
+    { code: "0x", canTransfer: true },
+  ] as const)(
+    "checks registry code after isVerified reverts (code: $code)",
+    async ({ code, canTransfer }) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: TOKEN,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        result: 20n,
+      });
+      mockRead(handle, {
+        address: TOKEN,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 21n,
+      });
+      mockReadFailure(handle, {
+        address: TOKEN,
+        abi: erc2612Abi,
+        functionName: "nonces",
+      });
+      mockRead(handle, {
+        address: TOKEN,
+        abi: permissionedErc20WrapperAbi,
+        functionName: "hasPermission",
+        result: true,
+      });
+      mockRead(handle, {
+        address: TOKEN,
+        abi: erc3643Abi,
+        functionName: "identityRegistry",
+        result: RECIPIENT,
+      });
+      const base = handle.request.getMockImplementation()!;
+      handle.request.mockImplementation(async (call) => {
+        if (call.method === "eth_getCode") return code;
+        if (call.method === "eth_call") {
+          const [tx] = call.params as [{ to?: Address }];
+          if (tx.to === RECIPIENT)
+            throw new ExecutionRevertedError({ message: "execution reverted" });
+        }
+        return base(call);
+      });
+
+      const holding = await fetchHolding(USER, TOKEN, handle.client, {
+        deployless: false,
+      });
+
+      expect(holding.canTransfer).toBe(canTransfer);
+      expect(handle.request.mock.calls.map(([call]) => call)).toContainEqual({
+        method: "eth_getCode",
+        params: [RECIPIENT, "latest"],
+      });
+    },
+  );
 
   test("falls back from deployless holding reads and tolerates optional read failures", async () => {
     const handle = createMockClient(mainnet);
@@ -1264,6 +1345,11 @@ describe("fetchHolding", () => {
       address: TOKEN,
       abi: permissionedErc20WrapperAbi,
       functionName: "hasPermission",
+    });
+    mockReadFailure(handle, {
+      address: TOKEN,
+      abi: erc3643Abi,
+      functionName: "identityRegistry",
     });
 
     const holding = await fetchHolding(USER, TOKEN, handle.client);

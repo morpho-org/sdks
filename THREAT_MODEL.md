@@ -2,6 +2,32 @@
 
 This file states what the Morpho SDKs defend against and what they deliberately trust. Read it before reporting a finding: a report whose only precondition is a trusted party misbehaving is out of scope unless it shows a check the SDK could make against an independent source.
 
+Anything this file does not list as trusted or as an accepted gap is in scope. Each trust boundary and accepted gap has a stable ID below; a triage that closes a finding as out of scope or accepted cites one of these IDs, and a finding that needs a new exclusion needs a change to this file first.
+
+### For auditors
+
+- A High severity finding about a built transaction or an onchain effect needs a proof of concept that reproduces on an Anvil fork at a pinned block, with the SDK calls an integrator would make. A CI or release-pipeline finding needs a reproduction against the workflow, such as a dry run.
+- Known issues are tracked in the team's Linear workspace. The open ones that break a property listed here are named as known gaps in [Financial invariants](#financial-invariants); a finding that only restates one is a duplicate.
+- Deprecated code that still ships has its own scope: see [Deprecated packages and code paths](#deprecated-packages-and-code-paths).
+
+### Trust boundaries and accepted gaps
+
+| ID | Boundary or gap | Recorded in |
+| --- | --- | --- |
+| TB-RPC | The JSON-RPC, `eth_simulateV1`, bundler and paymaster endpoints the integrator configures | [RPC](#rpc) |
+| TB-INTEGRATOR | The client-to-chain pairing, the addresses an integrator registers, and the input choices the per-input table leaves to it | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
+| TB-SNAPSHOT | Vault V2 snapshots the integrator builds or edits instead of fetching | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
+| TB-MIDNIGHT-API | Responses of the Midnight API | [Midnight API](#midnight-api) |
+| TB-RELEASE | The release pipeline: dependency code in the `pack` job, the GitHub-hosted runner, pinned actions, Node and npm, and the scripts of the release commit while the `publish` and `release` jobs hold their credentials | [Pack-job tarball contents](#pack-job-tarball-contents-bin-lib-manifest-fields), [Secret and internal-reference scan](#secret-and-internal-reference-scan), [Release plan](#release-plan), [npm publishing credential](#npm-publishing-credential), [Release job token](#release-job-token-before-the-plan-checks), [`release.yml`](https://github.com/morpho-org/sdks/blob/main/.github/workflows/release.yml) |
+| AG-APPROVALS | Unlimited approvals and share permits to registered spenders, and no on-chain share-burn bound for asset-mode vault exits | [ADR-2026-10-21-unlimited-sdk-approvals](./docs/adrs/ADR-2026-10-21-unlimited-sdk-approvals.md), [Approvals and vault exits](#approvals-and-vault-exits) |
+| AG-DEAD-DEPOSIT | Snapshot-free Blue `supply`, the snapshot-time check, and capped but unallocated Vault V2 markets | [ADR-2026-10-30-dead-share-protection](./docs/adrs/ADR-2026-10-30-dead-share-protection.md), [Dead-deposit protection](#dead-deposit-protection) |
+| AG-BLUE-AUTH | The standing Morpho Blue authorization of `BlueBundlesV1` | [Morpho Blue authorization for BlueBundlesV1](#morpho-blue-authorization-for-bluebundlesv1) |
+| AG-PREVIEW | `evm-simulation` preview mode grants every supplied authorization before the first transaction | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
+| AG-RAW-BUILDERS | Raw action builders check the shape of their inputs only; checks that need state or a clock (credit, position health, dead shares, expiry) run in entity flows | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry), [`AGENTS.md`](./AGENTS.md) |
+| AG-MAKER-BUFFER | Midnight maker flows and raw Midnight builders apply no LLTV buffer | [`SECURITY.md`](./SECURITY.md#security-invariants) INV-03 |
+| AG-ONCHAIN-BOUNDS | Vault V1/V2 `withdraw`/`redeem` and Midnight `repayWithdrawCollateral` are bounded only onchain | [`SECURITY.md`](./SECURITY.md#security-invariants) INV-07 |
+| AG-DEPRECATED | The frozen V1 compatibility graph of `liquidity-sdk-viem` | [Deprecated packages and code paths](#deprecated-packages-and-code-paths) |
+
 ## RPC
 
 The SDKs trust every endpoint the integrator configures:
@@ -128,12 +154,16 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash` unless `ChainSimulationConfig.parentHashCheck` is `false` (the default on Stable, 988, whose nodes report a `parentHash` that never matches the pinned block); anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way. A same-height response (Anvil re-hashes the pinned block) is tied to the pinned state only by number and timestamp: its `parentHash` is the pinned block's own parent either way, so it cannot distinguish execution on block N's state from execution on N-1's; this residual is accepted. With `parentHashCheck` off, a successor block is likewise tied to the pinned state only by block number and timestamp; this weaker binding is accepted for chains whose nodes cannot report a matching `parentHash`.
 - A call-count mismatch is a non-bypassable `InvalidSimulationResponseError`.
 - Before `eth_simulateV1` is sent, every distinct transaction `to` carrying calldata is checked for
-  code at the pinned state block (`eth_getCode`); a code-less target is a
+  code from its explicit caller override, when supplied, or at the pinned state block (`eth_getCode`).
+  An EIP-7702 `0xef0100<delegate>` designator triggers one delegate code check, using its explicit
+  override or one extra pinned `eth_getCode`, even in requests without overrides. A code-less target
+  or delegate (including an explicit `"0x"` override) is a
   `SimulationValidationError` naming `transactions[i].to`, because a call to an empty address would
   simulate as a silent success. Value-only transfers to EOAs stay allowed, and a `to` deployed by an
-  earlier transaction in the same batch has no code at the state block and is rejected — both are
+  earlier transaction in the same batch has no code at the state block and is rejected unless supplied
+  through overrides — both are
   product decisions. A node that lies about `eth_getCode` (reports code for an empty address, or the
-  reverse) falls under the lying-node residual: the SDK reads code only from its endpoint.
+  reverse) falls under the lying-node residual: onchain code is read only from its endpoint.
 - A target holding *unexpected* code (e.g. a token's runtime copied onto the bundler) can execute a
   call as a no-op success that nothing in the code check or execution catches; simulation exposes it
   only through the caller's declared `limits` (slippage/outcome verification). Without declared
@@ -148,7 +178,7 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
   An `eth_getBlock*` reply without a `result` reads as a missing block, which a lagging node also returns, so it stays `RpcTransportError`.
   A node-level revert (code 3, or an `execution reverted` / `VM execution error` message under any code) becomes `SimulationRevertedError`, never `RpcTransportError`.
   Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`, and a per-call value that fails normalization (a non-quantity `gasUsed`, a present but non-array `logs`, or a log whose `topics` (each must be 32 bytes), `address` or `data` are malformed) is rejected the same way; other per-call fields are trusted: a malformed value from a non-compliant node may be read as a revert (any `status` other than `"0x1"`) or pass through unchecked. An absent or `null` per-call `logs` is treated as no transfers, so a node that drops `logs` hides retained tokens; when operation limits are present, missing call logs throw `ApprovalCheckUnavailableError` instead.
-- Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
+- Calls run with `validation: false` (gas is not charged; Monad requires `true`) and `traceTransfers: true` so native-ETH moves appear as transfer logs. No state overrides are injected automatically. Caller-supplied `stateOverrides` are trusted hypothetical inputs, forwarded without runtime validation or normalization; consumers validate their contents. They apply once before all simulated calls, including checks; they can change balances, nonces, code and storage and make a transaction appear safe or funded when it is not at broadcast. Calldata-target code checks honor explicit code overrides; metadata reads outside `eth_simulateV1` still use pinned onchain state. Integrators must not accept overrides from untrusted users as evidence that an unmodified transaction is safe.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
 - Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.
 - A forged `status`/`returnData` shapes the reported outcome; no check can tell it from a real one.
@@ -170,23 +200,33 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - A stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
 - The wallet switches chains between a requirement being returned and the caller sending it. This needs no lying endpoint. Approval and authorization requirements (Blue or Midnight), from `morpho-sdk` resolvers such as [`getBlueAuthorizationRequirement`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/requirements/blue/getBlueAuthorizationRequirement.ts) and [`getMidnightAuthorizationRequirement`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/requirements/midnight/getMidnightAuthorizationRequirement.ts), from the WDK adapter's `getBorrowRequirements()`, `getRepayRequirements()`, `getSupplyCollateralRequirements()` and `getWithdrawCollateralRequirements()`, or from `getRequirements()` on its prepared actions (such as `prepareSupply()`), are plain [`Transaction`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/types/action.ts) objects (`to`, `value`, `data`, `action`) with no chain id. The resolver checks its client's chain before returning, and the [adapter](https://github.com/morpho-org/sdks/blob/main/packages/wdk-protocol-lending-morpho-evm/src/morpho-protocol-evm.ts) rechecks the provider chain after resolving, but neither sends the requirement: the caller does, with its own `account.sendTransaction`, on whatever chain the wallet is on by then. The caller checks the wallet chain before each send, as it owns the wallet and any switch; a requirement resolved on one client and sent through another is likewise a pairing the integrator owns. Sends the adapter makes itself (`submit()`, `borrow()`, `withdrawCollateral()` and the other operations) recheck the provider chain and throw `ChainIdMismatchError` after a switch, and with `supportSignature: true` the Blue authorization is signed and folded into the BlueBundlesV1 call the adapter sends, so no separate authorization transaction is returned.
 
+## Financial invariants
+
+Protocol-math properties the SDK must preserve when it computes an amount, bound or check for a transaction. A computation that breaks one is in scope, including in a flow not named here. Each is either enforced, with the code and test that pin it, or a known gap.
+
+| ID | Invariant | Status |
+| --- | --- | --- |
+| FI-DEAD-DEPOSIT | A supply or deposit into a near-empty Blue market or vault is rejected. | Opt-in. Entity flows and builders do not enforce it; integrators call the exported `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` or `validateVaultV2DeadShares` on their snapshot before building ([`deadShares.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/deadShares.ts), [`deadShares.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/deadShares.test.ts)); see [Dead-deposit protection](#dead-deposit-protection). The snapshot-free Blue `supply` overload is AG-DEAD-DEPOSIT. |
+| FI-ZERO-ELAPSED-LOSS | Vault V2 accrual applies losses its adapters realize, even when no time has elapsed since `lastUpdate`. | Known gap. `VaultV2.accrueInterest` returns before reading its adapters when the elapsed time is zero, so a loss realized in the same block is not applied ([`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts)); a `test.fails` case in [`VaultV2.accrueInterest.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.accrueInterest.property.test.ts) pins the divergence. |
+| FI-MAX-CAPS | A `MAX` deposit amount respects the vault's absolute and relative caps, counting interest pending on the liquidity adapter's allocation. | Enforced. Vault V2 `maxDeposit` adds the liquidity adapter's pending allocation increase to each of its cap allocations before applying the caps ([`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts), [`VaultV2.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.test.ts)). It reads the snapshot as given, so the snapshot must be accrued to the inclusion time. |
+| FI-ACCRUED-CREDIT | A Midnight redemption is checked against the position's credit after accruing fees and realized losses. | Enforced in the entity redemption flow ([`midnight.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/entities/midnight/midnight.ts), [`midnight.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/entities/midnight/midnight.test.ts)). The raw `midnightRedeem` action encodes the units it is given and leaves the credit check to the contract (AG-RAW-BUILDERS). |
+| FI-ROUNDING | Share and asset conversions round in the protocol's favour, as the contracts do: fewer shares minted or more assets paid on supply, more shares burned or fewer assets received on withdrawal. | Enforced in Blue market and Vault V2 conversions ([`Market.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/market/Market.ts), [`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts)), with property tests in [`Market.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/market/Market.property.test.ts) and [`VaultV2.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.property.test.ts). |
+
 ## Dead-deposit protection
 
 A nearly empty Blue market or vault lets the first depositor inflate the share price by donation, so later deposits round to few or zero shares. Protocol and curators mint a dead deposit at `DEAD_ADDRESS` (`0x…dEaD`) to close this.
 
-### What the SDK checks
+### Integrator checks
 
-- Blue `supply` with `marketData`, Vault V1 and V2 `deposit`, the Vault V2 target of `migrateToV2`, and the parking market of Midnight `supplyBlueMakeLend` throw `InsufficientDeadSharesError` when the target holds fewer than `MIN_DEAD_SHARES` (1e9) shares at `DEAD_ADDRESS`. Only `DEAD_ADDRESS` counts: Vault V1.1 uses `address(1)` for loss coverage, so its shares are not a dead deposit.
-- A Vault V1 also needs every withdraw-queue market to pass. A Vault V2 also needs its dead shares worth at least `MIN_VAULT_V2_DEAD_ASSETS` (1e6) assets, a share price above `1 / (10 * virtualShares)`, and every Blue market or Vault V1 with a non-zero absolute cap that the snapshot holds to pass, recursively. Zero-cap entries are skipped. The snapshot must hold the liquidity market, where the deposit is allocated, even before it has an allocation.
-- The checks fail closed: a snapshot without dead-share or cap data, or with an adapter the SDK cannot hydrate, throws `MissingDeadSharesDataError`. Snapshots from the `blue-sdk-viem` fetchers carry the data; hand-built or API-sourced ones do not.
-- Accepted gap: market adapters list only markets they currently supply to, so a Vault V2 market with a positive cap but no allocation is not checked. A deposit does not reach it; a later allocator reallocation can. The liquidity market, which deposits do reach, is the exception: `fetchAccrualVaultV2` adds it and its cap to a market-adapter liquidity adapter, and the validator fails closed when it is absent.
+Builders do not enforce the dead-deposit rule. Integrators should call the exported
+`validateBlueMarketDeadShares`, `validateVaultV1DeadShares`, or `validateVaultV2DeadShares`
+validator on their snapshot before building.
 
-### Accepted gaps
-
-- Snapshot-free Blue `supply` is deprecated but preserves its previous, unprotected behavior for one minor before removal in the next major. Callers only gain dead-deposit protection by passing `marketData`; the legacy overload does not fetch a snapshot implicitly.
-- The check reads the snapshot passed in. A dead deposit withdrawn between fetch and inclusion, or a forged RPC read, is not caught; the check runs offchain and nothing enforces it onchain.
-- The thresholds are a Protocol rule, not a proof that a market cannot be inflated; a large donation can still move the share price of a small market.
-
+- Only shares at `DEAD_ADDRESS` count; Vault V1.1 shares at `address(1)` do not.
+- A Vault V2 market with a positive cap but no current allocation is not checked; a later
+  reallocation can reach it.
+- The snapshot can change between fetch and inclusion, and nothing enforces the check onchain.
+- The thresholds are a Protocol rule, not proof that a market cannot be inflated.
 
 ## Approvals and vault exits
 
@@ -200,13 +240,6 @@ The following accepted behaviors are recorded in [ADR-2026-10-21-unlimited-sdk-a
 
 - Blue borrows, collateral withdrawals, supply withdrawals and refinances run through `BlueBundlesV1`, which must be authorized on Morpho Blue for the user. When `supportSignature` is off (the default in `morpho-sdk` and in `@morpho-org/wdk-protocol-lending-morpho-evm`), [`getBlueAuthorizationRequirement`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/requirements/blue/getBlueAuthorizationRequirement.ts) returns a standalone `Morpho.setAuthorization(BlueBundlesV1, true)` transaction to send before the operation. That grant covers every Blue market and never expires. If the user sends it and then abandons the operation, it stays active, and later operations get no authorization requirement. With `supportSignature` on, the SDK submits the signed authorization inside the operation itself, and it also stays active afterwards. The signature covers only Morpho's `Authorization` fields, not the operation, so once the operation's calldata is public (for example a broadcast transaction that reverts or is replaced), anyone can submit the unused signature through `Morpho.setAuthorizationWithSig` and turn on the same grant until the signature's deadline. No `getRequirements()` flow returns a revocation.
 - This is accepted: the SDK only requests authorization for the chain's registered `BlueBundlesV1` and throws `UnsupportedAuthorizationOperatorError` for any other operator. [`BlueBundlesV1`](https://github.com/morpho-org/bundles/blob/main/src/blue/BlueBundlesV1.sol) has no owner or upgrade path and only acts on the positions of the account that calls it, so another account cannot use the grant against the user. What remains is the user's trust in that contract's code, the same trust the operation already requires. A user who wants no standing grant can revoke it after the operation: send `Morpho.setAuthorization(BlueBundlesV1, false)`, which the SDK does not build, or sign a revocation built by [`encodeBlueSignatureAuthorization`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/requirements/encode/encodeBlueSignatureAuthorization.ts) with `isAuthorized: false` and submit it through `Morpho.setAuthorizationWithSig`.
-
-## Approvals and vault exits
-
-The following accepted behaviors are recorded in [ADR-2026-10-21-unlimited-sdk-approvals](./docs/adrs/ADR-2026-10-21-unlimited-sdk-approvals.md):
-
-- Classic ERC-20 approvals and vault-share approvals or permits to registered spenders are unlimited and remain in place for reuse. Per-token uint96 caps and USDT zero-reset behavior remain; ERC-2612 token permits and Permit2 SignatureTransfer remain exact.
-- Asset-mode Vault V1/V2 withdrawals, the asset-mode `migrateToV2` source leg, and in-kind redemption have no on-chain share-burn bound. A share-price drop before inclusion can burn more shares than quoted. The SDK-derived minimum share allowance only decides whether a new approval or permit is requested; it does not cap the on-chain share burn.
 
 ## Midnight API
 
@@ -299,8 +332,10 @@ runs earlier, in the private release pipeline, before the sync App pushes a rele
 
 ## Integrator inputs and the address registry
 
-The SDK trusts the inputs its integrator passes in and the configuration it registers. It does not
-treat an attacker-chosen value supplied by the integrator as a vulnerability.
+The SDK trusts the configuration its integrator registers and the input choices the table below
+leaves to it (TB-INTEGRATOR). An attacker-chosen value in one of those choices is not a
+vulnerability; a value the SDK is listed as rejecting, or should reject because a sibling flow does,
+is in scope.
 
 - **Client and chain pairing.** Entities and actions check that the viem client declares the chain
   they were asked to build for (`ChainIdMismatchError`). Entity reads and requirement resolvers also
@@ -318,8 +353,24 @@ treat an attacker-chosen value supplied by the integrator as a vulnerability.
   [`vaultV2ForceRedeem`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/vaultV2/forceRedeem.ts)
   still rejects an empty deallocation list and non-positive shares or amounts, and the recipient
   and `onBehalf` are always the `userAddress` given when the handle was created.
-- **Addresses passed as arguments.** Vault, market, receiver and `userAddress` values are used as
-  given; choosing them is the integrator's responsibility.
+- **Per-input checks.** The table below lists, for each input an integrator passes, what the SDK
+  rejects and what it uses as given. If any SDK flow rejects a value of an input, every sibling
+  flow that takes the same input must reject it too: a sibling that does not is a bug, not an
+  integrator choice. Siblings are flows of the same layer: a raw action builder is not a sibling
+  of its entity flow (AG-RAW-BUILDERS), and differences listed with an ID above stay accepted. An
+  input the table does not leave to the integrator is in scope.
+
+| Input | The SDK rejects | The SDK uses as given, and why |
+| --- | --- | --- |
+| Receiver | Every Midnight flow that takes a `receiver` or `collateralReceiver` (`takeBorrow`, `supplyCollateralTakeBorrow`, `takeWithdraw`, `withdrawCollateral`, `repayWithdrawCollateral`, `takeRepayWithdrawCollateral`, `redeem`) rejects the zero address (`MidnightZeroReceiverError`) and a Midnight protocol contract or market token (`MidnightContractReceiverError`); a positive referral fee's recipient is checked the same way ([`validateMidnightReceiver.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validateMidnightReceiver.ts)). The WDK adapter's optional `to` must equal the wallet (`AddressMismatchError`, [`morpho-protocol-evm.ts`](https://github.com/morpho-org/sdks/blob/main/packages/wdk-protocol-lending-morpho-evm/src/morpho-protocol-evm.ts)). Blue and vault builders take no receiver: proceeds go to `userAddress` or the sender. | Any other address, including contracts outside the Midnight deployment. Where funds go is the integrator's choice; the SDK rejects only receivers that burn funds or leave them inside the protocol. |
+| `userAddress` / `onBehalf` | Signing flows (ERC-2612 and vault-share permits, Blue authorization signatures) require the client's account to equal `userAddress` (`MissingClientPropertyError`, `AddressMismatchError`, [`validate.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validate.ts)) and verify the recovered signer (`InvalidSignatureError`, [`signAndVerifyTypedData.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/signAndVerifyTypedData.ts)). Midnight rejects a zero `onBehalf` (`MidnightZeroOnBehalfError`) and a zero entity account (`MidnightZeroAccountError`, [`validateMidnightAccount.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validateMidnightAccount.ts)). An authorization or permit signature whose owner is not `userAddress` is rejected (`DepositOwnerMismatchError`, [`actions/blue/common.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/blue/common.ts)). The WDK adapter's `onBehalfOf` must equal the wallet. | Transaction builders encode `userAddress` without comparing it to a connected account: they hold no wallet, and the contracts check that the sender may act for that address. |
+| Chain | See *Client and chain pairing* above (`ChainIdMismatchError`, [`validateClientChainId.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/requirements/validateClientChainId.ts)). A Midnight market must name the chain's registered Midnight (`MidnightMarketAddressMismatchError`, [`validateMidnightMarket.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validateMidnightMarket.ts)), and typed data is signed only for the client's chain. | An endpoint that lies about `eth_chainId` (TB-RPC). |
+| Market params / IDs | Blue builders, `client.morpho.blue` and `MorphoBlue` recompute the ID from the tuple (`MarketIdMismatchError`, see *Market params identity* below). Midnight maker flows reject offers for another Midnight market or ratifier (`MidnightOfferMarketAddressMismatchError`, `MidnightOfferRatifierMismatchError`). | Which market to use, with its oracle, IRM and LLTV: a product choice of the integrator. |
+| Vault, adapter, token and spender addresses | Approval spenders must be registered (`UnsupportedErc20ApprovalSpenderError`, [`validateRequirementSpender.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validateRequirementSpender.ts)), and so must Blue authorization operators (`UnsupportedAuthorizationOperatorError`) and Midnight authorization targets (`UnsupportedMidnightAuthorizationTargetError`); these comparisons ignore address case. Malformed Vault V2 reallocation addresses throw `InvalidReallocationAddressError` ([`validate.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/validate.ts)). Registry targets without code throw `MissingContractCodeError` (see *Address registry* below). | The vault address: builders encode it as given, since which vault to use is the integrator's choice. Registered addresses are TB-INTEGRATOR. |
+| Amounts / `MAX` | Negative and above-`uint256` values (`NegativeInputError`, `InputExceedsMaxError`), a zero exit amount (`NonPositiveInputError`), both assets and shares on a Blue withdrawal (`MutuallyExclusiveWithdrawAmountsError`), and unbounded Midnight take targets (`UnboundedMidnightTakeInputError`). How `MAX` amounts are computed is FI-MAX-CAPS. | The amount itself. |
+| Deadlines | A zero or above-`uint256` deadline in every builder (`NonPositiveInputError`, `InputExceedsMaxError`). Entity flows and signature encoders also reject an expired deadline (`ExpiredDeadlineError`); Midnight rejects a take deadline beyond its window (`MidnightTakeDeadlineTooFarError`) and an expired offer (`MidnightOfferExpiredError`). | A past deadline passed straight to an action builder: builders read no clock, and the chain rejects it. |
+| Signatures / permits | A vault-share permit with the wrong type, spender, amount or deadline (`BundlesPermitMismatchError`, [`actions/bundles/common.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/bundles/common.ts)), a Blue authorization signature for another operator (`BundlesRequirementSignatureMismatchError`, [`actions/blue/common.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/actions/blue/common.ts)), an unexpected or ambiguous signature (`UnexpectedRequirementSignatureError`, `AmbiguousRequirementSignaturesError`), and a signature that does not recover to the signer (`InvalidSignatureError`). | Whether the permit nonce is unused: it is on-chain state, see [Approvals and vault exits](#approvals-and-vault-exits). |
+
 - **Midnight ratifier and deployment pairing.** An Ecrecover ratifier checks delegated signers
   against the Midnight instance fixed at its deployment (immutable `MIDNIGHT` in the Midnight
   `EcrecoverRatifier` contract), while the Midnight instance that runs a take only checks that the
@@ -392,10 +443,13 @@ treat an attacker-chosen value supplied by the integrator as a vulnerability.
   (`RegistryValueAlreadyRegisteredError`). Addresses an integrator registers are part of its trusted
   configuration. A wrong address in the shipped registry is in scope; see
   [`SECURITY.md`](./SECURITY.md#scope). Every Blue, VaultV1 and VaultV2 write's `getRequirements()`
-  verifies the fixed bundles contract (and Permit2 or Blue when the flow touches them) holds code at
+  verifies the fixed bundles contract (and Blue when the flow touches it) holds code at
   its registered address, rejecting a code-less entry as `MissingContractCodeError` before planning
-  any calldata that would no-op onchain; `buildTx` alone stays unchecked. On both the entity and the
-  simulation side, a wrong-chain endpoint surfaces as `ChainIdMismatchError` / `InvalidChainIdError`
+  any calldata that would no-op onchain; `buildTx` alone stays unchecked. Funding selection never
+  uses Permit2, and `assertWriteTargets` does not check its code. Legacy Permit2 signatures supplied
+  to `buildTx` are checked for validity and nonce use only by Permit2 and the bundles contract
+  onchain. On both the entity and simulation side, a wrong-chain endpoint surfaces as
+  `ChainIdMismatchError` / `InvalidChainIdError`
   before these missing-code errors. An entry that holds
   *unexpected* code — the wrong contract at the right address — passes this check and is caught only
   by simulation reverts or identity reads; that residual is accepted.
@@ -416,6 +470,11 @@ treat an attacker-chosen value supplied by the integrator as a vulnerability.
   `IncrementNonce(authorizer, nonce)` from user-transaction logs; missing evidence throws
   `UnusedAuthorizationError`, even with `limits: "none"`
   ([`signed-authorizations.ts`](https://github.com/morpho-org/sdks/blob/main/packages/evm-simulation/src/simulate/signed-authorizations.ts)).
+  With caller state overrides, these checks describe only the overridden execution. Overriding token,
+  Morpho, Midnight or EcrecoverAuthorizer code or storage can fake use events or hide approval grants.
+  Unless the integrator controls the overrides, a passing final-mode result proves neither signature
+  use nor the absence of unlisted grants in the broadcast transaction. This caveat applies to the
+  approval allowlist above as well.
   These logs are use evidence, not cryptographic verification: an Approval cannot identify a permit
   nonce or signature. An Approval emitted by `transferFrom` can satisfy the permit check if its
   remaining allowance equals the signed value, even when the permit was skipped. Conversely, a token
@@ -425,6 +484,12 @@ treat an attacker-chosen value supplied by the integrator as a vulnerability.
   transfers have no use check: invalid submitted signatures revert, but an omitted transfer goes
   undetected and can leave its signature valid until its deadline. A transaction that depends on a later authorization still fails with
   `SimulationRevertedError`.
+
+## Deprecated packages and code paths
+
+Deprecated code that ships in the latest major of a maintained package is in scope until it is removed. That covers `@deprecated` exports and overloads such as snapshot-free Blue `supply`, whose missing dead-deposit check is the accepted gap AG-DEAD-DEPOSIT. Its support level is in [`SECURITY.md`](./SECURITY.md#supported-versions), and removal follows [ADR-2026-05-13-sdk-package-deprecation-lifecycle](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md).
+
+- **AG-DEPRECATED: the frozen V1 compatibility graph.** The deprecated `@morpho-org/liquidity-sdk-viem` runs against earlier majors of `morpho-sdk` (5.9.0), `blue-sdk-viem` (5.5.0), `blue-sdk` (6.7.0) and `morpho-ts` (2.11.1), pinned by the root `pnpm-workspace.yaml` overrides. Reports on that graph and on `liquidity-sdk-viem` itself are accepted and triaged, but fixes are not guaranteed: previous majors receive no fixes. A finding there that also holds in the latest major of a maintained package is in scope for that package.
 
 ## Release plan
 

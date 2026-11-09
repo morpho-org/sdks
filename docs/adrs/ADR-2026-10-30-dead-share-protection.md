@@ -47,3 +47,7 @@ vaults the deposit can reach.
 - Validators are pure and RPC-free. Check: unit tests call them directly as pure functions, without
   a client.
 - Revisit if the protocol changes its dead-deposit convention or thresholds.
+
+## References
+
+- Superseded by ADR-2026-11-03-dead-share-checks-opt-in.

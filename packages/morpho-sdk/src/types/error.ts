@@ -761,7 +761,10 @@ export class BundlesRequirementSignatureMismatchError extends Error {
   }
 }
 
-/** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
+/**
+ * Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
    * @param owner - Permit2 token owner whose nonce is unavailable.
@@ -778,7 +781,10 @@ export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   }
 }
 
-/** Thrown when no unused Permit2 unordered nonce exists at or after the requested start nonce. */
+/**
+ * Thrown when no unused Permit2 unordered nonce exists at or after the requested start nonce.
+ * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
+ */
 export class NoUnusedPermit2NonceError extends Error {
   /**
    * @param owner - Permit2 token owner scanned for a free nonce.
@@ -2110,12 +2116,7 @@ export class MidnightOfferCallbackDataMismatchError extends Error {
   }
 }
 
-/**
- * Thrown when loan assets would be parked in a Morpho Blue market with no existing supply.
- *
- * @deprecated `supplyBlueMakeLend` now throws `InsufficientDeadSharesError` or
- * `MissingDeadSharesDataError` instead; kept exported so existing `instanceof` checks compile.
- */
+/** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
 export class EmptyBlueParkingMarketError extends Error {
   constructor(params: { readonly marketId: MarketId }) {
     super(
@@ -2394,6 +2395,60 @@ export class WithdrawSharesExceedSupplyError extends Error {
       `Withdraw shares ${params.withdrawShares} exceed owned supply shares ${params.supplyShares} for market: ${params.market}. Reduce withdraw shares.`,
     );
     this.name = "WithdrawSharesExceedSupplyError";
+  }
+}
+
+/** Thrown when a Blue withdrawal finds no supply shares to withdraw for the position owner. */
+export class EmptyBlueSupplyPositionError extends Error {
+  constructor(params: { market: string; user: string }) {
+    super(
+      `Supply position of "${params.user}" is empty on market "${params.market}". Refresh the position data or skip the withdrawal.`,
+    );
+    this.name = "EmptyBlueSupplyPositionError";
+  }
+}
+
+/** Thrown when a Blue withdrawal needs more assets than the market's available liquidity. */
+export class InsufficientBlueLiquidityError extends Error {
+  constructor(params: { market: string; assets: bigint; liquidity: bigint }) {
+    super(
+      `Blue liquidity is insufficient on market "${params.market}": assets "${params.assets}", liquidity "${params.liquidity}". Try again when liquidity returns.`,
+    );
+    this.name = "InsufficientBlueLiquidityError";
+  }
+}
+
+/** Thrown when an address is not a BlueBuyCallback created by the chain's registered factory. */
+export class NotBlueBuyCallbackError extends Error {
+  constructor(callback: string) {
+    super(
+      `Address "${callback}" is not a BlueBuyCallback created by the registered factory. Pass a callback created by midnightBlueBuyCallbackFactory.`,
+    );
+    this.name = "NotBlueBuyCallbackError";
+  }
+}
+
+/** Thrown when a BlueBuyCallback's `OWNER()` is not the account withdrawing its Blue position. */
+export class BlueBuyCallbackOwnerMismatchError extends Error {
+  constructor(params: {
+    callback: string;
+    owner: string;
+    userAddress: string;
+  }) {
+    super(
+      `BlueBuyCallback "${params.callback}" is owned by "${params.owner}", not "${params.userAddress}". Withdraw from the owner's account.`,
+    );
+    this.name = "BlueBuyCallbackOwnerMismatchError";
+  }
+}
+
+/** Thrown when Morpho Blue does not authorize an account to withdraw a BlueBuyCallback's position. */
+export class BlueBuyCallbackUnauthorizedError extends Error {
+  constructor(params: { callback: string; userAddress: string }) {
+    super(
+      `"${params.userAddress}" is not authorized on Morpho Blue to withdraw for BlueBuyCallback "${params.callback}". Call setAuthorization on the callback from its owner, then retry.`,
+    );
+    this.name = "BlueBuyCallbackUnauthorizedError";
   }
 }
 

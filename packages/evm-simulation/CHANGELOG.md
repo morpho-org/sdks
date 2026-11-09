@@ -1,5 +1,43 @@
 # @morpho-org/evm-simulation
 
+## 8.6.0
+
+### Minor Changes
+
+- Support `blueWithdrawBuyCallback` in `toSimulationLimits` using Blue withdrawal verification. Pass the intended callback as `onBehalf` and `expected.assetsReceived` to check the callback's supply-share burn and the owner's wallet proceeds separately.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.1
+  - @morpho-org/morpho-sdk@9.5.0
+
+## 8.5.1
+
+### Patch Changes
+
+- Allow market loan-token approval events from the sender to BlueBundlesV1 during collateral withdrawals, including zero-amount repayment pulls. Resolve the loan token at the pinned block and continue rejecting unrelated tokens and spenders.
+
+## 8.5.0
+
+### Minor Changes
+
+- Accept caller-provided `stateOverrides` on `simulate()` and forward them to `eth_simulateV1`. Overrides use JSON-RPC account maps for code, balance, nonce and storage; consumers validate their contents, which the SDK forwards without runtime validation or normalization. Calldata-target checks honor explicit code overrides. Targets with EIP-7702 delegation also require code at their delegate: existing onchain delegations trigger an additional pinned `eth_getCode` read and reject code-less delegates with `SimulationValidationError`, even without overrides.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Borrows through BlueBundlesV1 no longer fail simulation when the collateral token re-emits an Approval on a zero-amount transferFrom.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-sdk@9.4.0
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 8.4.1-next.0
 
 ### Patch Changes
@@ -495,31 +533,6 @@
   - @morpho-org/morpho-ts@3.0.0-next.0
   - @morpho-org/blue-sdk@7.0.0-next.1
 
-## 4.1.9-next.0
-
-### Patch Changes
-
-- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
-
-  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
-
-  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
-
-  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
-
-- Updated dependencies [[`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1)]:
-  - @morpho-org/blue-sdk@6.10.0-next.0
-
-## 4.1.6-next.0
-
-### Patch Changes
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Extend the simulation retention check to also guard the standalone `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) from the blue-sdk address registry, alongside the existing `bundler3` executor and adapters. Net `(address, token)` retention above `DUST_THRESHOLD` in any of these restricted contracts now raises `BlacklistViolationError`. Chains are skipped only when blue-sdk catalogs neither a `bundler3` nor a `bundles` config.
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
-
 ## 4.1.10
 
 ### Patch Changes
@@ -557,6 +570,21 @@
 - Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
   - @morpho-org/morpho-ts@2.14.0
   - @morpho-org/blue-sdk@6.10.0
+
+## 4.1.9-next.0
+
+### Patch Changes
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+- Updated dependencies [[`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1)]:
+  - @morpho-org/blue-sdk@6.10.0-next.0
 
 ## 4.1.8
 
@@ -608,6 +636,16 @@
 - Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1)]:
   - @morpho-org/morpho-ts@2.11.2
   - @morpho-org/blue-sdk@6.8.0
+
+## 4.1.6-next.0
+
+### Patch Changes
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Extend the simulation retention check to also guard the standalone `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) from the blue-sdk address registry, alongside the existing `bundler3` executor and adapters. Net `(address, token)` retention above `DUST_THRESHOLD` in any of these restricted contracts now raises `BlacklistViolationError`. Chains are skipped only when blue-sdk catalogs neither a `bundler3` nor a `bundles` config.
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
 
 ## 4.1.5
 

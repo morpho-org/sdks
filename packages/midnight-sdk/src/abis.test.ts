@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  blueBuyCallbackAbi,
   blueBuyCallbackFactoryAbi,
   ecrecoverAuthorizerAbi,
   midnightBundlesV2Abi,
@@ -116,6 +117,26 @@ describe("blueBuyCallbackFactoryAbi", () => {
       "callbackOf",
       "createBlueBuyCallback",
       "isBlueBuyCallback",
+    ]);
+  });
+});
+
+describe("blueBuyCallbackAbi", () => {
+  test("behavior: exposes the owner, Blue authorization and Midnight callback entrypoints", () => {
+    const functions = blueBuyCallbackAbi
+      .filter((entry) => entry.type === "function")
+      .map((entry) => entry.name);
+
+    expect(functions).toEqual([
+      "BLUE",
+      "MIDNIGHT",
+      "OWNER",
+      "buyerAssetsBound",
+      "nonce",
+      "onBuy",
+      "setAuthorization",
+      "setAuthorizationWithSig",
+      "skim",
     ]);
   });
 });

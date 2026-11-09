@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { NegativeValueError } from "./errors.js";
+import { RetriesExhaustedError, RetryStoppedError } from "./index.js";
 import {
   assertNonNegative,
   bigIntComparator,
@@ -335,7 +336,111 @@ describe("mergeEntries", () => {
   });
 });
 
-describe("retryPromiseLinearBackoff", () => {
+describe.sequential("retryPromiseLinearBackoff", () => {
+  describe("failure contracts", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    test.each([0, 1, 3])(
+      "preserves the attempt budget for retries=%s without a final wait",
+      async (retries) => {
+        const failures = [
+          new Error("first"),
+          new Error("second"),
+          new Error("last"),
+        ];
+        const fn = vi.fn(() => {
+          throw failures[fn.mock.calls.length - 1];
+        });
+        const start = Date.now();
+        const result = retryPromiseLinearBackoff(fn, {
+          retries,
+          timeout: 50,
+        }).catch((failure: unknown) => failure);
+        await vi.runAllTimersAsync();
+        const error = await result;
+        const attempts = Math.max(1, retries);
+        expect(fn).toHaveBeenCalledTimes(attempts);
+        expect(Date.now() - start).toBe((50 * attempts * (attempts - 1)) / 2);
+        expect(error).toBeInstanceOf(Error);
+        expect(error).toBeInstanceOf(RetriesExhaustedError);
+        expect(error).toMatchObject({
+          name: "RetriesExhaustedError",
+          attempts,
+          cause: failures[attempts - 1],
+        });
+      },
+    );
+
+    test("preserves the last failure when an async predicate stops retries", async () => {
+      const cause = { reason: "stop" };
+      const fn = vi.fn(() => {
+        throw cause;
+      });
+      const onError = vi.fn(
+        async (_error: unknown, index: number) => index === 1,
+      );
+      const start = Date.now();
+      const result = retryPromiseLinearBackoff(fn, {
+        retries: 5,
+        timeout: 50,
+        onError,
+      }).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await result).toBeInstanceOf(Error);
+      expect(await result).toBeInstanceOf(RetryStoppedError);
+      expect(await result).toMatchObject({
+        name: "RetryStoppedError",
+        attempts: 2,
+        cause,
+      });
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls).toEqual([
+        [cause, 0],
+        [cause, 1],
+      ]);
+      expect(Date.now() - start).toBe(50);
+    });
+
+    test("accepts omitted options", async () => {
+      await expect(retryPromiseLinearBackoff(() => "ready")).resolves.toBe(
+        "ready",
+      );
+    });
+
+    test("defaults to eight total attempts with linear delays", async () => {
+      const fn = vi.fn(() => {
+        throw undefined;
+      });
+      const start = Date.now();
+      const result = retryPromiseLinearBackoff(fn, {}).catch(
+        (error: unknown) => error,
+      );
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(8);
+      expect(Date.now() - start).toBe(2800);
+      expect(await result).toMatchObject({
+        name: "RetriesExhaustedError",
+        attempts: 8,
+        cause: undefined,
+      });
+    });
+
+    test("propagates predicate failures unchanged without another attempt", async () => {
+      const cause = new TypeError("predicate failed");
+      const fn = vi.fn(() => {
+        throw new Error("operation failed");
+      });
+      const result = retryPromiseLinearBackoff(fn, {
+        onError: () => {
+          throw cause;
+        },
+      });
+      await expect(result).rejects.toBe(cause);
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
   test("returns the result on first success without retry", async () => {
     const fn = vi.fn(async () => "ok");
     const result = await retryPromiseLinearBackoff(fn, {
@@ -361,24 +466,24 @@ describe("retryPromiseLinearBackoff", () => {
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
-  test("throws 'too many retries' when retries exhausted", async () => {
+  test("throws RetriesExhaustedError when retries exhausted", async () => {
     const fn = vi.fn(async () => {
       throw new Error("always");
     });
     await expect(
       retryPromiseLinearBackoff(fn, { timeout: 1, retries: 2 }),
-    ).rejects.toThrow("too many retries");
+    ).rejects.toThrow(RetriesExhaustedError);
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  test("throws 'stopped retrying' when onError returns truthy", async () => {
+  test("throws RetryStoppedError when onError returns truthy", async () => {
     const fn = vi.fn(async () => {
       throw new Error("nope");
     });
     const onError = vi.fn(async () => true);
     await expect(
       retryPromiseLinearBackoff(fn, { timeout: 1, retries: 5, onError }),
-    ).rejects.toThrow("stopped retrying");
+    ).rejects.toThrow(RetryStoppedError);
     expect(fn).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledTimes(1);
   });

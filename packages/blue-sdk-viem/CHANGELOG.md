@@ -1,5 +1,17 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.3.0
+
+### Minor Changes
+
+- Export ERC-3643 ABIs and report whether the account is a verified recipient in `fetchHolding`. Both deployless and individual reads reject malformed non-empty identity-registry responses and report undefined eligibility when a deployed registry's verification read reverts or returns no data.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-ts@4.2.0
+
 ## 7.3.0-next.0
 
 ### Minor Changes
@@ -245,12 +257,6 @@
   - @morpho-org/morpho-ts@3.0.0-next.0
   - @morpho-org/blue-sdk@7.0.0-next.1
 
-## 5.5.1-next.0
-
-### Patch Changes
-
-- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
-
 ## 5.7.0
 
 ### Minor Changes
@@ -293,6 +299,12 @@
 - Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1)]:
   - @morpho-org/morpho-ts@2.11.2
   - @morpho-org/blue-sdk@6.8.0
+
+## 5.5.1-next.0
+
+### Patch Changes
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
 
 ## 5.5.0
 

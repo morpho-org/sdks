@@ -1,5 +1,12 @@
 # Migrating `@morpho-org/morpho-sdk` from v5 to v6
 
+> Current funding behavior: the SDK no longer requests Permit2 funding. Use ERC-2612 permits
+> (`supportSignature: true`, with `useSimplePermit` defaulting to true) or direct ERC-20 approvals.
+> Pass `useSimplePermit: false` to force approvals. The legacy
+> `permit2Nonce` option is deprecated and ignored; builders still accept previously collected
+> signatures. Permit2 requirement descriptions below document historical behavior.
+
+
 Version 6 keeps the Blue entity at `client.morpho.blue(marketParams, chainId)` and preserves its
 write-method names while routing them through five direct BlueBundlesV1 entrypoints. Blue reads and
 the Vault V2 reallocation-data helper remain on the same entity. There is no parallel

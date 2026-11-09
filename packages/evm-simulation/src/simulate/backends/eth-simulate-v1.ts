@@ -156,9 +156,9 @@ export const rpc = async <T>(
  *    it is sent as the block's `blockOverrides.gasLimit`; otherwise no block
  *    override is sent. When `callGasLimit` is set, it is sent as `gas` on every
  *    call; otherwise no per-call `gas` is sent.
- *    **No balance override is
- *    applied** — `value` transfers are funded by the sender's real native
- *    balance.
+ *    Caller-provided `stateOverrides` apply once before all planned calls; no
+ *    overrides are injected automatically. Without a caller balance override,
+ *    `value` transfers are funded by the sender's real native balance.
  * 2. **Response validation** — the simulated block must be exactly
  *    `stateBlockNumber` or `stateBlockNumber + 1`: geth-style nodes report
  *    the former's successor while Anvil reports the pinned block itself.
@@ -221,6 +221,9 @@ export async function executePlan(params: {
         {
           blockStateCalls: [
             {
+              ...(plan.request.stateOverrides !== undefined && {
+                stateOverrides: plan.request.stateOverrides,
+              }),
               ...(blockGasLimit !== undefined && {
                 blockOverrides: { gasLimit: numberToHex(blockGasLimit) },
               }),

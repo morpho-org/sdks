@@ -25,10 +25,13 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, and
   `refinance`. They map to the five registered `BlueBundlesV1` entrypoints directly; there is no
   `client.morpho.blueBundlesV1(...)` or route flag. Token
-  approvals, ERC-2612 permits, Permit2 signature transfers, and Morpho authorization therefore
-  target BlueBundlesV1 (the ERC-20 prerequisite for Permit2 still targets canonical Permit2). Blue
+  approvals, ERC-2612 permits, and Morpho authorization therefore
+  target BlueBundlesV1. Blue
   write calls accept no share-price bounds or `slippageTolerance` input. Optional write
   reallocations are Vault V2 BluePublicAllocator calls only.
+  `withdrawBuyCallback` is the one direct Morpho Blue call: a BlueBuyCallback's owner withdraws
+  the callback's whole supply position to their wallet with `withdraw(..., onBehalf = callback,
+  receiver = owner)`, because BlueBundlesV1 cannot act for the callback.
 - **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate taker flows route through MidnightBundlesV2 with an assets or units target; `takeRepayWithdrawCollateral` is a reduce-only buy that repays debt via borrow-side offers, repays the remainder directly when `repayEnabled` is set, then withdraws collateral to `collateralReceiver`. `repayWithdrawCollateral` routes through a reduce-only MidnightBundlesV2 buy with `repayEnabled` and no offer fills (assets-target entrypoint for an `assets` repay, units-target with `targetUnits = maxUint256` for a `full` repay); direct `supplyCollateral`, `withdrawCollateral`, and `redeem` calls route through Midnight. Guarded batch `cancelOffers` and the `makeLend`/`makeBorrow`/`makeWithdraw`/`makeRepay`/`supplyCollateralMakeBorrow`/`supplyBlueMakeLend` maker flows route through MidnightBundlesV2, pinned on Ethereum, Base, Arc, Robinhood, and Tempo. Maker flows accept PriceRatifierV1 or RateRatifierV1 trees and publish the root and payload in one transaction for `msg.sender`; `makeBorrow` takes no collateral, while `supplyCollateralMakeBorrow` requires it. Each maker flow uses `midnightCancelAndMake`. `makeWithdraw` and `makeRepay` require reduce-only sell and buy offers, then share the borrow-side and lend-side publication logic of `makeBorrow` and `makeLend`, which reject reduce-only offers. Both preserve the supplied tree and publish resting exits without executing a fill. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
@@ -50,7 +53,7 @@ Protocol terms used across this package's docs and JSDoc:
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
 - **VaultBundlesV1** — standalone protocol-owned fixed periphery for VaultV1/VaultV2 deposits,
   asset withdrawals, share redemptions, and V1-to-V2 migration. Deposits approve or permit the
-  gross underlying assets to VaultBundlesV1 (ERC-2612 or Permit2 SignatureTransfer), which pulls
+  gross underlying assets to VaultBundlesV1 (ERC-2612 permits or ERC-20 approvals), which pulls
   those assets, deducts any referral fee, and enforces `maxSharePrice`. Withdrawals and redemptions
   burn the transaction sender's vault shares and pay the net assets to that sender; asset
   withdrawals require a vault-share allowance at least as large as the SDK-derived share amount.
@@ -72,7 +75,6 @@ Protocol terms used across this package's docs and JSDoc:
   leg of Vault V1-to-V2 migration. VaultBundlesV1 enforces the
   deposit-side maximum directly. The high-level Blue write methods do not accept share-price bounds
   or `slippageTolerance` because BlueBundlesV1 cannot enforce them.
-- **Permit / Permit2** — signature-based token-pull flows. ERC-2612 permits name the contract that
-  pulls the token. Fixed Blue and vault bundles use Permit2 SignatureTransfer: the ERC-20 allowance
-  targets canonical Permit2, while the signed transfer names the fixed bundles contract as spender.
-  Both flow through `actions/requirements`.
+- **Permit** — ERC-2612 signature-based token allowances name the contract that pulls the token.
+  Unsupported tokens use direct ERC-20 approvals. Permit2 funding is no longer requested; legacy
+  encoders and transaction builders retain compatibility with previously collected signatures.

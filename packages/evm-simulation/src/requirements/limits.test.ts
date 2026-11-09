@@ -11,6 +11,7 @@ import {
   blueSupplyCollateral,
   blueSupplyCollateralBorrow,
   blueWithdraw,
+  blueWithdrawBuyCallback,
   type MidnightBuyTarget,
   midnightCancelAndMake,
   midnightRedeem,
@@ -141,6 +142,96 @@ const mkAction = <T extends Record<string, unknown>>(args: T) =>
 const onlyLimit = (action: TransactionAction, options = {}) =>
   toSimulationLimits(action, { owner: OWNER, ...options })
     .operations[0]! as OperationLimit;
+
+describe("toSimulationLimits — blueWithdrawBuyCallback", () => {
+  const marketParams = new MarketParams({
+    loanToken: BLUE_LOAN,
+    collateralToken: W_NATIVE,
+    oracle: zeroAddress,
+    irm: zeroAddress,
+    lltv: 0n,
+  });
+  const tx = blueWithdrawBuyCallback({
+    market: { chainId: base.id, marketParams },
+    args: { callbackAddress: OTHER, userAddress: OWNER, shares: 50n },
+  });
+  const options = {
+    owner: OWNER,
+    onBehalf: OTHER,
+    expected: { assetsReceived: 100n },
+  };
+
+  it("checks callback shares and owner proceeds through blueWithdraw limits", () => {
+    const limits = toSimulationLimits(tx.action, options);
+    expect(limits.operations).toEqual([
+      {
+        type: "blueWithdraw",
+        marketId: marketParams.id,
+        account: OTHER,
+        receiver: OWNER,
+        quote: { sharesBurned: 50n, assetsReceived: 100n },
+      },
+    ]);
+    expect(Object.isFrozen(limits.operations[0]?.quote)).toBe(true);
+    expect(() =>
+      parseRequest({
+        chainId: base.id,
+        transactions: [
+          { from: OWNER, to: tx.to, data: tx.data, value: tx.value },
+        ],
+        limits,
+      }),
+    ).not.toThrow();
+  });
+
+  it("requires a payout quote rather than accepting a share-only check", () => {
+    expect(() =>
+      toSimulationLimits(tx.action, { owner: OWNER, onBehalf: OTHER }),
+    ).toThrowError(MissingExpectedQuoteError);
+    expect(() =>
+      toSimulationLimits(tx.action, { owner: OWNER, onBehalf: OTHER }),
+    ).toThrowError(/assetsReceived/);
+  });
+
+  it.each([undefined, OWNER, RECEIVER])(
+    "rejects callback attribution to %s",
+    (onBehalf) => {
+      expect(() =>
+        toSimulationLimits(tx.action, { ...options, onBehalf }),
+      ).toThrowError(LimitAccountMismatchError);
+    },
+  );
+
+  it("rejects a payout not addressed to the intended owner", () => {
+    const foreignPayout = blueWithdrawBuyCallback({
+      market: { chainId: base.id, marketParams },
+      args: { callbackAddress: OTHER, userAddress: RECEIVER, shares: 50n },
+    });
+    expect(() =>
+      toSimulationLimits(foreignPayout.action, options),
+    ).toThrowError(LimitAccountMismatchError);
+    expect(() =>
+      toSimulationLimits(foreignPayout.action, {
+        ...options,
+        receiver: RECEIVER,
+      }),
+    ).toThrowError(LimitAccountMismatchError);
+  });
+
+  it("preserves caller quotes and tolerance overrides", () => {
+    expect(
+      toSimulationLimits(tx.action, {
+        ...options,
+        receiver: OWNER,
+        slippageTolerance: 0n,
+        expected: { assetsReceived: 100n, sharesBurned: 45n },
+      }).operations[0],
+    ).toMatchObject({
+      quote: { assetsReceived: 100n, sharesBurned: 45n },
+      slippageTolerance: 0n,
+    });
+  });
+});
 
 describe("toSimulationLimits", () => {
   it("returns a deep-frozen limits object with exactly one operation", () => {

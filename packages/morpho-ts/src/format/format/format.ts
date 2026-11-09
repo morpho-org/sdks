@@ -226,6 +226,21 @@ const _applyOptions = (
   return value;
 };
 
+const numberToScaledBigInt = (value: number, decimals: number): bigint => {
+  const str = decimals <= 100 ? value.toFixed(decimals) : value.toString();
+  const [significant, exp] = str.split(/[eE]/);
+  const [whole, digits = ""] = significant!.split(".");
+  const coefficient = BigInt(whole + digits);
+  const shift = decimals + Number(exp ?? 0) - digits.length;
+  if (shift >= 0) return coefficient * 10n ** BigInt(shift);
+
+  const divisor = 10n ** BigInt(-shift);
+  const magnitude = coefficient < 0n ? -coefficient : coefficient;
+  const rounded =
+    magnitude / divisor + ((magnitude % divisor) * 2n >= divisor ? 1n : 0n);
+  return coefficient < 0n ? -rounded : rounded;
+};
+
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 function formatBI(
   bi: bigint,
@@ -236,12 +251,12 @@ function formatBI(
     return (formatOptions.prefix ? "0x" : "") + bi.toString(16);
 
   if (formatOptions.max != null) {
-    const maxBI = BigInt(formatOptions.max.toFixed(decimals).replace(".", ""));
+    const maxBI = numberToScaledBigInt(formatOptions.max, decimals);
     if (bi > maxBI) return `> ${formatBI(maxBI, decimals, formatOptions)}`;
   }
 
   if (formatOptions.min != null) {
-    const minBI = BigInt(formatOptions.min.toFixed(decimals).replace(".", ""));
+    const minBI = numberToScaledBigInt(formatOptions.min, decimals);
     if (bi < minBI && bi !== 0n)
       return `< ${formatBI(minBI, decimals, formatOptions)}`;
   }
@@ -266,11 +281,8 @@ function formatBI(
   }
 
   return (
-    (isNegative && !/^0\.0+$/.test(value)
-      ? "-"
-      : formatOptions.sign
-        ? "+"
-        : "") + _withUnit(value, formatOptions.unit)
+    (isNegative && /[1-9]/.test(value) ? "-" : formatOptions.sign ? "+" : "") +
+    _withUnit(value, formatOptions.unit)
   );
 }
 
@@ -295,7 +307,7 @@ export abstract class BaseFormatter {
   protected abstract _clone(_options: FormatOptions): this;
 
   /**
-   * Sets a default value for the formatter. If the provided value is `undefined` or `null`,
+   * Sets a default value for nullish or non-finite input. If the provided default is `undefined` or `null`,
    * the method returns the current instance without modifying it. Otherwise, it creates
    * a new formatter instance with the specified default value.
    *
@@ -333,6 +345,9 @@ export abstract class BaseFormatter {
 
   /**
    * Formats a given value according to the formatter's configuration.
+   * Finite numbers in scientific notation are expanded to decimals, including subnormal values.
+   * Non-finite numbers return the configured default, or `"NaN"`, `"Infinity"`, or `"-Infinity"` without one.
+   * Negative values displayed as zero omit the minus sign, including after truncation or localization.
    *
    * @param value - The value to format. It can be:
    *  - A `bigint` for precise numeric representation.
@@ -372,31 +387,18 @@ export abstract class BaseFormatter {
       return this._options.default ?? (value == null ? value : decimals);
 
     if (typeof value === "number") {
+      if (!Number.isFinite(value))
+        return this._options.default ?? String(value);
       const str = value.toString();
       const [significant, exp] = str.split(/[eE]/);
-      const [whole, digits = ""] = significant!.split(".");
+      const [, digits = ""] = significant!.split(".");
 
       const numberExp = Number(exp ?? 0);
 
       // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-      decimals = Math.min(100, Math.max(0, -numberExp)) + digits.length;
-
-      if (numberExp > 0) {
-        const newDigits =
-          digits + "0".repeat(Math.max(0, numberExp - digits.length));
-
-        const strValue = `${whole}${newDigits.slice(0, numberExp)}.${newDigits.slice(numberExp)}`;
-
-        /* v8 ignore start -- strValue always includes the decimal separator above. */
-        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-        decimals = strValue.split(".")[1]?.length ?? 0;
-        /* v8 ignore stop */
-        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-        value = BigInt(strValue.replace(".", ""));
-      } else {
-        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-        value = BigInt(value.toFixed(decimals).replace(".", ""));
-      }
+      decimals = Math.max(0, digits.length - numberExp);
+      // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
+      value = numberToScaledBigInt(value, decimals);
     }
 
     return formatBI(value, decimals!, this._options);

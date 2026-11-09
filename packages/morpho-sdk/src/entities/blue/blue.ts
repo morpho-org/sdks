@@ -19,6 +19,11 @@ import {
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  blueAbi,
+  midnightBlueBuyCallbackAbi,
+  midnightBlueBuyCallbackFactoryAbi,
+} from "../../abis.js";
+import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1PublicAllocations,
   getBlueBundlesV1ReferralFeeAssets,
@@ -35,11 +40,11 @@ import {
   blueSupplyCollateral,
   blueSupplyCollateralBorrow,
   blueWithdraw,
+  blueWithdrawBuyCallback,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
-import { validateBlueMarketDeadShares } from "../../helpers/deadShares.js";
 import {
   DEFAULT_LLTV_BUFFER,
   validateAccrualPosition,
@@ -58,6 +63,8 @@ import {
   type ActionRequirement,
   type AssetsOrSharesArgs,
   type BlueBorrowAction,
+  BlueBuyCallbackOwnerMismatchError,
+  BlueBuyCallbackUnauthorizedError,
   type BlueRefinanceAction,
   type BlueRepayAction,
   type BlueRepayWithdrawCollateralAction,
@@ -65,9 +72,12 @@ import {
   type BlueSupplyCollateralAction,
   type BlueSupplyCollateralBorrowAction,
   type BlueWithdrawAction,
+  type BlueWithdrawBuyCallbackAction,
   type BlueWithdrawCollateralAction,
+  EmptyBlueSupplyPositionError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InsufficientBlueLiquidityError,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
@@ -76,6 +86,7 @@ import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
+  NotBlueBuyCallbackError,
   ReallocationsRequireBorrowError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
@@ -105,13 +116,16 @@ type VaultV2BlueReallocationsParams = {
 
 /** Options for resolving token-backed BlueBundlesV1 approval or signature prerequisites. */
 export interface BlueTokenRequirementsParams {
-  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce; defaults to true when signatures are supported. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
+  /** @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
   readonly permit2Nonce?: bigint;
 }
 
-/** Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1. */
+/**
+ * Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1, except
+ * `withdrawBuyCallback`, which calls Morpho Blue directly.
+ */
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
@@ -185,8 +199,6 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -239,17 +251,17 @@ export interface BlueActions {
   /**
    * Prepares a direct BlueBundlesV1 loan-asset supply.
    *
-   * `getRequirements()` first checks that BlueBundlesV1, Blue and, for ERC-20 funding with
-   * signatures enabled, Permit2 hold code at their registered addresses, then reads the loan-token
-   * allowance and selected ERC-2612 or Permit2 nonce state. Direct approvals and ERC-2612 name
-   * BlueBundlesV1 as spender; Permit2 keeps its ERC-20 approval on canonical Permit2. Native
+   * `getRequirements()` first checks that BlueBundlesV1 and Blue hold code, then
+   * reads the loan-token allowance and selected ERC-2612 nonce state. Direct approvals and
+   * ERC-2612 name BlueBundlesV1 as spender. Native
    * funding is exclusive and skips token requirements (the code check still runs).
    * The referral fee is deducted from the gross `assets` supplied. This route exposes no
    * share-price bound or `slippageTolerance`.
    *
    * @param params.userAddress - User funding and receiving the supply position.
    * @param params.marketData - Snapshot of this market from `getMarketData()` (or `fetchMarket` in
-   *   `@morpho-org/blue-sdk-viem`), used to check its dead deposit before building.
+   *   `@morpho-org/blue-sdk-viem`), checked only for `MarketIdMismatchError`. To check the dead-deposit
+   *   rule, call `validateBlueMarketDeadShares` on the snapshot yourself before building.
    * @param params.assets - Gross loan-token assets funded before the referral fee.
    * @param params.nativeAmount - Optional full native funding; must equal `assets` and requires wNative.
    * @param params.deadline - Final call deadline in Unix seconds.
@@ -260,14 +272,12 @@ export interface BlueActions {
    *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
    * @throws {ExpiredDeadlineError} when the deadline is not in the future at creation or requirement resolution.
    * @throws {NonPositiveInputError} when `assets` is not positive.
-   * @throws {NegativeInputError} when native funding or the referral fee is negative, or from `getRequirements()` when an explicit `permit2Nonce` is negative.
+   * @throws {NegativeInputError} when native funding or the referral fee is negative.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
+   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -278,8 +288,6 @@ export interface BlueActions {
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {MarketIdMismatchError} when `marketData` belongs to another market.
-   * @throws {MissingDeadSharesDataError} when `marketData` has no `deadSupplyShares`.
-   * @throws {InsufficientDeadSharesError} when the market holds fewer than `MIN_DEAD_SHARES` supply shares at `DEAD_ADDRESS`.
    * @throws {UnknownTokenError} from `getRequirements()` when the funded token's `decimals()` is unusable.
    * @throws {MalformedTokenMetadataError} when the token's `eip712Domain()` or
    *   `bytes32` `name`/`symbol` retry returns non-empty data that does not decode, or when the
@@ -325,8 +333,7 @@ export interface BlueActions {
       BlueTokenRequirementsParams
     >;
     /**
-     * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
-     * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+     * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
      */
     (params: {
       readonly userAddress: Address;
@@ -429,6 +436,77 @@ export interface BlueActions {
     readonly RequirementSignature[],
     undefined
   >;
+
+  /**
+   * Prepares a direct Morpho Blue withdrawal of a BlueBuyCallback's whole supply position to its
+   * owner.
+   *
+   * A BlueBuyCallback parks a maker's Midnight buy-offer funds as Blue supply owned by the
+   * callback. After the offer is cancelled or expires, its owner recovers them with
+   * `withdraw(marketParams, 0, supplyShares, callbackAddress, userAddress)` sent straight to Morpho
+   * Blue: BlueBundlesV1 cannot act for the callback. The callback's constructor authorizes its
+   * owner on Blue, so no requirement is returned.
+   *
+   * The handle checks the snapshot synchronously: it must be the callback's position on this
+   * market, hold supply shares, and the market's liquidity must cover their assets.
+   * `getRequirements()` then reads the chain and throws unless the registered
+   * `midnightBlueBuyCallbackFactory` created the callback, its `OWNER()` is `userAddress`, and Blue
+   * still authorizes `userAddress` for the callback. Await it before submitting the transaction.
+   *
+   * @param params.userAddress - Callback owner, who sends the transaction and receives the assets.
+   * @param params.callbackAddress - BlueBuyCallback whose supply position is withdrawn.
+   * @param params.positionData - Fresh snapshot of the callback's position on this market, for
+   *   example from `getPositionData(callbackAddress)`. Every supply share in it is withdrawn.
+   * @returns Lazy owner and authorization checks with no requirements, and a synchronous
+   *   deep-frozen transaction targeting Morpho Blue.
+   * @throws {ChainIdMismatchError} when the client targets another chain, or from
+   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
+   * @throws {viem.InvalidAddressError} when `callbackAddress` is malformed.
+   * @throws {MissingAccrualPositionError} when no position snapshot is provided.
+   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
+   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another account than
+   *   `callbackAddress`.
+   * @throws {EmptyBlueSupplyPositionError} when the callback holds no supply shares.
+   * @throws {InsufficientBlueLiquidityError} when the position's assets exceed market liquidity.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when Morpho Blue or `midnightBlueBuyCallbackFactory` is not
+   *   registered.
+   * @throws {MissingContractCodeError} from `getRequirements()` when Morpho Blue or the factory has
+   *   no code at its registered address.
+   * @throws {NotBlueBuyCallbackError} from `getRequirements()` when the factory did not create
+   *   `callbackAddress`.
+   * @throws {BlueBuyCallbackOwnerMismatchError} from `getRequirements()` when the callback's
+   *   `OWNER()` is not `userAddress`.
+   * @throws {BlueBuyCallbackUnauthorizedError} from `getRequirements()` when Blue does not
+   *   authorize `userAddress` for the callback.
+   * @throws {viem.BaseError} from `getRequirements()` when a read fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const userAddress = zeroAddress;
+   * const callbackAddress = zeroAddress;
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const action = market.withdrawBuyCallback({
+   *   userAddress,
+   *   callbackAddress,
+   *   positionData: await market.getPositionData(callbackAddress),
+   * });
+   * await action.getRequirements(); // throws unless userAddress owns the callback
+   * const tx = action.buildTx();
+   * // tx satisfies Readonly<Transaction<BlueWithdrawBuyCallbackAction>>
+   * ```
+   */
+  withdrawBuyCallback: (params: {
+    readonly userAddress: Address;
+    readonly callbackAddress: Address;
+    readonly positionData: AccrualPosition;
+  }) => ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined>;
 
   /**
    * Prepares a direct BlueBundlesV1 loan-asset borrow.
@@ -548,8 +626,6 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an authorization signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -732,8 +808,6 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
@@ -841,8 +915,6 @@ export interface BlueActions {
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
    * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
-   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
@@ -1152,13 +1224,8 @@ export class MorphoBlue implements BlueActions {
    * spender/authorized operator holds code, with one `eth_getCode` per distinct address
    * before any other requirement read. Blue write flows probe `eth_chainId` only after a target
    * has no code and report a chain mismatch when the RPC serves another chain.
-   *
-   * @param params.erc20Funding - Whether the flow resolves an ERC-20 funding leg, which
-   *   may name canonical Permit2 when signatures are supported.
    */
-  private async assertWriteTargets(params?: {
-    readonly erc20Funding?: boolean;
-  }): Promise<void> {
+  private async assertWriteTargets(): Promise<void> {
     const targets: { role: AddressLabel; address: Address }[] = [
       {
         role: "bundles.blueBundlesV1",
@@ -1166,10 +1233,6 @@ export class MorphoBlue implements BlueActions {
       },
       { role: "blue", address: getChainAddress(this.chainId, "blue") },
     ];
-    if (params?.erc20Funding && this.client.options.supportSignature) {
-      const permit2 = getChainAddresses(this.chainId).permit2;
-      if (permit2 != null) targets.push({ role: "permit2", address: permit2 });
-    }
     await assertRegistryTargetsHaveCode(
       this.client.viemClient,
       this.chainId,
@@ -1191,7 +1254,6 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     deadline: bigint;
     useSimplePermit?: boolean;
-    permit2Nonce?: bigint;
     now?: bigint;
   }): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline, params.now);
@@ -1205,7 +1267,6 @@ export class MorphoBlue implements BlueActions {
       supportSignature: this.client.options.supportSignature,
       supportDeployless: this.client.options.supportDeployless,
       useSimplePermit: params.useSimplePermit,
-      permit2Nonce: params.permit2Nonce,
       now: params.now,
     });
   }
@@ -1269,8 +1330,7 @@ export class MorphoBlue implements BlueActions {
     BlueTokenRequirementsParams
   >;
   /**
-   * @deprecated Pass `marketData` from `getMarketData()` to check the dead deposit.
-   * Snapshot-free supply is unprotected and will be removed in the next major after one minor.
+   * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
    */
   supply(params: {
     readonly userAddress: Address;
@@ -1317,8 +1377,6 @@ export class MorphoBlue implements BlueActions {
           this.marketParams.id,
         );
       }
-      // Throws when the market lacks a sufficient dead deposit; nothing to return.
-      validateBlueMarketDeadShares(params.marketData);
     }
 
     return {
@@ -1327,9 +1385,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        return this.assertWriteTargets({
-          erc20Funding: nativeValue === 0n,
-        }).then(() => {
+        return this.assertWriteTargets().then(() => {
           if (nativeValue > 0n) return [];
           return this.getTokenRequirements({
             token: this.marketParams.loanToken,
@@ -1338,7 +1394,6 @@ export class MorphoBlue implements BlueActions {
             deadline,
             now,
             useSimplePermit: requirementsParams?.useSimplePermit,
-            permit2Nonce: requirementsParams?.permit2Nonce,
           });
         });
       },
@@ -1464,6 +1519,99 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
+    };
+  }
+
+  /** {@inheritDoc BlueActions.withdrawBuyCallback} */
+  withdrawBuyCallback(params: {
+    readonly userAddress: Address;
+    readonly callbackAddress: Address;
+    readonly positionData: AccrualPosition;
+  }): ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined> {
+    const { userAddress, callbackAddress, positionData } = params;
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (positionData == null) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: callbackAddress,
+    });
+    const shares = positionData.supplyShares;
+    if (shares === 0n) {
+      throw new EmptyBlueSupplyPositionError({
+        market: this.marketParams.id,
+        user: callbackAddress,
+      });
+    }
+    const assets = positionData.supplyAssets;
+    const liquidity = positionData.market.liquidity;
+    if (assets > liquidity) {
+      throw new InsufficientBlueLiquidityError({
+        market: this.marketParams.id,
+        assets,
+        liquidity,
+      });
+    }
+    const blue = getChainAddress(this.chainId, "blue");
+    const factory = getChainAddress(
+      this.chainId,
+      "midnightBlueBuyCallbackFactory",
+    );
+    const tx = blueWithdrawBuyCallback({
+      market: { chainId: this.chainId, marketParams: this.marketParams },
+      args: { callbackAddress, userAddress, shares },
+      metadata: this.client.options.metadata,
+    });
+
+    return {
+      getRequirements: async () => {
+        const viemClient = this.client.viemClient;
+        await validateClientChainId(viemClient, this.chainId);
+        await assertRegistryTargetsHaveCode(viemClient, this.chainId, [
+          { role: "blue", address: blue },
+          { role: "midnightBlueBuyCallbackFactory", address: factory },
+        ]);
+        // Check the factory first: OWNER() on an arbitrary address can revert or lie.
+        const isBlueBuyCallback = await readContract(viemClient, {
+          address: factory,
+          abi: midnightBlueBuyCallbackFactoryAbi,
+          functionName: "isBlueBuyCallback",
+          args: [callbackAddress],
+        });
+        if (!isBlueBuyCallback) {
+          throw new NotBlueBuyCallbackError(callbackAddress);
+        }
+        const [owner, isAuthorized] = await Promise.all([
+          readContract(viemClient, {
+            address: callbackAddress,
+            abi: midnightBlueBuyCallbackAbi,
+            functionName: "OWNER",
+          }),
+          readContract(viemClient, {
+            address: blue,
+            abi: blueAbi,
+            functionName: "isAuthorized",
+            args: [callbackAddress, userAddress],
+          }),
+        ]);
+        if (!isAddressEqual(owner, userAddress)) {
+          throw new BlueBuyCallbackOwnerMismatchError({
+            callback: callbackAddress,
+            owner,
+            userAddress,
+          });
+        }
+        if (!isAuthorized) {
+          throw new BlueBuyCallbackUnauthorizedError({
+            callback: callbackAddress,
+            userAddress,
+          });
+        }
+        return [];
+      },
+      buildTx: () => tx,
     };
   }
 
@@ -1816,9 +1964,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets({
-          erc20Funding: hasRepay && nativeValue === 0n,
-        });
+        await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             hasRepay && nativeValue === 0n
@@ -1829,7 +1975,6 @@ export class MorphoBlue implements BlueActions {
                   deadline,
                   now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             collateralAssets > 0n
@@ -1962,9 +2107,7 @@ export class MorphoBlue implements BlueActions {
       ): Promise<readonly ActionRequirement[]> => {
         const now = Time.timestamp();
         this.validateDeadline(deadline, now);
-        await this.assertWriteTargets({
-          erc20Funding: collateralAssets > 0n && nativeValue === 0n,
-        });
+        await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
           await Promise.all([
             collateralAssets > 0n && nativeValue === 0n
@@ -1975,7 +2118,6 @@ export class MorphoBlue implements BlueActions {
                   deadline,
                   now,
                   useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
                 })
               : Promise.resolve([]),
             borrowAssets > 0n

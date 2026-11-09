@@ -643,7 +643,8 @@ describe("getHealthFactor", () => {
 });
 
 // morpho-blue src/Morpho.sol _isHealthy
-describe("getLtv", () => {
+// @fast-check/vitest 0.5.0 reads Vitest's shared current-test context.
+describe.sequential("getLtv", () => {
   test.prop([marketCase], { numRuns: 1000 })("default", (input) => {
     const collateralValueInLoanAssets = collateralValue(
       input.collateral,
@@ -846,7 +847,7 @@ describe("getMaxBorrowableAssets", () => {
   );
 
   // Morpho.borrow rounds newly issued debt shares up, which can add one wei of debt.
-  test.fails.prop([healthyMarketCase], {
+  test.prop([healthyMarketCase], {
     numRuns: 1000,
     examples: [
       [
@@ -1623,8 +1624,8 @@ describe("getLiquidationPrice", () => {
     },
   );
 
-  // The SDK rounds LLTV against collateral before applying the oracle price.
-  test.fails.prop([liquidationPriceCase], {
+  // The threshold inverts both floors in the onchain health check.
+  test.prop([liquidationPriceCase], {
     numRuns: 1000,
     examples: [
       [

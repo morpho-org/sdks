@@ -1,5 +1,12 @@
 # Migrating `@morpho-org/morpho-sdk` from v7 to v8
 
+> Current funding behavior: the SDK no longer requests Permit2 funding. Use ERC-2612 permits
+> (`supportSignature: true`, with `useSimplePermit` defaulting to true) or direct ERC-20 approvals.
+> Pass `useSimplePermit: false` to force approvals. The legacy
+> `permit2Nonce` option is deprecated and ignored; builders still accept previously collected
+> signatures. Permit2 requirement descriptions below document historical behavior.
+
+
 Version 8 makes token metadata and RPC-backed requirement reads fail closed.
 These calls now throw typed errors instead of returning partial or default values.
 

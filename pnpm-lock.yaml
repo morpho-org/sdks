@@ -334,9 +334,6 @@ importers:
 
   packages/test:
     dependencies:
-      '@morpho-org/morpho-ts':
-        specifier: workspace:^
-        version: link:../morpho-ts
       lodash.kebabcase:
         specifier: ^4.1.1
         version: 4.1.1
@@ -347,6 +344,9 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.6.6))
     devDependencies:
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1

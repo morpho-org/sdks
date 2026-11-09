@@ -42,7 +42,7 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import {
-  InsufficientDeadSharesError,
+  EmptyBlueParkingMarketError,
   MidnightInvalidAccountAddressError,
   MidnightOfferNoCreditError,
   MidnightOfferNoDebtError,
@@ -1133,6 +1133,6 @@ describe("Midnight maker offers on fork", () => {
           deadline: maxUint256,
           validation,
         }),
-    ).rejects.toThrow(InsufficientDeadSharesError);
+    ).rejects.toThrow(EmptyBlueParkingMarketError);
   });
 });

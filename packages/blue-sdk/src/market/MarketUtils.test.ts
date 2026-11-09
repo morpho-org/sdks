@@ -7,6 +7,80 @@ import { MarketUtils } from "./MarketUtils.js";
 
 const lltv = (pct: number) => (BigInt(pct * 1000) * MathLib.WAD) / 1000n;
 
+describe("MarketUtils input immutability", () => {
+  const helpers: readonly [
+    string,
+    (
+      position: Parameters<typeof MarketUtils.getWithdrawableCollateral>[0],
+      market: Parameters<typeof MarketUtils.getWithdrawableCollateral>[1],
+      config: Parameters<typeof MarketUtils.getWithdrawableCollateral>[2],
+    ) => bigint | null | undefined,
+  ][] = [
+    [
+      "getLiquidationSeizedAssets",
+      // biome-ignore lint/complexity/useMaxParams: adapter matches the other MarketUtils helper signatures.
+      (position, market, config) =>
+        MarketUtils.getLiquidationSeizedAssets(
+          position.borrowShares,
+          market,
+          config,
+        ),
+    ],
+    ["getSeizableCollateral", MarketUtils.getSeizableCollateral],
+    ["getWithdrawableCollateral", MarketUtils.getWithdrawableCollateral],
+    ["getLiquidationPrice", MarketUtils.getLiquidationPrice],
+    [
+      "getPriceVariationToLiquidationPrice",
+      MarketUtils.getPriceVariationToLiquidationPrice,
+    ],
+    ["getLtv", MarketUtils.getLtv],
+  ];
+
+  test.each(helpers)(
+    "%s accepts frozen BigIntish inputs without changing them",
+    (_name, helper) => {
+      for (const overrides of [
+        {},
+        { price: 0n },
+        { price: undefined },
+        { borrowShares: 0n },
+        { totalBorrowShares: 0n },
+      ]) {
+        const bigintPosition = {
+          collateral: 100n,
+          borrowShares: overrides.borrowShares ?? 80n,
+        };
+        const bigintMarket = {
+          totalBorrowAssets: 100n,
+          totalBorrowShares: overrides.totalBorrowShares ?? 100n,
+          price: "price" in overrides ? overrides.price : ORACLE_PRICE_SCALE,
+        };
+        const bigintConfig = { lltv: MathLib.WAD / 2n };
+        const positionInput = {
+          collateral: bigintPosition.collateral.toString(),
+          borrowShares: bigintPosition.borrowShares.toString(),
+        };
+        const marketInput = {
+          totalBorrowAssets: bigintMarket.totalBorrowAssets.toString(),
+          totalBorrowShares: bigintMarket.totalBorrowShares.toString(),
+          price: bigintMarket.price?.toString(),
+        };
+        const configInput = { lltv: bigintConfig.lltv.toString() };
+        const position = Object.freeze({ ...positionInput });
+        const market = Object.freeze({ ...marketInput });
+        const config = Object.freeze({ ...configInput });
+
+        const expected = helper(bigintPosition, bigintMarket, bigintConfig);
+        expect(() => helper(position, market, config)).not.toThrow();
+        expect(helper(position, market, config)).toBe(expected);
+        expect(position).toStrictEqual(positionInput);
+        expect(market).toStrictEqual(marketInput);
+        expect(config).toStrictEqual(configInput);
+      }
+    },
+  );
+});
+
 const marketParams = {
   loanToken: "0x0000000000000000000000000000000000000001",
   collateralToken: "0x0000000000000000000000000000000000000002",
@@ -370,6 +444,59 @@ describe("MarketUtils position risk helpers", () => {
     ).toBe(40n);
   });
 
+  test("getMaxBorrowableAssets accounts for borrow share rounding", () => {
+    const position = {
+      totalBorrowAssets: 5n,
+      totalBorrowShares: 0n,
+      price: 1n,
+      collateral: 64n * ORACLE_PRICE_SCALE,
+      lltv: 915_000_000_000_000_000n,
+      borrowShares: 0n,
+    };
+    const result = MarketUtils.getMaxBorrowableAssets(
+      position,
+      {
+        totalBorrowAssets: position.totalBorrowAssets,
+        totalBorrowShares: position.totalBorrowShares,
+        price: position.price,
+      },
+      { lltv: position.lltv },
+    );
+
+    expect(result).toBe(57n);
+    const shares = MarketUtils.toBorrowShares(result, position, "Up");
+    expect(
+      MarketUtils.isHealthy(
+        {
+          collateral: position.collateral,
+          borrowShares: shares,
+        },
+        {
+          totalBorrowAssets: position.totalBorrowAssets + result,
+          totalBorrowShares: shares,
+          price: position.price,
+        },
+        { lltv: position.lltv },
+      ),
+    ).toBe(true);
+    const next = result + 1n;
+    const nextShares = MarketUtils.toBorrowShares(next, position, "Up");
+    expect(
+      MarketUtils.isHealthy(
+        {
+          collateral: position.collateral,
+          borrowShares: nextShares,
+        },
+        {
+          totalBorrowAssets: position.totalBorrowAssets + next,
+          totalBorrowShares: nextShares,
+          price: position.price,
+        },
+        { lltv: position.lltv },
+      ),
+    ).toBe(false);
+  });
+
   test("getLiquidationSeizedAssets handles undefined and zero prices", () => {
     expect(
       MarketUtils.getLiquidationSeizedAssets(
@@ -493,6 +620,86 @@ describe("MarketUtils position risk helpers", () => {
         params,
       ),
     ).toBe(MathLib.MAX_UINT_256);
+  });
+
+  test.each([0, "0"])(
+    "getLiquidationPrice handles non-bigint zero collateral %j",
+    (collateral) => {
+      const position = Object.freeze({ collateral, borrowShares: 10n });
+
+      expect(MarketUtils.getLiquidationPrice(position, market, params)).toBe(
+        MathLib.MAX_UINT_256,
+      );
+      expect(position.collateral).toBe(collateral);
+    },
+  );
+
+  test.each([0, "0"])(
+    "getPriceVariationToLiquidationPrice handles non-bigint zero collateral %j",
+    (collateral) => {
+      const position = Object.freeze({ collateral, borrowShares: 10n });
+
+      expect(
+        MarketUtils.getPriceVariationToLiquidationPrice(
+          position,
+          market,
+          params,
+        ),
+      ).toBe(MathLib.wDivUp(MathLib.MAX_UINT_256, market.price) - MathLib.WAD);
+      expect(position.collateral).toBe(collateral);
+    },
+  );
+
+  test("getLiquidationPrice reverses the onchain health threshold exactly", () => {
+    const position = {
+      totalBorrowAssets: 0n,
+      totalBorrowShares: 1n,
+      collateral: 1n,
+      lltv: 2_941_176_470_588_236n,
+      borrowShares: 1n,
+    };
+    const debtAssets = MarketUtils.toBorrowAssets(position.borrowShares, {
+      totalBorrowAssets: position.totalBorrowAssets,
+      totalBorrowShares: position.totalBorrowShares,
+    });
+    const expected = MathLib.mulDivUp(
+      MathLib.wDivUp(debtAssets, position.lltv),
+      ORACLE_PRICE_SCALE,
+      position.collateral,
+    );
+
+    expect(
+      MarketUtils.getLiquidationPrice(
+        position,
+        {
+          totalBorrowAssets: position.totalBorrowAssets,
+          totalBorrowShares: position.totalBorrowShares,
+        },
+        { lltv: position.lltv },
+      ),
+    ).toBe(expected);
+    expect(
+      MarketUtils.isHealthy(
+        position,
+        {
+          totalBorrowAssets: position.totalBorrowAssets,
+          totalBorrowShares: position.totalBorrowShares,
+          price: expected,
+        },
+        { lltv: position.lltv },
+      ),
+    ).toBe(true);
+    expect(
+      MarketUtils.isHealthy(
+        position,
+        {
+          totalBorrowAssets: position.totalBorrowAssets,
+          totalBorrowShares: position.totalBorrowShares,
+          price: expected - 1n,
+        },
+        { lltv: position.lltv },
+      ),
+    ).toBe(false);
   });
 
   test("getPriceVariationToLiquidationPrice handles missing price, zero price, empty borrow and active borrow", () => {

@@ -1,5 +1,53 @@
 # @morpho-org/morpho-sdk
 
+## 9.5.0
+
+### Minor Changes
+
+- Stop requesting Permit2 funding: reuse sufficient bundles allowances first; otherwise `supportSignature: true` attempts ERC-2612 permits with a matching on-chain domain separator by default, while unsupported tokens or domains and `useSimplePermit: false` use direct ERC-20 approvals to the bundles contract.
+
+### Patch Changes
+
+- Reduce avoidable rounded penalties in Blue reallocation plans by comparing the existing plan with a physical-balance-seeded retry when an explicit Blue balance is available. Keep the retry only when it passes the existing funding checks and charges a strictly smaller total penalty; preserve the original plan otherwise. This bounded refinement does not guarantee globally minimal penalties.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.1
+
+## 9.4.0
+
+### Minor Changes
+
+- Add `client.morpho.blue(marketParams, chainId).withdrawBuyCallback({ userAddress, callbackAddress, positionData })` and its pure builder `blueWithdrawBuyCallback`. A BlueBuyCallback's owner withdraws the callback's whole Blue supply position to their wallet with a direct Morpho Blue `withdraw`. `getRequirements()` checks that the registered factory created the callback, that its `OWNER()` is `userAddress` and that Blue authorizes `userAddress` for it. Also export `midnightBlueBuyCallbackAbi` (and `blueBuyCallbackAbi` from `/midnight/abis`) and the new errors `EmptyBlueSupplyPositionError`, `InsufficientBlueLiquidityError`, `NotBlueBuyCallbackError`, `BlueBuyCallbackOwnerMismatchError` and `BlueBuyCallbackUnauthorizedError`.
+- Re-export `RetriesExhaustedError` and `RetryStoppedError` from `@morpho-org/morpho-sdk/errors`. `retryPromiseLinearBackoff`, re-exported from `@morpho-org/morpho-sdk/utils`, now throws these errors with the last operation failure in `cause` and the total number of attempts in `attempts`: check the error class instead of matching the old `too many retries` and `stopped retrying` messages.
+- Re-export the ERC-3643 token and identity-registry ABIs from the Blue ABI facades.
+
+### Patch Changes
+
+- Round constant wrapped-token exact-amount-out conversions up so callers receive at least their requested token amount.
+- Match liquidation-price calculations to Morpho Blue's two-step health-check rounding so returned thresholds remain exact at integer boundaries.
+- Keep caller-provided market inputs unchanged when calculating liquidation, withdrawable collateral, and loan-to-value values. These helpers now accept frozen inputs without throwing when normalizing numeric strings.
+- Account for debt-share rounding when calculating the maximum assets that can be borrowed while keeping a Morpho Blue position healthy.
+- Realize Vault V2 adapter losses during zero-elapsed accrual, matching the onchain `accrueInterestView` behavior.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+- Skip token permits and Permit2 approvals when the existing direct bundler allowance covers the required amount, while preserving independent Morpho authorization signatures.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.0
+  - @morpho-org/morpho-ts@4.2.0
+  - @morpho-org/midnight-sdk@2.4.0
+  - @morpho-org/blue-sdk-viem@7.3.0
+
+## 9.3.0
+
+### Minor Changes
+
+- Add direct Midnight collateral withdrawals without bundle authorization or token pulls, with snapshot balance and health checks.
+- Deposit, migration, protected Blue supply and Midnight parking-supply builders no longer reject targets without a sufficient dead deposit; the validators, thresholds and error classes stay exported so integrators can run the check themselves; `supplyBlueMakeLend` throws `EmptyBlueParkingMarketError` again on an empty parking market.
+
+  If you moved empty-parking-market handling to `InsufficientDeadSharesError` for 9.2.0, catch `EmptyBlueParkingMarketError` again.
+
+### Patch Changes
+
+- Fix Midnight maker offer-state reads on Tempo and Arc by reading contracts without requiring Multicall3 metadata in the viem chain definition. All reads remain pinned to one block and propagate failures.
+
 ## 9.3.0-next.0
 
 ### Minor Changes

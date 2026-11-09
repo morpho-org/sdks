@@ -79,7 +79,6 @@ import {
   EmptyMidnightTakeableOffersError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
-  InsufficientDeadSharesError,
   InsufficientMidnightWithdrawableLiquidityError,
   InvalidMidnightHexInputError,
   MarketIdMismatchError,
@@ -3369,30 +3368,21 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(NonPositiveInputError);
     });
 
-    test("error: InsufficientDeadSharesError for an empty parking market", async () => {
+    test("error: EmptyBlueParkingMarketError for an empty parking market", async () => {
       const handle = createMockClient(midnightTestChain);
       mockBlueReads(handle, { totalSupplyShares: 0n, deadSupplyShares: 0n });
-      const promise = prepare(handle);
-
-      await expect(promise).rejects.toBeInstanceOf(InsufficientDeadSharesError);
-      await expect(promise).rejects.not.toBeInstanceOf(
+      await expect(prepare(handle)).rejects.toBeInstanceOf(
         EmptyBlueParkingMarketError,
       );
-      await expect(promise).rejects.toMatchObject({
-        entity: [BlueMarketUtils.getMarketId(blueMarket)],
-        reason: "deadShares",
-        observed: 0n,
-        required: MIN_DEAD_SHARES,
-      });
     });
 
-    test("error: InsufficientDeadSharesError one share below the threshold", async () => {
+    test("builds from a non-empty parking market with no dead supply shares", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockBlueReads(handle, { deadSupplyShares: MIN_DEAD_SHARES - 1n });
+      mockBlueReads(handle, { deadSupplyShares: 0n });
 
-      await expect(prepare(handle)).rejects.toBeInstanceOf(
-        InsufficientDeadSharesError,
-      );
+      const output = await prepare(handle);
+
+      expect(output.buildTx().to).toBe(midnightBundlesV2);
     });
 
     test("error: ZeroBlueParkingSharesError", async () => {

@@ -153,6 +153,12 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
         assetPaid: nativeAssetPaid,
         quote: { assetsPaid: action.args.assets },
       };
+    case "blueWithdrawBuyCallback":
+      return {
+        type: "blueWithdraw",
+        requiredExpected: [],
+        quote: { sharesBurned: action.args.shares },
+      };
     case "blueWithdraw": {
       const {
         withdrawAssets,
@@ -524,11 +530,16 @@ const missingQuote = (
  * is unsupported.
  *
  * Account attribution fails closed: `account` is `owner` (or the caller-intended `onBehalf` on
- * `midnightSupplyCollateral` and `midnightRedeem`), never read from the args. An action whose
+ * `midnightSupplyCollateral`, `midnightRedeem` and `blueWithdrawBuyCallback`), never read from the args. An action whose
  * `args.onBehalf` (or
  * `redeem.recipient` on `vaultV2ForceRedeem`) names another account throws
  * {@link LimitAccountMismatchError} — `simulate()` would observe no movement on the limited
  * account.
+ *
+ * `blueWithdrawBuyCallback` uses the existing `blueWithdraw` verification: pass the intended
+ * callback as `onBehalf` and its expected payout as `expected.assetsReceived`. The helper derives
+ * `sharesBurned` from the action and measures the callback's supply shares separately from the
+ * owner's wallet. Its encoded receiver must equal `owner`.
  *
  * For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`; `simulate()` rejects a
  * raw limit whose `account` is not the bundle sender with `SlippageCheckUnavailableError`, because
@@ -642,8 +653,8 @@ const missingQuote = (
  * @param action - The action metadata (`tx.action`) of the transaction to limit.
  * @param options - Limit options.
  * @param options.owner - The connected account: position/share owner and default asset receiver.
- * @param options.onBehalf - Collateral owner for a direct `midnightSupplyCollateral` or credit
- *   owner for `midnightRedeem`; defaults to `owner`. For every other action, including maker
+ * @param options.onBehalf - Callback for `blueWithdrawBuyCallback`, collateral owner for a direct
+ *   `midnightSupplyCollateral` or credit owner for `midnightRedeem`; defaults to `owner`. For every other action, including maker
  *   bundles, a value different from `owner` throws {@link LimitAccountMismatchError}.
  * @param options.receiver - Asset receiver; applies to `vaultV2ForceRedeem` and Midnight redeem
  *   and sell actions, including `midnightSupplyCollateralTakeBorrow`, which must match the encoded
@@ -927,7 +938,7 @@ export const toSimulationLimits = (
   options: {
     /** The connected account: position/share owner and default asset receiver. */
     readonly owner: Address;
-    /** Collateral owner on `midnightSupplyCollateral`, credit owner on `midnightRedeem` — Midnight acts on `onBehalf`, not msg.sender. Any other action, including Midnight sells, throws when it differs from `owner`. Defaults to `owner`. */
+    /** Callback on `blueWithdrawBuyCallback`, collateral owner on `midnightSupplyCollateral`, or credit owner on `midnightRedeem`. Any other action, including Midnight sells, throws when it differs from `owner`. Defaults to `owner`. */
     readonly onBehalf?: Address;
     /**
      * Asset receiver for `vaultV2ForceRedeem`, Midnight redeem and sell actions,
@@ -1049,11 +1060,12 @@ export const toSimulationLimits = (
   }
   const receiver = options.receiver ?? owner;
 
-  // Only direct Midnight calls act on an account other than msg.sender;
+  // Direct callback withdrawals and Midnight calls can act for another account;
   // bundles act for `owner`.
   if (
     action.type !== "midnightSupplyCollateral" &&
     action.type !== "midnightRedeem" &&
+    action.type !== "blueWithdrawBuyCallback" &&
     options.onBehalf !== undefined &&
     !isAddressEqual(options.onBehalf, owner)
   ) {
@@ -1065,7 +1077,8 @@ export const toSimulationLimits = (
   }
   const account =
     action.type === "midnightSupplyCollateral" ||
-    action.type === "midnightRedeem"
+    action.type === "midnightRedeem" ||
+    action.type === "blueWithdrawBuyCallback"
       ? (options.onBehalf ?? owner)
       : owner;
 
@@ -1093,7 +1106,8 @@ export const toSimulationLimits = (
   // The payout is measured on `receiver`, so the encoded receiver must be the
   // intended one; checking the encoded address against itself proves nothing.
   if (
-    action.type === "midnightRedeem" &&
+    (action.type === "midnightRedeem" ||
+      action.type === "blueWithdrawBuyCallback") &&
     !isAddressEqual(action.args.receiver, receiver)
   ) {
     throw new LimitAccountMismatchError({
@@ -1243,6 +1257,11 @@ export const toSimulationLimits = (
         case "blueRepayWithdrawCollateral":
           return {
             type: limitAction.type,
+            marketId: limitAction.args.market as MarketId,
+          };
+        case "blueWithdrawBuyCallback":
+          return {
+            type: "blueWithdraw" as const,
             marketId: limitAction.args.market as MarketId,
           };
         case "midnightSupplyCollateral":

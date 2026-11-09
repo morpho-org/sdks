@@ -1,12 +1,9 @@
 import { MathLib } from "@morpho-org/blue-sdk";
-import { erc20Abi, parseEther, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { DEAD_ADDRESS } from "../../../src/constants.js";
 import {
-  InsufficientDeadSharesError,
   isRequirementApproval,
-  MIN_DEAD_SHARES,
   morphoViemExtension,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
@@ -137,46 +134,5 @@ describe("DepositVaultV2", () => {
       initialState.userSharesBalance,
     );
     expect(finalState.userSharesBalanceInAssets).toBe(netAssets - 1n);
-  });
-
-  test("error: rejects a deposit after the dead deposit is moved away", async ({
-    client,
-  }) => {
-    const vault = KeyrockUsdcVaultV2.address;
-    const deadShares = await client.readContract({
-      address: vault,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [DEAD_ADDRESS],
-    });
-    expect(deadShares).toBeGreaterThanOrEqual(MIN_DEAD_SHARES);
-    await client.impersonateAccount({ address: DEAD_ADDRESS });
-    await client.setBalance({ address: DEAD_ADDRESS, value: parseEther("1") });
-    await client.writeContract({
-      account: DEAD_ADDRESS,
-      address: vault,
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [client.account.address, deadShares],
-    });
-    await client.stopImpersonatingAccount({ address: DEAD_ADDRESS });
-
-    const morpho = client.extend(morphoViemExtension()).morpho;
-    const entity = morpho.vaultV2(vault, mainnet.id);
-    const vaultData = await entity.getData();
-    expect(() =>
-      entity.deposit({
-        userAddress: client.account.address,
-        amount: parseUnits("1000", 6),
-        vaultData,
-      }),
-    ).toThrow(
-      new InsufficientDeadSharesError({
-        entity: [vault],
-        reason: "deadShares",
-        observed: 0n,
-        required: MIN_DEAD_SHARES,
-      }),
-    );
   });
 });

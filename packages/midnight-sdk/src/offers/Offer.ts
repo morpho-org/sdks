@@ -569,6 +569,9 @@ export class Offer {
    * continuous fee and settlement-fee buckets are available locally. Fetch the
    * current `consumed(maker, group)` value separately and pass it as input.
    *
+   * Returns `0n` when Midnight `take` rejects this offer regardless of the
+   * amount; see {@link OfferUtils.getConsumableUnits} for the mirrored checks.
+   *
    * @param params.consumed - Amount already consumed from this offer's group.
    * @param params.timestamp - Timestamp used to compute the market time to maturity.
    * @returns Remaining consumable units accepted by Midnight `take`.

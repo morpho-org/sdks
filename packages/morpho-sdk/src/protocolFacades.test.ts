@@ -1,5 +1,7 @@
 import {
   blueMarketParamsAbi,
+  erc3643Abi,
+  erc3643IdentityRegistryAbi,
   midnightAdapterAbi,
   midnightAdapterFactoryAbi,
   midnightAdapterPriceRatifierV1Abi,
@@ -13,6 +15,8 @@ import {
 } from "@morpho-org/morpho-sdk/abis";
 import { addresses } from "@morpho-org/morpho-sdk/addresses";
 import {
+  erc3643Abi as rawBlueErc3643Abi,
+  erc3643IdentityRegistryAbi as rawBlueErc3643IdentityRegistryAbi,
   marketParamsAbi as rawBlueMarketParamsAbi,
   midnightAdapterAbi as rawMidnightAdapterAbi,
   midnightAdapterFactoryAbi as rawMidnightAdapterFactoryAbi,
@@ -124,9 +128,9 @@ import {
   MidnightMarket,
   VaultV2MidnightAdapter,
 } from "@morpho-org/morpho-sdk/entities";
+import * as unprefixedErrors from "@morpho-org/morpho-sdk/errors";
 import {
   BlueMarketParamsIdMismatchError,
-  BlueUnresolvedBlockNumberError,
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
   InvalidAddressError,
@@ -144,9 +148,6 @@ import {
   InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
-  InvalidPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError,
-  InvalidPositionLossFactorError,
   isBlueUnknownOfFactoryError,
   MalformedTokenMetadataError,
   MidnightRateRatifierV1BoundOverflowError,
@@ -156,6 +157,8 @@ import {
   NonTupleReturnValueError,
   Permit2ExpirationOutOfRangeError,
   RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
   UnknownAbiFunctionError,
   UnknownBlueDataError,
   UnknownBlueFactory,
@@ -165,6 +168,7 @@ import {
   UnknownBlueTokenPriceError,
   UnknownBlueVaultConfigError,
   UnnamedAbiOutputsError,
+  UnresolvedBlockNumberError,
   UnsupportedBlueMarketIrmError,
   UnsupportedBlueVaultV2AdapterError,
   UnsupportedPermitDomainExtensionsError,
@@ -264,6 +268,8 @@ import {
   InvalidPositionLossFactorError as RawInvalidPositionLossFactorError,
   MidnightPositionLib as RawMidnightPositionLib,
   NegativeValueError as RawNegativeValueError,
+  RetriesExhaustedError as RawRetriesExhaustedError,
+  RetryStoppedError as RawRetryStoppedError,
 } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { validateClientChainId as rawValidateClientChainId } from "./actions/requirements/validateClientChainId.js";
@@ -283,6 +289,8 @@ describe("protocol facades", () => {
     [isUndecodableResultError, rawIsUndecodableResultError],
     [validateClientChainId, rawValidateClientChainId],
     [blueMarketParamsAbi, rawBlueMarketParamsAbi],
+    [erc3643Abi, rawBlueErc3643Abi],
+    [erc3643IdentityRegistryAbi, rawBlueErc3643IdentityRegistryAbi],
     [addresses, rawBlueAddresses],
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
     [ERC20_ALLOWANCE_RECIPIENTS, rawBlueErc20AllowanceRecipients],
@@ -309,7 +317,7 @@ describe("protocol facades", () => {
     ],
     [RawBlueInvalidPositionLossFactorError, RawInvalidPositionLossFactorError],
     [BlueMarketParamsIdMismatchError, RawBlueMarketParamsIdMismatchError],
-    [BlueUnresolvedBlockNumberError, RawBlueUnresolvedBlockNumberError],
+    [UnresolvedBlockNumberError, RawBlueUnresolvedBlockNumberError],
     [MalformedTokenMetadataError, RawBlueMalformedTokenMetadataError],
     [MissingPermitDomainNameError, RawBlueMissingPermitDomainNameError],
     [UnknownAbiFunctionError, RawBlueUnknownAbiFunctionError],
@@ -319,13 +327,9 @@ describe("protocol facades", () => {
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],
-    [InvalidPositionAccrualStateError, RawInvalidPositionAccrualStateError],
-    [
-      InvalidPositionAccrualTimestampError,
-      RawInvalidPositionAccrualTimestampError,
-    ],
-    [InvalidPositionLossFactorError, RawInvalidPositionLossFactorError],
     [MidnightPositionLib, RawMidnightPositionLib],
+    [RetriesExhaustedError, RawRetriesExhaustedError],
+    [RetryStoppedError, RawRetryStoppedError],
     [
       RegistryValueAlreadyRegisteredError,
       RawBlueRegistryValueAlreadyRegisteredError,
@@ -538,6 +542,18 @@ describe("protocol facades", () => {
       permit2: true,
       permit2Transfer: true,
     });
+  });
+
+  test("keeps protocol-specific Midnight accrual error names out of the unprefixed facade", () => {
+    expect("InvalidPositionAccrualStateError" in unprefixedErrors).toBe(false);
+    expect("InvalidPositionAccrualTimestampError" in unprefixedErrors).toBe(
+      false,
+    );
+    expect("InvalidPositionLossFactorError" in unprefixedErrors).toBe(false);
+    expect("BlueUnresolvedBlockNumberError" in unprefixedErrors).toBe(false);
+    expect(unprefixedErrors.UnresolvedBlockNumberError).toBe(
+      RawBlueUnresolvedBlockNumberError,
+    );
   });
 
   test("keeps Midnight accrual error aliases identical across facades", () => {

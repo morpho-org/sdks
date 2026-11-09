@@ -1,4 +1,4 @@
-import type { BlockTag, Hex } from "viem";
+import type { Address, BlockTag, Hex } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationInputLimits, SimulationLimits } from "./limits.js";
 import type { SimulationTransaction } from "./types.js";
@@ -18,6 +18,25 @@ export interface StateBlock {
   /** Block timestamp in Unix seconds; the simulated block must not be earlier. */
   readonly timestamp: bigint;
 }
+
+/** Caller-supplied account state in JSON-RPC format, applied before all simulated calls. */
+export interface SimulationAccountOverride {
+  /** Native balance as a hex quantity, for example `"0x0"`. */
+  readonly balance?: Hex;
+  /** Account nonce as a uint64 hex quantity. */
+  readonly nonce?: Hex;
+  /** Replacement bytecode; `"0x"` removes code. */
+  readonly code?: Hex;
+  /** Replace all storage with these 32-byte slot/value pairs. Cannot accompany `stateDiff`. */
+  readonly state?: Readonly<Record<Hex, Hex>>;
+  /** Replace only these 32-byte slot/value pairs. Cannot accompany `state`. */
+  readonly stateDiff?: Readonly<Record<Hex, Hex>>;
+}
+
+/** Account-address map passed unchanged to `eth_simulateV1`; consumers validate its contents. */
+export type SimulationStateOverrides = Readonly<
+  Record<Address, SimulationAccountOverride>
+>;
 
 /**
  * Input to `simulate()`. `mode` defaults to "final".
@@ -48,6 +67,14 @@ export interface SimulateParams {
    * not final there, so the block at that number can change and fail the
    * `parentHash` check. */
   readonly block?: StateBlock;
+  /**
+   * Caller-controlled hypothetical state for all calls in `eth_simulateV1`, in
+   * JSON-RPC format. Contents are not validated or normalized by the SDK.
+   * No overrides are added automatically. Results describe
+   * this overridden state, not necessarily the state at broadcast. Metadata
+   * reads outside `eth_simulateV1` still use the pinned onchain state.
+   */
+  readonly stateOverrides?: SimulationStateOverrides;
   /**
    * Required caller-selected quotes, or the explicit
    * `"none"` opt-out, which skips limit reads and checks, but not final signed-request use checks. Omitted `limits`

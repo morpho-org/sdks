@@ -1,5 +1,5 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
-import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
+import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -10,7 +10,6 @@ import {
   getBundlesTokenRequirements,
   isRequirementApproval,
   isRequirementSignature,
-  Permit2SignatureTransferNonceAlreadyUsedError,
 } from "../../../src/index.js";
 
 const test = createViemTest(mainnet, {
@@ -18,8 +17,7 @@ const test = createViemTest(mainnet, {
   forkBlockNumber: 25_832_676n,
   stepsTracing: false,
 });
-const { usdc } = addressesRegistry[mainnet.id];
-const permit2 = getChainAddress(mainnet.id, "permit2");
+const { usdc, dai } = addressesRegistry[mainnet.id];
 
 describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
   "getBundlesTokenRequirements: %s",
@@ -32,6 +30,65 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
       amount: 1_000_000n,
       deadline: maxUint256,
     } as const;
+
+    describe.each([
+      { token: usdc, useSimplePermit: true, signatureType: "permit" },
+      {
+        token: dai,
+        useSimplePermit: true,
+        signatureType: "erc20Approval",
+      },
+      {
+        token: usdc,
+        useSimplePermit: false,
+        signatureType: "erc20Approval",
+      },
+    ] as const)(
+      "direct allowance: $token, simple permit: $useSimplePermit",
+      (options) => {
+        test("skips covered pulls and resolves funding for insufficient direct allowance", async ({
+          client,
+        }) => {
+          const request = {
+            ...params,
+            ...options,
+            owner: client.account.address,
+            supportSignature: true,
+            supportDeployless: false,
+          };
+          for (const allowance of [
+            params.amount,
+            params.amount + 1n,
+            maxUint256,
+          ]) {
+            await client.approve({
+              address: options.token,
+              args: [spender, allowance],
+            });
+            expect(await getBundlesTokenRequirements(client, request)).toEqual(
+              [],
+            );
+          }
+
+          await client.approve({
+            address: options.token,
+            args: [spender, params.amount - 1n],
+          });
+          expect(
+            (await getBundlesTokenRequirements(client, request)).map(
+              ({ action }) => action.type,
+            ),
+          ).toEqual([options.signatureType]);
+
+          await client.approve({ address: options.token, args: [spender, 0n] });
+          expect(
+            (await getBundlesTokenRequirements(client, request)).map(
+              ({ action }) => action.type,
+            ),
+          ).toEqual([options.signatureType]);
+        });
+      },
+    );
 
     test("default: approves the registered spender and skips a covered pull", async ({
       client,
@@ -75,7 +132,6 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
         ...params,
         owner: client.account.address,
         supportSignature: true,
-        useSimplePermit: true,
         supportDeployless: false,
       });
       expect(requirements).toHaveLength(1);
@@ -120,80 +176,26 @@ describe.each(["blueBundlesV1", "vaultBundlesV1"] as const)(
       ).toBe(nonce + 1n);
     });
 
-    test("behavior: approves canonical Permit2, executes a signature transfer, and rejects nonce reuse", async ({
+    test("behavior: explicitly disabling simple permit approves the bundles spender", async ({
       client,
     }) => {
-      const wordPosition = 12_345n;
-      const bit = 1n << 7n;
-      const nonce = (wordPosition << 8n) | 7n;
-      await client.deal({ erc20: usdc, amount: params.amount });
-      await client.approve({ address: usdc, args: [permit2, 0n] });
+      await client.approve({ address: usdc, args: [spender, 0n] });
       const request = {
         ...params,
         owner: client.account.address,
         supportSignature: true,
-        permit2Nonce: nonce,
+        useSimplePermit: false,
       };
       const requirements = await getBundlesTokenRequirements(client, request);
-      expect(requirements.map(({ action }) => action.type)).toEqual([
-        "erc20Approval",
-        "permit2SignatureTransfer",
-      ]);
-      const [approval, requirement] = requirements;
+      expect(requirements).toHaveLength(1);
+      const [approval] = requirements;
       assert(isRequirementApproval(approval));
-      assert(isRequirementSignature(requirement));
       expect(approval.action.args).toMatchObject({
-        spender: permit2,
+        spender,
         amount: maxUint256,
       });
-      expect(requirement.action.args).toMatchObject({
-        spender,
-        amount: params.amount,
-        nonce,
-      });
       await client.sendTransaction(approval);
-      expect(
-        (await getBundlesTokenRequirements(client, request)).map(
-          ({ action }) => action.type,
-        ),
-      ).toEqual(["permit2SignatureTransfer"]);
-      const signed = await requirement.sign(client, client.account.address);
-      const beforeBalance = await client.balanceOf({
-        erc20: usdc,
-        owner: spender,
-      });
-
-      // Execute as the registered spender to verify Permit2 accepts the fetched nonce and signed domain.
-      await client.setBalance({ address: spender, value: 10n ** 18n });
-      await client.writeContract({
-        account: spender,
-        address: permit2,
-        abi: permit2Abi,
-        functionName: "permitTransferFrom",
-        args: [
-          {
-            permitted: { token: usdc, amount: params.amount },
-            nonce,
-            deadline: params.deadline,
-          },
-          { to: spender, requestedAmount: params.amount },
-          client.account.address,
-          signed.args.signature,
-        ],
-      });
-      expect(await client.balanceOf({ erc20: usdc, owner: spender })).toBe(
-        beforeBalance + params.amount,
-      );
-      const bitmap = await client.readContract({
-        address: permit2,
-        abi: permit2Abi,
-        functionName: "nonceBitmap",
-        args: [client.account.address, wordPosition],
-      });
-      expect(bitmap & bit).toBe(bit);
-      await expect(
-        getBundlesTokenRequirements(client, request),
-      ).rejects.toBeInstanceOf(Permit2SignatureTransferNonceAlreadyUsedError);
+      expect(await getBundlesTokenRequirements(client, request)).toEqual([]);
     });
   },
 );

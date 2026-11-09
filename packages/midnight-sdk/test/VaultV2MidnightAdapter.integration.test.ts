@@ -5,14 +5,14 @@ import {
   vaultV2Abi,
 } from "@morpho-org/morpho-ts/abis";
 import { getErpcForkUrl } from "@morpho-org/test";
+import { testAccount } from "@morpho-org/test/fixtures";
 import {
   advanceVaultV2MidnightFixtureTime,
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
   MAX_MIDNIGHT_ADAPTER_MARKETS,
   takeVaultV2MidnightAdapterOffer,
-  testAccount,
-} from "@morpho-org/test/fixtures";
+} from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   concatHex,

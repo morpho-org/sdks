@@ -62,10 +62,9 @@ const prepared = await morpho.prepareSupply({
   token: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   amount: 1000000n
 })
-// Send approvals and retain any permit/Permit2 signature for this prepared handle.
-// Keep the explicit Permit2 nonce unique and unused for this owner.
+// Send approvals and retain any ERC-2612 permit signature for this prepared handle.
 let requirementSignature
-for (const requirement of await prepared.getRequirements({ permit2Nonce: 42n })) {
+for (const requirement of await prepared.getRequirements()) {
   if ('sign' in requirement) {
     requirementSignature = await requirement.sign(walletClient, userAddress)
   } else {
@@ -96,7 +95,7 @@ Options:
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
 - `presets` (object): `{ earn?: string, borrow?: string }`.
 - `slippageTolerance` (bigint): applied to Morpho Vault V2 flows only. BlueBundlesV1 market writes do not expose share-price bounds.
-- `supportSignature` (boolean): enable SDK permit/permit2 requirements.
+- `supportSignature` (boolean): enable SDK ERC-2612 permit requirements by default; pass `useSimplePermit: false` to `getRequirements` to force direct ERC-20 approvals. Unsupported tokens fall back to direct approvals.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter checks the provider at the start and terminal boundary of each operation. EOA transactions are signed for that chain and verified before broadcast; ERC-4337 preparation, signing, and broadcast execute atomically through WDK with the signing chain bound to the validated context.
@@ -157,15 +156,17 @@ Use `prepareSupply` to deposit through VaultBundlesV1. Supply exactly one of `am
 `nativeAmount`, resolve requirements on the returned handle, then call its `submit` or `quote`.
 The standard WDK `supply` and `quoteSupply` methods use the same VaultBundlesV1 route for
 approved ERC-20 assets or native funding; signed deposits use the prepared handle.
-ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. Permit2 uses SignatureTransfer,
-with an ERC-20 approval to Permit2 and a signed transfer naming VaultBundlesV1 as spender.
+ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. The SDK no longer requests Permit2 funding.
 See [MIGRATION.md](./MIGRATION.md) for migration from the removed legacy supply route.
 
 ## Morpho SDK Requirements
 
-Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
+Morpho SDK actions can require approvals, ERC-2612 permit signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
 
-When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupplyCollateralRequirements` selects Permit2 SignatureTransfer, the Morpho SDK resolves the lowest unused `permit2Nonce` for the account by default. Pass an explicit unused `permit2Nonce` in the optional `RequirementOptions` argument only when concurrent flows for the same owner need to partition nonces themselves; the adapter forwards it unchanged.
+Unsupported ERC-2612 tokens fall back to direct ERC-20 approvals. The legacy `permit2Nonce` option is deprecated and ignored.
+
+Token funding checks the bundles allowance first on every route. If it already covers the amount,
+no token requirement is returned and ERC-2612 support is not probed.
 
 For ERC-4337 accounts you can choose to batch the returned requirement transactions with the final transaction using your account-level flow. For EOA accounts, send requirements before the final operation.
 

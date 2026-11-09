@@ -2,6 +2,7 @@ import { fc, test as propTest } from "@fast-check/vitest";
 import {
   type AccrualVault,
   type AccrualVaultV2,
+  AccrualVaultV2MidnightAdapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   DEAD_ADDRESS,
@@ -319,6 +320,49 @@ describe("validateVaultV2DeadShares", () => {
         field: "absoluteCaps",
       }),
     );
+  });
+
+  test("behavior: skips Midnight adapters while checking Blue adapters", () => {
+    const midnightAdapter = new AccrualVaultV2MidnightAdapter({
+      adapter: {
+        address: V1_ADAPTER,
+        parentVault: IN_KIND_VAULT,
+        skimRecipient: IN_KIND_VAULT,
+        asset: IN_KIND_VAULT,
+        midnight: V1_ADAPTER,
+        marketIds: [],
+        marketData: {},
+        durations: [],
+        durationAllocations: [],
+        maxTtm: 1000n,
+        minRate: 0n,
+        noSalesWithShortfall: false,
+        noSalesBelowFaceValue: false,
+      },
+      markets: [],
+      lastUpdate: 0n,
+    });
+    const vault = inKindVaultV2Data();
+    expect(() =>
+      validateVaultV2DeadShares(
+        withV2({
+          accrualAdapters: [midnightAdapter, ...vault.accrualAdapters],
+        }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateVaultV2DeadShares(
+        withV2({ accrualAdapters: [midnightAdapter], absoluteCaps: {} }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateVaultV2DeadShares(
+        withV2({
+          accrualAdapters: [midnightAdapter, ...vault.accrualAdapters],
+          absoluteCaps: {},
+        }),
+      ),
+    ).toThrow(MissingDeadSharesDataError);
   });
 
   test("error: MissingDeadSharesDataError for an adapter the SDK cannot hydrate", () => {

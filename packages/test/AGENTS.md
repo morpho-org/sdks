@@ -6,9 +6,10 @@
 - `createViemTest(chain, parameters)` should set deterministic defaults such as zero gas and timestamp interval.
 - Extend viem clients through `createAnvilTestClient`; keep helpers like `balanceOf` and `approve` on the test client.
 - BigInts are JSON-serialized in the Vitest setup by adding `BigInt.prototype.toJSON`.
-- Export public entrypoints explicitly: `@morpho-org/test/vitest`, `/fixtures`, `/mock`, `/chaos`, and `/playwright`.
+- Export public entrypoints explicitly: `@morpho-org/test/vitest`, `/fixtures`, `/midnight`, `/mock`, `/chaos`, and `/playwright`.
 - `chaos.ts` owns the JSON-RPC fault proxy and `classifyError`; add new SDK error class names to its `ERROR_CATEGORY_RULES` table.
 - Deterministic fixtures and account helpers stay in `fixtures.ts`.
+- The Vault V2 Midnight adapter fixture is exposed only through `@morpho-org/test/midnight` (`midnight.ts` → `vaultV2MidnightFixture.ts`), which needs the optional `@morpho-org/morpho-ts` peer at 4.3 or later; keep the root barrel and `fixtures.ts` free of morpho-ts imports so they load with any morpho-ts version the package-level peer range accepts.
 - Deterministic accounts come from the standard test mnemonic via `testAccount(index)`.
 - Use `checksumAddress` for generated addresses, e.g. `randomAddress(chainId)`.
 - Trace assertions use `getFunctionCalls` over Anvil `ots_traceTransaction`.

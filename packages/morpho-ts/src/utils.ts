@@ -1,4 +1,8 @@
-import { NegativeValueError } from "./errors.js";
+import {
+  NegativeValueError,
+  RetriesExhaustedError,
+  RetryStoppedError,
+} from "./errors.js";
 import { Time } from "./time/index.js";
 import type { FieldType, PartialDottedKeys } from "./types.js";
 
@@ -326,10 +330,12 @@ export const mergeEntries = <K extends PropertyKey, T>(
  *
  * @param func - Operation to execute until it succeeds or retries are exhausted.
  * @param options - Optional retry settings.
- * @param options.timeout - Base delay in milliseconds multiplied by the retry attempt number.
- * @param options.retries - Maximum number of retry attempts.
- * @param options.onError - Optional hook called after each failure. Return a truthy value to stop retrying.
+ * @param options.timeout - Optional base delay in milliseconds, defaulting to 100, multiplied by the number of failed attempts. Delays occur only before another attempt.
+ * @param options.retries - Optional total attempt budget, defaulting to 8 (not additional retries). The operation is always attempted at least once, including when set to 0.
+ * @param options.onError - Optional hook called after each failure with the error and zero-based attempt index. Return a truthy value to stop retrying; hook failures propagate unchanged.
  * @returns The resolved operation result.
+ * @throws {RetriesExhaustedError} When the attempt budget is exhausted, with the last failure as `cause`.
+ * @throws {RetryStoppedError} When `onError` returns a truthy value, with the last operation failure as `cause`.
  * @example
  * ```ts
  * import { retryPromiseLinearBackoff } from "@morpho-org/morpho-ts";
@@ -351,21 +357,19 @@ export const retryPromiseLinearBackoff = async <R>(
     timeout?: number;
     retries?: number;
     onError?: (error: unknown, index: number) => unknown | Promise<unknown>;
-  },
+  } = {},
 ) => {
   let i = 0;
 
-  do {
+  while (true) {
     try {
       return await func();
     } catch (error) {
-      if (await onError?.(error, i)) throw Error("stopped retrying");
-
-      await Time.wait(timeout * ++i);
+      if (await onError?.(error, i)) throw new RetryStoppedError(i + 1, error);
+      if (!(++i < retries)) throw new RetriesExhaustedError(i, error);
+      await Time.wait(timeout * i);
     }
-  } while (i < retries);
-
-  throw Error("too many retries");
+  }
 };
 
 /**

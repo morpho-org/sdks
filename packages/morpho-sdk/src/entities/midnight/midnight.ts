@@ -48,7 +48,6 @@ import {
   getMidnightBlueBuyCallbackData,
 } from "../../helpers/callback.js";
 import { MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS } from "../../helpers/constant.js";
-import { validateBlueMarketDeadShares } from "../../helpers/deadShares.js";
 import {
   encodeMidnightMarketId,
   wrapMidnightEncoding,
@@ -71,6 +70,7 @@ import {
   AccrualPositionUserMismatchError,
   type ActionRequirement,
   BorrowExceedsSafeLtvError,
+  EmptyBlueParkingMarketError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
@@ -1844,8 +1844,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
    * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
-   * @throws {MissingDeadSharesDataError} when the fetched `blueMarket` snapshot has no `deadSupplyShares`.
-   * @throws {InsufficientDeadSharesError} when `blueMarket` holds fewer than `MIN_DEAD_SHARES` supply shares at `DEAD_ADDRESS`.
+   * @throws {EmptyBlueParkingMarketError} when `blueMarket` has no supply shares.
    * @throws {ZeroBlueParkingSharesError} when `assetsToPark` would mint no supply shares at the current share price (checked at preparation time only).
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group or `callbackSalt` is not 32-byte hex.
@@ -1912,8 +1911,9 @@ export class MorphoMidnight {
           ),
         UnsupportedMarketIrmError,
       ) ?? fetched;
-    // Throws when the parking market lacks a sufficient dead deposit; nothing to return.
-    validateBlueMarketDeadShares(fetched);
+    if (market.totalSupplyShares === 0n) {
+      throw new EmptyBlueParkingMarketError({ marketId: blueMarketId });
+    }
     if (market.toSupplyShares(params.assetsToPark, "Down") === 0n) {
       throw new ZeroBlueParkingSharesError({
         marketId: blueMarketId,

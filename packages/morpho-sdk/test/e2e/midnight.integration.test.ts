@@ -17,6 +17,7 @@ import { type E2eScenario, wrapE2eNative } from "@morpho-org/morpho-test";
 import {
   createE2eMidnightMarket,
   E2E_MIDNIGHT_WALLETS,
+  type E2eMidnightWallet,
   fundE2eMidnightWallets,
   getE2eTakeableOffers,
   postE2eSetterTree,
@@ -119,9 +120,14 @@ const ratifyOffer = async (
     chainId,
     params,
     buy,
-  }: { chainId: number; params: MarketParams; buy: boolean },
+    maker = E2E_MIDNIGHT_WALLETS.A,
+  }: {
+    chainId: number;
+    params: MarketParams;
+    buy: boolean;
+    maker?: Address;
+  },
 ) => {
-  const maker = E2E_MIDNIGHT_WALLETS.A;
   const units = parseEther("1");
   const tree = Tree.create([
     Offer.create({
@@ -143,14 +149,28 @@ const ratifyOffer = async (
 
 const setupMidnight = async (
   client: AnvilTestClient<Chain>,
-  { chainId, buy }: { chainId: number; buy: boolean },
+  {
+    chainId,
+    buy,
+    maker: makerName = "A",
+    maturity,
+  }: {
+    chainId: number;
+    buy: boolean;
+    maker?: E2eMidnightWallet;
+    maturity?: bigint;
+  },
 ) => {
   const midnight = getChainAddress(chainId, "midnight");
   const midnightBundlesV2 = getChainAddress(chainId, "midnightBundlesV2");
-  const { params, marketData } = await createE2eMidnightMarket(client, chainId);
+  const { params, marketData } = await createE2eMidnightMarket(
+    client,
+    chainId,
+    { maturity },
+  );
   const loanToken = params.loanToken;
   const collateralToken = params.collateralParams[0]!.token;
-  const maker = E2E_MIDNIGHT_WALLETS.A;
+  const maker = E2E_MIDNIGHT_WALLETS[makerName];
   const units = parseEther("1");
   const collateralAssets = parseEther("10");
   const offerPrice = TickLib.tickToPrice(offerTick);
@@ -169,7 +189,7 @@ const setupMidnight = async (
 
   await fundE2eMidnightWallets(client, {
     market: params,
-    wallets: { A: { collateralAssets } },
+    wallets: { [makerName]: { collateralAssets } },
     approve: midnight,
   });
   await client.writeContract({
@@ -179,11 +199,16 @@ const setupMidnight = async (
     functionName: "supplyCollateral",
     args: [MarketUtils.toStruct(params), 0n, collateralAssets, maker],
   });
-  const ratifiedOffer = await ratifyOffer(client, { chainId, params, buy });
+  const ratifiedOffer = await ratifyOffer(client, {
+    chainId,
+    params,
+    buy,
+    maker,
+  });
 
   await fundE2eMidnightWallets(client, {
     market: params,
-    wallets: { A: { loanAssets: 4n * units } },
+    wallets: { [makerName]: { loanAssets: 4n * units } },
     approve: midnight,
   });
   return {
@@ -272,6 +297,292 @@ describeE2e(scenario, (test, { chainId }) => {
         args: [MarketUtils.toId(params), taker],
       }),
     ).resolves.toBe(units);
+  });
+
+  test("L2-14 full loan: A lends to B, B repays part, then at maturity repays the rest, A redeems and B withdraws collateral", async ({
+    client,
+  }) => {
+    const latestBlock = await client.getBlock();
+    const now = Time.timestamp();
+    // Offer expiry is checked against wall time, while the fork's block time is pinned.
+    const maturity =
+      (latestBlock.timestamp > now ? latestBlock.timestamp : now) +
+      30n * 24n * 60n * 60n;
+    const {
+      midnight,
+      midnightBundlesV2,
+      loanToken,
+      collateralToken,
+      maker: borrower,
+      units,
+      collateralAssets,
+      params,
+      marketData,
+      ratifiedOffer,
+    } = await setupMidnight(client, {
+      chainId,
+      buy: false,
+      maker: "B",
+      maturity,
+    });
+    const lender = E2E_MIDNIGHT_WALLETS.A;
+    const loanTokenBalance = (account: Address) =>
+      client.readContract({
+        address: loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [account],
+      });
+    const collateralTokenBalance = (account: Address) =>
+      client.readContract({
+        address: collateralToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [account],
+      });
+    const [
+      borrowerCollateralBalanceAfterSetup,
+      midnightCollateralBalanceAfterSetup,
+    ] = await Promise.all([
+      collateralTokenBalance(borrower),
+      collateralTokenBalance(midnight),
+    ]);
+    await fundE2eMidnightWallets(client, {
+      market: params,
+      wallets: { A: { loanAssets: units } },
+    });
+
+    const claimableSettlementFeeBefore = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "claimableSettlementFee",
+      args: [loanToken],
+    });
+    const [
+      lenderLoanBalanceBefore,
+      borrowerLoanBalanceBefore,
+      midnightLoanBalanceBefore,
+      bundlesLoanBalanceBefore,
+    ] = await Promise.all([
+      loanTokenBalance(lender),
+      loanTokenBalance(borrower),
+      loanTokenBalance(midnight),
+      loanTokenBalance(midnightBundlesV2),
+    ]);
+
+    const midnightEntity = client
+      .extend(morphoViemExtension())
+      .morpho.midnight(chainId);
+    const take = midnightEntity.takeLend({
+      marketData,
+      accountAddress: lender,
+      target: { type: "units", units, maxBuyerAssets: units },
+      takeableOffers: [
+        {
+          units,
+          offer: OfferUtils.toStruct({ offer: ratifiedOffer.offer }),
+          ratifierData: ratifiedOffer.ratifierData,
+        },
+      ],
+      maxContinuousFee: maxUint256,
+      deadline: Time.timestamp() + 600n,
+    });
+    await executeTake(client, {
+      take,
+      expectedTarget: midnightBundlesV2,
+      account: lender,
+    });
+    const marketId = MarketUtils.toId(params);
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "credit",
+        args: [marketId, lender],
+      }),
+    ).resolves.toBe(units);
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "debt",
+        args: [marketId, borrower],
+      }),
+    ).resolves.toBe(units);
+
+    const [marketDataAfterLend, borrowerPositionAfterLend] = await Promise.all([
+      midnightEntity.getMarketData(marketId),
+      midnightEntity.getPositionData({
+        marketId,
+        accountAddress: borrower,
+      }),
+    ]);
+    const debtBeforePartialRepay = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "debt",
+      args: [marketId, borrower],
+    });
+    const partialRepay = midnightEntity.repayWithdrawCollateral({
+      accountAddress: borrower,
+      marketData: marketDataAfterLend,
+      positionData: borrowerPositionAfterLend,
+      collateralPrices: [],
+      repay: { type: "assets", assets: units / 2n },
+      deadline: maxUint256,
+    });
+    await executeTake(client, {
+      take: partialRepay,
+      expectedTarget: midnightBundlesV2,
+      account: borrower,
+    });
+    const debtAfterPartialRepay = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "debt",
+      args: [marketId, borrower],
+    });
+    expect(debtAfterPartialRepay).toBe(debtBeforePartialRepay - units / 2n);
+
+    await client.setNextBlockTimestamp({ timestamp: maturity });
+    await client.mine({ blocks: 1 });
+    expect((await client.getBlock()).timestamp).toBeGreaterThanOrEqual(
+      maturity,
+    );
+
+    const [marketDataAtMaturity, borrowerPositionAtMaturity] =
+      await Promise.all([
+        midnightEntity.getMarketData(marketId),
+        midnightEntity.getPositionData({
+          marketId,
+          accountAddress: borrower,
+        }),
+      ]);
+    const fullRepay = midnightEntity.repayWithdrawCollateral({
+      accountAddress: borrower,
+      marketData: marketDataAtMaturity,
+      positionData: borrowerPositionAtMaturity,
+      collateralPrices: [],
+      repay: {
+        type: "full",
+        maxBuyerAssets: borrowerPositionAtMaturity.debt,
+      },
+      deadline: maxUint256,
+    });
+    await executeTake(client, {
+      take: fullRepay,
+      expectedTarget: midnightBundlesV2,
+      account: borrower,
+    });
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "debt",
+        args: [marketId, borrower],
+      }),
+    ).resolves.toBe(0n);
+
+    const lenderPositionAtMaturity = await midnightEntity.getPositionData({
+      marketId,
+      accountAddress: lender,
+    });
+    const redeem = midnightEntity.redeem({
+      accountAddress: lender,
+      positionData: lenderPositionAtMaturity,
+    });
+    await executeTake(client, {
+      take: redeem,
+      expectedTarget: midnight,
+      account: lender,
+    });
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "credit",
+        args: [marketId, lender],
+      }),
+    ).resolves.toBe(0n);
+
+    const [marketDataForCollateralWithdrawal, borrowerPositionForWithdrawal] =
+      await Promise.all([
+        midnightEntity.getMarketData(marketId),
+        midnightEntity.getPositionData({
+          marketId,
+          accountAddress: borrower,
+        }),
+      ]);
+    const withdrawCollateral = midnightEntity.repayWithdrawCollateral({
+      accountAddress: borrower,
+      marketData: marketDataForCollateralWithdrawal,
+      positionData: borrowerPositionForWithdrawal,
+      collateralPrices: [ORACLE_PRICE_SCALE],
+      repay: { type: "assets", assets: 0n },
+      collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+      deadline: maxUint256,
+    });
+    await executeTake(client, {
+      take: withdrawCollateral,
+      expectedTarget: midnightBundlesV2,
+      account: borrower,
+    });
+
+    await expect(
+      client.readContract({
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        args: [marketId, borrower, 0n],
+      }),
+    ).resolves.toBe(0n);
+    await expect(collateralTokenBalance(borrower)).resolves.toBe(
+      borrowerCollateralBalanceAfterSetup + collateralAssets,
+    );
+    await expect(collateralTokenBalance(midnight)).resolves.toBe(
+      midnightCollateralBalanceAfterSetup - collateralAssets,
+    );
+
+    const [
+      lenderLoanBalanceAfter,
+      borrowerLoanBalanceAfter,
+      midnightLoanBalanceAfter,
+      bundlesLoanBalanceAfter,
+    ] = await Promise.all([
+      loanTokenBalance(lender),
+      loanTokenBalance(borrower),
+      loanTokenBalance(midnight),
+      loanTokenBalance(midnightBundlesV2),
+    ]);
+    const lenderLoanDelta = lenderLoanBalanceAfter - lenderLoanBalanceBefore;
+    const borrowerLoanDelta =
+      borrowerLoanBalanceAfter - borrowerLoanBalanceBefore;
+    const midnightLoanDelta =
+      midnightLoanBalanceAfter - midnightLoanBalanceBefore;
+    const bundlesLoanDelta = bundlesLoanBalanceAfter - bundlesLoanBalanceBefore;
+    const finalMarketData = await midnightEntity.getMarketData(marketId);
+    const claimableSettlementFeeAfter = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "claimableSettlementFee",
+      args: [loanToken],
+    });
+    const settlementFeeDelta =
+      claimableSettlementFeeAfter - claimableSettlementFeeBefore;
+
+    expect(
+      lenderLoanDelta +
+        borrowerLoanDelta +
+        midnightLoanDelta +
+        bundlesLoanDelta,
+    ).toBe(0n);
+    expect(bundlesLoanDelta).toBe(0n);
+    expect(midnightLoanDelta).toBeGreaterThanOrEqual(0n);
+    expect(
+      midnightLoanDelta,
+      `continuousFeeCredit=${finalMarketData.continuousFeeCredit}, claimableSettlementFeeDelta=${settlementFeeDelta}`,
+    ).toBe(finalMarketData.continuousFeeCredit + settlementFeeDelta);
+    expect(lenderLoanDelta).toBeGreaterThan(0n);
   });
 
   test("L1-M6 cancels a setter-ratified offer group", async ({ client }) => {

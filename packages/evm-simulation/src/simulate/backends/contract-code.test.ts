@@ -1,4 +1,4 @@
-import { type Address, numberToHex } from "viem";
+import { type Address, getAddress, numberToHex } from "viem";
 import { vi } from "vitest";
 import {
   InvalidSimulationResponseError,
@@ -45,6 +45,183 @@ afterEach(() => {
 });
 
 describe.sequential("assertTransactionTargetsHaveCode", () => {
+  test.each(["", "0X"])(
+    "rejects an empty-code spelling %j on targets and delegates",
+    async (code) => {
+      for (const delegated of [false, true]) {
+        await expect(
+          assertTransactionTargetsHaveCode({
+            ...baseParams,
+            client: client(),
+            transactions: [tx(TARGET, "0x12")],
+            stateOverrides: {
+              [TARGET]: {
+                code: delegated ? `0xef0100${OTHER.slice(2)}` : code,
+              },
+              ...(delegated ? { [OTHER]: { code } } : {}),
+            } as never,
+          }),
+        ).rejects.toBeInstanceOf(SimulationValidationError);
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("matches target and delegate overrides regardless of address casing", async () => {
+    const target = getAddress("0xABcdEFABcdEFabcdEfAbCdefabcdeFABcDEFabCD");
+    const delegate = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+    await expect(
+      assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(target, "0x12")],
+        stateOverrides: {
+          [target.toLowerCase()]: { code: `0xef0100${delegate.slice(2)}` },
+          [delegate.toLowerCase()]: { code: "0x6000" },
+        } as const,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { override: { balance: "0x1" }, fetched: [TARGET, OTHER] },
+    { override: { code: "0x6000" }, fetched: [OTHER] },
+  ] as const)(
+    "fetches code only for targets without an explicit code override: %#",
+    async ({ override, fetched }) => {
+      fetchMock.mockImplementation(async () => rpc("0x6000"));
+      await assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(TARGET, "0x12"), tx(OTHER, "0x12")],
+        stateOverrides: { [TARGET]: override },
+      });
+      expect(
+        getCodeCalls().map(
+          ([, init]) => JSON.parse(String(init?.body)).params[0],
+        ),
+      ).toEqual(fetched);
+    },
+  );
+
+  test.each([
+    { delegateCode: "0x6000", onchainCode: "0x", succeeds: true },
+    { delegateCode: "0x", onchainCode: "0x6000", succeeds: false },
+    { delegateCode: undefined, onchainCode: "0x6000", succeeds: true },
+    { delegateCode: undefined, onchainCode: "0x", succeeds: false },
+  ] as const)(
+    "checks the effective code behind a delegation: %#",
+    async ({ delegateCode, onchainCode, succeeds }) => {
+      fetchMock.mockImplementation(async () => rpc(onchainCode));
+      const result = assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(TARGET, "0x12")],
+        stateOverrides: {
+          [TARGET]: { code: `0xef0100${OTHER.slice(2)}` },
+          ...(delegateCode !== undefined && {
+            [OTHER]: { code: delegateCode },
+          }),
+        },
+      });
+      if (succeeds) await expect(result).resolves.toBeUndefined();
+      else
+        await expect(result).rejects.toBeInstanceOf(SimulationValidationError);
+      expect(
+        getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
+      ).toEqual(
+        delegateCode !== undefined
+          ? []
+          : [[OTHER, numberToHex(baseParams.blockNumber)]],
+      );
+    },
+  );
+
+  test("uses explicit code overrides without an eth_getCode lookup", async () => {
+    await expect(
+      assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(TARGET, "0x12")],
+        stateOverrides: { [TARGET]: { code: "0x6000" } },
+      }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(
+      assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(TARGET, "0x12")],
+        stateOverrides: { [TARGET]: { code: "0x" } },
+      }),
+    ).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { delegateCode: "0x6000", succeeds: true },
+    { delegateCode: "0x", succeeds: false },
+  ] as const)(
+    "checks onchain delegation without state overrides: %#",
+    async ({ delegateCode, succeeds }) => {
+      fetchMock.mockImplementation(async (_url, init) =>
+        rpc(
+          JSON.parse(String(init?.body)).params[0] === TARGET
+            ? `0xef0100${OTHER.slice(2)}`
+            : delegateCode,
+        ),
+      );
+      const result = assertTransactionTargetsHaveCode({
+        ...baseParams,
+        client: client(),
+        transactions: [tx(TARGET, "0x12")],
+      });
+      if (succeeds) await expect(result).resolves.toBeUndefined();
+      else
+        await expect(result).rejects.toBeInstanceOf(SimulationValidationError);
+      expect(
+        getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
+      ).toEqual([
+        [TARGET, numberToHex(baseParams.blockNumber)],
+        [OTHER, numberToHex(baseParams.blockNumber)],
+      ]);
+    },
+  );
+
+  test.each([
+    {
+      reply: () => new Response("unavailable", { status: 500 }),
+      error: RpcTransportError,
+    },
+    {
+      reply: () => new Response("<html>ok</html>"),
+      error: InvalidSimulationResponseError,
+    },
+  ])(
+    "preserves a failed onchain delegate read's error: %#",
+    async ({ reply, error }) => {
+      fetchMock.mockImplementation(async (_url, init) =>
+        JSON.parse(String(init?.body)).params[0] === TARGET
+          ? rpc(`0xef0100${OTHER.slice(2)}`)
+          : reply(),
+      );
+      await expect(
+        assertTransactionTargetsHaveCode({
+          ...baseParams,
+          client: client(),
+          transactions: [tx(TARGET, "0x12")],
+        }),
+      ).rejects.toBeInstanceOf(error);
+      expect(
+        getCodeCalls().map(([, init]) => JSON.parse(String(init?.body)).params),
+      ).toEqual([
+        [TARGET, numberToHex(baseParams.blockNumber)],
+        [OTHER, numberToHex(baseParams.blockNumber)],
+      ]);
+    },
+  );
+
   test("default: resolves when every calldata target holds code", async () => {
     fetchMock.mockImplementation(async () => rpc("0x6000"));
     await expect(

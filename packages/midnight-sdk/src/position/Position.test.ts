@@ -4,11 +4,13 @@ import {
   MathLib,
   InvalidPositionAccrualTimestampError as SharedPositionAccrualTimestampError,
 } from "@morpho-org/morpho-ts";
+import type { Hash } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { addresses, createFixtures } from "../__test__/fixtures.js";
 import { CBP } from "../constants.js";
 import {
+  InvalidMarketParameterError,
   InvalidPositionAccrualStateError,
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
@@ -73,6 +75,29 @@ describe("AccrualPosition", () => {
       position.getCollateralBalanceByToken(addresses.collateralToken),
     ).toBe(123n);
     expect(position.getCollateralBalanceByIndex(1)).toBeUndefined();
+  });
+
+  test("behavior: accepts a position carrying the same market id", () => {
+    const position = new AccrualPosition(
+      basePositionInput({
+        marketId: `0x${marketId.slice(2).toUpperCase()}` as Hash,
+      }),
+      baseMarketInput(),
+    );
+
+    expect(position.marketId).toBe(marketId);
+  });
+
+  test("error: InvalidMarketParameterError when the position carries another market id", () => {
+    const otherMarketId = `0x${"11".repeat(32)}` as const;
+
+    expect(
+      () =>
+        new AccrualPosition(
+          basePositionInput({ marketId: otherMarketId }),
+          baseMarketInput(),
+        ),
+    ).toThrow(InvalidMarketParameterError);
   });
 });
 

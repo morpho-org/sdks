@@ -40,3 +40,9 @@ export const vaultV2Test = createViemTest(base, {
   pruneHistory: false,
   stepsTracing: false,
 });
+
+/** This test runs on a Base fork at block 53,477,252. */
+export const erc3643Test = createViemTest(base, {
+  forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
+  forkBlockNumber: 53_477_252,
+});

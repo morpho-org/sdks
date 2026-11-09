@@ -373,10 +373,10 @@ describeActors(blueSupplyScenario, (test, chainId) => {
 });
 
 describeActors(vaultV2Scenario, (test, chainId) => {
-  test("Vault V2: a previewed deposit (Permit2 signature or ERC-20 approval) and a final permit-signed redeem match their execution", async ({
+  test("Vault V2: a previewed ERC-20 approval deposit and a final permit-signed redeem match their execution", async ({
     client,
   }) => {
-    const { vaultV2Factory, permit2 } = getChainAddresses(chainId);
+    const { vaultV2Factory } = getChainAddresses(chainId);
     const asset = getE2eAsset(chainId);
     await installE2eAsset(client, chainId);
     const user = client.account.address;
@@ -408,15 +408,15 @@ describeActors(vaultV2Scenario, (test, chainId) => {
       userAddress: user,
       vaultData: await seededVaultData(client, vaultV2),
     });
-    const depositRequirements = await deposit.getRequirements();
+    const depositRequirements = await deposit.getRequirements({
+      useSimplePermit: false,
+    });
     const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
     const authorizations = toSimulationAuthorizations({
       owner: user,
       requirements: depositRequirements,
     });
-    expect(authorizations.at(-1)?.type).toBe(
-      permit2 == null ? "erc20Approval" : "permit2SignatureTransfer",
-    );
+    expect(authorizations.at(-1)?.type).toBe("erc20Approval");
     const depositQuote = { assetsPaid: assets, sharesMinted: shares };
     const depositResult = await simulate(configFor(client, chainId), {
       chainId,

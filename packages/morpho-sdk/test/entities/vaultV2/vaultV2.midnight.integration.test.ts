@@ -12,13 +12,13 @@ import {
 } from "@morpho-org/midnight-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import { testAccount } from "@morpho-org/test/fixtures";
 import {
   advanceVaultV2MidnightFixtureTime,
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
   takeVaultV2MidnightAdapterOffer,
-  testAccount,
-} from "@morpho-org/test/fixtures";
+} from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -45,7 +45,6 @@ import {
 } from "../../../src/index.js";
 import {
   deployMorphoMarketV1AdapterV2,
-  seedVaultV2DeadDeposits,
   submitAndAcceptVaultV2Call,
 } from "../../helpers/vaultV2.js";
 
@@ -109,10 +108,7 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
   }) => {
     const { vault } = await setUpMixedVault(client);
     const entity = vaultEntity(client, vault);
-    const vaultData = await seedVaultV2DeadDeposits(
-      client as AnvilTestClient,
-      entity,
-    );
+    const vaultData = await entity.getData();
     const userAddress = client.account.address;
     const amount = parseUnits("100", 6);
     await client.deal({ erc20: usdc, amount });
@@ -183,10 +179,7 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
       functionName: "setMaxRate",
       args: [MathLib.WAD / Time.s.from.y(1n)],
     });
-    const seededVaultData = await seedVaultV2DeadDeposits(
-      client as AnvilTestClient,
-      entity,
-    );
+    const initialVaultData = await entity.getData();
     const amount = parseUnits("100", 6);
     await client.deal({ erc20: usdc, amount: 2n * amount });
     await execute(
@@ -194,7 +187,7 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
       entity.deposit({
         amount,
         userAddress,
-        vaultData: seededVaultData,
+        vaultData: initialVaultData,
       }),
     );
 

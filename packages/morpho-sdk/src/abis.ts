@@ -6,6 +6,8 @@ export {
   blueAbi,
   blueOracleAbi,
   erc2612Abi,
+  erc3643Abi,
+  erc3643IdentityRegistryAbi,
   erc5267Abi,
   metaMorphoAbi,
   metaMorphoFactoryAbi,
@@ -33,6 +35,7 @@ export {
   wstEthAbi,
 } from "@morpho-org/blue-sdk-viem";
 export {
+  blueBuyCallbackAbi as midnightBlueBuyCallbackAbi,
   blueBuyCallbackFactoryAbi as midnightBlueBuyCallbackFactoryAbi,
   ecrecoverAuthorizerAbi as midnightEcrecoverAuthorizerAbi,
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,

@@ -6540,6 +6540,351 @@ describe("VaultV2BlueReallocationData penalty-aware operation planning", () => {
     ]);
   });
 
+  describe("physical-balance penalty refinement", () => {
+    const penalty = MathLib.WAD / 50n;
+    const options = {
+      timestamp: TIMESTAMP,
+      capAccrualBuffer: 0n,
+      allocatorCapHeadroom: 0n,
+      maxPenalty: MathLib.WAD,
+    };
+    const makePaidIdleFixture = (overrides: FixtureOptions = {}) =>
+      makeFixture({
+        sourceSupply: 0n,
+        targetSupply: 1_000n,
+        targetBorrow: 995n,
+        blueBalances: { [LOAN_TOKEN]: 5n },
+        idle: 200n,
+        canPullFromMarket: false,
+        penalty,
+        ...overrides,
+      }).data;
+
+    test.each([
+      { amount: 53n, referralFeePct: 0n },
+      { amount: 52n, referralFeePct: MathLib.WAD / 50n },
+      { amount: 40n, referralFeePct: MathLib.WAD / 4n },
+    ])(
+      "behavior: finds the one-unit refinance penalty with $amount principal",
+      ({ amount, referralFeePct }) => {
+        const data = makePaidIdleFixture();
+        const before = data.clone();
+        const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+          ...options,
+          operation: { type: "refinance", amount, referralFeePct },
+        });
+
+        expect(getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct)).toBe(
+          53n - amount,
+        );
+        expect(result.reallocations).toEqual([
+          expect.objectContaining({
+            assets: 50n,
+            penalty,
+            from: { type: "idle" },
+          }),
+        ]);
+        expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(1n);
+        expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(
+          1_050n,
+        );
+        expect(result.data.getVault(VAULT).assetBalance).toBe(151n);
+        expect(result.data).not.toBe(data);
+        expect(data).toStrictEqual(before);
+        expect(
+          data.computeVaultV2BlueReallocations(targetParams.id, {
+            ...options,
+            operation: { type: "refinance", amount, referralFeePct },
+          }),
+        ).toStrictEqual(result);
+      },
+    );
+
+    test.each([49n, 52n, 101n])(
+      "behavior: retains the baseline when the retry only reallocates %s assets",
+      (retryAssets) => {
+        const data = makePaidIdleFixture();
+        let freePasses = 0;
+        let baselineData: VaultV2BlueReallocationData | undefined;
+        const passSpy = vi.spyOn(
+          VaultV2BlueReallocationData.prototype as unknown as {
+            computeVaultV2BlueReallocationsAtUtilizationInPlace: (
+              ...args: never[]
+            ) => {
+              readonly data: VaultV2BlueReallocationData;
+              readonly reallocations: readonly VaultV2BlueReallocation[];
+            };
+          },
+          "computeVaultV2BlueReallocationsAtUtilizationInPlace",
+        );
+        passSpy.mockImplementation(function (
+          this: VaultV2BlueReallocationData,
+          ...args
+        ) {
+          const input = args[0] as unknown as {
+            penalty?: bigint;
+            maxAssets?: bigint;
+          };
+          if (input.penalty === 0n) freePasses++;
+          const result = originalComputeAtUtilization.call(
+            this,
+            ...((freePasses > 2 && input.penalty === penalty
+              ? [{ ...input, maxAssets: retryAssets }]
+              : args) as never[]),
+          ) as {
+            readonly data: VaultV2BlueReallocationData;
+            readonly reallocations: readonly VaultV2BlueReallocation[];
+          };
+          if (
+            freePasses === 2 &&
+            result.reallocations.length === 1 &&
+            result.reallocations[0]?.assets === 52n
+          )
+            baselineData = result.data;
+          return result;
+        });
+        try {
+          const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+            ...options,
+            operation: { type: "refinance", amount: 53n },
+          });
+          expect(freePasses).toBe(4);
+          expect(result.reallocations.map(({ assets }) => assets)).toEqual([
+            52n,
+          ]);
+          expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(2n);
+          expect(baselineData).toBeDefined();
+          expect(result.data).toBe(baselineData);
+        } finally {
+          passSpy.mockRestore();
+        }
+      },
+    );
+
+    test("behavior: includes free idle before sizing the paid retry", () => {
+      const data = addSecondVault(
+        makePaidIdleFixture({ penalty: 0n, idle: 2n }),
+        {
+          idle: 200n,
+          penalty,
+        },
+      );
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        ...options,
+        operation: { type: "refinance", amount: 55n },
+      });
+      expect(
+        result.reallocations.map(({ assets, penalty: rate }) => [assets, rate]),
+      ).toEqual([
+        [2n, 0n],
+        [50n, penalty],
+      ]);
+      expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(1n);
+      expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(
+        1_052n,
+      );
+    });
+
+    test("behavior: leaves discovery and missing-balance planning unchanged", () => {
+      const data = makePaidIdleFixture({ blueBalances: undefined });
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        ...options,
+        operation: { type: "refinance", amount: 53n },
+      });
+      expect(data.blueBalances).not.toHaveProperty(LOAN_TOKEN);
+      expect(result.reallocations.map(({ assets }) => assets)).toEqual([52n]);
+      expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(2n);
+      const discovery = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        options,
+      );
+      expect(discovery.reallocations.map(({ assets }) => assets)).toEqual([
+        200n,
+      ]);
+    });
+
+    test("behavior: reuses a normalized single-use vault allowlist and headroom", () => {
+      const data = makePaidIdleFixture({ allocatorTargetCap: 100n });
+      const reallocatableVaults = (function* (): Generator<Address> {
+        yield VAULT;
+      })();
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        ...options,
+        reallocatableVaults,
+        allocatorCapHeadroom: MathLib.WAD / 10n,
+        operation: { type: "refinance", amount: 53n },
+      });
+      expect(result.reallocations).toEqual([
+        expect.objectContaining({ vault: VAULT, assets: 50n, penalty }),
+      ]);
+      expect(result.data.getVault(VAULT).assetBalance).toBe(151n);
+    });
+
+    test.each([
+      { rate: MathLib.WAD / 2n, balance: 2n, assets: 4n },
+      { rate: (3n * MathLib.WAD) / 4n, balance: 6n, assets: 8n },
+      { rate: (99n * MathLib.WAD) / 100n, balance: 198n, assets: 200n },
+    ])(
+      "behavior: preserves feasible refinance plans at high rate $rate",
+      ({ rate, balance, assets: expectedAssets }) => {
+        const data = makePaidIdleFixture({
+          targetBorrow: 1_000n,
+          blueBalances: { [LOAN_TOKEN]: balance },
+          penalty: rate,
+        });
+        const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+          ...options,
+          operation: { type: "refinance", amount: 2n },
+        });
+        expect(result.reallocations.map(({ assets }) => assets)).toEqual([
+          expectedAssets,
+        ]);
+        expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(
+          balance,
+        );
+        expect(expectedAssets).toBe(2n + balance);
+      },
+    );
+
+    test.each(["borrow", "withdraw", "refinance"] as const)(
+      "behavior: funds mixed market/idle %s reallocations and the penalty flash loan",
+      (type) => {
+        const data = makePaidIdleFixture({
+          sourceSupply: 50n,
+          sourceAdapter: TARGET_ADAPTER,
+          targetCaps: [
+            { absoluteCap: 110n, relativeCap: MathLib.WAD },
+            { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+            { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          ],
+          idle: 60n,
+          canPullFromMarket: true,
+          blueBalances: { [LOAN_TOKEN]: 55n },
+        });
+        const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+          ...options,
+          operation: { type, amount: 100n },
+        });
+        const charged = getBlueBundlesV1PenaltyAssets(result.reallocations);
+        const idle = result.reallocations.reduce(
+          (total, leg) => total + (leg.from.type === "idle" ? leg.assets : 0n),
+          0n,
+        );
+        const marketAssets = result.reallocations.reduce(
+          (total, leg) =>
+            total + (leg.from.type === "market" ? leg.assets : 0n),
+          0n,
+        );
+        const debtPenalty = type === "refinance" ? charged : 0n;
+        expect(marketAssets).toBe(type === "refinance" ? 38n : 35n);
+        expect(charged).toBe(3n);
+        expect(charged + marketAssets).toBeLessThanOrEqual(55n);
+        expect(55n + idle).toBeGreaterThanOrEqual(100n + debtPenalty + charged);
+        expect(5n + marketAssets + idle).toBeGreaterThanOrEqual(
+          100n + debtPenalty,
+        );
+      },
+    );
+
+    test("behavior: preserves the multi-vault dust-tier limitation", () => {
+      const data = addSecondVault(
+        makePaidIdleFixture({
+          penalty: MathLib.WAD / 100n,
+          idle: 25n,
+          targetBorrow: 1_000n,
+          blueBalances: { [LOAN_TOKEN]: 100n },
+        }),
+        { idle: 100n, penalty },
+      );
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        ...options,
+        operation: { type: "withdraw", amount: 26n },
+      });
+      expect(result.reallocations.map(({ assets }) => assets)).toEqual([
+        25n,
+        1n,
+      ]);
+      expect(getBlueBundlesV1PenaltyAssets(result.reallocations)).toBe(2n);
+    });
+
+    test.each(["borrow", "withdraw", "refinance"] as const)(
+      "behavior: checks %s plans against an independent idle-only integer oracle",
+      (type) => {
+        for (const rate of [
+          0n,
+          1n,
+          MathLib.WAD / 100n,
+          penalty,
+          MathLib.WAD / 10n,
+          MathLib.WAD / 2n - 1n,
+          MathLib.WAD / 2n,
+          MathLib.WAD - 1n,
+          MathLib.WAD,
+        ]) {
+          for (const amount of [1n, 10n, 49n, 50n, 51n, 52n, 53n, 54n, 99n]) {
+            for (const balance of [0n, 5n, 20n, 1_000n]) {
+              const local = balance === 0n ? 0n : 5n;
+              const referralFeePct =
+                type === "refinance" ? MathLib.WAD / 50n : 0n;
+              const fee =
+                (amount * referralFeePct) / (MathLib.WAD - referralFeePct);
+              let minimumPenalty: bigint | undefined;
+              for (let assets = 0n; assets <= 200n; assets++) {
+                const charged =
+                  (assets * rate + MathLib.WAD - 1n) / MathLib.WAD;
+                const debtPenalty = type === "refinance" ? charged : 0n;
+                if (
+                  local + assets < amount + fee + debtPenalty ||
+                  charged > balance ||
+                  balance + assets < amount + fee + debtPenalty + charged ||
+                  (type !== "refinance" && charged > amount)
+                )
+                  continue;
+                if (minimumPenalty == null || charged < minimumPenalty)
+                  minimumPenalty = charged;
+              }
+              const data = makePaidIdleFixture({
+                targetBorrow: 1_000n - local,
+                blueBalances: { [LOAN_TOKEN]: balance },
+                penalty: rate,
+              });
+              const compute = () =>
+                data.computeVaultV2BlueReallocations(targetParams.id, {
+                  ...options,
+                  operation: { type, amount, referralFeePct },
+                });
+              if (minimumPenalty == null) {
+                expect(compute).toThrow(InsufficientSharedLiquidityError);
+                continue;
+              }
+              const result = compute();
+              const assets = result.reallocations.reduce(
+                (total, leg) => total + leg.assets,
+                0n,
+              );
+              const charged = result.reallocations.reduce(
+                (total, leg) =>
+                  total +
+                  (leg.assets * leg.penalty + MathLib.WAD - 1n) / MathLib.WAD,
+                0n,
+              );
+              const debtPenalty = type === "refinance" ? charged : 0n;
+              expect(charged).toBe(minimumPenalty);
+              expect(charged).toBeLessThanOrEqual(balance);
+              expect(local + assets).toBeGreaterThanOrEqual(
+                amount + fee + debtPenalty,
+              );
+              expect(balance + assets).toBeGreaterThanOrEqual(
+                amount + fee + debtPenalty + charged,
+              );
+              expect(assets).toBeLessThanOrEqual(200n);
+            }
+          }
+        }
+      },
+    );
+  });
+
   test("uses one paid pass when the first refinance budget covers", () => {
     const penalty = MathLib.WAD / 10n;
     const { data } = makeFixture({

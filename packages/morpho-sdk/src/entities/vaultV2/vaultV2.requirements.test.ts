@@ -1,5 +1,5 @@
-import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
-import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
+import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
+import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
@@ -10,8 +10,11 @@ import {
   type Address,
   decodeFunctionData,
   erc20Abi,
+  getTypesForEIP712Domain,
+  hashDomain,
   maxUint256,
   serializeSignature,
+  type TypedData,
   toHex,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -51,6 +54,45 @@ const countAllowanceReads = (
     const [request] = (call.params ?? []) as readonly [{ data?: string }];
     return request?.data?.startsWith(ALLOWANCE_SELECTOR) === true;
   }).length;
+
+const mockAssetPermitMetadata = (
+  handle: ReturnType<typeof createMockClient>,
+) => {
+  mockRead(handle, {
+    address: IN_KIND_ASSET,
+    abi: erc20Abi,
+    functionName: "decimals",
+    result: 18,
+  });
+  mockRead(handle, {
+    address: IN_KIND_ASSET,
+    abi: erc20Abi,
+    functionName: "name",
+    result: "Token",
+  });
+  mockRead(handle, {
+    address: IN_KIND_ASSET,
+    abi: erc20Abi,
+    functionName: "symbol",
+    result: "TKN",
+  });
+  handle.dispatch.set(`${IN_KIND_ASSET.toLowerCase()}|0x84b0196e`, "0x");
+  const domain = {
+    name: "Token",
+    version: "1",
+    chainId: mainnet.id,
+    verifyingContract: IN_KIND_ASSET,
+  };
+  mockRead(handle, {
+    address: IN_KIND_ASSET,
+    abi: erc2612Abi,
+    functionName: "DOMAIN_SEPARATOR",
+    result: hashDomain<TypedData>({
+      domain,
+      types: { EIP712Domain: getTypesForEIP712Domain({ domain }) },
+    }),
+  });
+};
 
 const prepareDeposit = (handle: ReturnType<typeof createMockClient>) =>
   handle.client
@@ -115,17 +157,17 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 
   test("behavior: concurrent options share a signature while later reads refresh its nonce", async () => {
     const handle = createMockClient(mainnet);
-    const permit2 = getChainAddress(mainnet.id, "permit2");
+    mockAssetPermitMetadata(handle);
     mockRead(handle, {
       address: IN_KIND_ASSET,
       abi: erc20Abi,
       functionName: "allowance",
-      result: amount,
+      result: 0n,
     });
     mockRead(handle, {
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "nonceBitmap",
+      address: IN_KIND_ASSET,
+      abi: erc2612Abi,
+      functionName: "nonces",
       result: 0n,
     });
     const deposit = handle.client
@@ -138,14 +180,14 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       });
 
     const [first, concurrent] = await Promise.all([
-      deposit.getRequirements({ permit2Nonce: 0n }),
-      deposit.getRequirements({ useSimplePermit: true, permit2Nonce: 1n }),
+      deposit.getRequirements({ useSimplePermit: true }),
+      deposit.getRequirements(),
     ]);
     expect(concurrent).toBe(first);
     expect(countAllowanceReads(handle)).toBe(1);
     const requirement = first.find(isRequirementSignature);
-    if (requirement?.action.type !== "permit2SignatureTransfer") {
-      throw new Error("Permit2 SignatureTransfer requirement not found");
+    if (requirement?.action.type !== "permit") {
+      throw new Error("ERC-2612 requirement not found");
     }
     const signature = {
       action: requirement.action,
@@ -153,7 +195,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
         owner: IN_KIND_USER,
         asset: IN_KIND_ASSET,
         amount,
-        nonce: requirement.action.args.nonce,
+        nonce: requirement.action.args.nonce ?? 0n,
         deadline: requirement.action.args.deadline,
         signature: serializeSignature({
           r: toHex(1n, { size: 32 }),
@@ -167,20 +209,20 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 
     // The old nonce is now consumed, so the next read must use the new options and live state.
     mockRead(handle, {
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "nonceBitmap",
+      address: IN_KIND_ASSET,
+      abi: erc2612Abi,
+      functionName: "nonces",
       result: 1n,
     });
-    const refreshed = await deposit.getRequirements({ permit2Nonce: 1n });
+    const refreshed = await deposit.getRequirements({ useSimplePermit: true });
     const nextRequirement = refreshed.find(isRequirementSignature);
-    if (nextRequirement?.action.type !== "permit2SignatureTransfer") {
-      throw new Error("Permit2 SignatureTransfer requirement not found");
+    if (nextRequirement?.action.type !== "permit") {
+      throw new Error("ERC-2612 requirement not found");
     }
     const nextAction = nextRequirement.action;
     expect(nextAction.args.nonce).toBe(1n);
     expect(countAllowanceReads(handle)).toBe(2);
-    // The nonce is onchain state Permit2 verifies at execution, so the earlier
+    // The nonce is onchain state the token verifies at execution, so the earlier
     // signature still finalizes.
     expect(() => deposit.buildTx([signature])).not.toThrow();
     expect(() =>
@@ -194,9 +236,9 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const permit2 = getChainAddress(mainnet.id, "permit2");
     const makeVault = () => {
       const handle = createMockClient(mainnet);
+      mockAssetPermitMetadata(handle);
       mockRead(handle, {
         address: IN_KIND_ASSET,
         abi: erc20Abi,
@@ -204,9 +246,9 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
         result: 0n,
       });
       mockRead(handle, {
-        address: permit2,
-        abi: permit2Abi,
-        functionName: "nonceBitmap",
+        address: IN_KIND_ASSET,
+        abi: erc2612Abi,
+        functionName: "nonces",
         result: 0n,
       });
       return handle.client
@@ -221,11 +263,11 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
     };
     const depositA = makeVault().deposit(params);
 
-    const requirement = (await depositA.getRequirements()).find(
-      isRequirementSignature,
-    );
-    if (requirement?.action.type !== "permit2SignatureTransfer") {
-      throw new Error("Permit2 SignatureTransfer requirement not found");
+    const requirement = (
+      await depositA.getRequirements({ useSimplePermit: true })
+    ).find(isRequirementSignature);
+    if (requirement?.action.type !== "permit") {
+      throw new Error("ERC-2612 requirement not found");
     }
     const signature = await requirement.sign(signerWalletClient, signerAddress);
 
@@ -254,8 +296,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 
   test("behavior: snapshots the owner and asset used by the prepared handle", async () => {
     const handle = createMockClient(mainnet);
-    const { permit2 } = getChainAddresses(mainnet.id);
-    if (permit2 == null) throw new Error("Permit2 is not registered");
+    mockAssetPermitMetadata(handle);
     mockRead(handle, {
       address: IN_KIND_ASSET,
       abi: erc20Abi,
@@ -263,9 +304,9 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       result: 0n,
     });
     mockRead(handle, {
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "nonceBitmap",
+      address: IN_KIND_ASSET,
+      abi: erc2612Abi,
+      functionName: "nonces",
       result: 0n,
     });
     const vault = handle.client
@@ -285,25 +326,27 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
     params.userAddress = MUTATED_USER;
     expect(Reflect.set(params.vaultData, "asset", MUTATED_ASSET)).toBe(true);
 
-    const requirements = await deposit.getRequirements({ permit2Nonce: 0n });
+    const requirements = await deposit.getRequirements({
+      useSimplePermit: true,
+    });
     const signatureRequirement = requirements.find(isRequirementSignature);
-    if (signatureRequirement?.action.type !== "permit2SignatureTransfer") {
-      throw new Error("Permit2 SignatureTransfer requirement not found");
+    if (signatureRequirement?.action.type !== "permit") {
+      throw new Error("ERC-2612 requirement not found");
     }
     expect(
       expectReadCall(handle, {
         address: IN_KIND_ASSET,
-        abi: erc20Abi,
-        functionName: "allowance",
+        abi: erc2612Abi,
+        functionName: "nonces",
       })[0]?.args,
-    ).toEqual([IN_KIND_USER, permit2]);
+    ).toEqual([IN_KIND_USER]);
 
     const requirementSignature = {
       args: {
         owner: IN_KIND_USER,
         asset: IN_KIND_ASSET,
         amount,
-        nonce: signatureRequirement.action.args.nonce,
+        nonce: signatureRequirement.action.args.nonce ?? 0n,
         deadline: signatureRequirement.action.args.deadline,
         signature: serializeSignature({
           r: toHex(1n, { size: 32 }),

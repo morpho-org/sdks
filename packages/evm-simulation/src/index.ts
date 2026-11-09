@@ -99,7 +99,9 @@ export {
 export type {
   SimulateInputParams,
   SimulateParams,
+  SimulationAccountOverride,
   SimulationMode,
+  SimulationStateOverrides,
   StateBlock,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";

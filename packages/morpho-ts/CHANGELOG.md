@@ -1,5 +1,17 @@
 # @morpho-org/morpho-ts
 
+## 4.2.0
+
+### Minor Changes
+
+- Expose readonly `field` and `value` properties on `NegativeValueError` so integrators can inspect the offending field name and bigint value without parsing the error message. The constructor arguments and message remain unchanged.
+- Expose `RetriesExhaustedError` and `RetryStoppedError` from `retryPromiseLinearBackoff`, with the last operation failure in `cause` and the total number of attempts in `attempts`. Replace matching the old error message strings with checks for these error classes. Skip the delay after the final failed attempt and allow omitting retry options. The `retries` option continues to count total attempts rather than additional retries, with at least one attempt even when set to zero.
+
+### Patch Changes
+
+- Format very small finite numbers without precision-limit errors or losing subnormal values, and support large scientific-notation bounds. Non-finite inputs now return the configured default or the explicit strings `NaN`, `Infinity`, and `-Infinity`. Omit the minus sign when a negative value is displayed as zero, including with zero decimal places, removed trailing zeros, or localized separators.
+- Mark blue-sdk and morpho-ts modules as side-effect-free so bundlers can omit unused modules while preserving initialization of imported utilities and registries.
+
 ## 4.2.0-next.1
 
 ### Minor Changes

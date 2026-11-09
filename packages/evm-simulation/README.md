@@ -62,7 +62,55 @@ Every call inside `eth_simulateV1`, including preparation calls, state reads and
 
 Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` on a chain entry to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
-Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
+Native-ETH movements are observed through `traceTransfers` logs on the simulated calls. No state overrides or helper contracts are added automatically.
+
+### Caller-provided state overrides
+
+`simulate()` accepts an optional `stateOverrides` account-address map in JSON-RPC
+format (`SimulationStateOverrides`). Each account can override `code`, `balance`,
+`nonce`, and either `state` (replace all storage) or `stateDiff` (patch storage).
+Balances and nonces are hex quantities; storage keys and values are 32-byte hex.
+The SDK forwards override contents unchanged, without runtime validation or
+normalization. Consumers are responsible for supplying valid overrides.
+Overrides apply once before **all** calls in the simulated block, including state
+reads, authorization preparations, transactions and assertions. Calldata-target
+code checks use an explicit code override when supplied and reject code-less
+EIP-7702 delegates. Metadata lookups outside
+`eth_simulateV1` still read the pinned onchain state.
+
+For example, a caller can model a contract sender through an EIP-7702 delegation
+on Monad, whose `validation: true` otherwise rejects contract senders:
+
+```ts
+await simulate(config, {
+  chainId: 143,
+  transactions,
+  limits,
+  stateOverrides: {
+    [sender]: { code: `0xef0100${scratchAddress.slice(2)}` },
+    [scratchAddress]: { code: senderBytecode },
+  },
+});
+```
+
+The caller chooses an unused scratch address and reads `senderBytecode` at the
+same state block used for simulation (supply `block` or `blockNumber` to pin it).
+Delegation executes that code with the sender's storage; code introspection sees
+the delegation instead, and gas usage may differ. The SDK does not construct or
+verify this workaround. Any caller override, especially a balance or storage
+override, makes the result describe hypothetical state; it is not proof the
+unmodified transaction will succeed at broadcast. Omitting `stateOverrides`
+keeps real-balance funding and adds no implicit overrides. Calldata targets with
+EIP-7702 delegation now also need code at their delegate, including existing
+onchain delegations without overrides. This adds a pinned `eth_getCode` read
+under the same timeout and rejects code-less delegates with
+`SimulationValidationError`.
+
+With overrides, signed-request use and approval allowlist checks describe only
+the overridden execution. Overriding token, Morpho, Midnight or EcrecoverAuthorizer
+code or storage can fake use events or hide approval grants. Integrators must
+control the overrides; a passing result with untrusted overrides does not prove
+signatures were used or that the broadcast transaction grants only allowed permissions.
 
 Upgrading from v4? Start with the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover, then apply the [v5 → v6](../../docs/migrations/evm-simulation-v5-to-v6.md), [v6 → v7](../../docs/migrations/evm-simulation-v6-to-v7.md), and [v7 → v8](../../docs/migrations/evm-simulation-v7-to-v8.md) guides in order.
 Upgrading from v5? Apply the [v5 → v6 migration guide](../../docs/migrations/evm-simulation-v5-to-v6.md) first (retention-guard address change and 6.1.0 fail-closed RPC responses), then the [v6 → v7 migration guide](../../docs/migrations/evm-simulation-v6-to-v7.md) for simplified errors and original revert bytes, then the [v7 → v8 migration guide](../../docs/migrations/evm-simulation-v7-to-v8.md) for required limits.
@@ -75,7 +123,7 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`).
+- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
 - Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`, `MidnightAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `ApprovalLimit`, `OperationLimit`, and the shared `SlippageLimits`, `CheckedSlippageLimits` (the checked result carrying the applied `slippageTolerance`), `CheckedOperationLimit` and `CheckedSimulationLimits` (the type of `verification.limits` on a checked run), `SlippageQuote`, `SharePriceLimit`, `InKindPositionQuote`, `ForceExitDeallocationQuote`, `BluePositionBounds`, `MidnightPositionBounds`, `MidnightDebtPositionBounds`, `MidnightMarketStruct`, and `MidnightCollateralAmount`.
@@ -847,7 +895,7 @@ unchecked outcomes are economically verified.
 `toSimulationLimits(action, { owner, expected })` produces the
 `SimulationLimits` of a transaction built by a morpho-sdk action (`tx.action`),
 without touching the network. For operations that carry `account`, it is
-`owner`, except on `midnightSupplyCollateral` and `midnightRedeem`, where it is
+`owner`, except on `blueWithdrawBuyCallback`, `midnightSupplyCollateral` and `midnightRedeem`, where it is
 `options.onBehalf ?? owner`. Midnight sells always measure the sender and reject
 any explicit `account`. `midnightRepayWithdrawCollateral` and
 `midnightTakeRepayWithdrawCollateral` also always measure the sender and reject
@@ -859,6 +907,23 @@ encoded receivers on `midnightRedeem`, `midnightTakeBorrow`,
 `midnightRepayWithdrawCollateral` and `midnightTakeRepayWithdrawCollateral`,
 `args.collateralReceiver` must match the
 same value. Mismatches throw `LimitAccountMismatchError`.
+
+`blueWithdrawBuyCallback` maps to the existing `blueWithdraw` operation. Pass the
+intended callback as `onBehalf` and its payout quote as `expected.assetsReceived`:
+
+```ts
+const limits = toSimulationLimits(tx.action, {
+  owner: maker,
+  onBehalf: callbackAddress,
+  expected: { assetsReceived: expectedAssets },
+});
+```
+
+This checks the callback's supply-share burn separately from the maker's wallet
+proceeds. The action's callback must match `onBehalf`, and its receiver must match
+`owner`; omitting `onBehalf` does not infer the callback from the action. Callback
+registration, ownership and authorization checks remain in the SDK action's
+`getRequirements()`. Offer cancellation and confirmation still happen separately.
 
 For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`;
 `simulate()` rejects a raw limit whose `account` is not the bundle sender with
@@ -883,6 +948,7 @@ inputs; pass the UI's quote through `expected`.
 | `vaultV1MigrateToV2` | `sharesBurned` (shares mode), `sharesMinted` (when `netAssets` known) | either when not derivable | — |
 | `blueSupply` | `assetsPaid` (gross; fee deducted inside) | `sharesMinted` | — |
 | `blueWithdraw` | `assetsReceived` net of penalty and fee (assets mode); `sharesBurned` in shares mode | `sharesBurned` (assets mode), `assetsReceived` (shares mode) | — |
+| `blueWithdrawBuyCallback` (emits `blueWithdraw`) | `sharesBurned`; `account` is the intended callback in `onBehalf`, `receiver` is `owner` | `assetsReceived` | Callback ownership and offer cancellation |
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
 | `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |

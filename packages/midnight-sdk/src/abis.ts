@@ -6358,3 +6358,491 @@ export const midnightEventsAbi = [
     anonymous: false,
   },
 ] as const satisfies Abi;
+
+/**
+ * ABI JSON for a per-owner BlueBuyCallback, which parks Midnight buy-offer funds as Morpho Blue
+ * supply. Its constructor authorizes `OWNER` on Morpho Blue to manage the callback position.
+ *
+ * Source: `morpho-org/midnight` commit `4603969e80d6f911c33586c6b971e8edd7821bbc`,
+ * `src/periphery/blue-buy-callback/BlueBuyCallback.sol` (compiled with `forge inspect ... abi`).
+ *
+ * @example
+ * ```ts
+ * import { blueBuyCallbackAbi } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(blueBuyCallbackAbi.length);
+ * ```
+ */
+export const blueBuyCallbackAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "_owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_midnight",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_blue",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "BLUE",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "MIDNIGHT",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "OWNER",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "buyerAssetsBound",
+    inputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct Market",
+        components: [
+          {
+            name: "chainId",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "midnight",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "loanToken",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "collateralParams",
+            type: "tuple[]",
+            internalType: "struct CollateralParams[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "liquidationCursor",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "oracle",
+                type: "address",
+                internalType: "address",
+              },
+            ],
+          },
+          {
+            name: "maturity",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "rcfThreshold",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "enterGate",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "liquidatorGate",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "nonce",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "onBuy",
+    inputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: [
+          {
+            name: "chainId",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "midnight",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "loanToken",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "collateralParams",
+            type: "tuple[]",
+            internalType: "struct CollateralParams[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+                internalType: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "liquidationCursor",
+                type: "uint256",
+                internalType: "uint256",
+              },
+              {
+                name: "oracle",
+                type: "address",
+                internalType: "address",
+              },
+            ],
+          },
+          {
+            name: "maturity",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "rcfThreshold",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "enterGate",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "liquidatorGate",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+      {
+        name: "buyerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "buyer",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setAuthorization",
+    inputs: [
+      {
+        name: "authorized",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "newIsAuthorized",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setAuthorizationWithSig",
+    inputs: [
+      {
+        name: "authorization",
+        type: "tuple",
+        internalType: "struct Authorization",
+        components: [
+          {
+            name: "authorizer",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "authorized",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "isAuthorized",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+            internalType: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+            internalType: "uint256",
+          },
+        ],
+      },
+      {
+        name: "signature",
+        type: "tuple",
+        internalType: "struct Signature",
+        components: [
+          {
+            name: "v",
+            type: "uint8",
+            internalType: "uint8",
+          },
+          {
+            name: "r",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+          {
+            name: "s",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "skim",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "SetAuthorizationWithSig",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "nonce",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Skim",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "ApproveReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AuthorizationExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InconsistentLoanToken",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidNonce",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSignature",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NoCode",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotMidnight",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotOwner",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotOwnerBuyer",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReturnedFalse",
+    inputs: [],
+  },
+] as const satisfies Abi;

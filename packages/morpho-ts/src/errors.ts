@@ -52,7 +52,7 @@ export class DivisionByZeroError extends Error {
 }
 
 /**
- * Thrown when a uint-like value is negative.
+ * Thrown when a uint-like value is negative, exposing the offending `field` and bigint `value` as readonly properties.
  *
  * @example
  * ```ts
@@ -62,7 +62,10 @@ export class DivisionByZeroError extends Error {
  * ```
  */
 export class NegativeValueError extends Error {
-  public constructor(field: string, value: bigint) {
+  public constructor(
+    public readonly field: string,
+    public readonly value: bigint,
+  ) {
     super(`${field} "${value}" must be non-negative.`);
     this.name = "NegativeValueError";
   }
@@ -240,6 +243,52 @@ export class InvalidAddressError extends Error {
     );
     this.address = address;
     this.name = "InvalidAddressError";
+  }
+}
+
+/**
+ * Thrown when the retry attempt budget is exhausted, preserving the last failure as `cause`.
+ *
+ * @example
+ * ```ts
+ * import { RetriesExhaustedError } from "@morpho-org/morpho-ts";
+ *
+ * throw new RetriesExhaustedError(3, new TypeError("Request failed"));
+ * ```
+ */
+export class RetriesExhaustedError extends Error {
+  public constructor(
+    public readonly attempts: number,
+    cause: unknown,
+  ) {
+    super(
+      `Operation failed after "${attempts}" attempts. Check the cause before increasing the attempt budget or trying again.`,
+      { cause },
+    );
+    this.name = "RetriesExhaustedError";
+  }
+}
+
+/**
+ * Thrown when the retry error predicate returns a truthy value, preserving the last failure as `cause`.
+ *
+ * @example
+ * ```ts
+ * import { RetryStoppedError } from "@morpho-org/morpho-ts";
+ *
+ * throw new RetryStoppedError(1, new TypeError("Request failed"));
+ * ```
+ */
+export class RetryStoppedError extends Error {
+  public constructor(
+    public readonly attempts: number,
+    cause: unknown,
+  ) {
+    super(
+      `Retrying stopped after "${attempts}" attempts because the error predicate requested it. Check the cause and predicate before trying again.`,
+      { cause },
+    );
+    this.name = "RetryStoppedError";
   }
 }
 

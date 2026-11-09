@@ -16,9 +16,11 @@ import {
   maxUint256,
   zeroAddress,
 } from "viem";
-import { getBalance, getChainId, readContract } from "viem/actions";
+import { getBalance, getChainId, getCode, readContract } from "viem/actions";
 import {
   erc2612Abi,
+  erc3643Abi,
+  erc3643IdentityRegistryAbi,
   permissionedErc20WrapperAbi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
@@ -36,7 +38,9 @@ export const optionalBoolean = [undefined, false, true] as const;
  * Reads native balances directly for `NATIVE_ADDRESS`. For ERC20 tokens, uses the deployless
  * `GetHolding` query by default and falls back to individual ERC20, ERC-2612, Backed, and
  * permissioned-wrapper contract reads, plus ERC-20 allowances to Morpho Blue and Permit2, when
- * allowed.
+ * allowed. For ERC-3643 tokens, `canTransfer` reflects whether `user` is a verified recipient
+ * according to the token's identity registry in both modes, not whether the user can send tokens.
+ * If a deployed registry's verification read reverts or returns no data, eligibility is undefined.
  *
  * @param user - Address whose holding is fetched.
  * @param token - Token address, or `NATIVE_ADDRESS` for the native asset.
@@ -139,6 +143,7 @@ export async function fetchHolding(
     erc2612Nonce,
     whitelistControllerAggregator,
     hasErc20WrapperPermission,
+    identityRegistry,
   ] = await Promise.all([
     readContract(client, {
       ...parameters,
@@ -186,6 +191,12 @@ export async function fetchHolding(
       functionName: "hasPermission",
       args: [user],
     }).catch(catchRevertOnly(!isPermissionedWrapperToken)),
+    readContract(client, {
+      ...parameters,
+      abi: erc3643Abi,
+      address: token,
+      functionName: "identityRegistry",
+    }).catch(catchRevertOnly(undefined)),
   ]);
 
   const holding = new Holding({
@@ -205,6 +216,29 @@ export async function fetchHolding(
       functionName: "isWhitelisted",
       args: [user],
     }).catch(catchRevertOnly(undefined));
+  else if (
+    identityRegistry != null &&
+    !isAddressEqual(identityRegistry, zeroAddress)
+  ) {
+    const isVerified = await readContract(client, {
+      ...parameters,
+      abi: erc3643IdentityRegistryAbi,
+      address: identityRegistry,
+      functionName: "isVerified",
+      args: [user],
+    }).catch(catchRevertOnly(undefined));
+
+    if (isVerified != null) holding.canTransfer = isVerified;
+    else {
+      const registryCode =
+        parameters.stateOverride?.find(({ address }) =>
+          isAddressEqual(address, identityRegistry),
+        )?.code ??
+        (await getCode(client, { ...parameters, address: identityRegistry }));
+      if (registryCode && registryCode !== "0x")
+        holding.canTransfer = undefined;
+    }
+  }
 
   return holding;
 }

@@ -108,6 +108,7 @@ describe("resolveAssets", () => {
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[1]?.assetsReceived).toBe(loan);
+    expect(result[1]?.approvalToken).toBe(collateral);
     for (const resolved of result)
       expect(resolved.marketParams).toEqual({
         loanToken: loan,
@@ -939,7 +940,7 @@ describe("resolveAssets", () => {
             quote: { assetsReceived: 1n, sharesMinted: 1n },
             slippageTolerance: 0n,
           },
-          undefined,
+          collateral,
         ],
         [
           "blueWithdraw",
@@ -959,7 +960,7 @@ describe("resolveAssets", () => {
             quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
             slippageTolerance: 0n,
           },
-          undefined,
+          loan,
         ],
         [
           "blueRefinance",
@@ -1088,6 +1089,64 @@ describe("resolveAssets", () => {
       expect(result[0]?.approvalToken).toBe(expected);
     },
   );
+  test("collateral withdrawal approval tokens ignore quote overrides and use the pinned block", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [loan, collateral, zeroAddress, zeroAddress, 0n],
+    });
+    const [result] = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueWithdrawCollateral",
+          marketId,
+          assetReceived: vault,
+          quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 42n,
+    });
+    expect(result?.approvalToken).toBe(loan);
+    expect(handle.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "eth_call",
+        params: [expect.anything(), "0x2a"],
+      }),
+      undefined,
+    );
+  });
+
+  test("error: collateral withdrawal rejects a zero loan token in matching market params", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [zeroAddress, collateral, zeroAddress, zeroAddress, 0n],
+    });
+    const request = resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueWithdrawCollateral",
+          marketId: zeroLoanMarketId,
+          assetReceived: collateral,
+          quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    });
+    await expect(request).rejects.toThrow("the market token address is zero");
+    await expect(request).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
+  });
+
   test("error: zero approval tokens fail closed", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
@@ -1158,6 +1217,7 @@ describe("resolveAssets", () => {
       blockNumber: 1n,
     });
     expect(result[0]?.approvalToken).toBe(collateral);
+    expect(result[1]?.approvalToken).toBe(collateral);
     expect(result[1]?.marketParams).toEqual({
       loanToken: loan,
       collateralToken: collateral,

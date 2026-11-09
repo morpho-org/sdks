@@ -24,9 +24,9 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Read [Adopting dead-share protection](./DEAD-SHARE-PROTECTION.md) for the protected Blue `supply`
-overload and the dead-deposit checks on supply and deposit flows. Snapshot-free Blue `supply`
-is deprecated but remains unprotected during the deprecation minor.
+Read [Dead-share validators](./DEAD-SHARE-PROTECTION.md) for the exported checks. Builders do not
+enforce the dead-deposit rule; integrators should validate their snapshot before building.
+Snapshot-free Blue `supply` remains deprecated.
 
 Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
 API removals and the new unlimited-approval behavior.
@@ -54,6 +54,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
+| **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
@@ -76,7 +77,8 @@ Robinhood Chain, Arc, and X Layer. Custom deployments can still be configured wi
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
-writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits,
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call, except
+`withdrawBuyCallback`, which encodes one direct Morpho Blue `withdraw`. Vault deposits,
 `withdraw`, and `redeem` use the same shape for token or vault-share authorization to
 VaultBundlesV1. Vault `inKindRedeem` and `forceWithdraw` use it so callers can await
 `getRequirements()` to check share authorization to VaultExitBundlesV1 — and, for `inKindRedeem`,
@@ -84,7 +86,7 @@ live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directl
 RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
 prerequisites.
 
-- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, ERC-2612 permit signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 Every transaction carries `tx.action` — typed metadata describing the encoded call (`type` plus
@@ -109,7 +111,10 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ supportSignature: true })`.
+Enable off-chain approvals (ERC-2612 permits) with `morphoViemExtension({ supportSignature: true })`. Pass `getRequirements({ useSimplePermit: false })` to force direct ERC-20 approvals; unsupported tokens also fall back to direct approvals.
+
+Token funding checks the bundles allowance first on every route. If it already covers the amount,
+no token requirement is returned and ERC-2612 support is not probed.
 
 ### `userAddress` is the eventual submitter
 
@@ -150,8 +155,7 @@ Create an entity — every factory takes a chain ID as its last argument:
 ### Vault deposit / withdraw
 
 Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
-permits authorize VaultBundlesV1. Permit2 SignatureTransfer also names VaultBundlesV1 as spender,
-while the ERC-20 approval prerequisite targets canonical Permit2.
+permits authorize VaultBundlesV1. The SDK no longer requests Permit2 funding.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);

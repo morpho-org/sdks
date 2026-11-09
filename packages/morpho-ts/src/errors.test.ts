@@ -11,6 +11,8 @@ import {
   InvalidPositionLossFactorError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
   UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
@@ -18,6 +20,23 @@ import {
 class TestDataError extends Error {}
 
 class TestMissingError extends TestDataError {}
+
+describe.each([RetriesExhaustedError, RetryStoppedError])("%s", (ErrorType) => {
+  test.each([new Error("last failure"), { reason: "failure" }, undefined])(
+    "preserves cause %s and attempts",
+    (cause) => {
+      const error = new ErrorType(3, cause);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toBeInstanceOf(ErrorType);
+      expect(error.name).toBe(ErrorType.name);
+      expect(error.attempts).toBe(3);
+      expect(error.cause).toBe(cause);
+      expect(Object.hasOwn(error, "cause")).toBe(true);
+      expect(error.message).toContain('"3"');
+      expect(error.message).toContain("Check the cause");
+    },
+  );
+});
 
 describe("UnsupportedChainIdError", () => {
   test("default", () => {
@@ -53,6 +72,12 @@ describe("DivisionByZeroError", () => {
 });
 
 describe("NegativeValueError", () => {
+  test("exposes the offending field and bigint value without changing the message", () => {
+    const error = new NegativeValueError("assets", -1n);
+    expect(error).toMatchObject({ field: "assets", value: -1n });
+    expect(error.message).toBe('assets "-1" must be non-negative.');
+  });
+
   test("default", () => {
     const error = new NegativeValueError("assets", -1n);
 

@@ -23,12 +23,12 @@ import {
 } from "@morpho-org/midnight-sdk";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import { testAccount } from "@morpho-org/test/fixtures";
 import {
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
   takeVaultV2MidnightAdapterOffer,
-  testAccount,
-} from "@morpho-org/test/fixtures";
+} from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,

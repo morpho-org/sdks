@@ -6,6 +6,7 @@
 - Keep generated deployless query artifacts as `abi` and `code` constants under `src/queries`.
 - `src/queries` holds only compiler-generated artifacts from Solidity sources under `contracts/` (excluding `interfaces/`) and re-export-only `index.ts` barrels; `pnpm compile` fails on anything else, so fixtures and helpers for these queries go under `test/`, and their tests go there as fork tests named `*.integration.test.ts`, since the unit project only runs `src/**/*.test.ts` (an exception to root AGENTS.md §5 colocation).
 - Keep non-Blue-specific ABI literals defined in `@morpho-org/morpho-ts` and re-export them from `src/abis.ts` for compatibility. Blue-specific viem ABI literals stay local.
+  - Compatibility exception: `erc3643Abi` and `erc3643IdentityRegistryAbi` stay local because supported `morpho-ts` versions in the `^3.0.0 || ^4.0.0` peer range lack these exports; importing them from a new release would require raising the minimum peer version.
 - Augment classes only in `src/augment`, e.g. `Market.fetch = fetchMarket`.
 - Keep `fetch/`, `queries/`, and `augment/` names aligned with the matching `blue-sdk` entity names.
 - Use `readContractRestructured` when tuple fields should map to named object properties.

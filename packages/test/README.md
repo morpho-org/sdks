@@ -78,6 +78,17 @@ import { spawnAnvil } from "@morpho-org/test";
 spawnAnvil(mainnet, { forkBlockNumber: 19_750_000n });
 ```
 
+### Vault V2 Midnight adapter fixture
+
+The Base-fork fixture that deploys a Vault V2 with a Midnight adapter lives under its own subpath and needs `@morpho-org/morpho-ts` 4.3 or later (the optional peer); the root, `/fixtures`, `/vitest`, `/mock`, `/chaos` and `/playwright` entrypoints do not import morpho-ts.
+
+```typescript
+import {
+  BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
+  createVaultV2MidnightAdapterFixture,
+} from "@morpho-org/test/midnight";
+```
+
 ## Development
 
 Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).

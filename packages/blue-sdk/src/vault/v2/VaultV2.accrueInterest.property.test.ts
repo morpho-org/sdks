@@ -280,8 +280,7 @@ describe("VaultV2.accrueInterest", () => {
     },
   );
 
-  // SDK divergence (fresh transaction): elapsed 0 ignores losses; drop .fails once the SDK realizes the loss.
-  test.fails.prop([elapsedZeroLossCaseArb], {
+  test.prop([elapsedZeroLossCaseArb], {
     numRuns: 1_000,
     examples: [
       [

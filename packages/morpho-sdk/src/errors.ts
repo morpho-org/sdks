@@ -32,7 +32,7 @@ export {
   Permit2ExpirationOutOfRangeError,
   UnknownAbiFunctionError,
   UnnamedAbiOutputsError,
-  UnresolvedBlockNumberError as BlueUnresolvedBlockNumberError,
+  UnresolvedBlockNumberError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {
@@ -67,12 +67,11 @@ export {
   DivisionByZeroError,
   InvalidAddressError,
   InvalidBitLengthError,
-  InvalidPositionAccrualStateError,
   InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError,
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
-  InvalidPositionLossFactorError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
+  RetriesExhaustedError,
+  RetryStoppedError,
 } from "@morpho-org/morpho-ts";

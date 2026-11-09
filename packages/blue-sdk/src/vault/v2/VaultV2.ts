@@ -385,11 +385,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * Sums the vault's asset balance and every adapter's projected real assets, caps asset growth by
    * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
    * zero when its recipient cannot receive vault shares.
-   * Timestamps at or before this vault's `lastUpdate` return an unchanged copy and zero fee
-   * shares without accruing nested adapters. Forward accrual also accrues every adapter
-   * implementing `accrueInterest` to `timestamp`, so contributing nested markets and positions
-   * share the vault's `lastUpdate`; when registered among `accrualAdapters`, the liquidity adapter
-   * reuses that accrued instance, while an unregistered liquidity adapter remains unchanged.
+   * Timestamps before this vault's `lastUpdate` return an unchanged copy and zero fee
+   * shares without accruing nested adapters. At `lastUpdate`, loss realization still runs,
+   * matching the vault contract's zero-elapsed accrual. At or after `lastUpdate`, every adapter
+   * implementing `accrueInterest` is projected to `timestamp`; contributing nested markets and
+   * positions are advanced only when older than `timestamp`. When registered among
+   * `accrualAdapters`, the liquidity adapter reuses that accrued instance, while an unregistered
+   * liquidity adapter remains unchanged.
    * Adapters without `accrueInterest`, zero-allocation or zero-share Vault V1 adapters, and nested
    * markets already ahead of `timestamp` keep their snapshots.
    *
@@ -429,7 +431,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
-    if (elapsed <= 0n) {
+    if (elapsed < 0n) {
       const vault = new AccrualVaultV2(
         this,
         this.accrualLiquidityAdapter,

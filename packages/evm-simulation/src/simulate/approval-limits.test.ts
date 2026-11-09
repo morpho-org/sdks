@@ -2,11 +2,25 @@ import {
   getChainAddresses,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
-import { type Address, zeroAddress } from "viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
+  erc20Abi,
+  type Hex,
+  isHex,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
-import { ApprovalCheckUnavailableError } from "../errors.js";
+import {
+  ApprovalCheckUnavailableError,
+  UnexpectedTokenApprovalError,
+} from "../errors.js";
 import type { SimulateParams } from "../params.js";
+import type { RawLog } from "../types.js";
 import { resolveApprovalLimits } from "./approval-limits.js";
+import { assertApprovalEvents } from "./approvals.js";
 import type { ResolvedApprovalOperation } from "./backends/resolve-assets.js";
 import { parseRequest } from "./request/parse-request.js";
 
@@ -30,6 +44,76 @@ const parsed = (operation: object) => {
   if (limit === undefined) throw new Error("test limit was not parsed");
   return limit;
 };
+
+test("collateral withdrawals allow only the market loan token approval to BlueBundlesV1", () => {
+  const spender = getChainAddresses(1).bundles!.blueBundlesV1!;
+  const result = resolveApprovalLimits({
+    chainId: 1,
+    owner: OWNER,
+    operations: [
+      {
+        limit: parsed({
+          type: "blueWithdrawCollateral",
+          marketId: MARKET_ID,
+          quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
+        }),
+        approvalToken: LOAN,
+      },
+    ],
+  });
+  const check = (token: Address, approvedSpender: Address) =>
+    assertApprovalEvents({
+      owner: OWNER,
+      allowed: result.approvals,
+      addresses: result.eventAddresses,
+      logs: [
+        {
+          address: token,
+          topics: encodeEventTopics({
+            abi: erc20Abi,
+            eventName: "Approval",
+            args: { owner: OWNER, spender: approvedSpender },
+          }).filter((topic): topic is Hex => typeof topic === "string"),
+          data: encodeAbiParameters([{ type: "uint256" }], [maxUint256 - 1n]),
+        },
+      ],
+    });
+  expect(() => check(OTHER, spender)).toThrow(UnexpectedTokenApprovalError);
+  expect(() => check(LOAN, OTHER)).toThrow(UnexpectedTokenApprovalError);
+  expect(() => check(LOAN, result.eventAddresses.morpho)).toThrow(
+    UnexpectedTokenApprovalError,
+  );
+  expect(() => check(LOAN, getChainAddresses(1).permit2!)).toThrow(
+    UnexpectedTokenApprovalError,
+  );
+  expect(() =>
+    assertApprovalEvents({
+      owner: OWNER,
+      allowed: result.approvals,
+      addresses: result.eventAddresses,
+      logs: [],
+    }),
+  ).not.toThrow();
+  expect(() => check(LOAN, spender)).not.toThrow();
+});
+
+test("collateral withdrawals fail closed without a resolved loan token", () => {
+  expect(() =>
+    resolveApprovalLimits({
+      chainId: 1,
+      owner: OWNER,
+      operations: [
+        {
+          limit: parsed({
+            type: "blueWithdrawCollateral",
+            marketId: MARKET_ID,
+            quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
+          }),
+        },
+      ],
+    }),
+  ).toThrow(ApprovalCheckUnavailableError);
+});
 
 test("unions explicit approvals with operation-derived registry spenders", () => {
   const request = parseRequest({
@@ -95,6 +179,50 @@ test("fails closed when the chain has no approval-check registry", () => {
       operations: [],
     }),
   ).toThrow(ApprovalCheckUnavailableError);
+});
+
+test("blueBorrow allows the collateral Approval re-emitted by BlueBundlesV1's zero-amount transferFrom", () => {
+  const registry = getChainAddresses(1)!;
+  const blueBundles = registry.bundles!.blueBundlesV1!;
+  const result = resolveApprovalLimits({
+    chainId: 1,
+    owner: OWNER,
+    operations: [
+      {
+        limit: parsed({
+          type: "blueBorrow",
+          marketId: MARKET_ID,
+          quote: { assetsReceived: 1n, sharesMinted: 1n },
+        }),
+        approvalToken: COLLATERAL,
+      },
+    ],
+  });
+  const approval = (address: Address, spender: Address): RawLog => ({
+    address,
+    topics: encodeEventTopics({
+      abi: erc20Abi,
+      eventName: "Approval",
+      args: { owner: OWNER, spender },
+    }).filter((topic) => isHex(topic)),
+    data: encodeAbiParameters([{ type: "uint256" }] as const, [maxUint256]),
+  });
+  const assertLogs = (logs: readonly RawLog[]) =>
+    assertApprovalEvents({
+      logs,
+      owner: OWNER,
+      allowed: result.approvals,
+      addresses: result.eventAddresses,
+    });
+
+  expect(() => assertLogs([approval(COLLATERAL, blueBundles)])).not.toThrow();
+  for (const log of [
+    approval(LOAN, blueBundles),
+    approval(COLLATERAL, OTHER),
+    approval(COLLATERAL, registry.blue!),
+    approval(COLLATERAL, registry.permit2!),
+  ])
+    expect(() => assertLogs([log])).toThrow(UnexpectedTokenApprovalError);
 });
 
 test("does not derive an approval for V2 forceRedeem", () => {
@@ -227,7 +355,7 @@ describe("approval derivation for every operation type", () => {
         marketId: MARKET_ID,
         quote: { assetsReceived: 1n, sharesMinted: 1n },
       },
-      auth,
+      [...token(COLLATERAL, [blueBundles]), ...auth],
     ],
     [
       "blueWithdraw",
@@ -245,7 +373,7 @@ describe("approval derivation for every operation type", () => {
         marketId: MARKET_ID,
         quote: { assetsReceived: 1n, collateralWithdrawn: 1n },
       },
-      auth,
+      [...token(LOAN, [blueBundles]), ...auth],
     ],
     [
       "blueRefinance",
@@ -387,7 +515,9 @@ describe("approval derivation for every operation type", () => {
     cases.map(([type, operation, expected]) => ({ type, operation, expected })),
   )("$type derives its exact approval set", ({ type, operation, expected }) => {
     const approvalToken =
-      type === "blueSupplyCollateral" || type === "blueSupplyCollateralBorrow"
+      type === "blueBorrow" ||
+      type === "blueSupplyCollateral" ||
+      type === "blueSupplyCollateralBorrow"
         ? COLLATERAL
         : type.startsWith("blue")
           ? LOAN
@@ -406,7 +536,9 @@ describe("approval derivation for every operation type", () => {
     "$type keeps only registry-listed spenders on Fraxtal",
     ({ type, operation, expected }) => {
       const approvalToken =
-        type === "blueSupplyCollateral" || type === "blueSupplyCollateralBorrow"
+        type === "blueBorrow" ||
+        type === "blueSupplyCollateral" ||
+        type === "blueSupplyCollateralBorrow"
           ? COLLATERAL
           : type.startsWith("blue")
             ? LOAN

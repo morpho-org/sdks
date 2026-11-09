@@ -25,6 +25,7 @@ import {
 import { base, mainnet } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import {
+  encodeErc20Permit2SignatureTransfer,
   isRequirementBlueAuthorization,
   morphoViemExtension,
 } from "../../../src/index.js";
@@ -123,6 +124,49 @@ const getBlueBundlesBalances = async (
 };
 
 describe("BlueBundlesV1 Blue writes", () => {
+  test("supply: executes a caller-supplied legacy Permit2 signature", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const token = CbbtcUsdcBlue.loanToken;
+    const spender = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    await client.deal({ erc20: token, amount });
+    await client.approve({
+      address: token,
+      args: [getChainAddresses(mainnet.id).permit2!, amount],
+    });
+    await seedDeadSupply({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+    });
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const before = await market.getPositionData(client.account.address);
+    const action = market.supply({
+      marketData: await market.getMarketData(),
+      userAddress: client.account.address,
+      assets: amount,
+      deadline: maxUint256,
+    });
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      token,
+      spender,
+      amount,
+      chainId: mainnet.id,
+      nonce: 0n,
+      deadline: maxUint256,
+    });
+    const signature = await requirement.sign(client, client.account.address);
+    await client.sendTransaction(action.buildTx([signature]));
+    const after = await market.getPositionData(client.account.address);
+    expect(after.supplyShares).toBeGreaterThan(before.supplyShares);
+    expect(
+      await client.balanceOf({ erc20: token, owner: client.account.address }),
+    ).toBe(0n);
+  });
+
   test("supply: executes with ERC-2612 without retaining assets", async ({
     client,
   }) => {
@@ -148,9 +192,7 @@ describe("BlueBundlesV1 Blue writes", () => {
       deadline: maxUint256,
     });
 
-    const requirements = await action.getRequirements({
-      useSimplePermit: true,
-    });
+    const requirements = await action.getRequirements();
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
     ).toEqual(["permit"]);
@@ -168,7 +210,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
-  test("supply: executes with Permit2 SignatureTransfer without retaining assets", async ({
+  test("supply: executes with simple permits disabled without retaining assets", async ({
     client,
   }) => {
     const amount = parseUnits("1000", 6);
@@ -193,15 +235,12 @@ describe("BlueBundlesV1 Blue writes", () => {
       deadline: maxUint256,
     });
 
-    // No `useSimplePermit`: the default signature path selects Permit2
-    // SignatureTransfer, which needs an explicit unused nonce. It emits a
-    // one-time ERC-20 approval to canonical Permit2 plus the signed transfer
-    // naming BlueBundlesV1 as spender — verifying the deployed contract
-    // interprets the `kind: 2` permit payload.
-    const requirements = await action.getRequirements({ permit2Nonce: 0n });
+    const requirements = await action.getRequirements({
+      useSimplePermit: false,
+    });
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
-    ).toEqual(["erc20Approval", "permit2SignatureTransfer"]);
+    ).toEqual(["erc20Approval"]);
     const signatures = await satisfyBlueBundlesV1Requirements(client, {
       requirements,
     });
@@ -503,7 +542,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
-  test("supplyCollateralBorrow: executes with explicit-nonce SignatureTransfer", async ({
+  test("supplyCollateralBorrow: executes with approval and signed authorization", async ({
     client,
   }) => {
     const collateralAssets = parseUnits("10", 18);
@@ -532,21 +571,14 @@ describe("BlueBundlesV1 Blue writes", () => {
       deadline: maxUint256,
     });
 
-    const permit2Nonce = 42n;
-    const requirements = await action.getRequirements({ permit2Nonce });
+    const requirements = await action.getRequirements();
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
-    ).toEqual(["erc20Approval", "permit2SignatureTransfer", "authorization"]);
+    ).toEqual(["erc20Approval", "authorization"]);
     const signatures = await satisfyBlueBundlesV1Requirements(client, {
       requirements,
     });
-    expect(signatures).toMatchObject([
-      {
-        action: { type: "permit2SignatureTransfer" },
-        args: { nonce: permit2Nonce },
-      },
-      { action: { type: "authorization" } },
-    ]);
+    expect(signatures).toMatchObject([{ action: { type: "authorization" } }]);
     await client.sendTransaction(action.buildTx(signatures));
 
     const afterPosition = await market.getPositionData(client.account.address);
@@ -557,62 +589,101 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
-  test("repayWithdrawCollateral: saturates a full close", async ({
-    client,
-  }) => {
-    const collateralAssets = parseUnits("10", 18);
-    const borrowAssets = parseUnits("1000", 18);
-    await supplyLoan({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      supplyAmount: borrowAssets * 2n,
-    });
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount: collateralAssets,
-    });
-    await borrow({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      borrowAmount: borrowAssets,
-    });
+  test.for([false, true])(
+    "repayWithdrawCollateral: saturates a full close (covered allowance: %s)",
+    async (coveredAllowance, { client }) => {
+      const collateralAssets = parseUnits("10", 18);
+      const borrowAssets = parseUnits("1000", 18);
+      await supplyLoan({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        supplyAmount: borrowAssets * 2n,
+      });
+      await supplyCollateral({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        collateralAmount: collateralAssets,
+      });
+      await borrow({
+        client,
+        chainId: mainnet.id,
+        market: WethUsdsBlue,
+        borrowAmount: borrowAssets,
+      });
 
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(WethUsdsBlue, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-    const beforeBalances = await getBlueBundlesBalances(client, [WethUsdsBlue]);
-    const chainTimestamp = await client.timestamp();
-    const deadline = chainTimestamp + 60n * 60n;
-    const action = withChainTimestamp(chainTimestamp, () =>
-      market.repayWithdrawCollateral({
+      const market = client
+        .extend(morphoViemExtension({ supportSignature: coveredAllowance }))
+        .morpho.blue(WethUsdsBlue, mainnet.id);
+      const positionData = await market.getPositionData(client.account.address);
+      const beforeBalances = await getBlueBundlesBalances(client, [
+        WethUsdsBlue,
+      ]);
+      const chainTimestamp = await client.timestamp();
+      const deadline = chainTimestamp + 60n * 60n;
+      const params = {
         userAddress: client.account.address,
         positionData,
         repayShares: maxUint256,
         collateralAssets: positionData.collateral,
         deadline,
-      }),
-    );
-
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements: await withChainTimestamp(chainTimestamp, () =>
+      };
+      const action = withChainTimestamp(chainTimestamp, () =>
+        market.repayWithdrawCollateral(params),
+      );
+      const fundingCap = action.buildTx().action.args.maxRepayAssets;
+      if (coveredAllowance) {
+        const spender = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+        expect(
+          await client.readContract({
+            address: getChainAddress(mainnet.id, "blue"),
+            abi: blueAbi,
+            functionName: "isAuthorized",
+            args: [client.account.address, spender],
+          }),
+        ).toBe(false);
+        await client.deal({
+          erc20: WethUsdsBlue.loanToken,
+          amount: fundingCap,
+        });
+        await client.approve({
+          address: WethUsdsBlue.loanToken,
+          args: [spender, fundingCap],
+        });
+      }
+      const requirements = await withChainTimestamp(chainTimestamp, () =>
         action.getRequirements(),
-      ),
-      approvalFundingToken: WethUsdsBlue.loanToken,
-    });
-    await client.sendTransaction(action.buildTx(signatures));
+      );
+      if (coveredAllowance)
+        expect(
+          requirements.map(({ action: requirement }) => requirement.type),
+        ).toEqual(["authorization"]);
+      const signatures = await satisfyBlueBundlesV1Requirements(client, {
+        requirements,
+        approvalFundingToken: WethUsdsBlue.loanToken,
+      });
+      const freshAction = withChainTimestamp(chainTimestamp, () =>
+        client
+          .extend(morphoViemExtension({ supportSignature: coveredAllowance }))
+          .morpho.blue(WethUsdsBlue, mainnet.id)
+          .repayWithdrawCollateral(params),
+      );
+      const transaction = freshAction.buildTx(signatures);
+      expect(transaction).toEqual(action.buildTx(signatures));
+      expect(transaction.action.args.maxRepayAssets).toBe(fundingCap);
+      await client.sendTransaction(transaction);
 
-    const afterPosition = await market.getPositionData(client.account.address);
-    expect(afterPosition.borrowShares).toBe(0n);
-    expect(afterPosition.collateral).toBe(0n);
-    expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
-      beforeBalances,
-    );
-  });
+      const afterPosition = await market.getPositionData(
+        client.account.address,
+      );
+      expect(afterPosition.borrowShares).toBe(0n);
+      expect(afterPosition.collateral).toBe(0n);
+      expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
+        beforeBalances,
+      );
+    },
+  );
 
   test("repay: improves an unhealthy position without authorization", async ({
     client,
