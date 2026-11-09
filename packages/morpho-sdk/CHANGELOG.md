@@ -1,5 +1,34 @@
 # @morpho-org/morpho-sdk
 
+## 9.6.0-next.0
+
+### Minor Changes
+
+- Add direct and accrued Vault V2 Midnight adapter fetchers with reads pinned to one resolved block. On the direct-read path, `fetchVaultV2MidnightAdapter` and `fetchAccrualVaultV2MidnightAdapter` first resolve the requested block tag to a block number and throw the new `UnresolvedBlockNumberError` (also exported from `@morpho-org/morpho-sdk/errors`) when the tag, for example `pending`, yields no block number.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.3.0-0` (4.3.0 and its `4.3.0-next` prereleases, within 4.x); morpho-ts 3.x and 4.0.x through 4.2.x are no longer accepted because they lack the Midnight ABIs. It also peers `@morpho-org/blue-sdk` at `^8.3.0-0` (8.3.0 and its `8.3.0-next` prereleases, within 8.x); blue-sdk 7.x and 8.0.x through 8.2.x are no longer accepted because they lack the Vault V2 Midnight adapter entities.
+
+  If you are still on `@morpho-org/blue-sdk` 8.1.x/8.2.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x/4.2.x, pin `@morpho-org/blue-sdk-viem@~7.3`, the last line that accepts them. If you are still on `@morpho-org/blue-sdk` 7.x or 8.0.x, pin `@morpho-org/blue-sdk-viem@~7.1`, the last line whose peer range (`^7.0.0 || ^8.0.0`) accepts them.
+
+- Add shared Midnight position accrual helpers and errors.
+- Add `AccrualVaultV2MidnightAdapter`, which values a Vault V2 Midnight adapter's markets (live net credit discounted to maturity at each market's rate, rounded down per market) and accrues them forward in time. Add `VaultV2MidnightAdapterUtils.validateMarkets`, `realAssets` and `accrueMarkets`, and the `InvalidVaultV2MidnightAdapterMarketsError` error (exported from morpho-sdk `/errors` as `InvalidBlueVaultV2MidnightAdapterMarketsError`). Add `CapacityLimitReason.midnightSelfAllocation`: `maxDeposit` and `maxWithdraw` through a Midnight adapter return 0 because the adapter only accepts allocations it initiates itself (`SelfAllocationOnly`), so the vault cannot allocate or deallocate through it. Code that switches exhaustively on `CapacityLimitReason` must handle the new member.
+- Support Vault V2 vaults that hold Midnight adapters. `VaultV2BlueReallocationData` now clones vaults that mix Blue and Midnight adapters instead of throwing `UnsupportedVaultV2AdapterError`, and BluePublicAllocator plans never source from or target a Midnight adapter. A Midnight adapter reverts vault-initiated allocations (`SelfAllocationOnly`), so when it is the vault's liquidity adapter `MorphoVaultV2.deposit` throws `InputExceedsMaxError` (`max: 0n`), `withdraw` throws it when the requested assets exceed the vault's idle assets, and `redeem` throws it from `getRequirements()` when the accrued value of the shares exceeds the idle assets, in both cases before a reverting transaction is built. `inKindRedeem` and `forceWithdraw` keep rejecting vaults with a Midnight adapter with `VaultV2SingleAdapterRequiredError` or `VaultV2UnsupportedExitAdapterError`.
+- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.3.0-0` (4.3.0 and its `4.3.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x through 4.2.x are no longer accepted because they lack the new Midnight ABIs.
+
+  Projects still on `@morpho-org/blue-sdk` 8.1.x/8.2.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x/4.2.x should pin `@morpho-org/blue-sdk-viem@~7.3`, the last line that accepts them; projects still on `@morpho-org/blue-sdk` 7.x or 8.0.x should pin `@morpho-org/blue-sdk-viem@~7.1`, the last line whose peer range (`^7.0.0 || ^8.0.0`) accepts them.
+
+### Patch Changes
+
+- The `InvalidMidnightPositionAccrualStateError`, `InvalidMidnightPositionAccrualTimestampError` and `InvalidMidnightPositionLossFactorError` facade exports, and the raw names under `/midnight/errors`, now come from `@morpho-org/morpho-ts` directly. They are the same classes `@morpho-org/midnight-sdk` re-exports, so `instanceof` checks keep working across both packages.
+- The unprefixed `@morpho-org/morpho-sdk/errors` facade exports the block-tag resolution error as `UnresolvedBlockNumberError` instead of `BlueUnresolvedBlockNumberError`, since it is protocol-neutral like the other generic errors there, and no longer exports the bare Midnight position-accrual error names (`InvalidPositionAccrualStateError`, `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError`). Use the `InvalidMidnightPosition*Error` names from `/errors`, or the raw names from `/midnight/errors`.
+- Updated dependencies
+  - @morpho-org/blue-sdk-viem@7.4.0-next.0
+  - @morpho-org/midnight-sdk@2.5.0-next.0
+  - @morpho-org/morpho-ts@4.3.0-next.0
+  - @morpho-org/blue-sdk@8.3.0-next.0
+
 ## 9.5.0
 
 ### Minor Changes

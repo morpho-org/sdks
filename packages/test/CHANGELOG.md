@@ -1,5 +1,17 @@
 # @morpho-org/test
 
+## 2.13.0-next.1
+
+### Minor Changes
+
+- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+
+### Patch Changes
+
+- The Vault V2 Midnight adapter fixture (`createVaultV2MidnightAdapterFixture`, `configureVaultV2MidnightAdapterCaps`, `takeVaultV2MidnightAdapterOffer`, `advanceVaultV2MidnightFixtureTime`, `BASE_MIDNIGHT_FORK_BLOCK_NUMBER`, `MAX_MIDNIGHT_ADAPTER_MARKETS` and their types) moves from the root and `/fixtures` entrypoints to the new `@morpho-org/test/midnight` subpath, and `@morpho-org/morpho-ts` becomes an optional peer dependency (`^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.3.0-0`: the range `@morpho-org/morpho-test` already accepts, plus the `4.3.0-next` prereleases) instead of a runtime dependency. The root and `/fixtures` helpers do not import morpho-ts, so they install and load with any morpho-ts version in that range or with none at all; only `@morpho-org/test/midnight` needs morpho-ts 4.3 or later (its `4.3.0-next` prereleases included), and projects that use it resolve one morpho-ts copy with a single set of error classes.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.0-next.0
+
 ## 2.13.0-next.0
 
 ### Minor Changes
