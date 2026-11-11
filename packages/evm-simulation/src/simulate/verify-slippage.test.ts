@@ -226,7 +226,13 @@ describe("verifySlippage", () => {
         {
           limit: redeemLimit,
           measurements: [
-            { type: "balance", field: "sharesBurned", readId: "shares" },
+            {
+              type: "balance",
+              field: "sharesBurned",
+              readId: "shares",
+              token: vault,
+              account: owner,
+            },
             { type: "balance", field: "assetsReceived", readId: "assets" },
           ],
         },
@@ -240,14 +246,23 @@ describe("verifySlippage", () => {
         }).filter((topic): topic is Hex => typeof topic === "string"),
         data: encodeAbiParameters(parseAbiParameters("uint256"), [amount]),
       });
+      const transfer = (to: Address, amount: bigint): Transfer => ({
+        token: vault,
+        from: zeroAddress,
+        to,
+        amount,
+        txIdx: 0,
+      });
       const check = ({
         sharesAfter,
         assetsAfter = 50n,
         logs = [[mint(owner, 70n), mint(receiver, 1n)]],
+        transfers = [],
       }: {
         readonly sharesAfter: bigint;
         readonly assetsAfter?: bigint;
         readonly logs?: readonly (readonly RawLog[])[];
+        readonly transfers?: readonly Transfer[];
       }) =>
         verifySlippage({
           ctx,
@@ -260,15 +275,31 @@ describe("verifySlippage", () => {
             ["shares", sharesAfter],
             ["assets", assetsAfter],
           ]),
-          transfers: [],
+          transfers,
           logs,
           morpho: vault,
           requestTransactions: [],
         });
 
-      expect(() => check({ sharesAfter: 70n })).not.toThrow();
       expect(() =>
-        check({ sharesAfter: 70n, logs: [[mint(owner, 69n)]] }),
+        check({
+          sharesAfter: 70n,
+          transfers: [transfer(owner, 70n), transfer(receiver, 1n)],
+        }),
+      ).not.toThrow();
+      expect(() =>
+        check({
+          sharesAfter: 150n,
+          logs: [[mint(owner, 150n), mint(receiver, 1n)]],
+          transfers: [transfer(owner, 150n), transfer(receiver, 1n)],
+        }),
+      ).not.toThrow();
+      expect(() =>
+        check({
+          sharesAfter: 70n,
+          logs: [[mint(owner, 69n)]],
+          transfers: [transfer(owner, 69n)],
+        }),
       ).toThrow(ConsumerLimitViolationError);
       expect(() => check({ sharesAfter: 70n, assetsAfter: 49n })).toThrow(
         ConsumerLimitViolationError,

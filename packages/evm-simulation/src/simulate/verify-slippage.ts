@@ -278,15 +278,16 @@ export function verifySlippage(params: {
                 throw new ConsumerLimitViolationError(
                   `${label}: outgoing vault-share transfer for token "${token}" and account "${account}" cannot count toward exact "sharesBurned". Remove the share transfer or use quote-only limits for net balance changes.`,
                 );
-              delta -= transfers.reduce(
-                (total, transfer) =>
-                  isAddressEqual(transfer.token, token) &&
-                  isAddressEqual(transfer.from, zeroAddress) &&
-                  isAddressEqual(transfer.to, account)
-                    ? total + transfer.amount
-                    : total,
-                0n,
-              );
+              if (!isVaultRedeem)
+                delta -= transfers.reduce(
+                  (total, transfer) =>
+                    isAddressEqual(transfer.token, token) &&
+                    isAddressEqual(transfer.from, zeroAddress) &&
+                    isAddressEqual(transfer.to, account)
+                      ? total + transfer.amount
+                      : total,
+                  0n,
+                );
             }
           } else if (
             measurement.type === "position" &&
@@ -310,8 +311,12 @@ export function verifySlippage(params: {
         }
         observed[field] = QUOTE_FIELD_DIRECTION[field].output
           ? delta
-          : MathLib.max(0n, -delta) +
-            (field === "sharesBurned" && isVaultRedeem ? mintedShares : 0n);
+          : MathLib.max(
+              0n,
+              field === "sharesBurned" && isVaultRedeem
+                ? mintedShares - delta
+                : -delta,
+            );
       }
       if (limit.quote.positions !== undefined)
         observed.positions = observedPositions;
