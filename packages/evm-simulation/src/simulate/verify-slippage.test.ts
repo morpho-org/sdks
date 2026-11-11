@@ -4,6 +4,7 @@ import {
   type Address,
   encodeAbiParameters,
   encodeEventTopics,
+  erc20Abi,
   ethAddress,
   type Hex,
   parseAbiParameters,
@@ -196,6 +197,88 @@ describe("verifySlippage", () => {
     expect(check).toThrow(ConsumerLimitViolationError);
     expect(check).toThrow(/outgoing vault-share transfer/);
   });
+  test.each(["vaultV1Redeem", "vaultV2Redeem"] as const)(
+    "counts same-simulation share mints toward exact gross burn for %s",
+    (type) => {
+      const redeemLimit: ParsedOperationLimit =
+        type === "vaultV1Redeem"
+          ? {
+              type,
+              vault,
+              account: owner,
+              inputs: { shares: 100n },
+              quote: { sharesBurned: 100n, assetsReceived: 50n },
+              derivedFields: ["sharesBurned"],
+              exactFields: ["sharesBurned"],
+              slippageTolerance: 0n,
+            }
+          : {
+              type,
+              vault,
+              account: owner,
+              inputs: { shares: 100n },
+              quote: { sharesBurned: 100n, assetsReceived: 50n },
+              derivedFields: ["sharesBurned"],
+              exactFields: ["sharesBurned"],
+              slippageTolerance: 0n,
+            };
+      const operations = [
+        {
+          limit: redeemLimit,
+          measurements: [
+            { type: "balance", field: "sharesBurned", readId: "shares" },
+            { type: "balance", field: "assetsReceived", readId: "assets" },
+          ],
+        },
+      ] as const;
+      const mint = (to: Address, amount: bigint): RawLog => ({
+        address: vault,
+        topics: encodeEventTopics({
+          abi: erc20Abi,
+          eventName: "Transfer",
+          args: { from: zeroAddress, to },
+        }).filter((topic): topic is Hex => typeof topic === "string"),
+        data: encodeAbiParameters(parseAbiParameters("uint256"), [amount]),
+      });
+      const check = ({
+        sharesAfter,
+        assetsAfter = 50n,
+        logs = [[mint(owner, 70n), mint(receiver, 1n)]],
+      }: {
+        readonly sharesAfter: bigint;
+        readonly assetsAfter?: bigint;
+        readonly logs?: readonly (readonly RawLog[])[];
+      }) =>
+        verifySlippage({
+          ctx,
+          operations,
+          before: new Map([
+            ["shares", 100n],
+            ["assets", 0n],
+          ]),
+          after: new Map([
+            ["shares", sharesAfter],
+            ["assets", assetsAfter],
+          ]),
+          transfers: [],
+          logs,
+          morpho: vault,
+          requestTransactions: [],
+        });
+
+      expect(() => check({ sharesAfter: 70n })).not.toThrow();
+      expect(() =>
+        check({ sharesAfter: 70n, logs: [[mint(owner, 69n)]] }),
+      ).toThrow(ConsumerLimitViolationError);
+      expect(() => check({ sharesAfter: 70n, assetsAfter: 49n })).toThrow(
+        ConsumerLimitViolationError,
+      );
+      expect(() => check({ sharesAfter: 0n, logs: [] })).not.toThrow();
+      expect(() => check({ sharesAfter: 1n, logs: [] })).toThrow(
+        ConsumerLimitViolationError,
+      );
+    },
+  );
   test.each([
     "blueSupply",
     "blueWithdraw",

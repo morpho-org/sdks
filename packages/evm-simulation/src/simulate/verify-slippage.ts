@@ -15,6 +15,7 @@ import type { CheckContext } from "./context.js";
 import { operationMeasurementPlan } from "./measurement-plan.js";
 import { countPrecedingBlueSupplies } from "./parsing/blue-supply-rounding.js";
 import { measureForceExit } from "./parsing/index.js";
+import { TRANSFER_TOPIC } from "./parsing/transfers.js";
 import { checkSlippage } from "./slippage.js";
 import type { SlippageOperationReads, StateValue } from "./state/read-state.js";
 
@@ -78,6 +79,36 @@ export function verifySlippage(params: {
           : limit.type === "midnightSupplyBlueMakeLend"
             ? `Limit operation ${index} (${limit.type}, loanToken "${limit.loanToken}")`
             : `Limit operation ${index} (${limit.type})`;
+      const isVaultRedeem =
+        limit.type === "vaultV1Redeem" || limit.type === "vaultV2Redeem";
+      const redeemAccount = limit.account ?? ctx.owner;
+      const mintedShares = isVaultRedeem
+        ? logs.reduce(
+            (total, callLogs) =>
+              total +
+              callLogs.reduce((callTotal, log) => {
+                const fromTopic = log.topics[1];
+                const toTopic = log.topics[2];
+                if (
+                  !isAddressEqual(log.address, limit.vault) ||
+                  log.topics[0]?.toLowerCase() !== TRANSFER_TOPIC ||
+                  fromTopic === undefined ||
+                  toTopic === undefined ||
+                  !isAddressEqual(
+                    `0x${fromTopic.slice(26)}` as Address,
+                    zeroAddress,
+                  ) ||
+                  !isAddressEqual(
+                    `0x${toTopic.slice(26)}` as Address,
+                    redeemAccount,
+                  )
+                )
+                  return callTotal;
+                return callTotal + BigInt(log.data);
+              }, 0n),
+            0n,
+          )
+        : 0n;
       const subject = operationMeasurementPlan(limit).subject;
       if (counterSide !== undefined) {
         const b = before.get(counterSide.readId);
@@ -279,7 +310,8 @@ export function verifySlippage(params: {
         }
         observed[field] = QUOTE_FIELD_DIRECTION[field].output
           ? delta
-          : MathLib.max(0n, -delta);
+          : MathLib.max(0n, -delta) +
+            (field === "sharesBurned" && isVaultRedeem ? mintedShares : 0n);
       }
       if (limit.quote.positions !== undefined)
         observed.positions = observedPositions;
