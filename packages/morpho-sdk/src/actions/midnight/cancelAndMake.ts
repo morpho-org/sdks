@@ -1,20 +1,6 @@
-import {
-  InvalidTreeError,
-  MarketUtils,
-  midnightBundlesV2Abi,
-} from "@morpho-org/midnight-sdk";
-import {
-  deepFreeze,
-  getChainAddress,
-  getChainAddresses,
-} from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  isAddressEqual,
-  maxUint128,
-  zeroAddress,
-  zeroHash,
-} from "viem";
+import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { zeroAddress, zeroHash } from "viem";
 import {
   encodeMidnightCalldata,
   encodeMidnightMarketId,
@@ -24,27 +10,20 @@ import {
   validateDeadline,
   validateMidnightNativeAmount,
 } from "../../helpers/validate.js";
-import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
+import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
 import {
-  validateMidnightCollateralSupplySums,
-  validateMidnightUint128Field,
-} from "../../helpers/validateMidnightBounds.js";
-import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
+  normalizeMidnightCancelAndMakePublication,
+  validateMidnightCancelAndMakePublication,
+} from "../../helpers/validateMidnightCancelAndMakePublication.js";
 import {
   snapshotMidnightCancelAndMakeParams,
   validateMidnightPublication,
 } from "../../helpers/validateMidnightPublication.js";
 import {
   DuplicateMidnightGroupCancellationError,
-  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
-  InputExceedsMaxError,
   type MidnightCancelAndMakeAction,
-  MidnightReplacementGroupCancelledError,
-  NegativeInputError,
-  NonPositiveInputError,
   type Transaction,
-  UnsupportedMidnightAuthorizationTargetError,
 } from "../../types/index.js";
 import type { MidnightCancelAndMakeParams } from "../../types/midnightCancelAndMake.js";
 
@@ -54,15 +33,6 @@ export type {
   MidnightOfferPublication,
   MidnightRootActivationSignature,
 } from "../../types/midnightCancelAndMake.js";
-
-/** Blue market argument for `MidnightBundlesV2` calls that park no loan assets. */
-const emptyBlueMarket = {
-  loanToken: zeroAddress,
-  collateralToken: zeroAddress,
-  oracle: zeroAddress,
-  irm: zeroAddress,
-  lltv: 0n,
-} as const;
 
 /** Midnight market argument for `MidnightBundlesV2` calls that supply no collateral. */
 const emptyMidnightMarket = {
@@ -186,14 +156,8 @@ export const midnightCancelAndMake = (
     { group, maxConsumed },
   ] of snapshot.cancellations.entries()) {
     const field = `cancellations[${index}].maxConsumed`;
-    if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
-    if (maxConsumed > maxUint128) {
-      throw new InputExceedsMaxError({
-        field,
-        value: maxConsumed,
-        max: maxUint128,
-      });
-    }
+    // Validation only; enforces the cancellation ceiling uint128 range.
+    validateMidnightUint128Field(field, maxConsumed);
     const key = group.toLowerCase();
     if (cancelledGroups.has(key)) {
       throw new DuplicateMidnightGroupCancellationError({ index, group });
@@ -206,83 +170,12 @@ export const midnightCancelAndMake = (
       throw new EmptyMidnightGroupCancellationsError();
     }
   } else {
-    if (publication.root === zeroHash) {
-      throw new InvalidTreeError("Offer root cannot be zero.");
-    }
-    if (publication.payload === "0x") {
-      throw new InvalidTreeError("Offer payload cannot be empty.");
-    }
-    if (publication.groups.length === 0) {
-      throw new InvalidTreeError("Offer groups cannot be empty.");
-    }
-    const { priceRatifierV1, rateRatifierV1 } = getChainAddresses(
-      snapshot.chainId,
-    );
-    const supportedTargets = [priceRatifierV1, rateRatifierV1].filter(
-      (target): target is Address => target != null,
-    );
-    validateMidnightAddress("publication.ratifier", publication.ratifier);
-    if (
-      !supportedTargets.some((target) =>
-        isAddressEqual(publication.ratifier, target),
-      )
-    ) {
-      throw new UnsupportedMidnightAuthorizationTargetError({
-        authorized: publication.ratifier,
-        chainId: snapshot.chainId,
-        supportedTargets,
-      });
-    }
-    for (const group of publication.groups) {
-      if (cancelledGroups.has(group.toLowerCase())) {
-        throw new MidnightReplacementGroupCancelledError({ group });
-      }
-    }
-    if (publication.blueSupply != null) {
-      if (publication.blueSupply.assets <= 0n) {
-        throw new NonPositiveInputError(
-          "blueSupply.assets",
-          publication.blueSupply.assets,
-        );
-      }
-      validateMidnightUint128Field(
-        "blueSupply.assets",
-        publication.blueSupply.assets,
-      );
-    }
-    if (publication.collateral != null) {
-      if (publication.collateral.supplies.length === 0) {
-        throw new EmptyMidnightCollateralSuppliesError();
-      }
-      validateMidnightMarket({
-        market: publication.collateral.market,
-        chainId: snapshot.chainId,
-      });
-      for (const [
-        index,
-        { collateralIndex, assets },
-      ] of publication.collateral.supplies.entries()) {
-        if (assets <= 0n) {
-          throw new NonPositiveInputError(
-            `collateral.supplies[${index}].assets`,
-            assets,
-          );
-        }
-        validateMidnightUint128Field(
-          `collateral.supplies[${index}].assets`,
-          assets,
-        );
-        // Throws UnknownCollateralIndexError when the index is not configured on the market.
-        MarketUtils.getCollateralByIndex(
-          publication.collateral.market,
-          collateralIndex,
-        );
-      }
-      validateMidnightCollateralSupplySums(
-        "collateral.supplies",
-        publication.collateral.supplies,
-      );
-    }
+    // Validation only; checks publication content and funding inputs.
+    validateMidnightCancelAndMakePublication({
+      publication,
+      chainId: snapshot.chainId,
+      cancelledGroups,
+    });
   }
   const collateral = publication?.collateral;
   const collateralPulls =
@@ -316,31 +209,8 @@ export const midnightCancelAndMake = (
       maxConsumed,
     }),
   );
-  const supplies = (publication?.collateral?.supplies ?? []).map(
-    ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
-  );
-  const blueSupply =
-    publication?.blueSupply == null
-      ? undefined
-      : {
-          market: {
-            loanToken: publication.blueSupply.market.loanToken,
-            collateralToken: publication.blueSupply.market.collateralToken,
-            oracle: publication.blueSupply.market.oracle,
-            irm: publication.blueSupply.market.irm,
-            lltv: publication.blueSupply.market.lltv,
-          },
-          assets: publication.blueSupply.assets,
-          callbackSalt: publication.blueSupply.callbackSalt,
-        };
-  const signature = publication?.rootSignature ?? {
-    height: 0n,
-    nonce: 0n,
-    deadline: 0n,
-    v: 0,
-    r: zeroHash,
-    s: zeroHash,
-  };
+  const normalized = normalizeMidnightCancelAndMakePublication(publication);
+  const { supplies, blueSupply, signature } = normalized;
 
   let tx = {
     to: getChainAddress(snapshot.chainId, "midnightBundlesV2"),
@@ -349,15 +219,15 @@ export const midnightCancelAndMake = (
       abi: midnightBundlesV2Abi,
       functionName: "midnightBundlesV2CancelAndMake",
       args: [
-        blueSupply?.market ?? emptyBlueMarket, // blueMarket
-        blueSupply?.assets ?? 0n, // assetsToPark
-        blueSupply?.callbackSalt ?? zeroHash, // callbackSalt
+        normalized.blueMarket, // blueMarket
+        normalized.assetsToPark, // assetsToPark
+        normalized.callbackSalt, // callbackSalt
         publication?.collateral == null
           ? emptyMidnightMarket
           : MarketUtils.toStruct(publication.collateral.market), // market
         supplies, // collateralSupplies
-        publication?.ratifier ?? zeroAddress, // ratifier
-        publication?.root ?? zeroHash, // newRoot
+        normalized.ratifier, // ratifier
+        normalized.root, // newRoot
         signature.height, // signatureHeight
         signature.nonce, // signatureNonce
         signature.deadline, // signatureDeadline
@@ -365,7 +235,7 @@ export const midnightCancelAndMake = (
         signature.r, // r
         signature.s, // s
         cancellations, // groupsToCancel
-        publication?.payload ?? "0x", // payload
+        normalized.payload, // payload
         snapshot.deadline, // deadline
         nativeFunding.wrappedNative, // wrappedNative
       ],
@@ -384,9 +254,9 @@ export const midnightCancelAndMake = (
           publication?.collateral == null
             ? zeroHash
             : encodeMidnightMarketId(publication.collateral.market),
-        ratifier: publication?.ratifier ?? zeroAddress,
-        root: publication?.root ?? zeroHash,
-        groups: [...(publication?.groups ?? [])],
+        ratifier: normalized.ratifier,
+        root: normalized.root,
+        groups: normalized.groups,
         cancellations,
         collateralSupplies: supplies,
         ...(blueSupply && { blueSupply }),

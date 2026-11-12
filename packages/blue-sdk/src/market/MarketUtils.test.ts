@@ -1,3 +1,4 @@
+import { DivisionByZeroError } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect, test } from "vitest";
 import { ORACLE_PRICE_SCALE, SECONDS_PER_YEAR } from "../constants.js";
@@ -6,6 +7,74 @@ import { SharesMath } from "../math/SharesMath.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 const lltv = (pct: number) => (BigInt(pct * 1000) * MathLib.WAD) / 1000n;
+
+describe("MarketUtils.getWithdrawableCollateral", () => {
+  test.each([
+    { collateral: 10n, borrowShares: 0n, expected: 10n },
+    { collateral: 0n, borrowShares: 1n, expected: 0n },
+    { collateral: 1n, borrowShares: 1n, expected: 0n },
+  ])(
+    "behavior: bounds withdrawal for $collateral collateral and $borrowShares borrow shares",
+    ({ collateral, borrowShares, expected }) => {
+      expect(
+        MarketUtils.getWithdrawableCollateral(
+          { collateral, borrowShares },
+          {
+            totalBorrowAssets: 1n,
+            totalBorrowShares: 1n,
+            price: ORACLE_PRICE_SCALE,
+          },
+          { lltv: MathLib.WAD / 2n },
+        ),
+      ).toBe(expected);
+    },
+  );
+
+  test("error: preserves division by zero for zero LLTV", () => {
+    expect(() =>
+      MarketUtils.getWithdrawableCollateral(
+        { collateral: 10n, borrowShares: 1n },
+        {
+          totalBorrowAssets: 1n,
+          totalBorrowShares: 1n,
+          price: ORACLE_PRICE_SCALE,
+        },
+        { lltv: 0n },
+      ),
+    ).toThrow(DivisionByZeroError);
+  });
+
+  test("behavior: inverse rounding preserves onchain health and is maximal", () => {
+    const position = { collateral: 8361561358427930n, borrowShares: 3176603n };
+    const market = {
+      totalBorrowAssets: 5n,
+      totalBorrowShares: 5533230n,
+      price: 7357772355224998991368731900376n,
+    };
+    const params = { lltv: 535784989738460623n };
+    const withdrawable = MarketUtils.getWithdrawableCollateral(
+      position,
+      market,
+      params,
+    )!;
+    const remaining = position.collateral - withdrawable;
+    const borrowed =
+      (position.borrowShares * (market.totalBorrowAssets + 1n) +
+        market.totalBorrowShares +
+        1000000n -
+        1n) /
+      (market.totalBorrowShares + 1000000n);
+    const maxBorrow =
+      (((remaining * market.price) / ORACLE_PRICE_SCALE) * params.lltv) /
+      MathLib.WAD;
+    expect(maxBorrow >= borrowed).toBe(true);
+    expect(withdrawable).toBe(8361561357612465n);
+    const nextMaxBorrow =
+      ((((remaining - 1n) * market.price) / ORACLE_PRICE_SCALE) * params.lltv) /
+      MathLib.WAD;
+    expect(nextMaxBorrow >= borrowed).toBe(false);
+  });
+});
 
 describe("MarketUtils input immutability", () => {
   const helpers: readonly [

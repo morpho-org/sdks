@@ -1,3 +1,14 @@
+// One-market Vault V2s keep cold-fork snapshot hydration cheap.
+export const SkyMoneyUsdcRiskCapitalVaultV2 = {
+  address: "0x56bfa6f53669B836D1E0Dfa5e99706b12c373ecf",
+  asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+} as const;
+
+export const AvantgardeWethConservativeVaultV2 = {
+  address: "0x132Fe294ea9b6faD8cA00554D211d5F2b905c1AD",
+  asset: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+} as const;
+
 export const KeyrockUsdcVaultV2 = {
   address: "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145",
   asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",

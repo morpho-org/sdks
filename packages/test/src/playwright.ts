@@ -87,6 +87,7 @@ export const createViemTest = <chain extends Chain>(
   });
 };
 
+/** Playwright assertions with exact bigint comparisons at a decimal tolerance. */
 export const expect = test.expect.extend({
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   toApproxEqual(
@@ -97,19 +98,20 @@ export const expect = test.expect.extend({
   ) {
     const assertionName = "toApproxEqual";
 
-    const receivedNumber = Number(formatUnits(received, decimals));
-    const expectedNumber = Number(formatUnits(expected, decimals));
-
-    let pass: boolean;
-    // biome-ignore lint/suspicious/noExplicitAny: Playwright matcher result is untyped
-    let matcherResult: any;
-    try {
-      test.expect(receivedNumber).toBeCloseTo(expectedNumber, numDigits);
-      pass = true;
-    } catch (error) {
-      // @ts-expect-error
-      matcherResult = error.matcherResult;
-      pass = false;
+    const difference =
+      received >= expected ? received - expected : expected - received;
+    const tolerance = 10 ** -numDigits / 2;
+    let pass = tolerance === Infinity;
+    if (Number.isFinite(tolerance) && tolerance > 0) {
+      // Scale the decimal tolerance rather than rounding either bigint to Number.
+      const [coefficient, exponent] = tolerance.toExponential().split("e");
+      const [whole, fraction = ""] = coefficient!.split(".");
+      const threshold = BigInt(whole! + fraction);
+      const scale = decimals + Number(exponent) - fraction.length;
+      pass =
+        scale >= 0
+          ? difference < threshold * 10n ** BigInt(scale)
+          : difference * 10n ** BigInt(-scale) < threshold;
     }
 
     return {
@@ -118,17 +120,17 @@ export const expect = test.expect.extend({
           isNot: this.isNot,
         })}
 
-Expected: ${this.utils.printExpected(expectedNumber)}
-Received: ${this.utils.printReceived(receivedNumber)}
+Expected: ${this.utils.printExpected(formatUnits(expected, decimals))}
+Received: ${this.utils.printReceived(formatUnits(received, decimals))}
 
 Expected precision:  ${numDigits}
-Expected difference: ${this.isNot ? ">=" : "<"} ${this.utils.printExpected(10 ** -numDigits / 2)}
-Received difference: ${this.utils.printReceived(Math.abs(receivedNumber - expectedNumber))}`;
+Expected difference: ${this.isNot ? ">=" : "<"} ${this.utils.printExpected(tolerance)}
+Received difference: ${this.utils.printReceived(formatUnits(difference, decimals))}`;
       },
       pass,
       name: assertionName,
       expected,
-      actual: matcherResult?.actual,
+      actual: received,
     };
   },
 });

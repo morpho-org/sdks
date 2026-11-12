@@ -410,6 +410,7 @@ export function planStateReads(params: {
       let collateralSupplyReads: SlippageOperationReads["collateralSupplyReads"];
       let walletBounds: SlippageOperationReads["walletBounds"];
       if (
+        limit.type === "midnightWithdrawCollateralBatch" ||
         limit.type === "midnightRepayWithdrawCollateral" ||
         limit.type === "midnightTakeRepayWithdrawCollateral"
       ) {
@@ -488,7 +489,10 @@ export function planStateReads(params: {
             };
           });
       }
-      if (limit.type === "midnightSupplyCollateralTakeBorrow") {
+      if (
+        limit.type === "midnightSupplyCollateralTakeBorrow" ||
+        limit.type === "midnightSupplyCollateralBatch"
+      ) {
         if (params.nativeValueSent && params.wNative === undefined)
           throw new SlippageCheckUnavailableError(
             `${label}: native value is sent but no wNative is registered for this chain, so native-funded collateral supplies cannot be measured. Send no native value.`,
@@ -528,22 +532,24 @@ export function planStateReads(params: {
           grouped.set(key, bound);
           return { collateralIndex, readId };
         });
-        if (
-          assetsReceived === undefined ||
-          limit.quote.assetsReceived === undefined
-        )
-          throw new SlippageCheckUnavailableError(
-            `${label}: cannot resolve the loan token or proceeds quote.`,
-          );
-        const proceedsKey = `${assetsReceived.toLowerCase()}:${receiver.toLowerCase()}`;
-        const proceedsBound = grouped.get(proceedsKey) ?? {
-          token: assetsReceived,
-          account: receiver,
-          maxPulls: 0n,
-          minProceeds: 0n,
-        };
-        proceedsBound.minProceeds += limit.quote.assetsReceived;
-        grouped.set(proceedsKey, proceedsBound);
+        if (limit.type === "midnightSupplyCollateralTakeBorrow") {
+          if (
+            assetsReceived === undefined ||
+            limit.quote.assetsReceived === undefined
+          )
+            throw new SlippageCheckUnavailableError(
+              `${label}: cannot resolve the loan token or proceeds quote.`,
+            );
+          const proceedsKey = `${assetsReceived.toLowerCase()}:${receiver.toLowerCase()}`;
+          const proceedsBound = grouped.get(proceedsKey) ?? {
+            token: assetsReceived,
+            account: receiver,
+            maxPulls: 0n,
+            minProceeds: 0n,
+          };
+          proceedsBound.minProceeds += limit.quote.assetsReceived;
+          grouped.set(proceedsKey, proceedsBound);
+        }
         walletBounds = [...grouped.values()].map((bound) => {
           const nativeValue =
             params.wNative !== undefined &&
@@ -794,7 +800,11 @@ export function planStateReads(params: {
       "Native value sent by the request is not covered by any measured native side. Remove the transaction value, or declare the native or wNative asset on the operation it funds.",
     );
   for (const [index, operation] of operations.entries()) {
-    if (operation.limit.type !== "midnightSupplyCollateralTakeBorrow") continue;
+    if (
+      operation.limit.type !== "midnightSupplyCollateralTakeBorrow" &&
+      operation.limit.type !== "midnightSupplyCollateralBatch"
+    )
+      continue;
     const positionReadIds = [
       ...(operation.collateralSupplyReads ?? []).map(({ readId }) => readId),
       ...(operation.creditReadId === undefined ? [] : [operation.creditReadId]),

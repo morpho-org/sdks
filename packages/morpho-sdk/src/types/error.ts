@@ -1438,13 +1438,42 @@ export class RepayExceedsDebtError extends Error {
   }
 }
 
-/** Thrown when EIP-712 signature verification fails (the signed data does not match the expected signer). */
+/** Thrown when EIP-712 signature verification fails to recover the expected signer. */
 export class InvalidSignatureError extends Error {
-  constructor() {
+  constructor(options?: ErrorOptions) {
     super(
       "Signature verification failed: the signed data does not match the expected signer address",
+      options,
     );
     this.name = "InvalidSignatureError";
+  }
+}
+
+/** Thrown when signature recovery fails, with redacted diagnostics and the original error as `cause`. */
+export class MalformedSignatureError extends InvalidSignatureError {
+  /** JavaScript type returned by the wallet, without the signature value. */
+  readonly signatureType: string;
+  /** Whether the returned value is an even-length hex string. */
+  readonly signatureIsHex: boolean;
+  /** Signature byte length, when it is an even-length hex string. */
+  readonly signatureByteLength: number | undefined;
+
+  constructor(params: {
+    readonly signature: unknown;
+    readonly cause: unknown;
+  }) {
+    super({ cause: params.cause });
+    this.name = "MalformedSignatureError";
+    this.message =
+      "Signature verification failed: the wallet returned a malformed signature. Check the wallet signing transport and sign the typed data again.";
+    this.signatureType = typeof params.signature;
+    this.signatureIsHex =
+      typeof params.signature === "string" &&
+      /^0x(?:[0-9a-fA-F]{2})*$/.test(params.signature);
+    this.signatureByteLength =
+      this.signatureIsHex && typeof params.signature === "string"
+        ? (params.signature.length - 2) / 2
+        : undefined;
   }
 }
 
@@ -1628,6 +1657,26 @@ export class EmptyMidnightCollateralSuppliesError extends Error {
       "Midnight collateral supplies cannot be empty. Pass at least one collateral supply, or use `makeBorrow` to publish without collateral.",
     );
     this.name = "EmptyMidnightCollateralSuppliesError";
+  }
+}
+
+/** Thrown when a direct Midnight collateral withdrawal batch is empty. */
+export class EmptyMidnightCollateralWithdrawalsError extends Error {
+  constructor() {
+    super(
+      "Midnight collateral withdrawals cannot be empty. Pass at least one collateral withdrawal.",
+    );
+    this.name = "EmptyMidnightCollateralWithdrawalsError";
+  }
+}
+
+/** Thrown when a direct Midnight collateral batch repeats an index. */
+export class DuplicateMidnightCollateralIndexError extends Error {
+  constructor(collateralIndex: bigint) {
+    super(
+      `Midnight collateral batch repeats index "${collateralIndex}". Pass each collateral index once.`,
+    );
+    this.name = "DuplicateMidnightCollateralIndexError";
   }
 }
 

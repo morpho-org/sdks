@@ -92,38 +92,105 @@ export function releaseTag(pkg: TarballIdentity) {
 }
 
 /**
- * Finds the commit that first set a package to its current version on the
- * mainline, so a tag created by a later run still marks where the version was
- * set. On a normal run that is also the commit npm provenance records; if an
- * earlier run failed before publishing, provenance records the later commit that
- * published it instead. Only
+ * Finds the commit that first set a package to its current name and version on
+ * the mainline, so a tag created by a later run still marks where the version
+ * was set. A package renamed at an unchanged version is tagged on the rename,
+ * not on an earlier commit whose manifest still holds the old name. It follows
+ * a package moved between `packages/<dir>` directories at an unchanged name and
+ * version back to where that version was set. On a normal run that is also the
+ * commit npm provenance records; if an earlier run failed before publishing,
+ * provenance records the later commit that published it instead. Only
  * first-parent history counts: a version set on a side branch is released by
  * the commit that merged it into the mainline.
  *
  * @param root - Repository root, with full history.
- * @param pkg - The package, at its current version.
+ * @param pkg - The package, at its current name and version.
  * @returns The commit SHA.
- * @throws If no mainline commit sets that version, or git fails or a historical
- *   manifest is malformed.
+ * @throws If no mainline commit sets that name and version, or git fails or a
+ *   historical manifest is malformed, or multiple historical directories hold
+ *   the package's identity.
  */
 export function releaseCommit(root: string, pkg: PublicPackage): string {
-  const path = `${pkg.dir}/package.json`;
+  let path = `${pkg.dir}/package.json`;
+  let tip = "HEAD";
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", root, ...args], { encoding: "utf8" });
-  const versionAt = (commit: string) => {
-    // The package didn't exist at that commit: no version, not an error.
-    if (!git("ls-tree", "--name-only", commit, "--", path).trim()) return;
-    const manifest: unknown = JSON.parse(git("show", `${commit}:${path}`));
-    return publicIdentity(manifest, `"${path}" at ${commit}`)?.version;
+  const identityAt = (
+    commit: string,
+    manifestPath: string,
+  ): TarballIdentity | undefined | null => {
+    if (!git("ls-tree", "--name-only", commit, "--", manifestPath).trim())
+      return null;
+    const manifest: unknown = JSON.parse(
+      git("show", `${commit}:${manifestPath}`),
+    );
+    return publicIdentity(manifest, `"${manifestPath}" at ${commit}`);
   };
-  const history = git("log", "--first-parent", "--format=%H %P", "--", path)
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => line.split(" "));
-  for (const [commit, parent] of history) {
-    if (!commit || versionAt(commit) !== pkg.version) continue;
-    // A root commit has no parent, so it sets whatever version it holds.
-    if (!parent || versionAt(parent) !== pkg.version) return commit;
+  const isCurrent = (identity: TarballIdentity | undefined | null) =>
+    identity?.name === pkg.name && identity?.version === pkg.version;
+  for (;;) {
+    const history = git(
+      "log",
+      "--first-parent",
+      "--format=%H %P",
+      tip,
+      "--",
+      path,
+    )
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split(" "));
+    let moved = false;
+    for (const [commit, parent] of history) {
+      if (!commit || !isCurrent(identityAt(commit, path))) continue;
+      if (!parent) return commit;
+      const parentIdentity = identityAt(parent, path);
+      if (isCurrent(parentIdentity)) continue;
+      if (parentIdentity !== null) return commit;
+
+      const matches = git(
+        "diff",
+        "--name-only",
+        "--no-renames",
+        "--diff-filter=D",
+        parent,
+        commit,
+        "--",
+        "packages/*/package.json",
+      )
+        .split("\n")
+        .filter(Boolean)
+        .filter((candidatePath) =>
+          /^packages\/[^/]+\/package\.json$/.test(candidatePath),
+        )
+        .filter((candidatePath) => {
+          const contents = git("show", `${parent}:${candidatePath}`);
+          try {
+            const manifest: unknown = JSON.parse(contents);
+            return isCurrent(
+              publicIdentity(manifest, `"${candidatePath}" at ${parent}`),
+            );
+          } catch {
+            return false;
+          }
+        });
+      if (matches.length === 0) return commit;
+      if (matches.length > 1) {
+        const dirs = matches
+          .map((candidatePath) =>
+            candidatePath.slice(0, -"/package.json".length),
+          )
+          .join(", ");
+        throw new Error(
+          `${pkg.name} ${pkg.version} moved at ${commit} from more than one directory holding that name and version (${dirs}). History can't be changed and every run recomputes this, so bump the package's version to give it a release commit after ${commit}.`,
+        );
+      }
+      path = matches[0]!;
+      tip = parent;
+      moved = true;
+      break;
+    }
+    if (!moved) break;
   }
   throw new Error(`No commit sets ${pkg.name} to ${pkg.version}.`);
 }

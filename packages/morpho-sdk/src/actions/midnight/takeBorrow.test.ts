@@ -436,3 +436,15 @@ describe("midnightTakeBorrow malformed address", () => {
     );
   });
 });
+
+test("unknown target tags retain units-branch validation", () => {
+  const target = {
+    type: "unit",
+    units: 0n,
+    maxBuyerAssets: 1n,
+    minSellerAssets: 1n,
+  } as unknown as Parameters<typeof midnightTakeBorrow>[0]["target"];
+  expect(() => midnightTakeBorrow({ ...params, target })).toThrow(
+    new NonPositiveInputError("target.units", 0n),
+  );
+});

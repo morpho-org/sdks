@@ -1111,8 +1111,12 @@ const createChecks = (): FieldChecks => {
           quote,
           "collateralWithdrawals",
         );
-        if (rawCollateralWithdrawals !== undefined) {
+        if (
+          rawCollateralWithdrawals !== undefined ||
+          type === "midnightWithdrawCollateralBatch"
+        ) {
           if (
+            type !== "midnightWithdrawCollateralBatch" &&
             type !== "midnightRepayWithdrawCollateral" &&
             type !== "midnightTakeRepayWithdrawCollateral"
           ) {
@@ -1165,9 +1169,13 @@ const createChecks = (): FieldChecks => {
         const rawCollateralSupplies = readField(quote, "collateralSupplies");
         if (
           rawCollateralSupplies !== undefined ||
-          type === "midnightSupplyCollateralTakeBorrow"
+          type === "midnightSupplyCollateralTakeBorrow" ||
+          type === "midnightSupplyCollateralBatch"
         ) {
-          if (type !== "midnightSupplyCollateralTakeBorrow") {
+          if (
+            type !== "midnightSupplyCollateralTakeBorrow" &&
+            type !== "midnightSupplyCollateralBatch"
+          ) {
             errors.push(
               `${path}.quote.collateralSupplies: cannot be measured for "${type}"`,
             );
@@ -1298,7 +1306,9 @@ const createChecks = (): FieldChecks => {
                 ? MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS
                 : type === "midnightTakeBorrow" ||
                     type === "midnightTakeWithdraw" ||
-                    type === "midnightSupplyCollateralTakeBorrow"
+                    type === "midnightSupplyCollateralTakeBorrow" ||
+                    type === "midnightSupplyCollateralBatch" ||
+                    type === "midnightWithdrawCollateralBatch"
                   ? []
                   : POSITION_BOUNDS_FIELDS;
           check.keys(rawPosition, {
@@ -1620,6 +1630,14 @@ const OPERATION_SPECS: Record<
   midnightTakeWithdraw: {
     ...marketSpec([["creditRedeemed"], ["assetsReceived"]]),
     addresses: ["receiver", "assetPaid", "assetReceived"] as const,
+  },
+  midnightSupplyCollateralBatch: {
+    ...marketSpec([]),
+    addresses: [],
+  },
+  midnightWithdrawCollateralBatch: {
+    ...marketSpec([]),
+    addresses: ["receiver"],
   },
   midnightSupplyCollateralTakeBorrow: {
     ...marketSpec([["unitsSold"], ["assetsReceived"]]),

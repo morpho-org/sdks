@@ -62,6 +62,7 @@ export interface EncodeVaultSharesPermitParams {
  *   wallet account differs from `userAddress`.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet targets another chain.
  * @throws {InvalidSignatureError} from `sign()` when signature recovery fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @throws {InvalidPermitDomainChainIdError} when a Vault V1 permit domain targets another chain or omits `chainId`.
  * @throws {InvalidPermitDomainVerifyingContractError} when a Vault V1 permit domain targets another token or omits `verifyingContract`.
  * @throws {UnsupportedPermitDomainExtensionsError} when a Vault V1 permit domain advertises unsupported extensions.

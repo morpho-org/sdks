@@ -55,11 +55,121 @@ const limit: ParsedOperationLimit = {
   slippageTolerance: 10_000000000000000n,
 };
 
+describe("Midnight direct collateral batches", () => {
+  test.each([
+    "midnightSupplyCollateralBatch",
+    "midnightWithdrawCollateralBatch",
+  ] as const)(
+    "%s measures every index and one summed token balance",
+    (type) => {
+      const marketId: Hex = `0x${"11".repeat(32)}`;
+      const entries = [
+        { collateralIndex: 0n, assets: 10n },
+        { collateralIndex: 1n, assets: 20n },
+      ];
+      const midnightMarket = {
+        chainId: 1n,
+        midnight: vault,
+        loanToken: owner,
+        collateralParams: entries.map(() => ({
+          token: receiver,
+          lltv: 0n,
+          liquidationCursor: 0n,
+          oracle: zeroAddress,
+        })),
+        maturity: 2_000_000_000n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      };
+      const operation: ParsedOperationLimit =
+        type === "midnightSupplyCollateralBatch"
+          ? {
+              type,
+              marketId,
+              quote: { collateralSupplies: entries },
+              slippageTolerance: 0n,
+            }
+          : {
+              type,
+              marketId,
+              receiver,
+              quote: { collateralWithdrawals: entries },
+              slippageTolerance: 0n,
+            };
+      const plan = planStateReads({
+        owner,
+        morpho: zeroAddress,
+        midnight: vault,
+        operations: [
+          {
+            limit: operation,
+            midnightMarket,
+            midnightCollateralTokens: entries.map(({ collateralIndex }) => ({
+              collateralIndex,
+              token: receiver,
+            })),
+          },
+        ],
+      });
+      const positions = plan.reads.filter(
+        (read) => read.kind === "midnight.collateral",
+      );
+      const balances = plan.reads.filter(
+        (read) => read.kind === "erc20.balance",
+      );
+      expect(positions).toHaveLength(2);
+      expect(balances).toHaveLength(1);
+      expect(plan.reads).toHaveLength(3);
+      const before = new Map<string, StateValue>(
+        plan.reads.map((read) => [read.id, 100n]),
+      );
+      const after = new Map(before);
+      const direction = type === "midnightSupplyCollateralBatch" ? 1n : -1n;
+      positions.forEach((read, index) =>
+        after.set(read.id, 100n + direction * entries[index]!.assets),
+      );
+      after.set(balances[0]!.id, 100n - direction * 30n);
+      const check = () =>
+        verifySlippage({
+          ctx,
+          operations: plan.operations,
+          before,
+          after,
+          transfers: [],
+          logs: [],
+          morpho: zeroAddress,
+          requestTransactions: [],
+        });
+      expect(check()[0]?.checkedLimits.quote).toMatchObject(
+        type === "midnightSupplyCollateralBatch"
+          ? { collateralSupplies: entries }
+          : { collateralWithdrawals: entries },
+      );
+      after.set(balances[0]!.id, 100n - direction * 30n - 1n);
+      expect(check).toThrow(ConsumerLimitViolationError);
+      after.delete(positions[0]!.id);
+      expect(check).toThrow(SlippageCheckUnavailableError);
+    },
+  );
+});
+
 describe("verifySlippage", () => {
-  test("behavior: quote-only vault burn keeps net balance semantics", () => {
+  test.each([
+    "vaultV1Withdraw",
+    "vaultV2Withdraw",
+    "vaultV1Redeem",
+    "vaultV2Redeem",
+    "vaultV2ForceWithdraw",
+    "vaultV2ForceRedeem",
+    "vaultV1InKindRedeem",
+    "vaultV2InKindRedeem",
+    "vaultV1MigrateToV2",
+  ] as const)("behavior: quote-only %s keeps net balance semantics", (type) => {
     const operation: ParsedOperationLimit = {
-      type: "vaultV2Withdraw",
-      vault,
+      ...(type === "vaultV1MigrateToV2"
+        ? { type, sourceVault: vault, targetVault: receiver }
+        : { type, vault }),
       account: owner,
       quote: { sharesBurned: 80n },
       slippageTolerance: 0n,
@@ -196,6 +306,99 @@ describe("verifySlippage", () => {
     expect(check).toThrow(ConsumerLimitViolationError);
     expect(check).toThrow(/outgoing vault-share transfer/);
   });
+  test.each([
+    "vaultV1Withdraw",
+    "vaultV2Withdraw",
+    "vaultV1Redeem",
+    "vaultV2Redeem",
+    "vaultV1MigrateToV2",
+  ] as const)("typed %s adds subject share mints back exactly once", (type) => {
+    const operation: ParsedOperationLimit = {
+      ...(type === "vaultV1MigrateToV2"
+        ? {
+            type,
+            sourceVault: vault,
+            targetVault: owner,
+            inputs: { shares: 100n },
+          }
+        : type === "vaultV1Withdraw" || type === "vaultV2Withdraw"
+          ? { type, vault, inputs: { assets: 100n } }
+          : { type, vault, inputs: { shares: 100n } }),
+      account: receiver,
+      quote: { sharesBurned: 100n },
+      slippageTolerance: 0n,
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    for (const minted of [0n, 15n, 120n]) {
+      const transfers: Transfer[] = [
+        {
+          token: vault,
+          from: zeroAddress,
+          to: receiver,
+          amount: minted / 2n,
+          txIdx: 0,
+        },
+        {
+          token: vault,
+          from: zeroAddress,
+          to: receiver,
+          amount: minted - minted / 2n,
+          txIdx: 0,
+        },
+        {
+          token: owner,
+          from: zeroAddress,
+          to: receiver,
+          amount: 999n,
+          txIdx: 0,
+        },
+        { token: vault, from: zeroAddress, to: owner, amount: 999n, txIdx: 0 },
+        { token: vault, from: owner, to: receiver, amount: 999n, txIdx: 0 },
+      ];
+      const params = {
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 200n]]),
+        after: new Map([[id, 100n + minted]]),
+        transfers,
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      };
+      expect(verifySlippage(params)[0]?.checkedLimits.fieldChecks).toEqual({
+        sharesBurned: "exact",
+      });
+      for (const actualBurn of [99n, 101n]) {
+        expect(() =>
+          verifySlippage({
+            ...params,
+            after: new Map([[id, 200n + minted - actualBurn]]),
+          }),
+        ).toThrow(ConsumerLimitViolationError);
+      }
+      expect(() =>
+        verifySlippage({
+          ...params,
+          operations: [
+            {
+              ...plan.operations[0]!,
+              limit: { ...operation, derivedFields: [], exactFields: [] },
+            },
+          ],
+          after: new Map([[id, 99n + minted]]),
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    }
+  });
+
   test.each([
     "blueSupply",
     "blueWithdraw",

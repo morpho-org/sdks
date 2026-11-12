@@ -151,6 +151,17 @@ export function resolveApprovalLimits(params: {
           });
         }
         break;
+      case "midnightSupplyCollateralBatch":
+        for (const token of new Set(
+          (operation.midnightApprovalTokens ?? []).map(
+            (approvalToken) => approvalToken.toLowerCase() as Address,
+          ),
+        )) {
+          addToken(token, requiredAddress(registry.midnight, "midnight"));
+        }
+        break;
+      case "midnightWithdrawCollateralBatch":
+        break;
       case "midnightRedeem":
       case "midnightTakeLend":
       case "midnightTakeBorrow":

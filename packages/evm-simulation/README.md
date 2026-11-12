@@ -727,6 +727,13 @@ position's `collateral`, except on `midnightSupplyCollateral` and
 `collateralSupplied` is the Midnight collateral slot delta. Equality and
 favorable movement pass.
 
+For typed-input vault exits, `sharesBurned` (including a migration's source vault)
+measures the account's share-balance decrease plus vault shares minted to that
+account during the bundle, counted once. This prevents accrued V1 or V2 fee shares
+from masking shares spent on withdrawals, redeems or migrations. Both derived
+checks and explicit quoted share caps on typed-input limits use this observation.
+Quote-only limits, including force and in-kind exits, keep the net balance decrease.
+
 ```ts
 const result = await simulate(config, {
   chainId: 1,
@@ -952,6 +959,8 @@ inputs; pass the UI's quote through `expected`.
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
 | `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightSupplyCollateralBatch` | exact `collateralSupplies` per index, used as minimum collateral credit and summed wallet pull caps per token; always measures the sender; encoded `args.onBehalf` must equal `owner`, and a non-owner `options.onBehalf` throws `LimitAccountMismatchError`; approval limits target Midnight for each distinct collateral token | — | — |
+| `midnightWithdrawCollateralBatch` | `collateralWithdrawals` per index; always measures the sender; `receiver` is `options.receiver ?? owner` and must match `args.receiver`, including a non-owner receiver; receiver delivery is checked against the sum of withdrawals per token | — | — |
 | `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
 | `midnightCancelAndMake` with `blueSupply` and no `collateralSupplies` (emits `midnightSupplyBlueMakeLend`) | exact `assetsPaid` (`blueSupply.assets`): sender debit of the full parked amount; for wNative, counts ETH sent plus net wNative change; combining with collateral supplies is unsupported | `sharesMinted` (the BlueBuyCallback's expected Blue supply-share increase) | Offer fillability |
 | `midnightRedeem` | `assetsReceived`, `creditRedeemed` (`units`); `account` is `options.onBehalf ?? owner`, `receiver` is `options.receiver ?? owner` | — | — |
@@ -973,6 +982,7 @@ which cannot be overridden; an explicit `0n` is passed through so
 omits the field, or emits the `1n` cap on a combined op's inactive leg. A
 missing required side throws `MissingExpectedQuoteError` naming the field and
 what to compute. Supported Midnight actions are `midnightSupplyCollateral`,
+`midnightSupplyCollateralBatch`, `midnightWithdrawCollateralBatch`,
 `midnightRedeem`, `midnightTakeLend`, `midnightTakeBorrow`,
 `midnightTakeWithdraw`, `midnightRepayWithdrawCollateral`,
 `midnightTakeRepayWithdrawCollateral`, and `midnightSupplyCollateralTakeBorrow`, plus

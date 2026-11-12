@@ -20,12 +20,12 @@ import {
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import { validateMidnightSellTargetBounds } from "../../helpers/validateMidnightTakeFeasibility.js";
+import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
   type MidnightSellTarget,
   type MidnightTakeWithdrawAction,
-  NonPositiveInputError,
   type Transaction,
   UnboundedMidnightTakeInputError,
 } from "../../types/index.js";
@@ -67,36 +67,34 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
   });
 
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.assets <= 0n) {
-      throw new NonPositiveInputError("target.assets", target.assets);
+  switch (target.type) {
+    case "assets": {
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.assets", target.assets);
+      if (target.maxUnits === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.maxUnits");
+      }
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.maxUnits", target.maxUnits);
+      validateMidnightUint128Field("target.assets", target.assets);
+      validateMidnightUint128Field("target.maxUnits", target.maxUnits);
+      break;
     }
-    if (target.maxUnits === maxUint256) {
-      throw new UnboundedMidnightTakeInputError("target.maxUnits");
-    }
-    if (target.maxUnits <= 0n) {
-      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
-    }
-    validateMidnightUint128Field("target.assets", target.assets);
-    validateMidnightUint128Field("target.maxUnits", target.maxUnits);
-  } else {
-    if (target.units === maxUint256) {
-      throw new UnboundedMidnightTakeInputError("target.units");
-    }
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.minSellerAssets <= 0n) {
-      throw new NonPositiveInputError(
+    default: {
+      if (target.units === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.units");
+      }
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.units", target.units);
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.minSellerAssets", target.minSellerAssets);
+      validateMidnightUint128Field("target.units", target.units);
+      validateMidnightUint128Field(
         "target.minSellerAssets",
         target.minSellerAssets,
       );
+      break;
     }
-    validateMidnightUint128Field("target.units", target.units);
-    validateMidnightUint128Field(
-      "target.minSellerAssets",
-      target.minSellerAssets,
-    );
   }
   if (params.deadline === maxUint256) {
     throw new UnboundedMidnightTakeInputError("deadline");

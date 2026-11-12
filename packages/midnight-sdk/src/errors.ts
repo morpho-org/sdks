@@ -558,6 +558,27 @@ export class InvalidTypedDataSignatureError extends Error {
 }
 
 /**
+ * Thrown when an Ecrecover signature cannot be parsed or recovered.
+ *
+ * @example
+ * ```ts
+ * import { InvalidEcrecoverSignatureError } from "@morpho-org/midnight-sdk";
+ *
+ * const error = new InvalidEcrecoverSignatureError(new TypeError("Invalid recovery input"));
+ * console.log(error.cause);
+ * ```
+ */
+export class InvalidEcrecoverSignatureError extends Error {
+  public constructor(cause: unknown) {
+    super(
+      "Ecrecover signature is malformed. Provide a valid ECDSA signature and try again.",
+      { cause },
+    );
+    this.name = "InvalidEcrecoverSignatureError";
+  }
+}
+
+/**
  * Thrown when decoded Ecrecover ratifier data contains a non-canonical signature `v` value.
  *
  * @example

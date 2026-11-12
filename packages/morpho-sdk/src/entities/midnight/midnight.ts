@@ -31,12 +31,14 @@ import {
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
+  midnightSupplyCollateralBatch,
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
   midnightTakeWithdraw,
   midnightWithdrawCollateral,
+  midnightWithdrawCollateralBatch,
 } from "../../actions/midnight/index.js";
 import {
   getMidnightApprovalRequirements,
@@ -61,6 +63,7 @@ import {
   validateMidnightAddress,
 } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
+import { validateMidnightCollateralBatch } from "../../helpers/validateMidnightCollateralBatch.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightBytes32 } from "../../helpers/validateMidnightPublication.js";
 import { validateMidnightTakeFeasibility } from "../../helpers/validateMidnightTakeFeasibility.js";
@@ -71,6 +74,8 @@ import {
   type ActionRequirement,
   BorrowExceedsSafeLtvError,
   EmptyBlueParkingMarketError,
+  EmptyMidnightCollateralSuppliesError,
+  EmptyMidnightCollateralWithdrawalsError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
@@ -92,6 +97,7 @@ import {
   MidnightRepayExceedsDebtError,
   type MidnightRepayWithdrawCollateralAction,
   type MidnightSupplyCollateralAction,
+  type MidnightSupplyCollateralBatchAction,
   type MidnightSupplyCollateralTakeBorrowAction,
   type MidnightTakeBorrowAction,
   MidnightTakeDeadlineTooFarError,
@@ -100,6 +106,7 @@ import {
   MidnightTakeTargetUnreachableError,
   type MidnightTakeWithdrawAction,
   type MidnightWithdrawCollateralAction,
+  type MidnightWithdrawCollateralBatchAction,
   MidnightZeroOnBehalfError,
   MissingAccrualPositionError,
   NegativeInputError,
@@ -128,6 +135,7 @@ import type {
   RedeemParams,
   RepayWithdrawCollateralParams,
   SupplyBlueMakeLendParams,
+  SupplyCollateralBatchParams,
   SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
@@ -135,6 +143,7 @@ import type {
   TakeLendParams,
   TakeRepayWithdrawCollateralParams,
   TakeWithdrawParams,
+  WithdrawCollateralBatchParams,
   WithdrawCollateralParams,
 } from "./types.js";
 
@@ -207,7 +216,9 @@ export type MidnightActions = Pick<
   | "supplyCollateralTakeBorrow"
   | "takeRepayWithdrawCollateral"
   | "supplyCollateral"
+  | "supplyCollateralBatch"
   | "withdrawCollateral"
+  | "withdrawCollateralBatch"
   | "makeLend"
   | "makeBorrow"
   | "supplyBlueMakeLend"
@@ -1454,6 +1465,124 @@ export class MorphoMidnight {
   }
 
   /**
+   * Withdraws an ordered collateral batch atomically from Midnight without bundle authorization or token pulls.
+   *
+   * Uses the supplied position snapshot to resolve maxUint256 and check collateral health.
+   * Duplicates are rejected, unlike bundle flows which sum them.
+   * No requirements or RPC reads are needed. The signing account must be accountAddress.
+   *
+   * @param params - Market, owner-bound position, collateral prices and withdrawal amount.
+   * @param params.accountAddress - Collateral owner. This account must send the transaction.
+   * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
+   * @param params.positionData - Owner-bound position snapshot returned by getPositionData.
+   * @param params.collateralPrices - Oracle prices indexed like positionData.collateral and scaled by
+   *   ORACLE_PRICE_SCALE; required when the position has debt, otherwise an empty array is safe.
+   * @param params.collateralWithdrawals - Nonempty ordered withdrawals, one per index.
+   *   maxUint256 resolves that index's full snapshot balance.
+   * @param params.receiver - Account receiving the withdrawn collateral; defaults to accountAddress.
+   * @returns Lazy handles for a direct Midnight withdrawal.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
+   * @throws {MidnightCalldataEncodingError} when accountAddress is malformed or an input cannot be ABI-encoded.
+   * @throws {MidnightZeroAccountError} when accountAddress is zero.
+   * @throws {MidnightMarketAddressMismatchError} when marketData targets another Midnight deployment.
+   * @throws {MissingMarketPriceError} when debt is positive and held collateral has no supplied price.
+   * @throws {MarketIdMismatchError} when positionData belongs to another market.
+   * @throws {AccrualPositionUserMismatchError} when positionData belongs to another account.
+   * @throws {UnknownCollateralIndexError} when collateralIndex is not configured.
+   * @throws {EmptyMidnightCollateralWithdrawalsError} when the list is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when an index repeats.
+   * @throws {NonPositiveInputError} when the resolved amount is not positive.
+   * @throws {InputExceedsMaxError} when assets exceeds uint128.
+   * @throws {WithdrawExceedsCollateralError} when assets exceeds the collateral balance.
+   * @throws {WithdrawMakesPositionUnhealthyError} when remaining collateral cannot safely cover debt.
+   * @throws {MidnightZeroReceiverError} when receiver is zero.
+   * @throws {MidnightContractReceiverError} when receiver cannot safely receive collateral.
+   * @example
+   * ```ts
+   * const output = midnight.withdrawCollateralBatch({
+   *   accountAddress: user,
+   *   marketData,
+   *   positionData,
+   *   collateralPrices,
+   *   collateralWithdrawals: [{ collateralIndex: 0n, assets: 1_000n }],
+   * });
+   * const tx = output.buildTx();
+   * ```
+   */
+  withdrawCollateralBatch(
+    params: WithdrawCollateralBatchParams,
+  ): MidnightActionOutput<MidnightWithdrawCollateralBatchAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject invalid owners before preparing the direct call.
+    validateMidnightAccount("accountAddress", params.accountAddress);
+    validateMarketData(params.marketData, this.chainId);
+    validatePositionBinding(params);
+    // Direct batches reject duplicates instead of summing them.
+    validateMidnightCollateralBatch(
+      params.collateralWithdrawals,
+      new EmptyMidnightCollateralWithdrawalsError(),
+    );
+    const collateralWithdrawals = params.collateralWithdrawals.map(
+      ({ collateralIndex, assets }) => {
+        // Reject unconfigured indexes before reading the position balance.
+        MarketUtils.getCollateralByIndex(
+          params.marketData.params,
+          collateralIndex,
+        );
+        return {
+          collateralIndex,
+          assets:
+            assets === maxUint256
+              ? (params.positionData.collateral[Number(collateralIndex)] ?? 0n)
+              : assets,
+        };
+      },
+    );
+    const tx = midnightWithdrawCollateralBatch({
+      chainId: this.chainId,
+      market: params.marketData.params,
+      collateralWithdrawals,
+      onBehalf: params.accountAddress,
+      receiver: params.receiver ?? params.accountAddress,
+      metadata: this.client.options.metadata,
+    });
+    const collateral = Array.from(
+      { length: params.marketData.params.collateralParams.length },
+      (_, i) => params.positionData.collateral[i] ?? 0n,
+    );
+    for (const { collateralIndex, assets } of collateralWithdrawals) {
+      const index = Number(collateralIndex);
+      const available = collateral[index]!;
+      if (assets > available) {
+        throw new WithdrawExceedsCollateralError({
+          withdrawAmount: assets,
+          available,
+          market: params.marketData.id,
+        });
+      }
+      collateral[index] = available - assets;
+    }
+    if (params.positionData.debt > 0n) {
+      const maxSafeDebt = getMidnightMaxSafeDebt({
+        market: params.marketData,
+        collateral,
+        collateralPrices: params.collateralPrices,
+      });
+      if (params.positionData.debt > maxSafeDebt) {
+        throw new WithdrawMakesPositionUnhealthyError({
+          withdrawAmount: collateralWithdrawals.reduce(
+            (sum, entry) => sum + entry.assets,
+            0n,
+          ),
+          borrowAssets: params.positionData.debt,
+          maxSafeBorrow: maxSafeDebt,
+        });
+      }
+    }
+    return { getRequirements: async () => [], buildTx: () => tx };
+  }
+
+  /**
    * Prepares a direct collateral supply using a caller-provided market snapshot.
    *
    * @param params - Supplier, market snapshot, collateral amount, reserve, and optional collateral index.
@@ -1533,6 +1662,102 @@ export class MorphoMidnight {
           market: market.params,
           collateralIndex,
           assets: params.collateralAssets,
+          onBehalf: params.accountAddress,
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  /**
+   * Prepares ordered direct collateral supplies in one Midnight multicall.
+   * Pass one entry per index: duplicates are rejected, unlike bundle flows which sum them.
+   *
+   * @param params.accountAddress - Sender and collateral beneficiary.
+   * @param params.marketData - Snapshot of the target market.
+   * @param params.collateralSupplies - Ordered supplies with optional reserved allowance amounts.
+   * @returns A lazy approval resolver and synchronous stateless transaction builder.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when the deployment differs.
+   * @throws {MidnightCalldataEncodingError} when the account is malformed.
+   * @throws {NegativeInputError} when reserved assets are negative.
+   * @throws {NonPositiveInputError} when assets are not positive.
+   * @throws {InputExceedsMaxError} when assets exceed uint128.
+   * @throws {UnknownCollateralIndexError} when an index is not configured.
+   * @throws {EmptyMidnightCollateralSuppliesError} when the list is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when an index repeats.
+   * @throws {MidnightZeroOnBehalfError} when requirements or construction uses the zero account.
+   * @example
+   * ```ts
+   * const output = midnight.supplyCollateralBatch({
+   *   accountAddress: user, marketData,
+   *   collateralSupplies: [{ collateralIndex: 0n, assets: 100n }],
+   * });
+   * const tx = output.buildTx();
+   * ```
+   */
+  supplyCollateralBatch(
+    params: SupplyCollateralBatchParams,
+  ): MidnightActionOutput<MidnightSupplyCollateralBatchAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject malformed accounts before resolving token requirements.
+    validateMidnightAddress("accountAddress", params.accountAddress);
+    validateMarketData(params.marketData, this.chainId);
+    // Reject empty and duplicate-index batches before resolving allowance thresholds.
+    validateMidnightCollateralBatch(
+      params.collateralSupplies,
+      new EmptyMidnightCollateralSuppliesError(),
+    );
+    for (const supply of params.collateralSupplies) {
+      assertPositiveAmount("assets", supply.assets);
+      validateMidnightUint128Field("assets", supply.assets);
+      assertNonNegativeAmount(
+        "reservedCollateralAssets",
+        supply.reservedCollateralAssets ?? 0n,
+      );
+      // Fail eagerly for collateral absent from the supplied snapshot.
+      params.marketData.getCollateralByIndex(supply.collateralIndex);
+    }
+    const midnight = getChainAddress(this.chainId, "midnight");
+    return {
+      getRequirements: async (
+        _requirementsParams?: MidnightRequirementsParams,
+      ) => {
+        if (isAddressEqual(params.accountAddress, zeroAddress)) {
+          throw new MidnightZeroOnBehalfError("onBehalf");
+        }
+        const amounts = new Map<Address, bigint>();
+        for (const supply of params.collateralSupplies) {
+          const token = params.marketData.getCollateralByIndex(
+            supply.collateralIndex,
+          ).token;
+          amounts.set(
+            token,
+            (amounts.get(token) ?? 0n) +
+              supply.assets +
+              (supply.reservedCollateralAssets ?? 0n),
+          );
+        }
+        const requirements = await Promise.all(
+          [...amounts].map(([token, amount]) =>
+            getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: params.accountAddress,
+              spender: midnight,
+              amount,
+            }),
+          ),
+        );
+        return requirements.flat();
+      },
+      buildTx: () =>
+        midnightSupplyCollateralBatch({
+          chainId: this.chainId,
+          market: params.marketData.params,
+          collateralSupplies: params.collateralSupplies.map(
+            ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
+          ),
           onBehalf: params.accountAddress,
           metadata: this.client.options.metadata,
         }),

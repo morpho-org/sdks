@@ -9,6 +9,8 @@ import {
 import {
   ChainId,
   getChainAddress,
+  getChainAddresses,
+  registerCustomAddresses,
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
@@ -30,6 +32,7 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  ChainWNativeMissingError,
   DuplicateMidnightGroupCancellationError,
   EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
@@ -1480,6 +1483,36 @@ describe("midnightCancelAndMake without publication", () => {
         },
       ),
     );
+  });
+});
+
+describe("midnightCancelAndMake native funding validation", () => {
+  test("behavior: explicit zero native funding disables wrapping", () => {
+    const tx = midnightCancelAndMake({ ...params, nativeAmount: 0n });
+    expect(tx.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: midnightBundlesV2Abi, data: tx.data }).args.at(
+        -1,
+      ),
+    ).toBe(zeroAddress);
+  });
+
+  test("error: negative native funding", () => {
+    const build = () => midnightCancelAndMake({ ...params, nativeAmount: -1n });
+    expect(build).toThrow(NegativeInputError);
+    expect(build).toThrow(
+      expect.objectContaining({ field: "nativeAmount", value: -1n }),
+    );
+  });
+
+  test("error: native funding requires a registered wrapped-native token", () => {
+    const chainId = 999104;
+    const { wNative: _wNative, ...addresses } =
+      getChainAddresses(midnightChainId);
+    registerCustomAddresses({ addresses: { [chainId]: addresses } });
+    expect(() =>
+      midnightCancelAndMake({ ...params, chainId, nativeAmount: 1n }),
+    ).toThrow(ChainWNativeMissingError);
   });
 });
 

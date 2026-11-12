@@ -296,6 +296,16 @@ export interface SupplyCollateralParams extends MarketActionParams {
   readonly collateralIndex?: bigint;
 }
 
+/** Parameters for an atomic direct Midnight collateral supply batch. */
+export interface SupplyCollateralBatchParams extends MarketActionParams {
+  readonly collateralSupplies: readonly {
+    readonly collateralIndex: bigint;
+    readonly assets: bigint;
+    /** Additional assets included only in the allowance threshold. */
+    readonly reservedCollateralAssets?: bigint;
+  }[];
+}
+
 /** Parameters for a direct Midnight collateral withdrawal. */
 export interface WithdrawCollateralParams
   extends MarketActionParams,
@@ -304,6 +314,16 @@ export interface WithdrawCollateralParams
   /** Collateral assets to withdraw; maxUint256 resolves the snapshot's whole balance. */
   readonly assets: bigint;
   /** Defaults to accountAddress. */
+  readonly receiver?: Address;
+}
+
+/** Parameters for an atomic direct Midnight collateral withdrawal batch. */
+export interface WithdrawCollateralBatchParams
+  extends MarketActionParams,
+    MidnightPositionHealthParams {
+  /** Ordered unique indexes; maxUint256 resolves that index's whole snapshot balance. */
+  readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
+  /** Defaults to accountAddress for every withdrawal. */
   readonly receiver?: Address;
 }
 

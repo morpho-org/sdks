@@ -1,5 +1,29 @@
 # @morpho-org/morpho-sdk
 
+## 9.6.0
+
+### Minor Changes
+
+- Add Midnight withdrawCollateralBatch to withdraw multiple collateral assets atomically through one multicall, with full-balance resolution and buffered end-state health checks. Direct batches reject duplicate collateral indexes.
+- Normalize malformed signature verification failures into typed SDK errors while preserving their causes. Add MalformedSignatureError (extending InvalidSignatureError) with redacted signature diagnostics, without changing the existing mismatch message or wrapping wallet signing errors.
+
+  Re-export `InvalidEcrecoverSignatureError` as `InvalidMidnightEcrecoverSignatureError` from `/errors` and as `InvalidEcrecoverSignatureError` from `/midnight/errors`.
+
+- Add Midnight supplyCollateralBatch to supply multiple collateral assets atomically through one multicall, with per-token unlimited approval requirements and optional reserved allowance thresholds. Direct batches reject duplicate collateral indexes.
+
+### Patch Changes
+
+- Correct withdrawable collateral rounding to return the maximum amount that preserves position health under Morpho's onchain check, preventing withdrawals that would revert because too little collateral remains.
+- Include projected lost assets in newly constructed MetaMorpho v1.1 accrual vault totals, so asset and share conversions account for losses before interest accrual is requested. Preserve loss accounting during subsequent accrual without counting losses twice.
+
+  For freshly constructed v1.1 vaults with losses, allocation proportions and APY now use the loss-inclusive total, as accrued vaults already did. Allocation proportions can sum to less than 100%, and the weighted yield rate reflects the ratio of real assets to total assets. Exact onchain parity requires underlying markets accrued to the current timestamp; share conversions also require pending vault fees to be accrued.
+
+- Flatten the action builders that had the highest cognitive complexity (Blue, bundles, Midnight and Vault V1 migration actions) to a score of 15 or lower using guard clauses, `switch` statements and shared internal validators. Transactions, errors and their order are unchanged.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.2
+  - @morpho-org/midnight-sdk@2.5.0
+  - @morpho-org/morpho-ts@4.3.0
+
 ## 9.5.1
 
 ### Patch Changes

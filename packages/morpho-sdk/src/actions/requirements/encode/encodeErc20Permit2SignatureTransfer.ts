@@ -62,6 +62,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `userAddress`.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet chain differs from `chainId`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @example
  * ```ts
  * import { addressesRegistry } from "@morpho-org/blue-sdk";

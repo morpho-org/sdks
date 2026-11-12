@@ -67,6 +67,101 @@ test.each(["vaultV1Deposit", "vaultV2Deposit"] as const)(
   },
 );
 const MIDNIGHT_MARKET_ID = MidnightMarketUtils.toId(MIDNIGHT_MARKET);
+
+test.each([
+  "midnightSupplyCollateralBatch",
+  "midnightWithdrawCollateralBatch",
+] as const)(
+  "%s validates per-index quotes and rejects duplicate indices",
+  (type) => {
+    const entries = [
+      { collateralIndex: 0n, assets: 10n },
+      { collateralIndex: 1n, assets: 20n },
+    ];
+    const parse = (amounts: typeof entries) =>
+      parseRequest({
+        chainId: 1,
+        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+        limits: {
+          operations: [
+            {
+              type,
+              marketId: MIDNIGHT_MARKET_ID,
+              quote:
+                type === "midnightSupplyCollateralBatch"
+                  ? { collateralSupplies: amounts }
+                  : { collateralWithdrawals: amounts },
+            },
+          ],
+        },
+      });
+    expect(parse(entries).limits).not.toBe("none");
+    expect(() => parse([])).toThrow(SimulationValidationError);
+    expect(() => parse([entries[0]!, entries[0]!])).toThrow(
+      SimulationValidationError,
+    );
+    expect(() => parse([{ collateralIndex: 0n, assets: 0n }])).toThrow(
+      SimulationValidationError,
+    );
+  },
+);
+test.each([{}, { collateralWithdrawals: undefined }])(
+  "error: withdraw batches reject missing collateral withdrawals in quote %j",
+  (quote) => {
+    expect(() =>
+      parseRequest({
+        chainId: 1,
+        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+        limits: {
+          operations: [
+            {
+              type: "midnightWithdrawCollateralBatch",
+              marketId: MIDNIGHT_MARKET_ID,
+              quote,
+            },
+          ],
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        name: "SimulationValidationError",
+        fieldErrors: expect.arrayContaining([
+          expect.stringContaining(
+            "quote.collateralWithdrawals: must be an array of { collateralIndex, assets }",
+          ),
+        ]),
+      }),
+    );
+  },
+);
+
+test("error: withdraw batches reject position.maxCollateral as an unknown field", () => {
+  expect(() =>
+    parseRequest({
+      chainId: 1,
+      transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+      limits: {
+        operations: [
+          {
+            type: "midnightWithdrawCollateralBatch",
+            marketId: MIDNIGHT_MARKET_ID,
+            quote: {
+              collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+            },
+            position: { maxCollateral: [{ collateralIndex: 0n, assets: 0n }] },
+          },
+        ],
+      },
+    } as unknown as SimulateParams),
+  ).toThrowError(
+    expect.objectContaining({
+      fieldErrors: expect.arrayContaining([
+        "limits.operations[0].position.maxCollateral: unknown field",
+      ]),
+    }),
+  );
+});
+
 const MIDNIGHT_HYDRATED_MARKET = new MidnightMarket({
   params: MIDNIGHT_MARKET_PARAMS,
   totalUnits: 0n,

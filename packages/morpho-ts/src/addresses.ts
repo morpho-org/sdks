@@ -1993,11 +1993,20 @@ export let addressesRegistry: AddressRegistry = deepFreeze(_addressesRegistry);
 export let addresses = addressesRegistry;
 /** Deep-frozen registry of deployment blocks, keyed by chain id. */
 export let deployments: DeploymentRegistry = deepFreeze(_deployments);
-/** Alias of `addressesRegistry` kept for Blue package compatibility. */
+/**
+ * Alias of `addressesRegistry` kept for Blue package compatibility.
+ * @deprecated Use `addressesRegistry` instead.
+ */
 export let blueAddressRegistry = addressesRegistry;
-/** Alias of `addressesRegistry` matching the previous Blue object-style export. */
+/**
+ * Alias of `addressesRegistry` matching the previous Blue object-style export.
+ * @deprecated Use `addresses` instead.
+ */
 export let blueAddresses = blueAddressRegistry;
-/** Alias of `deployments` kept for Blue package compatibility. */
+/**
+ * Alias of `deployments` kept for Blue package compatibility.
+ * @deprecated Use `deployments` instead.
+ */
 export let blueDeployments = deployments;
 /** Deep-frozen registry of wrapped token to unwrapped token mappings. */
 export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);

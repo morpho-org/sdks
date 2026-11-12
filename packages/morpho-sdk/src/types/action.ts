@@ -351,7 +351,7 @@ export interface BlueWithdrawAction
   > {}
 
 /**
- * Metadata for a direct Morpho Blue withdrawal of a BlueBuyCallback's whole supply position,
+ * Metadata for a direct Morpho Blue withdrawal of a BlueBuyCallback's supply shares,
  * sent by the callback's owner.
  */
 export interface BlueWithdrawBuyCallbackAction
@@ -359,7 +359,7 @@ export interface BlueWithdrawBuyCallbackAction
     "blueWithdrawBuyCallback",
     {
       readonly market: Hex;
-      /** Supply shares burned: the callback's whole position. */
+      /** Caller-supplied number of supply shares burned. */
       readonly shares: bigint;
       /** BlueBuyCallback whose supply position is withdrawn. */
       readonly onBehalf: Address;
@@ -572,6 +572,17 @@ export interface MidnightSupplyCollateralAction
     }
   > {}
 
+/** Metadata for an atomic direct Midnight collateral supply batch. */
+export interface MidnightSupplyCollateralBatchAction
+  extends BaseAction<
+    "midnightSupplyCollateralBatch",
+    {
+      readonly market: Hex;
+      readonly collateralSupplies: readonly MidnightCollateralTransfer[];
+      readonly onBehalf: Address;
+    }
+  > {}
+
 /** Metadata for a direct Midnight collateral withdrawal transaction. */
 export interface MidnightWithdrawCollateralAction
   extends BaseAction<
@@ -580,6 +591,18 @@ export interface MidnightWithdrawCollateralAction
       readonly market: Hex;
       readonly collateralIndex: bigint;
       readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly receiver: Address;
+    }
+  > {}
+
+/** Metadata for an atomic direct Midnight collateral withdrawal batch. */
+export interface MidnightWithdrawCollateralBatchAction
+  extends BaseAction<
+    "midnightWithdrawCollateralBatch",
+    {
+      readonly market: Hex;
+      readonly collateralWithdrawals: readonly MidnightCollateralTransfer[];
       readonly onBehalf: Address;
       readonly receiver: Address;
     }
@@ -698,7 +721,9 @@ export type TransactionAction =
   | MidnightTakeWithdrawAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
+  | MidnightSupplyCollateralBatchAction
   | MidnightWithdrawCollateralAction
+  | MidnightWithdrawCollateralBatchAction
   | MidnightRedeemAction
   | MidnightTakeRepayWithdrawCollateralAction
   | MidnightRepayWithdrawCollateralAction

@@ -181,7 +181,8 @@ export namespace BlueErrors {
 export namespace VaultV2Errors {
   /**
    * Legacy Vault V2 accrual error retained for compatibility.
-   * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   * Accrual before `lastUpdate` returns an unchanged snapshot; at `lastUpdate`, losses are still
+   * reconciled.
    * @deprecated Never thrown by the SDK and will be removed in the next major.
    */
   export class InvalidInterestAccrual extends Error {

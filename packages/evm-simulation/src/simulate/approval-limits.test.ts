@@ -33,6 +33,56 @@ const COLLATERAL = "0x6666666666666666666666666666666666666666";
 const MARKET_ID =
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+test("batch supplies allow each distinct collateral token only to Midnight", () => {
+  const midnight = getChainAddresses(1).midnight!;
+  const result = resolveApprovalLimits({
+    chainId: 1,
+    owner: OWNER,
+    operations: [
+      {
+        limit: {
+          type: "midnightSupplyCollateralBatch",
+          marketId: MARKET_ID,
+          quote: {
+            collateralSupplies: [
+              { collateralIndex: 0n, assets: 10n },
+              { collateralIndex: 1n, assets: 20n },
+            ],
+          },
+          slippageTolerance: 0n,
+        },
+        midnightApprovalTokens: [LOAN, COLLATERAL, LOAN],
+      },
+    ],
+  });
+  expect(result.approvals).toEqual(
+    [LOAN, COLLATERAL].map((token) => ({
+      type: "token",
+      owner: OWNER,
+      token,
+      spender: midnight,
+    })),
+  );
+  expect(
+    resolveApprovalLimits({
+      chainId: 1,
+      owner: OWNER,
+      operations: [
+        {
+          limit: {
+            type: "midnightWithdrawCollateralBatch",
+            marketId: MARKET_ID,
+            quote: {
+              collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+            },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+    }).approvals,
+  ).toEqual([]);
+});
+
 const parsed = (operation: object) => {
   const request = parseRequest({
     chainId: 1,

@@ -1,5 +1,13 @@
 # @morpho-org/morpho-ts
 
+## 4.3.0
+
+### Minor Changes
+
+- Document the package's shared addresses, ABIs, math and generic helpers alongside time and formatting utilities, and clarify integer time conversion and non-negative math rounding assumptions. Deprecate the `blueAddressRegistry`, `blueAddresses` and `blueDeployments` aliases in favor of `addressesRegistry`, `addresses` and `deployments`; the aliases remain available and runtime behavior is unchanged.
+
+  Document that direct conversions between two of weeks, months and years are unsupported: they currently return zero or an incorrect value, or throw a division-by-zero error. Convert through days or a smaller unit instead.
+
 ## 4.2.0
 
 ### Minor Changes

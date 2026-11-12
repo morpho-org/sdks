@@ -1,5 +1,17 @@
 # @morpho-org/blue-sdk
 
+## 8.2.2
+
+### Patch Changes
+
+- Correct withdrawable collateral rounding to return the maximum amount that preserves position health under Morpho's onchain check, preventing withdrawals that would revert because too little collateral remains.
+- Include projected lost assets in newly constructed MetaMorpho v1.1 accrual vault totals, so asset and share conversions account for losses before interest accrual is requested. Preserve loss accounting during subsequent accrual without counting losses twice.
+
+  For freshly constructed v1.1 vaults with losses, allocation proportions and APY now use the loss-inclusive total, as accrued vaults already did. Allocation proportions can sum to less than 100%, and the weighted yield rate reflects the ratio of real assets to total assets. Exact onchain parity requires underlying markets accrued to the current timestamp; share conversions also require pending vault fees to be accrued.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.0
+
 ## 8.2.1
 
 ### Patch Changes

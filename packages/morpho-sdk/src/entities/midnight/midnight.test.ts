@@ -54,6 +54,7 @@ import {
   midnightMarket,
   midnightMarketId,
   midnightOtherMarket,
+  midnightTwoCollateralMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
   InvalidMidnightOfferGroupError,
@@ -73,8 +74,10 @@ import {
   AccrualPositionUserMismatchError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
+  DuplicateMidnightCollateralIndexError,
   EmptyBlueParkingMarketError,
   EmptyMidnightCollateralSuppliesError,
+  EmptyMidnightCollateralWithdrawalsError,
   EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
   ExpiredDeadlineError,
@@ -529,6 +532,29 @@ describe.each(takeFlowCases)("deadline window: $name", (takeFlow) => {
   });
 });
 
+const nativeFundingCases = (pull: bigint) =>
+  (
+    [
+      { funding: "partial", nativeAmount: pull / 2n },
+      { funding: "full", nativeAmount: pull },
+    ] as const
+  ).flatMap((funding) =>
+    [
+      { allowanceLabel: "absent", allowance: 0n, needsApproval: true },
+      {
+        allowanceLabel: "insufficient",
+        allowance: pull - 1n,
+        needsApproval: true,
+      },
+      { allowanceLabel: "exact", allowance: pull, needsApproval: false },
+      {
+        allowanceLabel: "sufficient",
+        allowance: pull + 1n,
+        needsApproval: false,
+      },
+    ].map((allowance) => ({ ...funding, ...allowance })),
+  );
+
 const mockAllowance = (params: {
   readonly handle: MidnightMockHandle;
   readonly token: Address;
@@ -841,25 +867,44 @@ describe("MorphoMidnight", () => {
       expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
     });
 
-    test("behavior: forwards native funding for a wNative loan token", () => {
-      const nativeAmount = 500n;
-      const market = wNativeLoanMarket;
-      const tx = midnight()
-        .takeLend({
+    test.each(nativeFundingCases(1000n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        const market = wNativeLoanMarket;
+        const output = midnightWithHandle(handle, {
+          supportSignature: true,
+        }).takeLend({
           ...params,
           marketData: new Market({ ...marketData(), params: market }),
           takeableOffers: [midnightApiTake({ market })],
           nativeAmount,
-        })
-        .buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+        });
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const tx = output.buildTx();
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("behavior: forwards the referral fee", async () => {
       const handle = createMockClient(midnightTestChain);
@@ -1406,10 +1451,13 @@ describe("MorphoMidnight", () => {
       expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
     });
 
-    test("behavior: forwards native funding for a wNative collateral supply", () => {
-      const nativeAmount = 500n;
-      const tx = midnight()
-        .supplyCollateralTakeBorrow({
+    test.each(nativeFundingCases(2000n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        const output = midnightWithHandle(handle, {
+          supportSignature: true,
+        }).supplyCollateralTakeBorrow({
           ...params,
           marketData: new Market({
             ...marketData(),
@@ -1423,16 +1471,32 @@ describe("MorphoMidnight", () => {
             midnightApiTake({ buy: true, market: wNativeCollateralMarket }),
           ],
           nativeAmount,
-        })
-        .buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+        });
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const tx = output.buildTx();
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("behavior: forwards an explicit receiver", () => {
       const tx = midnight()
@@ -1762,10 +1826,13 @@ describe("MorphoMidnight", () => {
       expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
     });
 
-    test("behavior: forwards native funding for a wNative loan token", () => {
-      const nativeAmount = 500n;
-      const tx = midnight()
-        .takeRepayWithdrawCollateral({
+    test.each(nativeFundingCases(990n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        const output = midnightWithHandle(handle, {
+          supportSignature: true,
+        }).takeRepayWithdrawCollateral({
           ...params,
           marketData: new Market({
             ...marketData(),
@@ -1777,16 +1844,32 @@ describe("MorphoMidnight", () => {
           ),
           takeableOffers: [midnightApiTake({ market: wNativeLoanMarket })],
           nativeAmount,
-        })
-        .buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+        });
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const tx = output.buildTx();
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("behavior: forwards the referral fee", async () => {
       const handle = createMockClient(midnightTestChain);
@@ -2198,6 +2281,131 @@ describe("MorphoMidnight", () => {
           max: maxUint128,
         }),
       );
+    });
+  });
+
+  describe("supplyCollateralBatch", () => {
+    test.each([
+      [[], EmptyMidnightCollateralSuppliesError],
+      [
+        [
+          { collateralIndex: 0n, assets: 100n },
+          { collateralIndex: 0n, assets: 200n },
+        ],
+        DuplicateMidnightCollateralIndexError,
+      ],
+    ])("rejects invalid lists eagerly %#", (collateralSupplies, error) => {
+      const handle = createMockClient(midnightTestChain);
+      expect(() =>
+        midnightWithHandle(handle).supplyCollateralBatch({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          collateralSupplies,
+        }),
+      ).toThrow(error);
+    });
+
+    test("rejects negative reserved assets eagerly", () => {
+      expect(() =>
+        midnight().supplyCollateralBatch({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          collateralSupplies: [
+            {
+              collateralIndex: 0n,
+              assets: 100n,
+              reservedCollateralAssets: -1n,
+            },
+          ],
+        }),
+      ).toThrow(NegativeInputError);
+    });
+
+    test.each([0n, 100n])(
+      "resolves distinct tokens with first allowance %s",
+      async (allowance) => {
+        const handle = createMockClient(midnightTestChain);
+        mockAllowance({
+          handle,
+          token: midnightAddresses.collateralToken,
+          result: allowance,
+        });
+        mockAllowance({
+          handle,
+          token: midnightAddresses.secondCollateralToken,
+          result: 0n,
+        });
+        const data = new Market({
+          ...marketData(),
+          params: midnightTwoCollateralMarket,
+        });
+        const output = midnightWithHandle(handle).supplyCollateralBatch({
+          marketData: data,
+          accountAddress: midnightAddresses.taker,
+          collateralSupplies: [
+            { collateralIndex: 0n, assets: 100n },
+            { collateralIndex: 1n, assets: 200n },
+          ],
+        });
+        const before = output.buildTx();
+        const requirements = await output.getRequirements();
+        expect(requirements).toHaveLength(allowance === 0n ? 2 : 1);
+        expect(requirements.map((r) => r.action)).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: "erc20Approval",
+              args: expect.objectContaining({
+                amount: maxUint256,
+                spender: midnightAddresses.midnight,
+              }),
+            }),
+          ]),
+        );
+        expect(output.buildTx()).toEqual(before);
+      },
+    );
+
+    test("reserved assets raise allowance threshold without being transferred", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 100n,
+      });
+      const entity = midnightWithHandle(handle);
+      const params = {
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralSupplies: [{ collateralIndex: 0n, assets: 100n }],
+      };
+      expect(
+        await entity.supplyCollateralBatch(params).getRequirements(),
+      ).toEqual([]);
+      const output = entity.supplyCollateralBatch({
+        ...params,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 100n, reservedCollateralAssets: 1n },
+        ],
+      });
+      expect(await output.getRequirements()).toHaveLength(1);
+      expect(output.buildTx().action.args.collateralSupplies).toEqual(
+        params.collateralSupplies,
+      );
+      expect(midnight().supplyCollateralBatch(params).buildTx()).toEqual(
+        output.buildTx(),
+      );
+    });
+
+    test("zero account fails both lazy paths", async () => {
+      const output = midnight().supplyCollateralBatch({
+        marketData: marketData(),
+        accountAddress: zeroAddress,
+        collateralSupplies: [{ collateralIndex: 0n, assets: 100n }],
+      });
+      await expect(output.getRequirements()).rejects.toThrow(
+        MidnightZeroOnBehalfError,
+      );
+      expect(() => output.buildTx()).toThrow(MidnightZeroOnBehalfError);
     });
   });
 
@@ -3099,9 +3307,14 @@ describe("MorphoMidnight", () => {
   describe("supplyBlueMakeLend", () => {
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<SupplyBlueMakeLendParams> = {},
+      {
+        supportSignature = false,
+        ...overrides
+      }: Partial<SupplyBlueMakeLendParams> & {
+        readonly supportSignature?: boolean;
+      } = {},
     ) =>
-      midnightWithHandle(handle).supplyBlueMakeLend({
+      midnightWithHandle(handle, { supportSignature }).supplyBlueMakeLend({
         accountAddress: midnightAddresses.maker,
         offers: rateTree(blueOffer()),
         deadline: maxUint256,
@@ -3191,34 +3404,52 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("behavior: forwards native funding for a wNative Blue supply", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockBlueReads(handle, { marketParams: wNativeBlueMarket });
-      const wNativeBlueOfferMarket = new MarketParams({
-        ...midnightMarket,
-        loanToken: wNative,
-        maturity: apiValidMaturity,
-      });
-      const nativeAmount = 1_000n;
-      const output = await prepare(handle, {
-        blueMarket: wNativeBlueMarket,
-        offers: rateTree(
-          blueOffer({
-            market: wNativeBlueOfferMarket,
-            callbackData: getMidnightBlueBuyCallbackData(wNativeBlueMarket),
-          }),
-        ),
-        nativeAmount,
-      });
-      const tx = output.buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+    test.each(nativeFundingCases(1000n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        mockBlueReads(handle, { marketParams: wNativeBlueMarket });
+        const wNativeBlueOfferMarket = new MarketParams({
+          ...midnightMarket,
+          loanToken: wNative,
+          maturity: apiValidMaturity,
+        });
+        const output = await prepare(handle, {
+          blueMarket: wNativeBlueMarket,
+          offers: rateTree(
+            blueOffer({
+              market: wNativeBlueOfferMarket,
+              callbackData: getMidnightBlueBuyCallbackData(wNativeBlueMarket),
+            }),
+          ),
+          nativeAmount,
+          supportSignature: true,
+        });
+        const tx = output.buildTx();
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("error: assetsToPark above uint128 is rejected before reads", async () => {
       await expect(
@@ -3864,9 +4095,16 @@ describe("MorphoMidnight", () => {
     };
     const prepare = (
       handle: MidnightMockHandle,
-      overrides: Partial<SupplyCollateralMakeBorrowParams> = {},
+      {
+        supportSignature = false,
+        ...overrides
+      }: Partial<SupplyCollateralMakeBorrowParams> & {
+        readonly supportSignature?: boolean;
+      } = {},
     ) =>
-      midnightWithHandle(handle).supplyCollateralMakeBorrow({
+      midnightWithHandle(handle, {
+        supportSignature,
+      }).supplyCollateralMakeBorrow({
         ...params,
         ...overrides,
       });
@@ -3953,31 +4191,50 @@ describe("MorphoMidnight", () => {
       expect(() => output.buildTx()).not.toThrow();
     });
 
-    test("behavior: forwards native funding for a wNative collateral supply", async () => {
-      const wNativeCollateralParams = new MarketParams({
-        ...wNativeCollateralMarket,
-        maturity: apiValidMaturity,
-      });
-      const nativeAmount = 1_000n;
-      const output = await prepare(createMockClient(midnightTestChain), {
-        offers: rateTree(
-          makerOffer({ buy: false, market: wNativeCollateralParams }),
-        ),
-        collateral: {
-          market: wNativeCollateralParams,
-          supplies: [{ collateralIndex: 0n, assets: 2_000n }],
-        },
-        nativeAmount,
-      });
-      const tx = output.buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+    test.each(nativeFundingCases(2000n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        const wNativeCollateralParams = new MarketParams({
+          ...wNativeCollateralMarket,
+          maturity: apiValidMaturity,
+        });
+        const output = await prepare(handle, {
+          offers: rateTree(
+            makerOffer({ buy: false, market: wNativeCollateralParams }),
+          ),
+          collateral: {
+            market: wNativeCollateralParams,
+            supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+          },
+          nativeAmount,
+          supportSignature: true,
+        });
+        const tx = output.buildTx();
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("error: MidnightOfferReduceOnlyError", async () => {
       await expect(
@@ -4178,6 +4435,197 @@ describe("MorphoMidnight", () => {
           },
         }),
       ).rejects.toThrow(UnknownCollateralIndexError);
+    });
+  });
+
+  describe("withdrawCollateralBatch", () => {
+    const params = (debt = 0n) => {
+      const market = marketWithTwoCollaterals();
+      return {
+        marketData: market,
+        ...positionHealthParams(market, {
+          debt,
+          collateral: [10_000n, 10_000n],
+          collateralPrices: [ORACLE_PRICE_SCALE, ORACLE_PRICE_SCALE],
+        }),
+        accountAddress: midnightAddresses.taker,
+        collateralWithdrawals: [
+          { collateralIndex: 1n, assets: 1_000n },
+          { collateralIndex: 0n, assets: 2_000n },
+        ],
+      };
+    };
+    test("two entries within health, default receiver and stateless handles", async () => {
+      const input = params(1_000n);
+      const output = midnight().withdrawCollateralBatch(input);
+      const before = [...input.positionData.collateral];
+      const tx = output.buildTx();
+      await expect(output.getRequirements()).resolves.toEqual([]);
+      expect(output.buildTx()).toEqual(tx);
+      expect(midnight().withdrawCollateralBatch(input).buildTx()).toEqual(tx);
+      expect(tx.action.args.collateralWithdrawals).toEqual(
+        input.collateralWithdrawals,
+      );
+      expect(tx.action.args.receiver).toBe(input.accountAddress);
+      expect(input.positionData.collateral).toEqual(before);
+      expect(tx).not.toBeInstanceOf(Promise);
+    });
+    test("buffer limit passes; one unit more debt fails", () => {
+      const input = params();
+      const limit = [8_000n, 9_000n]
+        .entries()
+        .reduce(
+          (sum, [index, amount]) =>
+            sum +
+            MathLib.mulDivDown(
+              amount,
+              input.marketData.params.collateralParams[index]!.lltv -
+                DEFAULT_LLTV_BUFFER,
+              MathLib.WAD,
+            ),
+          0n,
+        );
+      expect(() =>
+        midnight().withdrawCollateralBatch(params(limit)),
+      ).not.toThrow();
+      expect(() =>
+        midnight().withdrawCollateralBatch(params(limit + 1n)),
+      ).toThrow(WithdrawMakesPositionUnhealthyError);
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...params(limit),
+          collateralWithdrawals: [
+            { collateralIndex: 1n, assets: 1_000n },
+            { collateralIndex: 0n, assets: 2_001n },
+          ],
+        }),
+      ).toThrow(WithdrawMakesPositionUnhealthyError);
+    });
+    test("full balance plus partial, debt free without prices and explicit receiver", () => {
+      const input = params();
+      const tx = midnight()
+        .withdrawCollateralBatch({
+          ...input,
+          collateralPrices: [],
+          receiver: midnightAddresses.maker,
+          collateralWithdrawals: [
+            { collateralIndex: 1n, assets: maxUint256 },
+            { collateralIndex: 0n, assets: 100n },
+          ],
+        })
+        .buildTx();
+      expect(tx.action.args.collateralWithdrawals).toEqual([
+        { collateralIndex: 1n, assets: 10_000n },
+        { collateralIndex: 0n, assets: 100n },
+      ]);
+      expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
+    });
+    test.each([
+      [{ collateralWithdrawals: [] }, EmptyMidnightCollateralWithdrawalsError],
+      [
+        {
+          collateralWithdrawals: [
+            { collateralIndex: 0n, assets: 1n },
+            { collateralIndex: 0n, assets: 2n },
+          ],
+        },
+        DuplicateMidnightCollateralIndexError,
+      ],
+      [
+        { collateralWithdrawals: [{ collateralIndex: 0n, assets: 10_001n }] },
+        WithdrawExceedsCollateralError,
+      ],
+      [
+        { collateralWithdrawals: [{ collateralIndex: 2n, assets: 1n }] },
+        UnknownCollateralIndexError,
+      ],
+      [
+        { collateralWithdrawals: [{ collateralIndex: 0n, assets: 0n }] },
+        NonPositiveInputError,
+      ],
+      [
+        { collateralWithdrawals: [{ collateralIndex: 0n, assets: -1n }] },
+        NonPositiveInputError,
+      ],
+      [
+        {
+          collateralWithdrawals: [
+            { collateralIndex: 0n, assets: maxUint128 + 1n },
+          ],
+        },
+        InputExceedsMaxError,
+      ],
+      [{ receiver: zeroAddress }, MidnightZeroReceiverError],
+      [{ receiver: midnightAddresses.midnight }, MidnightContractReceiverError],
+      [{ accountAddress: zeroAddress }, MidnightZeroAccountError],
+    ])("rejects invalid input %#", (overrides, error) => {
+      expect(() =>
+        midnight().withdrawCollateralBatch({ ...params(), ...overrides }),
+      ).toThrow(error);
+    });
+    test("requires prices for remaining held collateral with debt", () => {
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...params(1n),
+          collateralPrices: [ORACLE_PRICE_SCALE],
+        }),
+      ).toThrow(MissingMarketPriceError);
+    });
+    test("rejects full withdrawal of an empty balance", () => {
+      const input = params();
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...input,
+          positionData: positionData(input.marketData, {
+            collateral: [0n, 10_000n],
+          }),
+          collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
+        }),
+      ).toThrow(NonPositiveInputError);
+    });
+    test("validates position market and owner binding", () => {
+      const input = params();
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...input,
+          positionData: positionData(marketData(), { collateral: [10_000n] }),
+        }),
+      ).toThrow(MarketIdMismatchError);
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...input,
+          positionData: positionData(input.marketData, {
+            user: midnightAddresses.maker,
+          }),
+        }),
+      ).toThrow(AccrualPositionUserMismatchError);
+    });
+    test("validates market chain and deployment", () => {
+      const input = params();
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...input,
+          marketData: new Market({
+            ...input.marketData,
+            params: new MarketParams({
+              ...input.marketData.params,
+              chainId: 1n,
+            }),
+          }),
+        }),
+      ).toThrow(ChainIdMismatchError);
+      expect(() =>
+        midnight().withdrawCollateralBatch({
+          ...input,
+          marketData: new Market({
+            ...input.marketData,
+            params: new MarketParams({
+              ...input.marketData.params,
+              midnight: zeroAddress,
+            }),
+          }),
+        }),
+      ).toThrow(MidnightMarketAddressMismatchError);
     });
   });
 
@@ -4439,30 +4887,49 @@ describe("MorphoMidnight", () => {
       );
     });
 
-    test("behavior: forwards native funding for a wNative loan token", () => {
-      const nativeAmount = 500n;
-      const wNativeMarketData = new Market({
-        ...defaultMarketData,
-        params: wNativeLoanMarket,
-      });
-      const tx = midnight()
-        .repayWithdrawCollateral({
+    test.each(nativeFundingCases(1000n))(
+      "behavior: native $funding funding with $allowanceLabel allowance",
+      async ({ nativeAmount, allowance, needsApproval }) => {
+        const handle = createMockClient(midnightTestChain);
+        const wNativeMarketData = new Market({
+          ...defaultMarketData,
+          params: wNativeLoanMarket,
+        });
+        const output = midnightWithHandle(handle, {
+          supportSignature: true,
+        }).repayWithdrawCollateral({
           marketData: wNativeMarketData,
           ...positionHealthParams(wNativeMarketData, { debt: 1_000n }),
           accountAddress: midnightAddresses.taker,
           repay: { type: "assets", assets: 1_000n },
           nativeAmount,
           deadline: maxUint256,
-        })
-        .buildTx();
-      const decoded = decodeFunctionData({
-        abi: midnightBundlesV2Abi,
-        data: tx.data,
-      });
+        });
+        mockAllowance({ handle, token: wNative, result: allowance });
+        mockMidnightAuthorization(handle, true);
+        const requirements = await output.getRequirements();
+        expect(requirements.map((requirement) => requirement.action)).toEqual(
+          needsApproval
+            ? [
+                {
+                  type: "erc20Approval",
+                  args: { spender: midnightBundlesV2, amount: maxUint256 },
+                },
+              ]
+            : [],
+        );
+        if (needsApproval)
+          expect(requirements[0]).toMatchObject({ to: wNative });
+        const tx = output.buildTx();
+        const decoded = decodeFunctionData({
+          abi: midnightBundlesV2Abi,
+          data: tx.data,
+        });
 
-      expect(tx.value).toBe(nativeAmount);
-      expect(decoded.args.at(-1)).toBe(wNative);
-    });
+        expect(tx.value).toBe(nativeAmount);
+        expect(decoded.args.at(-1)).toBe(wNative);
+      },
+    );
 
     test("error: NonPositiveInputError when nothing is repaid or withdrawn", () => {
       expect(() =>

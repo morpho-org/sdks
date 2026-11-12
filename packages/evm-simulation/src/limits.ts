@@ -24,6 +24,8 @@ export const OPERATION_TYPES = [
   "vaultV2InKindRedeem",
   "vaultV1MigrateToV2",
   "midnightSupplyCollateral",
+  "midnightSupplyCollateralBatch",
+  "midnightWithdrawCollateralBatch",
   "midnightSupplyCollateralMakeBorrow",
   "midnightSupplyBlueMakeLend",
   "midnightRedeem",
@@ -168,9 +170,10 @@ export interface MidnightRedeemSubject {
   readonly marketId: Hex;
 }
 
-/** Subject of a Midnight sell (borrow, reduce-only withdraw, or collateral supply and borrow). */
+/** Subject of a Midnight sell or direct collateral supply batch. */
 export interface MidnightSellSubject {
   readonly operation:
+    | "midnightSupplyCollateralBatch"
     | "midnightTakeBorrow"
     | "midnightTakeWithdraw"
     | "midnightSupplyCollateralTakeBorrow";
@@ -178,9 +181,10 @@ export interface MidnightSellSubject {
   readonly marketId: Hex;
 }
 
-/** Subject of Midnight debt repayment (direct or through offers) and collateral withdrawal. */
+/** Subject of Midnight collateral withdrawal, optionally combined with debt repayment. */
 export interface MidnightRepayWithdrawCollateralSubject {
   readonly operation:
+    | "midnightWithdrawCollateralBatch"
     | "midnightRepayWithdrawCollateral"
     | "midnightTakeRepayWithdrawCollateral";
   /** Midnight market id (`MidnightMarketUtils.toId(marketParams)`), not a Blue market id. */
@@ -239,8 +243,11 @@ export interface SlippageQuote {
    */
   readonly assetsPaid?: bigint;
   /**
-   * Expected net shares removed from the position. For debt shares, this is a
-   * minimum: burning fewer debt shares than quoted is adverse.
+   * Expected shares removed from the position. For debt shares, this is a
+   * minimum: burning fewer debt shares than quoted is adverse. For vault exits,
+   * including source-vault migrations, quote-only limits use the net balance
+   * decrease. Typed-input limits add back shares of that vault minted to the
+   * measured account during the bundle.
    */
   readonly sharesBurned?: bigint;
   /**
@@ -290,12 +297,12 @@ export interface SlippageQuote {
    */
   readonly debtRepaid?: bigint;
   /**
-   * `midnightRepayWithdrawCollateral` and `midnightTakeRepayWithdrawCollateral` only: expected collateral removed from
+   * `midnightWithdrawCollateralBatch`, `midnightRepayWithdrawCollateral` and `midnightTakeRepayWithdrawCollateral`: expected collateral removed from
    * the Midnight position and delivered to `receiver` for each collateral index.
    */
   readonly collateralWithdrawals?: readonly MidnightCollateralAmount[];
   /**
-   * `midnightSupplyCollateralTakeBorrow` only: the exact collateral supplied
+   * `midnightSupplyCollateralBatch` and `midnightSupplyCollateralTakeBorrow`: the exact collateral supplied
    * and exact minimum collateral credited to the account at each index.
    * Percentage tolerance does not widen this amount. Each entry is checked
    * independently against the Midnight collateral-slot delta and also sets
@@ -531,6 +538,7 @@ export type ApprovalLimit =
 
 /** Midnight operation limits that accept a supplied market struct. @internal */
 export const MIDNIGHT_MARKET_INPUT_OPERATION_TYPES = [
+  "midnightSupplyCollateralBatch",
   "midnightSupplyCollateral",
   "midnightSupplyCollateralMakeBorrow",
   "midnightTakeLend",
@@ -733,6 +741,38 @@ export type OperationLimit = SlippageLimits & {
         readonly assetReceived?: never;
         /** Bounds on the debt and collateral left after the bundle; Blue bound fields are rejected. */
         readonly position?: MidnightDebtPositionBounds;
+      }
+    | {
+        /** Direct collateral supply batch, measured per index and per token. */
+        readonly type: "midnightSupplyCollateralBatch";
+        /** Midnight market id. */
+        readonly marketId: Hex;
+        /** Market struct when the simulation creates the market. */
+        readonly market?: MidnightMarketStruct;
+        /** Direct batches measure the simulation owner. */
+        readonly account?: never;
+        /** Wallet debits are resolved from the listed collateral indices. */
+        readonly assetPaid?: never;
+        /** Supply batches have no payout. */
+        readonly assetReceived?: never;
+        /** Supply batches have no payout. */
+        readonly receiver?: never;
+        /** Supply batches quote per-index changes. */
+        readonly position?: never;
+      }
+    | {
+        /** Direct collateral withdrawal batch, measured on the owner and receiver. */
+        readonly type: "midnightWithdrawCollateralBatch";
+        /** Midnight market id. */
+        readonly marketId: Hex;
+        /** Direct batches measure the simulation owner. */
+        readonly account?: never;
+        /** Withdraw batches have no payment. */
+        readonly assetPaid?: never;
+        /** Wallet credits are resolved from the listed collateral indices. */
+        readonly assetReceived?: never;
+        /** Withdraw batches quote per-index changes. */
+        readonly position?: never;
       }
     | {
         readonly type: "midnightTakeLend";

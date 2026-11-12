@@ -200,7 +200,9 @@ export async function resolveAssets(params: {
       // For repay-withdraw, this creditRedeemed iteration is the market load even though that field is never quoted.
       const needsMidnightMarket =
         (field === "creditRedeemed" &&
-          (limit.type === "midnightRepayWithdrawCollateral" ||
+          (limit.type === "midnightSupplyCollateralBatch" ||
+            limit.type === "midnightWithdrawCollateralBatch" ||
+            limit.type === "midnightRepayWithdrawCollateral" ||
             limit.type === "midnightTakeRepayWithdrawCollateral")) ||
         (field === "creditRedeemed" &&
           (limit.type === "midnightRedeem" ||
@@ -229,7 +231,9 @@ export async function resolveAssets(params: {
       }
       const source =
         field === "creditRedeemed" &&
-        (limit.type === "midnightRepayWithdrawCollateral" ||
+        (limit.type === "midnightSupplyCollateralBatch" ||
+          limit.type === "midnightWithdrawCollateralBatch" ||
+          limit.type === "midnightRepayWithdrawCollateral" ||
           limit.type === "midnightTakeRepayWithdrawCollateral")
           ? { type: "midnightLoan" as const, marketId: limit.marketId }
           : field === "unitsBought" && limit.type === "midnightTakeLend"
@@ -369,12 +373,15 @@ export async function resolveAssets(params: {
         }
         result.midnightMarket = market;
         if (
+          limit.type === "midnightSupplyCollateralBatch" ||
+          limit.type === "midnightWithdrawCollateralBatch" ||
           limit.type === "midnightRepayWithdrawCollateral" ||
           limit.type === "midnightTakeRepayWithdrawCollateral" ||
           limit.type === "midnightSupplyCollateralTakeBorrow"
         ) {
           const quoted =
-            limit.type === "midnightSupplyCollateralTakeBorrow"
+            limit.type === "midnightSupplyCollateralTakeBorrow" ||
+            limit.type === "midnightSupplyCollateralBatch"
               ? (limit.quote.collateralSupplies ?? [])
               : (limit.quote.collateralWithdrawals ?? []);
           if (quoted.length > 0)
@@ -564,9 +571,11 @@ export async function resolveAssets(params: {
       case "midnightRedeem":
       case "midnightTakeLend":
       case "midnightTakeBorrow":
+      case "midnightWithdrawCollateralBatch":
       case "midnightTakeWithdraw":
       case "midnightRepayWithdrawCollateral":
       case "midnightTakeRepayWithdrawCollateral":
+      case "midnightSupplyCollateralBatch":
       case "midnightSupplyCollateralTakeBorrow":
       case "midnightSupplyBlueMakeLend":
         break;
@@ -659,6 +668,7 @@ export async function resolveAssets(params: {
       case "blueRefinance":
       case "midnightRedeem":
       case "midnightTakeBorrow":
+      case "midnightWithdrawCollateralBatch":
       case "midnightTakeWithdraw":
         break;
       case "midnightSupplyBlueMakeLend":
@@ -666,6 +676,7 @@ export async function resolveAssets(params: {
           resolveMidnightApprovalToken(limit.loanToken),
         ];
         break;
+      case "midnightSupplyCollateralBatch":
       case "midnightSupplyCollateralTakeBorrow": {
         const collateralTokens = result.midnightCollateralTokens?.map(
           ({ token }) => resolveMidnightApprovalToken(token),

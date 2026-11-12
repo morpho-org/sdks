@@ -88,6 +88,7 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
         readonly amount: bigint;
       }): Promise<void>;
 
+      /** Approves ERC-20 spending without modifying the caller's parameters. */
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
       balanceOf(args?: { erc20?: Address; owner?: Address }): Promise<bigint>;
       allowance(args: {
@@ -106,6 +107,7 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
         erc4626: Address;
         shares: bigint;
       }): Promise<bigint>;
+      /** Deposits ERC-4626 assets without modifying the caller's parameters. */
       deposit(args: DepositParameters<chain>): Promise<WriteContractReturnType>;
 
       deployContractWait<const abi extends Abi | readonly unknown[]>(
@@ -165,7 +167,8 @@ export type DepositParameters<
  * reaching Anvil, which would forward it to the fork RPC. Under
  * automine, `sendTransaction`, `sendRawTransaction` and `writeContract` wait
  * for the local block to advance, then for the receipt, before returning the
- * hash.
+ * hash. Each send reads the node's current automine setting, including changes
+ * made through another client. With automine disabled, sends return while pending.
  *
  * @param transport - HTTP transport to the Anvil node.
  * @param chain - The chain the node forks.
@@ -226,8 +229,6 @@ export const createAnvilTestClient = <chain extends Chain>(
     .extend(publicActions)
     .extend(walletActions)
     .extend((client) => {
-      let automine: boolean;
-
       // viem waits for a new block before re-fetching a missing receipt, and
       // dedupes that fetch into one already in flight. When Anvil mines during
       // that request, automine produces no later block and the wait hangs, so
@@ -290,7 +291,7 @@ export const createAnvilTestClient = <chain extends Chain>(
       };
 
       const sendAndWait = async (send: () => Promise<Hash>) => {
-        const previousBlockNumber = (automine ??= await client.getAutomine())
+        const previousBlockNumber = (await client.getAutomine())
           ? await client.getBlockNumber({ cacheTime: 0 })
           : undefined;
         const hash = await send();
@@ -327,11 +328,12 @@ export const createAnvilTestClient = <chain extends Chain>(
         async approve<chainOverride extends Chain | undefined = undefined>(
           args: ApproveParameters<chain, chainOverride>,
         ) {
-          args.abi = erc20Abi;
-          args.functionName = "approve";
-
           // @ts-expect-error
-          return this.writeContract(args);
+          return this.writeContract({
+            ...args,
+            abi: erc20Abi,
+            functionName: "approve",
+          });
         },
         async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
@@ -429,11 +431,12 @@ export const createAnvilTestClient = <chain extends Chain>(
         async deposit<chainOverride extends Chain | undefined = undefined>(
           args: DepositParameters<chain, chainOverride>,
         ) {
-          args.abi = erc4626Abi;
-          args.functionName = "deposit";
-
           // @ts-expect-error
-          return this.writeContract(args);
+          return this.writeContract({
+            ...args,
+            abi: erc4626Abi,
+            functionName: "deposit",
+          });
         },
 
         async deployContractWait<const abi extends Abi | readonly unknown[]>(

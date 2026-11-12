@@ -78,6 +78,7 @@ interface EncodeErc20PermitParams {
  * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
  *   client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @example
  * ```ts
  * import { createWalletClient, http } from "viem";

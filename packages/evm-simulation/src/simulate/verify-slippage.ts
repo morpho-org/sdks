@@ -283,7 +283,10 @@ export function verifySlippage(params: {
       }
       if (limit.quote.positions !== undefined)
         observed.positions = observedPositions;
-      if (limit.type === "midnightSupplyCollateralTakeBorrow") {
+      if (
+        limit.type === "midnightSupplyCollateralTakeBorrow" ||
+        limit.type === "midnightSupplyCollateralBatch"
+      ) {
         if (
           limit.quote.collateralSupplies === undefined ||
           limit.quote.collateralSupplies.length === 0
@@ -342,6 +345,7 @@ export function verifySlippage(params: {
       }
       const finalCollateral = new Map<bigint, bigint>();
       if (
+        limit.type === "midnightWithdrawCollateralBatch" ||
         limit.type === "midnightRepayWithdrawCollateral" ||
         limit.type === "midnightTakeRepayWithdrawCollateral"
       ) {
@@ -382,8 +386,20 @@ export function verifySlippage(params: {
               `${label}: collateral index "${expected.collateralIndex}" withdrawal exceeds tolerance against quote "${expected.assets}"; allowed bound "${cap}", got "${decrease}".`,
             );
           const delivered = receiverAfter - receiverBefore;
+          const expectedDelivery =
+            limit.type === "midnightWithdrawCollateralBatch"
+              ? (limit.quote.collateralWithdrawals ?? []).reduce(
+                  (sum, entry) =>
+                    collateralReads?.find(
+                      (read) => read.collateralIndex === entry.collateralIndex,
+                    )?.receiverBalanceReadId === reads?.receiverBalanceReadId
+                      ? sum + entry.assets
+                      : sum,
+                  0n,
+                )
+              : expected.assets;
           const minimum = MathLib.wMulUp(
-            expected.assets,
+            expectedDelivery,
             MathLib.WAD - limit.slippageTolerance,
           );
           if (delivered < minimum)
@@ -392,7 +408,10 @@ export function verifySlippage(params: {
             );
           observedWithdrawals.push({
             collateralIndex: expected.collateralIndex,
-            assets: delivered,
+            assets:
+              limit.type === "midnightWithdrawCollateralBatch"
+                ? decrease
+                : delivered,
           });
         }
         if (observedWithdrawals.length > 0)

@@ -4,6 +4,7 @@ import {
   type Chain,
   encodeFunctionResult,
   erc20Abi,
+  erc4626Abi,
   type Hex,
   http,
   InternalRpcError,
@@ -81,6 +82,64 @@ const startNode = async (
 };
 
 describe.sequential("createAnvilTestClient", () => {
+  test.each([false, true])(
+    "approve preserves caller inputs (frozen: %s)",
+    async (frozen) => {
+      const client = createAnvilTestClient(http("http://127.0.0.1:0"), mainnet);
+      const args = {
+        address: zeroAddress,
+        args: [zeroAddress, 123n] as const,
+        gas: 45_000n,
+      };
+      const original = { ...args };
+      if (frozen) Object.freeze(args);
+      const writeContract = vi.fn().mockResolvedValue(hash);
+      const result = await client.approve.call(
+        { ...client, writeContract },
+        args,
+      );
+      expect(result).toBe(hash);
+      expect(args).toEqual(original);
+      expect(Object.keys(args)).toEqual(Object.keys(original));
+      expect(writeContract).toHaveBeenCalledWith({
+        ...original,
+        abi: erc20Abi,
+        functionName: "approve",
+      });
+      expect(writeContract.mock.calls[0]![0]).not.toBe(args);
+      expect(writeContract.mock.calls[0]![0].args).toBe(args.args);
+    },
+  );
+
+  test.each([false, true])(
+    "deposit preserves caller inputs (frozen: %s)",
+    async (frozen) => {
+      const client = createAnvilTestClient(http("http://127.0.0.1:0"), mainnet);
+      const args = {
+        address: zeroAddress,
+        args: [123n, zeroAddress] as const,
+        gas: 45_000n,
+      };
+      const original = { ...args };
+      if (frozen) Object.freeze(args);
+      const writeContract = vi.fn().mockResolvedValue(hash);
+      const result = await client.deposit.call(
+        { ...client, writeContract },
+        args,
+      );
+      expect(result).toBe(hash);
+      expect(args).toEqual(original);
+      expect(Object.keys(args)).toEqual(Object.keys(original));
+      expect(writeContract).toHaveBeenCalledWith({
+        ...original,
+        abi: erc4626Abi,
+        functionName: "deposit",
+      });
+      expect(writeContract.mock.calls[0]![0]).not.toBe(args);
+      expect(writeContract.mock.calls[0]![0].args).toBe(args.args);
+    },
+  );
+
   test("polls receipts faster than viem's default interval", () => {
     const client = createAnvilTestClient(http("http://127.0.0.1:0"), mainnet);
 
@@ -207,6 +266,33 @@ describe.sequential("createAnvilTestClient", () => {
         "anvil_getAutomine",
         "eth_sendRawTransaction",
       ]);
+    } finally {
+      node.close();
+    }
+  });
+
+  test("reads automine again after an earlier send", async () => {
+    let automine = false;
+    let block = 100;
+    const node = await startNode(async (method) => {
+      if (method === "anvil_getAutomine") return { result: automine };
+      if (method === "eth_blockNumber") return { result: numberToHex(block) };
+      if (method === "eth_sendRawTransaction") {
+        if (automine) block++;
+        return { result: hash };
+      }
+      return {
+        result: method === "eth_getTransactionReceipt" ? receipt : null,
+      };
+    });
+    try {
+      await node.client.sendRawTransaction({ serializedTransaction: "0x01" });
+      automine = true;
+      await node.client.sendRawTransaction({ serializedTransaction: "0x01" });
+      expect(
+        node.methods.filter((method) => method === "anvil_getAutomine"),
+      ).toHaveLength(2);
+      expect(node.methods).toContain("eth_getTransactionReceipt");
     } finally {
       node.close();
     }

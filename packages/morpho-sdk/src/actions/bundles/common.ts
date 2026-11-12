@@ -360,6 +360,20 @@ export const normalizeBundlesSignature = (
   return { v: Number(normalizedV), r: parsed.r, s: parsed.s };
 };
 
+const validateBundlesPermitValue = (params: {
+  readonly field: "amount" | "deadline" | "nonce";
+  readonly expected: bigint;
+  readonly actual: bigint;
+}): void => {
+  if (params.actual !== params.expected) {
+    throw new BundlesPermitMismatchError({
+      field: params.field,
+      expected: String(params.expected),
+      actual: String(params.actual),
+    });
+  }
+};
+
 /**
  * Converts an optional vault-share ERC-2612 requirement into the ABI-ready Permit tuple.
  *
@@ -398,10 +412,6 @@ export const getBundlesSharesPermit = (params: {
   const { requirementSignature } = params;
   // Require a positive uint256 for the fallback permit deadline.
   validateDeadline(params.deadline);
-  if (requirementSignature != null) {
-    // Require a positive uint256 for the signed permit deadline too.
-    validateDeadline(requirementSignature.args.deadline);
-  }
   if (requirementSignature == null) {
     return {
       value: 0n,
@@ -412,6 +422,10 @@ export const getBundlesSharesPermit = (params: {
       s: zeroHash,
     };
   }
+  // Require a positive uint256 for the signed permit deadline too.
+  validateDeadline(requirementSignature.args.deadline);
+  const validatesOperation =
+    params.owner != null || params.spender != null || params.amount != null;
   if (requirementSignature.action.type !== "permit") {
     throw new BundlesPermitMismatchError({
       field: "type",
@@ -457,35 +471,26 @@ export const getBundlesSharesPermit = (params: {
       actual: String(requirementSignature.args.amount),
     });
   }
-  if (
-    (params.owner != null || params.spender != null || params.amount != null) &&
-    requirementSignature.action.args.amount !== requirementSignature.args.amount
-  ) {
-    throw new BundlesPermitMismatchError({
+  if (validatesOperation) {
+    // Validation only; checks signed values against their operation descriptors.
+    validateBundlesPermitValue({
       field: "amount",
-      expected: String(requirementSignature.args.amount),
-      actual: String(requirementSignature.action.args.amount),
+      expected: requirementSignature.args.amount,
+      actual: requirementSignature.action.args.amount,
     });
-  }
-  if (
-    (params.owner != null || params.spender != null || params.amount != null) &&
-    requirementSignature.action.args.deadline !==
-      requirementSignature.args.deadline
-  ) {
-    throw new BundlesPermitMismatchError({
+    // Validation only; checks the signed deadline against its operation descriptor.
+    validateBundlesPermitValue({
       field: "deadline",
-      expected: String(requirementSignature.args.deadline),
-      actual: String(requirementSignature.action.args.deadline),
+      expected: requirementSignature.args.deadline,
+      actual: requirementSignature.action.args.deadline,
     });
   }
-  if (
-    requirementSignature.action.args.nonce != null &&
-    requirementSignature.action.args.nonce !== requirementSignature.args.nonce
-  ) {
-    throw new BundlesPermitMismatchError({
+  if (requirementSignature.action.args.nonce != null) {
+    // Validation only; checks the optional operation nonce against the signed nonce.
+    validateBundlesPermitValue({
       field: "nonce",
-      expected: String(requirementSignature.args.nonce),
-      actual: String(requirementSignature.action.args.nonce),
+      expected: requirementSignature.args.nonce,
+      actual: requirementSignature.action.args.nonce,
     });
   }
   const signature = normalizeBundlesSignature(
@@ -523,7 +528,8 @@ export const selectBundlesTokenRequirementSignature = (
     readonly deadline: bigint;
   },
 ): BundlesTokenRequirementSignature | undefined => {
-  if (signatures == null || signatures.length === 0) return undefined;
+  if (signatures == null) return undefined;
+  if (signatures.length === 0) return undefined;
   const selected = signatures.filter(
     (signature): signature is BundlesTokenRequirementSignature =>
       signature.action.type === "permit" ||
@@ -552,32 +558,26 @@ export const selectBundlesTokenRequirementSignature = (
       actual: action.args.spender,
     });
   }
-  if (
-    selectedSignature.args.amount !== expected.amount ||
-    action.args.amount !== expected.amount
-  ) {
+  const actualAmount =
+    selectedSignature.args.amount !== expected.amount
+      ? selectedSignature.args.amount
+      : action.args.amount;
+  if (actualAmount !== expected.amount) {
     throw new BundlesPermitMismatchError({
       field: "amount",
       expected: String(expected.amount),
-      actual: String(
-        selectedSignature.args.amount !== expected.amount
-          ? selectedSignature.args.amount
-          : action.args.amount,
-      ),
+      actual: String(actualAmount),
     });
   }
-  if (
-    selectedSignature.args.deadline !== expected.deadline ||
-    action.args.deadline !== expected.deadline
-  ) {
+  const actualDeadline =
+    selectedSignature.args.deadline !== expected.deadline
+      ? selectedSignature.args.deadline
+      : action.args.deadline;
+  if (actualDeadline !== expected.deadline) {
     throw new BundlesPermitMismatchError({
       field: "deadline",
       expected: String(expected.deadline),
-      actual: String(
-        selectedSignature.args.deadline !== expected.deadline
-          ? selectedSignature.args.deadline
-          : action.args.deadline,
-      ),
+      actual: String(actualDeadline),
     });
   }
   if (

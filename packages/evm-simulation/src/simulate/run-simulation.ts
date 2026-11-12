@@ -190,6 +190,8 @@ export async function runSimulation(params: {
   const requiresMidnight =
     limits.operations.some(
       (operation) =>
+        operation.type === "midnightSupplyCollateralBatch" ||
+        operation.type === "midnightWithdrawCollateralBatch" ||
         operation.type === "midnightSupplyCollateral" ||
         operation.type === "midnightSupplyCollateralMakeBorrow" ||
         operation.type === "midnightRedeem" ||

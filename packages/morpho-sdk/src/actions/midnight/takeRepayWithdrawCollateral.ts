@@ -21,6 +21,7 @@ import {
 } from "../../helpers/validateMidnightBounds.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
+import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
@@ -159,12 +160,8 @@ export const midnightTakeRepayWithdrawCollateral = (
     index,
     { collateralIndex, assets },
   ] of params.collateralWithdrawals.entries()) {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError(
-        `collateralWithdrawals[${index}].assets`,
-        assets,
-      );
-    }
+    // Validation only; rejects non-positive amounts.
+    validatePositiveInput(`collateralWithdrawals[${index}].assets`, assets);
     if (assets !== maxUint256) {
       validateMidnightUint128Field(
         `collateralWithdrawals[${index}].assets`,
@@ -192,29 +189,28 @@ export const midnightTakeRepayWithdrawCollateral = (
   validateMidnightTakeableOfferBounds(params.takeableOffers);
 
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.minUnits <= 0n) {
-      throw new NonPositiveInputError("target.minUnits", target.minUnits);
+  switch (target.type) {
+    case "assets": {
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.minUnits", target.minUnits);
+      validateMidnightUint128Field("target.assets", target.assets);
+      validateMidnightUint128Field("target.minUnits", target.minUnits);
+      break;
     }
-    validateMidnightUint128Field("target.assets", target.assets);
-    validateMidnightUint128Field("target.minUnits", target.minUnits);
-  } else {
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.maxBuyerAssets <= 0n) {
-      throw new NonPositiveInputError(
+    default: {
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.units", target.units);
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.maxBuyerAssets", target.maxBuyerAssets);
+      if (target.units !== maxUint256) {
+        validateMidnightUint128Field("target.units", target.units);
+      }
+      validateMidnightUint128Field(
         "target.maxBuyerAssets",
         target.maxBuyerAssets,
       );
+      break;
     }
-    if (target.units !== maxUint256) {
-      validateMidnightUint128Field("target.units", target.units);
-    }
-    validateMidnightUint128Field(
-      "target.maxBuyerAssets",
-      target.maxBuyerAssets,
-    );
   }
   validateUint256Field("maxContinuousFee", params.maxContinuousFee);
   if (params.deadline === maxUint256) {

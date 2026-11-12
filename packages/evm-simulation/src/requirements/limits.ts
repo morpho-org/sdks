@@ -312,6 +312,20 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
           collateralSupplied: action.args.assets,
         },
       };
+    case "midnightSupplyCollateralBatch":
+      return {
+        type: action.type,
+        requiredExpected: [],
+        quote: {},
+        collateralSupplies: action.args.collateralSupplies,
+      };
+    case "midnightWithdrawCollateralBatch":
+      return {
+        type: action.type,
+        requiredExpected: [],
+        quote: {},
+        collateralWithdrawals: action.args.collateralWithdrawals,
+      };
     case "midnightCancelAndMake": {
       const blueSupply = action.args.blueSupply;
       if (blueSupply === undefined) return undefined;
@@ -523,6 +537,11 @@ const missingQuote = (
  * The helper is pure and synchronous: no RPC reads, no decoding — it only reads `action.args`,
  * which morpho-sdk normalized when it encoded the call.
  *
+ * `midnightSupplyCollateralBatch` quotes every collateral supply exactly and sums wallet
+ * pull caps by token. Its encoded `onBehalf` and `options.onBehalf` must equal `owner`.
+ * `midnightWithdrawCollateralBatch` quotes every collateral withdrawal and measures each
+ * token's delivery to `receiver`.
+ *
  * `midnightSupplyBlueMakeLend` checks the sender's exact debit of the full parked amount and the
  * callback's Blue supply shares; `expected.sharesMinted` must quote the expected position increase.
  * For wNative loan tokens, the debit measurement adds ETH sent to the net wNative balance change,
@@ -654,11 +673,13 @@ const missingQuote = (
  * @param options - Limit options.
  * @param options.owner - The connected account: position/share owner and default asset receiver.
  * @param options.onBehalf - Callback for `blueWithdrawBuyCallback`, collateral owner for a direct
- *   `midnightSupplyCollateral` or credit owner for `midnightRedeem`; defaults to `owner`. For every other action, including maker
- *   bundles, a value different from `owner` throws {@link LimitAccountMismatchError}.
+ *   `midnightSupplyCollateral` or credit owner for `midnightRedeem`; defaults to `owner`. For every other action, including
+ *   `midnightSupplyCollateralBatch` and maker bundles, a value different from `owner` throws
+ *   {@link LimitAccountMismatchError}. The supply batch's encoded `args.onBehalf` must equal `owner`.
  * @param options.receiver - Asset receiver; applies to `vaultV2ForceRedeem` and Midnight redeem
  *   and sell actions, including `midnightSupplyCollateralTakeBorrow`, which must match the encoded
- *   `args.receiver`; also applies to `collateralReceiver` when
+ *   `args.receiver`; also accepts a non-owner receiver for `midnightWithdrawCollateralBatch`
+ *   when it matches `args.receiver`, and applies to `collateralReceiver` when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral` withdraws collateral.
  *   Defaults to `owner`.
  * @param options.slippageTolerance - WAD-scaled tolerance below `1e18`; defaults to blue-sdk's
@@ -938,12 +959,14 @@ export const toSimulationLimits = (
   options: {
     /** The connected account: position/share owner and default asset receiver. */
     readonly owner: Address;
-    /** Callback on `blueWithdrawBuyCallback`, collateral owner on `midnightSupplyCollateral`, or credit owner on `midnightRedeem`. Any other action, including Midnight sells, throws when it differs from `owner`. Defaults to `owner`. */
+    /** Callback on `blueWithdrawBuyCallback`, collateral owner on `midnightSupplyCollateral`, or credit owner on `midnightRedeem`. Any other action, including `midnightSupplyCollateralBatch` and Midnight sells, throws when it differs from `owner`. The supply batch's encoded `args.onBehalf` must equal `owner`. Defaults to `owner`. */
     readonly onBehalf?: Address;
     /**
      * Asset receiver for `vaultV2ForceRedeem`, Midnight redeem and sell actions,
      * including `midnightSupplyCollateralTakeBorrow`, where it must match the
-     * encoded `args.receiver`; and `collateralReceiver` when
+     * encoded `args.receiver`; also accepts a non-owner receiver for
+     * `midnightWithdrawCollateralBatch` when it matches `args.receiver`; and
+     * `collateralReceiver` when
      * `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
      * withdraws collateral. Every other action pays `msg.sender`, and a non-`owner`
      * receiver throws. Defaults to `owner`.
@@ -1033,7 +1056,8 @@ export const toSimulationLimits = (
   }
 
   const hasCollateralWithdrawals =
-    (action.type === "midnightRepayWithdrawCollateral" ||
+    (action.type === "midnightWithdrawCollateralBatch" ||
+      action.type === "midnightRepayWithdrawCollateral" ||
       action.type === "midnightTakeRepayWithdrawCollateral") &&
     action.args.collateralWithdrawals.length > 0;
   // Bundles pay `msg.sender`, except for the external collateral receiver.
@@ -1045,6 +1069,7 @@ export const toSimulationLimits = (
         derived.type === "midnightTakeBorrow" ||
         derived.type === "midnightTakeWithdraw" ||
         derived.type === "midnightSupplyCollateralTakeBorrow" ||
+        derived.type === "midnightWithdrawCollateralBatch" ||
         ((derived.type === "midnightRepayWithdrawCollateral" ||
           derived.type === "midnightTakeRepayWithdrawCollateral") &&
           hasCollateralWithdrawals),
@@ -1130,12 +1155,23 @@ export const toSimulationLimits = (
   }
   if (
     hasCollateralWithdrawals &&
-    !isAddressEqual(action.args.collateralReceiver, receiver)
+    !isAddressEqual(
+      action.type === "midnightWithdrawCollateralBatch"
+        ? action.args.receiver
+        : action.args.collateralReceiver,
+      receiver,
+    )
   ) {
     throw new LimitAccountMismatchError({
-      field: "args.collateralReceiver",
+      field:
+        action.type === "midnightWithdrawCollateralBatch"
+          ? "args.receiver"
+          : "args.collateralReceiver",
       expected: receiver,
-      actual: action.args.collateralReceiver,
+      actual:
+        action.type === "midnightWithdrawCollateralBatch"
+          ? action.args.receiver
+          : action.args.collateralReceiver,
     });
   }
 
@@ -1285,6 +1321,16 @@ export const toSimulationLimits = (
             ),
             callbackSalt: limitAction.args.blueSupply.callbackSalt,
           };
+        case "midnightSupplyCollateralBatch":
+          return {
+            type: "midnightSupplyCollateralBatch" as const,
+            marketId: limitAction.args.market,
+          };
+        case "midnightWithdrawCollateralBatch":
+          return {
+            type: "midnightWithdrawCollateralBatch" as const,
+            marketId: limitAction.args.market,
+          };
         case "midnightRedeem":
           return { type: limitAction.type, marketId: limitAction.args.market };
         case "midnightTakeLend":
@@ -1357,10 +1403,21 @@ export const toSimulationLimits = (
         : {}),
     };
     if (
+      subject.type === "midnightWithdrawCollateralBatch" ||
       subject.type === "midnightRepayWithdrawCollateral" ||
       subject.type === "midnightTakeRepayWithdrawCollateral"
     ) {
       return { ...subject, ...sharedLimitFields } satisfies OperationLimit;
+    }
+    if (subject.type === "midnightSupplyCollateralBatch") {
+      return {
+        ...subject,
+        ...(market === undefined ? {} : { market }),
+        quote,
+        ...(options.slippageTolerance === undefined
+          ? {}
+          : { slippageTolerance: options.slippageTolerance }),
+      } satisfies OperationLimit;
     }
     if (subject.type === "midnightSupplyCollateralTakeBorrow") {
       return {

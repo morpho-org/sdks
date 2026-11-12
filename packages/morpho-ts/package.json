@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
-  "description": "TypeScript package to handle all things time & format-related.",
-  "version": "4.2.0",
+  "description": "Framework-free TypeScript helpers and shared Morpho primitives: addresses, ABIs, math, typed errors, time and formatting utilities.",
+  "version": "4.3.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",

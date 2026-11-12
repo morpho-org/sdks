@@ -1,5 +1,12 @@
 # @morpho-org/test
 
+## 2.12.1
+
+### Patch Changes
+
+- Correct Anvil fork header serialization and allow silent nodes to complete startup with explicit or automatic ports. Read the current automine setting for each send, compare bigint approximate assertions without floating-point amount conversion, and preserve caller parameters in the approve and deposit helpers, including frozen objects.
+- Classify MalformedSignatureError and InvalidEcrecoverSignatureError as auth errors in the chaos error classification rules.
+
 ## 2.12.0
 
 ### Minor Changes

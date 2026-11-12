@@ -75,6 +75,73 @@ const limit: ParsedOperationLimit = {
 };
 
 describe("resolveAssets", () => {
+  test.each([
+    "midnightSupplyCollateralBatch",
+    "midnightWithdrawCollateralBatch",
+  ] as const)(
+    "resolves every %s collateral and its approval tokens",
+    async (type) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: suppliedMidnightMarket.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: suppliedMidnightMarket,
+      });
+      const quote =
+        type === "midnightSupplyCollateralBatch"
+          ? { collateralSupplies: [{ collateralIndex: 0n, assets: 10n }] }
+          : { collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }] };
+      const resolved = await resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight: suppliedMidnightMarket.midnight,
+        operations: [
+          {
+            type,
+            marketId: suppliedMidnightMarketId,
+            quote,
+            slippageTolerance: 0n,
+          },
+        ],
+        blockNumber: 1n,
+      });
+      expect(resolved[0]?.midnightCollateralTokens).toEqual([
+        { collateralIndex: 0n, token: collateral },
+      ]);
+      expect(resolved[0]?.midnightApprovalTokens).toEqual(
+        type === "midnightSupplyCollateralBatch" ? [collateral] : undefined,
+      );
+    },
+  );
+
+  test("fails closed for an unknown batch collateral index", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: suppliedMidnightMarket.midnight,
+      abi: midnightAbi,
+      functionName: "toMarket",
+      result: suppliedMidnightMarket,
+    });
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight: suppliedMidnightMarket.midnight,
+        operations: [
+          {
+            type: "midnightSupplyCollateralBatch",
+            marketId: suppliedMidnightMarketId,
+            quote: {
+              collateralSupplies: [{ collateralIndex: 9n, assets: 10n }],
+            },
+            slippageTolerance: 0n,
+          },
+        ],
+        blockNumber: 1n,
+      }),
+    ).rejects.toThrow(SlippageCheckUnavailableError);
+  });
   test("input limits validate explicit assets and cache market parameters", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {

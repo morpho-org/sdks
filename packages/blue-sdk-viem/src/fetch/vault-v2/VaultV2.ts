@@ -839,7 +839,7 @@ function toAccrualAdapter(
         supplyQueue: [...vaultV1.supplyQueue] as MarketId[],
         withdrawQueue: [...vaultV1.withdrawQueue] as MarketId[],
         totalSupply: vaultV1.totalSupply,
-        // Overridden by `AccrualVault` with the sum of allocations' supply assets.
+        // Overridden by `AccrualVault`: real assets, or max(real + lostAssets, lastTotalAssets) for v1.1.
         totalAssets: 0n,
         lastTotalAssets: vaultV1.lastTotalAssets,
         lostAssets: vaultV1.hasLostAssets ? vaultV1.lostAssets : undefined,

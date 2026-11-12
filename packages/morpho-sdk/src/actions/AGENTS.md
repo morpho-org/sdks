@@ -16,6 +16,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `BundlesPermitKind` discriminator; plus `resolveBundlesTokenRequirements`, consumed by the
   entity-layer resolver `entities/requirements/getBundlesTokenRequirements.ts`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
+  `midnightSupplyCollateralBatch` and `midnightWithdrawCollateralBatch` take one entry per
+  collateral index and reject duplicates (`DuplicateMidnightCollateralIndexError`), unlike the
+  bundle flows, which sum them. They always encode a Midnight core `multicall`, even for one entry.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, ERC-2612 permit signature requests, Morpho authorization, and Midnight authorization.
 
 ## Common builder pattern
@@ -27,7 +30,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
    direct Morpho Blue `withdraw` for a BlueBuyCallback's owner. **Midnight bundle paths** encode one
    `MidnightBundlesV2` entrypoint call directly (see
    [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
-   collateral supply / withdrawCollateral / redeem) encode their target contract call directly. Vault `inKindRedeem` and
+   collateral supply / withdrawCollateral / redeem) encode their target contract call directly;
+   the Midnight collateral batches wrap those direct calls in one Midnight core `multicall`. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.

@@ -3,6 +3,15 @@ import { describe, expect, test } from "vitest";
 import { DivisionByZeroError, InvalidBitLengthError } from "./errors.js";
 import { MathLib } from "./math.js";
 
+describe("MathLib signed operands outside the non-negative rounding domain", () => {
+  test("pins truncation and the positive-remainder adjustment", () => {
+    expect(MathLib.mulDivDown(-1n, 1n, 2n)).toBe(0n);
+    expect(MathLib.mulDivDown(1n, 1n, -2n)).toBe(0n);
+    expect(MathLib.mulDivUp(-1n, 1n, 2n)).toBe(0n);
+    expect(MathLib.mulDivUp(1n, 1n, -2n)).toBe(1n);
+  });
+});
+
 describe("MathLib constants", () => {
   test("default", () => {
     expect(MathLib.WAD).toBe(1_000_000_000_000_000_000n);

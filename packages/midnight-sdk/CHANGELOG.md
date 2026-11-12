@@ -1,5 +1,16 @@
 # @morpho-org/midnight-sdk
 
+## 2.5.0
+
+### Minor Changes
+
+- Add InvalidEcrecoverSignatureError, thrown by EcrecoverRatifier when a signature cannot be parsed or recovered. Preserve the original error as cause.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.0
+
 ## 2.4.0
 
 ### Minor Changes

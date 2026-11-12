@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/morpho-ts?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/morpho-org/morpho-ts/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/sdks/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/morpho-ts?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/morpho-ts?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
@@ -23,9 +23,22 @@
 
 ## Overview
 
-TypeScript package to handle all things time & format-related.
+Framework-free, dependency-light TypeScript helpers and shared SDK primitives used across Morpho Blue and Midnight: address and deployment registries, ABI literals, fixed-point math, typed errors, constants, time conversion and numeric formatting.
+
+### Major exports
+
+- `addressesRegistry`, `addresses`, `deployments`, `getChainAddresses` and `getChainAddress`: look up shared addresses and deployment blocks by chain. `registerCustomAddresses` extends the registries without overriding existing entries.
+- `ChainId` and `ChainUtils`: chain identifiers and chain metadata helpers.
+- `MathLib`: WAD/RAY constants and fixed-point arithmetic with non-negative rounding operands.
+- Typed errors such as `UnsupportedChainIdError` and `UnknownAddressError`, plus shared types such as `BigIntish`, `DeepPartial` and `ChainMetadata`.
+- `Time`, `format` and `createFormat`: integer time conversions and chainable numeric formatters.
+- Generic helpers such as `isDefined`, `transformValue`, `entries` and `deepFreeze`.
+- Shared ABI literals from `@morpho-org/morpho-ts/abis`; `marketParamsAbi` is also available from `@morpho-org/morpho-ts/abis/marketParams`. ABI exports are separate from the root entry point.
+
+The compatibility aliases `blueAddressRegistry`, `blueAddresses` and `blueDeployments` are deprecated; use `addressesRegistry`, `addresses` and `deployments`, respectively.
 
 Upgrading from v2? Read the [v2 → v3 migration guide](./MIGRATION-v2-to-v3.md).
+Upgrading from v3? Read the [v3 → v4 migration guide](./MIGRATION-v3-to-v4.md).
 
 ## Installation
 

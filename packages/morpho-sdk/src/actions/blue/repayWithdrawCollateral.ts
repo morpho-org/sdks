@@ -158,8 +158,8 @@ export const blueRepayWithdrawCollateral = (
   if (repayAssets > 0n && repayShares > 0n) {
     throw new MutuallyExclusiveRepayAmountsError(marketParams.id);
   }
-  const hasRepay = repayAssets > 0n || repayShares > 0n;
-  if (!hasRepay && collateralAssets === 0n) {
+  const hasRepay = repayAssets + repayShares > 0n;
+  if (repayAssets + repayShares + collateralAssets === 0n) {
     throw new NonPositiveInputError(
       "repayAssets, repayShares, or collateralAssets",
       0n,

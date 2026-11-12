@@ -10,20 +10,20 @@ import {
 } from "../../helpers/validate.js";
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import {
-  validateMidnightCollateralSupplySums,
   validateMidnightReferralFeeCap,
   validateMidnightTakeableOfferBounds,
   validateMidnightUint128Field,
 } from "../../helpers/validateMidnightBounds.js";
+import { validateMidnightCollateralSupplies } from "../../helpers/validateMidnightCollateralSupplies.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
 import { validateMidnightSellTargetBounds } from "../../helpers/validateMidnightTakeFeasibility.js";
+import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   EmptyMidnightCollateralSuppliesError,
   type MidnightCollateralTransfer,
   type MidnightSupplyCollateralTakeBorrowAction,
-  NonPositiveInputError,
   type Transaction,
   UnboundedMidnightTakeInputError,
 } from "../../types/index.js";
@@ -129,24 +129,12 @@ export const midnightSupplyCollateralTakeBorrow = (
   if (params.collateralSupplies.length === 0) {
     throw new EmptyMidnightCollateralSuppliesError();
   }
-  for (const [
-    index,
-    { collateralIndex, assets },
-  ] of params.collateralSupplies.entries()) {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError(
-        `collateralSupplies[${index}].assets`,
-        assets,
-      );
-    }
-    validateMidnightUint128Field(`collateralSupplies[${index}].assets`, assets);
-    // Throws UnknownCollateralIndexError when the index is not configured on the market.
-    MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-  }
-  validateMidnightCollateralSupplySums(
-    "collateralSupplies",
-    params.collateralSupplies,
-  );
+  // Validation only; checks supply entries and their per-index totals.
+  validateMidnightCollateralSupplies({
+    market: params.market,
+    field: "collateralSupplies",
+    supplies: params.collateralSupplies,
+  });
   const marketId = validateTakeableOffers({
     market: params.market,
     takeableOffers: params.takeableOffers,
@@ -163,36 +151,34 @@ export const midnightSupplyCollateralTakeBorrow = (
   });
 
   const { target } = params;
-  if (target.type === "assets") {
-    if (target.assets <= 0n) {
-      throw new NonPositiveInputError("target.assets", target.assets);
+  switch (target.type) {
+    case "assets": {
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.assets", target.assets);
+      if (target.maxUnits === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.maxUnits");
+      }
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.maxUnits", target.maxUnits);
+      validateMidnightUint128Field("target.assets", target.assets);
+      validateMidnightUint128Field("target.maxUnits", target.maxUnits);
+      break;
     }
-    if (target.maxUnits === maxUint256) {
-      throw new UnboundedMidnightTakeInputError("target.maxUnits");
-    }
-    if (target.maxUnits <= 0n) {
-      throw new NonPositiveInputError("target.maxUnits", target.maxUnits);
-    }
-    validateMidnightUint128Field("target.assets", target.assets);
-    validateMidnightUint128Field("target.maxUnits", target.maxUnits);
-  } else {
-    if (target.units === maxUint256) {
-      throw new UnboundedMidnightTakeInputError("target.units");
-    }
-    if (target.units <= 0n) {
-      throw new NonPositiveInputError("target.units", target.units);
-    }
-    if (target.minSellerAssets <= 0n) {
-      throw new NonPositiveInputError(
+    default: {
+      if (target.units === maxUint256) {
+        throw new UnboundedMidnightTakeInputError("target.units");
+      }
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.units", target.units);
+      // Validation only; rejects non-positive amounts.
+      validatePositiveInput("target.minSellerAssets", target.minSellerAssets);
+      validateMidnightUint128Field("target.units", target.units);
+      validateMidnightUint128Field(
         "target.minSellerAssets",
         target.minSellerAssets,
       );
+      break;
     }
-    validateMidnightUint128Field("target.units", target.units);
-    validateMidnightUint128Field(
-      "target.minSellerAssets",
-      target.minSellerAssets,
-    );
   }
   if (params.deadline === maxUint256) {
     throw new UnboundedMidnightTakeInputError("deadline");

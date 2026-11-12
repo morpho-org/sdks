@@ -254,7 +254,8 @@ export interface AnvilArgs {
    */
   retries?: number | undefined;
   /**
-   * Don't print anything on startup and don't print logs.
+   * Accepted for compatibility; does not change output. Startup output is always captured
+   * for readiness detection, and post-startup warnings are still forwarded.
    */
   silent?: boolean | undefined;
   /**
@@ -298,7 +299,15 @@ export interface AnvilArgs {
  */
 function toArgs(obj: AnvilArgs) {
   return Object.entries(obj).flatMap<string>(([key, value]) => {
+    // Output is already captured; --silent would hide the readiness banner.
+    if (key === "silent") return [];
     if (value === undefined) return [];
+
+    if (key === "forkHeader")
+      return Object.entries(obj.forkHeader ?? {}).flatMap(([name, header]) => [
+        "--fork-header",
+        `${name}: ${header}`,
+      ]);
 
     if (Array.isArray(value)) return [`--${_kebabCase(key)}`, value.join(",")];
 

@@ -8,6 +8,8 @@ import {
   type ChainDeployments,
   deployments,
   getChainAddress,
+  getChainAddresses,
+  getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
   registerCustomAddresses,
@@ -76,6 +78,27 @@ const createBlueDeployments = () =>
 const createChainDeployments = () => ({
   ...createBlueDeployments(),
   ...createMidnightDeployments(),
+});
+
+describe("getChainAddresses", () => {
+  test("returns the supported chain registry entry", () => {
+    expect(getChainAddresses(ChainId.EthMainnet)).toBe(
+      addressesRegistry[ChainId.EthMainnet],
+    );
+  });
+
+  test("throws UnsupportedChainIdError for an unsupported chain", () => {
+    expect(() => getChainAddresses(0)).toThrow(UnsupportedChainIdError);
+  });
+});
+
+describe("getPermissionedCoinbaseTokens", () => {
+  test("returns an empty set when no tokens are registered", () => {
+    expect(getPermissionedCoinbaseTokens(ChainId.EthMainnet)).toEqual(
+      new Set(),
+    );
+    expect(getPermissionedCoinbaseTokens(0)).toEqual(new Set());
+  });
 });
 
 describe("getChainAddress", () => {

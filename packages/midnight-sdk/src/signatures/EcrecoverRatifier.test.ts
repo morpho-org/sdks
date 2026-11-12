@@ -23,6 +23,7 @@ import {
 } from "../constants.js";
 import {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureError,
   InvalidEcrecoverSignatureVError,
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -462,6 +463,30 @@ describe("EcrecoverRatifierUtils.digestRatifierData", () => {
 });
 
 describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
+  test("error: malformed recovery preserves cause", async () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+    const proof = tree.proof(0n);
+    const ratifierData = EcrecoverRatifierUtils.encodeRatifierData({
+      signature: {
+        v: 27,
+        r: `0x${"00".repeat(32)}`,
+        s: `0x${"00".repeat(32)}`,
+      },
+      root: proof.root,
+      leafIndex: proof.leafIndex,
+      proof: proof.proof,
+    });
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: base.id,
+        offer: tree.offers[0]!,
+        ratifierData,
+      }),
+    ).rejects.toMatchObject({
+      name: "InvalidEcrecoverSignatureError",
+      cause: expect.any(Error),
+    });
+  });
   test("behavior: verifies proof and returns recovered signer", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
@@ -661,6 +686,16 @@ describe("EcrecoverRatifierUtils typehash constants", () => {
 });
 
 describe("EcrecoverRatifierUtils.toSignature", () => {
+  test.each([
+    "0x",
+    "0xnot-hex",
+    `0x${"11".repeat(64)}`,
+    `0x${"11".repeat(64)}1d`,
+  ] as const)("error: malformed signature %s", (signature) => {
+    expect(() => EcrecoverRatifierUtils.toSignature(signature)).toThrow(
+      InvalidEcrecoverSignatureError,
+    );
+  });
   test("default", () => {
     const signature = {
       yParity: 1,
@@ -673,6 +708,53 @@ describe("EcrecoverRatifierUtils.toSignature", () => {
       r: signature.r,
       s: signature.s,
     });
+  });
+});
+
+describe("EcrecoverRatifierUtils.sign signature verification", () => {
+  test.each([
+    "0x",
+    "0xnot-hex",
+    `0x${"11".repeat(64)}`,
+    `0x${"00".repeat(64)}1b`,
+    `0x${"11".repeat(64)}1d`,
+  ] as const)("error: malformed wallet signature %s", async (signature) => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const client = createWalletClient({
+      account: { ...account, signTypedData: async () => signature as Hex },
+      chain: base,
+      transport: custom({ request: async () => "0x" }),
+    });
+    await expect(
+      EcrecoverRatifierUtils.sign({ tree, client, account: client.account }),
+    ).rejects.toMatchObject({
+      name: "InvalidTypedDataSignatureError",
+      cause: expect.any(Error),
+    });
+  });
+
+  test("error: wallet signing failure passes through", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const cause = new TypeError("Signing rejected");
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const client = createWalletClient({
+      account: {
+        ...account,
+        signTypedData: async () => {
+          throw cause;
+        },
+      },
+      chain: base,
+      transport: custom({ request: async () => "0x" }),
+    });
+    await expect(
+      EcrecoverRatifierUtils.sign({ tree, client, account: client.account }),
+    ).rejects.toBe(cause);
   });
 });
 

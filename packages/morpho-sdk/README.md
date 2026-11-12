@@ -57,6 +57,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
+| | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
 | | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
@@ -290,6 +291,62 @@ const requirements = await output.getRequirements();
 const tx = output.buildTx();
 ```
 
+### Midnight: collateral batches
+
+`supplyCollateralBatch` and `withdrawCollateralBatch` move several collaterals of one position in
+one transaction: a Midnight core `multicall` of direct `supplyCollateral` or `withdrawCollateral`
+calls that reverts as a whole. Pass one entry per collateral index; duplicates throw
+`DuplicateMidnightCollateralIndexError`, unlike the bundle flows, which sum them.
+
+A supply batch returns one unlimited Midnight approval per collateral token whose allowance is
+below that token's total:
+
+```typescript
+const supply = midnight.supplyCollateralBatch({
+  accountAddress: user,
+  marketData,
+  collateralSupplies: [
+    { collateralIndex: 0n, assets: 1_000_000n },
+    { collateralIndex: 1n, assets: 2_000_000_000_000_000_000n },
+  ],
+});
+
+for (const approval of await supply.getRequirements()) {
+  const hash = await walletClient.sendTransaction({ ...approval, account: user });
+  await client.waitForTransactionReceipt({ hash });
+}
+await walletClient.sendTransaction({ ...supply.buildTx(), account: user });
+```
+
+A withdraw batch checks every entry against `positionData` and, when the position has debt, checks
+the remaining collateral against the LLTV buffer using `collateralPrices`. `maxUint256` withdraws
+that index's whole balance. It needs no requirements:
+
+```typescript
+import { blueOracleAbi } from "@morpho-org/morpho-sdk/abis";
+import { maxUint256 } from "viem";
+
+const positionData = await midnight.getPositionData({ marketId, accountAddress: user });
+const collateralPrices = await Promise.all(
+  marketData.params.collateralParams.map(({ oracle }) =>
+    client.readContract({ address: oracle, abi: blueOracleAbi, functionName: "price" }),
+  ),
+);
+
+const withdrawal = midnight.withdrawCollateralBatch({
+  accountAddress: user,
+  marketData,
+  positionData,
+  collateralPrices,
+  collateralWithdrawals: [
+    { collateralIndex: 0n, assets: 500_000n },
+    { collateralIndex: 1n, assets: maxUint256 },
+  ],
+  receiver: user,
+});
+await walletClient.sendTransaction({ ...withdrawal.buildTx(), account: user });
+```
+
 See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API:
 native wrapping, Vault V2 BluePublicAllocator reallocations, borrow-position migration, vault V1 →
 V2 migration, force withdraw/redeem, and Midnight maker flows.
@@ -368,10 +425,12 @@ graph LR
         MN1 --> MNM[maker offer submission]
         MN1 --> MNR[repayWithdrawCollateral]
         MN1 --> MNP[collateral supply / redeem]
+        MN1 --> MNCB[collateral batches]
         MNT --> MNB2[MidnightBundlesV2]
         MNM --> MNB2
         MNR --> MNB2
         MNP --> MNC[Midnight]
+        MNCB -->|multicall| MNC
     end
 
 

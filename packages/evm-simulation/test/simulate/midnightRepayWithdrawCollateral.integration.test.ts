@@ -1,8 +1,10 @@
 import {
   midnightRepayWithdrawCollateral,
+  midnightSupplyCollateralBatch,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
+  midnightWithdrawCollateralBatch,
   morphoViemExtension,
 } from "@morpho-org/morpho-sdk";
 import { midnightAbi } from "@morpho-org/morpho-sdk/abis";
@@ -35,6 +37,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  SimulationRevertedError,
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
@@ -457,6 +460,116 @@ const asTransaction = (
 ) => ({ from, to: tx.to, data: tx.data, value: tx.value });
 
 describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
+  test("direct collateral batches verify both tokens and reject an unhealthy withdrawal", async ({
+    client,
+  }) => {
+    const batchMarketData = new Market({
+      ...marketData,
+      params: new MarketParams({
+        ...market,
+        collateralParams: [
+          ...market.collateralParams,
+          {
+            token: usdc,
+            lltv: 770000000000000000n,
+            liquidationCursor: 300000000000000000n,
+            oracle: wNativeOracle,
+          },
+        ],
+      }),
+    });
+    const fixture = {
+      ...baseFixture,
+      marketData: batchMarketData,
+      market: batchMarketData.params,
+      marketId: MarketUtils.toId(batchMarketData.params),
+    };
+    const { user } = await setUp(client, fixture);
+    await client.setCode({
+      address: wNativeOracle,
+      bytecode: concatHex([
+        "0x7f",
+        padHex(toHex(10n ** 36n), { size: 32 }),
+        "0x60005260206000f3",
+      ]),
+    });
+    await client.deal({ erc20: usdc, account: user, amount: 100n });
+    await client.deal({
+      erc20: wNative,
+      account: user,
+      amount: parseEther("1"),
+    });
+    await client.writeContract({
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [midnight, maxUint256],
+    });
+    const supplies = [
+      { collateralIndex: 0n, assets: parseEther("0.1") },
+      { collateralIndex: 1n, assets: 20n },
+    ];
+    const supply = midnightSupplyCollateralBatch({
+      chainId: base.id,
+      market: fixture.market,
+      onBehalf: user,
+      collateralSupplies: supplies,
+    });
+    const supplied = await simulate(configFor(client), {
+      chainId: base.id,
+      transactions: [asTransaction(user, supply)],
+      limits: toSimulationLimits(supply.action, { owner: user }),
+    });
+    expect(
+      supplied.verification.operations[0]?.checkedLimits.quote
+        .collateralSupplies,
+    ).toEqual(supplies);
+    await client.sendTransaction(supply);
+    const withdrawals = [
+      { collateralIndex: 0n, assets: parseEther("0.05") },
+      { collateralIndex: 1n, assets: 10n },
+    ];
+    const withdraw = midnightWithdrawCollateralBatch({
+      chainId: base.id,
+      market: fixture.market,
+      onBehalf: user,
+      receiver: RECEIVER,
+      collateralWithdrawals: withdrawals,
+    });
+    const withdrawn = await simulate(configFor(client), {
+      chainId: base.id,
+      transactions: [asTransaction(user, withdraw)],
+      limits: toSimulationLimits(withdraw.action, {
+        owner: user,
+        receiver: RECEIVER,
+      }),
+    });
+    expect(
+      withdrawn.verification.operations[0]?.checkedLimits.quote
+        .collateralWithdrawals,
+    ).toEqual(withdrawals);
+    await createDebt(client, { user, fixture });
+    const unhealthy = midnightWithdrawCollateralBatch({
+      chainId: base.id,
+      market: fixture.market,
+      onBehalf: user,
+      receiver: RECEIVER,
+      collateralWithdrawals: [
+        { collateralIndex: 0n, assets: parseEther("10.1") },
+        { collateralIndex: 1n, assets: 20n },
+      ],
+    });
+    await expect(
+      simulate(configFor(client), {
+        chainId: base.id,
+        transactions: [asTransaction(user, unhealthy)],
+        limits: toSimulationLimits(unhealthy.action, {
+          owner: user,
+          receiver: RECEIVER,
+        }),
+      }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
   test("partial repayment passes and an overquoted debt reduction fails", async ({
     client,
   }) => {

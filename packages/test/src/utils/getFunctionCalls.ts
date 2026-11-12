@@ -48,11 +48,11 @@ export type FunctionCall<
 };
 
 /**
- * Get the number of times a specific function was called within a transaction.
+ * Gets the decoded calls to a specific function within a transaction.
  *
  * This helper queries Anvil's `ots_traceTransaction` RPC method to retrieve the
- * call tree for a given transaction and counts how many times the provided
- * contract + function name combination appears in the trace (including internal calls).
+ * call tree for a given transaction and returns matching calls to the provided
+ * contract and function name, including internal calls.
  *
  * @template TAbi - The ABI type of the target contract.
  * @template TName - A function name extracted from the ABI. Ensures type-safety:
@@ -62,22 +62,25 @@ export type FunctionCall<
  * @param params - Object containing the function parameters.
  * @param params.txHash - The transaction hash to analyze.
  * @param params.abi - The ABI of the contract to decode calldata against.
- * @param params.contract - The address of the contract whose function calls to count.
+ * @param params.contract - The address of the contract whose function calls to decode.
  * @param params.functionName - The function name to check for (type-safe).
  *
- * @returns The number of times the specified function was called during execution
- *          of the given transaction (may be `0` if not called).
+ * @returns An array of decoded calls containing `functionName` and `args`,
+ * or an empty array if no matching calls were found.
  *
  * @example
  * ```ts
- * const count = await getFunctionCallCount(client, {
+ * import { getFunctionCalls } from "@morpho-org/test";
+ * import { erc20Abi } from "viem";
+ *
+ * const calls = await getFunctionCalls(client, {
  *   txHash: "0x1234..." as Hash,
- *   abi: myAbi,
+ *   abi: erc20Abi,
  *   contract: "0xabc..." as Address,
- *   functionName: "foo", // must exist in `myAbi`
+ *   functionName: "transfer",
  * });
  *
- * expect(count).toBe(1); // assert foo() was called once
+ * expect(calls.length).toBe(1); // assert transfer() was called once
  * ```
  */
 export async function getFunctionCalls<

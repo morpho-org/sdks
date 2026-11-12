@@ -18,6 +18,7 @@ import {
 import { validateMidnightAddress } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightReceiver } from "../../helpers/validateMidnightReceiver.js";
+import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import {
   InputExceedsMaxError,
   type Metadata,
@@ -124,12 +125,8 @@ export const midnightRepayWithdrawCollateral = (
     throw new NonPositiveInputError("repay or withdraw amount", 0n);
   }
   if (repay.type === "full") {
-    if (repay.maxBuyerAssets <= 0n) {
-      throw new NonPositiveInputError(
-        "repay.maxBuyerAssets",
-        repay.maxBuyerAssets,
-      );
-    }
+    // Validation only; rejects non-positive amounts.
+    validatePositiveInput("repay.maxBuyerAssets", repay.maxBuyerAssets);
     if (repay.maxBuyerAssets >= maxUint256) {
       throw new InputExceedsMaxError({
         field: "repay.maxBuyerAssets",
@@ -145,12 +142,8 @@ export const midnightRepayWithdrawCollateral = (
     index,
     { collateralIndex, assets },
   ] of params.collateralWithdrawals.entries()) {
-    if (assets <= 0n) {
-      throw new NonPositiveInputError(
-        `collateralWithdrawals[${index}].assets`,
-        assets,
-      );
-    }
+    // Validation only; rejects non-positive amounts.
+    validatePositiveInput(`collateralWithdrawals[${index}].assets`, assets);
     validateUint256Field(`collateralWithdrawals[${index}].assets`, assets);
     // Throws UnknownCollateralIndexError when the index is not configured on the market.
     MarketUtils.getCollateralByIndex(params.market, collateralIndex);

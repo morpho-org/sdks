@@ -103,6 +103,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based multiplication of two numbers, rounded down.
+   * Requires non-negative operands for rounded-down semantics; signed division truncates toward zero.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -115,6 +116,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based multiplication of two numbers, rounded up.
+   * Requires non-negative operands for rounded-up semantics; signed inputs follow `mulDivUp` instead.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -127,6 +129,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based multiplication of two numbers with a rounding direction.
+   * Rounding assumes non-negative operands; signed inputs follow `mulDivDown` or `mulDivUp` instead.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -145,6 +148,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based division of two numbers, rounded down.
+   * Rounding assumes a non-negative numerator and positive denominator; signed division truncates toward zero.
    *
    * @param x - The numerator accepted by `BigInt`.
    * @param y - The denominator accepted by `BigInt`.
@@ -158,6 +162,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based division of two numbers, rounded up.
+   * Rounding assumes a non-negative numerator and positive denominator; signed inputs follow `mulDivUp` instead.
    *
    * @param x - The numerator accepted by `BigInt`.
    * @param y - The denominator accepted by `BigInt`.
@@ -171,6 +176,7 @@ export namespace MathLib {
 
   /**
    * Performs the WAD-based division of two numbers with a rounding direction.
+   * Rounding assumes a non-negative numerator and positive denominator; signed inputs follow `mulDivDown` or `mulDivUp` instead.
    *
    * @param x - The numerator accepted by `BigInt`.
    * @param y - The denominator accepted by `BigInt`.
@@ -190,6 +196,8 @@ export namespace MathLib {
 
   /**
    * Multiplies two numbers and divides by a denominator, rounding down the result.
+   * Rounding assumes non-negative `x` and `y` and a positive `denominator`.
+   * Signed division truncates toward zero, not toward negative infinity.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -215,6 +223,9 @@ export namespace MathLib {
 
   /**
    * Multiplies two numbers and divides by a denominator, rounding up the result.
+   * Rounding assumes non-negative `x` and `y` and a positive `denominator`.
+   * For signed operands, division truncates toward zero, then adds one only when
+   * the product remainder is positive; this is not a general signed ceiling.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -239,6 +250,8 @@ export namespace MathLib {
 
   /**
    * Multiplies two numbers and divides by a denominator with a rounding direction.
+   * Rounding assumes non-negative `x` and `y` and a positive `denominator`.
+   * Signed inputs follow `mulDivDown` or `mulDivUp`, not general signed floor/ceiling.
    *
    * @param x - The first number accepted by `BigInt`.
    * @param y - The second number accepted by `BigInt`.
@@ -260,6 +273,7 @@ export namespace MathLib {
 
   /**
    * Approximates a continuously compounded interest rate using Taylor expansion.
+   * Requires non-negative `x` and `n` for the rounding assumptions of the fixed-point helpers.
    *
    * @param x - The base of the exponent accepted by `BigInt`.
    * @param n - The exponent accepted by `BigInt`.
