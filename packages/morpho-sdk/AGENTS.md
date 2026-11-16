@@ -2,9 +2,31 @@
 
 Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requirement helpers used by protocol flows. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
 
-> Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
+> Repo-wide architecture, type, test, doc and release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
 > **Dependency facade:** apply root §4 on every `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` surface change. Canonical raw upstream names live under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`; Midnight has no address surface. The corresponding unprefixed facade qualifies protocol-specific names with `Blue` or `Midnight` and keeps shared infrastructure unqualified. Extend these categories only where an equivalent facade already exists; do not add parity-only upstream internals.
+
+> **TransactionPlan:** the public API and stored plan types are experimental during beta; breaking changes follow the scoped [experimental TransactionPlan exception](../../docs/EXCEPTIONS.md#experimental-transactionplan-apis). Existing entity flows remain the recommended stable path during the shadow-mode rollout. Plans never use Permit2, and the SDK never signs; see [TransactionPlan format ADR](../../docs/adrs/ADR-2026-11-04-transaction-plan-format.md).
+
+## Architecture
+
+`Client → Entity → Action`. Dependencies point one way; lower layers never reach back into higher ones.
+
+| Layer | Reads state? | Encodes calldata? | Async? | Returns |
+| --- | --- | --- | --- | --- |
+| **Client** | no | no | no | factory for entities |
+| **Entity** | yes (RPC) | no | yes | lazy `{ buildTx, getRequirements }` |
+| **Action** | no | yes | **no** | deep-frozen `Transaction` |
+| **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | per-function contract |
+
+Cross-layer leaks (entities encoding calldata, actions reading state, helpers depending on entities) are an API design failure, not an implementation detail. Redesign the boundary; do not add a shortcut.
+
+- `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
+- **Entity flows are stateless: no in-memory state may be shared between `getRequirements()`/`sign()` and `buildTx()`.** An `ActionOutput` must not close over a mutable cache (a `Map`, `Set`, array, or object mutated during signing) that `buildTx` later reads. Everything `buildTx` needs must be derivable from the arguments it is handed — including the payloads and derived data carried on the `RequirementSignature` objects passed to it. This keeps `prepare-on-instance-A → finalize-on-instance-B` (and serialize-then-resume) flows correct: the signature is the transport, not a shared closure. If a builder needs a value that only signing can compute (e.g. an encoded offer-root payload), put it on the signature's `args`, not in a side Map. The only mutable binding a handle may hold is an in-flight `getRequirements()` promise shared between concurrent callers and cleared on settlement; `buildTx` never touches it. Decision and acceptance checklist: [`ADR-2026-09-23-stateless-entity-flows`](../../docs/adrs/ADR-2026-09-23-stateless-entity-flows.md); every flow that consumes a signature carries a cross-handle test (prepare on A, finalize identically on a fresh B).
+- Actions and transaction builders are synchronous and pure: no `async`, clocks, randomness, network reads, or signing (root §2 rule 3). Every returned `Transaction` is `deepFreeze`d.
+- No lint rule bans cross-layer imports or `async` in actions; both are review-time rules and binding regardless.
+
+> Applied by personas: [`module-api-architecture`](../../.agents/pr-review-engine/agents/module-api-architecture.md) (layering), [`web3-security`](../../.agents/pr-review-engine/agents/web3-security.md) (Action-layer purity), [`test-coverage`](../../.agents/pr-review-engine/agents/test-coverage.md) (cross-handle statelessness tests).
 
 ## Routing summary
 
@@ -32,12 +54,14 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   `withdrawBuyCallback` is the one direct Morpho Blue call: a BlueBuyCallback's owner withdraws
   the callback's whole supply position to their wallet with `withdraw(..., onBehalf = callback,
   receiver = owner)`, because BlueBundlesV1 cannot act for the callback.
-- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate taker flows route through MidnightBundlesV2 with an assets or units target; `takeRepayWithdrawCollateral` is a reduce-only buy that repays debt via borrow-side offers, repays the remainder directly when `repayEnabled` is set, then withdraws collateral to `collateralReceiver`. `repayWithdrawCollateral` routes through a reduce-only MidnightBundlesV2 buy with `repayEnabled` and no offer fills (assets-target entrypoint for an `assets` repay, units-target with `targetUnits = maxUint256` for a `full` repay); direct `supplyCollateral`, `withdrawCollateral`, and `redeem` calls route through Midnight, and `supplyCollateralBatch` and `withdrawCollateralBatch` route through one Midnight core `multicall` of those direct collateral calls. Guarded batch `cancelOffers` and the `makeLend`/`makeBorrow`/`makeWithdraw`/`makeRepay`/`supplyCollateralMakeBorrow`/`supplyBlueMakeLend` maker flows route through MidnightBundlesV2, pinned on Ethereum, Base, Arc, Robinhood, and Tempo. Maker flows accept PriceRatifierV1 or RateRatifierV1 trees and publish the root and payload in one transaction for `msg.sender`; `makeBorrow` takes no collateral, while `supplyCollateralMakeBorrow` requires it. Each maker flow uses `midnightCancelAndMake`. `makeWithdraw` and `makeRepay` require reduce-only sell and buy offers, then share the borrow-side and lend-side publication logic of `makeBorrow` and `makeLend`, which reject reduce-only offers. Both preserve the supplied tree and publish resting exits without executing a fill. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization and token-pull requirements.
+- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate taker flows route through MidnightBundlesV2 with an assets or units target; `takeRepayWithdrawCollateral` is a reduce-only buy that repays debt via borrow-side offers, repays the remainder directly when `repayEnabled` is set, then withdraws collateral to `collateralReceiver`. `repayWithdrawCollateral` routes through a reduce-only MidnightBundlesV2 buy with `repayEnabled` and no offer fills (assets-target entrypoint for an `assets` repay, units-target with `targetUnits = maxUint256` for a `full` repay); direct `supplyCollateral`, `withdrawCollateral`, and `redeem` calls route through Midnight, and `supplyCollateralBatch` and `withdrawCollateralBatch` route through one Midnight core `multicall` of those direct collateral calls. Guarded batch `cancelOffers` and the `makeLend`/`makeBorrow`/`makeWithdraw`/`makeRepay`/`supplyCollateralMakeBorrow`/`supplyBlueMakeLend` maker flows route through MidnightBundlesV2, pinned on Ethereum, Base, Arbitrum, Arc, Robinhood, and Tempo. Maker flows accept PriceRatifierV1 or RateRatifierV1 trees and publish the root and payload in one transaction for `msg.sender`; `makeBorrow` takes no collateral, while `supplyCollateralMakeBorrow` requires it. Each maker flow uses `midnightCancelAndMake`. `makeWithdraw` and `makeRepay` require reduce-only sell and buy offers, then share the borrow-side and lend-side publication logic of `makeBorrow` and `makeLend`, which reject reduce-only offers. Both preserve the supplied tree and publish resting exits without executing a fill. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
 ## Tests
 
 Per root §5, unit tests are colocated as `src/**/*.test.ts`. Fork and integration tests are named `*.integration.test.ts` and live under `packages/morpho-sdk/test/`; test-only helper units stay beside their helper there. Use parameterized fixtures (`randomMarket(...)`); never weaken assertions to make a test pass.
+
+Security invariants are tests (root §5): deposit routing, inflation-attack guard, LLTV buffer, bounded slippage, `chainId` validation, authorization, and accounting each keep an `[INV-NN]`-tagged test that fails if the invariant is removed. [`SECURITY.md`](../../SECURITY.md) holds the table.
 
 ## Glossary
 

@@ -86,7 +86,6 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 | [`@morpho-org/midnight-sdk`](./packages/midnight-sdk) | Yes | Midnight offers, signatures and bundles. |
 | [`@morpho-org/evm-simulation`](./packages/evm-simulation) | Yes | Transaction simulation and balance-change checks. |
 | [`@morpho-org/wdk-protocol-lending-morpho-evm`](./packages/wdk-protocol-lending-morpho-evm) | Yes | WDK lending module, including ERC-4337 and paymaster flows. |
-| [`@morpho-org/liquidity-sdk-viem`](./packages/liquidity-sdk-viem) | Limited | Deprecated (see its [`DEPRECATED.md`](./packages/liquidity-sdk-viem/DEPRECATED.md)). Reports are accepted, but fixes are not guaranteed. |
 | [`@morpho-org/test`](./packages/test), [`@morpho-org/morpho-test`](./packages/morpho-test) | No | Test fixtures and harnesses, not meant for production. Supply-chain issues in their published tarballs are still in scope. |
 | `@morpho-org/consumer-sdk` | No | Legacy predecessor of `@morpho-org/morpho-sdk`; not maintained in this repository. |
 | CI/CD, release scripts and workflows in this repository | Yes | Anything that could change what is published to npm. |
@@ -151,7 +150,6 @@ Security fixes ship only in the latest major line of each maintained package. Pr
 | `@morpho-org/midnight-sdk` | Latest major |
 | `@morpho-org/evm-simulation` | Latest major |
 | `@morpho-org/wdk-protocol-lending-morpho-evm` | Latest major |
-| `@morpho-org/liquidity-sdk-viem` | Deprecated; no fix guaranteed |
 | `@morpho-org/test`, `@morpho-org/morpho-test` | Test utilities; not covered |
 | `@morpho-org/consumer-sdk` | Not maintained in this repository |
 
@@ -163,7 +161,7 @@ Packages are developed in a private repository. Each release is published to thi
 
 1. A release snapshot pushed to `main` or `next` runs [`release.yml`](./.github/workflows/release.yml). On `next`, it publishes only prereleases, under the `next` dist-tag.
 2. An unprivileged **Pack** job installs dependencies, builds every package and packs the tarballs, with read-only permissions.
-3. A privileged **Publish** job, in the `npm` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It installs nothing, re-checks their digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry. It then runs `npm publish --provenance --ignore-scripts` with **npm trusted publishing (OIDC)**. No long-lived npm token is stored for publishing.
+3. A privileged **Publish** job, in the `npm` GitHub environment and the only job with `id-token: write`, takes those tarballs as untrusted input. It downloads npm 11.21.0 through `scripts/publish/setup-npm.ts`, verifies its hard-coded SHA-512 before extraction or execution, installs no workspace dependencies and runs no install lifecycle scripts. It re-checks tarball digests, checks each tarball's name and version against the source tree with npm's own manifest reader, rejects entries that would collide on a consumer's filesystem, and pins `publishConfig` to the npm registry. After verifying tarballs and planning the whole release, it uses **npm trusted publishing (OIDC)** to promote eligible existing stable versions from `next` to `latest` on `main` with `npm dist-tag add`, respecting explicit rollback pins, then runs `npm publish --provenance --ignore-scripts` for new versions. Promotions require **Allow npm dist-tag** on each package's trusted publisher. No long-lived npm token is stored for publishing.
 4. Package git tags and GitHub releases are created only after npm accepts the publish, on the commit that set each version.
 
 ### Verifying a release

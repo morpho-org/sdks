@@ -1449,7 +1449,7 @@ describe("midnightCancelAndMake without publication", () => {
   test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
     expect(() =>
       midnightCancelAndMake({
-        chainId: ChainId.ArbitrumMainnet,
+        chainId: ChainId.OptimismMainnet,
         cancellations: [{ group: groupA, maxConsumed: 0n }],
         deadline: maxUint256,
       }),

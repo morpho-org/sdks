@@ -64,7 +64,7 @@ import "@morpho-org/blue-sdk-viem/augment";
 
 ### Fetch the config of a specific market
 
-Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to fetch information on a given market's immutable configuration:
+Leverage the [`MarketParams`](../blue-sdk/src/market/MarketParams.ts) class to fetch information on a given market's immutable configuration:
 
 ```typescript
 import { MarketId } from "@morpho-org/blue-sdk";

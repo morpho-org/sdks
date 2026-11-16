@@ -891,11 +891,11 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
             ]),
           },
           {
-            chainId: ChainId.ArbitrumMainnet,
+            chainId: ChainId.OptimismMainnet,
             transactions: [TRANSACTION],
             limits: {
               operations: [
@@ -920,11 +920,11 @@ describe.sequential("runSimulation", () => {
       simulate(
         {
           chains: new Map([
-            [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+            [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
           ]),
         },
         {
-          chainId: ChainId.ArbitrumMainnet,
+          chainId: ChainId.OptimismMainnet,
           transactions: [TRANSACTION],
           limits: {
             operations: [
@@ -990,11 +990,11 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
             ]),
           },
           {
-            chainId: ChainId.ArbitrumMainnet,
+            chainId: ChainId.OptimismMainnet,
             transactions: [TRANSACTION],
             limits: { operations: [operation] },
           },

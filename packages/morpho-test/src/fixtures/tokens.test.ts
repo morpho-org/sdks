@@ -20,7 +20,7 @@ describe("withSimplePermit registry", () => {
   test("EthMainnet set contains the expected canonical permit tokens", () => {
     const ethSet = withSimplePermit[ChainId.EthMainnet]!;
     expect(ethSet.has(addressesRegistry[ChainId.EthMainnet].wstEth)).toBe(true);
-    expect(ethSet.has(addressesRegistry[ChainId.EthMainnet].dai)).toBe(true);
+    expect(ethSet.has(addressesRegistry[ChainId.EthMainnet].dai)).toBe(false);
     expect(ethSet.has(addressesRegistry[ChainId.EthMainnet].usdc)).toBe(true);
   });
 

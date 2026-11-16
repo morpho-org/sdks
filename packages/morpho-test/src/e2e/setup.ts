@@ -1,6 +1,12 @@
 import { ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { type Address, type Chain, numberToHex, parseEther } from "viem";
+import {
+  type Address,
+  type Chain,
+  isAddressEqual,
+  numberToHex,
+  parseEther,
+} from "viem";
 import { E2E_ASSET_BYTECODE, E2E_ASSET_STORAGE, getE2eAsset } from "./asset.js";
 
 /** Address of the fixed-price oracle installed on every fork. */
@@ -81,6 +87,16 @@ export const wrapE2eNative = async (
         (await client.balanceOf({ erc20: params.wNative, owner: account })) +
         params.amount,
     });
+    if (
+      isAddressEqual(params.wNative, getE2eAsset(client.chain.id).address) &&
+      (await client.getCode({ address: params.wNative })) === E2E_ASSET_BYTECODE
+    )
+      await client.setBalance({
+        address: params.wNative,
+        value:
+          (await client.getBalance({ address: params.wNative })) +
+          params.amount,
+      });
     return;
   }
 

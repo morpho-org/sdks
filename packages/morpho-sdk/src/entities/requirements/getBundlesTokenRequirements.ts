@@ -1,28 +1,14 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import {
-  erc2612Abi,
-  InvalidPermitDomainChainIdError,
-  InvalidPermitDomainVerifyingContractError,
-  isContractRevertError,
-  isTransportError,
-  isUndecodableResultError,
-  MissingPermitDomainNameError,
-  UnsupportedPermitDomainExtensionsError,
-} from "@morpho-org/blue-sdk-viem";
-import { _try, isDefined, Time } from "@morpho-org/morpho-ts";
+import { isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
   erc20Abi,
-  getTypesForEIP712Domain,
-  hashDomain,
   isAddressEqual,
   maxUint256,
-  type TypedData,
 } from "viem";
 import { readContract } from "viem/actions";
 import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
-import { encodeErc20Permit } from "../../actions/requirements/encode/encodeErc20Permit.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import {
   validateChainId,
@@ -37,6 +23,8 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
+
+import { getErc2612Permit } from "./getErc2612Permit.js";
 
 /** Parameters for {@link getBundlesTokenRequirements}. */
 export interface GetBundlesTokenRequirementsParams {
@@ -191,59 +179,17 @@ export const getBundlesTokenRequirements = async (
   if (params.supportSignature) {
     const isDai = isDefined(dai) && isAddressEqual(params.token, dai);
     if ((params.useSimplePermit ?? true) && !isDai) {
-      const nonce = await readContract(viemClient, {
-        abi: erc2612Abi,
-        address: params.token,
-        functionName: "nonces",
-        args: [params.owner],
-      }).catch((error: unknown) => {
-        if (isTransportError(error)) throw error;
-        if (isContractRevertError(error) || isUndecodableResultError(error))
-          return undefined;
-        throw error;
+      const permit = await getErc2612Permit(viemClient, {
+        token: params.token,
+        owner: params.owner,
+        spender: params.spender,
+        amount: params.amount,
+        chainId: params.chainId,
+        deadline: params.deadline,
+        now: timestamp,
+        supportDeployless: params.supportDeployless,
       });
-
-      if (isDefined(nonce)) {
-        const permit = await _try(
-          () =>
-            encodeErc20Permit(viemClient, {
-              token: params.token,
-              owner: params.owner,
-              spender: params.spender,
-              amount: params.amount,
-              chainId: params.chainId,
-              nonce,
-              deadline: params.deadline,
-              now: timestamp,
-              supportDeployless: params.supportDeployless,
-            }),
-          MissingPermitDomainNameError,
-          InvalidPermitDomainChainIdError,
-          InvalidPermitDomainVerifyingContractError,
-          UnsupportedPermitDomainExtensionsError,
-        );
-        if (isDefined(permit)) {
-          const separator = await readContract(viemClient, {
-            abi: erc2612Abi,
-            address: params.token,
-            functionName: "DOMAIN_SEPARATOR",
-          }).catch((error: unknown) => {
-            if (isTransportError(error)) throw error;
-            if (isContractRevertError(error) || isUndecodableResultError(error))
-              return undefined;
-            throw error;
-          });
-          const domain = permit.action.typedData.domain ?? {};
-          if (
-            separator?.toLowerCase() ===
-            hashDomain<TypedData>({
-              domain,
-              types: { EIP712Domain: getTypesForEIP712Domain({ domain }) },
-            }).toLowerCase()
-          )
-            return [permit];
-        }
-      }
+      if (isDefined(permit)) return [permit];
     }
   }
 

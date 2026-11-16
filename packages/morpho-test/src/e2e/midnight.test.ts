@@ -1,4 +1,5 @@
 import {
+  MarketParams,
   Offer,
   OfferUtils,
   PriceRatifierV1,
@@ -8,9 +9,11 @@ import {
   Tree,
 } from "@morpho-org/midnight-sdk";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { type Chain, zeroAddress } from "viem";
-import { describe, expect, test } from "vitest";
+import { type Chain, parseEther, zeroAddress } from "viem";
+import { describe, expect, test, vi } from "vitest";
+import { E2E_ASSET_BYTECODE } from "./asset.js";
 import {
+  E2E_MIDNIGHT_WALLETS,
   E2eMidnightMarketRequiredError,
   fundE2eMidnightWallets,
   getE2eTakeableOffers,
@@ -60,6 +63,66 @@ const offer = Offer.create({
   ratifier: "0x000000000000000000000000000000000000a111",
   maxUnits: 100n,
 });
+describe("fundE2eMidnightWallets collateral backing", () => {
+  const token = "0xE2e0000000000000000000000000000000000004";
+  const market = new MarketParams({
+    ...offer.market,
+    collateralParams: [{ ...offer.market.collateralParams[0]!, token }],
+  });
+
+  test.each([
+    {
+      name: "increases synthetic backing",
+      amount: 5n,
+      bytecode: E2E_ASSET_BYTECODE,
+    },
+    {
+      name: "decreases synthetic backing",
+      amount: -5n,
+      bytecode: E2E_ASSET_BYTECODE,
+    },
+    {
+      name: "leaves non-synthetic backing unchanged",
+      amount: 5n,
+      bytecode: "0x",
+    },
+  ] as const)("$name", async ({ amount, bytecode }) => {
+    const mock = {
+      setCode: vi.fn().mockResolvedValue(undefined),
+      setBalance: vi.fn().mockResolvedValue(undefined),
+      readContract: vi
+        .fn()
+        .mockResolvedValueOnce(17n)
+        .mockResolvedValueOnce(17n + amount),
+      deal: vi.fn().mockResolvedValue(undefined),
+      getCode: vi.fn().mockResolvedValue(bytecode),
+      getBalance: vi.fn().mockResolvedValue(23n),
+    };
+    await fundE2eMidnightWallets(mock as unknown as AnvilTestClient<Chain>, {
+      market,
+      wallets: { A: { collateralAssets: amount } },
+    });
+
+    expect(mock.deal).toHaveBeenCalledExactlyOnceWith({
+      erc20: token,
+      account: E2E_MIDNIGHT_WALLETS.A,
+      amount: 17n + amount,
+    });
+    expect(mock.getCode).toHaveBeenCalledExactlyOnceWith({ address: token });
+    expect(mock.setBalance.mock.calls).toEqual([
+      [{ address: E2E_MIDNIGHT_WALLETS.A, value: parseEther("1") }],
+      ...(bytecode === E2E_ASSET_BYTECODE
+        ? [[{ address: token, value: 23n + amount }]]
+        : []),
+    ]);
+    if (bytecode === E2E_ASSET_BYTECODE)
+      expect(mock.getBalance).toHaveBeenCalledExactlyOnceWith({
+        address: token,
+      });
+    else expect(mock.getBalance).not.toHaveBeenCalled();
+  });
+});
+
 const legacyTree = Tree.create([offer]);
 const setterTree = Tree.create({ type: "setter", entries: [offer] });
 const priceTree = Tree.create({

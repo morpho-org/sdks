@@ -134,14 +134,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.ArbitrumMainnet, "midnight");
+      getChainAddress(ChainId.OptimismMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.ArbitrumMainnet,
+      chainId: ChainId.OptimismMainnet,
       label: "midnight",
     });
   });

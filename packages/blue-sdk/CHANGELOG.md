@@ -1,5 +1,17 @@
 # @morpho-org/blue-sdk
 
+## 8.2.3
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+
 ## 8.2.2
 
 ### Patch Changes

@@ -3,8 +3,8 @@ name: Release
 # Every push to main or next is a release: the repository only receives release
 # snapshots. main publishes stable versions under the `latest` dist-tag; next
 # publishes only its prerelease versions, under `next`. Publishing is
-# idempotent: an existing version is skipped unless its dist-tag points to an
-# older version; a lagging tag fails so a maintainer can repair it.
+# idempotent: existing versions on next are promoted to latest on main, unless
+# explicitly rollback-pinned. Other lagging tags fail for maintainer repair.
 #
 #   pack     unprivileged: install, build and pack the exact bytes to publish
 #   publish  npm trusted publishing (OIDC) with provenance; runs no dependency code
@@ -59,7 +59,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -79,9 +79,9 @@ jobs:
           path: ${{ runner.temp }}/tarballs
           if-no-files-found: error
 
-  # Holds the npm OIDC token. It installs nothing and runs only Node, the npm
-  # bundled with it and dependency-free scripts from this commit, on tarballs
-  # whose digests and identities it checks first.
+  # Holds the npm OIDC token. Downloads and verifies checksum-pinned npm;
+  # installs no workspace dependencies. Verifies tarballs and plans all promotions
+  # and uploads before mutating npm.
   publish:
     name: Publish to npm
     needs: pack
@@ -100,12 +100,15 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      # An exact Node release fixes the bundled npm (11.20.0), which supports
-      # trusted publishing. Bump it with .nvmrc's major.
+      # Pin Node; setup-npm uses a reviewed distribution digest because bundled
+      # npm 11.20.0 cannot authenticate dist-tag operations with OIDC.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.12.1
           package-manager-cache: false
+
+      - name: Set up npm with OIDC dist-tag support
+        run: node scripts/publish/setup-npm.ts
 
       - name: Require npm with trusted publishing
         run: node scripts/publish/require-trusted-publishing-npm.ts
@@ -122,25 +125,25 @@ jobs:
       - name: Verify tarballs
         run: node scripts/publish/verify-release-set.ts --channel "$RELEASE_CHANNEL" "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/release-set.tsv"
 
-      # Skips versions already on npm unless the run's dist-tag points to an older
-      # version; fails when the tag lags, npm would refuse, or publishing
-      # would move the run's dist-tag back, before anything is uploaded.
+      # Plan the whole set before mutating npm. Rollback pins must agree with
+      # latest, and never hide a release version missing from the registry.
       - name: Plan publish
-        run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
+        run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" --promotions "$RUNNER_TEMP/to-promote.tsv" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
 
-      - name: Publish packages
+      - name: Promote packages to latest
         shell: bash
         run: |
           set -euo pipefail
-          while IFS=$'\t' read -r -u 3 name version tgz; do
-            echo "Publishing ${name}@${version}"
-            npm publish "$tgz" \
-              --provenance \
-              --access public \
-              --tag "$RELEASE_CHANNEL" \
-              --ignore-scripts \
-              --registry https://registry.npmjs.org
-          done 3< "$RUNNER_TEMP/to-publish.tsv"
+          while IFS=$'\t' read -r -u 3 name version; do
+            echo "Promoting ${name}@${version} to latest"
+            npm dist-tag add "${name}@${version}" latest --registry https://registry.npmjs.org
+          done 3< "$RUNNER_TEMP/to-promote.tsv"
+
+      # A failed publish is checked against npm before deciding: the exact bytes
+      # under an up-to-date dist-tag count as published, other bytes fail, and
+      # anything else is retried, three tries in all.
+      - name: Publish packages
+        run: node scripts/publish/publish-packages.ts --tag "$RELEASE_CHANNEL" "$RUNNER_TEMP/to-publish.tsv"
 
   prepare-release:
     name: Prepare tags & release notes

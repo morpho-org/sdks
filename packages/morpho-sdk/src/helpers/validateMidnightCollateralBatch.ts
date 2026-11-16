@@ -7,6 +7,7 @@ import { DuplicateMidnightCollateralIndexError } from "../types/error.js";
  * @param transfers - Ordered collateral transfers.
  * @param emptyError - Operation-specific error thrown for an empty batch.
  * @returns Nothing.
+ * @throws `emptyError` when `transfers` is empty.
  * @throws {DuplicateMidnightCollateralIndexError} when an index appears twice.
  * @example
  * ```ts

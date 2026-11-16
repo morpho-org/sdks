@@ -11,8 +11,11 @@ import {
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
 import {
-  type ActionRequirement,
+  type ERC20ApprovalAction,
   ExpiredDeadlineError,
+  type PermitRequirementSignature,
+  type Requirement,
+  type Transaction,
 } from "../../types/index.js";
 
 /**
@@ -44,7 +47,12 @@ export const getVaultBundlesSharesRequirements = async (
     readonly supportSignature: boolean;
     readonly now?: bigint;
   },
-): Promise<readonly ActionRequirement[]> => {
+): Promise<
+  readonly (
+    | Readonly<Transaction<ERC20ApprovalAction>>
+    | Requirement<PermitRequirementSignature>
+  )[]
+> => {
   validateChainId(viemClient.chain?.id, params.chainId);
   const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {

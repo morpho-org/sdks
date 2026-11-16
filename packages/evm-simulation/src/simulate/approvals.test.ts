@@ -278,6 +278,16 @@ test("rejects sender ERC-20 approvals, accepts other owners, zero and explicit e
   ).not.toThrow();
 });
 
+test("accepts repeated unchanged non-zero allowances on an allowlisted tuple", () => {
+  expect(() =>
+    assertEvents([
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 100n }),
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 100n }),
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 90n }),
+    ]),
+  ).not.toThrow();
+});
+
 test("rejects ERC-721 token and operator approvals, but accepts revocations", () => {
   expect(() =>
     assertEvents([erc721Approval({ eventOwner: OWNER, approved: SPENDER })]),

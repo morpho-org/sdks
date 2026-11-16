@@ -56,6 +56,6 @@
 - Keep backend I/O isolated behind normalized execution results; public simulation behavior should not depend on hidden backend state.
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer typed failures and explicit backend support rules over broad catch/fallback logic.
-- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
+- If a convention cannot yet be met, record the exception in [docs/EXCEPTIONS.md](../../docs/EXCEPTIONS.md), point to it from this file, and make the touched surface closer to the target design.
 
 - `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used through its root entry point for the requirements adapter and its `/abis` subpath for Morpho ABIs, and its `/midnight/utils` subpath to validate and normalize supplied Midnight market structs. Address lookups come from `@morpho-org/blue-sdk`. Every morpho-sdk bump requires the root AGENTS.md §7 dependent package bump audit for evm-simulation.

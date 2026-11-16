@@ -1,5 +1,25 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.5.3
+
+### Patch Changes
+
+- Add experimental, static, serializable `TransactionPlan` preparation for Vault V2 deposits and withdrawals alongside the existing entity handles. The public TransactionPlan APIs, types and dedicated errors ship with `@experimental` tags during beta; breaking changes may ship in minor releases. Existing entity flows remain the recommended stable path during the shadow-mode rollout. Preparers take a plain viem client and a caller-fetched `vaultData` snapshot, resolve their remaining reads, and return self-contained actions and permit requests. The SDK never signs. `supportSignature` defaults to false; insufficient allowance requires a direct approval or, when enabled and supported, an ERC-2612 permit. TransactionPlan has no Permit2 route; entity flows retain their behavior and Permit2 support.
+
+  `applySignatures(plan, signatures)` synchronously verifies every supplied signature before attaching it, with no client or RPC. It validates all requests against their referencing actions, rejects unknown and duplicate input IDs with `TransactionPlanSignatureMismatchError` (`field: "reference"` or `"duplicate"`), and uses the bundle builders' `normalizeBundlesSignature` parser. Compact 64-byte and serialized 65-byte ECDSA signatures are accepted and stored in serialized form; unsupported encodings throw `BundlesPermitMismatchError`. Local secp256k1 recovery verifies the EIP-712 typed-data hash and owner; high-s signatures, recovery failures and wrong signers throw `InvalidSignatureError`. The EIP-712 domain binds the signature to the action chain. Empty input validates requests and returns the original plan; omitted IDs retain their signatures. The direct `@noble/curves` dependency enables synchronous recovery and reuses viem's version. Contract wallets should use `supportSignature: false` for direct approvals because deployed bundles consume ECDSA `v/r/s`, not arbitrary ERC-1271 or ERC-6492 signatures.
+
+  Only deposit parameters accept `slippageTolerance`, which controls the on-chain maximum share price. Withdrawal plans use `DEFAULT_SLIPPAGE_TOLERANCE` internally for their share-allowance quote and expose no slippage input, since withdrawal calldata enforces no share-price or maximum-shares bound. Insufficient share allowance results in unlimited (`maxUint256`) direct approvals or ERC-2612 share permits. Stored version-1 finite share permits covering the required minimum remain buildable without changing their signed value. Deposit asset permits sign the exact pull amount.
+
+  Pending signature selection and signature attachment reject a permit deadline that differs from any referencing action's deadline before signing, with `TransactionPlanSignatureMismatchError` (`field: "args.deadline"`). Parsing applies the same check and reports `InvalidTransactionPlanError` at the request's `args.deadline` path. Builders retain their `BundlesPermitMismatchError` (`field: "deadline"`) check for this mismatch.
+
+  Plan-interpreting helpers reject unsupported versions with `UnsupportedTransactionPlanVersionError` and unknown action types with `UnsupportedTransactionPlanActionError` before inspecting requests or signature updates, including empty inputs and prototype-property action names. Builders run action-layer validators, including registered approval-spender, amount, share-price, deadline and referral-fee checks. `buildTransaction(plan, step)` and `buildTransactions(plan)` return frozen SDK transactions (`{ to, data, value, action }`), without step IDs or kinds, and append optional `calldataOrigin` bytes.
+
+  `parseTransactionPlan` revives bigints and validates supported versions/actions, field shapes and uint256 ranges, unique IDs, references, action chain/account agreement and permit/action consistency, including already-signed requests. Extra keys remain allowed. Malformed JSON, fields or consistency violations throw the exported `InvalidTransactionPlanError`, exposing the first failure's JSON `path` and `reason`; unsupported versions and action types keep their existing typed errors. Serialization remains unchecked. Parsing is pure: expiry, live state, signature ownership and action-layer business constraints are not checked. It does not prove authenticity or intent; tampered-but-well-formed, internally consistent plans pass, so stored plans must still be protected. Builders do not reverify restored signatures. Missing signatures throw `IncompleteTransactionPlanError`; request consistency mismatches throw `TransactionPlanSignatureMismatchError`, while builders retain the separate permit/action deadline check described above. Preparation rejects malformed inputs before RPC reads, including zero accounts, invalid calldata origins and unsafe integer expiry or fee values. Update maintained direct runtime dependents to resolve the new SDK version; the deprecated liquidity SDK retains its v5 peer range.
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.3
+  - @morpho-org/morpho-sdk@9.7.0
+
 ## 4.5.2
 
 ### Patch Changes

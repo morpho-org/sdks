@@ -271,43 +271,45 @@ describe("release issues", () => {
     },
   );
 
-  test("watches retired packages absent from the workspace", async () => {
-    const retired = "@morpho-org/bundler-sdk-viem";
-    const workspacePackage = "@morpho-org/workspace-only";
-    const cwd = createRepository([
-      { directory: "workspace-only", name: workspacePackage },
-    ]);
-    const retiredUrlSuffix = retired.replaceAll("/", "%2f");
-    const registryUrls: string[] = [];
-    const createdTitles: string[] = [];
-    try {
-      await main({
-        cwd,
-        nowMs: NOW_MS,
-        env: ENV,
-        fetchImpl: async (input, init) => {
-          const url = String(input);
-          if (url.startsWith("https://registry.npmjs.org/")) {
-            registryUrls.push(url);
-            return url.endsWith(retiredUrlSuffix)
-              ? jsonResponse(releasePackument(NOW_MS))
-              : new Response("Not Found", { status: 404 });
-          }
-          if (init?.method === "POST") {
-            createdTitles.push(JSON.parse(String(init.body)).title as string);
-            return jsonResponse({ number: 2 }, 201);
-          }
-          return jsonResponse([]);
-        },
-      });
-      expect(
-        registryUrls.filter((url) => url.endsWith(retiredUrlSuffix)),
-      ).toHaveLength(1);
-      expect(createdTitles).toEqual([releaseIssueTitle(retired, "1.2.3")]);
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  });
+  test.each(["@morpho-org/bundler-sdk-viem", "@morpho-org/liquidity-sdk-viem"])(
+    "watches retired package %s absent from the workspace",
+    async (retired) => {
+      const workspacePackage = "@morpho-org/workspace-only";
+      const cwd = createRepository([
+        { directory: "workspace-only", name: workspacePackage },
+      ]);
+      const retiredUrlSuffix = retired.replaceAll("/", "%2f");
+      const registryUrls: string[] = [];
+      const createdTitles: string[] = [];
+      try {
+        await main({
+          cwd,
+          nowMs: NOW_MS,
+          env: ENV,
+          fetchImpl: async (input, init) => {
+            const url = String(input);
+            if (url.startsWith("https://registry.npmjs.org/")) {
+              registryUrls.push(url);
+              return url.endsWith(retiredUrlSuffix)
+                ? jsonResponse(releasePackument(NOW_MS))
+                : new Response("Not Found", { status: 404 });
+            }
+            if (init?.method === "POST") {
+              createdTitles.push(JSON.parse(String(init.body)).title as string);
+              return jsonResponse({ number: 2 }, 201);
+            }
+            return jsonResponse([]);
+          },
+        });
+        expect(
+          registryUrls.filter((url) => url.endsWith(retiredUrlSuffix)),
+        ).toHaveLength(1);
+        expect(createdTitles).toEqual([releaseIssueTitle(retired, "1.2.3")]);
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("deduplicates page-two issues and ignores pull requests", async () => {
     const name = "@morpho-org/blue-sdk";

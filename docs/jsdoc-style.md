@@ -34,7 +34,7 @@ Do not start with "This function…", "Used to…", or sentence fragments.
 
 ### 2. What it reads on-chain (entity layer only)
 
-Required on every entity fetcher; forbidden on actions and pure helpers (per [`AGENTS.md`](../AGENTS.md) §1: actions never read state, helpers are pure).
+Required on every entity fetcher; forbidden on actions and pure helpers (per [`packages/morpho-sdk/AGENTS.md`](../packages/morpho-sdk/AGENTS.md#architecture): actions never read state, helpers are pure).
 
 > "Reads `Morpho.market(id)` and `Morpho.idToMarketParams(id)` in a single multicall."
 

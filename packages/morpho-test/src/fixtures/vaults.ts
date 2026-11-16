@@ -39,7 +39,7 @@ export const vaults = {
       decimalsOffset: 12n,
       symbol: "bbUSDC",
       name: "BlockAnalytica USDC",
-      asset: wNative,
+      asset: usdc,
     }),
 
     bbEth: new VaultConfig({

@@ -7,7 +7,6 @@ export const withSimplePermit: Record<number, Set<Address>> = {
     addressesRegistry[ChainId.EthMainnet].sDai,
     addressesRegistry[ChainId.EthMainnet].osEth,
     addressesRegistry[ChainId.EthMainnet].usdc,
-    addressesRegistry[ChainId.EthMainnet].dai,
   ]),
   [ChainId.BaseMainnet]: new Set([
     addressesRegistry[ChainId.BaseMainnet].usdc,
