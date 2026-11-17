@@ -8,5 +8,5 @@ export {
   AnvilStartupError,
 } from "./errors.js";
 export * from "./fixtures.js";
-
 export * from "./utils/getFunctionCalls.js";
+export { version } from "./version.js";

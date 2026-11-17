@@ -1,5 +1,18 @@
 # @morpho-org/blue-sdk
 
+## 8.3.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/blue-sdk"`, which takes precedence over the wildcards, and alias any others, for example `export { version as blueSdkVersion } from "@morpho-org/blue-sdk"`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.4.0
+
 ## 8.2.3
 
 ### Patch Changes

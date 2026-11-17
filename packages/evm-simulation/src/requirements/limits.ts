@@ -561,7 +561,7 @@ const missingQuote = (
  * owner's wallet. Its encoded receiver must equal `owner`.
  *
  * For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`; `simulate()` rejects a
- * raw limit whose `account` is not the bundle sender with `SlippageCheckUnavailableError`, because
+ * raw limit whose `account` is not the bundle sender with `SimulationValidationError`, because
  * MidnightBundlesV2 creates the BlueBuyCallback for `msg.sender`.
  *
  * `midnightSupplyCollateral` derives `assetsPaid` and `collateralSupplied` from `args.assets`.
@@ -575,11 +575,11 @@ const missingQuote = (
  * collateral for `owner`; `onBehalf` cannot change that. If the maker's supply creates the
  * market, `toMarket` has no entry yet: pass its struct via `options.market` or, when no market is
  * passed, set `assetPaid` to `collateralParams[collateralIndex].token` on each returned operation,
- * or `simulate()` throws `SlippageCheckUnavailableError`.
+ * or `simulate()` throws `SimulationValidationError`.
  * When supplied collateral is wNative, the check counts ETH sent plus the sender's net wNative
  * change against `assetsPaid`, so native funding needs no quote adjustment. Sending value when no
- * supplied collateral is wNative, or on a chain without registered wNative, throws
- * `SlippageCheckUnavailableError`.
+ * supplied collateral is wNative throws `SimulationValidationError`; a chain without
+ * registered wNative throws `SlippageCheckUnavailableError`.
  *
  * `midnightRedeem` derives `assetsReceived` and `creditRedeemed` from `args.units`: Midnight
  * removes exactly `units` of `onBehalf`'s fee- and loss-adjusted credit and pays exactly `units`

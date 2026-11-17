@@ -1,5 +1,22 @@
 # @morpho-org/morpho-sdk
 
+## 9.8.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/morpho-sdk"`, which takes precedence over the wildcards, and alias any others, for example `export { version as morphoSdkVersion } from "@morpho-org/morpho-sdk"`.
+
+### Patch Changes
+
+- Cap deployless token metadata staticcalls at 60,000 gas for ERC20 fields and 100,000 gas for EIP-5267. Isolate direct reads from shared multicall batches with a separate 2,000,000 gas allowance that accommodates intrinsic gas and L2 overhead, so gas-exhausting tokens cannot fail unrelated reads. Direct-read error classification is unchanged, including propagation of out-of-gas errors. Deployless stipend exhaustion now degrades optional name, symbol, and EIP-5267 domain fields to undefined.
+- Updated dependencies
+  - @morpho-org/blue-sdk-viem@7.5.0
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/midnight-sdk@2.6.0
+  - @morpho-org/morpho-ts@4.4.0
+
 ## 9.7.0
 
 ### Minor Changes

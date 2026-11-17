@@ -580,7 +580,7 @@ export type OperationLimit = SlippageLimits & {
    * `midnightSupplyCollateral` or `midnightSupplyCollateralMakeBorrow` with a
    * supplied `market`, omit this override or set it to
    * `market.collateralParams[collateralIndex].token`; otherwise
-   * `simulate()` throws `SlippageCheckUnavailableError`. In other cases, the
+   * `simulate()` throws `SimulationValidationError`. In other cases, the
    * quote-only override is trusted as given and never checked against the subject's
    * token: a wrong address measures a token the bundle does not move, so the
    * required caps pass vacuously. Omit it unless native ETH is paid, in which

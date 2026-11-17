@@ -9,7 +9,6 @@ import { type Address, isAddressEqual, zeroAddress } from "viem";
 import {
   ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
-  SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
 import type {
@@ -19,7 +18,10 @@ import type {
 import type { VerifiedSimulationInputResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
 import { resolveApprovalLimits } from "./approval-limits.js";
-import { assertApprovalEvents, assertPendingApprovals } from "./approvals.js";
+import {
+  assertPendingApprovals,
+  findApprovalEventFailures,
+} from "./approvals.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
 import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
@@ -34,18 +36,16 @@ import {
 } from "./derivation-reads.js";
 import { deriveQuote } from "./derive-quote.js";
 import { parseTransfers } from "./parsing/index.js";
-import {
-  DEPOSIT_TOPIC,
-  TRANSFER_TOPIC,
-  WITHDRAWAL_TOPIC,
-} from "./parsing/transfers.js";
-import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
+import { findBundlesRetentionFailures } from "./pipeline/bundles-retention.js";
 import { resolveChain } from "./pipeline/resolve-chain.js";
 import { planExecution } from "./plan/plan-execution.js";
-import { prepareAuthorizations } from "./prepare.js";
+import {
+  findPreparationTransferFailures,
+  prepareAuthorizations,
+} from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
-import { assertSignedAuthorizationsUsed } from "./signed-authorizations.js";
+import { findSignedAuthorizationUseFailures } from "./signed-authorizations.js";
 import { decodeStateRead, planStateReads } from "./state/read-state.js";
 import { verifySlippage } from "./verify-slippage.js";
 
@@ -350,27 +350,17 @@ export async function runSimulation(params: {
       throw new ApprovalCheckUnavailableError(
         `Simulation response omitted logs for ${missingLogs.type === "preparation" ? `authorization ${missingLogs.authorizationIndex}` : `transaction ${missingLogs.transactionIndex}`}; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
       );
-    assertApprovalEvents({
+    const [approvalFailure] = findApprovalEventFailures({
       logs: execution.calls.flatMap(({ result }) => result.logs),
       owner,
       allowed: approvalLimits.approvals,
       addresses: approvalLimits.eventAddresses,
     });
+    if (approvalFailure !== undefined) throw approvalFailure;
   }
 
-  for (const { planned, result } of execution.calls) {
-    if (planned.type !== "preparation") continue;
-    if (
-      result.logs.some((log) =>
-        [TRANSFER_TOPIC, DEPOSIT_TOPIC, WITHDRAWAL_TOPIC].some(
-          (topic) => topic === log.topics[0]?.toLowerCase(),
-        ),
-      )
-    )
-      throw new SimulationValidationError(
-        `Preview authorization "${planned.authorizationIndex}" preparation call "${planned.callIndex}" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.`,
-      );
-  }
+  const [preparationFailure] = findPreparationTransferFailures(execution.calls);
+  if (preparationFailure !== undefined) throw preparationFailure;
 
   const userCalls = execution.calls
     .filter((call) => call.planned.type === "transaction")
@@ -381,8 +371,8 @@ export async function runSimulation(params: {
     );
 
   // Require final signature-use evidence independently of operation limits.
-  if (!preview)
-    assertSignedAuthorizationsUsed({
+  if (!preview) {
+    const [signedUseFailure] = findSignedAuthorizationUseFailures({
       authorizations: request.authorizations,
       logs: execution.calls.some(
         (call) => call.planned.type === "transaction" && call.logsMissing,
@@ -392,6 +382,8 @@ export async function runSimulation(params: {
       morpho,
       ecrecoverAuthorizer,
     });
+    if (signedUseFailure !== undefined) throw signedUseFailure;
+  }
 
   const decodePhase = (phase: "before" | "after") =>
     new Map(
@@ -435,7 +427,10 @@ export async function runSimulation(params: {
   const derivedOperations = observations.operations.map((operation, index) => ({
     ...operation,
     limit: deriveQuote(operation.limit, {
-      ...decodeDerivationState(index, derivationData),
+      ...decodeDerivationState(
+        { index, operationType: operation.limit.type },
+        derivationData,
+      ),
       operationIndex: index,
       netWalletAssets: operation.netWalletAssets,
     }),
@@ -462,6 +457,7 @@ export async function runSimulation(params: {
     }),
   );
 
+  // Stop at the first failure before later response-integrity checks run.
   const checked = verifySlippage({
     ctx,
     operations: derivedOperations,
@@ -473,12 +469,13 @@ export async function runSimulation(params: {
     requestTransactions: request.transactions,
   });
 
-  assertNoBundlesRetention({
+  const [retentionFailure] = findBundlesRetentionFailures({
     chainId: request.chainId,
     transfers,
     assetChanges,
     logger: config.logger,
   });
+  if (retentionFailure !== undefined) throw retentionFailure;
 
   return assembleResult({
     ctx: {

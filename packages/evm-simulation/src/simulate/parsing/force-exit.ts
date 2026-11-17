@@ -29,24 +29,28 @@ const VAULT_WITHDRAW = toEventSelector(
 );
 
 /**
- * Measure quoted Vault V2 force-exit economics from the simulated call logs.
+ * Find force-exit attribution failures and measure the quoted economics.
  * @param params - Per-call logs, contract addresses, account, operation, and whether deallocations are quoted.
- * @returns The account's total penalty and paired deallocations by market.
- * @throws {SlippageCheckUnavailableError} When the vault exit is absent, a `ForceDeallocate` charges a penalty to another account, or quoted deallocations cannot be attributed.
+ * @returns Attribution failures in check order, plus measured penalty and paired deallocations.
  * @throws {InvalidSimulationResponseError} When a matching event log cannot be decoded.
  * @internal
  */
-export function measureForceExit(params: {
+export function findForceExitFailures(params: {
   readonly logs: readonly (readonly RawLog[])[];
   readonly vault: Address;
   readonly morpho: Address;
   readonly account: Address;
   readonly operationType: "vaultV2ForceWithdraw" | "vaultV2ForceRedeem";
+  readonly operationIndex: number;
   readonly requireDeallocations: boolean;
 }): {
-  readonly penalty: bigint;
-  readonly deallocations: readonly ForceExitDeallocationQuote[];
+  readonly failures: readonly SlippageCheckUnavailableError[];
+  readonly checked: {
+    readonly penalty: bigint;
+    readonly deallocations: readonly ForceExitDeallocationQuote[];
+  };
 } {
+  const failures: SlippageCheckUnavailableError[] = [];
   const { logs, vault, morpho, account, operationType, requireDeallocations } =
     params;
   let exitEvidenced = false;
@@ -165,21 +169,70 @@ export function measureForceExit(params: {
     }
   }
   if (penalizedAccounts.size > 0) {
-    throw new SlippageCheckUnavailableError(
-      `Cannot attribute "penalty" for "${operationType}": ForceDeallocate charged ${[...penalizedAccounts].join(", ")} instead of ${account}. Retry the simulation or report the RPC response.`,
+    failures.push(
+      new SlippageCheckUnavailableError(
+        `Cannot attribute "penalty" for "${operationType}": ForceDeallocate charged ${[...penalizedAccounts].join(", ")} instead of ${account}. Retry the simulation or report the RPC response.`,
+        {
+          operationIndex: params.operationIndex,
+          operationType,
+          field: "penalty",
+          reason: "accountMismatch",
+        },
+      ),
     );
   }
   // A quoted force exit must leave the vault's own ERC4626 `Withdraw`
   // log; without it "no ForceDeallocate" cannot be read as zero penalty.
   if (!exitEvidenced) {
-    throw new SlippageCheckUnavailableError(
-      `Missing "Withdraw" evidence for "${operationType}": the vault's ERC4626 exit log is absent from the simulated calls. Retry the simulation or report the RPC response.`,
+    failures.push(
+      new SlippageCheckUnavailableError(
+        `Missing "Withdraw" evidence for "${operationType}": the vault's ERC4626 exit log is absent from the simulated calls. Retry the simulation or report the RPC response.`,
+        {
+          operationIndex: params.operationIndex,
+          operationType,
+          field: "penalty",
+          reason: "missingEvent",
+        },
+      ),
     );
   }
   if (requireDeallocations && unpairedAdapters.size > 0) {
-    throw new SlippageCheckUnavailableError(
-      `Cannot attribute "deallocations" for "${operationType}": adapter(s) ${[...unpairedAdapters].join(", ")} produced no Blue "Withdraw" evidence; they may not be Blue market adapters. Retry the simulation or report the RPC response.`,
+    failures.push(
+      new SlippageCheckUnavailableError(
+        `Cannot attribute "deallocations" for "${operationType}": adapter(s) ${[...unpairedAdapters].join(", ")} produced no Blue "Withdraw" evidence; they may not be Blue market adapters. Retry the simulation or report the RPC response.`,
+        {
+          operationIndex: params.operationIndex,
+          operationType,
+          field: "deallocations",
+          reason: "unmatchedEvent",
+        },
+      ),
     );
   }
-  return { penalty, deallocations: [...deallocated.values()] };
+  return {
+    failures,
+    checked: { penalty, deallocations: [...deallocated.values()] },
+  };
+}
+
+/**
+ * Reject the first force-exit measurement failure.
+ * @param params - Observations and limits to check.
+ * @returns The checked values for the success path.
+ * @throws {SlippageCheckUnavailableError} When required evidence is unavailable.
+ * @throws {InvalidSimulationResponseError} When a matching event log cannot be decoded.
+ * @internal
+ */
+export function measureForceExit(
+  params: Parameters<typeof findForceExitFailures>[0],
+): {
+  readonly penalty: bigint;
+  readonly deallocations: readonly ForceExitDeallocationQuote[];
+} {
+  const {
+    failures: [failure],
+    checked,
+  } = findForceExitFailures(params);
+  if (failure !== undefined) throw failure;
+  return checked;
 }

@@ -150,8 +150,9 @@ All symbols below are re-exported from the package root.
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Input-based limits: `InputOperationLimit`, `OperationInputs`, `AssetsOrShares`, `RepayInputs`, `SimulationInputLimits` and `SimulateInputParams`; checked input outputs use `CheckedInputOperationLimit`, `CheckedSimulationInputLimits`, `SimulationInputVerification` and `VerifiedSimulationInputResult`. `ScalarQuoteField` names the keys of `fieldChecks`; `FeelessInputType` names the input operation types that reject `referralFee`, and `ReallocationPenaltyInputType` names those that accept `reallocationPenalty`. Existing `SimulateParams`, `SimulationLimits`, `CheckedOperationLimit` and quote-only result types remain unchanged; `simulate()` accepts both forms and preserves its quote-only return overload, including wrappers typed with `SimulateParams`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `AuthorizationRequestMismatchError`, `UnusedAuthorizationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
-- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationSafetyError`, `SimulationRejectedError`, `SimulationInvalidRequestError`, `SimulationInfrastructureError`, `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `AuthorizationRequestMismatchError`, `UnusedAuthorizationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard with optional findings; read `error.findings ?? []`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy. `ConsumerLimitViolationError` names what failed: `operationIndex`, `operationType`, `field` (`ConsumerLimitField`), `check` (one of `CONSUMER_LIMIT_CHECKS` / `ConsumerLimitCheck`), `expected` and `observed`, plus `tolerance` or `bound` when the check applies one, and `entry` (`ConsumerLimitEntry`: `{ marketId }` for `positions` and `deallocations`, `{ collateralIndex }` for `collateralSupplies`, `collateralWithdrawals` and `position.maxCollateral`, `{ token, account }` for `walletBalance`) naming the failing entry when the quote or bound has several, undefined otherwise; `ConsumerLimitViolation` is that field set. The fields are optional in the 8.x type, and `simulate` always sets them.
+- Slippage-unavailable diagnostics: `SlippageCheckUnavailableError` carries `field` and `reason`, plus `operationIndex` and `operationType` for operation-scoped failures. `SLIPPAGE_CHECK_UNAVAILABLE_REASONS` / `SlippageCheckUnavailableReason` list the documented reasons. The seven reasons describe unavailable evidence. Caller-input conflicts and combined flows that cannot be measured separately throw `SimulationValidationError` with operation-scoped `fieldErrors` instead. These fields remain optional in 8.x for constructor compatibility.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject`, `MidnightBuySubject`, `MidnightBlueParkingSubject`, `MidnightCollateralOperationSubject`, `MidnightRedeemSubject`, `MidnightSellSubject`, and `MidnightRepayWithdrawCollateralSubject` (operation groups and the operation-keyed subject union used by verification results).
 
 ### Assertions
@@ -389,7 +390,7 @@ required-caps lists below — the per-operation table lives in
   transactions in the bundle, including unrelated ones, is subtracted from the
   owner's wNative pull cap, which is the quoted wNative collateral. If native
   value exceeds that cap, simulation fails closed with
-  `SlippageCheckUnavailableError`. This includes a `0n` cap: any positive
+  `SimulationValidationError`. This includes a `0n` cap: any positive
   native value fails closed, for example when the owner receives wNative loan
   proceeds but no quoted collateral is wNative. Native value sent on a chain
   without registered wNative fails closed with `SlippageCheckUnavailableError`;
@@ -476,7 +477,7 @@ If the maker's supply creates the market, the `toMarket` rule above applies:
 pass the struct via `market` to `toSimulationLimits`, or, when no market is
 passed, set `assetPaid` to `collateralParams[collateralIndex].token` on each
 returned operation.
-Otherwise, `simulate()` throws `SlippageCheckUnavailableError`.
+Otherwise, `simulate()` throws `SimulationValidationError`.
 Other Midnight actions—including `midnightCancelAndMake` bundles that combine
 Blue parking with collateral supplies, contain unfunded publications, or
 contain cancellations only—remain unsupported; pass `limits: "none"` only
@@ -484,8 +485,9 @@ when no covered operation is present.
 
 When supplied collateral is wNative, the check counts ETH sent plus the
 sender's net wNative change against `assetsPaid`, so native funding needs no
-quote adjustment. Sending value when no supplied collateral is wNative, or on
-a chain without registered wNative, throws `SlippageCheckUnavailableError`.
+quote adjustment. Sending value when no supplied collateral is wNative throws
+`SimulationValidationError`. Sending value on a chain without registered
+wNative throws `SlippageCheckUnavailableError`.
 For Blue parking, the helper quotes the full amount parked. When the loan token
 is wNative, the check adds the sender's ETH sent to the net wNative change, so
 native funding needs no quote adjustment.
@@ -704,7 +706,19 @@ sign the request. A Midnight grant, or a token or Morpho grant whose
 `allowlistable` is `true`, can be added to `limits.approvals`; ERC-721 grants,
 Permit2 or Morpho signatures that name another verifying contract, and
 EcrecoverAuthorizer signatures that name another verifying contract are never
-allowlistable. If the subject token or
+allowlistable. Request mistakes found during approval-token resolution throw
+`SimulationValidationError` with operation-scoped `fieldErrors`: a zero vault
+subject (`vault`, or `sourceVault` for migration), a zero `loanToken` on
+`midnightSupplyBlueMakeLend`, an absent `collateralIndex`
+on an existing market for `midnightSupplyCollateral` or
+`midnightSupplyCollateralMakeBorrow`, or missing `assetPaid` when that market
+has not been created yet. Pass the market struct via `market` or the selected
+collateral token via `assetPaid` for a first-market supply.
+These caller mistakes are validation errors even for complete quotes without
+asset overrides. A first-market supply is identified by the `MarketNotCreated`
+revert; transport failures, unknown reverts and unusable market metadata remain
+unavailable-evidence errors.
+If a valid request's subject token or
 required chain registry address cannot be resolved, the RPC response omits logs
 for a preparation or user call, or an approval-topic event cannot be decoded,
 `ApprovalCheckUnavailableError` fails the simulation closed.
@@ -760,7 +774,7 @@ Typed wNative measurements on the sender also include native ETH whenever the
 request sends native value, even without an explicit native alias.
 Requests that send native value with typed inputs must have that value covered
 by a measured native or wNative side; otherwise simulation throws
-`SlippageCheckUnavailableError`.
+`SimulationValidationError`.
 For combined operations with the same token and sender/receiver wallet, either
 native alias applies to the shared ETH-plus-wNative net measurement on both sides.
 With distinct wallets, each side uses only its own asset override.
@@ -848,11 +862,11 @@ value sent, a metadata read that reverts or returns empty/invalid data, a
 quoted force exit with no vault `Withdraw` for the account, or a
 `ForceDeallocate` that cannot be paired with a Blue `Withdraw` while
 `deallocations` is quoted (for example a non-Blue adapter), or a
-`ForceDeallocate` that charges a penalty to another account, or repay-withdraw
-checks when a quote returns loan-token collateral to the payer, native value
-is sent without registered wNative, or native value is sent while wNative
-collateral is delivered to the sender, or a `midnightTakeLend` that sends
-native value without registered wNative. A quoted
+`ForceDeallocate` that charges a penalty to another account, or native value
+sent without registered wNative. Repay-withdraw checks throw
+`SimulationValidationError` when a quote returns loan-token collateral to the
+payer, or native value is sent while wNative collateral is delivered to the
+sender. A quoted
 balance/position read whose non-empty return data cannot be decoded throws
 `InvalidSimulationResponseError`, as does a matching `ForceDeallocate`/`Withdraw`
 event log that fails to decode. Excessive slippage, a violated
@@ -934,11 +948,11 @@ registration, ownership and authorization checks remain in the SDK action's
 
 For `midnightSupplyBlueMakeLend`, the helper sets `account` to `owner`;
 `simulate()` rejects a raw limit whose `account` is not the bundle sender with
-`SlippageCheckUnavailableError`, because MidnightBundlesV2 creates the
+`SimulationValidationError`, because MidnightBundlesV2 creates the
 BlueBuyCallback for `msg.sender`.
 The same applies to `midnightSupplyCollateralMakeBorrow`: its helper `account`
 is `owner`, and `simulate()` rejects a raw limit whose `account` is not the
-bundle sender with `SlippageCheckUnavailableError` (omit it or use the sender),
+bundle sender with `SimulationValidationError` (omit it or use the sender),
 because MidnightBundlesV2 `cancelAndMake` supplies collateral for `msg.sender`.
 
 Derived limits catch on-chain divergence from the encoded calldata, not wrong
@@ -958,10 +972,10 @@ inputs; pass the UI's quote through `expected`.
 | `blueWithdrawBuyCallback` (emits `blueWithdraw`) | `sharesBurned`; `account` is the intended callback in `onBehalf`, `receiver` is `owner` | `assetsReceived` | Callback ownership and offer cancellation |
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
-| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side throws `SimulationValidationError`, while a chain without registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
 | `midnightSupplyCollateralBatch` | exact `collateralSupplies` per index, used as minimum collateral credit and summed wallet pull caps per token; always measures the sender; encoded `args.onBehalf` must equal `owner`, and a non-owner `options.onBehalf` throws `LimitAccountMismatchError`; approval limits target Midnight for each distinct collateral token | — | — |
 | `midnightWithdrawCollateralBatch` | `collateralWithdrawals` per index; always measures the sender; `receiver` is `options.receiver ?? owner` and must match `args.receiver`, including a non-owner receiver; receiver delivery is checked against the sum of withdrawals per token | — | — |
-| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment, and sending value without `wNative` collateral or a registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side throws `SimulationValidationError`, while a chain without registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
 | `midnightCancelAndMake` with `blueSupply` and no `collateralSupplies` (emits `midnightSupplyBlueMakeLend`) | exact `assetsPaid` (`blueSupply.assets`): sender debit of the full parked amount; for wNative, counts ETH sent plus net wNative change; combining with collateral supplies is unsupported | `sharesMinted` (the BlueBuyCallback's expected Blue supply-share increase) | Offer fillability |
 | `midnightRedeem` | `assetsReceived`, `creditRedeemed` (`units`); `account` is `options.onBehalf ?? owner`, `receiver` is `options.receiver ?? owner` | — | — |
 | `midnightTakeLend` | `assetsPaid` and `unitsBought`; always measures the sender, rejects any explicit `account` or `receiver`; a non-owner `options.receiver` throws `LimitAccountMismatchError` | — | — |
@@ -1132,13 +1146,48 @@ rejection above) without losing bytes.
 
 See [AGENTS.md](./AGENTS.md) for pipeline conventions and retention rules.
 
-## Development
+## Error types
 
-Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+```ts
+try {
+  return await simulate(config, { chainId: 1, transactions, limits });
+} catch (err) {
+  if (err instanceof SimulationSafetyError) {
+    alerts.page(err.code, err.message);
+    throw err;
+  }
+  if (err instanceof SimulationInfrastructureError) return retryOrAlert(err);
+  if (err instanceof SimulationPackageError) ui.showError(err.message);
+  throw err;
+}
+```
 
-## License
+Every concrete error extends exactly one of these exported parent classes:
 
-MIT. See [LICENSE](./LICENSE).
+| Parent class | Meaning |
+| --- | --- |
+| `SimulationSafetyError` | Funds or permissions are at risk. |
+| `SimulationRejectedError` | The user or caller acts. |
+| `SimulationInvalidRequestError` | The integrator fixes the request or configuration. |
+| `SimulationInfrastructureError` | The operator investigates the RPC/node or a check that could not run. |
+
+| Group | Classes |
+| --- | --- |
+| `SimulationSafetyError`         | `BlacklistViolationError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`                                                                                         |
+| `SimulationRejectedError`       | `ConsumerLimitViolationError`, `SimulationAssertError`, `SimulationLogAssertError`, `UnusedAuthorizationError`, `SimulationRevertedError`                                                                                       |
+| `SimulationInvalidRequestError` | `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `AuthorizationRequestMismatchError`, `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError` |
+| `SimulationInfrastructureError` | `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `RpcTransportError`, `InvalidSimulationResponseError` (and `InvalidChainIdError` through it), `UnexpectedSimulationError`                                     |
+
+All four reject; this is not a severity scale.
+
+Every error has a readonly `findings` list of other failure instances from the
+same simulation, in pipeline order. Findings are flat, never include the primary
+error and are additional rejections, never alternatives. The list is frozen and
+empty until collection lands. `isSimulationPackageError` accepts legacy objects
+without findings as well as objects carrying an array of valid package errors.
+The field is optional on the type in 8.x for legacy structural objects, but is
+always set on package instances. It becomes required in 9.0.0. Read
+`e.findings ?? []` after the guard.
 
 ## Handling failures in an API service
 
@@ -1187,3 +1236,11 @@ The success response above still contains bigint transaction quantities; apply
 the API's normal transaction encoding before sending JSON. Simulation verifies
 the requested mode and checks at the simulated state; it does not guarantee
 execution against later onchain state.
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

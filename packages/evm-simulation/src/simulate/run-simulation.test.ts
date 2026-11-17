@@ -665,7 +665,14 @@ describe.sequential("runSimulation", () => {
               (cause: unknown) => cause,
             );
       if (guard) {
-        expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+        expect(error).toBeInstanceOf(SimulationValidationError);
+        expect(error).toMatchObject({
+          fieldErrors: [
+            expect.stringContaining(
+              "limits.operations[0].quote.collateralWithdrawals:",
+            ),
+          ],
+        });
         expect(error).toHaveProperty(
           "message",
           expect.stringContaining("native ETH is sent"),

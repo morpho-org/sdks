@@ -18,6 +18,7 @@ import {
 import type { StateBlock } from "../../params.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { formatRevert } from "./decode-revert.js";
+import { evaluateCalls } from "./evaluate-calls.js";
 import type { SimulationExecution } from "./parse-response.js";
 import { parseSimulationResponse } from "./parse-response.js";
 
@@ -164,6 +165,9 @@ export const rpc = async <T>(
  *    the former's successor while Anvil reports the pinned block itself.
  *    The result records whatever the node returns; consumers must read
  *    {@link ExecutionBlock.blockNumber} and never assume +1.
+ * 3. **Call checks** — after parsing, `evaluateCalls` checks preparation
+ *    reverts, then each transaction's assertions and revert in call order,
+ *    then every planned state read.
  *
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
@@ -247,12 +251,14 @@ export async function executePlan(params: {
     }),
   );
 
-  return parseSimulationResponse({
-    plan,
-    blocks: response,
-    stateBlockNumber: stateBlock.number,
-    stateBlockHash: stateBlock.hash,
-    stateBlockTimestamp: stateBlock.timestamp,
-    parentHashCheck,
-  });
+  return evaluateCalls(
+    parseSimulationResponse({
+      plan,
+      blocks: response,
+      stateBlockNumber: stateBlock.number,
+      stateBlockHash: stateBlock.hash,
+      stateBlockTimestamp: stateBlock.timestamp,
+      parentHashCheck,
+    }),
+  );
 }

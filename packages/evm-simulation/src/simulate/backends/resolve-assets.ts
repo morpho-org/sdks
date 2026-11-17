@@ -105,12 +105,14 @@ type MidnightMarket = MidnightMarketStruct;
  *   including the loan token for collateral withdrawals with a zero repay leg.
  * @throws {RpcTransportError} For transport failures during a required metadata read.
  * @throws {SimulationValidationError} For a typed-input asset override that is
- *   neither the canonical token nor its registered native alias.
+ *   neither the canonical token nor its registered native alias, or supplied
+ *   Midnight market inputs conflict with the deployment or collateral token.
+ *   Also for a zero vault subject or Blue parking loanToken, an absent Midnight
+ *   collateral index on a collateral supply, or missing assetPaid on a
+ *   positively identified first-market supply.
  * @throws {SlippageCheckUnavailableError} For reverted, malformed, or empty
- *   metadata; a supplied market struct for another Midnight deployment; an
- *   explicit `assetPaid` that does not match its collateral token; or a
- *   collateral index the Midnight market does not configure; or Blue market
- *   params that do not hash to the requested market id.
+ *   metadata; an unconfigured Midnight collateral index outside a collateral
+ *   supply; or Blue market params that do not hash to the requested market id.
  * @throws {ApprovalCheckUnavailableError} For unavailable approval-token metadata.
  * @internal
  */
@@ -137,7 +139,20 @@ export async function resolveAssets(params: {
     NonNullable<ResolvedSlippageOperation["marketParams"]>
   >();
   const resolved: ResolvedApprovalOperation[] = [];
-  for (const limit of operations) {
+  for (const [index, limit] of operations.entries()) {
+    const vaultSubject =
+      "sourceVault" in limit
+        ? limit.sourceVault
+        : "vault" in limit
+          ? limit.vault
+          : undefined;
+    if (vaultSubject !== undefined && isAddressEqual(vaultSubject, zeroAddress))
+      throw new SimulationValidationError(
+        `Cannot resolve the token required by "${limit.type}": the subject token address is zero.`,
+        [
+          `limits.operations[${index}].${"sourceVault" in limit ? "sourceVault" : "vault"}: must not be the zero address`,
+        ],
+      );
     const acceptsMarket = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
       (acceptedType) => acceptedType === limit.type,
     );
@@ -146,8 +161,11 @@ export async function resolveAssets(params: {
     }
     const suppliedMarket = MidnightMarketUtils.toStruct(limit.market);
     if (!isAddressEqual(suppliedMarket.midnight, midnight)) {
-      throw new SlippageCheckUnavailableError(
+      throw new SimulationValidationError(
         `The supplied Midnight market struct for "${limit.type}" uses a different Midnight address. Pass this chain's Midnight market struct.`,
+        [
+          `limits.operations[${index}].market: must use this chain's Midnight address`,
+        ],
       );
     }
     if (
@@ -161,8 +179,11 @@ export async function resolveAssets(params: {
         (collateralToken === undefined ||
           !isAddressEqual(limit.assetPaid, collateralToken))
       ) {
-        throw new SlippageCheckUnavailableError(
+        throw new SimulationValidationError(
           "assetPaid must equal the supplied market's collateral token at collateralIndex; omit assetPaid when passing market.",
+          [
+            `limits.operations[${index}].assetPaid: must match the supplied market's collateral token at collateralIndex`,
+          ],
         );
       }
     }
@@ -212,6 +233,16 @@ export async function resolveAssets(params: {
             limit.type === "midnightSupplyCollateralTakeBorrow")) ||
         (field === "unitsBought" && limit.type === "midnightTakeLend");
       if (limit.quote[field] === undefined && !needsMidnightMarket) continue;
+      const evidenceField =
+        field === "creditRedeemed" &&
+        (limit.type === "midnightSupplyCollateralBatch" ||
+          limit.type === "midnightWithdrawCollateralBatch" ||
+          limit.type === "midnightRepayWithdrawCollateral" ||
+          limit.type === "midnightTakeRepayWithdrawCollateral")
+          ? limit.type === "midnightSupplyCollateralBatch"
+            ? "collateralSupplies"
+            : "collateralWithdrawals"
+          : field;
       const explicit =
         field === "assetsPaid"
           ? limit.assetPaid
@@ -246,6 +277,12 @@ export async function resolveAssets(params: {
       if (source === undefined)
         throw new SlippageCheckUnavailableError(
           `Cannot resolve the asset source for "${limit.type}" field "${field}".`,
+          {
+            operationIndex: index,
+            operationType: limit.type,
+            field: field,
+            reason: "missingRead",
+          },
         );
       if (source.type === "token") {
         if (field === "assetsPaid" || field === "assetsReceived") {
@@ -254,6 +291,12 @@ export async function resolveAssets(params: {
         }
         throw new SlippageCheckUnavailableError(
           `Cannot resolve the asset source for "${limit.type}" field "${field}".`,
+          {
+            operationIndex: index,
+            operationType: limit.type,
+            field: field,
+            reason: "missingRead",
+          },
         );
       }
       if (
@@ -264,6 +307,12 @@ export async function resolveAssets(params: {
       ) {
         throw new SlippageCheckUnavailableError(
           `Cannot resolve the Midnight market for "${limit.type}" asset source.`,
+          {
+            operationIndex: index,
+            operationType: limit.type,
+            field: field,
+            reason: "missingRead",
+          },
         );
       }
       const key =
@@ -303,6 +352,12 @@ export async function resolveAssets(params: {
             ) {
               throw new SlippageCheckUnavailableError(
                 `Cannot resolve the token for "${limit.type}": idToMarketParams("${source.marketId.toLowerCase()}") returned params for market "${receivedMarketId}". Check the RPC endpoint.`,
+                {
+                  operationIndex: index,
+                  operationType: limit.type,
+                  field: field,
+                  reason: "missingRead",
+                },
               );
             }
             pair = [values[0], values[1]];
@@ -340,20 +395,42 @@ export async function resolveAssets(params: {
               { cause },
             );
           }
-          throw new SlippageCheckUnavailableError(
+          const message =
             `Cannot resolve the token for "${limit.type}" asset source "${key}".` +
-              (acceptsMarket &&
-              (source.type === "midnightCollateral" ||
-                source.type === "midnightLoan")
-                ? ' If this bundle creates the market, pass the market struct via "market".'
-                : "") +
-              (source.type === "midnightCollateral"
-                ? " If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked."
-                : ""),
-            {
-              cause,
-            },
-          );
+            (acceptsMarket &&
+            (source.type === "midnightCollateral" ||
+              source.type === "midnightLoan")
+              ? ' If this bundle creates the market, pass the market struct via "market".'
+              : "") +
+            (source.type === "midnightCollateral"
+              ? " If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked."
+              : "");
+          if (
+            source.type === "midnightCollateral" &&
+            (limit.type === "midnightSupplyCollateral" ||
+              limit.type === "midnightSupplyCollateralMakeBorrow") &&
+            limit.assetPaid === undefined &&
+            cause instanceof BaseError &&
+            cause.walk(
+              (error) =>
+                error instanceof ContractFunctionRevertedError &&
+                error.data?.errorName === "MarketNotCreated",
+            ) !== null
+          )
+            throw new SimulationValidationError(
+              message,
+              [
+                `limits.operations[${index}].assetPaid: required for a market the bundle creates`,
+              ],
+              { cause },
+            );
+          throw new SlippageCheckUnavailableError(message, {
+            operationIndex: index,
+            operationType: limit.type,
+            field: evidenceField,
+            reason: "missingRead",
+            cause,
+          });
         }
         tokens.set(key, pair);
       }
@@ -369,6 +446,12 @@ export async function resolveAssets(params: {
         ) {
           throw new SlippageCheckUnavailableError(
             `Cannot resolve the Midnight market for "${limit.type}" asset source "${key}": the market does not exist at the state block.${acceptsMarket ? ' If this bundle creates the market, pass the market struct via "market".' : ""}`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field: evidenceField,
+              reason: "emptyData",
+            },
           );
         }
         result.midnightMarket = market;
@@ -379,11 +462,12 @@ export async function resolveAssets(params: {
           limit.type === "midnightTakeRepayWithdrawCollateral" ||
           limit.type === "midnightSupplyCollateralTakeBorrow"
         ) {
-          const quoted =
+          const collateralField =
             limit.type === "midnightSupplyCollateralTakeBorrow" ||
             limit.type === "midnightSupplyCollateralBatch"
-              ? (limit.quote.collateralSupplies ?? [])
-              : (limit.quote.collateralWithdrawals ?? []);
+              ? "collateralSupplies"
+              : "collateralWithdrawals";
+          const quoted = limit.quote[collateralField] ?? [];
           if (quoted.length > 0)
             result.midnightCollateralTokens = quoted.map(
               ({ collateralIndex }) => {
@@ -392,6 +476,12 @@ export async function resolveAssets(params: {
                 if (token === undefined)
                   throw new SlippageCheckUnavailableError(
                     `Cannot resolve collateral index "${collateralIndex}" for "${limit.type}": the Midnight market has no collateral at that index.`,
+                    {
+                      operationIndex: index,
+                      operationType: limit.type,
+                      field: collateralField,
+                      reason: "emptyData",
+                    },
                   );
                 return { collateralIndex, token };
               },
@@ -406,15 +496,35 @@ export async function resolveAssets(params: {
             ? pair[0]
             : pair[1 + Number(source.collateralIndex)];
       if (token === undefined) {
-        throw new SlippageCheckUnavailableError(
+        const message =
           `Cannot resolve the token for "${limit.type}" asset source "${key}": the market has no collateral at the quoted index. ` +
-            "Check collateralIndex. If the market does not exist yet at the state block, " +
-            "set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.",
-        );
+          "Check collateralIndex. If the market does not exist yet at the state block, " +
+          "set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.";
+        if (
+          source.type === "midnightCollateral" &&
+          !isAddressEqual(pair[0] ?? zeroAddress, zeroAddress) &&
+          (limit.type === "midnightSupplyCollateral" ||
+            limit.type === "midnightSupplyCollateralMakeBorrow")
+        )
+          throw new SimulationValidationError(message, [
+            `limits.operations[${index}].collateralIndex: the market has no collateral at this index`,
+          ]);
+        throw new SlippageCheckUnavailableError(message, {
+          operationIndex: index,
+          operationType: limit.type,
+          field: field,
+          reason: "emptyData",
+        });
       }
       if (isAddressEqual(token, zeroAddress)) {
         throw new SlippageCheckUnavailableError(
           `Cannot resolve the token for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
+          {
+            operationIndex: index,
+            operationType: limit.type,
+            field: field,
+            reason: "emptyData",
+          },
         );
       }
       if (
@@ -544,10 +654,6 @@ export async function resolveAssets(params: {
       case "vaultV1MigrateToV2": {
         const subject =
           limit.type === "vaultV1MigrateToV2" ? limit.sourceVault : limit.vault;
-        if (isAddressEqual(subject, zeroAddress))
-          throw new ApprovalCheckUnavailableError(
-            `Cannot resolve the token required by "${limit.type}": the subject token address is zero.`,
-          );
         approvalToken = subject;
         break;
       }
@@ -672,6 +778,10 @@ export async function resolveAssets(params: {
       case "midnightTakeWithdraw":
         break;
       case "midnightSupplyBlueMakeLend":
+        if (isAddressEqual(limit.loanToken, zeroAddress))
+          throw new SimulationValidationError(midnightApprovalTokenError, [
+            `limits.operations[${index}].loanToken: must not be the zero address`,
+          ]);
         midnightApprovalTokens = [
           resolveMidnightApprovalToken(limit.loanToken),
         ];
@@ -692,6 +802,15 @@ export async function resolveAssets(params: {
         const token = midnightMarketCreated
           ? midnightPair?.[1 + Number(limit.collateralIndex)]
           : limit.assetPaid;
+        if (
+          token === undefined ||
+          (!midnightMarketCreated && isAddressEqual(token, zeroAddress))
+        )
+          throw new SimulationValidationError(midnightApprovalTokenError, [
+            midnightMarketCreated
+              ? `limits.operations[${index}].collateralIndex: the market has no collateral at this index`
+              : `limits.operations[${index}].assetPaid: required for a market the bundle creates`,
+          ]);
         midnightApprovalTokens = [resolveMidnightApprovalToken(token)];
         break;
       }

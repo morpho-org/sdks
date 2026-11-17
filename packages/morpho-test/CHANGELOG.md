@@ -1,5 +1,21 @@
 # @morpho-org/morpho-test
 
+## 4.3.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/morpho-test"`, which takes precedence over the wildcards, and alias any others, for example `export { version as morphoTestVersion } from "@morpho-org/morpho-test"`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/midnight-sdk@2.6.0
+  - @morpho-org/morpho-ts@4.4.0
+  - @morpho-org/test@2.13.0
+
 ## 4.2.1
 
 ### Patch Changes

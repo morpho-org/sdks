@@ -36,7 +36,7 @@ interface AssertNoBundlesRetentionParams {
 }
 
 /**
- * Assert that no value is retained by standalone `bundles` periphery contracts
+ * Find value retained by standalone `bundles` periphery contracts
  * (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) or by
  * `MidnightBundlesV2` (`midnightBundlesV2`).
  *
@@ -72,15 +72,12 @@ interface AssertNoBundlesRetentionParams {
  *   truth for native value stuck in a restricted contract.
  * @param params.logger - Optional logger. Receives retention-check skip warnings
  *   and pre-existing-balance sweep telemetry (net-negative flow).
- * @returns Nothing. Returns silently when no restricted contract retains value
- *   above `DUST_THRESHOLD`; otherwise throws.
- * @throws {BlacklistViolationError} when net inbound flow to a restricted
- *   `bundles` or `midnightBundlesV2` contract exceeds `DUST_THRESHOLD` for any
- *   token.
+ * @returns An aggregate failure containing every retained address/token pair,
+ *   or an empty array when no value above the dust threshold is retained.
  */
-export function assertNoBundlesRetention(
+export function findBundlesRetentionFailures(
   params: AssertNoBundlesRetentionParams,
-): void {
+): readonly BlacklistViolationError[] {
   const { chainId, transfers, assetChanges, logger } = params;
 
   // Standalone bundles contracts and `MidnightBundlesV2` are transient
@@ -95,7 +92,7 @@ export function assertNoBundlesRetention(
       logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
         chainId,
       });
-      return;
+      return [];
     }
     throw error;
   }
@@ -115,7 +112,7 @@ export function assertNoBundlesRetention(
       "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
       { chainId },
     );
-    return;
+    return [];
   }
 
   // Map keyed by (address, token) → structured entry. Avoids string parse-back.
@@ -180,13 +177,24 @@ export function assertNoBundlesRetention(
   const retained = entries.filter((e) => e.netChange > DUST_THRESHOLD);
 
   if (retained.length > 0) {
-    throw new BlacklistViolationError(
-      "Simulation detected asset transfers retained by restricted bundles contracts",
-      retained.map((e) => ({
-        address: e.address,
-        token: e.token,
-        netRetained: e.netChange,
-      })),
-    );
+    return [
+      new BlacklistViolationError(
+        "Simulation detected asset transfers retained by restricted bundles contracts",
+        retained.map((e) => ({
+          address: e.address,
+          token: e.token,
+          netRetained: e.netChange,
+        })),
+      ),
+    ];
   }
+  return [];
+}
+
+/** Reject the aggregate bundles-retention failure, if present. @internal */
+export function assertNoBundlesRetention(
+  params: AssertNoBundlesRetentionParams,
+): void {
+  const [failure] = findBundlesRetentionFailures(params);
+  if (failure !== undefined) throw failure;
 }

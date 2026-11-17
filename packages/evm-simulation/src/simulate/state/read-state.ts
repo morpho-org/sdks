@@ -234,17 +234,17 @@ function planMidnightCollateralRead(params: {
  * @returns Read calls and their mapping to each quoted amount; empty without limits.
  * @throws {SimulationValidationError} When operations share a wallet measurement
  *   and either uses typed inputs, or a Midnight combined operation's wallet or
- *   position reads overlap another operation.
+ *   position reads overlap another operation, an account cannot be measured, or
+ *   repayment and collateral delivery cannot be measured separately, or native
+ *   value is not covered by the declared measurements or collateral pull cap.
  * @throws {SlippageCheckUnavailableError} When a Midnight market or Blue
  *   parking callback is not resolved for a measurement, or a
  *   native-funded Blue parking or takeLend has no registered wNative token.
- *   Native value sent alongside typed inputs also requires a planned native
- *   measurement for the owner. Native value sent with `midnightSupplyCollateral`
+ *   Native value sent with `midnightSupplyCollateral`
  *   or `midnightSupplyCollateralMakeBorrow` requires a registered wNative and
  *   an owner-side wNative collateral measurement.
  *   `midnightSupplyCollateralTakeBorrow` also throws if native value is sent
- *   without a registered wNative, the owner's native value exceeds the quoted
- *   wNative collateral pull cap, or a collateral token or loan-token/proceeds
+ *   without a registered wNative, or a collateral token or loan-token/proceeds
  *   quote cannot be resolved.
  * @internal
  */
@@ -288,24 +288,33 @@ export function planStateReads(params: {
           limit.type === "midnightTakeRepayWithdrawCollateral") &&
         "account" in limit
       )
-        throw new SlippageCheckUnavailableError(
+        throw new SimulationValidationError(
           `"${limit.type}" always measures the bundle sender "${params.owner}"; omit account.`,
+          [
+            `limits.operations[${index}].account: must measure the bundle sender; omit account or use the sender where supported`,
+          ],
         );
       if (
         limit.type === "midnightSupplyBlueMakeLend" &&
         limit.account !== undefined &&
         !isAddressEqual(limit.account, params.owner)
       )
-        throw new SlippageCheckUnavailableError(
+        throw new SimulationValidationError(
           `Blue parking is measured on the bundle sender "${params.owner}" because MidnightBundlesV2 creates the BlueBuyCallback for msg.sender; account must equal the sender or be omitted.`,
+          [
+            `limits.operations[${index}].account: must measure the bundle sender; omit account or use the sender where supported`,
+          ],
         );
       if (
         limit.type === "midnightSupplyCollateralMakeBorrow" &&
         limit.account !== undefined &&
         !isAddressEqual(limit.account, params.owner)
       )
-        throw new SlippageCheckUnavailableError(
+        throw new SimulationValidationError(
           `Maker collateral is measured on the bundle sender "${params.owner}" because MidnightBundlesV2 cancelAndMake supplies collateral for msg.sender; account must equal the sender or be omitted.`,
+          [
+            `limits.operations[${index}].account: must measure the bundle sender; omit account or use the sender where supported`,
+          ],
         );
       const measurements: SlippageMeasurement[] = [];
       const paidIsNative =
@@ -329,6 +338,12 @@ export function planStateReads(params: {
         if (blueBuyCallback === undefined)
           throw new SlippageCheckUnavailableError(
             `${label}: no BlueBuyCallback address is resolved for this limit.`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field: "position",
+              reason: "missingRead",
+            },
           );
         positionAccount = blueBuyCallback;
       }
@@ -348,6 +363,12 @@ export function planStateReads(params: {
               : "native-funded collateral supply";
         throw new SlippageCheckUnavailableError(
           `${label}: native value is sent but no wNative is registered for this chain, so ${operation} cannot be measured. Send no native value.`,
+          {
+            operationIndex: index,
+            operationType: limit.type,
+            field: "assetsPaid",
+            reason: "noRegisteredWrappedNative",
+          },
         );
       }
       const plan = operationMeasurementPlan(limit);
@@ -365,6 +386,12 @@ export function planStateReads(params: {
         if (midnightMarket === undefined)
           throw new SlippageCheckUnavailableError(
             `Cannot observe credit for "${limit.type}": no Midnight market is resolved for this market id.`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field: "credit",
+              reason: "missingRead",
+            },
           );
         creditReadId =
           `midnight-credit:${limit.marketId}:${account}`.toLowerCase();
@@ -417,10 +444,25 @@ export function planStateReads(params: {
         if (params.nativeValueSent && params.wNative === undefined)
           throw new SlippageCheckUnavailableError(
             `${label}: native value is sent but no wNative is registered for this chain, so native-funded repayment cannot be measured. Send no native value.`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field:
+                limit.type === "midnightWithdrawCollateralBatch"
+                  ? "collateralWithdrawals"
+                  : "assetsPaid",
+              reason: "noRegisteredWrappedNative",
+            },
           );
         if (midnightMarket === undefined)
           throw new SlippageCheckUnavailableError(
             `Cannot observe collateral for "${limit.type}": no Midnight market is resolved for this market id.`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field: "collateralWithdrawals",
+              reason: "missingRead",
+            },
           );
         const quoted = limit.quote.collateralWithdrawals ?? [];
         const receiver = limit.receiver ?? params.owner;
@@ -438,8 +480,11 @@ export function planStateReads(params: {
             );
           });
           if (sameTokenWithdrawal !== undefined)
-            throw new SlippageCheckUnavailableError(
+            throw new SimulationValidationError(
               `${label}: collateral index "${sameTokenWithdrawal.collateralIndex}" uses the loan token and is delivered to the payer, so repayment and delivery cannot be measured separately. Send the withdrawal to a different receiver or split repay and withdraw into separate bundles.`,
+              [
+                `limits.operations[${index}].quote.collateralWithdrawals: cannot measure repayment and delivery separately; change the receiver or funding`,
+              ],
             );
         }
         const wNative = params.wNative;
@@ -455,8 +500,11 @@ export function planStateReads(params: {
             return token !== undefined && isAddressEqual(token, wNative);
           });
           if (wNativeWithdrawal !== undefined)
-            throw new SlippageCheckUnavailableError(
+            throw new SimulationValidationError(
               `${label}: collateral index "${wNativeWithdrawal.collateralIndex}" uses wNative while native ETH is sent, so wrapped ETH and collateral delivery cannot be measured separately. Send the withdrawal to a different receiver or send no ETH.`,
+              [
+                `limits.operations[${index}].quote.collateralWithdrawals: cannot measure repayment and delivery separately; change the receiver or funding`,
+              ],
             );
         }
         const midnight = params.midnight;
@@ -477,6 +525,12 @@ export function planStateReads(params: {
             if (token === undefined)
               throw new SlippageCheckUnavailableError(
                 `Cannot resolve collateral token for index "${collateralIndex}" in "${limit.type}".`,
+                {
+                  operationIndex: index,
+                  operationType: limit.type,
+                  field: "collateralWithdrawals",
+                  reason: "missingRead",
+                },
               );
             return {
               collateralIndex,
@@ -496,6 +550,12 @@ export function planStateReads(params: {
         if (params.nativeValueSent && params.wNative === undefined)
           throw new SlippageCheckUnavailableError(
             `${label}: native value is sent but no wNative is registered for this chain, so native-funded collateral supplies cannot be measured. Send no native value.`,
+            {
+              operationIndex: index,
+              operationType: limit.type,
+              field: "collateralSupplies",
+              reason: "noRegisteredWrappedNative",
+            },
           );
         const quoted = limit.quote.collateralSupplies ?? [];
         const receiver = limit.receiver ?? params.owner;
@@ -520,6 +580,12 @@ export function planStateReads(params: {
           if (token === undefined)
             throw new SlippageCheckUnavailableError(
               `Cannot resolve collateral token for index "${collateralIndex}" in "${limit.type}".`,
+              {
+                operationIndex: index,
+                operationType: limit.type,
+                field: "collateralSupplies",
+                reason: "missingRead",
+              },
             );
           const key = `${token.toLowerCase()}:${params.owner.toLowerCase()}`;
           const bound = grouped.get(key) ?? {
@@ -539,6 +605,12 @@ export function planStateReads(params: {
           )
             throw new SlippageCheckUnavailableError(
               `${label}: cannot resolve the loan token or proceeds quote.`,
+              {
+                operationIndex: index,
+                operationType: limit.type,
+                field: "assetsReceived",
+                reason: "missingRead",
+              },
             );
           const proceedsKey = `${assetsReceived.toLowerCase()}:${receiver.toLowerCase()}`;
           const proceedsBound = grouped.get(proceedsKey) ?? {
@@ -558,8 +630,11 @@ export function planStateReads(params: {
               ? (params.nativeValue ?? 0n)
               : 0n;
           if (nativeValue > bound.maxPulls)
-            throw new SlippageCheckUnavailableError(
+            throw new SimulationValidationError(
               `${label}: native value sent by the owner (${nativeValue}) exceeds this operation's quoted wNative collateral supply (${bound.maxPulls}), so wNative pulls cannot be attributed. Send at most the quoted wNative collateral supply (${bound.maxPulls}) as native value.`,
+              [
+                `limits.operations[${index}].quote.collateralSupplies: must cover the owner's native value (${nativeValue})`,
+              ],
             );
           return {
             ...bound,
@@ -604,6 +679,12 @@ export function planStateReads(params: {
             if (creditReadId === undefined)
               throw new SlippageCheckUnavailableError(
                 `Cannot observe "${field}" for "${limit.type}": no credit read is planned.`,
+                {
+                  operationIndex: index,
+                  operationType: limit.type,
+                  field: field,
+                  reason: "missingRead",
+                },
               );
             measurements.push({ field, type: "balance", readId: creditReadId });
             continue;
@@ -612,6 +693,12 @@ export function planStateReads(params: {
             if (debtReadId === undefined)
               throw new SlippageCheckUnavailableError(
                 `Cannot observe "${field}" for "${limit.type}": no debt read is planned.`,
+                {
+                  operationIndex: index,
+                  operationType: limit.type,
+                  field: field,
+                  reason: "missingRead",
+                },
               );
             measurements.push({
               field,
@@ -624,6 +711,12 @@ export function planStateReads(params: {
             if (creditReadId === undefined || debtReadId === undefined)
               throw new SlippageCheckUnavailableError(
                 `Cannot observe "${field}" for "${limit.type}": no credit or debt read is planned.`,
+                {
+                  operationIndex: index,
+                  operationType: limit.type,
+                  field: field,
+                  reason: "missingRead",
+                },
               );
             measurements.push({
               field,
@@ -796,8 +889,9 @@ export function planStateReads(params: {
       ),
     )
   )
-    throw new SlippageCheckUnavailableError(
+    throw new SimulationValidationError(
       "Native value sent by the request is not covered by any measured native side. Remove the transaction value, or declare the native or wNative asset on the operation it funds.",
+      ["transactions: native value must be covered by a measured native side"],
     );
   for (const [index, operation] of operations.entries()) {
     if (
@@ -940,6 +1034,7 @@ export function decodeStateRead(read: StateRead, data: Hex): StateValue {
   if (data === "0x") {
     throw new SlippageCheckUnavailableError(
       `Cannot observe slippage read "${read.id}": the selected subject returned no data (likely not a contract).`,
+      { field: read.id, reason: "emptyData" },
     );
   }
   try {

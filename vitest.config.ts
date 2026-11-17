@@ -26,7 +26,7 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       include: [
         "packages/**/src/**/*.{ts,tsx}",
-        "scripts/generate-midnight-package-version.ts",
+        "scripts/generate-package-versions.ts",
         "scripts/paths.ts",
         "scripts/workflow.ts",
         "scripts/publish/**/*.ts",
@@ -147,6 +147,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation",
+          setupFiles: [
+            "./packages/evm-simulation/test/structured-limit-violation.setup.ts",
+          ],
           include: [
             "packages/evm-simulation/src/**/*.test.ts",
             "packages/evm-simulation/test/e2e/**/*.test.ts",
@@ -162,6 +165,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation-fork",
+          setupFiles: [
+            "./packages/evm-simulation/test/structured-limit-violation.setup.ts",
+          ],
           include: ["packages/evm-simulation/test/**/*.integration.test.ts"],
           globals: true,
           environment: "node",

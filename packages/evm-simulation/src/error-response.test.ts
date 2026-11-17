@@ -11,6 +11,20 @@ import {
 } from "./errors.js";
 
 describe("toSimulationErrorResponse", () => {
+  test("behavior: returns a generic response for cyclic findings", () => {
+    const value = {
+      name: "SimulationRevertedError",
+      code: "SIMULATION_REVERTED",
+      message: "reverted",
+      findings: [] as unknown[],
+    };
+    value.findings.push(value);
+    expect(toSimulationErrorResponse(value)).toEqual({
+      code: "UNEXPECTED_SIMULATION_ERROR",
+      message: "Simulation failed unexpectedly.",
+    });
+  });
+
   test.each(["0x", "0xDEADBEEF", undefined] as const)(
     "behavior: preserves message and exact revert data %s",
     (revertData) => {

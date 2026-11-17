@@ -1,5 +1,34 @@
 # @morpho-org/evm-simulation
 
+## 8.8.0
+
+### Minor Changes
+
+- Export four abstract error group classes: `SimulationSafetyError`, `SimulationRejectedError`, `SimulationInvalidRequestError` and `SimulationInfrastructureError`. Every concrete simulation error extends one group so integrators can handle failures with `instanceof`, while messages, codes and concrete class names remain unchanged. All groups reject; they are not a severity scale.
+
+  Add a readonly `findings` list for other failure instances from the same simulation. It is optional on the type in 8.x for legacy structural objects, always set to a frozen empty array on package instances until collection lands, and becomes required in 9.0.0. The structural error guard narrows to `SimulationPackageError`, accepts objects with or without findings, and validates findings arrays and their entries; read `error.findings ?? []` after the guard. The JSON error response is unchanged.
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/evm-simulation"`, which takes precedence over the wildcards, and alias any others, for example `export { version as evmSimulationVersion } from "@morpho-org/evm-simulation"`.
+
+- `ConsumerLimitViolationError` now names what failed as fields, so integrators no longer parse its message: `operationIndex`, `operationType`, `field`, `check`, `expected` and `observed`, plus `tolerance` or `bound` when the check applies one. When a quote or bound has several entries, `entry` (`ConsumerLimitEntry`) names the one that failed: `{ marketId }` for `positions` and `deallocations`, `{ collateralIndex }` for `collateralSupplies`, `collateralWithdrawals` and `position.maxCollateral`, `{ token, account }` for `walletBalance`; it is undefined for single-value sides. `check` is one of the exported `CONSUMER_LIMIT_CHECKS`. The fields are optional in the type for 8.x, and `simulate` always sets them. Messages are unchanged.
+- Expose `reason` and `field` on `SlippageCheckUnavailableError`, with `operationIndex` and `operationType` for operation-scoped failures. Use the exported `SLIPPAGE_CHECK_UNAVAILABLE_REASONS` to distinguish missing evidence without parsing messages. The seven reasons describe unavailable evidence. Caller-input conflicts and combined flows that cannot be measured separately now throw `SimulationValidationError` with operation-scoped `fieldErrors` instead. Approval-token resolution also uses `SimulationValidationError` for zero vault subjects or Blue parking loan tokens, absent Midnight collateral indices, and missing `assetPaid` on first-market collateral supplies. The fields remain optional for 8.x constructor compatibility; SDK failures populate them without changing existing messages.
+
+  Missing-wNative diagnostics identify `assetsPaid` for native-funded Midnight repay-withdraw operations and `collateralWithdrawals` for batch withdrawals. Public helper and overload documentation distinguishes invalid caller requests from unavailable chain evidence.
+
+  Caller-mistake validation also runs for complete quotes without asset overrides, before quote metadata failures can hide it. Transport failures, unknown reverts and unusable market metadata remain unavailable-evidence errors.
+
+### Patch Changes
+
+- Check simulated call outcomes (preparation reverts, transaction assertions and reverts, and state reads) in a separate step after parsing the `eth_simulateV1` response. Errors, their order and results are unchanged.
+- Restructure post-execution simulation checks internally. The errors surfaced to callers, their order, and their messages are unchanged.
+- Restructure slippage checks internally while preserving the errors, messages, and order reported by `simulate`.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.8.0
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/morpho-ts@4.4.0
+
 ## 8.7.1
 
 ### Patch Changes

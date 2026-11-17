@@ -8,6 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { SlippageCheckUnavailableError } from "../errors.js";
+import type { OperationType } from "../limits.js";
 import type { ResolvedSlippageOperation } from "./backends/resolve-assets.js";
 import type { DerivationState } from "./derive-quote.js";
 import type { StateRead } from "./state/contract.js";
@@ -28,6 +29,7 @@ export function planDerivationReads(
         kind: "derivation",
         id: `derive:${index}:${name}`,
         operationIndex: index,
+        operationType: limit.type,
         subject:
           "marketId" in limit
             ? `marketId ${limit.marketId}`
@@ -41,6 +43,12 @@ export function planDerivationReads(
       if (marketParams === undefined)
         throw new SlippageCheckUnavailableError(
           `Missing market parameters for "${limit.type}".`,
+          {
+            operationIndex: index,
+            operationType: limit?.type,
+            field: "market",
+            reason: "missingRead",
+          },
         );
       add("accrue", {
         to: morpho,
@@ -126,7 +134,10 @@ export function planDerivationReads(
 
 /** Decode one operation's hidden before-state values, failing closed on malformed data. @internal */
 export function decodeDerivationState(
-  index: number,
+  {
+    index,
+    operationType,
+  }: { readonly index: number; readonly operationType: OperationType },
   data: ReadonlyMap<string, Hex>,
 ): DerivationState {
   try {
@@ -204,7 +215,13 @@ export function decodeDerivationState(
   } catch (cause) {
     throw new SlippageCheckUnavailableError(
       `Cannot decode before-state derivation for operation "${index}". Check the subject and RPC response.`,
-      { cause },
+      {
+        operationIndex: index,
+        operationType,
+        field: "derivation",
+        reason: "emptyData",
+        cause,
+      },
     );
   }
 }

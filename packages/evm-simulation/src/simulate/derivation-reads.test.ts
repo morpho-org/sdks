@@ -167,7 +167,9 @@ describe("hidden derivation calls", () => {
         }),
       ],
     ]);
-    expect(decodeDerivationState(0, data)).toEqual({
+    expect(
+      decodeDerivationState({ index: 0, operationType: limit.type }, data),
+    ).toEqual({
       market: {
         totalSupplyAssets: 1n,
         totalSupplyShares: 2n,
@@ -180,14 +182,19 @@ describe("hidden derivation calls", () => {
     });
   });
   test("empty optional evidence is absent; malformed evidence fails closed", () => {
-    expect(decodeDerivationState(0, new Map())).toEqual({
+    expect(
+      decodeDerivationState({ index: 0, operationType: limit.type }, new Map()),
+    ).toEqual({
       market: undefined,
       borrowShares: undefined,
       preview: undefined,
       targetVault: undefined,
     });
     expect(() =>
-      decodeDerivationState(0, new Map([["derive:0:market", "0x"]])),
+      decodeDerivationState(
+        { index: 0, operationType: limit.type },
+        new Map([["derive:0:market", "0x"]]),
+      ),
     ).toThrow(SlippageCheckUnavailableError);
     expect(() =>
       planDerivationReads([{ limit }], { morpho: owner, owner }),

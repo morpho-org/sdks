@@ -5,13 +5,14 @@ import {
   SlippageCheckUnavailableError,
 } from "../errors.js";
 import type { CheckedSlippageLimits } from "../limits.js";
-import { checkSlippage } from "./slippage.js";
+import { checkSlippage, findSlippageFailures } from "./slippage.js";
 
 describe("checkSlippage", () => {
   test("derived bound violations direct callers to the typed inputs or explicit quote", () => {
     const depositError = (() => {
       try {
         checkSlippage({
+          operationIndex: 0,
           label: "deposit",
           limits: {
             type: "vaultV2Deposit",
@@ -34,6 +35,7 @@ describe("checkSlippage", () => {
     const withdrawError = (() => {
       try {
         checkSlippage({
+          operationIndex: 0,
           label: "withdraw",
           limits: {
             type: "blueWithdraw",
@@ -60,6 +62,7 @@ describe("checkSlippage", () => {
       sharesMinted: 1n,
     };
     const checked = checkSlippage({
+      operationIndex: 0,
       label: "collateral only",
       limits: {
         type: "blueSupplyCollateralBorrow",
@@ -74,6 +77,30 @@ describe("checkSlippage", () => {
       inactiveFields: ["sharesMinted"],
     });
     expect(checked.quote).toEqual(quote);
+    expect(() =>
+      checkSlippage({
+        operationIndex: 0,
+        label: "collateral only",
+        limits: {
+          type: "blueSupplyCollateralBorrow",
+          inputs: { collateralAssets: 100n },
+          quote,
+          slippageTolerance: 0n,
+        },
+        observed: { ...quote, sharesMinted: 2n },
+        derivedFields: ["assetsPaid", "collateralSupplied", "sharesMinted"],
+        exactFields: ["assetsPaid", "collateralSupplied"],
+        debtShares: true,
+        inactiveFields: ["sharesMinted"],
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        field: "sharesMinted",
+        check: "inactiveLeg",
+        expected: 0n,
+        observed: 2n,
+      }),
+    );
   });
   test.each([
     { field: "assetsReceived", accepted: 990n, rejected: 989n },
@@ -90,6 +117,7 @@ describe("checkSlippage", () => {
       };
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: accepted },
@@ -100,6 +128,7 @@ describe("checkSlippage", () => {
       });
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: 1000n },
@@ -110,6 +139,7 @@ describe("checkSlippage", () => {
       });
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: rejected },
@@ -126,6 +156,7 @@ describe("checkSlippage", () => {
     };
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: debtLimits,
         observed: { sharesMinted: 1011n },
@@ -134,6 +165,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: debtLimits,
         observed: { sharesMinted: 980n },
@@ -152,6 +184,7 @@ describe("checkSlippage", () => {
     };
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repayLimits,
         observed: { sharesBurned: 980n },
@@ -160,6 +193,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repayLimits,
         observed: { sharesBurned: 1020n },
@@ -180,6 +214,7 @@ describe("checkSlippage", () => {
       };
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: 1n },
@@ -190,6 +225,7 @@ describe("checkSlippage", () => {
       });
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: field === "sharesMinted" ? 0n : 2n },
@@ -205,6 +241,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { assetsPaid: 0n },
@@ -215,6 +252,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { assetsPaid: 1n },
@@ -231,6 +269,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV1InKindRedeem)",
         limits,
         observed: { positions: [{ marketId, supplyShares: 990n }] },
@@ -241,6 +280,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV1InKindRedeem)",
         limits,
         observed: { positions: [{ marketId, supplyShares: 989n }] },
@@ -249,6 +289,7 @@ describe("checkSlippage", () => {
     const error = (() => {
       try {
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV1InKindRedeem)",
           limits,
           observed: {},
@@ -268,6 +309,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { penalty: 1010n },
@@ -278,6 +320,7 @@ describe("checkSlippage", () => {
     });
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { penalty: 0n },
@@ -288,6 +331,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { penalty: 1011n },
@@ -295,6 +339,7 @@ describe("checkSlippage", () => {
     ).toThrow(ConsumerLimitViolationError);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: {},
@@ -313,6 +358,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { deallocations: [{ marketId, assets: 1010n }] },
@@ -324,6 +370,7 @@ describe("checkSlippage", () => {
     // An unobserved market deallocated nothing; less than quoted is not adverse.
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { deallocations: [] },
@@ -334,6 +381,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: {},
@@ -343,6 +391,7 @@ describe("checkSlippage", () => {
     );
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { deallocations: [{ marketId, assets: 1011n }] },
@@ -351,11 +400,47 @@ describe("checkSlippage", () => {
     // A realized deallocation in an unquoted market violates.
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2ForceRedeem)",
         limits,
         observed: { deallocations: [{ marketId: otherMarket, assets: 1n }] },
       }),
-    ).toThrow(ConsumerLimitViolationError);
+    ).toThrow(
+      expect.objectContaining({
+        check: "unquotedMarket",
+        entry: { marketId: otherMarket },
+      }),
+    );
+    // Two markets quoted with the same amount: the error names the one that failed.
+    expect(() =>
+      checkSlippage({
+        operationIndex: 0,
+        label: "Limit operation 0 (vaultV2ForceRedeem)",
+        limits: {
+          ...limits,
+          quote: {
+            deallocations: [
+              { marketId, assets: 1000n },
+              { marketId: otherMarket, assets: 1000n },
+            ],
+          },
+        },
+        observed: {
+          deallocations: [
+            { marketId, assets: 1000n },
+            { marketId: otherMarket, assets: 1011n },
+          ],
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        field: "deallocations",
+        check: "slippageTolerance",
+        expected: 1000n,
+        observed: 1011n,
+        entry: { marketId: otherMarket },
+      }),
+    );
   });
   test("behavior: sharePrice bounds the realized rate in the adverse direction", () => {
     // A 100% amount tolerance keeps the amount checks permissive so the
@@ -372,6 +457,7 @@ describe("checkSlippage", () => {
     // Realized 1.01, bound 1.01 inclusive.
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: deposit,
         observed: { assetsPaid: 1010n, sharesMinted: 1000n },
@@ -385,6 +471,7 @@ describe("checkSlippage", () => {
     const { sharePrice: _depositSharePrice, ...depositAmounts } = deposit;
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: depositAmounts,
         observed: overpriced,
@@ -395,6 +482,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: deposit,
         observed: overpriced,
@@ -402,6 +490,7 @@ describe("checkSlippage", () => {
     ).toThrowError(/"sharePrice"/);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: deposit,
         observed: overpriced,
@@ -417,6 +506,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repay,
         observed: { assetsPaid: 1010n, sharesBurned: 1000n },
@@ -431,6 +521,7 @@ describe("checkSlippage", () => {
     const { sharePrice: _repaySharePrice, ...repayAmounts } = repay;
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repayAmounts,
         observed: overpricedRepay,
@@ -442,6 +533,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repay,
         observed: overpricedRepay,
@@ -450,6 +542,7 @@ describe("checkSlippage", () => {
     ).toThrowError(/"sharePrice"/);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: repay,
         observed: overpricedRepay,
@@ -467,6 +560,7 @@ describe("checkSlippage", () => {
     // Realized 0.99, floor 0.99 inclusive.
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: withdraw,
         observed: { assetsReceived: 990n, sharesBurned: 1000n },
@@ -480,6 +574,7 @@ describe("checkSlippage", () => {
     const { sharePrice: _withdrawSharePrice, ...withdrawAmounts } = withdraw;
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: withdrawAmounts,
         observed: underpriced,
@@ -490,6 +585,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: withdraw,
         observed: underpriced,
@@ -497,6 +593,7 @@ describe("checkSlippage", () => {
     ).toThrowError(/"sharePrice"/);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: withdraw,
         observed: underpriced,
@@ -512,6 +609,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: borrow,
         observed: { assetsReceived: 990n, sharesMinted: 1000n },
@@ -526,6 +624,7 @@ describe("checkSlippage", () => {
     const { sharePrice: _borrowSharePrice, ...borrowAmounts } = borrow;
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: borrowAmounts,
         observed: underborrow,
@@ -537,6 +636,7 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: borrow,
         observed: underborrow,
@@ -545,6 +645,7 @@ describe("checkSlippage", () => {
     ).toThrowError(/"sharePrice"/);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: borrow,
         observed: underborrow,
@@ -561,6 +662,7 @@ describe("checkSlippage", () => {
     };
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { assetsPaid: 1010n },
@@ -568,6 +670,7 @@ describe("checkSlippage", () => {
     ).toThrow(SlippageCheckUnavailableError);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { sharesMinted: 1000n },
@@ -577,6 +680,7 @@ describe("checkSlippage", () => {
   test("error: sharePrice throws when no shares moved", () => {
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: {
           type: "vaultV2Deposit",
@@ -586,11 +690,43 @@ describe("checkSlippage", () => {
         },
         observed: { assetsPaid: 0n, sharesMinted: 0n },
       }),
-    ).toThrow(ConsumerLimitViolationError);
+    ).toThrow(
+      expect.objectContaining({
+        field: "sharePrice",
+        check: "noMovement",
+        expected: 10n ** 27n,
+        observed: 0n,
+        tolerance: 0n,
+      }),
+    );
+  });
+  test("error: typed inputs with no subject movement report noMovement", () => {
+    expect(() =>
+      checkSlippage({
+        operationIndex: 0,
+        label: "Limit operation 0 (blueSupply)",
+        limits: {
+          type: "blueSupply",
+          inputs: { assets: 100n },
+          quote: { sharesMinted: 100n },
+          slippageTolerance: 0n,
+        },
+        observed: { sharesMinted: 0n },
+        derivedFields: ["sharesMinted"],
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        field: "sharesMinted",
+        check: "noMovement",
+        expected: 100n,
+        observed: 0n,
+      }),
+    );
   });
   test("error: SlippageCheckUnavailableError", () => {
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits: {
           type: "blueSupply",
@@ -608,6 +744,7 @@ describe("checkSlippage", () => {
       slippageTolerance: 0n,
     };
     const result = checkSlippage({
+      operationIndex: 0,
       label: "Limit operation 0 (vaultV2Deposit)",
       limits,
       observed: { sharesMinted: 110n, assetsPaid: 90n, sharesBurned: 999n },
@@ -651,6 +788,7 @@ describe("checkSlippage", () => {
       };
       expect(
         checkSlippage({
+          operationIndex: 0,
           label,
           limits,
           observed: { sharesMinted: 1n },
@@ -664,6 +802,7 @@ describe("checkSlippage", () => {
       const error = (() => {
         try {
           checkSlippage({
+            operationIndex: 0,
             label,
             limits,
             observed: { sharesMinted: 1n },
@@ -682,6 +821,7 @@ describe("checkSlippage", () => {
     const error = (() => {
       try {
         checkSlippage({
+          operationIndex: 0,
           label,
           limits: {
             type: "blueSupply",
@@ -707,13 +847,15 @@ describe("checkSlippage", () => {
     };
     const label = "Limit operation 0 (midnightRedeem)";
     const observed = { creditRedeemed: 10n };
-    expect(checkSlippage({ label, limits, observed, credit: 5n })).toEqual({
+    expect(
+      checkSlippage({ label, operationIndex: 0, limits, observed, credit: 5n }),
+    ).toEqual({
       quote: limits.quote,
       slippageTolerance: limits.slippageTolerance,
       position: { maxCredit: 5n },
     });
     expect(() =>
-      checkSlippage({ label, limits, observed, credit: 6n }),
+      checkSlippage({ label, operationIndex: 0, limits, observed, credit: 6n }),
     ).toThrow(ConsumerLimitViolationError);
   });
 
@@ -721,6 +863,7 @@ describe("checkSlippage", () => {
     const label = "Limit operation 0 (midnightRedeem)";
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label,
         limits: {
           type: "midnightRedeem",
@@ -741,6 +884,7 @@ describe("checkSlippage", () => {
     };
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { sharesMinted: 0n, assetsPaid: 200n },
@@ -751,10 +895,187 @@ describe("checkSlippage", () => {
     });
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "Limit operation 0 (vaultV2Deposit)",
         limits,
         observed: { sharesMinted: 0n, assetsPaid: 201n },
       }),
     ).toThrow(ConsumerLimitViolationError);
+  });
+});
+
+describe("checkSlippage structured violations", () => {
+  const catchViolation = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected a ConsumerLimitViolationError");
+  };
+
+  test("error: a tolerance breach names its operation, field, quote, tolerance and bound", () => {
+    const error = catchViolation(() =>
+      checkSlippage({
+        operationIndex: 2,
+        label: "Limit operation 2 (vaultV2Deposit)",
+        limits: {
+          type: "vaultV2Deposit",
+          quote: { sharesMinted: 100n },
+          slippageTolerance: 10_000000000000000n,
+        },
+        observed: { sharesMinted: 98n },
+      }),
+    );
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).toMatchObject({
+      message:
+        'Limit operation 2 (vaultV2Deposit): slippage for "sharesMinted" exceeds tolerance "10000000000000000" against quote "100"; allowed bound "99", got "98". Adjust the transaction or tolerance.',
+      operationIndex: 2,
+      operationType: "vaultV2Deposit",
+      field: "sharesMinted",
+      check: "slippageTolerance",
+      expected: 100n,
+      observed: 98n,
+      tolerance: 10_000000000000000n,
+      bound: 99n,
+    });
+  });
+
+  test("error: a derived bound names the derived amount as expected and bound", () => {
+    const error = catchViolation(() =>
+      checkSlippage({
+        operationIndex: 0,
+        label: "deposit",
+        limits: {
+          type: "vaultV2Deposit",
+          inputs: { assets: 100n },
+          quote: { sharesMinted: 100n },
+          slippageTolerance: 0n,
+        },
+        observed: { sharesMinted: 99n },
+        derivedFields: ["sharesMinted"],
+      }),
+    );
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).toMatchObject({
+      field: "sharesMinted",
+      check: "derivedBound",
+      expected: 100n,
+      observed: 99n,
+      bound: 100n,
+      tolerance: undefined,
+    });
+  });
+
+  test("error: an exact input mismatch reports exactQuote", () => {
+    const error = catchViolation(() =>
+      checkSlippage({
+        operationIndex: 1,
+        label: "repay",
+        limits: {
+          type: "blueRepay",
+          quote: { assetsPaid: 100n },
+          slippageTolerance: 0n,
+        },
+        observed: { assetsPaid: 101n },
+        derivedFields: ["assetsPaid"],
+        exactFields: ["assetsPaid"],
+      }),
+    );
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).toMatchObject({
+      operationIndex: 1,
+      operationType: "blueRepay",
+      field: "assetsPaid",
+      check: "exactQuote",
+      expected: 100n,
+      observed: 101n,
+    });
+  });
+
+  test("error: a post-bundle position bound reports positionBound", () => {
+    const error = catchViolation(() =>
+      checkSlippage({
+        operationIndex: 0,
+        label: "redeem",
+        limits: {
+          type: "midnightRedeem",
+          quote: { creditRedeemed: 10n },
+          slippageTolerance: 10_000000000000000n,
+          position: { maxCredit: 5n },
+        },
+        observed: { creditRedeemed: 10n },
+        credit: 6n,
+      }),
+    );
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).toMatchObject({
+      field: "position.maxCredit",
+      check: "positionBound",
+      expected: 5n,
+      observed: 6n,
+      bound: 5n,
+    });
+  });
+});
+
+describe("findSlippageFailures", () => {
+  test("returns every independent field check without dividing by zero shares", () => {
+    const params = {
+      operationIndex: 4,
+      label: "deposit",
+      limits: {
+        type: "vaultV2Deposit",
+        quote: { assetsPaid: 10n, sharesMinted: 10n },
+        slippageTolerance: 0n,
+        sharePrice: { expected: 1n, tolerance: 0n },
+        position: { minSupplyShares: 10n, minCollateral: 10n },
+      },
+      observed: { assetsPaid: 20n, sharesMinted: 0n },
+      position: { supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+    } as const;
+    const { failures } = findSlippageFailures(params);
+    expect(failures.map(({ field }) => field)).toEqual([
+      "assetsPaid",
+      "sharesMinted",
+      "sharePrice",
+      "position.minSupplyShares",
+      "position.minCollateral",
+    ]);
+    expect(failures[2]).toMatchObject({
+      operationIndex: 4,
+      operationType: "vaultV2Deposit",
+      field: "sharePrice",
+      check: "noMovement",
+      expected: 1n,
+      observed: 0n,
+      tolerance: 0n,
+    });
+    expect(() => checkSlippage(params)).toThrowError(failures[0]);
+  });
+
+  test("continues to position checks after unavailable quotes and share-price observations", () => {
+    const { failures } = findSlippageFailures({
+      operationIndex: 1,
+      label: "deposit",
+      limits: {
+        type: "vaultV2Deposit",
+        quote: { assetsPaid: 10n, sharesMinted: 10n },
+        slippageTolerance: 0n,
+        sharePrice: { expected: 1n, tolerance: 0n },
+        position: { minSupplyShares: 10n },
+      },
+      observed: {},
+      position: { supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+    });
+    expect(failures.map(({ field }) => field)).toEqual([
+      "assetsPaid",
+      "sharesMinted",
+      "sharePrice",
+      "position.minSupplyShares",
+    ]);
+    expect(failures[0]).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(failures[3]).toBeInstanceOf(ConsumerLimitViolationError);
   });
 });

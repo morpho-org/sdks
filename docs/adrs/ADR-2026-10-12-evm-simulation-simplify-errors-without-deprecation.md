@@ -91,3 +91,4 @@ external consumers such as the Actions API must stop forwarding `reasonCode`.
 - [Quoted slippage limits](./ADR-2026-10-01-evm-simulation-quoted-slippage-limits.md)
 - [Retire Tenderly](./ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation.md)
 - [Deprecation lifecycle](./ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)
+- Base-error field set superseded by ADR-2026-11-11-evm-simulation-error-types-and-findings.

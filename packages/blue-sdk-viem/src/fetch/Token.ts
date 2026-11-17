@@ -84,6 +84,10 @@ const catchRevertOrMalformed =
     return catchRevertOnly(undefined)(error);
   };
 
+// Isolate direct reads from multicall; unlike the 60k staticcall stipend, this
+// allowance includes intrinsic gas and L2 overhead (including Tempo's fixed costs).
+const DIRECT_READ_GAS_LIMIT = 2_000_000n;
+
 const MALFORMED_SELECTOR_FIELDS: Record<string, TokenMetadataField> = {
   [toFunctionSelector("name()")]: "name",
   [toFunctionSelector("symbol()")]: "symbol",
@@ -96,9 +100,14 @@ const MALFORMED_SELECTOR_FIELDS: Record<string, TokenMetadataField> = {
  * Reads native token metadata locally for `NATIVE_ADDRESS`. For ERC20 tokens, uses the deployless
  * `GetToken` query by default and falls back to ERC20, EIP-5267, wstETH, and local unwrap-token
  * reads when allowed.
+ * Deployless metadata staticcalls are gas-capped (60,000 for ERC20 fields, 100,000 for EIP-5267).
+ * Direct reads use a 2,000,000 gas allowance including intrinsic gas and L2 overhead,
+ * bypassing viem's shared multicall batching to isolate token failures.
+ * Gas exhaustion in direct reads propagates as a viem error; it is not classified as a revert.
  *
- * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`, and only when the call
- * reverts or the contract has no code. A `name`/`symbol` that does not decode as `string` is
+ * Only `name`, `symbol` and `eip712Domain` resolve to `undefined`: when the call reverts,
+ * the contract has no code, or a deployless call exhausts its stipend (60,000 gas for
+ * `name`/`symbol`, 100,000 for `eip712Domain`). A `name`/`symbol` that does not decode as `string` is
  * retried as `bytes32`; a malformed `bytes32` retry or `eip712Domain()` result throws
  * `MalformedTokenMetadataError`, and transport errors propagate. Under `deployless: true` or
  * `"force"`, a `GetToken` query that reports malformed `name()`/`symbol()`/`eip712Domain()`
@@ -121,7 +130,7 @@ const MALFORMED_SELECTOR_FIELDS: Record<string, TokenMetadataField> = {
  * @throws {MalformedTokenMetadataError} when `eip712Domain()` or the `bytes32`
  *   `name`/`symbol` retry returns non-empty data that does not decode, or when the deployless
  *   query reports malformed `name()`/`symbol()`/`eip712Domain()` returndata (no fallback).
- * @throws {viem.BaseError} when an RPC transport failure occurs; its cause chain contains a
+ * @throws {viem.BaseError} when a direct read exhausts its gas limit or an RPC transport failure occurs; a transport failure's cause chain contains a
  * viem.HttpRequestError, viem.TimeoutError, viem.LimitExceededRpcError, viem.SocketClosedError, or viem.WebSocketRequestError (detect with
  * isTransportError).
  * @example
@@ -220,9 +229,10 @@ export async function fetchToken(
     }
   }
 
+  const metadataParameters = { ...parameters, gas: DIRECT_READ_GAS_LIMIT };
   const [decimals, symbol, name, eip5267Domain] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...metadataParameters,
       address,
       abi: erc20Abi,
       functionName: "decimals",
@@ -238,7 +248,7 @@ export async function fetchToken(
       },
     ),
     readContract(client, {
-      ...parameters,
+      ...metadataParameters,
       address,
       abi: erc20Abi,
       functionName: "symbol",
@@ -247,7 +257,7 @@ export async function fetchToken(
       // Raw `call` so the bytes32 retry rejects non-32-byte returndata:
       // viem's `readContract` decode would ignore trailing bytes.
       return call(client, {
-        ...parameters,
+        ...metadataParameters,
         to: address,
         data: encodeFunctionData({
           abi: erc20Abi_bytes32,
@@ -276,7 +286,7 @@ export async function fetchToken(
         .catch(catchRevertOrMalformed(address, "symbol"));
     }),
     readContract(client, {
-      ...parameters,
+      ...metadataParameters,
       address,
       abi: erc20Abi,
       functionName: "name",
@@ -285,7 +295,7 @@ export async function fetchToken(
       // Raw `call` so the bytes32 retry rejects non-32-byte returndata:
       // viem's `readContract` decode would ignore trailing bytes.
       return call(client, {
-        ...parameters,
+        ...metadataParameters,
         to: address,
         data: encodeFunctionData({
           abi: erc20Abi_bytes32,
@@ -311,7 +321,7 @@ export async function fetchToken(
         .catch(catchRevertOrMalformed(address, "name"));
     }),
     readContract(client, {
-      ...parameters,
+      ...metadataParameters,
       address,
       abi: erc5267Abi,
       functionName: "eip712Domain",
@@ -349,7 +359,7 @@ export async function fetchToken(
 
   if (isWstEth && wstEth != null && stEth != null) {
     const stEthPerWstEth = await readContract(client, {
-      ...parameters,
+      ...metadataParameters,
       address: wstEth,
       abi: wstEthAbi,
       functionName: "stEthPerToken",

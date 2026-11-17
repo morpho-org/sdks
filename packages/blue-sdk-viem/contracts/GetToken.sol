@@ -22,6 +22,10 @@ struct TokenResponse {
 }
 
 contract GetToken {
+    uint256 private constant METADATA_GAS_LIMIT = 60_000;
+    // Mainnet block 24,671,815: eip712Domain estimates including intrinsic gas are
+    // 23,237 for steakUSDC and 37,106 for tETH. Leave ample proxy/storage headroom.
+    uint256 private constant EIP5267_GAS_LIMIT = 100_000;
     uint256 private constant STRING_HEAD_SIZE = 0x40;
     uint256 private constant EIP5267_DOMAIN_HEAD_SIZE = 0xe0;
 
@@ -57,7 +61,7 @@ contract GetToken {
         bytes memory callData
     ) private view returns (bool success, string memory value) {
         bytes memory returnData;
-        (success, returnData) = target.staticcall(callData);
+        (success, returnData) = target.staticcall{gas: METADATA_GAS_LIMIT}(callData);
         if (!success || returnData.length == 0) return (false, "");
 
         if (_isValidStringReturnData(returnData)) {
@@ -72,7 +76,7 @@ contract GetToken {
 
     function _queryUint8(address target, bytes memory callData) private view returns (bool success, uint8 value) {
         bytes memory returnData;
-        (success, returnData) = target.staticcall(callData);
+        (success, returnData) = target.staticcall{gas: METADATA_GAS_LIMIT}(callData);
         if (!success || returnData.length != 0x20) return (false, 0);
 
         uint256 decoded = _loadWord(returnData, 0);
@@ -83,7 +87,7 @@ contract GetToken {
 
     function _queryEip5267Domain(address target) private view returns (bool success, Eip5267Domain memory value) {
         bytes memory returnData;
-        (success, returnData) = target.staticcall(abi.encodeCall(IERC20Permit.eip712Domain, ()));
+        (success, returnData) = target.staticcall{gas: EIP5267_GAS_LIMIT}(abi.encodeCall(IERC20Permit.eip712Domain, ()));
         if (!success || returnData.length == 0) return (false, value);
         if (!_isValidEip5267DomainReturnData(returnData)) revert MalformedReturnData(IERC20Permit.eip712Domain.selector);
 

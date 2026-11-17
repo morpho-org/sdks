@@ -456,3 +456,4 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 - calldata decoding, route rejection, request freshness, effect verification, simulation limits, verification output, preview request validation, Migration route restrictions, error catalog apart from the existing classes' rows, the requirement for execution reverts to carry a typed context, descriptor verification and the preview authorization rule, and the Invariants depending on them superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits.
 - error context, revert-error surface, `ExternalServiceError` bypass and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.
 - VaultBundlesV1 exit share-allowance rule superseded by ADR-2026-10-21-unlimited-sdk-approvals.
+- rule that error additions extend the base error directly superseded by ADR-2026-11-11-evm-simulation-error-types-and-findings.

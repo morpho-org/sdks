@@ -75,6 +75,65 @@ const limit: ParsedOperationLimit = {
 };
 
 describe("resolveAssets", () => {
+  test.each(
+    (
+      [
+        "midnightSupplyCollateralBatch",
+        "midnightWithdrawCollateralBatch",
+      ] as const
+    ).flatMap((type) =>
+      (["missingRead", "emptyData"] as const).map((reason) => ({
+        type,
+        reason,
+      })),
+    ),
+  )(
+    "reports the collateral quote field for $type $reason",
+    async ({ type, reason }) => {
+      const handle = createMockClient(mainnet);
+      if (reason === "missingRead")
+        handle.request.mockRejectedValue(
+          new ContractFunctionRevertedError({
+            abi: midnightAbi,
+            functionName: "toMarket",
+          }),
+        );
+      else
+        mockRead(handle, {
+          address: suppliedMidnightMarket.midnight,
+          abi: midnightAbi,
+          functionName: "toMarket",
+          result: { ...suppliedMidnightMarket, loanToken: zeroAddress },
+        });
+      const field =
+        type === "midnightSupplyCollateralBatch"
+          ? "collateralSupplies"
+          : "collateralWithdrawals";
+      const resolution = resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight: suppliedMidnightMarket.midnight,
+        operations: [
+          {
+            type,
+            marketId: suppliedMidnightMarketId,
+            quote: { [field]: [{ collateralIndex: 0n, assets: 10n }] },
+            slippageTolerance: 0n,
+          },
+        ],
+        blockNumber: 1n,
+      });
+      await expect(resolution).rejects.toBeInstanceOf(
+        SlippageCheckUnavailableError,
+      );
+      await expect(resolution).rejects.toMatchObject({
+        operationIndex: 0,
+        operationType: type,
+        field,
+        reason,
+      });
+    },
+  );
   test.each([
     "midnightSupplyCollateralBatch",
     "midnightWithdrawCollateralBatch",
@@ -115,33 +174,52 @@ describe("resolveAssets", () => {
     },
   );
 
-  test("fails closed for an unknown batch collateral index", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: suppliedMidnightMarket.midnight,
-      abi: midnightAbi,
-      functionName: "toMarket",
-      result: suppliedMidnightMarket,
-    });
-    await expect(
-      resolveAssets({
+  test.each([
+    "midnightSupplyCollateralBatch",
+    "midnightSupplyCollateralTakeBorrow",
+    "midnightWithdrawCollateralBatch",
+    "midnightRepayWithdrawCollateral",
+    "midnightTakeRepayWithdrawCollateral",
+  ] as const)(
+    "fails closed for an unknown %s collateral index",
+    async (type) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: suppliedMidnightMarket.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: suppliedMidnightMarket,
+      });
+      const field =
+        type === "midnightSupplyCollateralBatch" ||
+        type === "midnightSupplyCollateralTakeBorrow"
+          ? "collateralSupplies"
+          : "collateralWithdrawals";
+      const resolution = resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
         midnight: suppliedMidnightMarket.midnight,
         operations: [
           {
-            type: "midnightSupplyCollateralBatch",
+            type,
             marketId: suppliedMidnightMarketId,
             quote: {
-              collateralSupplies: [{ collateralIndex: 9n, assets: 10n }],
+              [field]: [{ collateralIndex: 9n, assets: 10n }],
             },
             slippageTolerance: 0n,
           },
         ],
         blockNumber: 1n,
-      }),
-    ).rejects.toThrow(SlippageCheckUnavailableError);
-  });
+      });
+      await expect(resolution).rejects.toThrow(SlippageCheckUnavailableError);
+      await expect(resolution).rejects.toMatchObject({
+        operationIndex: 0,
+        operationType: type,
+        field,
+        reason: "emptyData",
+      });
+    },
+  );
   test("input limits validate explicit assets and cache market parameters", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
@@ -461,6 +539,34 @@ describe("resolveAssets", () => {
     });
     expect(result[0]?.assetsPaid).toBe(loan);
     expect(result[0]?.midnightApprovalTokens).toEqual([loan]);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+  test("error: Midnight Blue parking rejects a zero caller-supplied loanToken", async () => {
+    const handle = createMockClient(mainnet);
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "midnightSupplyBlueMakeLend",
+          loanToken: zeroAddress,
+          marketId,
+          callbackSalt: marketId,
+          quote: { assetsPaid: 10n, sharesMinted: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        'Cannot resolve the token approval required by "midnightSupplyBlueMakeLend" at the pinned block. If this bundle creates the market, pass the market struct via "market".',
+      fieldErrors: [
+        "limits.operations[0].loanToken: must not be the zero address",
+      ],
+    });
     expect(handle.request).not.toHaveBeenCalled();
   });
   test("error: an unmeasurable repay-withdraw asset quote fails closed", async () => {
@@ -1214,7 +1320,7 @@ describe("resolveAssets", () => {
     await expect(request).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
 
-  test("error: zero approval tokens fail closed", async () => {
+  test("error: zero onchain approval tokens fail closed", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: vault,
@@ -1237,13 +1343,6 @@ describe("resolveAssets", () => {
         quote: { assetsPaid: 1n, collateralSupplied: 1n },
         slippageTolerance: 0n,
       },
-      {
-        type: "vaultV1MigrateToV2",
-        sourceVault: zeroAddress,
-        targetVault: vault,
-        quote: { sharesBurned: 1n, sharesMinted: 1n },
-        slippageTolerance: 0n,
-      },
     ];
     for (const operation of operations)
       await expect(
@@ -1255,6 +1354,79 @@ describe("resolveAssets", () => {
         }),
       ).rejects.toBeInstanceOf(ApprovalCheckUnavailableError);
   });
+  test.each(
+    (
+      [
+        "vaultV1Withdraw",
+        "vaultV1Redeem",
+        "vaultV1InKindRedeem",
+        "vaultV2Withdraw",
+        "vaultV2Redeem",
+        "vaultV2InKindRedeem",
+        "vaultV2ForceWithdraw",
+        "vaultV1MigrateToV2",
+      ] as const
+    ).flatMap((type) =>
+      [false, true].map((fullQuote) => ({ type, fullQuote })),
+    ),
+  )(
+    "error: a zero vault subject is invalid input ($type, fullQuote=$fullQuote)",
+    async ({ type, fullQuote }) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockRejectedValue(
+        new ContractFunctionRevertedError({
+          abi: erc4626Abi,
+          functionName: "asset",
+        }),
+      );
+      const operation: ParsedOperationLimit =
+        type === "vaultV1MigrateToV2"
+          ? {
+              type,
+              sourceVault: zeroAddress,
+              targetVault: vault,
+              quote: {
+                sharesBurned: 1n,
+                sharesMinted: 1n,
+                ...(fullQuote ? { assetsReceived: 1n } : {}),
+              },
+              slippageTolerance: 0n,
+            }
+          : {
+              type,
+              vault: zeroAddress,
+              quote: {
+                sharesBurned: 1n,
+                ...(fullQuote ? { assetsReceived: 1n } : {}),
+              },
+              slippageTolerance: 0n,
+            };
+      const error = await resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [
+          {
+            type: "blueWithdraw",
+            marketId,
+            assetReceived: loan,
+            quote: { assetsReceived: 1n, sharesBurned: 1n },
+            slippageTolerance: 0n,
+          },
+          operation,
+        ],
+        blockNumber: 1n,
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        message: `Cannot resolve the token required by "${type}": the subject token address is zero.`,
+        fieldErrors: [
+          `limits.operations[1].${type === "vaultV1MigrateToV2" ? "sourceVault" : "vault"}: must not be the zero address`,
+        ],
+      });
+      expect(handle.request).not.toHaveBeenCalled();
+    },
+  );
   test("behavior: an approval market read keeps market params for a later operation", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
@@ -1456,25 +1628,154 @@ describe("resolveAssets — Midnight collateral", () => {
       expect((error as Error).cause).toBeDefined();
     },
   );
-  test("error: an existing market with no collateral at collateralIndex fails closed instead of using assetPaid", async () => {
-    const handle = createMockClient(mainnet);
-    mockToMarket(handle);
-    await expect(
-      resolveAssets({
+  test.each(
+    (
+      [
+        "midnightSupplyCollateral",
+        "midnightSupplyCollateralMakeBorrow",
+      ] as const
+    ).flatMap((type) =>
+      ([undefined, collateral] as const).map((assetPaid) => ({
+        type,
+        assetPaid,
+      })),
+    ),
+  )(
+    "error: an absent collateralIndex is invalid input ($type, assetPaid=$assetPaid)",
+    async ({ type, assetPaid }) => {
+      const handle = createMockClient(mainnet);
+      mockToMarket(handle);
+      const error = await resolveAssets({
         client: handle.client,
         morpho: zeroAddress,
         midnight,
         operations: [
-          { ...midnightLimit, collateralIndex: 5n, assetPaid: collateral },
+          {
+            ...midnightLimitForType(type),
+            collateralIndex: 5n,
+            ...(assetPaid === undefined ? {} : { assetPaid }),
+          },
         ],
         blockNumber: 1n,
-      }),
-    ).rejects.toThrow(
-      new ApprovalCheckUnavailableError(
-        'Cannot resolve the token approval required by "midnightSupplyCollateral" at the pinned block. If this bundle creates the market, pass the market struct via "market".',
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        message:
+          assetPaid === undefined
+            ? `Cannot resolve the token for "${type}" asset source "midnight:${marketId}": the market has no collateral at the quoted index. Check collateralIndex. If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
+            : `Cannot resolve the token approval required by "${type}" at the pinned block. If this bundle creates the market, pass the market struct via "market".`,
+        fieldErrors: [
+          "limits.operations[0].collateralIndex: the market has no collateral at this index",
+        ],
+      });
+      expect(handle.request).toHaveBeenCalledTimes(1);
+    },
+  );
+  test.each([
+    ["midnightSupplyCollateral", undefined],
+    ["midnightSupplyCollateralMakeBorrow", undefined],
+    ["midnightSupplyCollateral", zeroAddress],
+    ["midnightSupplyCollateralMakeBorrow", zeroAddress],
+  ] as const)(
+    "error: a first-market supply needs a usable assetPaid (%s, %s)",
+    async (type, assetPaid) => {
+      const handle = createMockClient(mainnet);
+      handle.request.mockRejectedValue(
+        new ContractFunctionRevertedError({
+          abi: midnightAbi,
+          functionName: "toMarket",
+          data: encodeErrorResult({
+            abi: midnightAbi,
+            errorName: "MarketNotCreated",
+          }),
+        }),
+      );
+      const error = await resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight,
+        operations: [
+          {
+            ...midnightLimitForType(type),
+            quote: midnightLimit.quote,
+            ...(assetPaid === undefined ? {} : { assetPaid }),
+          },
+        ],
+        blockNumber: 1n,
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        message:
+          assetPaid === undefined
+            ? `Cannot resolve the token for "${type}" asset source "midnight:${marketId}". If this bundle creates the market, pass the market struct via "market". If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
+            : `Cannot resolve the token approval required by "${type}" at the pinned block. If this bundle creates the market, pass the market struct via "market".`,
+        fieldErrors: [
+          "limits.operations[0].assetPaid: required for a market the bundle creates",
+        ],
+      });
+      if (assetPaid === undefined)
+        expect(error).toHaveProperty("cause", expect.any(BaseError));
+      expect(handle.request).toHaveBeenCalled();
+    },
+  );
+  test.each(
+    (
+      [
+        "midnightSupplyCollateral",
+        "midnightSupplyCollateralMakeBorrow",
+      ] as const
+    ).flatMap((type) =>
+      (["transport", "unknownRevert", "emptyMetadata"] as const).map(
+        (failure) => ({ type, failure }),
       ),
-    );
-  });
+    ),
+  )(
+    "error: a full $type quote keeps $failure as an evidence error",
+    async ({ type, failure }) => {
+      const handle = createMockClient(mainnet);
+      if (failure === "emptyMetadata")
+        mockRead(handle, {
+          address: midnight,
+          abi: midnightAbi,
+          functionName: "toMarket",
+          result: {
+            ...suppliedMidnightMarket,
+            loanToken: zeroAddress,
+            collateralParams: [],
+          },
+        });
+      else
+        handle.request.mockRejectedValue(
+          failure === "transport"
+            ? new HttpRequestError({ body: {}, url: "https://rpc.example" })
+            : new ContractFunctionRevertedError({
+                abi: midnightAbi,
+                functionName: "toMarket",
+              }),
+        );
+      const error = await resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight,
+        operations: [midnightLimitForType(type)],
+        blockNumber: 1n,
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(
+        failure === "transport"
+          ? RpcTransportError
+          : SlippageCheckUnavailableError,
+      );
+      if (failure !== "transport")
+        expect(error).toMatchObject({
+          operationIndex: 0,
+          operationType: type,
+          field: "assetsPaid",
+          reason: failure === "emptyMetadata" ? "emptyData" : "missingRead",
+        });
+    },
+  );
   test("behavior: a supplied market struct provides the approval token without RPC reads", async () => {
     const handle = createMockClient(mainnet);
     const result = await resolveAssets({
@@ -1771,17 +2072,23 @@ describe("resolveAssets — Midnight collateral", () => {
               quote: { assetsPaid: 10n, collateralSupplied: 10n },
               slippageTolerance: 0n,
             } satisfies ParsedOperationLimit);
-      await expect(
-        resolveAssets({
-          client: handle.client,
-          morpho: zeroAddress,
-          midnight: suppliedMidnightMarket.midnight,
-          operations: [operation],
-          blockNumber: 1n,
-        }),
-      ).rejects.toThrow(
+      const resolution = resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight: suppliedMidnightMarket.midnight,
+        operations: [operation],
+        blockNumber: 1n,
+      });
+      await expect(resolution).rejects.toThrow(SimulationValidationError);
+      await expect(resolution).rejects.toThrow(
         "assetPaid must equal the supplied market's collateral token at collateralIndex; omit assetPaid when passing market.",
       );
+      await expect(resolution).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+        fieldErrors: [
+          expect.stringContaining("limits.operations[0].assetPaid:"),
+        ],
+      });
       expect(handle.request).not.toHaveBeenCalled();
     },
   );
@@ -1817,15 +2124,18 @@ describe("resolveAssets — Midnight collateral", () => {
       quote: { assetsPaid: 10n, collateralSupplied: 10n },
       slippageTolerance: 0n,
     };
-    await expect(
-      resolveAssets({
-        client: handle.client,
-        morpho: zeroAddress,
-        midnight: suppliedMidnightMarket.midnight,
-        operations: [operation],
-        blockNumber: 1n,
-      }),
-    ).rejects.toThrow(SlippageCheckUnavailableError);
+    const resolution = resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      midnight: suppliedMidnightMarket.midnight,
+      operations: [operation],
+      blockNumber: 1n,
+    });
+    await expect(resolution).rejects.toThrow(SimulationValidationError);
+    await expect(resolution).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      fieldErrors: [expect.stringContaining("limits.operations[0].assetPaid:")],
+    });
     expect(handle.request).not.toHaveBeenCalled();
   });
   test.each(["take-lend then redeem", "redeem then take-lend"] as const)(
@@ -1884,10 +2194,14 @@ describe("resolveAssets — Midnight collateral", () => {
     } catch (caught) {
       error = caught;
     }
-    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(error).toBeInstanceOf(SimulationValidationError);
     expect((error as Error).message).toContain(
       "Pass this chain's Midnight market struct.",
     );
+    expect(error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      fieldErrors: [expect.stringContaining("limits.operations[0].market:")],
+    });
     expect(handle.request).not.toHaveBeenCalled();
   });
   test("error: repayment on a market that does not exist fails closed", async () => {
@@ -1935,6 +2249,6 @@ describe("resolveAssets — Midnight collateral", () => {
         operations: [{ ...midnightLimit, collateralIndex: 2n }],
         blockNumber: 1n,
       }),
-    ).rejects.toThrow(SlippageCheckUnavailableError);
+    ).rejects.toThrow(SimulationValidationError);
   });
 });

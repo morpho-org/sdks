@@ -33,3 +33,4 @@ export {
   ZeroAccountError,
 } from "./transactionPlan/index.js";
 export * from "./types/index.js";
+export { version } from "./version.js";

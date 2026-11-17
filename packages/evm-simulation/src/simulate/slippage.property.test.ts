@@ -67,6 +67,7 @@ describe("checkSlippage", () => {
       expect(actual).toBeGreaterThanOrEqual(expected - BigInt(supplyCount));
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "withdraw after supply",
           limits: {
             type: "blueWithdraw",
@@ -118,6 +119,7 @@ describe("checkSlippage", () => {
       expect(bound).toBeLessThanOrEqual(expected);
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound },
@@ -130,6 +132,7 @@ describe("checkSlippage", () => {
       if (bound > 0n) {
         expect(() =>
           checkSlippage({
+            operationIndex: 0,
             label: "Limit operation 0 (vaultV2Deposit)",
             limits,
             observed: { [field]: bound - 1n },
@@ -174,6 +177,7 @@ describe("checkSlippage", () => {
       expect(bound).toBeGreaterThanOrEqual(expected);
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound },
@@ -185,6 +189,7 @@ describe("checkSlippage", () => {
       });
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits,
           observed: { [field]: bound + 1n },
@@ -230,6 +235,7 @@ describe("checkSlippage", () => {
       });
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits: limits(maxAssets),
           observed: observed(maxAssets),
@@ -241,6 +247,7 @@ describe("checkSlippage", () => {
       });
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits: limits(maxAssets + 1n),
           observed: observed(maxAssets + 1n),
@@ -276,6 +283,7 @@ describe("checkSlippage", () => {
       });
       expect(
         checkSlippage({
+          operationIndex: 0,
           label: "Limit operation 0 (vaultV2Deposit)",
           limits: limits(minAssets),
           observed: observed(minAssets),
@@ -289,6 +297,7 @@ describe("checkSlippage", () => {
       if (bound > 0n) {
         expect(() =>
           checkSlippage({
+            operationIndex: 0,
             label: "Limit operation 0 (vaultV2Deposit)",
             limits: limits(minAssets - 1n),
             observed: observed(minAssets - 1n),

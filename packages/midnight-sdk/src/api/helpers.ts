@@ -16,6 +16,7 @@ import {
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import { OfferUtils } from "../offers/index.js";
+import { version } from "../version.js";
 import {
   type ApiBookMarketResponse,
   type ApiCollateralResponse,
@@ -30,7 +31,6 @@ import {
   type MidnightApiPriceLevel,
   type MidnightApiTake,
 } from "./types.js";
-import { MIDNIGHT_SDK_VERSION } from "./version.generated.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("/v0/midnight", BLUE_API_BASE_URL);
 const MAX_UINT256_DECIMAL_LENGTH = maxUint256.toString().length;
@@ -68,7 +68,7 @@ export async function requestMidnightApi<Response = unknown>(
   const headers = new Headers(params.request?.headers);
   if (params.body !== undefined)
     headers.set("Content-Type", "application/json");
-  headers.set("sdk-version", MIDNIGHT_SDK_VERSION);
+  headers.set("sdk-version", version);
 
   const init: RequestInit = {
     ...params.request,

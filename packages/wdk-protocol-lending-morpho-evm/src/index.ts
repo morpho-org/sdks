@@ -88,3 +88,4 @@ export {
   MixedBlueCollateralFundingError,
   UnresolvedVaultWithdrawRequirementsError,
 } from "./morpho-protocol-evm.js";
+export { version } from "./version.js";

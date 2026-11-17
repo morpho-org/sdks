@@ -2,7 +2,14 @@ import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
 import type { SimulationAuthorization } from "../authorizations.js";
+import { SimulationValidationError } from "../errors.js";
 import type { SimulationTransaction } from "../types.js";
+import type { SimulationExecution } from "./backends/parse-response.js";
+import {
+  DEPOSIT_TOPIC,
+  TRANSFER_TOPIC,
+  WITHDRAWAL_TOPIC,
+} from "./parsing/transfers.js";
 
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const approvalTx = (
@@ -132,4 +139,33 @@ export function prepareAuthorizations(params: {
   });
 
   return deepFreeze(preparations);
+}
+
+/**
+ * Find preparation calls that emit asset-transfer events, in execution order.
+ * @param calls - Normalized calls from the simulation execution.
+ * @returns One failure per offending preparation call.
+ * @internal
+ */
+export function findPreparationTransferFailures(
+  calls: SimulationExecution["calls"],
+): readonly SimulationValidationError[] {
+  const failures: SimulationValidationError[] = [];
+  for (const { planned, result } of calls) {
+    if (planned.type !== "preparation") continue;
+    if (
+      result.logs.some((log) =>
+        [TRANSFER_TOPIC, DEPOSIT_TOPIC, WITHDRAWAL_TOPIC].some(
+          (topic) => topic === log.topics[0]?.toLowerCase(),
+        ),
+      )
+    )
+      failures.push(
+        new SimulationValidationError(
+          `Preview authorization "${planned.authorizationIndex}" preparation call "${planned.callIndex}" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.`,
+        ),
+      );
+  }
+
+  return failures;
 }

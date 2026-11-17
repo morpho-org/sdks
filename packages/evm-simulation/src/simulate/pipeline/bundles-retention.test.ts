@@ -1,6 +1,6 @@
 import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Address, ethAddress, getAddress } from "viem";
-import { vi } from "vitest";
+import { type Address, ethAddress, getAddress, zeroAddress } from "viem";
+import { describe, vi } from "vitest";
 
 // Overrides are keyed by chainId rather than queued as `mockReturnValueOnce`,
 // because these cases run concurrently: a call-ordered one-shot would be
@@ -27,7 +27,10 @@ vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
 import { BlacklistViolationError } from "../../errors.js";
 import { makeCall, makeTransferLog } from "../../test-helpers/index.js";
 import { parseTransfers } from "../parsing/transfers.js";
-import { assertNoBundlesRetention } from "./bundles-retention.js";
+import {
+  assertNoBundlesRetention,
+  findBundlesRetentionFailures,
+} from "./bundles-retention.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
@@ -591,5 +594,43 @@ describe("assertNoBundlesRetention", () => {
         [USDC.toLowerCase(), ethAddress.toLowerCase()].sort(),
       );
     }
+  });
+});
+
+describe("findBundlesRetentionFailures", () => {
+  const address = getAddress(getChainAddresses(1).bundles!.vaultBundlesV1!);
+  const params = { chainId: 1, transfers: [], assetChanges: [] };
+
+  test("returns no failure for empty flows and unsupported chains", () => {
+    expect(findBundlesRetentionFailures(params)).toEqual([]);
+    expect(findBundlesRetentionFailures({ ...params, chainId: -1 })).toEqual(
+      [],
+    );
+  });
+
+  test("preserves the aggregate retention error and native-before-token order", () => {
+    const input = {
+      chainId: 1,
+      assetChanges: [
+        { account: address, changes: [{ token: ethAddress, diff: 101n }] },
+      ],
+      transfers: [
+        {
+          from: zeroAddress,
+          to: address,
+          token: zeroAddress,
+          amount: 102n,
+          txIdx: 0,
+        },
+      ],
+    };
+    const failures = findBundlesRetentionFailures(input);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(BlacklistViolationError);
+    expect(failures[0]?.assetChanges).toEqual([
+      { address, token: ethAddress, netRetained: 101n },
+      { address, token: zeroAddress, netRetained: 102n },
+    ]);
+    expect(() => assertNoBundlesRetention(input)).toThrowError(failures[0]);
   });
 });

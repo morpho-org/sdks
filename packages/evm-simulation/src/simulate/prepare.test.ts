@@ -1,8 +1,25 @@
 import { blueAbi, midnightAbi } from "@morpho-org/morpho-sdk/abis";
-import { type Address, decodeFunctionData, erc20Abi, getAddress } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  erc20Abi,
+  getAddress,
+  type Hex,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
-import { prepareAuthorizations } from "./prepare.js";
+import { SimulationValidationError } from "../errors.js";
+import type { SimulationExecution } from "./backends/parse-response.js";
+import {
+  DEPOSIT_TOPIC,
+  TRANSFER_TOPIC,
+  WITHDRAWAL_TOPIC,
+} from "./parsing/transfers.js";
+import {
+  findPreparationTransferFailures,
+  prepareAuthorizations,
+} from "./prepare.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const MORPHO: Address = getAddress(
@@ -224,4 +241,72 @@ test("behavior: preparation preserves a requested Morpho revocation", () => {
   expect(
     decodeFunctionData({ abi: blueAbi, data: preparation!.calls[0]!.data }),
   ).toMatchObject({ functionName: "setAuthorization", args: [SPENDER, false] });
+});
+
+describe("findPreparationTransferFailures", () => {
+  const transaction = {
+    from: zeroAddress,
+    to: zeroAddress,
+    data: "0x" as const,
+    value: 0n,
+  };
+  const result = {
+    status: true,
+    returnData: "0x" as const,
+    gasUsed: 0n,
+    logs: [],
+  };
+
+  test("ignores empty preparations and user transaction transfers", () => {
+    expect(findPreparationTransferFailures([])).toEqual([]);
+    expect(
+      findPreparationTransferFailures([
+        {
+          planned: { type: "transaction", transactionIndex: 0, transaction },
+          result: {
+            ...result,
+            logs: [
+              { address: zeroAddress, data: "0x", topics: [TRANSFER_TOPIC] },
+            ],
+          },
+          logsMissing: false,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  test("returns one failure per offending preparation in execution order", () => {
+    const topics: readonly Hex[] = [
+      TRANSFER_TOPIC,
+      DEPOSIT_TOPIC,
+      WITHDRAWAL_TOPIC,
+    ];
+    const calls: SimulationExecution["calls"] = topics.map((topic, index) => ({
+      planned: {
+        type: "preparation",
+        authorizationIndex: index,
+        callIndex: index + 1,
+        transaction,
+      },
+      result: {
+        ...result,
+        logs: [
+          { address: zeroAddress, data: "0x", topics: [topic] },
+          { address: zeroAddress, data: "0x", topics: [topic] },
+        ],
+      },
+      logsMissing: false,
+    }));
+    expect(findPreparationTransferFailures(calls)).toEqual(
+      [0, 1, 2].map(
+        (index) =>
+          new SimulationValidationError(
+            `Preview authorization "${index}" preparation call "${index + 1}" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.`,
+          ),
+      ),
+    );
+    expect(findPreparationTransferFailures([{ ...calls[0]!, result }])).toEqual(
+      [],
+    );
+  });
 });

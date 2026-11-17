@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type { OperationType, SlippageQuote } from "./limits.js";
@@ -39,14 +40,46 @@ export abstract class SimulationPackageError extends Error {
   /** Stable string discriminator for log aggregation and external mapping. */
   abstract readonly code: SimulationErrorCode;
 
+  /**
+   * Other rejections from the same simulation in pipeline order, never this error and never nested.
+   * Empty unless attached by the SDK; these are additional rejections, never alternatives.
+   * Always set on package instances, but may be missing on legacy structural objects in 8.x.
+   * Becomes required in 9.0.0.
+   */
+  readonly findings?: readonly SimulationPackageError[] = Object.freeze([]);
+
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = new.target.name;
   }
 }
 
-/** A final-mode signed request has no matching use event in the user transactions. */
-export class UnusedAuthorizationError extends SimulationPackageError {
+/**
+ * Base class for failures where funds or permissions are at risk.
+ * Every group rejects; these groups are not a severity scale.
+ */
+export abstract class SimulationSafetyError extends SimulationPackageError {}
+
+/**
+ * Base class for failures where the user or caller acts.
+ * Every group rejects; these groups are not a severity scale.
+ */
+export abstract class SimulationRejectedError extends SimulationPackageError {}
+
+/**
+ * Base class for failures where the integrator fixes the request or configuration.
+ * Every group rejects; these groups are not a severity scale.
+ */
+export abstract class SimulationInvalidRequestError extends SimulationPackageError {}
+
+/**
+ * Base class for failures where the operator investigates the RPC/node or a check that could not run.
+ * Every group rejects; these groups are not a severity scale.
+ */
+export abstract class SimulationInfrastructureError extends SimulationPackageError {}
+
+/** A final-mode signed request has no matching use event in the user transactions. Extends {@link SimulationRejectedError}. */
+export class UnusedAuthorizationError extends SimulationRejectedError {
   override readonly name = "UnusedAuthorizationError";
   readonly code = "UNUSED_AUTHORIZATION";
 
@@ -78,6 +111,7 @@ export class UnusedAuthorizationError extends SimulationPackageError {
  * Read `message` for the decoded error and every argument; use `revertData`
  * with a contract ABI for programmatic inspection. Messages are not stable codes.
  *
+ * Extends {@link SimulationRejectedError}.
  * @example
  * ```ts
  * import { SimulationRevertedError } from "@morpho-org/evm-simulation";
@@ -87,7 +121,7 @@ export class UnusedAuthorizationError extends SimulationPackageError {
  * console.log(error.message, error.revertData);
  * ```
  */
-export class SimulationRevertedError extends SimulationPackageError {
+export class SimulationRevertedError extends SimulationRejectedError {
   override readonly name = "SimulationRevertedError";
   readonly code = "SIMULATION_REVERTED";
 
@@ -116,6 +150,7 @@ export class SimulationRevertedError extends SimulationPackageError {
  * state or its read reverted. The error includes a copy of the caller's
  * assertion (`to`, `data`, and `check`) and the read's raw return or revert data.
  *
+ * Extends {@link SimulationRejectedError}.
  * @example
  * ```ts
  * import {
@@ -135,7 +170,7 @@ export class SimulationRevertedError extends SimulationPackageError {
  * console.log(error.phase, error.returnData); // "before", "0x"
  * ```
  */
-export class SimulationAssertError extends SimulationPackageError {
+export class SimulationAssertError extends SimulationRejectedError {
   override readonly name = "SimulationAssertError";
   readonly code = "SIMULATION_ASSERT_FAILED";
   /** Zero-based index in the caller's transactions. */
@@ -186,6 +221,7 @@ export class SimulationAssertError extends SimulationPackageError {
  * A caller-supplied `assertLogs` check did not hold for a simulated
  * transaction's emitted logs.
  *
+ * Extends {@link SimulationRejectedError}.
  * @example
  * ```ts
  * import {
@@ -203,7 +239,7 @@ export class SimulationAssertError extends SimulationPackageError {
  * console.log(error.transactionIndex, error.logs);
  * ```
  */
-export class SimulationLogAssertError extends SimulationPackageError {
+export class SimulationLogAssertError extends SimulationRejectedError {
   /** Stable discriminator used by consumers that inspect `error.name`. */
   override readonly name = "SimulationLogAssertError";
   /** Shares the existing error code for read-assertion failures. */
@@ -261,8 +297,9 @@ export interface RetainedAsset {
  * Thrown when net value above the dust threshold is retained by a restricted bundles contract
  * (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1 or MidnightBundlesV2) after simulation;
  * pass-through flows and net outflows are allowed. Never bypassable.
+ * Extends {@link SimulationSafetyError}.
  */
-export class BlacklistViolationError extends SimulationPackageError {
+export class BlacklistViolationError extends SimulationSafetyError {
   override readonly name = "BlacklistViolationError";
   readonly code = "BLACKLIST_ERROR";
 
@@ -281,14 +318,15 @@ export class BlacklistViolationError extends SimulationPackageError {
  * An RPC request failed, including transport, timeout, or non-revert node errors.
  * The original viem error is preserved as `cause`. This does not imply retryability;
  * services requiring simulation must withhold transactions on this failure.
+ * Extends {@link SimulationInfrastructureError}.
  */
-export class RpcTransportError extends SimulationPackageError {
+export class RpcTransportError extends SimulationInfrastructureError {
   override readonly name = "RpcTransportError";
   readonly code = "RPC_TRANSPORT_ERROR";
 }
 
-/** Bad input or a preview authorization preparation that emits asset transfers. Not bypassable. */
-export class SimulationValidationError extends SimulationPackageError {
+/** Bad input or a preview authorization preparation that emits asset transfers. Not bypassable. Extends {@link SimulationInvalidRequestError}. */
+export class SimulationValidationError extends SimulationInvalidRequestError {
   override readonly name = "SimulationValidationError";
   readonly code = "VALIDATION_ERROR";
 
@@ -302,8 +340,8 @@ export class SimulationValidationError extends SimulationPackageError {
   }
 }
 
-/** Chain ID not configured for any simulation method. Not bypassable. */
-export class UnsupportedChainError extends SimulationPackageError {
+/** Chain ID not configured for any simulation method. Not bypassable. Extends {@link SimulationInvalidRequestError}. */
+export class UnsupportedChainError extends SimulationInvalidRequestError {
   override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
 
@@ -318,8 +356,9 @@ export class UnsupportedChainError extends SimulationPackageError {
 /**
  * An SDK requirement passed to `toSimulationAuthorizations` cannot be
  * converted into a simulation authorization.
+ * Extends {@link SimulationInvalidRequestError}.
  */
-export class UnsupportedOperationError extends SimulationPackageError {
+export class UnsupportedOperationError extends SimulationInvalidRequestError {
   override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";
 }
@@ -329,8 +368,9 @@ export class UnsupportedOperationError extends SimulationPackageError {
  * {@link InvalidChainIdError} subclasses this class and shares its `name`
  * and `code`; check `instanceof InvalidChainIdError` first to tell the two
  * apart.
+ * Extends {@link SimulationInfrastructureError}.
  */
-export class InvalidSimulationResponseError extends SimulationPackageError {
+export class InvalidSimulationResponseError extends SimulationInfrastructureError {
   override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
 }
@@ -341,17 +381,81 @@ export class InvalidSimulationResponseError extends SimulationPackageError {
  * Extends {@link InvalidSimulationResponseError} and shares its `name` and
  * `code`, so v5 callers that match on either still catch it;
  * `instanceof InvalidChainIdError` is how to tell the two apart.
+ * Extends {@link SimulationInfrastructureError}.
  */
 export class InvalidChainIdError extends InvalidSimulationResponseError {}
 
-/** A slippage limit could not be checked because its quoted amount could not be read or measured. */
-export class SlippageCheckUnavailableError extends SimulationPackageError {
-  override readonly name = "SlippageCheckUnavailableError";
-  readonly code = "SLIPPAGE_CHECK_UNAVAILABLE";
+/** Reasons a slippage check lacks usable evidence. */
+export const SLIPPAGE_CHECK_UNAVAILABLE_REASONS = [
+  /** A required state or derivation read is missing or failed. */
+  "missingRead",
+  /** A read or resolved subject has no usable data. */
+  "emptyData",
+  /** An active quote side derives to zero. */
+  "zeroDerivedAmount",
+  /** A required event is absent from the simulation logs. */
+  "missingEvent",
+  /** An observed event cannot be paired with the required operation evidence. */
+  "unmatchedEvent",
+  /** Observed evidence belongs to a different account. */
+  "accountMismatch",
+  /** Native funding needs a wrapped-native token that the chain has not registered. */
+  "noRegisteredWrappedNative",
+] as const;
+
+/** Reason a slippage limit could not be checked. */
+export type SlippageCheckUnavailableReason =
+  (typeof SLIPPAGE_CHECK_UNAVAILABLE_REASONS)[number];
+
+/** Structured facts a {@link SlippageCheckUnavailableError} repeats from its message. */
+export interface SlippageCheckUnavailable {
+  /** Zero-based index in `limits.operations`; absent for bundle-wide or shared reads. */
+  readonly operationIndex?: number;
+  /** The operation's limit type; absent for bundle-wide or shared reads. */
+  readonly operationType?: OperationType;
+  /** Quote side, subject input or read whose evidence is unavailable. */
+  readonly field: string;
+  /** Why the evidence cannot be used. */
+  readonly reason: SlippageCheckUnavailableReason;
 }
 
-/** A sender-granted token approval or permit is not allowed by the request. */
-export class UnexpectedTokenApprovalError extends SimulationPackageError {
+/**
+ * A slippage limit could not be checked because its quoted amount could not be read or measured.
+ * Fields are optional in 8.x for constructor compatibility; the SDK sets the reason
+ * and field, plus operation coordinates for operation-scoped failures.
+ * Extends {@link SimulationInfrastructureError}.
+ */
+export class SlippageCheckUnavailableError extends SimulationInfrastructureError {
+  override readonly name = "SlippageCheckUnavailableError";
+  readonly code = "SLIPPAGE_CHECK_UNAVAILABLE";
+
+  /** Zero-based index in `limits.operations`, when scoped to one operation. */
+  readonly operationIndex?: number;
+  /** The operation's limit type, when scoped to one operation. */
+  readonly operationType?: OperationType;
+  /** Quote side, subject input or read whose evidence is unavailable. */
+  readonly field?: string;
+  /** Why the evidence cannot be used. */
+  readonly reason?: SlippageCheckUnavailableReason;
+
+  /**
+   * @param message - Human-readable failure, unchanged by the structured facts.
+   * @param options - Optional cause and structured evidence failure.
+   */
+  constructor(
+    message: string,
+    options?: ErrorOptions & Partial<SlippageCheckUnavailable>,
+  ) {
+    super(message, options);
+    this.operationIndex = options?.operationIndex;
+    this.operationType = options?.operationType;
+    this.field = options?.field;
+    this.reason = options?.reason;
+  }
+}
+
+/** A sender-granted token approval or permit is not allowed by the request. Extends {@link SimulationSafetyError}. */
+export class UnexpectedTokenApprovalError extends SimulationSafetyError {
   override readonly name = "UnexpectedTokenApprovalError";
   readonly code = "UNEXPECTED_TOKEN_APPROVAL";
   /** Token or NFT collection that emitted or would receive the approval. */
@@ -385,8 +489,8 @@ export class UnexpectedTokenApprovalError extends SimulationPackageError {
   }
 }
 
-/** A sender-granted Morpho authorization is not allowed by the request. */
-export class UnexpectedMorphoAuthorizationError extends SimulationPackageError {
+/** A sender-granted Morpho authorization is not allowed by the request. Extends {@link SimulationSafetyError}. */
+export class UnexpectedMorphoAuthorizationError extends SimulationSafetyError {
   override readonly name = "UnexpectedMorphoAuthorizationError";
   readonly code = "UNEXPECTED_MORPHO_AUTHORIZATION";
   /** Account granting Morpho authorization. */
@@ -416,8 +520,8 @@ export class UnexpectedMorphoAuthorizationError extends SimulationPackageError {
   }
 }
 
-/** A sender-granted Midnight authorization is not allowed by the request. */
-export class UnexpectedMidnightAuthorizationError extends SimulationPackageError {
+/** A sender-granted Midnight authorization is not allowed by the request. Extends {@link SimulationSafetyError}. */
+export class UnexpectedMidnightAuthorizationError extends SimulationSafetyError {
   override readonly name = "UnexpectedMidnightAuthorizationError";
   readonly code = "UNEXPECTED_MIDNIGHT_AUTHORIZATION";
   /** Midnight account whose control is granted. */
@@ -443,8 +547,8 @@ export class UnexpectedMidnightAuthorizationError extends SimulationPackageError
   }
 }
 
-/** An approval or authorization could not be resolved or decoded safely. */
-export class ApprovalCheckUnavailableError extends SimulationPackageError {
+/** Approval or authorization evidence for a valid request could not be resolved or decoded safely. Extends {@link SimulationInfrastructureError}. */
+export class ApprovalCheckUnavailableError extends SimulationInfrastructureError {
   override readonly name = "ApprovalCheckUnavailableError";
   readonly code = "APPROVAL_CHECK_UNAVAILABLE";
 
@@ -456,20 +560,167 @@ export class ApprovalCheckUnavailableError extends SimulationPackageError {
   }
 }
 
-/** A pending authorization does not match the request it was prepared for. */
-export class AuthorizationRequestMismatchError extends SimulationPackageError {
+/** A pending authorization does not match the request it was prepared for. Extends {@link SimulationInvalidRequestError}. */
+export class AuthorizationRequestMismatchError extends SimulationInvalidRequestError {
   override readonly name = "AuthorizationRequestMismatchError";
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
 }
 
-/** A consumer-supplied limit was violated. */
-export class ConsumerLimitViolationError extends SimulationPackageError {
-  override readonly name = "ConsumerLimitViolationError";
-  readonly code = "CONSUMER_LIMIT_VIOLATION";
+/**
+ * Kinds of check a {@link ConsumerLimitViolationError} reports in `check`:
+ * - `slippageTolerance`: a quoted amount or share price is past its quote
+ *   adjusted by the percentage tolerance.
+ * - `derivedBound`: an amount is past a minimum or maximum derived from typed
+ *   inputs, including the subject-share rounding allowance.
+ * - `exactQuote`: an amount breaks an exact input or quote: it differs from it,
+ *   or a Midnight collateral credit falls below it.
+ * - `inactiveLeg`: an inactive combined-operation leg moved adversely.
+ * - `noMovement`: a quoted position or share-price pair did not move.
+ * - `unquotedMarket`: a force exit deallocated from a market the quote omits.
+ * - `positionBound`: a post-bundle position is past its declared bound.
+ * - `unchangedState`: an undeclared position, debt or credit change on a side
+ *   the operation must leave unchanged or must not move adversely.
+ * - `shareTransfer`: an outgoing vault-share transfer would count toward an
+ *   exact `sharesBurned`.
+ */
+export const CONSUMER_LIMIT_CHECKS = [
+  "slippageTolerance",
+  "derivedBound",
+  "exactQuote",
+  "inactiveLeg",
+  "noMovement",
+  "unquotedMarket",
+  "positionBound",
+  "unchangedState",
+  "shareTransfer",
+] as const;
+
+/** Kind of check a {@link ConsumerLimitViolationError} failed. */
+export type ConsumerLimitCheck = (typeof CONSUMER_LIMIT_CHECKS)[number];
+
+/**
+ * Limit side a {@link ConsumerLimitViolationError} reports in `field`: a
+ * {@link SlippageQuote} field, `sharePrice`, a `position.*` bound, a Blue
+ * position side (`supplyShares`, `borrowShares`, `collateral`), Midnight
+ * `debt` or `credit`, or `walletBalance` for a net wallet bound.
+ */
+export type ConsumerLimitField =
+  | keyof SlippageQuote
+  | "sharePrice"
+  | "position.maxBorrowShares"
+  | "position.minSupplyShares"
+  | "position.minCollateral"
+  | "position.maxCredit"
+  | "position.maxDebt"
+  | "position.maxCollateral"
+  | "supplyShares"
+  | "borrowShares"
+  | "collateral"
+  | "debt"
+  | "credit"
+  | "walletBalance";
+
+/**
+ * The failing entry of a quote or bound with several entries, named by the key
+ * the entry carries: `marketId` for `positions` and `deallocations`,
+ * `collateralIndex` for `collateralSupplies`, `collateralWithdrawals` and
+ * `position.maxCollateral`, `token` and `account` for `walletBalance`.
+ */
+export type ConsumerLimitEntry =
+  | { readonly marketId: MarketId }
+  | { readonly collateralIndex: bigint }
+  | { readonly token: Address; readonly account: Address };
+
+/** Structured facts a {@link ConsumerLimitViolationError} repeats from its message. */
+export interface ConsumerLimitViolation {
+  /** Zero-based index in `limits.operations`. */
+  readonly operationIndex: number;
+  /** The operation's limit type. */
+  readonly operationType: OperationType;
+  /** The limit side that failed. */
+  readonly field: ConsumerLimitField;
+  /** The kind of check that failed. */
+  readonly check: ConsumerLimitCheck;
+  /** The quoted, derived or declared value, or the value before the bundle for `unchangedState`; `0n` for `inactiveLeg`, `shareTransfer` and `unquotedMarket`. */
+  readonly expected: bigint;
+  /** The observed value; `0n` shares for a share-price `noMovement`. */
+  readonly observed: bigint;
+  /** WAD-scaled percentage tolerance the check applied, when it applies one. */
+  readonly tolerance?: bigint;
+  /** The allowed minimum or maximum the observed value was compared to, when the check applies one. */
+  readonly bound?: bigint;
+  /** The failing entry when the quote or bound has several entries; undefined for single-value sides. */
+  readonly entry?: ConsumerLimitEntry;
 }
 
-/** The simulation failed for a reason that fits no other code. */
-export class UnexpectedSimulationError extends SimulationPackageError {
+/**
+ * A consumer-supplied limit was violated. The fields repeat what the message
+ * says. They are optional in the type in 8.x; `simulate` always sets them.
+ * Extends {@link SimulationRejectedError}.
+ *
+ * @example
+ * ```ts
+ * import { ConsumerLimitViolationError } from "@morpho-org/evm-simulation";
+ *
+ * const error = new ConsumerLimitViolationError("Limit operation 0 (vaultV1Deposit): ...", {
+ *   operationIndex: 0,
+ *   operationType: "vaultV1Deposit",
+ *   field: "sharesMinted",
+ *   check: "slippageTolerance",
+ *   expected: 1000n,
+ *   observed: 980n,
+ *   tolerance: 10000000000000000n,
+ *   bound: 990n,
+ * });
+ * console.log(error.code, error.check, error.field); // "CONSUMER_LIMIT_VIOLATION", "slippageTolerance", "sharesMinted"
+ * ```
+ */
+export class ConsumerLimitViolationError extends SimulationRejectedError {
+  override readonly name = "ConsumerLimitViolationError";
+  readonly code = "CONSUMER_LIMIT_VIOLATION";
+
+  /** Zero-based index in `limits.operations`. */
+  readonly operationIndex?: number;
+  /** The operation's limit type. */
+  readonly operationType?: OperationType;
+  /** The limit side that failed. */
+  readonly field?: ConsumerLimitField;
+  /** The kind of check that failed. */
+  readonly check?: ConsumerLimitCheck;
+  /** The quoted, derived or declared value the check compared against, or the value before the bundle for `unchangedState`. */
+  readonly expected?: bigint;
+  /** The observed value. */
+  readonly observed?: bigint;
+  /** WAD-scaled percentage tolerance the check applied, when it applies one. */
+  readonly tolerance?: bigint;
+  /** The allowed minimum or maximum, when the check applies one. */
+  readonly bound?: bigint;
+  /** The failing entry when the quote or bound has several entries; undefined for single-value sides. */
+  readonly entry?: ConsumerLimitEntry;
+
+  /**
+   * @param message - Human-readable failure naming the operation, side and values.
+   * @param options - Optional cause and the structured violation facts.
+   */
+  constructor(
+    message: string,
+    options?: ErrorOptions & Partial<ConsumerLimitViolation>,
+  ) {
+    super(message, options);
+    this.operationIndex = options?.operationIndex;
+    this.operationType = options?.operationType;
+    this.field = options?.field;
+    this.check = options?.check;
+    this.expected = options?.expected;
+    this.observed = options?.observed;
+    this.tolerance = options?.tolerance;
+    this.bound = options?.bound;
+    this.entry = options?.entry;
+  }
+}
+
+/** The simulation failed for a reason that fits no other code. Extends {@link SimulationInfrastructureError}. */
+export class UnexpectedSimulationError extends SimulationInfrastructureError {
   override readonly name = "UnexpectedSimulationError";
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
@@ -490,8 +741,9 @@ export class UnexpectedSimulationError extends SimulationPackageError {
  * `receiver ?? owner` (`field: "args.collateralReceiver"`),
  * or `onBehalf` other than `owner` is passed for an action other than
  * `midnightSupplyCollateral` or `midnightRedeem` (`field: "options.onBehalf"`).
+ * Extends {@link SimulationInvalidRequestError}.
  */
-export class LimitAccountMismatchError extends SimulationPackageError {
+export class LimitAccountMismatchError extends SimulationInvalidRequestError {
   override readonly name = "LimitAccountMismatchError";
   readonly code = "LIMIT_ACCOUNT_MISMATCH";
 
@@ -562,8 +814,9 @@ export class LimitAccountMismatchError extends SimulationPackageError {
 /**
  * A quote side `toSimulationLimits` cannot derive from the action args and the
  * caller did not supply through `expected`.
+ * Extends {@link SimulationInvalidRequestError}.
  */
-export class MissingExpectedQuoteError extends SimulationPackageError {
+export class MissingExpectedQuoteError extends SimulationInvalidRequestError {
   override readonly name = "MissingExpectedQuoteError";
   readonly code = "MISSING_EXPECTED_QUOTE";
 
@@ -595,8 +848,9 @@ export class MissingExpectedQuoteError extends SimulationPackageError {
 /**
  * An expected quote cannot be assigned to each of a maker action's
  * per-collateral-index operations.
+ * Extends {@link SimulationInvalidRequestError}.
  */
-export class AmbiguousExpectedQuoteError extends SimulationPackageError {
+export class AmbiguousExpectedQuoteError extends SimulationInvalidRequestError {
   override readonly name = "AmbiguousExpectedQuoteError";
   readonly code = "AMBIGUOUS_EXPECTED_QUOTE";
 
@@ -624,8 +878,8 @@ export class AmbiguousExpectedQuoteError extends SimulationPackageError {
   }
 }
 
-/** An action type `toSimulationLimits` has no {@link OperationType} for. */
-export class UnsupportedLimitActionError extends SimulationPackageError {
+/** An action type `toSimulationLimits` has no {@link OperationType} for. Extends {@link SimulationInvalidRequestError}. */
+export class UnsupportedLimitActionError extends SimulationInvalidRequestError {
   override readonly name = "UnsupportedLimitActionError";
   readonly code = "UNSUPPORTED_LIMIT_ACTION";
 
@@ -675,7 +929,11 @@ const ERROR_NAME_BY_CODE: Readonly<
  * @param value - Anything caught.
  * @returns `true` for package instances or objects carrying a message string,
  *   a known code and one of its matching class names. Subclass-specific fields
- *   are not checked.
+ *   are not checked. Legacy objects without `findings` are accepted; when present,
+ *   findings must be an array whose entries also pass this guard and are flat:
+ *   each entry's findings must be absent or an empty array.
+ *   Findings are optional in 8.x and become required in 9.0.0.
+ *   Read `e.findings ?? []` after the guard because findings remain optional.
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -713,8 +971,21 @@ const ERROR_NAME_BY_CODE: Readonly<
 export function isSimulationPackageError(
   value: unknown,
 ): value is SimulationPackageError {
-  if (value instanceof SimulationPackageError) return true;
   if (typeof value !== "object" || value === null) return false;
+  if (
+    "findings" in value &&
+    (!Array.isArray(value.findings) ||
+      !value.findings.every(
+        (entry: unknown) =>
+          typeof entry === "object" &&
+          entry !== null &&
+          (!("findings" in entry) ||
+            (Array.isArray(entry.findings) && entry.findings.length === 0)) &&
+          isSimulationPackageError(entry),
+      ))
+  )
+    return false;
+  if (value instanceof SimulationPackageError) return true;
   const { name, message, code } = value as {
     name?: unknown;
     message?: unknown;

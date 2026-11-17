@@ -59,3 +59,4 @@ export type {
   TypedRatifierTreeInput,
   TypedTreeMempoolValidateParams,
 } from "./signatures/treeTypes.js";
+export { version } from "./version.js";

@@ -12,3 +12,4 @@ export * from "./types.js";
 export * from "./user/index.js";
 export * from "./utils.js";
 export * from "./vault/index.js";
+export { version } from "./version.js";

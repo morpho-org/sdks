@@ -85,7 +85,7 @@ const decode = <TAbi extends Abi>(params: {
   const { abi, log, eventDescription } = params;
   const [firstTopic, ...remainingTopics] = log.topics;
   if (firstTopic === undefined)
-    throw new ApprovalCheckUnavailableError(
+    return new ApprovalCheckUnavailableError(
       `Event from "${log.address}" has no topics and cannot be decoded as ${eventDescription}. Remove the call that emits it.`,
     );
   try {
@@ -96,7 +96,7 @@ const decode = <TAbi extends Abi>(params: {
       strict: true,
     });
   } catch (cause) {
-    throw new ApprovalCheckUnavailableError(
+    return new ApprovalCheckUnavailableError(
       `Event from "${log.address}" could not be decoded as ${eventDescription}. Remove the call that emits it.`,
       { cause },
     );
@@ -267,20 +267,31 @@ export function assertPendingApprovals(params: {
   }
 }
 
+interface ApprovalEventParams {
+  readonly logs: readonly RawLog[];
+  readonly owner: Address;
+  readonly allowed: readonly ApprovalLimit[];
+  readonly addresses: ApprovalEventAddresses;
+}
+
+type ApprovalEventFailure =
+  | ApprovalCheckUnavailableError
+  | UnexpectedTokenApprovalError
+  | UnexpectedMorphoAuthorizationError
+  | UnexpectedMidnightAuthorizationError;
+
 /**
- * Reject sender-granted approvals and authorizations found in simulated logs.
+ * Find disallowed approvals and authorizations in log order.
  * @param logs - Logs from every preparation and transaction call.
  * @param owner - The simulation sender.
  * @param allowed - Operation-derived and caller-supplied limits.
  * @param addresses - Registered Permit2 and Morpho contracts for the chain.
  * @internal
  */
-export function assertApprovalEvents(params: {
-  readonly logs: readonly RawLog[];
-  readonly owner: Address;
-  readonly allowed: readonly ApprovalLimit[];
-  readonly addresses: ApprovalEventAddresses;
-}): void {
+export function findApprovalEventFailures(
+  params: ApprovalEventParams,
+): readonly ApprovalEventFailure[] {
+  const failures: ApprovalEventFailure[] = [];
   const { logs, owner, allowed, addresses } = params;
   for (const log of logs) {
     const topic = log.topics[0]?.toLowerCase();
@@ -291,10 +302,18 @@ export function assertApprovalEvents(params: {
           log,
           eventDescription: "ERC-20 Approval event",
         });
-        if (decoded.eventName !== "Approval")
-          throw new ApprovalCheckUnavailableError(
-            `Approval event from "${log.address}" could not be identified as ERC-20 Approval. Remove the call that emits it.`,
+        if (decoded instanceof ApprovalCheckUnavailableError) {
+          failures.push(decoded);
+          continue;
+        }
+        if (decoded.eventName !== "Approval") {
+          failures.push(
+            new ApprovalCheckUnavailableError(
+              `Approval event from "${log.address}" could not be identified as ERC-20 Approval. Remove the call that emits it.`,
+            ),
           );
+          continue;
+        }
         const { owner: eventOwner, spender, value } = decoded.args;
         if (
           isAddressEqual(eventOwner, owner) &&
@@ -305,13 +324,17 @@ export function assertApprovalEvents(params: {
             owner: eventOwner,
             spender,
           })
-        )
-          throw new UnexpectedTokenApprovalError({
-            token: log.address,
-            owner: eventOwner,
-            spender,
-            source: "event",
-          });
+        ) {
+          failures.push(
+            new UnexpectedTokenApprovalError({
+              token: log.address,
+              owner: eventOwner,
+              spender,
+              source: "event",
+            }),
+          );
+          continue;
+        }
         continue;
       }
       if (log.topics.length === 4) {
@@ -320,27 +343,42 @@ export function assertApprovalEvents(params: {
           log,
           eventDescription: "ERC-721 Approval event",
         });
-        if (decoded.eventName !== "Approval")
-          throw new ApprovalCheckUnavailableError(
-            `Approval event from "${log.address}" could not be identified as ERC-721 Approval. Remove the call that emits it.`,
+        if (decoded instanceof ApprovalCheckUnavailableError) {
+          failures.push(decoded);
+          continue;
+        }
+        if (decoded.eventName !== "Approval") {
+          failures.push(
+            new ApprovalCheckUnavailableError(
+              `Approval event from "${log.address}" could not be identified as ERC-721 Approval. Remove the call that emits it.`,
+            ),
           );
+          continue;
+        }
         const { owner: eventOwner, spender: approved } = decoded.args;
         if (
           isAddressEqual(eventOwner, owner) &&
           !isAddressEqual(approved, zeroAddress)
-        )
-          throw new UnexpectedTokenApprovalError({
-            token: log.address,
-            owner: eventOwner,
-            spender: approved,
-            source: "event",
-            allowlistable: false,
-          });
+        ) {
+          failures.push(
+            new UnexpectedTokenApprovalError({
+              token: log.address,
+              owner: eventOwner,
+              spender: approved,
+              source: "event",
+              allowlistable: false,
+            }),
+          );
+          continue;
+        }
         continue;
       }
-      throw new ApprovalCheckUnavailableError(
-        `Approval event from "${log.address}" has ${log.topics.length} topics; approval checks cannot classify it. Remove the call that emits it.`,
+      failures.push(
+        new ApprovalCheckUnavailableError(
+          `Approval event from "${log.address}" has ${log.topics.length} topics; approval checks cannot classify it. Remove the call that emits it.`,
+        ),
       );
+      continue;
     }
 
     if (topic === ERC721_APPROVAL_FOR_ALL_TOPIC) {
@@ -349,19 +387,31 @@ export function assertApprovalEvents(params: {
         log,
         eventDescription: "ERC-721 ApprovalForAll event",
       });
-      if (decoded.eventName !== "ApprovalForAll")
-        throw new ApprovalCheckUnavailableError(
-          `Approval event from "${log.address}" could not be identified as ERC-721 ApprovalForAll. Remove the call that emits it.`,
+      if (decoded instanceof ApprovalCheckUnavailableError) {
+        failures.push(decoded);
+        continue;
+      }
+      if (decoded.eventName !== "ApprovalForAll") {
+        failures.push(
+          new ApprovalCheckUnavailableError(
+            `Approval event from "${log.address}" could not be identified as ERC-721 ApprovalForAll. Remove the call that emits it.`,
+          ),
         );
+        continue;
+      }
       const { owner: eventOwner, operator, approved } = decoded.args;
-      if (isAddressEqual(eventOwner, owner) && approved)
-        throw new UnexpectedTokenApprovalError({
-          token: log.address,
-          owner: eventOwner,
-          spender: operator,
-          source: "event",
-          allowlistable: false,
-        });
+      if (isAddressEqual(eventOwner, owner) && approved) {
+        failures.push(
+          new UnexpectedTokenApprovalError({
+            token: log.address,
+            owner: eventOwner,
+            spender: operator,
+            source: "event",
+            allowlistable: false,
+          }),
+        );
+        continue;
+      }
       continue;
     }
 
@@ -375,10 +425,18 @@ export function assertApprovalEvents(params: {
         log,
         eventDescription: "Permit2 approval event",
       });
-      if (decoded.eventName !== "Approval" && decoded.eventName !== "Permit")
-        throw new ApprovalCheckUnavailableError(
-          `Approval event from "${log.address}" could not be identified as a Permit2 approval. Remove the call that emits it.`,
+      if (decoded instanceof ApprovalCheckUnavailableError) {
+        failures.push(decoded);
+        continue;
+      }
+      if (decoded.eventName !== "Approval" && decoded.eventName !== "Permit") {
+        failures.push(
+          new ApprovalCheckUnavailableError(
+            `Approval event from "${log.address}" could not be identified as a Permit2 approval. Remove the call that emits it.`,
+          ),
         );
+        continue;
+      }
       const { owner: eventOwner, token, spender, amount } = decoded.args;
       if (
         isAddressEqual(eventOwner, owner) &&
@@ -389,13 +447,17 @@ export function assertApprovalEvents(params: {
           owner: eventOwner,
           spender,
         })
-      )
-        throw new UnexpectedTokenApprovalError({
-          token,
-          owner: eventOwner,
-          spender,
-          source: "event",
-        });
+      ) {
+        failures.push(
+          new UnexpectedTokenApprovalError({
+            token,
+            owner: eventOwner,
+            spender,
+            source: "event",
+          }),
+        );
+        continue;
+      }
       continue;
     }
 
@@ -408,21 +470,33 @@ export function assertApprovalEvents(params: {
         log,
         eventDescription: "Morpho SetAuthorization event",
       });
-      if (decoded.eventName !== "SetAuthorization")
-        throw new ApprovalCheckUnavailableError(
-          `Morpho authorization event from "${log.address}" could not be identified as SetAuthorization. Remove the call that emits it.`,
+      if (decoded instanceof ApprovalCheckUnavailableError) {
+        failures.push(decoded);
+        continue;
+      }
+      if (decoded.eventName !== "SetAuthorization") {
+        failures.push(
+          new ApprovalCheckUnavailableError(
+            `Morpho authorization event from "${log.address}" could not be identified as SetAuthorization. Remove the call that emits it.`,
+          ),
         );
+        continue;
+      }
       const { authorizer, authorized, newIsAuthorized } = decoded.args;
       if (
         isAddressEqual(authorizer, owner) &&
         newIsAuthorized &&
         !morphoAuthorizationAllowed({ allowed, authorizer, authorized })
-      )
-        throw new UnexpectedMorphoAuthorizationError({
-          authorizer,
-          authorized,
-          source: "event",
-        });
+      ) {
+        failures.push(
+          new UnexpectedMorphoAuthorizationError({
+            authorizer,
+            authorized,
+            source: "event",
+          }),
+        );
+        continue;
+      }
       continue;
     }
 
@@ -436,10 +510,18 @@ export function assertApprovalEvents(params: {
         log,
         eventDescription: "Midnight SetIsAuthorized event",
       });
-      if (decoded.eventName !== "SetIsAuthorized")
-        throw new ApprovalCheckUnavailableError(
-          `Midnight authorization event from "${log.address}" could not be identified as SetIsAuthorized. Remove the call that emits it.`,
+      if (decoded instanceof ApprovalCheckUnavailableError) {
+        failures.push(decoded);
+        continue;
+      }
+      if (decoded.eventName !== "SetIsAuthorized") {
+        failures.push(
+          new ApprovalCheckUnavailableError(
+            `Midnight authorization event from "${log.address}" could not be identified as SetIsAuthorized. Remove the call that emits it.`,
+          ),
         );
+        continue;
+      }
       const { caller, onBehalf, authorized, newIsAuthorized } = decoded.args;
       if (
         newIsAuthorized &&
@@ -450,11 +532,21 @@ export function assertApprovalEvents(params: {
             isAddressEqual(limit.onBehalf, onBehalf) &&
             isAddressEqual(limit.authorized, authorized),
         )
-      )
-        throw new UnexpectedMidnightAuthorizationError({
-          onBehalf,
-          authorized,
-        });
+      ) {
+        failures.push(
+          new UnexpectedMidnightAuthorizationError({
+            onBehalf,
+            authorized,
+          }),
+        );
+      }
     }
   }
+  return failures;
+}
+
+/** Reject the first approval-event failure. @internal */
+export function assertApprovalEvents(params: ApprovalEventParams): void {
+  const [failure] = findApprovalEventFailures(params);
+  if (failure !== undefined) throw failure;
 }
