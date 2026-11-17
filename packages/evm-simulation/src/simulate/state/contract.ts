@@ -1,5 +1,6 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
+import type { OperationType } from "../../limits.js";
 
 /** Minimal view call replayed before and after the user bundle. @internal */
 export type StateRead = {
@@ -10,6 +11,7 @@ export type StateRead = {
   | {
       readonly kind: "derivation";
       readonly operationIndex?: number;
+      readonly operationType?: OperationType;
       readonly subject?: string;
     }
   | {

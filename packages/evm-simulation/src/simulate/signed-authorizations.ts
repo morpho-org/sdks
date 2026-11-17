@@ -16,24 +16,31 @@ import {
 } from "../errors.js";
 import type { RawLog } from "../types.js";
 
+interface SignedAuthorizationUseParams {
+  readonly authorizations: readonly SimulationAuthorization[];
+  readonly logs: readonly RawLog[] | undefined;
+  readonly morpho: Address;
+  readonly ecrecoverAuthorizer: Address;
+}
+
 /**
- * Require a distinct use event for each final-mode permit or authorization signature.
+ * Find final-mode signatures without distinct matching use events, in request order.
  * Permit2 signature transfers revert on invalid submitted signatures; omitted transfers are not checked.
  * @param params.authorizations - Parsed caller requests.
  * @param params.logs - Logs from user transactions only, in execution order, or undefined if any transaction omitted logs.
  * @param params.morpho - Registered Morpho Blue address.
  * @param params.ecrecoverAuthorizer - Registered EcrecoverAuthorizer address.
- * @throws {UnusedAuthorizationError} When a signed request has no matching event.
- * @throws {ApprovalCheckUnavailableError} When required transaction logs are missing from the response.
+ * @returns Failures in request order, with missing transaction logs reported only
+ *   once, at the first signature that requires them.
  * @internal
  */
-export function assertSignedAuthorizationsUsed(params: {
-  readonly authorizations: readonly SimulationAuthorization[];
-  readonly logs: readonly RawLog[] | undefined;
-  readonly morpho: Address;
-  readonly ecrecoverAuthorizer: Address;
-}): void {
+export function findSignedAuthorizationUseFailures(
+  params: SignedAuthorizationUseParams,
+): readonly (UnusedAuthorizationError | ApprovalCheckUnavailableError)[] {
+  const failures: (UnusedAuthorizationError | ApprovalCheckUnavailableError)[] =
+    [];
   const used = new Set<number>();
+  let missingLogsReported = false;
   for (const [
     authorizationIndex,
     authorization,
@@ -49,13 +56,22 @@ export function assertSignedAuthorizationsUsed(params: {
         break;
       default: {
         const exhaustive: never = authorization;
-        throw new UnusedAuthorizationError(authorizationIndex, exhaustive);
+        failures.push(
+          new UnusedAuthorizationError(authorizationIndex, exhaustive),
+        );
+        continue;
       }
     }
-    if (params.logs === undefined)
-      throw new ApprovalCheckUnavailableError(
-        "Simulation response omitted user-transaction logs; signature-use checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.",
+    if (params.logs === undefined) {
+      if (missingLogsReported) continue;
+      failures.push(
+        new ApprovalCheckUnavailableError(
+          "Simulation response omitted user-transaction logs; signature-use checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.",
+        ),
       );
+      missingLogsReported = true;
+      continue;
+    }
     const { domain } = authorization.typedData;
     const logIndex = params.logs.findIndex((log, index) => {
       if (
@@ -132,8 +148,21 @@ export function assertSignedAuthorizationsUsed(params: {
         return false;
       }
     });
-    if (logIndex === -1)
-      throw new UnusedAuthorizationError(authorizationIndex, authorization);
+    if (logIndex === -1) {
+      failures.push(
+        new UnusedAuthorizationError(authorizationIndex, authorization),
+      );
+      continue;
+    }
     used.add(logIndex);
   }
+  return failures;
+}
+
+/** Reject the first signed-authorization-use failure. @internal */
+export function assertSignedAuthorizationsUsed(
+  params: SignedAuthorizationUseParams,
+): void {
+  const [failure] = findSignedAuthorizationUseFailures(params);
+  if (failure !== undefined) throw failure;
 }

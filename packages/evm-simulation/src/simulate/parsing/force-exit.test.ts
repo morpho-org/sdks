@@ -13,7 +13,7 @@ import {
   SlippageCheckUnavailableError,
 } from "../../errors.js";
 import type { RawLog } from "../../types.js";
-import { measureForceExit } from "./force-exit.js";
+import { findForceExitFailures, measureForceExit } from "./force-exit.js";
 
 const owner: Address = "0x0000000000000000000000000000000000000001";
 const vault: Address = "0x0000000000000000000000000000000000000002";
@@ -97,6 +97,7 @@ const measure = (
     morpho,
     account: options.account ?? owner,
     operationType: "vaultV2ForceRedeem",
+    operationIndex: 0,
     requireDeallocations: options.requireDeallocations ?? true,
   });
 
@@ -151,7 +152,7 @@ describe("measureForceExit", () => {
   });
 
   test("error: a positive penalty charged to another account", () => {
-    expect(() =>
+    const measurePenalty = () =>
       measure(
         [
           [
@@ -160,8 +161,16 @@ describe("measureForceExit", () => {
           ],
         ],
         { requireDeallocations: false },
-      ),
-    ).toThrow(SlippageCheckUnavailableError);
+      );
+    expect(measurePenalty).toThrow(SlippageCheckUnavailableError);
+    expect(measurePenalty).toThrow(
+      expect.objectContaining({
+        operationIndex: 0,
+        operationType: "vaultV2ForceRedeem",
+        field: "penalty",
+        reason: "accountMismatch",
+      }),
+    );
   });
 
   test("behavior: ignores a zero-penalty force deallocation for another account", () => {
@@ -302,4 +311,43 @@ describe("measureForceExit", () => {
       ]),
     ).toThrow(SlippageCheckUnavailableError);
   });
+});
+
+test("findForceExitFailures returns all attribution failures in check order", () => {
+  const params = {
+    logs: [
+      [
+        forceDeallocate({ onBehalf: other, penaltyAssets: 1n }),
+        forceDeallocate({ onBehalf: owner, penaltyAssets: 1n }),
+      ],
+    ],
+    vault,
+    morpho,
+    account: owner,
+    operationType: "vaultV2ForceRedeem",
+    operationIndex: 2,
+    requireDeallocations: true,
+  } as const;
+  const { failures } = findForceExitFailures(params);
+  expect(failures).toEqual([
+    expect.objectContaining({
+      operationIndex: 2,
+      operationType: params.operationType,
+      field: "penalty",
+      reason: "accountMismatch",
+    }),
+    expect.objectContaining({
+      operationIndex: 2,
+      operationType: params.operationType,
+      field: "penalty",
+      reason: "missingEvent",
+    }),
+    expect.objectContaining({
+      operationIndex: 2,
+      operationType: params.operationType,
+      field: "deallocations",
+      reason: "unmatchedEvent",
+    }),
+  ]);
+  expect(() => measureForceExit(params)).toThrowError(failures[0]);
 });

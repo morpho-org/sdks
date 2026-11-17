@@ -1,7 +1,7 @@
 import {
   type Address,
   type ChainId,
-  getChainAddresses,
+  getChainAddress,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
@@ -48,6 +48,8 @@ const permit2PermitTypes = {
  * @param chainId - Chain id whose Permit2 deployment verifies the signature.
  * @returns Typed data ready to pass to a wallet for signing.
  * @throws {Permit2ExpirationOutOfRangeError} When `expiration` is not an integer in the uint48 range.
+ * @throws {UnsupportedChainIdError} When no address registry exists for `chainId`.
+ * @throws {UnknownAddressError} When `chainId` has no registered Permit2 address.
  * @example
  * ```ts
  * import { ChainId } from "@morpho-org/blue-sdk";
@@ -82,9 +84,16 @@ export const getPermit2PermitTypedData = (
     domain: {
       name: "Permit2",
       chainId: chainId,
-      verifyingContract: getChainAddresses(chainId).permit2,
+      verifyingContract: getChainAddress(chainId, "permit2"),
     },
-    types: permit2PermitTypes,
+    types: {
+      PermitSingle: permit2PermitTypes.PermitSingle.map((field) => ({
+        ...field,
+      })),
+      PermitDetails: permit2PermitTypes.PermitDetails.map((field) => ({
+        ...field,
+      })),
+    },
     message: {
       details: {
         token: args.erc20,
@@ -123,6 +132,8 @@ const permit2TransferFromTypes = {
  * @param args - Permit2 signature-transfer message fields.
  * @param chainId - Chain id whose Permit2 deployment verifies the signature.
  * @returns Typed data ready to pass to a wallet for signing.
+ * @throws {UnsupportedChainIdError} When no address registry exists for `chainId`.
+ * @throws {UnknownAddressError} When `chainId` has no registered Permit2 address.
  * @example
  * ```ts
  * import { ChainId } from "@morpho-org/blue-sdk";
@@ -151,9 +162,16 @@ export const getPermit2TransferFromTypedData = (
     domain: {
       name: "Permit2",
       chainId,
-      verifyingContract: getChainAddresses(chainId).permit2,
+      verifyingContract: getChainAddress(chainId, "permit2"),
     },
-    types: permit2TransferFromTypes,
+    types: {
+      PermitTransferFrom: permit2TransferFromTypes.PermitTransferFrom.map(
+        (field) => ({ ...field }),
+      ),
+      TokenPermissions: permit2TransferFromTypes.TokenPermissions.map(
+        (field) => ({ ...field }),
+      ),
+    },
     message: {
       permitted: {
         token: args.erc20,

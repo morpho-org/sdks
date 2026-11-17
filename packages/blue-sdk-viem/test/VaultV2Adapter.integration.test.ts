@@ -33,6 +33,8 @@ import {
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   concatHex,
+  createPublicClient,
+  custom,
   deploylessCallViaBytecodeBytecode,
   encodeAbiParameters,
   encodeDeployData,
@@ -166,9 +168,36 @@ describe("VaultV2Adapter", () => {
         },
       );
 
-      const value = await fetchVaultV2Adapter(adapterAddress, client, {
+      let deploylessCalls = 0;
+      let directCalls = 0;
+      const observedClient = createPublicClient({
+        chain: client.chain,
+        transport: custom({
+          async request({ method, params }) {
+            const [call] = params ?? [];
+            if (
+              method === "eth_call" &&
+              call !== null &&
+              typeof call === "object" &&
+              "data" in call
+            ) {
+              if (!("to" in call) || call.to == null) deploylessCalls++;
+              else directCalls++;
+            }
+            return client.request({ method, params });
+          },
+        }),
+      });
+      const value = await fetchVaultV2Adapter(adapterAddress, observedClient, {
+        deployless: false,
+      });
+      expect(deploylessCalls).toBe(0);
+      expect(directCalls).toBeGreaterThan(0);
+      const forced = await fetchVaultV2Adapter(adapterAddress, observedClient, {
         deployless: "force",
       });
+      expect(deploylessCalls).toBeGreaterThan(0);
+      expect(value).toStrictEqual(forced);
       expect(value).toStrictEqual(
         new VaultV2MorphoMarketV1Adapter({
           address: adapterAddress,

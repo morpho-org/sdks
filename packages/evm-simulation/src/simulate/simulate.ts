@@ -137,6 +137,18 @@ import { runSimulation } from "./run-simulation.js";
  *   `ethAddress`, this chain's registered wrapped native token. Also thrown when
  *   a preview authorization preparation emits asset transfers; simulate that
  *   authorization as a transaction in final mode to check its asset flows.
+ *   Also thrown for an explicit `account` on sender-only operations, an
+ *   `account` other than the sender on `midnightSupplyBlueMakeLend` or
+ *   `midnightSupplyCollateralMakeBorrow`, native value without a measured
+ *   native or wNative side, or owner native value above the quoted wNative
+ *   pull cap on `midnightSupplyCollateralTakeBorrow` (including a `0n` cap).
+ *   Repay-withdraw also throws this error when quoted loan-token collateral
+ *   goes to the payer, or native value is sent with wNative collateral going
+ *   to the sender; use a different receiver or separate the flows.
+ *   Approval-token resolution also throws this error for a zero vault subject
+ *   or midnightSupplyBlueMakeLend loanToken,
+ *   a Midnight collateral supply whose collateralIndex is absent from the
+ *   existing market, or missing assetPaid for a first-market collateral supply.
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects, including when
  *   `midnightRepayWithdrawCollateral` or `midnightTakeRepayWithdrawCollateral`
@@ -154,7 +166,7 @@ import { runSimulation } from "./run-simulation.js";
  *   authorization is outside the derived and explicit allowlist, or a Midnight
  *   signature's `verifyingContract` is not the registered EcrecoverAuthorizer
  *   (`allowlistable: false`).
- * @throws {ApprovalCheckUnavailableError} when a subject token or required
+ * @throws {ApprovalCheckUnavailableError} when a valid request's subject token or required
  *   approval-registry address cannot be resolved at the pinned block, when
  *   the RPC response omits logs for a preparation or user call, or when an
  *   approval-topic event cannot be decoded. When the endpoint serves another
@@ -189,24 +201,9 @@ import { runSimulation } from "./run-simulation.js";
  *   evidence from quoted-asset resolution or a failed planned state read
  *   detected by `executePlan`'s response parsing triggers an `eth_chainId`
  *   probe; this error remains when that probe fails or reports the requested
- *   chain. Repay-withdraw also fails closed when quoted loan-token collateral
- *   goes to the payer, when native value is sent with wNative collateral going
- *   to the sender, or when native value is sent on a chain without registered
- *   wNative. `midnightSupplyBlueMakeLend` fails closed under the same
- *   no-registered-wNative condition. `midnightSupplyCollateralTakeBorrow`
- *   fails closed when the owner's total native value exceeds its wNative pull
- *   cap (the quoted wNative collateral; `0n` when the owner receives wNative
- *   loan proceeds without quoted wNative collateral), or when native value is
- *   sent on a chain without registered wNative. Native value is not checked
- *   when the operation has no owner wNative wallet bound. `midnightSupplyCollateral`
- *   and `midnightSupplyCollateralMakeBorrow` also fail closed when native value
- *   is sent without a registered wNative or without any supplied wNative collateral.
- *   `midnightSupplyBlueMakeLend` also fails closed when its limit's `account`
- *   is not the bundle sender (MidnightBundlesV2 creates the BlueBuyCallback
- *   for `msg.sender`) or no BlueBuyCallback address is resolved for it.
- *   `midnightSupplyCollateralMakeBorrow` also fails closed when its limit's
- *   `account` is not the bundle sender (MidnightBundlesV2 `cancelAndMake`
- *   supplies collateral for `msg.sender`).
+ *   chain. Also thrown when a native-funded Midnight measurement requires
+ *   wNative but none is registered for the chain, or when no BlueBuyCallback
+ *   address is resolved for `midnightSupplyBlueMakeLend`.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
@@ -296,14 +293,14 @@ export function simulate(
  *   the subject's token nor, for `ethAddress`, this chain's registered wrapped
  *   native token. Also thrown when a preview authorization preparation emits
  *   asset transfers; simulate that authorization as a transaction in final mode
- *   to check its asset flows.
+ *   to check its asset flows. Also thrown when native value is sent with typed
+ *   inputs and no owner-side native or wNative side measures it.
  * @throws {ConsumerLimitViolationError} When observed effects violate a bound or
  *   an undeclared Blue counter-side or inactive leg moves adversely, including
  *   with quote overrides. Use combined operations or quote-only limits for
  *   multi-operation bundles with those intended movements.
  * @throws {SlippageCheckUnavailableError} When subject or derivation evidence
- *   is missing, or when native value is sent with typed inputs and no
- *   owner-side native or wNative side measures it.
+ *   is missing.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";

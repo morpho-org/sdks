@@ -48,6 +48,91 @@ const nativeValueCoverageErrorMessage =
   "Native value sent by the request is not covered by any measured native side. Remove the transaction value, or declare the native or wNative asset on the operation it funds.";
 
 describe("planStateReads", () => {
+  test.each([
+    "midnightSupplyCollateralBatch",
+    "midnightSupplyCollateralTakeBorrow",
+    "midnightWithdrawCollateralBatch",
+    "midnightRepayWithdrawCollateral",
+    "midnightTakeRepayWithdrawCollateral",
+  ] as const)(
+    "reports the measured quote field for native-funded %s without wNative",
+    (type) => {
+      const field =
+        type === "midnightSupplyCollateralBatch" ||
+        type === "midnightSupplyCollateralTakeBorrow"
+          ? "collateralSupplies"
+          : "collateralWithdrawals";
+      const isRepayment =
+        type === "midnightRepayWithdrawCollateral" ||
+        type === "midnightTakeRepayWithdrawCollateral";
+      const plan = () =>
+        planStateReads({
+          operations: [
+            {
+              limit: {
+                type,
+                marketId,
+                quote: {
+                  [field]: [{ collateralIndex: 0n, assets: 10n }],
+                  ...(isRepayment ? { assetsPaid: 10n, debtRepaid: 10n } : {}),
+                },
+                slippageTolerance: 0n,
+              },
+              midnightMarket: {
+                chainId: 1n,
+                midnight: zeroAddress,
+                loanToken: asset,
+                collateralParams: [],
+                maturity: 0n,
+                rcfThreshold: 0n,
+                enterGate: zeroAddress,
+                liquidatorGate: zeroAddress,
+              },
+            },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight: zeroAddress,
+          nativeValueSent: true,
+        });
+      expect(plan).toThrow(SlippageCheckUnavailableError);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          operationIndex: 0,
+          operationType: type,
+          field: isRepayment ? "assetsPaid" : field,
+          reason: "noRegisteredWrappedNative",
+        }),
+      );
+    },
+  );
+  test("behavior: vault share burn identifies its token and account", () => {
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "vaultV2Withdraw",
+            vault,
+            account: receiver,
+            quote: { sharesBurned: 100n },
+            slippageTolerance: 0n,
+          },
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    expect(plan.operations[0]!.measurements).toEqual([
+      {
+        field: "sharesBurned",
+        type: "balance",
+        readId: plan.reads[0]!.id,
+        token: vault,
+        account: receiver,
+      },
+    ]);
+  });
   test.each([owner, receiver] as const)(
     "implicit native funding only applies to an owner-held payout (%s)",
     (payoutReceiver) => {
@@ -75,8 +160,15 @@ describe("planStateReads", () => {
       if (payoutReceiver === owner)
         expect(plan().operations[0]!.measurements[0]!.type).toBe("native");
       else {
-        expect(plan).toThrow(SlippageCheckUnavailableError);
+        expect(plan).toThrow(SimulationValidationError);
         expect(plan).toThrow(nativeValueCoverageErrorMessage);
+        expect(plan).toThrow(
+          expect.objectContaining({
+            fieldErrors: [
+              "transactions: native value must be covered by a measured native side",
+            ],
+          }),
+        );
       }
     },
   );
@@ -89,8 +181,15 @@ describe("planStateReads", () => {
         nativeValueSent: true,
         operations: [{ limit: typedDepositLimit, assetsPaid: asset }],
       });
-    expect(plan).toThrow(SlippageCheckUnavailableError);
+    expect(plan).toThrow(SimulationValidationError);
     expect(plan).toThrow(nativeValueCoverageErrorMessage);
+    expect(plan).toThrow(
+      expect.objectContaining({
+        fieldErrors: [
+          "transactions: native value must be covered by a measured native side",
+        ],
+      }),
+    );
   });
   test("typed non-native inputs allow requests without native value", () => {
     expect(() =>
@@ -909,7 +1008,7 @@ describe("planStateReads — Midnight collateral", () => {
           account: owner,
         } satisfies ParsedOperationLimit);
   test("error: maker collateral rejects an account other than the bundle sender", () => {
-    expect(() =>
+    const plan = () =>
       planStateReads({
         operations: [
           {
@@ -927,8 +1026,14 @@ describe("planStateReads — Midnight collateral", () => {
         owner,
         morpho: zeroAddress,
         midnight,
+      });
+    expect(plan).toThrow(SimulationValidationError);
+    expect(plan).toThrow(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        fieldErrors: [expect.stringContaining("limits.operations[0].account:")],
       }),
-    ).toThrow(SlippageCheckUnavailableError);
+    );
   });
   test("behavior: maker collateral accepts an account equal to the bundle sender", () => {
     expect(() =>
@@ -1082,8 +1187,15 @@ describe("planStateReads — Midnight collateral", () => {
           wNative: asset,
           nativeValueSent: true,
         });
-      expect(plan).toThrow(SlippageCheckUnavailableError);
+      expect(plan).toThrow(SimulationValidationError);
       expect(plan).toThrow(nativeValueCoverageErrorMessage);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          fieldErrors: [
+            "transactions: native value must be covered by a measured native side",
+          ],
+        }),
+      );
     },
   );
   test("behavior: reads sender spending and the onBehalf collateral slot, deduplicated", () => {
@@ -1421,7 +1533,7 @@ describe("planStateReads — Midnight sells", () => {
   ])(
     "error: rejects any account for $type",
     ({ limit: limitUnderTest, account }) => {
-      expect(() =>
+      const plan = () =>
         planStateReads({
           operations: [
             {
@@ -1436,8 +1548,16 @@ describe("planStateReads — Midnight sells", () => {
           owner,
           morpho: zeroAddress,
           midnight,
+        });
+      expect(plan).toThrowError(SimulationValidationError);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          code: "VALIDATION_ERROR",
+          fieldErrors: [
+            expect.stringContaining("limits.operations[0].account:"),
+          ],
         }),
-      ).toThrowError(SlippageCheckUnavailableError);
+      );
     },
   );
 });
@@ -1497,7 +1617,7 @@ describe("planStateReads — Midnight repay-withdraw", () => {
   ])(
     "error: rejects an explicit account on $type ($account)",
     ({ type, account }) => {
-      expect(() =>
+      const plan = () =>
         planStateReads({
           operations: [
             {
@@ -1514,8 +1634,16 @@ describe("planStateReads — Midnight repay-withdraw", () => {
           owner,
           morpho: zeroAddress,
           midnight,
+        });
+      expect(plan).toThrowError(SimulationValidationError);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          code: "VALIDATION_ERROR",
+          fieldErrors: [
+            expect.stringContaining("limits.operations[0].account:"),
+          ],
         }),
-      ).toThrowError(SlippageCheckUnavailableError);
+      );
     },
   );
 
@@ -1622,29 +1750,45 @@ describe("planStateReads — Midnight repay-withdraw", () => {
     expect(plan.operations[0]?.collateralReads).toBeUndefined();
   });
 
-  test("error: same-token repayment and delivery to the payer fails closed", () => {
-    const sameTokenMarket = {
-      ...midnightMarket,
-      collateralParams: [
-        { ...midnightMarket.collateralParams[0], token: asset as Address },
-      ],
-    };
-    expect(() =>
-      planStateReads({
-        operations: [
-          {
-            limit: { ...repayLimit, receiver: owner },
-            assetsPaid: asset,
-            midnightMarket: sameTokenMarket,
-            midnightCollateralTokens: [{ collateralIndex: 0n, token: asset }],
-          },
+  test.each([
+    "midnightRepayWithdrawCollateral",
+    "midnightTakeRepayWithdrawCollateral",
+  ] as const)(
+    "error: same-token %s and delivery to the payer fails closed",
+    (type) => {
+      const sameTokenMarket = {
+        ...midnightMarket,
+        collateralParams: [
+          { ...midnightMarket.collateralParams[0], token: asset as Address },
         ],
-        owner,
-        morpho: zeroAddress,
-        midnight,
-      }),
-    ).toThrow(SlippageCheckUnavailableError);
-  });
+      };
+      const plan = () =>
+        planStateReads({
+          operations: [
+            {
+              limit: { ...repayLimit, type, receiver: owner },
+              assetsPaid: asset,
+              midnightMarket: sameTokenMarket,
+              midnightCollateralTokens: [{ collateralIndex: 0n, token: asset }],
+            },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight,
+        });
+      expect(plan).toThrow(SimulationValidationError);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          code: "VALIDATION_ERROR",
+          fieldErrors: [
+            expect.stringContaining(
+              "limits.operations[0].quote.collateralWithdrawals:",
+            ),
+          ],
+        }),
+      );
+    },
+  );
 
   test("behavior: same-token repayment can deliver collateral to another receiver", () => {
     const sameTokenMarket = {
@@ -1729,25 +1873,41 @@ describe("planStateReads — Midnight repay-withdraw", () => {
     ).not.toThrow();
   });
 
-  test("error: native funding and wNative collateral delivery to the payer fail closed", () => {
-    expect(() =>
-      planStateReads({
-        operations: [
-          {
-            limit: { ...repayLimit, receiver: owner },
-            assetsPaid: asset,
-            midnightMarket,
-            midnightCollateralTokens: collateralTokens,
-          },
-        ],
-        owner,
-        morpho: zeroAddress,
-        midnight,
-        wNative: collateralToken,
-        nativeValueSent: true,
-      }),
-    ).toThrow(SlippageCheckUnavailableError);
-  });
+  test.each([
+    "midnightRepayWithdrawCollateral",
+    "midnightTakeRepayWithdrawCollateral",
+  ] as const)(
+    "error: native-funded %s and wNative delivery to the payer fail closed",
+    (type) => {
+      const plan = () =>
+        planStateReads({
+          operations: [
+            {
+              limit: { ...repayLimit, type, receiver: owner },
+              assetsPaid: asset,
+              midnightMarket,
+              midnightCollateralTokens: collateralTokens,
+            },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight,
+          wNative: collateralToken,
+          nativeValueSent: true,
+        });
+      expect(plan).toThrow(SimulationValidationError);
+      expect(plan).toThrow(
+        expect.objectContaining({
+          code: "VALIDATION_ERROR",
+          fieldErrors: [
+            expect.stringContaining(
+              "limits.operations[0].quote.collateralWithdrawals:",
+            ),
+          ],
+        }),
+      );
+    },
+  );
 
   test("behavior: wNative collateral delivery to the payer is measurable with no ETH sent", () => {
     expect(() =>
@@ -1780,7 +1940,7 @@ describe("planStateReads — Midnight repay-withdraw", () => {
         },
       ],
     };
-    expect(() =>
+    const plan = () =>
       planStateReads({
         operations: [
           {
@@ -1804,8 +1964,18 @@ describe("planStateReads — Midnight repay-withdraw", () => {
         midnight,
         wNative: collateralToken,
         nativeValueSent: true,
+      });
+    expect(plan).toThrow(SimulationValidationError);
+    expect(plan).toThrow(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        fieldErrors: [
+          expect.stringContaining(
+            "limits.operations[0].quote.collateralWithdrawals:",
+          ),
+        ],
       }),
-    ).toThrow(SlippageCheckUnavailableError);
+    );
   });
 
   test("behavior: wNative repayment plans a balance read with native traces", () => {
@@ -1902,7 +2072,7 @@ describe("planStateReads — Midnight repay-withdraw", () => {
   });
 
   test("error: Blue parking rejects an account other than the bundle sender", () => {
-    expect(() =>
+    const plan = () =>
       planStateReads({
         operations: [
           {
@@ -1922,8 +2092,14 @@ describe("planStateReads — Midnight repay-withdraw", () => {
         owner,
         morpho: zeroAddress,
         midnight: zeroAddress,
+      });
+    expect(plan).toThrow(SimulationValidationError);
+    expect(plan).toThrow(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        fieldErrors: [expect.stringContaining("limits.operations[0].account:")],
       }),
-    ).toThrow(SlippageCheckUnavailableError);
+    );
   });
 
   test("behavior: Blue parking accepts an account equal to the bundle sender", () => {
@@ -2195,7 +2371,14 @@ describe("planStateReads — Midnight combined supply-take", () => {
       error = caught;
     }
 
-    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(error).toMatchObject({
+      fieldErrors: [
+        expect.stringContaining(
+          "limits.operations[0].quote.collateralSupplies:",
+        ),
+      ],
+    });
     expect(error).toHaveProperty(
       "message",
       "Limit operation 0 (midnightSupplyCollateralTakeBorrow): native value sent by the owner (21) exceeds this operation's quoted wNative collateral supply (20), so wNative pulls cannot be attributed. Send at most the quoted wNative collateral supply (20) as native value.",

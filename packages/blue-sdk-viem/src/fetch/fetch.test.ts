@@ -1950,7 +1950,7 @@ describe("vault fetchers", () => {
     const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
-    expect(vault.totalAssets).toBe(0n);
+    expect(vault.totalAssets).toBe(55n);
     expect(vault.lostAssets).toBe(55n);
     expect(vault.totalSupply).toBe(42n);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);

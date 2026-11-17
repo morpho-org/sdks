@@ -20,6 +20,7 @@ import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureError,
   InvalidEcrecoverSignatureVError,
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -759,6 +760,7 @@ export namespace EcrecoverRatifierUtils {
    * @returns Decoded ratifier data plus recovered signer.
    * @throws {ChainIdMismatchError} when `params.chainId` does not match `offer.market.chainId`.
    * @throws {InvalidEcrecoverSignatureVError} when the decoded signature `v` is not 27 or 28.
+   * @throws {InvalidEcrecoverSignatureError} when signature recovery fails, preserving the original error as `cause`.
    * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
    * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
    * @example
@@ -789,19 +791,26 @@ export namespace EcrecoverRatifierUtils {
       throw new InvalidTreeError("Ratifier data proof does not include offer.");
     }
 
-    const signer = await recoverAddress({
-      hash: digestForRoot({
-        chainId: params.chainId,
-        offer,
-        root: decoded.root,
-        proofLength: decoded.proof.length,
-      }),
-      signature: serializeSignature({
-        r: decoded.signature.r,
-        s: decoded.signature.s,
-        yParity: toCanonicalYParity(decoded.signature.v),
-      }),
+    const hash = digestForRoot({
+      chainId: params.chainId,
+      offer,
+      root: decoded.root,
+      proofLength: decoded.proof.length,
     });
+    const yParity = toCanonicalYParity(decoded.signature.v);
+    let signer: Address;
+    try {
+      signer = await recoverAddress({
+        hash,
+        signature: serializeSignature({
+          r: decoded.signature.r,
+          s: decoded.signature.s,
+          yParity,
+        }),
+      });
+    } catch (cause) {
+      throw new InvalidEcrecoverSignatureError(cause);
+    }
 
     return deepFreeze({
       ...decoded,
@@ -936,6 +945,7 @@ export namespace EcrecoverRatifierUtils {
    *
    * @param signature - Hex string or tuple signature.
    * @returns Signature tuple.
+   * @throws {InvalidEcrecoverSignatureError} when the serialized signature cannot be parsed, preserving the original error as `cause`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
@@ -962,7 +972,12 @@ export namespace EcrecoverRatifierUtils {
       };
     }
 
-    const parsed = parseSignature(signature);
+    let parsed: ReturnType<typeof parseSignature>;
+    try {
+      parsed = parseSignature(signature);
+    } catch (cause) {
+      throw new InvalidEcrecoverSignatureError(cause);
+    }
     const v = Number(parsed.v ?? BigInt(parsed.yParity));
     return {
       v: v < 27 ? v + 27 : v,
@@ -982,6 +997,7 @@ export namespace EcrecoverRatifierUtils {
    * @param params.leafIndex - Leaf index proven by `params.proof`.
    * @param params.proof - Merkle proof siblings for the leaf.
    * @returns ABI-encoded ratifier data.
+   * @throws {InvalidEcrecoverSignatureError} when signature parsing fails, preserving the original error as `cause`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
@@ -1071,6 +1087,7 @@ export namespace EcrecoverRatifierUtils {
    * @param params.signature - Ecrecover signature for the tree root.
    * @returns ABI-encoded EcrecoverRatifier data.
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
+   * @throws {InvalidEcrecoverSignatureError} when the supplied serialized signature cannot be parsed.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Offer, Tree } from "@morpho-org/midnight-sdk";
@@ -1138,7 +1155,8 @@ export namespace EcrecoverRatifierUtils {
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
-   * @throws {InvalidTypedDataSignatureError} when client signing or a precomputed signature does not recover to `params.account`.
+   * @throws {InvalidTypedDataSignatureError} when verification fails after signing or after parsing a precomputed signature, including a signer mismatch.
+   * @throws {InvalidEcrecoverSignatureError} when a precomputed serialized signature cannot be parsed.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -1332,6 +1350,7 @@ export namespace EcrecoverRatifier {
    * @throws {InvalidTreeError} When the tag, commitments, or root are invalid.
    * @throws {InvalidTreeHeightError} When the descriptor height is unsupported.
    * @throws {InvalidEcrecoverSignatureVError} When a supplied signature has an unsupported recovery value.
+   * @throws {InvalidEcrecoverSignatureError} When a supplied serialized signature cannot be parsed.
    * @example
    * ```ts
    * import { EcrecoverRatifier, type EcrecoverRatifierDataRequest } from "@morpho-org/midnight-sdk";
@@ -1357,6 +1376,7 @@ export namespace EcrecoverRatifier {
    * @throws {ChainIdMismatchError} When the signing client's chain differs from the offers.
    * @throws {InvalidTypedDataSignatureError} When the signature does not recover to the supplied account.
    * @throws {InvalidEcrecoverSignatureVError} When a supplied signature has an unsupported recovery value.
+   * @throws {InvalidEcrecoverSignatureError} When a precomputed serialized signature cannot be parsed.
    * @example
    * ```ts
    * import { EcrecoverRatifier, type EcrecoverRatifierRatifyRequest } from "@morpho-org/midnight-sdk";

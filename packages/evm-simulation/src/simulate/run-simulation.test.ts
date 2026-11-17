@@ -665,7 +665,14 @@ describe.sequential("runSimulation", () => {
               (cause: unknown) => cause,
             );
       if (guard) {
-        expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+        expect(error).toBeInstanceOf(SimulationValidationError);
+        expect(error).toMatchObject({
+          fieldErrors: [
+            expect.stringContaining(
+              "limits.operations[0].quote.collateralWithdrawals:",
+            ),
+          ],
+        });
         expect(error).toHaveProperty(
           "message",
           expect.stringContaining("native ETH is sent"),
@@ -891,11 +898,11 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
             ]),
           },
           {
-            chainId: ChainId.ArbitrumMainnet,
+            chainId: ChainId.OptimismMainnet,
             transactions: [TRANSACTION],
             limits: {
               operations: [
@@ -920,11 +927,11 @@ describe.sequential("runSimulation", () => {
       simulate(
         {
           chains: new Map([
-            [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+            [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
           ]),
         },
         {
-          chainId: ChainId.ArbitrumMainnet,
+          chainId: ChainId.OptimismMainnet,
           transactions: [TRANSACTION],
           limits: {
             operations: [
@@ -990,11 +997,11 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.ArbitrumMainnet, { simulateV1Url: RPC_URL }],
+              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
             ]),
           },
           {
-            chainId: ChainId.ArbitrumMainnet,
+            chainId: ChainId.OptimismMainnet,
             transactions: [TRANSACTION],
             limits: { operations: [operation] },
           },

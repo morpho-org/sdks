@@ -1,5 +1,33 @@
 # @morpho-org/morpho-test
 
+## 4.3.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/morpho-test"`, which takes precedence over the wildcards, and alias any others, for example `export { version as morphoTestVersion } from "@morpho-org/morpho-test"`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/midnight-sdk@2.6.0
+  - @morpho-org/morpho-ts@4.4.0
+  - @morpho-org/test@2.13.0
+
+## 4.2.1
+
+### Patch Changes
+
+- Keep synthetic WETH9 E2E asset balances backed by native currency when funding wallets, including Midnight collateral. Repeated funding and balance decreases now preserve total supply and allow withdrawals on compatible Anvil chains.
+- Remove mainnet DAI from the simple-permit token fixtures because it supports only the legacy DAI permit format, not ERC-2612.
+- Correct the mainnet bbUsdc vault fixture's asset to USDC instead of WETH so tests using the fixture reference the vault's actual underlying token.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+  - @morpho-org/blue-sdk@8.2.3
+  - @morpho-org/midnight-sdk@2.5.1
+
 ## 4.2.0
 
 ### Minor Changes

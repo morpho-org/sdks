@@ -10,6 +10,7 @@ import {
   InputExceedsMaxError,
   NonPositiveInputError,
   type Permit2SignatureTransferRequirementSignature,
+  type ReferenceTimestampParams,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -17,7 +18,8 @@ import {
  * Parameters for {@link encodeErc20Permit2SignatureTransfer}.
  * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
  */
-export interface EncodeErc20Permit2SignatureTransferParams {
+export interface EncodeErc20Permit2SignatureTransferParams
+  extends ReferenceTimestampParams {
   /** ERC-20 token pulled through Permit2. */
   readonly token: Address;
   /** Registered fixed bundles deployment receiving permission to pull the token. */
@@ -30,8 +32,6 @@ export interface EncodeErc20Permit2SignatureTransferParams {
   readonly nonce: bigint;
   /** Signature expiration timestamp in seconds. */
   readonly deadline: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  readonly now?: bigint;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @param params.chainId - Target chain id.
  * @param params.nonce - Unused Permit2 unordered nonce.
  * @param params.deadline - Signature expiration timestamp in seconds.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` returns a deep-frozen signature result.
  * @throws {NegativeInputError} when `amount` or `nonce` is negative.
@@ -62,6 +62,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `userAddress`.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet chain differs from `chainId`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @example
  * ```ts
  * import { addressesRegistry } from "@morpho-org/blue-sdk";
@@ -75,7 +76,8 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  *   amount: 1_000_000n,
  *   chainId: mainnet.id,
  *   nonce: 0n,
- *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+ *   now: (await client.getBlock()).timestamp,
+ *   deadline: (await client.getBlock()).timestamp + 3_600n,
  * });
  * // requirement satisfies Requirement<Permit2SignatureTransferRequirementSignature>
  * ```

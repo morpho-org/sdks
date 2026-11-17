@@ -1,7 +1,10 @@
 import type { Address, Hex, TypedDataDefinition, WalletClient } from "viem";
 import { verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
-import { InvalidSignatureError } from "../types/index.js";
+import {
+  InvalidSignatureError,
+  MalformedSignatureError,
+} from "../types/index.js";
 import { validateChainId, validateUserAddress } from "./validate.js";
 
 /**
@@ -21,6 +24,7 @@ import { validateChainId, validateUserAddress } from "./validate.js";
  * @throws {AddressMismatchError} when the wallet client account differs from `userAddress`.
  * @throws {ChainIdMismatchError} when the wallet client targets a different chain than the typed-data domain.
  * @throws {InvalidSignatureError} when the signature does not recover to `userAddress`.
+ * @throws {MalformedSignatureError} when verification throws; preserves the original error as `cause` with redacted signature diagnostics. Extends `InvalidSignatureError`.
  * @example
  * ```ts
  * import { signAndVerifyTypedData } from "@morpho-org/morpho-sdk";
@@ -50,11 +54,16 @@ export const signAndVerifyTypedData = async (params: {
     account,
   });
 
-  const isValid = await verifyTypedData({
-    ...typedData,
-    address: userAddress,
-    signature,
-  });
+  let isValid: boolean;
+  try {
+    isValid = await verifyTypedData({
+      ...typedData,
+      address: userAddress,
+      signature,
+    });
+  } catch (cause) {
+    throw new MalformedSignatureError({ signature, cause });
+  }
 
   if (!isValid) {
     throw new InvalidSignatureError();

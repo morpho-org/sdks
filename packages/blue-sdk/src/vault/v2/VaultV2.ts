@@ -262,7 +262,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * changes to rates, allocations or caps can still invalidate the quote.
    * Uses the liquidity adapter's optional `pendingAllocationIncrease` before cap checks.
    * Pending interest uses the liquidity adapter's nested market or Vault V1 snapshot, so
-   * first call `accrueInterest` at that buffered inclusion timestamp; if it is not after
+   * first call `accrueInterest` at that buffered inclusion timestamp; if it is before
    * the vault's `lastUpdate`, nested adapters are not accrued and pending may be understated.
    * A Vault V1 liquidity adapter with zero parent allocation also skips accrual, so residual
    * shares are valued at its unaccrued Vault V1 snapshot.

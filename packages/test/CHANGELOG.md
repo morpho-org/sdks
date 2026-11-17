@@ -1,5 +1,13 @@
 # @morpho-org/test
 
+## 2.13.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/test"`, which takes precedence over the wildcards, and alias any others, for example `export { version as testVersion } from "@morpho-org/test"`.
+
 ## 2.13.0-next.1
 
 ### Minor Changes
@@ -22,6 +30,13 @@
 
 - Updated dependencies
   - @morpho-org/morpho-ts@4.2.0-next.1
+
+## 2.12.1
+
+### Patch Changes
+
+- Correct Anvil fork header serialization and allow silent nodes to complete startup with explicit or automatic ports. Read the current automine setting for each send, compare bigint approximate assertions without floating-point amount conversion, and preserve caller parameters in the approve and deposit helpers, including frozen objects.
+- Classify MalformedSignatureError and InvalidEcrecoverSignatureError as auth errors in the chaos error classification rules.
 
 ## 2.12.0
 

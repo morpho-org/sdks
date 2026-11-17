@@ -26,7 +26,7 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       include: [
         "packages/**/src/**/*.{ts,tsx}",
-        "scripts/generate-midnight-package-version.ts",
+        "scripts/generate-package-versions.ts",
         "scripts/paths.ts",
         "scripts/workflow.ts",
         "scripts/publish/**/*.ts",
@@ -147,6 +147,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation",
+          setupFiles: [
+            "./packages/evm-simulation/test/structured-limit-violation.setup.ts",
+          ],
           include: [
             "packages/evm-simulation/src/**/*.test.ts",
             "packages/evm-simulation/test/e2e/**/*.test.ts",
@@ -162,6 +165,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation-fork",
+          setupFiles: [
+            "./packages/evm-simulation/test/structured-limit-violation.setup.ts",
+          ],
           include: ["packages/evm-simulation/test/**/*.integration.test.ts"],
           globals: true,
           environment: "node",
@@ -186,33 +192,6 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "liquidity-sdk-viem",
-          include: ["packages/liquidity-sdk-viem/src/**/*.test.ts"],
-          server: {
-            deps: {
-              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
-            },
-          },
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidity-sdk-viem-fork",
-          include: [
-            "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
-          ],
-          server: {
-            deps: {
-              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
-            },
-          },
-          ...forkTestConfig,
-        },
-      },
-      {
-        extends: true,
-        test: {
           name: "test",
           include: ["packages/test/src/**/*.test.ts"],
         },
@@ -230,6 +209,14 @@ export default defineConfig({
         test: {
           name: "morpho-test",
           include: ["packages/morpho-test/src/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "morpho-test-fork",
+          include: ["packages/morpho-test/test/**/*.integration.test.ts"],
+          ...forkTestConfig,
         },
       },
       {

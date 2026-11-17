@@ -2,11 +2,11 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import { validateUint256Field } from "../../helpers/validate.js";
+import { validatePositiveInput } from "../../helpers/validatePositiveInput.js";
 import {
   AmountAndSharesExclusiveError,
   type Erc2612RequirementSignature,
   type Metadata,
-  NonPositiveInputError,
   SameVaultMigrationError,
   type Transaction,
   VaultAssetMismatchError,
@@ -143,20 +143,16 @@ export const vaultV1MigrateToV2 = (
     throw new AmountAndSharesExclusiveError();
   }
   const selectedAmount = assets ?? shares ?? 0n;
-  if (selectedAmount <= 0n) {
-    throw new NonPositiveInputError(
-      assets != null ? "assets" : "shares",
-      selectedAmount,
-    );
-  }
-  if (params.args.maxSharePriceVaultV2 <= 0n) {
-    throw new NonPositiveInputError(
-      "maxSharePriceVaultV2",
-      params.args.maxSharePriceVaultV2,
-    );
-  }
+  const amountField = assets != null ? "assets" : "shares";
+  // Validation only; rejects non-positive migration amounts.
+  validatePositiveInput(amountField, selectedAmount);
+  // Validation only; rejects non-positive share-price bounds.
+  validatePositiveInput(
+    "maxSharePriceVaultV2",
+    params.args.maxSharePriceVaultV2,
+  );
   // Reject ABI overflow with SDK errors before calldata encoding.
-  validateUint256Field(assets != null ? "assets" : "shares", selectedAmount);
+  validateUint256Field(amountField, selectedAmount);
   validateUint256Field(
     "maxSharePriceVaultV2",
     params.args.maxSharePriceVaultV2,

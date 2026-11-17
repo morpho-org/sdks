@@ -11,15 +11,30 @@ type TPeriod = {
 };
 
 type P = {
+  /** Converts an integer duration, preserving the number or bigint input kind. */
   [U in TUnit]: <T extends number | bigint>(
     value: T,
   ) => T extends number ? number : bigint;
 };
 
-type Converters = { from: P; fromPeriod(period: Time.PeriodLike): number };
+type Converters = {
+  from: P;
+  /** Converts a period whose duration is an integer, using the same rounding as `from`. */
+  fromPeriod(period: Time.PeriodLike): number;
+};
 
 /**
  * Groups unit converters for milliseconds, seconds, minutes, hours, days, weeks, months, and years.
+ *
+ * `Time[target].from[source](value)` accepts integer `number` or `bigint` durations
+ * and preserves the input kind. Cross-unit conversions reject fractional numbers.
+ * Converting to a larger unit discards the remainder (floors non-negative inputs;
+ * negative inputs truncate toward zero). Months are 31 days and years are 365 days.
+ * Direct conversions between two distinct units among weeks, months and years
+ * are unsupported: they currently return zero or an incorrect value, or throw a division-by-zero error.
+ * Convert through days or a smaller unit instead, for example
+ * `Time.mo.from.d(Time.d.from.y(1))` rather than `Time.mo.from.y(1)`.
+ * `fromPeriod` follows the same integer-input and rounding rules.
  */
 // biome-ignore lint/complexity/noStaticOnlyClass: namespace-style API for unit converters
 export class Time {

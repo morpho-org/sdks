@@ -15,11 +15,24 @@ import {
   InvalidSimulationResponseError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
-import type { RawLog } from "../types.js";
+import {
+  OPERATION_TYPES,
+  type OperationType,
+  type SlippageQuote,
+} from "../limits.js";
+import type { RawLog, Transfer } from "../types.js";
 import type { CheckContext } from "./context.js";
+import { sharePriceMeasurement } from "./measurement-plan.js";
 import type { ParsedOperationLimit } from "./request/parse-request.js";
-import { planStateReads, type StateValue } from "./state/read-state.js";
-import { verifySlippage } from "./verify-slippage.js";
+import {
+  planStateReads,
+  type SlippageOperationReads,
+  type StateValue,
+} from "./state/read-state.js";
+import {
+  findOperationSlippageFailures,
+  verifySlippage,
+} from "./verify-slippage.js";
 
 type ParsedRepayWithdrawLimit = Extract<
   ParsedOperationLimit,
@@ -55,7 +68,384 @@ const limit: ParsedOperationLimit = {
   slippageTolerance: 10_000000000000000n,
 };
 
+describe("Midnight direct collateral batches", () => {
+  test.each([
+    "midnightSupplyCollateralBatch",
+    "midnightWithdrawCollateralBatch",
+  ] as const)(
+    "%s measures every index and one summed token balance",
+    (type) => {
+      const marketId: Hex = `0x${"11".repeat(32)}`;
+      const entries = [
+        { collateralIndex: 0n, assets: 10n },
+        { collateralIndex: 1n, assets: 20n },
+      ];
+      const midnightMarket = {
+        chainId: 1n,
+        midnight: vault,
+        loanToken: owner,
+        collateralParams: entries.map(() => ({
+          token: receiver,
+          lltv: 0n,
+          liquidationCursor: 0n,
+          oracle: zeroAddress,
+        })),
+        maturity: 2_000_000_000n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      };
+      const operation: ParsedOperationLimit =
+        type === "midnightSupplyCollateralBatch"
+          ? {
+              type,
+              marketId,
+              quote: { collateralSupplies: entries },
+              slippageTolerance: 0n,
+            }
+          : {
+              type,
+              marketId,
+              receiver,
+              quote: { collateralWithdrawals: entries },
+              slippageTolerance: 0n,
+            };
+      const plan = planStateReads({
+        owner,
+        morpho: zeroAddress,
+        midnight: vault,
+        operations: [
+          {
+            limit: operation,
+            midnightMarket,
+            midnightCollateralTokens: entries.map(({ collateralIndex }) => ({
+              collateralIndex,
+              token: receiver,
+            })),
+          },
+        ],
+      });
+      const positions = plan.reads.filter(
+        (read) => read.kind === "midnight.collateral",
+      );
+      const balances = plan.reads.filter(
+        (read) => read.kind === "erc20.balance",
+      );
+      expect(positions).toHaveLength(2);
+      expect(balances).toHaveLength(1);
+      expect(plan.reads).toHaveLength(3);
+      const before = new Map<string, StateValue>(
+        plan.reads.map((read) => [read.id, 100n]),
+      );
+      const after = new Map(before);
+      const direction = type === "midnightSupplyCollateralBatch" ? 1n : -1n;
+      positions.forEach((read, index) =>
+        after.set(read.id, 100n + direction * entries[index]!.assets),
+      );
+      after.set(balances[0]!.id, 100n - direction * 30n);
+      const check = () =>
+        verifySlippage({
+          ctx,
+          operations: plan.operations,
+          before,
+          after,
+          transfers: [],
+          logs: [],
+          morpho: zeroAddress,
+          requestTransactions: [],
+        });
+      expect(check()[0]?.checkedLimits.quote).toMatchObject(
+        type === "midnightSupplyCollateralBatch"
+          ? { collateralSupplies: entries }
+          : { collateralWithdrawals: entries },
+      );
+      // Index 1 credits one unit less, or withdraws one unit more, than quoted.
+      after.set(
+        positions[1]!.id,
+        type === "midnightSupplyCollateralBatch" ? 119n : 79n,
+      );
+      expect(check).toThrow(
+        expect.objectContaining({
+          field:
+            type === "midnightSupplyCollateralBatch"
+              ? "collateralSupplies"
+              : "collateralWithdrawals",
+          entry: { collateralIndex: 1n },
+        }),
+      );
+      after.set(positions[1]!.id, 100n + direction * entries[1]!.assets);
+      after.set(balances[0]!.id, 100n - direction * 30n - 1n);
+      expect(check).toThrow(ConsumerLimitViolationError);
+      if (type === "midnightWithdrawCollateralBatch")
+        expect(check).toThrow(
+          expect.objectContaining({
+            field: "collateralWithdrawals",
+            check: "slippageTolerance",
+            expected: 30n,
+            observed: 29n,
+            bound: 30n,
+            entry: { collateralIndex: 0n },
+          }),
+        );
+      after.delete(positions[0]!.id);
+      expect(check).toThrow(SlippageCheckUnavailableError);
+    },
+  );
+});
+
 describe("verifySlippage", () => {
+  test.each([
+    "vaultV1Withdraw",
+    "vaultV2Withdraw",
+    "vaultV1Redeem",
+    "vaultV2Redeem",
+    "vaultV2ForceWithdraw",
+    "vaultV2ForceRedeem",
+    "vaultV1InKindRedeem",
+    "vaultV2InKindRedeem",
+    "vaultV1MigrateToV2",
+  ] as const)("behavior: quote-only %s keeps net balance semantics", (type) => {
+    const operation: ParsedOperationLimit = {
+      ...(type === "vaultV1MigrateToV2"
+        ? { type, sourceVault: vault, targetVault: receiver }
+        : { type, vault }),
+      account: owner,
+      quote: { sharesBurned: 80n },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    expect(
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 100n]]),
+        after: new Map([[id, 20n]]),
+        transfers: [
+          { token: vault, from: zeroAddress, to: owner, amount: 20n, txIdx: 0 },
+          { token: vault, from: owner, to: receiver, amount: 10n, txIdx: 0 },
+        ],
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      })[0],
+    ).toMatchObject({ checkedLimits: { quote: { sharesBurned: 80n } } });
+  });
+  test("behavior: exact vault burn adds back shares minted to the account", () => {
+    const sharesBurned = 18790920560802140820882n;
+    const minted = 22073456256335329336n;
+    const operation: ParsedOperationLimit = {
+      type: "vaultV2Withdraw",
+      vault,
+      account: owner,
+      inputs: { assets: 100n },
+      quote: { sharesBurned },
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    const mint: Transfer = {
+      token: vault,
+      from: zeroAddress,
+      to: owner,
+      amount: minted,
+      txIdx: 0,
+    };
+    const check = (transfers: readonly Transfer[]) =>
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, sharesBurned]]),
+        after: new Map([[id, minted]]),
+        transfers,
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      });
+    expect(check([mint])[0]).toMatchObject({
+      checkedLimits: { quote: { sharesBurned } },
+    });
+    const outgoing: Transfer = {
+      token: vault,
+      from: owner,
+      to: receiver,
+      amount: 10n,
+      txIdx: 0,
+    };
+    expect(() => check([mint, outgoing])).toThrow(ConsumerLimitViolationError);
+    for (const transfer of [
+      { ...outgoing, to: zeroAddress },
+      { ...outgoing, to: owner },
+      { ...outgoing, from: receiver },
+      { ...outgoing, token: receiver },
+    ])
+      expect(check([mint, transfer])).toHaveLength(1);
+    for (const transfers of [
+      [],
+      [{ ...mint, to: receiver }],
+      [{ ...mint, token: receiver }],
+      [{ ...mint, from: receiver }],
+    ])
+      expect(() => check(transfers)).toThrow(ConsumerLimitViolationError);
+  });
+  test.each([
+    { name: "exact burn plus an extra transfer", balanceAfter: 10n },
+    { name: "smaller burn topped up by a transfer", balanceAfter: 20n },
+  ])("typed vault burn rejects $name", ({ balanceAfter }) => {
+    const operation: ParsedOperationLimit = {
+      type: "vaultV2Redeem",
+      vault,
+      account: owner,
+      inputs: { shares: 100n },
+      quote: { sharesBurned: 100n },
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    const check = () =>
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 100n]]),
+        after: new Map([[id, balanceAfter]]),
+        transfers: [
+          { token: vault, from: zeroAddress, to: owner, amount: 20n, txIdx: 0 },
+          {
+            token: vault,
+            from: owner,
+            to: zeroAddress,
+            amount: balanceAfter === 10n ? 100n : 90n,
+            txIdx: 0,
+          },
+          { token: vault, from: owner, to: receiver, amount: 10n, txIdx: 0 },
+        ],
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      });
+    expect(check).toThrow(ConsumerLimitViolationError);
+    expect(check).toThrow(/outgoing vault-share transfer/);
+    expect(check).toThrow(
+      expect.objectContaining({
+        field: "sharesBurned",
+        check: "shareTransfer",
+        expected: 0n,
+        observed: 10n,
+      }),
+    );
+  });
+  test.each([
+    "vaultV1Withdraw",
+    "vaultV2Withdraw",
+    "vaultV1Redeem",
+    "vaultV2Redeem",
+    "vaultV1MigrateToV2",
+  ] as const)("typed %s adds subject share mints back exactly once", (type) => {
+    const operation: ParsedOperationLimit = {
+      ...(type === "vaultV1MigrateToV2"
+        ? {
+            type,
+            sourceVault: vault,
+            targetVault: owner,
+            inputs: { shares: 100n },
+          }
+        : type === "vaultV1Withdraw" || type === "vaultV2Withdraw"
+          ? { type, vault, inputs: { assets: 100n } }
+          : { type, vault, inputs: { shares: 100n } }),
+      account: receiver,
+      quote: { sharesBurned: 100n },
+      slippageTolerance: 0n,
+      derivedFields: ["sharesBurned"],
+      exactFields: ["sharesBurned"],
+    };
+    const plan = planStateReads({
+      operations: [{ limit: operation }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.reads[0]!.id;
+    for (const minted of [0n, 15n, 120n]) {
+      const transfers: Transfer[] = [
+        {
+          token: vault,
+          from: zeroAddress,
+          to: receiver,
+          amount: minted / 2n,
+          txIdx: 0,
+        },
+        {
+          token: vault,
+          from: zeroAddress,
+          to: receiver,
+          amount: minted - minted / 2n,
+          txIdx: 0,
+        },
+        {
+          token: owner,
+          from: zeroAddress,
+          to: receiver,
+          amount: 999n,
+          txIdx: 0,
+        },
+        { token: vault, from: zeroAddress, to: owner, amount: 999n, txIdx: 0 },
+        { token: vault, from: owner, to: receiver, amount: 999n, txIdx: 0 },
+      ];
+      const params = {
+        ctx,
+        operations: plan.operations,
+        before: new Map([[id, 200n]]),
+        after: new Map([[id, 100n + minted]]),
+        transfers,
+        logs: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      };
+      expect(verifySlippage(params)[0]?.checkedLimits.fieldChecks).toEqual({
+        sharesBurned: "exact",
+      });
+      for (const actualBurn of [99n, 101n]) {
+        expect(() =>
+          verifySlippage({
+            ...params,
+            after: new Map([[id, 200n + minted - actualBurn]]),
+          }),
+        ).toThrow(ConsumerLimitViolationError);
+      }
+      expect(() =>
+        verifySlippage({
+          ...params,
+          operations: [
+            {
+              ...plan.operations[0]!,
+              limit: { ...operation, derivedFields: [], exactFields: [] },
+            },
+          ],
+          after: new Map([[id, 99n + minted]]),
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    }
+  });
+
   test.each([
     "blueSupply",
     "blueWithdraw",
@@ -151,7 +541,15 @@ describe("verifySlippage", () => {
       const adverse = guard.direction === "increase" ? 1n : -1n;
       expect(() => check(0n)).not.toThrow();
       expect(() => check(-adverse)).not.toThrow();
-      expect(() => check(adverse)).toThrow(ConsumerLimitViolationError);
+      expect(() => check(adverse)).toThrow(
+        expect.objectContaining({
+          field: guard.field,
+          check: "unchangedState",
+          expected: position[guard.field],
+          observed: position[guard.field] + adverse,
+          bound: position[guard.field],
+        }),
+      );
       expect(() => check(adverse, { quoteOnly: true })).not.toThrow();
       expect(() => check(0n, { missing: true })).toThrow(
         SlippageCheckUnavailableError,
@@ -627,6 +1025,12 @@ describe("verifySlippage", () => {
     })();
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain('allowed bound "99", got "98"');
+    expect(error).toMatchObject({
+      operationIndex: 0,
+      check: "slippageTolerance",
+      observed: 98n,
+      bound: 99n,
+    });
   });
   test("behavior: a native assetsReceived quote uses incoming traces", () => {
     const nativeLimit = {
@@ -2309,6 +2713,85 @@ describe("verifySlippage — Midnight sells", () => {
     ).toThrowError(ConsumerLimitViolationError);
   });
 
+  test("error: a wallet-balance violation names its token and account", () => {
+    const otherToken: Address = "0x0000000000000000000000000000000000000007";
+    const combinedLimit: ParsedOperationLimit = {
+      type: "midnightSupplyCollateralTakeBorrow",
+      marketId,
+      receiver: owner,
+      quote: {
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 30n },
+          { collateralIndex: 1n, assets: 30n },
+        ],
+        unitsSold: 10n,
+        assetsReceived: 20n,
+      },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: combinedLimit,
+          assetsReceived: token,
+          midnightMarket,
+          midnightCollateralTokens: [
+            { collateralIndex: 0n, token: vault },
+            { collateralIndex: 1n, token: otherToken },
+          ],
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+      midnight,
+    });
+    const supplyReads = plan.operations[0]?.collateralSupplyReads ?? [];
+    const bounds = plan.operations[0]?.walletBounds ?? [];
+    const readId = (wallet: Address) =>
+      bounds.find((bound) => bound.token === wallet)!.readId;
+    const creditReadId = plan.reads.find(
+      (read) => read.kind === "midnight.credit",
+    )!.id;
+    const debtReadId = plan.reads.find(
+      (read) => read.kind === "midnight.debt",
+    )!.id;
+    // Both collateral pulls are capped at 30; only otherToken is overdrawn.
+    expect(() =>
+      verifySlippage({
+        ctx,
+        logs: [],
+        morpho: zeroAddress,
+        operations: plan.operations,
+        before: new Map([
+          ...supplyReads.map((read) => [read.readId, 0n] as const),
+          [readId(vault), 100n],
+          [readId(otherToken), 100n],
+          [readId(token), 100n],
+          [creditReadId, 100n],
+          [debtReadId, 20n],
+        ]),
+        after: new Map([
+          ...supplyReads.map((read) => [read.readId, 30n] as const),
+          [readId(vault), 70n],
+          [readId(otherToken), 69n],
+          [readId(token), 120n],
+          [creditReadId, 90n],
+          [debtReadId, 20n],
+        ]),
+        transfers: [],
+        requestTransactions: [],
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        field: "walletBalance",
+        check: "slippageTolerance",
+        expected: -30n,
+        observed: -31n,
+        entry: { token: otherToken, account: owner },
+      }),
+    );
+  });
+
   test("error: combined limits reject a unitsSold overrun", () => {
     const combinedLimit: ParsedOperationLimit = {
       type: "midnightSupplyCollateralTakeBorrow",
@@ -2724,6 +3207,12 @@ describe("verifySlippage — Midnight sells", () => {
       "Limit operation 0 (midnightTakeWithdraw)",
     );
     expect((error as Error).message).toContain("debt changed");
+    expect(error).toMatchObject({
+      field: "debt",
+      check: "unchangedState",
+      expected: 20n,
+      observed: 21n,
+    });
     expect((error as Error).message).not.toMatch(/transaction \d+/);
   });
 });
@@ -2972,6 +3461,15 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
     expect(() => run(withdrawOnlyLimit, { debtAfter: 101n })).toThrowError(
       new ConsumerLimitViolationError(
         'Limit operation 0 (midnightRepayWithdrawCollateral): Midnight debt increased from "100" to "101"; a repay-withdraw without a debtRepaid quote must not increase debt. Remove the debt-increasing transaction from the bundle.',
+        {
+          operationIndex: 0,
+          operationType: "midnightRepayWithdrawCollateral",
+          field: "debt",
+          check: "unchangedState",
+          expected: 100n,
+          observed: 101n,
+          bound: 100n,
+        },
       ),
     );
   });
@@ -2985,6 +3483,15 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
     expect(() => run(fullRepayLimit, { debtAfter: 150n })).toThrowError(
       new ConsumerLimitViolationError(
         'Limit operation 0 (midnightRepayWithdrawCollateral): Midnight debt increased from "100" to "150"; a repay-withdraw without a debtRepaid quote must not increase debt. Remove the debt-increasing transaction from the bundle.',
+        {
+          operationIndex: 0,
+          operationType: "midnightRepayWithdrawCollateral",
+          field: "debt",
+          check: "unchangedState",
+          expected: 100n,
+          observed: 150n,
+          bound: 100n,
+        },
       ),
     );
   });
@@ -2999,6 +3506,15 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
     expect(() => run(takeRepayLimit, { debtAfter: 150n })).toThrowError(
       new ConsumerLimitViolationError(
         'Limit operation 0 (midnightTakeRepayWithdrawCollateral): Midnight debt increased from "100" to "150"; a repay-withdraw without a debtRepaid quote must not increase debt. Remove the debt-increasing transaction from the bundle.',
+        {
+          operationIndex: 0,
+          operationType: "midnightTakeRepayWithdrawCollateral",
+          field: "debt",
+          check: "unchangedState",
+          expected: 100n,
+          observed: 150n,
+          bound: 100n,
+        },
       ),
     );
   });
@@ -3337,6 +3853,12 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
       name: "changed credit",
       changes: { creditAfter: 49n },
       message: "credit changed",
+      fields: {
+        field: "credit",
+        check: "unchangedState",
+        expected: 50n,
+        observed: 49n,
+      },
     },
     {
       name: "missing debt",
@@ -3363,7 +3885,8 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
       changes: { missing: "payment" },
       message: "midnightRepayWithdrawCollateral",
     },
-  ] as const)("error: rejects $name", ({ changes, message }) => {
+  ] as const)("error: rejects $name", (testCase) => {
+    const { changes, message } = testCase;
     const error = (() => {
       try {
         run(midnightLimit, changes);
@@ -3377,5 +3900,726 @@ describe("verifySlippage — Midnight repay-withdraw", () => {
         : SlippageCheckUnavailableError,
     );
     expect((error as Error).message).toContain(message);
+    if ("fields" in testCase && testCase.fields !== undefined)
+      expect(error).toMatchObject(testCase.fields);
+  });
+});
+
+describe("findOperationSlippageFailures", () => {
+  const base = {
+    ctx,
+    before: new Map<string, StateValue>(),
+    after: new Map<string, StateValue>(),
+    transfers: [],
+    logs: [],
+    morpho: zeroAddress,
+    requestTransactions: [],
+  } as const;
+
+  test("returns empty failures and checked operations for empty and successful requests", () => {
+    expect(findOperationSlippageFailures({ ...base, operations: [] })).toEqual({
+      failures: [],
+      checked: [],
+    });
+    const params = {
+      ...base,
+      operations: [{ limit: { ...limit, quote: {} }, measurements: [] }],
+    };
+    const result = findOperationSlippageFailures(params);
+    expect(result.failures).toEqual([]);
+    expect(result.checked).toEqual(verifySlippage(params));
+    expect(result.checked).toHaveLength(1);
+  });
+
+  test("returns mixed failures in operation and field check order with unchanged facts", () => {
+    const params = {
+      ...base,
+      before: new Map<string, StateValue>([
+        ["assets", 0n],
+        ["shares", 0n],
+      ]),
+      after: new Map<string, StateValue>([
+        ["assets", -20n],
+        ["shares", 1n],
+      ]),
+      operations: [
+        {
+          limit: {
+            ...limit,
+            quote: { assetsPaid: 10n, sharesMinted: 5n },
+            slippageTolerance: 0n,
+            sharePrice: { expected: MathLib.RAY, tolerance: 0n },
+          },
+          measurements: [
+            { type: "balance", field: "assetsPaid", readId: "assets" },
+            { type: "balance", field: "sharesMinted", readId: "shares" },
+          ],
+        },
+        {
+          limit: {
+            ...limit,
+            quote: { assetsPaid: 10n, sharesMinted: 5n },
+            slippageTolerance: 0n,
+          },
+          measurements: [],
+        },
+      ] as const,
+    };
+    const { failures } = findOperationSlippageFailures(params);
+    expect(failures).toEqual([
+      expect.objectContaining({
+        operationIndex: 0,
+        operationType: limit.type,
+        field: "assetsPaid",
+        check: "slippageTolerance",
+        expected: 10n,
+        observed: 20n,
+        tolerance: 0n,
+        bound: 10n,
+      }),
+      expect.objectContaining({
+        operationIndex: 0,
+        operationType: limit.type,
+        field: "sharesMinted",
+        check: "slippageTolerance",
+        expected: 5n,
+        observed: 1n,
+        tolerance: 0n,
+        bound: 5n,
+      }),
+      expect.objectContaining({
+        operationIndex: 0,
+        operationType: limit.type,
+        field: "sharePrice",
+        check: "slippageTolerance",
+        expected: MathLib.RAY,
+        observed: 20n * MathLib.RAY,
+        tolerance: 0n,
+        bound: MathLib.RAY,
+      }),
+      expect.objectContaining({
+        operationIndex: 1,
+        operationType: limit.type,
+        field: "assetsPaid",
+        reason: "missingRead",
+      }),
+      expect.objectContaining({
+        operationIndex: 1,
+        operationType: limit.type,
+        field: "sharesMinted",
+        reason: "missingRead",
+      }),
+    ]);
+    expect(failures[0]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(failures[3]).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(() => verifySlippage(params)).toThrowError(failures[0]);
+  });
+
+  test("skips dependent quote and share-price checks after a missing measurement", () => {
+    const params = {
+      ...base,
+      operations: [
+        {
+          limit: {
+            ...limit,
+            quote: { sharesMinted: 5n },
+            sharePrice: { expected: MathLib.RAY, tolerance: 0n },
+          },
+          measurements: [
+            { type: "balance", field: "sharesMinted", readId: "missing" },
+          ],
+        },
+      ] as const,
+    };
+    const { failures } = findOperationSlippageFailures(params);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      operationIndex: 0,
+      operationType: limit.type,
+      field: "sharesMinted",
+      reason: "missingRead",
+    });
+    expect(() => verifySlippage(params)).toThrowError(failures[0]);
+  });
+
+  test("keeps an earlier limit failure ahead of a later response-integrity throw", () => {
+    const malformed: RawLog = {
+      address: vault,
+      topics: encodeEventTopics({
+        abi: vaultV2Abi,
+        eventName: "Withdraw",
+      }) as Hex[],
+      data: "0x",
+    };
+    const params = {
+      ...base,
+      before: new Map<string, StateValue>([["shares", 0n]]),
+      after: new Map<string, StateValue>([["shares", 1n]]),
+      logs: [[malformed]],
+      operations: [
+        {
+          limit,
+          measurements: [
+            { type: "balance", field: "sharesMinted", readId: "shares" },
+          ],
+        },
+        {
+          limit: {
+            type: "vaultV2ForceRedeem",
+            vault,
+            quote: { penalty: 1n },
+            slippageTolerance: 0n,
+          },
+          measurements: [],
+        },
+      ] as const,
+    };
+    expect(() => findOperationSlippageFailures(params)).toThrow(
+      InvalidSimulationResponseError,
+    );
+    expect(() => verifySlippage(params)).toThrow(ConsumerLimitViolationError);
+    expect(() =>
+      verifySlippage({ ...params, operations: [params.operations[1]] }),
+    ).toThrow(InvalidSimulationResponseError);
+  });
+});
+
+test("slippage collection keeps independent collateral delivery checks when the position read is missing", () => {
+  const params = {
+    ctx,
+    logs: [],
+    transfers: [],
+    morpho: zeroAddress,
+    requestTransactions: [],
+    before: new Map<string, StateValue>([
+      ["debt", 0n],
+      ["credit", 0n],
+      ["receiver", 0n],
+    ]),
+    after: new Map<string, StateValue>([
+      ["debt", 0n],
+      ["credit", 0n],
+      ["receiver", 0n],
+    ]),
+    operations: [
+      {
+        limit: {
+          type: "midnightRepayWithdrawCollateral",
+          marketId: `0x${"11".repeat(32)}` as Hex,
+          quote: {
+            collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+          },
+          slippageTolerance: 0n,
+          position: { maxCollateral: [{ collateralIndex: 0n, assets: 5n }] },
+        },
+        measurements: [],
+        debtReadId: "debt",
+        creditReadId: "credit",
+        collateralReads: [
+          {
+            collateralIndex: 0n,
+            positionReadId: "position",
+            receiverBalanceReadId: "receiver",
+          },
+        ],
+      },
+    ],
+  } as const;
+  const { failures } = findOperationSlippageFailures(params);
+  expect(failures).toEqual([
+    expect.objectContaining({
+      operationIndex: 0,
+      operationType: "midnightRepayWithdrawCollateral",
+      field: "collateralWithdrawals",
+      reason: "missingRead",
+    }),
+    expect.objectContaining({
+      operationIndex: 0,
+      operationType: "midnightRepayWithdrawCollateral",
+      field: "collateralWithdrawals",
+      check: "slippageTolerance",
+      expected: 10n,
+      observed: 0n,
+      tolerance: 0n,
+      bound: 10n,
+    }),
+  ]);
+  expect(() => verifySlippage(params)).toThrowError(failures[0]);
+});
+
+describe("shared-read position bounds", () => {
+  const marketId = `0x${"11".repeat(32)}` as MarketId;
+  const entries = [
+    { collateralIndex: 0n, assets: 1n },
+    { collateralIndex: 1n, assets: 1n },
+  ];
+  const quotes = {
+    blueSupply: { assetsPaid: 1n, sharesMinted: 1n },
+    blueWithdraw: { assetsReceived: 1n, sharesBurned: 1n },
+    blueSupplyCollateral: { assetsPaid: 1n, collateralSupplied: 1n },
+    blueBorrow: { assetsReceived: 1n, sharesMinted: 1n },
+    blueSupplyCollateralBorrow: {
+      assetsPaid: 1n,
+      assetsReceived: 1n,
+      sharesMinted: 1n,
+      collateralSupplied: 1n,
+    },
+    blueRepay: { assetsPaid: 1n, sharesBurned: 1n },
+    blueWithdrawCollateral: { assetsReceived: 1n, collateralWithdrawn: 1n },
+    blueRepayWithdrawCollateral: {
+      assetsPaid: 1n,
+      assetsReceived: 1n,
+      sharesBurned: 1n,
+      collateralWithdrawn: 1n,
+    },
+    blueRefinance: { sharesBurned: 1n, sharesMinted: 1n },
+    vaultV1Deposit: { assetsPaid: 1n, sharesMinted: 1n },
+    vaultV2Deposit: { assetsPaid: 1n, sharesMinted: 1n },
+    vaultV1Withdraw: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV2Withdraw: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV1Redeem: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV2Redeem: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV2ForceWithdraw: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV2ForceRedeem: { assetsReceived: 1n, sharesBurned: 1n },
+    vaultV1InKindRedeem: {
+      sharesBurned: 1n,
+      positions: [{ marketId, supplyShares: 1n }],
+    },
+    vaultV2InKindRedeem: {
+      sharesBurned: 1n,
+      positions: [{ marketId, supplyShares: 1n }],
+    },
+    vaultV1MigrateToV2: { sharesBurned: 1n, sharesMinted: 1n },
+    midnightSupplyCollateral: { assetsPaid: 1n, collateralSupplied: 1n },
+    midnightSupplyCollateralBatch: { collateralSupplies: entries },
+    midnightWithdrawCollateralBatch: { collateralWithdrawals: entries },
+    midnightSupplyCollateralMakeBorrow: {
+      assetsPaid: 1n,
+      collateralSupplied: 1n,
+    },
+    midnightSupplyBlueMakeLend: { assetsPaid: 1n, sharesMinted: 1n },
+    midnightRedeem: { assetsReceived: 1n, creditRedeemed: 1n },
+    midnightTakeLend: { assetsPaid: 1n, unitsBought: 1n },
+    midnightTakeBorrow: { assetsReceived: 1n, unitsSold: 1n },
+    midnightTakeWithdraw: { assetsReceived: 1n, creditRedeemed: 1n },
+    midnightSupplyCollateralTakeBorrow: {
+      assetsReceived: 1n,
+      unitsSold: 1n,
+      collateralSupplies: entries,
+    },
+    midnightRepayWithdrawCollateral: {
+      assetsPaid: 1n,
+      debtRepaid: 1n,
+      collateralWithdrawals: entries,
+    },
+    midnightTakeRepayWithdrawCollateral: {
+      assetsPaid: 1n,
+      debtRepaid: 1n,
+      collateralWithdrawals: entries,
+    },
+  } satisfies Record<OperationType, SlippageQuote>;
+
+  describe.each(OPERATION_TYPES)("planned %s missing reads", (type) => {
+    test.each(["before", "after", "both"] as const)(
+      "reports each read once when %s is missing",
+      (missing) => {
+        const operationLimit = {
+          type,
+          marketId,
+          sourceMarketId: marketId,
+          targetMarketId: `0x${"22".repeat(32)}` as MarketId,
+          vault,
+          sourceVault: vault,
+          targetVault: receiver,
+          collateralIndex: 0n,
+          loanToken: owner,
+          callbackSalt: marketId,
+          quote: quotes[type],
+          slippageTolerance: 0n,
+          ...(sharePriceMeasurement(type) === undefined
+            ? {}
+            : { sharePrice: { expected: MathLib.RAY, tolerance: 0n } }),
+          ...(type.startsWith("blue")
+            ? { position: { maxBorrowShares: 5n } }
+            : type === "midnightRedeem"
+              ? { position: { maxCredit: 5n } }
+              : type === "midnightRepayWithdrawCollateral" ||
+                  type === "midnightTakeRepayWithdrawCollateral"
+                ? { position: { maxDebt: 5n, maxCollateral: entries } }
+                : {}),
+        } as ParsedOperationLimit;
+        const plan = planStateReads({
+          operations: [
+            {
+              limit: operationLimit,
+              assetsPaid: vault,
+              assetsReceived: receiver,
+              blueBuyCallback: receiver,
+              midnightMarket: {
+                chainId: 1n,
+                midnight: vault,
+                loanToken: owner,
+                collateralParams: entries.map(() => ({
+                  token: receiver,
+                  lltv: 0n,
+                  liquidationCursor: 0n,
+                  oracle: zeroAddress,
+                })),
+                maturity: 2_000_000_000n,
+                rcfThreshold: 0n,
+                enterGate: zeroAddress,
+                liquidatorGate: zeroAddress,
+              },
+              midnightCollateralTokens: entries.map(({ collateralIndex }) => ({
+                collateralIndex,
+                token: receiver,
+              })),
+            },
+          ],
+          owner,
+          morpho: zeroAddress,
+          midnight: vault,
+        });
+        expect(plan.reads.length).toBeGreaterThan(0);
+        for (const read of plan.reads) {
+          const before = new Map<string, StateValue>(
+            plan.reads.map((entry) => [
+              entry.id,
+              entry.kind === "morpho.position"
+                ? { supplyShares: 10n, borrowShares: 10n, collateral: 10n }
+                : 10n,
+            ]),
+          );
+          const after = new Map(before);
+          const params = {
+            ctx,
+            before,
+            after,
+            operations: plan.operations,
+            logs: [],
+            transfers: [],
+            morpho: zeroAddress,
+            requestTransactions: [],
+          };
+          const baseline = findOperationSlippageFailures(params).failures;
+          expect(
+            baseline.filter(
+              (failure) => failure instanceof SlippageCheckUnavailableError,
+            ),
+          ).toEqual([]);
+          if (missing !== "after") before.delete(read.id);
+          if (missing !== "before") after.delete(read.id);
+          const { failures } = findOperationSlippageFailures(params);
+          expect(() => verifySlippage(params)).toThrowError(failures[0]);
+          expect(
+            failures.filter(
+              (failure) =>
+                failure instanceof SlippageCheckUnavailableError &&
+                failure.reason === "missingRead",
+            ),
+            `${type}: ${read.id}, missing ${missing}`,
+          ).toHaveLength(1);
+          if (missing === "before")
+            expect(
+              failures.filter(
+                (failure) =>
+                  failure instanceof ConsumerLimitViolationError &&
+                  failure.check === "positionBound",
+              ),
+            ).toEqual(
+              baseline.filter(
+                (failure) =>
+                  failure instanceof ConsumerLimitViolationError &&
+                  failure.check === "positionBound",
+              ),
+            );
+        }
+      },
+    );
+  });
+
+  test.each(["before", "after", "both"] as const)(
+    "deduplicates a planned read shared across operations with missing %s",
+    (missing) => {
+      const plan = planStateReads({
+        operations: (
+          ["blueSupplyCollateralBorrow", "blueRepayWithdrawCollateral"] as const
+        ).map((type) => ({
+          limit: { type, marketId, quote: quotes[type], slippageTolerance: 0n },
+          assetsPaid: vault,
+          assetsReceived: receiver,
+        })),
+        owner,
+        morpho: zeroAddress,
+        midnight: vault,
+      });
+      const read = plan.reads.find(
+        (entry) => entry.kind === "morpho.position",
+      )!;
+      const before = new Map<string, StateValue>(
+        plan.reads.map((entry) => [
+          entry.id,
+          entry.kind === "morpho.position"
+            ? { supplyShares: 10n, borrowShares: 10n, collateral: 10n }
+            : 10n,
+        ]),
+      );
+      const after = new Map(before);
+      if (missing !== "after") before.delete(read.id);
+      if (missing !== "before") after.delete(read.id);
+      const params = {
+        ctx,
+        before,
+        after,
+        operations: plan.operations,
+        logs: [],
+        transfers: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      };
+      const { failures } = findOperationSlippageFailures(params);
+      expect(
+        failures.filter(
+          (failure) =>
+            failure instanceof SlippageCheckUnavailableError &&
+            failure.reason === "missingRead",
+        ),
+      ).toHaveLength(1);
+      expect(failures[0]).toEqual(
+        expect.objectContaining({
+          operationIndex: 0,
+          field: "sharesMinted",
+          reason: "missingRead",
+        }),
+      );
+      expect(() => verifySlippage(params)).toThrowError(failures[0]);
+    },
+  );
+  test.each(["before", "after", "both"] as const)(
+    "reports a planned Blue position read once when %s state is missing",
+    (missing) => {
+      const plan = planStateReads({
+        operations: [
+          {
+            limit: {
+              type: "blueSupply",
+              marketId,
+              inputs: { assets: 1n },
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+              slippageTolerance: 0n,
+              sharePrice: { expected: MathLib.RAY, tolerance: 0n },
+              position: { maxBorrowShares: 5n },
+            },
+            assetsPaid: vault,
+          },
+        ],
+        owner,
+        morpho: zeroAddress,
+        midnight: zeroAddress,
+      });
+      const operation = plan.operations[0]!;
+      const readId = operation.counterSide!.readId;
+      expect(operation.measurements).toContainEqual(
+        expect.objectContaining({
+          type: "position",
+          field: "sharesMinted",
+          readId,
+        }),
+      );
+      expect(operation.positionBoundsReadId).toBe(readId);
+      const before = new Map<string, StateValue>(
+        plan.reads.map((read) => [
+          read.id,
+          read.id === readId
+            ? { supplyShares: 0n, borrowShares: 10n, collateral: 0n }
+            : 10n,
+        ]),
+      );
+      const after = new Map<string, StateValue>(
+        plan.reads.map((read) => [
+          read.id,
+          read.id === readId
+            ? { supplyShares: 1n, borrowShares: 10n, collateral: 0n }
+            : 9n,
+        ]),
+      );
+      if (missing !== "after") before.delete(readId);
+      if (missing !== "before") after.delete(readId);
+      const params = {
+        ctx,
+        before,
+        after,
+        operations: plan.operations,
+        logs: [],
+        transfers: [],
+        morpho: zeroAddress,
+        requestTransactions: [],
+      };
+      const { failures } = findOperationSlippageFailures(params);
+      expect(failures).toEqual([
+        expect.objectContaining({
+          operationIndex: 0,
+          operationType: "blueSupply",
+          field: "position",
+          reason: "missingRead",
+        }),
+        ...(missing === "before"
+          ? [
+              expect.objectContaining({
+                operationIndex: 0,
+                operationType: "blueSupply",
+                field: "position.maxBorrowShares",
+                check: "positionBound",
+                expected: 5n,
+                observed: 10n,
+                bound: 5n,
+              }),
+            ]
+          : []),
+      ]);
+      expect(() => verifySlippage(params)).toThrowError(failures[0]);
+    },
+  );
+
+  const cases: readonly {
+    readonly name: string;
+    readonly operation: SlippageOperationReads;
+    readonly value: StateValue;
+    readonly unavailableField: string;
+    readonly boundField: string;
+  }[] = [
+    {
+      name: "Blue counter-side position",
+      operation: {
+        limit: {
+          type: "blueSupply",
+          marketId,
+          inputs: { assets: 1n },
+          quote: {},
+          slippageTolerance: 0n,
+          position: { maxBorrowShares: 5n },
+        },
+        measurements: [],
+        counterSide: {
+          readId: "shared",
+          guards: [{ field: "borrowShares", direction: "increase" }],
+        },
+        positionBoundsReadId: "shared",
+      },
+      value: { supplyShares: 0n, borrowShares: 10n, collateral: 0n },
+      unavailableField: "position",
+      boundField: "position.maxBorrowShares",
+    },
+    {
+      name: "Midnight debt-increase check",
+      operation: {
+        limit: {
+          type: "midnightRepayWithdrawCollateral",
+          marketId,
+          quote: {},
+          slippageTolerance: 0n,
+          position: { maxDebt: 5n },
+        },
+        measurements: [],
+        debtReadId: "shared",
+        creditReadId: "credit",
+      },
+      value: 10n,
+      unavailableField: "debt",
+      boundField: "position.maxDebt",
+    },
+    {
+      name: "Midnight credit-redeemed measurement",
+      operation: {
+        limit: {
+          type: "midnightRedeem",
+          marketId,
+          quote: { creditRedeemed: 1n },
+          slippageTolerance: 0n,
+          position: { maxCredit: 5n },
+        },
+        measurements: [
+          { type: "balance", field: "creditRedeemed", readId: "shared" },
+        ],
+        creditReadId: "shared",
+        positionBoundsReadId: "shared",
+      },
+      value: 10n,
+      unavailableField: "creditRedeemed",
+      boundField: "position.maxCredit",
+    },
+  ];
+
+  describe.each(cases)(
+    "$name",
+    ({ operation, value, unavailableField, boundField }) => {
+      test.each(["before", "after", "both", "neither"] as const)(
+        "missing %s state suppresses only dependent unavailable bounds",
+        (missing) => {
+          const before = new Map<string, StateValue>([["credit", 0n]]);
+          const after = new Map<string, StateValue>([["credit", 0n]]);
+          if (missing !== "before" && missing !== "both")
+            before.set("shared", value);
+          if (missing !== "after" && missing !== "both")
+            after.set("shared", value);
+          const params = {
+            ctx,
+            before,
+            after,
+            operations: [operation],
+            logs: [],
+            transfers: [],
+            morpho: zeroAddress,
+            requestTransactions: [],
+          };
+          const { failures } = findOperationSlippageFailures(params);
+          const expected = [];
+          if (missing !== "neither")
+            expected.push(
+              expect.objectContaining({
+                operationIndex: 0,
+                operationType: operation.limit.type,
+                field: unavailableField,
+                reason: "missingRead",
+              }),
+            );
+          if (missing === "before" || missing === "neither")
+            expected.push(
+              expect.objectContaining({
+                operationIndex: 0,
+                operationType: operation.limit.type,
+                field: boundField,
+                check: "positionBound",
+                expected: 5n,
+                observed: 10n,
+                bound: 5n,
+              }),
+            );
+          expect(failures).toEqual(expected);
+          expect(() => verifySlippage(params)).toThrowError(failures[0]);
+        },
+      );
+    },
+  );
+
+  test("does not suppress a bound backed by a different missing read", () => {
+    const operation = cases[0]!.operation;
+    const params = {
+      ctx,
+      before: new Map<string, StateValue>(),
+      after: new Map<string, StateValue>(),
+      operations: [{ ...operation, positionBoundsReadId: "different" }],
+      logs: [],
+      transfers: [],
+      morpho: zeroAddress,
+      requestTransactions: [],
+    };
+    const { failures } = findOperationSlippageFailures(params);
+    expect(failures).toHaveLength(2);
+    expect(failures.map(({ field }) => field)).toEqual([
+      "position",
+      "position",
+    ]);
+    expect(() => verifySlippage(params)).toThrowError(failures[0]);
   });
 });

@@ -6,9 +6,9 @@
 - **Chain safety.** Re-validate the chain after each read, around ERC-4337 signing, before EOA broadcast, and on the signed transaction's chain id. Explicit vault or market targets require a `chainId`. Accepted RPC trust gaps are recorded in the root [`THREAT_MODEL.md`](../../THREAT_MODEL.md) (RPC section); reference it rather than restating them.
 - **Wallet-only recipients.** `onBehalfOf` and `to` must equal the wallet address; keep new flows to that rule.
 - **Per-process EOA send queue.** EOA sends are serialized per chain and address in a module-level queue so concurrent sends don't reuse the same pending nonce. It is the only module-level mutable state allowed here: entries are removed when they settle, and it must not carry data between `getRequirements`/`sign` and `buildTx`.
-- **Errors.** Every failure throws an exported, named class from `src/errors.ts` or a reused `morpho-sdk` class, re-exported from `src/index.ts`. Current exception: some option, recipient, target and balance checks in `src/morpho-protocol-evm.ts` still throw plain `Error` until they are migrated; don't add new ones.
+- **Errors.** Every failure throws an exported, named class from `src/errors.ts` or a reused `morpho-sdk` class, re-exported from `src/index.ts`.
 - **License exception.** This is the only Apache-2.0 package in the monorepo (everything else is MIT). Keep the package `LICENSE` and `package.json#license`; relicensing needs its own decision record.
 
 ## Tests
 
-- Unit tests are colocated `src/*.test.ts` and use a mocked transport. Fork tests live in `test/*.integration.test.ts`, run on Anvil forks through `@morpho-org/test`, and must skip when `ERPC_SECRET` is unset (`describe.skipIf(!process.env.ERPC_SECRET)`). Current exception: `test/submission.chaos.integration.test.ts` has no such guard yet.
+- Unit tests are colocated `src/*.test.ts` and use a mocked transport. Fork tests live in `test/*.integration.test.ts`, run on Anvil forks through `@morpho-org/test`, and must skip when `ERPC_SECRET` is unset (`describe.skipIf(!process.env.ERPC_SECRET)`).

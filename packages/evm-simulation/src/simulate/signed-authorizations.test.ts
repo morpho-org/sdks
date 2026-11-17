@@ -8,8 +8,9 @@ import {
   encodeEventTopics,
   erc20Abi,
   type Hex,
+  zeroAddress,
 } from "viem";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import type {
   BlueAuthorizationSignature,
   Erc2612PermitAuthorization,
@@ -20,7 +21,10 @@ import {
   UnusedAuthorizationError,
 } from "../index.js";
 import type { RawLog } from "../types.js";
-import { assertSignedAuthorizationsUsed } from "./signed-authorizations.js";
+import {
+  assertSignedAuthorizationsUsed,
+  findSignedAuthorizationUseFailures,
+} from "./signed-authorizations.js";
 
 const owner = "0x1111111111111111111111111111111111111111";
 const spender = "0x2222222222222222222222222222222222222222";
@@ -440,4 +444,114 @@ test("does not reuse an EcrecoverAuthorizer event for duplicate signatures", () 
       authorization: midnight,
     }),
   );
+});
+
+describe("findSignedAuthorizationUseFailures", () => {
+  const signedPermit: Erc2612PermitAuthorization = {
+    type: "erc2612Permit",
+    typedData: {
+      domain: { chainId: 1, verifyingContract: zeroAddress },
+      primaryType: "Permit",
+      types: { Permit: [] },
+      message: {
+        owner: zeroAddress,
+        spender: zeroAddress,
+        value: 1n,
+        nonce: 0n,
+        deadline: 100n,
+      },
+    },
+  };
+  const log = {
+    address: zeroAddress,
+    topics: encodeEventTopics({
+      abi: erc20Abi,
+      eventName: "Approval",
+      args: { owner: zeroAddress, spender: zeroAddress },
+    }) as Hex[],
+    data: encodeAbiParameters([{ type: "uint256" }], [1n]),
+  };
+  const params = { morpho: zeroAddress, ecrecoverAuthorizer: zeroAddress };
+
+  test("returns no failures for empty requests and matching evidence", () => {
+    expect(
+      findSignedAuthorizationUseFailures({
+        ...params,
+        authorizations: [],
+        logs: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      findSignedAuthorizationUseFailures({
+        ...params,
+        authorizations: [signedPermit],
+        logs: [log],
+      }),
+    ).toEqual([]);
+  });
+
+  test("returns unused signatures in request order without reusing events", () => {
+    const input = {
+      ...params,
+      authorizations: [signedPermit, signedPermit, signedPermit],
+      logs: [log],
+    };
+    const failures = findSignedAuthorizationUseFailures(input);
+    expect(failures).toEqual([
+      new UnusedAuthorizationError(1, signedPermit),
+      new UnusedAuthorizationError(2, signedPermit),
+    ]);
+    expect(() => assertSignedAuthorizationsUsed(input)).toThrowError(
+      failures[0],
+    );
+  });
+
+  test("returns one missing-log failure for duplicate signed requests", () => {
+    const failures = findSignedAuthorizationUseFailures({
+      ...params,
+      authorizations: [signedPermit, signedPermit],
+      logs: undefined,
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(ApprovalCheckUnavailableError);
+  });
+
+  test("returns one missing-log failure across all signed authorization types", () => {
+    const failures = findSignedAuthorizationUseFailures({
+      ...params,
+      authorizations: [signedPermit, blue, midnight],
+      logs: undefined,
+    });
+    expect(failures).toEqual([
+      new ApprovalCheckUnavailableError(
+        "Simulation response omitted user-transaction logs; signature-use checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.",
+      ),
+    ]);
+  });
+
+  test("keeps unsupported requests in order around the first missing-log failure", () => {
+    const unsupported = {
+      type: "unsupported",
+    } as unknown as Erc2612PermitAuthorization;
+    const failures = findSignedAuthorizationUseFailures({
+      ...params,
+      authorizations: [
+        unsupported,
+        signedPermit,
+        unsupported,
+        blue,
+        midnight,
+        unsupported,
+      ],
+      logs: undefined,
+    });
+    expect(failures).toEqual([
+      new UnusedAuthorizationError(0, unsupported),
+      new ApprovalCheckUnavailableError(
+        "Simulation response omitted user-transaction logs; signature-use checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.",
+      ),
+      new UnusedAuthorizationError(2, unsupported),
+      new UnusedAuthorizationError(5, unsupported),
+    ]);
+  });
 });

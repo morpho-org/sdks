@@ -1,5 +1,31 @@
 # @morpho-org/morpho-ts
 
+## 4.4.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/morpho-ts"`, which takes precedence over the wildcards, and alias any others, for example `export { version as morphoTsVersion } from "@morpho-org/morpho-ts"`.
+
+## 4.3.1
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+
+## 4.3.0
+
+### Minor Changes
+
+- Document the package's shared addresses, ABIs, math and generic helpers alongside time and formatting utilities, and clarify integer time conversion and non-negative math rounding assumptions. Deprecate the `blueAddressRegistry`, `blueAddresses` and `blueDeployments` aliases in favor of `addressesRegistry`, `addresses` and `deployments`; the aliases remain available and runtime behavior is unchanged.
+
+  Document that direct conversions between two of weeks, months and years are unsupported: they currently return zero or an incorrect value, or throw a division-by-zero error. Convert through days or a smaller unit instead.
+
 ## 4.3.0-next.0
 
 ### Minor Changes

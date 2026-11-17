@@ -20,7 +20,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  SlippageCheckUnavailableError,
+  SimulationValidationError,
   simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
@@ -245,7 +245,12 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
       ...request,
       limits,
     }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(SlippageCheckUnavailableError);
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(error).toMatchObject({
+      fieldErrors: [
+        "limits.operations[0].assetPaid: required for a market the bundle creates",
+      ],
+    });
     expect((error as Error).message).toContain(
       'If this bundle creates the market, pass the market struct via "market".',
     );

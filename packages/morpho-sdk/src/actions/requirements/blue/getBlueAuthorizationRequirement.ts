@@ -16,6 +16,7 @@ import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ExpiredDeadlineError,
+  type ReferenceTimestampParams,
   type Requirement,
   type Transaction,
   UnsupportedAuthorizationOperatorError,
@@ -40,7 +41,7 @@ import { validateClientChainId } from "../validateClientChainId.js";
  * @param params.authorized - Operator to authorize. Defaults to the chain's registered
  *   BlueBundlesV1 deployment and must match it.
  * @param params.deadline - Optional signature deadline forwarded to the authorization encoder.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
  *   transaction so the destination route can consume the signed authorization.
  * @returns A deep-frozen `Transaction<BlueAuthorizationAction>`, a signable authorization
@@ -78,15 +79,16 @@ import { validateClientChainId } from "../validateClientChainId.js";
  * // otherwise Readonly<Transaction<BlueAuthorizationAction>>
  * ```
  */
-export const getBlueAuthorizationRequirement = async (params: {
-  readonly viemClient: Client;
-  readonly chainId: number;
-  readonly userAddress: Address;
-  readonly supportSignature?: boolean;
-  readonly authorized?: Address;
-  readonly deadline?: bigint;
-  readonly now?: bigint;
-}): Promise<
+export const getBlueAuthorizationRequirement = async (
+  params: {
+    readonly viemClient: Client;
+    readonly chainId: number;
+    readonly userAddress: Address;
+    readonly supportSignature?: boolean;
+    readonly authorized?: Address;
+    readonly deadline?: bigint;
+  } & ReferenceTimestampParams,
+): Promise<
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>
   | null

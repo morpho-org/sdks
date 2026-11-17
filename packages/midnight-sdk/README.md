@@ -148,7 +148,8 @@ tree, then call `SetterRatifierUtils.ratify({ tree })` before `Payload.encode(..
 
 The take-side starts from API book, quote, or maker takeable-offer responses. `MidnightApi` maps the
 router response into ABI-ready take objects: each item has `offer`, `ratifierData`, and `units` for
-`IMidnight.take`, plus `marketId` metadata from the API. Book `asks` are maker sell offers, while
+`IMidnight.take`, plus `marketId` and `validUntil` metadata from the API. `validUntil` is the
+inclusive Unix-second execution bound as a `bigint`. Book `asks` are maker sell offers, while
 book `bids` are maker buy offers.
 The quote's `averageWorstPrice` is an **aggregate** guard over the requested target: a favorable
 offer can compensate for a worse one, and the worse offer does not satisfy the guard on its own.
@@ -186,6 +187,7 @@ export async function takeAskQuoteAtomically(params: {
   readonly market: MarketParams;
   readonly marketId: Hash;
   readonly deadline: bigint;
+  readonly minimumDeadline?: bigint;
 }) {
   const targetUnits = parseUnits("50", 18);
   const quote = await MidnightApi.fetchBookQuote({
@@ -195,6 +197,17 @@ export async function takeAskQuoteAtomically(params: {
     units: targetUnits,
     slippage: "0.5",
   });
+
+  const deadline = quote.data.takeableOffers.reduce(
+    (bound, take) => take.validUntil < bound ? take.validUntil : bound,
+    params.deadline,
+  );
+  if (
+    deadline < BigInt(Math.floor(Date.now() / 1_000)) ||
+    deadline < (params.minimumDeadline ?? 0n)
+  ) {
+    throw new Error("Quote expires too soon; fetch a fresh quote.");
+  }
 
   // Keep the caller's target and the quote's aggregate guard as two independent inputs.
   // Do not substitute `quote.data.availableUnits` for the target: it is fallback capacity,
@@ -223,7 +236,7 @@ export async function takeAskQuoteAtomically(params: {
       0n, // referralFeePct
       zeroAddress, // referralFeeRecipient
       maxUint256, // maxContinuousFee: bound this to the fee the caller accepts
-      params.deadline,
+      deadline,
       zeroAddress, // wrappedNative
     ],
   });

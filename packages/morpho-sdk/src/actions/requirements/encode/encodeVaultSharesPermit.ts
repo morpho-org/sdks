@@ -12,11 +12,13 @@ import {
   type Erc2612RequirementSignature,
   ExpiredDeadlineError,
   type PermitRequirementSignature,
+  type ReferenceTimestampParams,
   type Requirement,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeVaultSharesPermit}. */
-export interface EncodeVaultSharesPermitParams {
+export interface EncodeVaultSharesPermitParams
+  extends ReferenceTimestampParams {
   /** Vault share token, including V1 permit-domain metadata when available. */
   readonly vault: Token;
   /** Vault generation, which selects the standard V1 or two-field V2 domain. */
@@ -31,8 +33,6 @@ export interface EncodeVaultSharesPermitParams {
   readonly nonce: bigint;
   /** Shared permit and bundle deadline. */
   readonly deadline: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  readonly now?: bigint;
 }
 
 /**
@@ -49,7 +49,7 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.chainId - Chain on which the vault and spender are deployed.
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.deadline - Shared permit and bundle deadline.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
  *   can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
@@ -62,6 +62,7 @@ export interface EncodeVaultSharesPermitParams {
  *   wallet account differs from `userAddress`.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet targets another chain.
  * @throws {InvalidSignatureError} from `sign()` when signature recovery fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @throws {InvalidPermitDomainChainIdError} when a Vault V1 permit domain targets another chain or omits `chainId`.
  * @throws {InvalidPermitDomainVerifyingContractError} when a Vault V1 permit domain targets another token or omits `verifyingContract`.
  * @throws {UnsupportedPermitDomainExtensionsError} when a Vault V1 permit domain advertises unsupported extensions.

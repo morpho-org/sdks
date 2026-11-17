@@ -56,6 +56,7 @@ import {
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
+import { resolveTransactionMetadata } from "../../helpers/metadata.js";
 import { validateMarketParamsId } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -88,6 +89,7 @@ import {
   NonPositiveInputError,
   NotBlueBuyCallbackError,
   ReallocationsRequireBorrowError,
+  type ReferenceTimestampParams,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type RequirementSignature,
@@ -235,14 +237,16 @@ export interface BlueActions {
    * const tx = action.buildTx();
    * ```
    */
-  supplyCollateral: (params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
+  supplyCollateral: (
+    params: {
+      readonly userAddress: Address;
+      readonly collateralAssets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<
     BlueSupplyCollateralAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
@@ -311,7 +315,8 @@ export interface BlueActions {
    *   userAddress,
    *   marketData: await market.getMarketData(),
    *   assets: 1_000_000n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 3_600n,
    * });
    * const requirements = await action.getRequirements();
    * const tx = action.buildTx();
@@ -319,15 +324,17 @@ export interface BlueActions {
    * ```
    */
   supply: {
-    (params: {
-      readonly userAddress: Address;
-      readonly marketData: Market;
-      readonly assets: bigint;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    }): ActionOutput<
+    (
+      params: {
+        readonly userAddress: Address;
+        readonly marketData: Market;
+        readonly assets: bigint;
+        readonly nativeAmount?: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct?: bigint;
+        readonly referralFeeRecipient?: Address;
+      } & ReferenceTimestampParams,
+    ): ActionOutput<
       BlueSupplyAction,
       readonly RequirementSignature[],
       BlueTokenRequirementsParams
@@ -335,14 +342,16 @@ export interface BlueActions {
     /**
      * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
      */
-    (params: {
-      readonly userAddress: Address;
-      readonly assets: bigint;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    }): ActionOutput<
+    (
+      params: {
+        readonly userAddress: Address;
+        readonly assets: bigint;
+        readonly nativeAmount?: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct?: bigint;
+        readonly referralFeeRecipient?: Address;
+      } & ReferenceTimestampParams,
+    ): ActionOutput<
       BlueSupplyAction,
       readonly RequirementSignature[],
       BlueTokenRequirementsParams
@@ -415,7 +424,8 @@ export interface BlueActions {
    *   userAddress,
    *   positionData,
    *   shares: 1n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 3_600n,
    * });
    * const requirements = await action.getRequirements();
    * const tx = action.buildTx();
@@ -430,7 +440,8 @@ export interface BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & AssetsOrSharesArgs,
+    } & ReferenceTimestampParams &
+      AssetsOrSharesArgs,
   ) => ActionOutput<
     BlueWithdrawAction,
     readonly RequirementSignature[],
@@ -502,11 +513,13 @@ export interface BlueActions {
    * // tx satisfies Readonly<Transaction<BlueWithdrawBuyCallbackAction>>
    * ```
    */
-  withdrawBuyCallback: (params: {
-    readonly userAddress: Address;
-    readonly callbackAddress: Address;
-    readonly positionData: AccrualPosition;
-  }) => ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined>;
+  withdrawBuyCallback: (
+    params: {
+      readonly userAddress: Address;
+      readonly callbackAddress: Address;
+      readonly positionData: AccrualPosition;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined>;
 
   /**
    * Prepares a direct BlueBundlesV1 loan-asset borrow.
@@ -578,15 +591,17 @@ export interface BlueActions {
    * const tx = action.buildTx();
    * ```
    */
-  borrow: (params: {
-    readonly userAddress: Address;
-    readonly borrowAssets: bigint;
-    readonly positionData: AccrualPosition;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
+  borrow: (
+    params: {
+      readonly userAddress: Address;
+      readonly borrowAssets: bigint;
+      readonly positionData: AccrualPosition;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<
     BlueBorrowAction,
     readonly RequirementSignature[],
     undefined
@@ -677,10 +692,11 @@ export interface BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-    ),
+    } & ReferenceTimestampParams &
+      (
+        | { readonly repayAssets: bigint; readonly repayShares?: never }
+        | { readonly repayShares: bigint; readonly repayAssets?: never }
+      ),
   ) => ActionOutput<
     BlueRepayAction,
     readonly RequirementSignature[],
@@ -751,14 +767,16 @@ export interface BlueActions {
    * const tx = action.buildTx();
    * ```
    */
-  withdrawCollateral: (params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly collateralAssets: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
+  withdrawCollateral: (
+    params: {
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly collateralAssets: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<
     BlueWithdrawCollateralAction,
     readonly RequirementSignature[],
     undefined
@@ -846,7 +864,8 @@ export interface BlueActions {
    *   positionData,
    *   repayShares: maxUint256,
    *   collateralAssets: 1n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 3_600n,
    * });
    * const requirements = await action.getRequirements(); // Satisfy these first.
    * const tx = action.buildTx(); // For a client configured with supportSignature: false.
@@ -862,11 +881,12 @@ export interface BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
-    ),
+    } & ReferenceTimestampParams &
+      (
+        | { readonly repayAssets: bigint; readonly repayShares?: never }
+        | { readonly repayShares: bigint; readonly repayAssets?: never }
+        | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
+      ),
   ) => ActionOutput<
     BlueRepayWithdrawCollateralAction,
     readonly RequirementSignature[],
@@ -949,24 +969,27 @@ export interface BlueActions {
    *   positionData,
    *   collateralAssets: 100_000_000n,
    *   borrowAssets: 1_000_000n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 3_600n,
    * });
    * const requirements = await action.getRequirements(); // Satisfy these first.
    * const tx = action.buildTx(); // For a client configured with supportSignature: false.
    * // tx satisfies Readonly<Transaction<BlueSupplyCollateralBorrowAction>>
    * ```
    */
-  supplyCollateralBorrow: (params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly borrowAssets: bigint;
-    readonly positionData?: AccrualPosition;
-    readonly nativeAmount?: bigint;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
+  supplyCollateralBorrow: (
+    params: {
+      readonly userAddress: Address;
+      readonly collateralAssets: bigint;
+      readonly borrowAssets: bigint;
+      readonly positionData?: AccrualPosition;
+      readonly nativeAmount?: bigint;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<
     BlueSupplyCollateralBorrowAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
@@ -1050,25 +1073,28 @@ export interface BlueActions {
    *   userAddress,
    *   positionData: source,
    *   destination: { marketParams: destinationParams, positionData: destination },
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 3_600n,
    * });
    * const requirements = await action.getRequirements(); // Satisfy these first.
    * const tx = action.buildTx(); // For a client configured with supportSignature: false.
    * // tx satisfies Readonly<Transaction<BlueRefinanceAction>>
    * ```
    */
-  refinance: (params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly destination: {
-      readonly marketParams: MarketParams;
+  refinance: (
+    params: {
+      readonly userAddress: Address;
       readonly positionData: AccrualPosition;
-    };
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
+      readonly destination: {
+        readonly marketParams: MarketParams;
+        readonly positionData: AccrualPosition;
+      };
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) => ActionOutput<
     BlueRefinanceAction,
     readonly RequirementSignature[],
     undefined
@@ -1198,14 +1224,17 @@ export class MorphoBlue implements BlueActions {
     }
   }
 
-  private validateWriteCommon(params: {
-    userAddress: Address;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
-  }): void {
+  private validateWriteCommon(
+    params: {
+      userAddress: Address;
+      deadline: bigint;
+      referralFeePct?: bigint;
+      referralFeeRecipient?: Address;
+    },
+    now: bigint,
+  ): void {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    this.validateDeadline(params.deadline);
+    this.validateDeadline(params.deadline, now);
     // Resolve at handle creation so unsupported deployments fail before any RPC prerequisite work.
     getChainAddress(this.chainId, "bundles.blueBundlesV1");
     // Validate the referral inputs eagerly; the normalized result is intentionally discarded here
@@ -1244,18 +1273,22 @@ export class MorphoBlue implements BlueActions {
     return MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER);
   }
 
-  private getBlueBundlesV1QuoteTimestamp(lastUpdate: bigint): bigint {
-    return MathLib.max(Time.timestamp(), lastUpdate) + Time.s.from.h(2n);
+  private getBlueBundlesV1QuoteTimestamp(
+    lastUpdate: bigint,
+    now = Time.timestamp(),
+  ): bigint {
+    return MathLib.max(now, lastUpdate) + Time.s.from.h(2n);
   }
 
-  private async getTokenRequirements(params: {
-    token: Address;
-    amount: bigint;
-    userAddress: Address;
-    deadline: bigint;
-    useSimplePermit?: boolean;
-    now?: bigint;
-  }): Promise<readonly ActionRequirement[]> {
+  private async getTokenRequirements(
+    params: {
+      token: Address;
+      amount: bigint;
+      userAddress: Address;
+      deadline: bigint;
+      useSimplePermit?: boolean;
+    } & ReferenceTimestampParams,
+  ): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline, params.now);
     return getBundlesTokenRequirements(this.client.viemClient, {
       token: params.token,
@@ -1271,11 +1304,12 @@ export class MorphoBlue implements BlueActions {
     });
   }
 
-  private async getAuthorizationRequirements(params: {
-    userAddress: Address;
-    deadline: bigint;
-    now?: bigint;
-  }): Promise<readonly ActionRequirement[]> {
+  private async getAuthorizationRequirements(
+    params: {
+      userAddress: Address;
+      deadline: bigint;
+    } & ReferenceTimestampParams,
+  ): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline, params.now);
     const requirement = await getBlueAuthorizationRequirement({
       viemClient: this.client.viemClient,
@@ -1316,15 +1350,17 @@ export class MorphoBlue implements BlueActions {
   }
 
   /** {@inheritDoc BlueActions.supply} */
-  supply(params: {
-    readonly userAddress: Address;
-    readonly marketData: Market;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
+  supply(
+    params: {
+      readonly userAddress: Address;
+      readonly marketData: Market;
+      readonly assets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<
     BlueSupplyAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
@@ -1332,27 +1368,36 @@ export class MorphoBlue implements BlueActions {
   /**
    * @deprecated Pass `marketData` from `getMarketData()`; the snapshot-free overload is removed in the next major.
    */
-  supply(params: {
-    readonly userAddress: Address;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
+  supply(
+    params: {
+      readonly userAddress: Address;
+      readonly assets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<
     BlueSupplyAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
   >;
-  supply(params: {
-    readonly userAddress: Address;
-    readonly marketData?: Market;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) {
+  supply(
+    params: {
+      readonly userAddress: Address;
+      readonly marketData?: Market;
+      readonly assets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     const {
       userAddress,
       assets,
@@ -1361,7 +1406,8 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
       referralFeeRecipient,
     } = params;
-    this.validateWriteCommon(params);
+    const createdAt = suppliedNow ?? Time.timestamp();
+    this.validateWriteCommon(params, createdAt);
     if (assets <= 0n) throw new NonPositiveInputError("assets", assets);
     const nativeValue = validateBlueBundlesV1NativeFunding({
       chainId: this.chainId,
@@ -1383,7 +1429,7 @@ export class MorphoBlue implements BlueActions {
       getRequirements: (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = Time.timestamp();
+        const now = suppliedNow ?? Time.timestamp();
         this.validateDeadline(deadline, now);
         return this.assertWriteTargets().then(() => {
           if (nativeValue > 0n) return [];
@@ -1412,7 +1458,7 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             requirementSignature: token,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
@@ -1427,8 +1473,14 @@ export class MorphoBlue implements BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & AssetsOrSharesArgs,
+    } & ReferenceTimestampParams &
+      AssetsOrSharesArgs,
   ) {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     const {
       userAddress,
       positionData,
@@ -1436,7 +1488,8 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
       referralFeeRecipient,
     } = params;
-    this.validateWriteCommon(params);
+    const createdAt = suppliedNow ?? Time.timestamp();
+    this.validateWriteCommon(params, createdAt);
     const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
     const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
     if (assets < 0n) throw new NegativeInputError("assets", assets);
@@ -1488,7 +1541,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const now = Time.timestamp();
+        const now = suppliedNow ?? Time.timestamp();
         this.validateDeadline(deadline, now);
         await this.assertWriteTargets();
         return this.getAuthorizationRequirements({
@@ -1516,18 +1569,24 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
   }
 
   /** {@inheritDoc BlueActions.withdrawBuyCallback} */
-  withdrawBuyCallback(params: {
-    readonly userAddress: Address;
-    readonly callbackAddress: Address;
-    readonly positionData: AccrualPosition;
-  }): ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined> {
+  withdrawBuyCallback(
+    params: {
+      readonly userAddress: Address;
+      readonly callbackAddress: Address;
+      readonly positionData: AccrualPosition;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<BlueWithdrawBuyCallbackAction, undefined, undefined> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const { userAddress, callbackAddress, positionData } = params;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (positionData == null) {
@@ -1562,7 +1621,7 @@ export class MorphoBlue implements BlueActions {
     const tx = blueWithdrawBuyCallback({
       market: { chainId: this.chainId, marketParams: this.marketParams },
       args: { callbackAddress, userAddress, shares },
-      metadata: this.client.options.metadata,
+      metadata,
     });
 
     return {
@@ -1616,18 +1675,24 @@ export class MorphoBlue implements BlueActions {
   }
 
   /** {@inheritDoc BlueActions.supplyCollateral} */
-  supplyCollateral(params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
+  supplyCollateral(
+    params: {
+      readonly userAddress: Address;
+      readonly collateralAssets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<
     BlueSupplyCollateralAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
   > {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const {
       userAddress,
       collateralAssets,
@@ -1637,6 +1702,7 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     const combinedAction = this.supplyCollateralBorrow({
+      now: params.now,
       userAddress,
       collateralAssets,
       borrowAssets: 0n,
@@ -1662,26 +1728,32 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             requirementSignature: token,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
   }
 
   /** {@inheritDoc BlueActions.borrow} */
-  borrow(params: {
-    readonly userAddress: Address;
-    readonly borrowAssets: bigint;
-    readonly positionData: AccrualPosition;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
+  borrow(
+    params: {
+      readonly userAddress: Address;
+      readonly borrowAssets: bigint;
+      readonly positionData: AccrualPosition;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<
     BlueBorrowAction,
     readonly RequirementSignature[],
     undefined
   > {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const {
       userAddress,
       borrowAssets,
@@ -1693,6 +1765,7 @@ export class MorphoBlue implements BlueActions {
     } = params;
     const normalizedReallocations = [...(reallocations ?? [])];
     const combinedAction = this.supplyCollateralBorrow({
+      now: params.now,
       userAddress,
       collateralAssets: 0n,
       borrowAssets,
@@ -1721,7 +1794,7 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
@@ -1736,15 +1809,20 @@ export class MorphoBlue implements BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-    ),
+    } & ReferenceTimestampParams &
+      (
+        | { readonly repayAssets: bigint; readonly repayShares?: never }
+        | { readonly repayShares: bigint; readonly repayAssets?: never }
+      ),
   ): ActionOutput<
     BlueRepayAction,
     readonly RequirementSignature[],
     BlueTokenRequirementsParams
   > {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const combinedAction = this.repayWithdrawCollateral({
       ...params,
       collateralAssets: 0n,
@@ -1778,25 +1856,31 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             requirementSignature: token,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
   }
 
   /** {@inheritDoc BlueActions.withdrawCollateral} */
-  withdrawCollateral(params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly collateralAssets: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
+  withdrawCollateral(
+    params: {
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly collateralAssets: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ): ActionOutput<
     BlueWithdrawCollateralAction,
     readonly RequirementSignature[],
     undefined
   > {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const {
       userAddress,
       positionData,
@@ -1806,6 +1890,7 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     const combinedAction = this.repayWithdrawCollateral({
+      now: params.now,
       userAddress,
       positionData,
       repayAssets: 0n,
@@ -1834,7 +1919,7 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient: combinedArgs.referralFeeRecipient,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
@@ -1850,12 +1935,18 @@ export class MorphoBlue implements BlueActions {
       readonly deadline: bigint;
       readonly referralFeePct?: bigint;
       readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
-    ),
+    } & ReferenceTimestampParams &
+      (
+        | { readonly repayAssets: bigint; readonly repayShares?: never }
+        | { readonly repayShares: bigint; readonly repayAssets?: never }
+        | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
+      ),
   ) {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     const {
       userAddress,
       positionData,
@@ -1864,7 +1955,8 @@ export class MorphoBlue implements BlueActions {
       deadline,
       referralFeeRecipient,
     } = params;
-    this.validateWriteCommon(params);
+    const createdAt = suppliedNow ?? Time.timestamp();
+    this.validateWriteCommon(params, createdAt);
     // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
     // here, matching the pure action's normalization.
     const referralFeePct = params.referralFeePct ?? 0n;
@@ -1918,6 +2010,7 @@ export class MorphoBlue implements BlueActions {
 
     const quoteHorizon = this.getBlueBundlesV1QuoteTimestamp(
       positionData.market.lastUpdate,
+      createdAt,
     );
     if (repayShares > 0n && deadline > quoteHorizon) {
       throw new InputExceedsMaxError({
@@ -1962,7 +2055,7 @@ export class MorphoBlue implements BlueActions {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = Time.timestamp();
+        const now = suppliedNow ?? Time.timestamp();
         this.validateDeadline(deadline, now);
         await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
@@ -2019,24 +2112,31 @@ export class MorphoBlue implements BlueActions {
             requirementSignature: token,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
   }
 
   /** {@inheritDoc BlueActions.supplyCollateralBorrow} */
-  supplyCollateralBorrow(params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly borrowAssets: bigint;
-    readonly positionData?: AccrualPosition;
-    readonly nativeAmount?: bigint;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) {
+  supplyCollateralBorrow(
+    params: {
+      readonly userAddress: Address;
+      readonly collateralAssets: bigint;
+      readonly borrowAssets: bigint;
+      readonly positionData?: AccrualPosition;
+      readonly nativeAmount?: bigint;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     const {
       userAddress,
       collateralAssets,
@@ -2047,7 +2147,8 @@ export class MorphoBlue implements BlueActions {
       referralFeePct,
       referralFeeRecipient,
     } = params;
-    this.validateWriteCommon(params);
+    const createdAt = suppliedNow ?? Time.timestamp();
+    this.validateWriteCommon(params, createdAt);
     if (collateralAssets < 0n) {
       throw new NegativeInputError("collateralAssets", collateralAssets);
     }
@@ -2086,7 +2187,10 @@ export class MorphoBlue implements BlueActions {
       });
       validatePositionHealth({
         positionData: positionData.accrueInterest(
-          this.getBlueBundlesV1QuoteTimestamp(positionData.market.lastUpdate),
+          this.getBlueBundlesV1QuoteTimestamp(
+            positionData.market.lastUpdate,
+            createdAt,
+          ),
         ),
         additionalCollateral: collateralAssets,
         borrowAmount: borrowAssets,
@@ -2105,7 +2209,7 @@ export class MorphoBlue implements BlueActions {
       getRequirements: async (
         requirementsParams?: BlueTokenRequirementsParams,
       ): Promise<readonly ActionRequirement[]> => {
-        const now = Time.timestamp();
+        const now = suppliedNow ?? Time.timestamp();
         this.validateDeadline(deadline, now);
         await this.assertWriteTargets();
         const [tokenRequirements, authorizationRequirements] =
@@ -2151,25 +2255,32 @@ export class MorphoBlue implements BlueActions {
             requirementSignature: token,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };
   }
 
   /** {@inheritDoc BlueActions.refinance} */
-  refinance(params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly destination: {
-      readonly marketParams: MarketParams;
+  refinance(
+    params: {
+      readonly userAddress: Address;
       readonly positionData: AccrualPosition;
-    };
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) {
+      readonly destination: {
+        readonly marketParams: MarketParams;
+        readonly positionData: AccrualPosition;
+      };
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+    } & ReferenceTimestampParams,
+  ) {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     const {
       userAddress,
       positionData,
@@ -2177,7 +2288,8 @@ export class MorphoBlue implements BlueActions {
       deadline,
       referralFeeRecipient,
     } = params;
-    this.validateWriteCommon(params);
+    const createdAt = suppliedNow ?? Time.timestamp();
+    this.validateWriteCommon(params, createdAt);
     validateMarketParamsId(destination.marketParams);
     // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
     // here, matching the pure action's normalization.
@@ -2234,6 +2346,7 @@ export class MorphoBlue implements BlueActions {
         positionData.market.lastUpdate,
         destination.positionData.market.lastUpdate,
       ),
+      createdAt,
     );
     const accruedSourcePosition = positionData.accrueInterest(accrualTimestamp);
     const accruedDestinationPosition =
@@ -2253,7 +2366,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const now = Time.timestamp();
+        const now = suppliedNow ?? Time.timestamp();
         this.validateDeadline(deadline, now);
         await this.assertWriteTargets();
         return this.getAuthorizationRequirements({
@@ -2284,7 +2397,7 @@ export class MorphoBlue implements BlueActions {
             referralFeeRecipient,
             authorizationSignature: authorization,
           },
-          metadata: this.client.options.metadata,
+          metadata,
         });
       },
     };

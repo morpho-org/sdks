@@ -14,7 +14,7 @@ import {
   isHex,
   zeroAddress,
 } from "viem";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { SimulationAuthorization } from "../authorizations.js";
 import {
   ApprovalCheckUnavailableError,
@@ -24,7 +24,11 @@ import {
 } from "../errors.js";
 import type { ApprovalLimit } from "../limits.js";
 import type { RawLog } from "../types.js";
-import { assertApprovalEvents, assertPendingApprovals } from "./approvals.js";
+import {
+  assertApprovalEvents,
+  assertPendingApprovals,
+  findApprovalEventFailures,
+} from "./approvals.js";
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
 const OTHER: Address = "0x2222222222222222222222222222222222222222";
@@ -274,6 +278,16 @@ test("rejects sender ERC-20 approvals, accepts other owners, zero and explicit e
   expect(() =>
     assertEvents([
       erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 2n }),
+    ]),
+  ).not.toThrow();
+});
+
+test("accepts repeated unchanged non-zero allowances on an allowlisted tuple", () => {
+  expect(() =>
+    assertEvents([
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 100n }),
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 100n }),
+      erc20Approval({ eventOwner: OWNER, spender: SPENDER, value: 90n }),
     ]),
   ).not.toThrow();
 });
@@ -946,4 +960,47 @@ test("fails closed for malformed approval logs", () => {
   expect(() => assertEvents([{ ...permit, data: "0x" }])).toThrow(
     ApprovalCheckUnavailableError,
   );
+});
+
+describe("findApprovalEventFailures", () => {
+  const owner = zeroAddress;
+  const spender = "0x1111111111111111111111111111111111111111" as const;
+  const approval = {
+    address: spender,
+    topics: encodeEventTopics({
+      abi: erc20Abi,
+      eventName: "Approval",
+      args: { owner, spender },
+    }) as Hex[],
+    data: encodeAbiParameters([{ type: "uint256" }], [1n]),
+  };
+  const params = { owner, allowed: [], addresses: { morpho: zeroAddress } };
+
+  test("returns no failures for empty logs and allowed approvals", () => {
+    expect(findApprovalEventFailures({ ...params, logs: [] })).toEqual([]);
+    expect(
+      findApprovalEventFailures({
+        ...params,
+        logs: [approval],
+        allowed: [{ type: "token", token: spender, owner, spender }],
+      }),
+    ).toEqual([]);
+  });
+
+  test("continues after malformed logs and returns failures in emission order", () => {
+    const input = {
+      ...params,
+      logs: [
+        { ...approval, data: "0x" as const },
+        approval,
+        { ...approval, topics: approval.topics.slice(0, 1) },
+      ],
+    };
+    const failures = findApprovalEventFailures(input);
+    expect(failures).toHaveLength(3);
+    expect(failures[0]).toBeInstanceOf(ApprovalCheckUnavailableError);
+    expect(failures[1]).toBeInstanceOf(UnexpectedTokenApprovalError);
+    expect(failures[2]).toBeInstanceOf(ApprovalCheckUnavailableError);
+    expect(() => assertApprovalEvents(input)).toThrowError(failures[0]);
+  });
 });

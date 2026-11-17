@@ -1,5 +1,41 @@
 # @morpho-org/midnight-sdk
 
+## 2.6.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/midnight-sdk"`, which takes precedence over the wildcards, and alias any others, for example `export { version as midnightSdkVersion } from "@morpho-org/midnight-sdk"`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.4.0
+
+## 2.5.1
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+
+## 2.5.0
+
+### Minor Changes
+
+- Add InvalidEcrecoverSignatureError, thrown by EcrecoverRatifier when a signature cannot be parsed or recovered. Preserve the original error as cause.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.0
+
 ## 2.5.0-next.0
 
 ### Minor Changes

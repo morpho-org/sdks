@@ -17,11 +17,13 @@ import {
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
+  midnightSupplyCollateralBatch,
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
   midnightTakeWithdraw,
+  midnightWithdrawCollateralBatch,
   type TransactionAction,
   vaultV2Deposit,
   vaultV2ForceRedeem,
@@ -71,6 +73,120 @@ const MARKET2 =
   "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as MarketId;
 const BLUE_LOAN = getChainAddress(base.id, "usdc");
 const W_NATIVE = getChainAddress(base.id, "wNative");
+const BATCH_MARKET = new MidnightMarketParams({
+  chainId: base.id,
+  midnight: getChainAddress(base.id, "midnight"),
+  loanToken: BLUE_LOAN,
+  collateralParams: [W_NATIVE, BLUE_LOAN].map((token) => ({
+    token,
+    lltv: 770000000000000000n,
+    liquidationCursor: 300000000000000000n,
+    oracle: zeroAddress,
+  })),
+  maturity: 2_000_000_000n,
+  rcfThreshold: 0n,
+  enterGate: zeroAddress,
+  liquidatorGate: zeroAddress,
+});
+
+describe("Midnight collateral batch limits", () => {
+  const entries = [
+    { collateralIndex: 0n, assets: 10n },
+    { collateralIndex: 1n, assets: 20n },
+  ];
+  const supply = midnightSupplyCollateralBatch({
+    chainId: base.id,
+    market: BATCH_MARKET,
+    onBehalf: OWNER,
+    collateralSupplies: entries,
+  }).action;
+  const withdraw = midnightWithdrawCollateralBatch({
+    chainId: base.id,
+    market: BATCH_MARKET,
+    onBehalf: OWNER,
+    receiver: RECEIVER,
+    collateralWithdrawals: entries,
+  }).action;
+
+  it("derives exact per-index supplies and parses the batch", () => {
+    const limits = toSimulationLimits(supply, { owner: OWNER });
+    expect(limits.operations).toEqual([
+      {
+        type: "midnightSupplyCollateralBatch",
+        marketId: MidnightMarketUtils.toId(BATCH_MARKET),
+        quote: { collateralSupplies: entries },
+      },
+    ]);
+    expect(
+      parseRequest({
+        chainId: base.id,
+        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+        limits,
+      }).limits,
+    ).not.toBe("none");
+  });
+
+  it("derives per-index withdrawals and binds the receiver", () => {
+    const limits = toSimulationLimits(withdraw, {
+      owner: OWNER,
+      receiver: RECEIVER,
+    });
+    expect(limits.operations).toEqual([
+      {
+        type: "midnightWithdrawCollateralBatch",
+        marketId: MidnightMarketUtils.toId(BATCH_MARKET),
+        receiver: RECEIVER,
+        quote: { collateralWithdrawals: entries },
+      },
+    ]);
+    expect(
+      parseRequest({
+        chainId: base.id,
+        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+        limits,
+      }).limits,
+    ).not.toBe("none");
+    expect(() => toSimulationLimits(withdraw, { owner: OWNER })).toThrow(
+      new LimitAccountMismatchError({
+        field: "args.receiver",
+        expected: OWNER,
+        actual: RECEIVER,
+      }),
+    );
+  });
+
+  it("rejects a different onBehalf option or encoded owner", () => {
+    expect(() =>
+      toSimulationLimits(supply, { owner: OWNER, onBehalf: OTHER }),
+    ).toThrow(LimitAccountMismatchError);
+    expect(() =>
+      toSimulationLimits(
+        { ...supply, args: { ...supply.args, onBehalf: OTHER } },
+        { owner: OWNER },
+      ),
+    ).toThrow(LimitAccountMismatchError);
+    expect(() =>
+      toSimulationLimits(supply, { owner: OWNER, onBehalf: OWNER }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    "midnightSupplyCollateralBatch",
+    "midnightWithdrawCollateralBatch",
+  ] as const)("rejects empty %s quotes", (type) => {
+    const quote =
+      type === "midnightSupplyCollateralBatch"
+        ? { collateralSupplies: [] }
+        : { collateralWithdrawals: [] };
+    expect(() =>
+      parseRequest({
+        chainId: base.id,
+        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+        limits: { operations: [{ type, marketId: MARKET, quote }] },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+});
 const MIDNIGHT_MARKET = new MidnightMarketParams({
   chainId: base.id,
   midnight: getChainAddress(base.id, "midnight"),

@@ -37,6 +37,7 @@ export {
 } from "@morpho-org/blue-sdk-viem";
 export {
   ChainIdMismatchError as MidnightChainIdMismatchError,
+  InvalidEcrecoverSignatureError as InvalidMidnightEcrecoverSignatureError,
   InvalidEcrecoverSignatureVError as InvalidMidnightEcrecoverSignatureVError,
   InvalidMarketParameterError as InvalidMidnightMarketParameterError,
   InvalidMidnightApiQuoteTargetError,

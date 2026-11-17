@@ -78,6 +78,38 @@ afterEach(() => {
 
 // These tests intentionally share the spawn mock.
 describe.sequential("spawnAnvil", () => {
+  test("serializes fork headers without suppressing the readiness banner", async () => {
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+    const started = spawnAnvil({
+      chainId: 1,
+      silent: true,
+      forkHeader: {
+        Authorization: "Bearer test:token",
+        "X-Test": "second value",
+      },
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    const flags = spawnMock.mock.calls[0]?.[1];
+    subprocess.stdout.write("Listening on 127.0.0.1:31030\n");
+    const node = await started;
+    try {
+      expect(flags).toEqual(
+        expect.arrayContaining([
+          "--fork-header",
+          "Authorization: Bearer test:token",
+          "--fork-header",
+          "X-Test: second value",
+        ]),
+      );
+      expect(flags).not.toContain("--silent");
+    } finally {
+      await node.stopAndWait();
+    }
+  });
+
   test("behavior: tolerates stderr output while Anvil is starting", async () => {
     const subprocess = createFakeAnvilProcess();
     spawnMock.mockReturnValue(

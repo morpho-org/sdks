@@ -1,5 +1,74 @@
 # @morpho-org/morpho-sdk
 
+## 9.8.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/morpho-sdk"`, which takes precedence over the wildcards, and alias any others, for example `export { version as morphoSdkVersion } from "@morpho-org/morpho-sdk"`.
+
+### Patch Changes
+
+- Cap deployless token metadata staticcalls at 60,000 gas for ERC20 fields and 100,000 gas for EIP-5267. Isolate direct reads from shared multicall batches with a separate 2,000,000 gas allowance that accommodates intrinsic gas and L2 overhead, so gas-exhausting tokens cannot fail unrelated reads. Direct-read error classification is unchanged, including propagation of out-of-gas errors. Deployless stipend exhaustion now degrades optional name, symbol, and EIP-5267 domain fields to undefined.
+- Updated dependencies
+  - @morpho-org/blue-sdk-viem@7.5.0
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/midnight-sdk@2.6.0
+  - @morpho-org/morpho-ts@4.4.0
+
+## 9.7.0
+
+### Minor Changes
+
+- Add experimental, static, serializable `TransactionPlan` preparation for Vault V2 deposits and withdrawals alongside the existing entity handles. The public TransactionPlan APIs, types and dedicated errors ship with `@experimental` tags during beta; breaking changes may ship in minor releases. Existing entity flows remain the recommended stable path during the shadow-mode rollout. Preparers take a plain viem client and a caller-fetched `vaultData` snapshot, resolve their remaining reads, and return self-contained actions and permit requests. The SDK never signs. `supportSignature` defaults to false; insufficient allowance requires a direct approval or, when enabled and supported, an ERC-2612 permit. TransactionPlan has no Permit2 route; entity flows retain their behavior and Permit2 support.
+
+  `applySignatures(plan, signatures)` synchronously verifies every supplied signature before attaching it, with no client or RPC. It validates all requests against their referencing actions, rejects unknown and duplicate input IDs with `TransactionPlanSignatureMismatchError` (`field: "reference"` or `"duplicate"`), and uses the bundle builders' `normalizeBundlesSignature` parser. Compact 64-byte and serialized 65-byte ECDSA signatures are accepted and stored in serialized form; unsupported encodings throw `BundlesPermitMismatchError`. Local secp256k1 recovery verifies the EIP-712 typed-data hash and owner; high-s signatures, recovery failures and wrong signers throw `InvalidSignatureError`. The EIP-712 domain binds the signature to the action chain. Empty input validates requests and returns the original plan; omitted IDs retain their signatures. The direct `@noble/curves` dependency enables synchronous recovery and reuses viem's version. Contract wallets should use `supportSignature: false` for direct approvals because deployed bundles consume ECDSA `v/r/s`, not arbitrary ERC-1271 or ERC-6492 signatures.
+
+  Only deposit parameters accept `slippageTolerance`, which controls the on-chain maximum share price. Withdrawal plans use `DEFAULT_SLIPPAGE_TOLERANCE` internally for their share-allowance quote and expose no slippage input, since withdrawal calldata enforces no share-price or maximum-shares bound. Insufficient share allowance results in unlimited (`maxUint256`) direct approvals or ERC-2612 share permits. Stored version-1 finite share permits covering the required minimum remain buildable without changing their signed value. Deposit asset permits sign the exact pull amount.
+
+  Pending signature selection and signature attachment reject a permit deadline that differs from any referencing action's deadline before signing, with `TransactionPlanSignatureMismatchError` (`field: "args.deadline"`). Parsing applies the same check and reports `InvalidTransactionPlanError` at the request's `args.deadline` path. Builders retain their `BundlesPermitMismatchError` (`field: "deadline"`) check for this mismatch.
+
+  Plan-interpreting helpers reject unsupported versions with `UnsupportedTransactionPlanVersionError` and unknown action types with `UnsupportedTransactionPlanActionError` before inspecting requests or signature updates, including empty inputs and prototype-property action names. Builders run action-layer validators, including registered approval-spender, amount, share-price, deadline and referral-fee checks. `buildTransaction(plan, step)` and `buildTransactions(plan)` return frozen SDK transactions (`{ to, data, value, action }`), without step IDs or kinds, and append optional `calldataOrigin` bytes.
+
+  `parseTransactionPlan` revives bigints and validates supported versions/actions, field shapes and uint256 ranges, unique IDs, references, action chain/account agreement and permit/action consistency, including already-signed requests. Extra keys remain allowed. Malformed JSON, fields or consistency violations throw the exported `InvalidTransactionPlanError`, exposing the first failure's JSON `path` and `reason`; unsupported versions and action types keep their existing typed errors. Serialization remains unchecked. Parsing is pure: expiry, live state, signature ownership and action-layer business constraints are not checked. It does not prove authenticity or intent; tampered-but-well-formed, internally consistent plans pass, so stored plans must still be protected. Builders do not reverify restored signatures. Missing signatures throw `IncompleteTransactionPlanError`; request consistency mismatches throw `TransactionPlanSignatureMismatchError`, while builders retain the separate permit/action deadline check described above. Preparation rejects malformed inputs before RPC reads, including zero accounts, invalid calldata origins and unsafe integer expiry or fee values. Update maintained direct runtime dependents to resolve the new SDK version; the deprecated liquidity SDK retains its v5 peer range.
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+  - @morpho-org/blue-sdk@8.2.3
+  - @morpho-org/midnight-sdk@2.5.1
+
+## 9.6.0
+
+### Minor Changes
+
+- Add Midnight withdrawCollateralBatch to withdraw multiple collateral assets atomically through one multicall, with full-balance resolution and buffered end-state health checks. Direct batches reject duplicate collateral indexes.
+- Normalize malformed signature verification failures into typed SDK errors while preserving their causes. Add MalformedSignatureError (extending InvalidSignatureError) with redacted signature diagnostics, without changing the existing mismatch message or wrapping wallet signing errors.
+
+  Re-export `InvalidEcrecoverSignatureError` as `InvalidMidnightEcrecoverSignatureError` from `/errors` and as `InvalidEcrecoverSignatureError` from `/midnight/errors`.
+
+- Add Midnight supplyCollateralBatch to supply multiple collateral assets atomically through one multicall, with per-token unlimited approval requirements and optional reserved allowance thresholds. Direct batches reject duplicate collateral indexes.
+
+### Patch Changes
+
+- Correct withdrawable collateral rounding to return the maximum amount that preserves position health under Morpho's onchain check, preventing withdrawals that would revert because too little collateral remains.
+- Include projected lost assets in newly constructed MetaMorpho v1.1 accrual vault totals, so asset and share conversions account for losses before interest accrual is requested. Preserve loss accounting during subsequent accrual without counting losses twice.
+
+  For freshly constructed v1.1 vaults with losses, allocation proportions and APY now use the loss-inclusive total, as accrued vaults already did. Allocation proportions can sum to less than 100%, and the weighted yield rate reflects the ratio of real assets to total assets. Exact onchain parity requires underlying markets accrued to the current timestamp; share conversions also require pending vault fees to be accrued.
+
+- Flatten the action builders that had the highest cognitive complexity (Blue, bundles, Midnight and Vault V1 migration actions) to a score of 15 or lower using guard clauses, `switch` statements and shared internal validators. Transactions, errors and their order are unchanged.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.2
+  - @morpho-org/midnight-sdk@2.5.0
+  - @morpho-org/morpho-ts@4.3.0
+
 ## 9.6.0-next.0
 
 ### Minor Changes
@@ -28,6 +97,16 @@
   - @morpho-org/midnight-sdk@2.5.0-next.0
   - @morpho-org/morpho-ts@4.3.0-next.0
   - @morpho-org/blue-sdk@8.3.0-next.0
+
+## 9.5.1
+
+### Patch Changes
+
+- Return independent nested EIP-712 type schemas for Morpho authorization, ERC-2612 permits, Permit2 allowances, and Permit2 signature transfers. ERC-2612 permit domains are also copied from fetched token metadata. Modifying one signing payload no longer changes the domains, schemas, or signing hashes produced by later calls. These copies do not require a runtime `structuredClone` global.
+- Permit2 allowance and signature-transfer typed-data helpers now throw `UnknownAddressError` when a supported chain has no registered Permit2 contract, instead of returning a signable payload without a verifying contract. Unsupported chains continue to throw `UnsupportedChainIdError`. Use another approval path when Permit2 is unavailable.
+- Reject empty ABI output names in `restructure` and `readContractRestructured` with `UnnamedAbiOutputsError`, just like missing names. This prevents tuple values from being silently overwritten under an empty object key. Name every ABI output or read the tuple positionally instead.
+- Updated dependencies
+  - @morpho-org/blue-sdk-viem@7.4.0
 
 ## 9.5.0
 

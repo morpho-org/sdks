@@ -77,6 +77,33 @@ describe("Vault", () => {
 });
 
 describe("AccrualVault", () => {
+  test.each([
+    { lostAssets: 10n, lastTotalAssets: 100n, expected: 110n },
+    { lostAssets: 10n, lastTotalAssets: 120n, expected: 120n },
+    { lostAssets: 0n, lastTotalAssets: 120n, expected: 120n },
+  ])(
+    "constructor includes v1.1 loss accounting: $lostAssets stored, $lastTotalAssets last total",
+    ({ lostAssets, lastTotalAssets, expected }) => {
+      const position = accrualPosition({ supplyShares: 100n });
+      const input = vaultInput({
+        fee: 0n,
+        totalSupply: 1000n,
+        lostAssets,
+        lastTotalAssets,
+      });
+      const vault = new AccrualVault(input, [
+        { config: vaultMarketConfig(position.marketId), position },
+      ]);
+      expect(position.supplyAssets).toBe(100n);
+      expect(vault.totalAssets).toBe(expected);
+      const reference = new Vault({ ...input, totalAssets: expected });
+      expect(vault.toAssets(100n)).toBe(reference.toAssets(100n));
+      expect(vault.toShares(100n)).toBe(reference.toShares(100n));
+      expect(vault.lostAssets).toBe(lostAssets);
+      expect(input.lostAssets).toBe(lostAssets);
+    },
+  );
+
   test("constructor builds ordered allocations and collateral allocation summaries", () => {
     const firstPosition = accrualPosition({ supplyShares: 100n });
     const secondPosition = accrualPosition(

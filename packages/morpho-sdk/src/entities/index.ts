@@ -147,6 +147,7 @@ export type {
   RedeemParams as MidnightRedeemParams,
   RepayWithdrawCollateralParams as MidnightRepayWithdrawCollateralParams,
   SupplyBlueMakeLendParams as MidnightSupplyBlueMakeLendParams,
+  SupplyCollateralBatchParams as MidnightSupplyCollateralBatchParams,
   SupplyCollateralMakeBorrowParams as MidnightSupplyCollateralMakeBorrowParams,
   SupplyCollateralParams as MidnightSupplyCollateralParams,
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,
@@ -154,6 +155,7 @@ export type {
   TakeLendParams as MidnightTakeLendParams,
   TakeRepayWithdrawCollateralParams as MidnightTakeRepayWithdrawCollateralParams,
   TakeWithdrawParams as MidnightTakeWithdrawParams,
+  WithdrawCollateralBatchParams as MidnightWithdrawCollateralBatchParams,
   WithdrawCollateralParams as MidnightWithdrawCollateralParams,
 } from "./midnight/index.js";
 export {

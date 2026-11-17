@@ -8,6 +8,8 @@ import {
   type ChainDeployments,
   deployments,
   getChainAddress,
+  getChainAddresses,
+  getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
   registerCustomAddresses,
@@ -78,6 +80,27 @@ const createChainDeployments = () => ({
   ...createMidnightDeployments(),
 });
 
+describe("getChainAddresses", () => {
+  test("returns the supported chain registry entry", () => {
+    expect(getChainAddresses(ChainId.EthMainnet)).toBe(
+      addressesRegistry[ChainId.EthMainnet],
+    );
+  });
+
+  test("throws UnsupportedChainIdError for an unsupported chain", () => {
+    expect(() => getChainAddresses(0)).toThrow(UnsupportedChainIdError);
+  });
+});
+
+describe("getPermissionedCoinbaseTokens", () => {
+  test("returns an empty set when no tokens are registered", () => {
+    expect(getPermissionedCoinbaseTokens(ChainId.EthMainnet)).toEqual(
+      new Set(),
+    );
+    expect(getPermissionedCoinbaseTokens(0)).toEqual(new Set());
+  });
+});
+
 describe("getChainAddress", () => {
   test("default", () => {
     expect(getChainAddress(ChainId.EthMainnet, "blue")).toBe(
@@ -111,14 +134,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.ArbitrumMainnet, "midnight");
+      getChainAddress(ChainId.OptimismMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.ArbitrumMainnet,
+      chainId: ChainId.OptimismMainnet,
       label: "midnight",
     });
   });

@@ -2,7 +2,7 @@ import { ChainId } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, type Chain, parseEther } from "viem";
 import { describe, expect, test, vi } from "vitest";
-import { E2E_ASSET_BYTECODE, E2E_ASSET_STORAGE } from "./asset.js";
+import { E2E_ASSET, E2E_ASSET_BYTECODE, E2E_ASSET_STORAGE } from "./asset.js";
 import { installE2eAsset, installE2eOracle, wrapE2eNative } from "./setup.js";
 
 const defaultAccount: Address = "0x0000000000000000000000000000000000000001";
@@ -14,6 +14,7 @@ const createClient = (chainId: number = ChainId.EthMainnet) => {
     account: { address: defaultAccount },
     chain: { id: chainId },
     setCode: vi.fn().mockResolvedValue(undefined),
+    getCode: vi.fn().mockResolvedValue(E2E_ASSET_BYTECODE),
     setStorageAt: vi.fn().mockResolvedValue(undefined),
     balanceOf: vi.fn().mockResolvedValue(17n),
     deal: vi.fn().mockResolvedValue(undefined),
@@ -90,22 +91,61 @@ describe("wrapE2eNative", () => {
     "preserves the installed asset balance when funding account %s",
     async (account) => {
       const { client, mock } = createClient(ChainId.ArcMainnet);
-      await wrapE2eNative(client, { wNative: token, amount: 5n, account });
+      await wrapE2eNative(client, { wNative: E2E_ASSET, amount: 5n, account });
 
       expect(mock.balanceOf).toHaveBeenCalledExactlyOnceWith({
-        erc20: token,
+        erc20: E2E_ASSET,
         owner: account ?? defaultAccount,
       });
       expect(mock.deal).toHaveBeenCalledExactlyOnceWith({
-        erc20: token,
+        erc20: E2E_ASSET,
         account: account ?? defaultAccount,
         amount: 22n,
       });
-      expect(mock.getBalance).not.toHaveBeenCalled();
-      expect(mock.setBalance).not.toHaveBeenCalled();
+      expect(mock.getBalance).toHaveBeenCalledExactlyOnceWith({
+        address: E2E_ASSET,
+      });
+      expect(mock.setBalance).toHaveBeenCalledExactlyOnceWith({
+        address: E2E_ASSET,
+        value: 28n,
+      });
       expect(mock.writeContract).not.toHaveBeenCalled();
     },
   );
+
+  test.each([0n, -5n])(
+    "adjusts backing by the signed funding delta %s",
+    async (amount) => {
+      const { client, mock } = createClient(ChainId.ArcMainnet);
+      await wrapE2eNative(client, { wNative: E2E_ASSET, amount });
+      expect(mock.setBalance).toHaveBeenCalledExactlyOnceWith({
+        address: E2E_ASSET,
+        value: 23n + amount,
+      });
+    },
+  );
+
+  test("does not change native backing for another token", async () => {
+    const { client, mock } = createClient(ChainId.ArcMainnet);
+    await wrapE2eNative(client, { wNative: token, amount: 5n });
+    expect(mock.setBalance).not.toHaveBeenCalled();
+  });
+
+  test("does not change native backing when synthetic code is absent", async () => {
+    const { client, mock } = createClient(ChainId.ArcMainnet);
+    mock.getCode.mockResolvedValueOnce("0x");
+    await wrapE2eNative(client, { wNative: E2E_ASSET, amount: 5n });
+    expect(mock.setBalance).not.toHaveBeenCalled();
+  });
+
+  test("propagates a backing write failure", async () => {
+    const { client, mock } = createClient(ChainId.ArcMainnet);
+    const error = new Error("backing write failed");
+    mock.setBalance.mockRejectedValueOnce(error);
+    await expect(
+      wrapE2eNative(client, { wNative: E2E_ASSET, amount: 5n }),
+    ).rejects.toBe(error);
+  });
 
   test.each([0n, 5n])(
     "funds the default account and deposits %s native units",

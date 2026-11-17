@@ -10,7 +10,7 @@ import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256, serializeSignature } from "viem";
 import { arc, mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_ASSET,
   IN_KIND_BUNDLER,
@@ -132,6 +132,35 @@ const expectInKindAllowanceThreshold = async (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
+  test.sequential("explicit chain time reaches the share permit after device-clock expiry", async () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    mockV2Requirements(handle, { allowance: 0n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const exit = withChainTimestamp(now + 10_800n, () =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: withChainTimestamp(now, () => inKindVaultV2Data()),
+        userAddress: IN_KIND_USER,
+        now,
+        deadline: now + 1_200n,
+      }),
+    );
+    const clock = vi.spyOn(Time, "timestamp").mockReturnValue(now + 10_800n);
+    try {
+      const [requirement] = await exit.getRequirements();
+      expect(requirement?.action.type).toBe("permit");
+      expect(requirement?.action.args).toMatchObject({
+        deadline: now + 1_200n,
+      });
+      expect(clock).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
   test("error: InputExceedsMaxError before exposing requirements", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

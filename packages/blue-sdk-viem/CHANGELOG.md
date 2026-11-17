@@ -1,5 +1,31 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.5.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/blue-sdk-viem"`, which takes precedence over the wildcards, and alias any others, for example `export { version as blueSdkViemVersion } from "@morpho-org/blue-sdk-viem"`.
+
+### Patch Changes
+
+- Cap deployless token metadata staticcalls at 60,000 gas for ERC20 fields and 100,000 gas for EIP-5267. Isolate direct reads from shared multicall batches with a separate 2,000,000 gas allowance that accommodates intrinsic gas and L2 overhead, so gas-exhausting tokens cannot fail unrelated reads. Direct-read error classification is unchanged, including propagation of out-of-gas errors. Deployless stipend exhaustion now degrades optional name, symbol, and EIP-5267 domain fields to undefined.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/morpho-ts@4.4.0
+
+## 7.4.0
+
+### Minor Changes
+
+- Permit2 allowance and signature-transfer typed-data helpers now throw `UnknownAddressError` when a supported chain has no registered Permit2 contract, instead of returning a signable payload without a verifying contract. Unsupported chains continue to throw `UnsupportedChainIdError`. Use another approval path when Permit2 is unavailable.
+
+### Patch Changes
+
+- Return independent nested EIP-712 type schemas for Morpho authorization, ERC-2612 permits, Permit2 allowances, and Permit2 signature transfers. ERC-2612 permit domains are also copied from fetched token metadata. Modifying one signing payload no longer changes the domains, schemas, or signing hashes produced by later calls. These copies do not require a runtime `structuredClone` global.
+- Reject empty ABI output names in `restructure` and `readContractRestructured` with `UnnamedAbiOutputsError`, just like missing names. This prevents tuple values from being silently overwritten under an empty object key. Name every ABI output or read the tuple positionally instead.
+
 ## 7.4.0-next.0
 
 ### Minor Changes

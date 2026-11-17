@@ -1,5 +1,6 @@
 export type { SimulationErrorResponse } from "./error-response.js";
 export { toSimulationErrorResponse } from "./error-response.js";
+export { version } from "./version.js";
 // Public fns (via feature-folder barrels)
 
 export type {
@@ -17,8 +18,14 @@ export type {
   SimulationAuthorization,
 } from "./authorizations.js";
 export type {
+  ConsumerLimitCheck,
+  ConsumerLimitEntry,
+  ConsumerLimitField,
+  ConsumerLimitViolation,
   RetainedAsset,
   SimulationErrorCode,
+  SlippageCheckUnavailable,
+  SlippageCheckUnavailableReason,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -26,6 +33,7 @@ export {
   ApprovalCheckUnavailableError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
+  CONSUMER_LIMIT_CHECKS,
   ConsumerLimitViolationError,
   InvalidChainIdError,
   InvalidSimulationResponseError,
@@ -35,10 +43,15 @@ export {
   RpcTransportError,
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
+  SimulationInfrastructureError,
+  SimulationInvalidRequestError,
   SimulationLogAssertError,
   SimulationPackageError,
+  SimulationRejectedError,
   SimulationRevertedError,
+  SimulationSafetyError,
   SimulationValidationError,
+  SLIPPAGE_CHECK_UNAVAILABLE_REASONS,
   SlippageCheckUnavailableError,
   UnexpectedMidnightAuthorizationError,
   UnexpectedMorphoAuthorizationError,

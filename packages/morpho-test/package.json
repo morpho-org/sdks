@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-test",
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures and registry-driven E2E chain selection for tests on forks.",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -37,11 +37,11 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.0.0 || ^7.0.0 || ^8.0.0",
-    "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0 || ^4.0.0",
-    "@morpho-org/test": "^2.11.0",
+    "@morpho-org/blue-sdk": "^6.0.0 || ^7.0.0 || ^8.0.0 || ^8.4.0-0",
+    "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.5.0-0",
+    "@morpho-org/test": "^2.11.0 || ^2.14.0-0",
     "viem": "^2.21.10",
-    "@morpho-org/midnight-sdk": "^2.2.0"
+    "@morpho-org/midnight-sdk": "^2.2.0 || ^2.7.0-0"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",

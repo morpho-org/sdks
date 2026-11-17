@@ -4,6 +4,7 @@ import {
 } from "@morpho-org/midnight-sdk";
 import {
   getChainAddress,
+  getChainAddresses,
   registerCustomAddresses,
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
@@ -26,6 +27,7 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  ChainWNativeMissingError,
   InputExceedsMaxError,
   MidnightCalldataEncodingError,
   MidnightContractReceiverError,
@@ -52,6 +54,52 @@ const decode = (data: `0x${string}`) =>
   decodeFunctionData({ abi: midnightBundlesV2Abi, data });
 
 describe("midnightRepayWithdrawCollateral", () => {
+  describe.each([
+    { label: "assets", repay: { type: "assets", assets: 500n }, cap: 500n },
+    {
+      label: "full",
+      repay: { type: "full", maxBuyerAssets: 1_010n },
+      cap: 1_010n,
+    },
+  ] as const)("native cap: $label repay", ({ repay, cap }) => {
+    test.each([false, true])(
+      "behavior: exact native cap with withdrawals=%s",
+      (withdraw) => {
+        const tx = midnightRepayWithdrawCollateral({
+          ...params,
+          market: { ...midnightMarket, loanToken: wNative },
+          repay,
+          collateralWithdrawals: withdraw ? params.collateralWithdrawals : [],
+          nativeAmount: cap,
+        });
+        expect(tx.value).toBe(cap);
+        expect(decode(tx.data).args.at(-1)).toBe(wNative);
+      },
+    );
+
+    test.each([false, true])(
+      "error: native cap exceeded with withdrawals=%s",
+      (withdraw) => {
+        const build = () =>
+          midnightRepayWithdrawCollateral({
+            ...params,
+            market: { ...midnightMarket, loanToken: wNative },
+            repay,
+            collateralWithdrawals: withdraw ? params.collateralWithdrawals : [],
+            nativeAmount: cap + 1n,
+          });
+        expect(build).toThrow(InputExceedsMaxError);
+        expect(build).toThrow(
+          expect.objectContaining({
+            field: "nativeAmount",
+            value: cap + 1n,
+            max: cap,
+          }),
+        );
+      },
+    );
+  });
+
   test("error: MidnightZeroReceiverError", () => {
     const build = () =>
       midnightRepayWithdrawCollateral({
@@ -395,5 +443,43 @@ describe("midnightRepayWithdrawCollateral malformed address", () => {
         cause: expect.objectContaining({ name: "InvalidAddressError" }),
       }),
     );
+  });
+});
+
+describe("midnightRepayWithdrawCollateral native funding validation", () => {
+  test("behavior: explicit zero native funding disables wrapping", () => {
+    const tx = midnightRepayWithdrawCollateral({ ...params, nativeAmount: 0n });
+    expect(tx.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: midnightBundlesV2Abi, data: tx.data }).args.at(
+        -1,
+      ),
+    ).toBe(zeroAddress);
+  });
+
+  test("error: negative native funding", () => {
+    const build = () =>
+      midnightRepayWithdrawCollateral({ ...params, nativeAmount: -1n });
+    expect(build).toThrow(NegativeInputError);
+    expect(build).toThrow(
+      expect.objectContaining({ field: "nativeAmount", value: -1n }),
+    );
+  });
+
+  test("error: native funding requires a registered wrapped-native token", () => {
+    const chainId = 999103;
+    const { wNative: _wNative, ...addresses } =
+      getChainAddresses(midnightChainId);
+    registerCustomAddresses({ addresses: { [chainId]: addresses } });
+    const market = { ...midnightMarket, chainId: BigInt(chainId) };
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        ...params,
+        chainId,
+        market,
+
+        nativeAmount: 1n,
+      }),
+    ).toThrow(ChainWNativeMissingError);
   });
 });

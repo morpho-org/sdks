@@ -13,6 +13,7 @@ import {
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
+import { evaluateCalls } from "./evaluate-calls.js";
 import { parseSimulationResponse } from "./parse-response.js";
 import { toServedChainError } from "./served-chain.js";
 
@@ -48,6 +49,10 @@ describe("toServedChainError", () => {
     const { client } = createMockClient(base);
     const error = new SlippageCheckUnavailableError("market not found", {
       cause: nodeError,
+      operationIndex: 0,
+      operationType: "blueSupply",
+      field: "market",
+      reason: "missingRead",
     });
 
     const relabeled = await toServedChainError({
@@ -93,31 +98,35 @@ describe("toServedChainError", () => {
     expect(failedReadIndex).toBeGreaterThanOrEqual(0);
     let missingEvidence: unknown;
     try {
-      parseSimulationResponse({
-        plan,
-        blocks: [
-          {
-            number: numberToHex(STATE_BLOCK + 1n),
-            timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
-            hash: `0x${"cd".repeat(32)}`,
-            parentHash: STATE_BLOCK_HASH,
-            calls: plan.calls.map((_, index) => ({
-              status:
-                index === failedReadIndex ? ("0x0" as const) : ("0x1" as const),
-              returnData: "0x" as const,
-              gasUsed: numberToHex(256n),
-              logs: [],
-              ...(index === failedReadIndex
-                ? { error: { message: "state read failed" } }
-                : {}),
-            })),
-          },
-        ],
-        stateBlockNumber: STATE_BLOCK,
-        stateBlockHash: STATE_BLOCK_HASH,
-        stateBlockTimestamp: STATE_BLOCK_TIMESTAMP,
-        parentHashCheck: true,
-      });
+      evaluateCalls(
+        parseSimulationResponse({
+          plan,
+          blocks: [
+            {
+              number: numberToHex(STATE_BLOCK + 1n),
+              timestamp: numberToHex(STATE_BLOCK_TIMESTAMP),
+              hash: `0x${"cd".repeat(32)}`,
+              parentHash: STATE_BLOCK_HASH,
+              calls: plan.calls.map((_, index) => ({
+                status:
+                  index === failedReadIndex
+                    ? ("0x0" as const)
+                    : ("0x1" as const),
+                returnData: "0x" as const,
+                gasUsed: numberToHex(256n),
+                logs: [],
+                ...(index === failedReadIndex
+                  ? { error: { message: "state read failed" } }
+                  : {}),
+              })),
+            },
+          ],
+          stateBlockNumber: STATE_BLOCK,
+          stateBlockHash: STATE_BLOCK_HASH,
+          stateBlockTimestamp: STATE_BLOCK_TIMESTAMP,
+          parentHashCheck: true,
+        }),
+      );
     } catch (error) {
       missingEvidence = error;
     }
@@ -163,7 +172,12 @@ describe("toServedChainError", () => {
 
   test("behavior: keeps missing evidence when the endpoint serves the right chain", async () => {
     const { client } = createMockClient(mainnet);
-    const error = new SlippageCheckUnavailableError("market not found");
+    const error = new SlippageCheckUnavailableError("market not found", {
+      operationIndex: 0,
+      operationType: "blueSupply",
+      field: "market",
+      reason: "missingRead",
+    });
 
     await expect(
       toServedChainError({ client, chainId: mainnet.id, error }),

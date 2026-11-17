@@ -74,13 +74,25 @@ export const test = createViemTest(mainnet, {
 ```typescript
 import { mainnet } from "viem/chains";
 import { spawnAnvil } from "@morpho-org/test";
+import { createPublicClient, http } from "viem";
 
-spawnAnvil(mainnet, { forkBlockNumber: 19_750_000n });
+const { rpcUrl, stopAndWait } = await spawnAnvil({
+  chainId: mainnet.id,
+  forkUrl: "https://<your-mainnet-rpc>",
+  forkBlockNumber: 19_750_000,
+});
+
+try {
+  const client = createPublicClient({ chain: mainnet, transport: http(rpcUrl) });
+  await client.getBlockNumber();
+} finally {
+  await stopAndWait();
+}
 ```
 
 ### Vault V2 Midnight adapter fixture
 
-The Base-fork fixture that deploys a Vault V2 with a Midnight adapter lives under its own subpath and needs `@morpho-org/morpho-ts` 4.3 or later (the optional peer); the root, `/fixtures`, `/vitest`, `/mock`, `/chaos` and `/playwright` entrypoints do not import morpho-ts.
+The Base-fork fixture that deploys a Vault V2 with a Midnight adapter lives under its own subpath and needs `@morpho-org/morpho-ts` 4.5 or later (including 4.5.0 prereleases; the optional peer); the root, `/fixtures`, `/vitest`, `/mock`, `/chaos` and `/playwright` entrypoints do not import morpho-ts.
 
 ```typescript
 import {

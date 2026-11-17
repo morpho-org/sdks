@@ -2,6 +2,48 @@ import { describe, expect, test } from "vitest";
 import { Time } from "./time.js";
 
 describe("Time — unit conversion matrix", () => {
+  describe("unsupported direct conversions among weeks, months and years", () => {
+    test("larger-to-smaller pairs currently return zero or an incorrect value", () => {
+      expect(Time.mo.from.y(1)).toBe(0);
+      expect(Time.w.from.y(1)).toBe(0);
+      expect(Time.w.from.mo(1)).toBe(0);
+      expect(Time.mo.from.y(1n)).toBe(0n);
+      expect(Time.w.from.y(1n)).toBe(0n);
+      expect(Time.w.from.mo(1n)).toBe(0n);
+      expect(Time.w.from.y(8)).toBe(365);
+      expect(Time.w.from.y(8n)).toBe(365n);
+    });
+
+    test("smaller-to-larger pairs currently divide by zero", () => {
+      expect(() => Time.y.from.mo(12)).toThrow(RangeError);
+      expect(() => Time.y.from.w(52)).toThrow(RangeError);
+      expect(() => Time.mo.from.w(5)).toThrow(RangeError);
+      expect(() => Time.y.from.mo(12n)).toThrow(RangeError);
+      expect(() => Time.y.from.w(52n)).toThrow(RangeError);
+      expect(() => Time.mo.from.w(5n)).toThrow(RangeError);
+    });
+
+    test("converts those pairs through days instead", () => {
+      expect(Time.mo.from.d(Time.d.from.y(1))).toBe(11);
+      expect(Time.w.from.d(Time.d.from.y(1))).toBe(52);
+      expect(Time.w.from.d(Time.d.from.mo(1))).toBe(4);
+      expect(Time.y.from.d(Time.d.from.mo(12))).toBe(1);
+      expect(Time.y.from.d(Time.d.from.w(52))).toBe(0);
+      expect(Time.mo.from.d(Time.d.from.w(5))).toBe(1);
+    });
+  });
+
+  test("cross-unit conversion rejects fractional number inputs", () => {
+    expect(() => Time.s.from.h(1.5)).toThrow(RangeError);
+  });
+
+  test("larger-unit conversion floors positive durations and truncates negative ones", () => {
+    expect(Time.h.from.s(5399)).toBe(1);
+    expect(Time.h.from.s(-5399)).toBe(-1);
+    expect(Time.h.from.s(5399n)).toBe(1n);
+    expect(Time.h.from.s(-5399n)).toBe(-1n);
+  });
+
   describe("from larger to smaller (multiplication)", () => {
     test("s ↔ ms", () => {
       expect(Time.ms.from.s(1)).toBe(1000);

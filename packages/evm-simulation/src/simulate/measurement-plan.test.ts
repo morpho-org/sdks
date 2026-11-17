@@ -57,7 +57,7 @@ const cases: {
   readonly type: OperationLimit["type"];
   readonly expected: {
     readonly subject: unknown;
-    readonly assetsPaid: unknown;
+    readonly assetsPaid?: unknown;
     readonly assetsReceived?: unknown;
     readonly sharesMinted?: unknown;
     readonly sharesBurned?: unknown;
@@ -69,6 +69,15 @@ const cases: {
     readonly unitsBought?: unknown;
   };
 }[] = [
+  ...(
+    [
+      "midnightSupplyCollateralBatch",
+      "midnightWithdrawCollateralBatch",
+    ] as const
+  ).map((type) => ({
+    type,
+    expected: { subject: { operation: type, marketId: midnightMarketId } },
+  })),
   ...(["blueSupply", "blueWithdraw"] as const).map((type) => ({
     type,
     expected: {
@@ -295,6 +304,8 @@ const limitFor = (type: OperationLimit["type"]): OperationLimit =>
   ({
     type,
     marketId:
+      type === "midnightSupplyCollateralBatch" ||
+      type === "midnightWithdrawCollateralBatch" ||
       type === "midnightSupplyCollateral" ||
       type === "midnightSupplyCollateralMakeBorrow" ||
       type === "midnightRedeem" ||
@@ -330,6 +341,8 @@ describe("positionBoundsMarketField", () => {
     ["vaultV1Deposit", undefined],
     ["vaultV1MigrateToV2", undefined],
     ["midnightSupplyCollateral", undefined],
+    ["midnightSupplyCollateralBatch", undefined],
+    ["midnightWithdrawCollateralBatch", undefined],
     ["midnightSupplyCollateralMakeBorrow", undefined],
     ["midnightRedeem", undefined],
     ["midnightRepayWithdrawCollateral", undefined],
@@ -385,6 +398,8 @@ describe("sharePriceMeasurement", () => {
     { type: "vaultV2InKindRedeem", expected: undefined },
     { type: "vaultV1MigrateToV2", expected: undefined },
     { type: "midnightSupplyCollateral", expected: undefined },
+    { type: "midnightSupplyCollateralBatch", expected: undefined },
+    { type: "midnightWithdrawCollateralBatch", expected: undefined },
     { type: "midnightSupplyCollateralMakeBorrow", expected: undefined },
     { type: "midnightSupplyBlueMakeLend", expected: undefined },
     { type: "midnightRedeem", expected: undefined },

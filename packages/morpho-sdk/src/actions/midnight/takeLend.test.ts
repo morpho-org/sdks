@@ -1,5 +1,9 @@
 import { MarketUtils, midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import {
+  getChainAddress,
+  getChainAddresses,
+  registerCustomAddresses,
+} from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import {
   BaseError,
@@ -19,6 +23,7 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  ChainWNativeMissingError,
   EmptyMidnightTakeableOffersError,
   InputExceedsMaxError,
   MidnightContractReceiverError,
@@ -527,4 +532,53 @@ describe("midnightTakeLend malformed address", () => {
       }),
     );
   });
+});
+
+describe("midnightTakeLend native funding validation", () => {
+  test("behavior: explicit zero native funding disables wrapping", () => {
+    const tx = midnightTakeLend({ ...params, nativeAmount: 0n });
+    expect(tx.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: midnightBundlesV2Abi, data: tx.data }).args.at(
+        -1,
+      ),
+    ).toBe(zeroAddress);
+  });
+
+  test("error: negative native funding", () => {
+    const build = () => midnightTakeLend({ ...params, nativeAmount: -1n });
+    expect(build).toThrow(NegativeInputError);
+    expect(build).toThrow(
+      expect.objectContaining({ field: "nativeAmount", value: -1n }),
+    );
+  });
+
+  test("error: native funding requires a registered wrapped-native token", () => {
+    const chainId = 999100;
+    const { wNative: _wNative, ...addresses } =
+      getChainAddresses(midnightChainId);
+    registerCustomAddresses({ addresses: { [chainId]: addresses } });
+    const market = { ...midnightMarket, chainId: BigInt(chainId) };
+    expect(() =>
+      midnightTakeLend({
+        ...params,
+        chainId,
+        market,
+        takeableOffers: [midnightApiTake({ market })],
+        nativeAmount: 1n,
+      }),
+    ).toThrow(ChainWNativeMissingError);
+  });
+});
+
+test("unknown target tags retain units-branch validation", () => {
+  const target = {
+    type: "unit",
+    units: 0n,
+    maxBuyerAssets: 1n,
+    minSellerAssets: 1n,
+  } as unknown as Parameters<typeof midnightTakeLend>[0]["target"];
+  expect(() => midnightTakeLend({ ...params, target })).toThrow(
+    new NonPositiveInputError("target.units", 0n),
+  );
 });

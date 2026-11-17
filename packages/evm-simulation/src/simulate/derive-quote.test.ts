@@ -72,6 +72,7 @@ test.each([
       expect(limit.quote.assetsPaid).toBe(received < 0n ? -received : 0n);
       const check = (observed: typeof limit.quote) =>
         checkSlippage({
+          operationIndex: 0,
           label: type,
           limits: limit,
           observed,
@@ -120,6 +121,7 @@ test.each([{ shares: 100_000_000n }, "full"] as const)(
     expect(limit.exactFields).not.toContain("assetsReceived");
     const check = (assetsReceived: bigint) =>
       checkSlippage({
+        operationIndex: 0,
         label: "repay",
         limits: limit,
         observed: {
@@ -295,6 +297,7 @@ test.each([
     const observed = { ...derived.quote, [field]: 0n };
     const check = (amount: bigint) =>
       checkSlippage({
+        operationIndex: 0,
         label: "inactive",
         limits: derived,
         observed: { ...observed, [field]: amount },
@@ -327,6 +330,7 @@ test.each([
         : "collateralSupplied";
     const check = (amount: bigint | undefined) =>
       checkSlippage({
+        operationIndex: 0,
         label: "inactive",
         limits: limit,
         observed: { ...limit.quote, [field]: amount },
@@ -364,6 +368,7 @@ describe("input-derived quotes", () => {
       expect(limit.inactiveFields).toContain("collateralWithdrawn");
       const check = (amount: bigint | undefined) =>
         checkSlippage({
+          operationIndex: 0,
           label: "repay-only",
           limits: limit,
           observed: { ...limit.quote, collateralWithdrawn: amount },
@@ -390,6 +395,7 @@ describe("input-derived quotes", () => {
       );
       const check = (collateralWithdrawn: bigint) =>
         checkSlippage({
+          operationIndex: 0,
           label: "wrong market",
           limits: limit,
           observed: { ...limit.quote, collateralWithdrawn },
@@ -436,6 +442,7 @@ describe("input-derived quotes", () => {
       ]) {
         const check = () =>
           checkSlippage({
+            operationIndex: 0,
             label: "split subject",
             limits: limit,
             observed: { ...limit.quote, [field]: amount },
@@ -477,6 +484,7 @@ describe("input-derived quotes", () => {
         );
         expect(() =>
           checkSlippage({
+            operationIndex: 0,
             label: "payout",
             limits: limit,
             observed: { assetsReceived: 100n, [shareField]: 0n },
@@ -487,6 +495,7 @@ describe("input-derived quotes", () => {
         ).toThrow(ConsumerLimitViolationError);
         expect(() =>
           checkSlippage({
+            operationIndex: 0,
             label: "payout",
             limits: limit,
             observed: limit.quote,
@@ -544,6 +553,7 @@ describe("input-derived quotes", () => {
     for (const sharesBurned of [0n, 99n, 101n])
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "migration",
           limits: limit,
           observed: { ...limit.quote, sharesBurned },
@@ -554,6 +564,7 @@ describe("input-derived quotes", () => {
     for (const sharesBurned of [100n])
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "migration",
           limits: limit,
           observed: { ...limit.quote, sharesBurned },
@@ -637,6 +648,7 @@ describe("input-derived quotes", () => {
         state,
       );
       const checked = checkSlippage({
+        operationIndex: 0,
         label: "deposit",
         limits: limit,
         observed: limit.quote,
@@ -656,6 +668,7 @@ describe("input-derived quotes", () => {
     );
     expect(
       checkSlippage({
+        operationIndex: 0,
         label: "borrow",
         limits: limit,
         observed: limit.quote,
@@ -670,6 +683,7 @@ describe("input-derived quotes", () => {
     expect(limit.quote).toEqual(quote);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "operation",
         limits: limit,
         observed: quote,
@@ -703,6 +717,7 @@ describe("input-derived quotes", () => {
     expect(limit.derivedFields).toEqual(["assetsPaid"]);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "operation",
         limits: limit,
         observed: { assetsPaid: 100n, sharesMinted: 81n },
@@ -724,6 +739,7 @@ describe("input-derived quotes", () => {
     for (const received of [999_900n, 999_999n, 1_000_001n])
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: "operation",
           limits: limit,
           observed: {
@@ -743,6 +759,7 @@ describe("input-derived quotes", () => {
     );
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "operation",
         limits: limit,
         observed: { assetsPaid: 100n, sharesMinted: 99n },
@@ -752,6 +769,7 @@ describe("input-derived quotes", () => {
     ).toThrow(ConsumerLimitViolationError);
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "operation",
         limits: limit,
         observed: { assetsPaid: 100n, sharesMinted: 101n },
@@ -830,6 +848,7 @@ describe("input-derived quotes", () => {
       const observed = { ...limit.quote, assetsReceived: 84n };
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: operation.type,
           limits: limit,
           observed,
@@ -840,6 +859,7 @@ describe("input-derived quotes", () => {
       ).not.toThrow();
       expect(() =>
         checkSlippage({
+          operationIndex: 0,
           label: operation.type,
           limits: withoutPenalty,
           observed,
@@ -942,12 +962,20 @@ describe("input-derived quotes", () => {
     );
   });
   test("a zero active conversion fails closed instead of disabling the required floor", () => {
-    expect(() =>
+    const derive = () =>
       deriveQuote(
         parse({ type: "vaultV2Deposit", vault, inputs: { assets: 1n } }),
-        { preview: 0n },
-      ),
-    ).toThrow(SlippageCheckUnavailableError);
+        { preview: 0n, operationIndex: 3 },
+      );
+    expect(derive).toThrow(SlippageCheckUnavailableError);
+    expect(derive).toThrow(
+      expect.objectContaining({
+        operationIndex: 3,
+        operationType: "vaultV2Deposit",
+        field: "sharesMinted",
+        reason: "zeroDerivedAmount",
+      }),
+    );
   });
   test("parsing does not freeze the consumer's nested inputs", () => {
     const inputs = { repay: { assets: 100n } };
@@ -962,6 +990,7 @@ describe("input-derived quotes", () => {
     );
     expect(() =>
       checkSlippage({
+        operationIndex: 0,
         label: "borrow",
         limits: limit,
         observed: { assetsReceived: 100n, sharesMinted: 0n },

@@ -8,8 +8,7 @@
       "!**/.vscode",
       "!**/cache",
       "!**/coverage",
-      "!**/artifacts",
-      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
+      "!**/artifacts"
     ]
   },
   "formatter": {

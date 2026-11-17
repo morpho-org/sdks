@@ -312,6 +312,49 @@ describe("safeGetAddress", () => {
 });
 
 describe("restructure", () => {
+  test.each([
+    { label: "single empty name", names: [""] },
+    { label: "multiple empty names", names: ["", ""] },
+    { label: "mixed named and empty outputs", names: ["amount", ""] },
+  ])("rejects $label", ({ names }) => {
+    const abi = [
+      {
+        type: "function",
+        name: "foo",
+        stateMutability: "view",
+        inputs: [],
+        outputs: names.map((name) => ({ name, type: "uint256" })),
+      },
+    ] as const;
+
+    expect(() =>
+      restructure(
+        names.map((_, index) => BigInt(index + 1)),
+        { abi, name: "foo", args: [] },
+      ),
+    ).toThrow(UnnamedAbiOutputsError);
+  });
+
+  test("accepts fully named outputs in an explicit ABI", () => {
+    const abi = [
+      {
+        type: "function",
+        name: "foo",
+        stateMutability: "view",
+        inputs: [],
+        outputs: [
+          { name: "amount", type: "uint256" },
+          { name: "shares", type: "uint256" },
+        ],
+      },
+    ] as const;
+
+    expect(restructure([1n, 2n], { abi, name: "foo", args: [] })).toEqual({
+      amount: 1n,
+      shares: 2n,
+    });
+  });
+
   const namedAbi = parseAbi([
     "function getMarket() view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
   ]);

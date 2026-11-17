@@ -42,7 +42,12 @@ describe("AccrualVault", () => {
 
       expect(vault.lostAssets).toBeGreaterThan(0n);
       expect(accrualVault.lostAssets).toBe(vault.lostAssets);
-      expect(accrualVault.totalAssets).toBe(allocatedAssets);
+      const assetsWithStoredLosses = allocatedAssets + (vault.lostAssets ?? 0n);
+      expect(accrualVault.totalAssets).toBe(
+        assetsWithStoredLosses < vault.lastTotalAssets
+          ? vault.lastTotalAssets
+          : assetsWithStoredLosses,
+      );
       expect(accruedVault.totalAssets).toBe(vault.totalAssets);
       expect(accruedVault.totalAssets).toBe(
         accruedAllocatedAssets + (accruedVault.lostAssets ?? 0n),

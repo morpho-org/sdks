@@ -274,6 +274,7 @@ const expectedOffer = {
 };
 
 const apiTakeableOffer = {
+  valid_until: apiOffer.expiry - 1,
   market_id: MARKET_ID,
   units: "369216000000000000000000",
   offer: apiOffer,
@@ -335,6 +336,7 @@ function createQuoteFetch(
 }
 
 const expectedTakeableOffer = {
+  validUntil: BigInt(apiTakeableOffer.valid_until),
   marketId: MARKET_ID,
   units: 369216000000000000000000n,
   offer: expectedOffer,
@@ -2148,6 +2150,44 @@ describe("MidnightApi malformed responses", () => {
       (fetch) => MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
     ],
   ];
+  test.each(
+    fetchers
+      .filter(([name]) =>
+        [
+          "fetchBookQuote",
+          "fetchBookTakeableOffers",
+          "fetchTakeableOffers",
+        ].includes(name),
+      )
+      .flatMap(([name, call]) =>
+        [
+          undefined,
+          null,
+          "1761922798",
+          1.5,
+          -1,
+          true,
+          Number.MAX_SAFE_INTEGER + 1,
+          apiOffer.expiry + 1,
+        ].map((validUntil) => ({ name, call, validUntil })),
+      ),
+  )(
+    "error: $name rejects valid_until=$validUntil",
+    async ({ name, call, validUntil }) => {
+      const take = { ...apiTakeableOffer, valid_until: validUntil };
+      const { fetch } = createJsonFetch({
+        data:
+          name === "fetchBookQuote"
+            ? { ...quoteData, takeable_offers: [take] }
+            : [take],
+      });
+
+      await expect(call(fetch)).rejects.toBeInstanceOf(
+        InvalidMidnightApiResponseError,
+      );
+    },
+  );
+
   const cases: readonly (readonly [
     string,
     unknown,

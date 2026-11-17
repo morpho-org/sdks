@@ -258,6 +258,9 @@ export function operationMeasurementPlan(
         unitsSold: { type: "midnightNet", marketId: limit.marketId },
       };
     }
+    case "midnightSupplyCollateralBatch":
+    case "midnightWithdrawCollateralBatch":
+      return { subject: { operation: limit.type, marketId: limit.marketId } };
     case "midnightRepayWithdrawCollateral":
     case "midnightTakeRepayWithdrawCollateral":
       return {
@@ -322,6 +325,8 @@ const SHARE_PRICE_MEASUREMENTS = {
   vaultV1InKindRedeem: null,
   vaultV2InKindRedeem: null,
   vaultV1MigrateToV2: null,
+  midnightSupplyCollateralBatch: null,
+  midnightWithdrawCollateralBatch: null,
   midnightSupplyCollateral: null,
   midnightSupplyCollateralMakeBorrow: null,
   midnightSupplyBlueMakeLend: null,
@@ -384,6 +389,8 @@ export function positionBoundsMarketField(
     case "midnightTakeBorrow":
     case "midnightTakeWithdraw":
     case "midnightSupplyCollateralTakeBorrow":
+    case "midnightSupplyCollateralBatch":
+    case "midnightWithdrawCollateralBatch":
     case "midnightRepayWithdrawCollateral":
     case "midnightTakeRepayWithdrawCollateral":
       return undefined;
@@ -406,6 +413,8 @@ export function positionBoundsMarketId(
   const marketField = positionBoundsMarketField(limit.type);
   if (marketField === "marketId")
     return "marketId" in limit &&
+      limit.type !== "midnightSupplyCollateralBatch" &&
+      limit.type !== "midnightWithdrawCollateralBatch" &&
       limit.type !== "midnightSupplyCollateral" &&
       limit.type !== "midnightSupplyCollateralMakeBorrow" &&
       limit.type !== "midnightRedeem" &&

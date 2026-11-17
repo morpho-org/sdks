@@ -28,7 +28,7 @@ describe("getMidnightBlueBuyCallbackAddress", () => {
   test("error: UnknownAddressError when the chain has no callback factory", () => {
     expect(() =>
       getMidnightBlueBuyCallbackAddress({
-        chainId: ChainId.ArbitrumMainnet,
+        chainId: ChainId.OptimismMainnet,
         owner,
         salt,
       }),

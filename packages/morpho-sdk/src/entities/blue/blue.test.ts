@@ -16,6 +16,7 @@ import {
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
+  numberToHex,
   type TypedData,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -112,6 +113,181 @@ const makePosition = (
   );
 
 const supplyMarketData = makePosition(marketParams).market;
+
+describe.sequential("clock skew reproduction", () => {
+  test.each([
+    { supplied: true, changedNow: undefined },
+    { supplied: true, changedNow: 1_800_086_400n },
+    { supplied: false, changedNow: 1_800_000_000n },
+  ])(
+    "snapshots reference time when supplied=$supplied and now changes to $changedNow",
+    async ({ supplied, changedNow }) => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      const entity = handle.client
+        .extend(morphoViemExtension())
+        .morpho.blue(marketParams, mainnet.id);
+      mockRead(handle, {
+        address: marketParams.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: maxUint256,
+      });
+      const params = {
+        userAddress,
+        assets: 1n,
+        deadline: now + 1_200n,
+        now: supplied ? now : undefined,
+      };
+      const output = withChainTimestamp(now, () => entity.supply(params));
+      const tx = output.buildTx();
+      params.now = changedNow;
+      if (supplied) {
+        await expect(
+          withChainTimestamp(now + 86_400n, () => output.getRequirements()),
+        ).resolves.toEqual([]);
+      } else {
+        expect(() =>
+          withChainTimestamp(now + 86_400n, () => output.getRequirements()),
+        ).toThrow(ExpiredDeadlineError);
+      }
+      expect(output.buildTx()).toEqual(tx);
+    },
+  );
+
+  test.each([-9_000n, 10_800n])(
+    "entity metadata records reference time despite device skew %s",
+    (skew) => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      const entity = handle.client
+        .extend(
+          morphoViemExtension({
+            metadata: { origin: "deadbeef", timestamp: true },
+          }),
+        )
+        .morpho.blue(marketParams, mainnet.id);
+      const tx = withChainTimestamp(now + skew, () =>
+        entity
+          .supply({ userAddress, assets: 1n, deadline: now + 1_200n, now })
+          .buildTx(),
+      );
+      expect(`0x${tx.data.slice(-16, -8)}`).toBe(numberToHex(now, { size: 4 }));
+      expect(tx.data.slice(-8)).toBe("deadbeef");
+    },
+  );
+
+  test.each([-1n, 1n << 32n])(
+    "rejects metadata timestamp %s at handle creation",
+    (timestamp) => {
+      const handle = createMockClient(mainnet);
+      const entity = handle.client
+        .extend(
+          morphoViemExtension({ metadata: { origin: "cafe", timestamp } }),
+        )
+        .morpho.blue(marketParams, mainnet.id);
+      expect(() =>
+        entity.supply({
+          userAddress,
+          marketData: supplyMarketData,
+          assets: 1n,
+          now: 1_800_000_000n,
+          deadline: 1_800_001_200n,
+        }),
+      ).toThrowError(
+        timestamp < 0n ? NegativeInputError : InputExceedsMaxError,
+      );
+    },
+  );
+  test("explicit reference time survives requirement re-checks while omission preserves expiry", async () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    const entity = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: maxUint256,
+    });
+    const params = {
+      userAddress,
+      marketData: supplyMarketData,
+      assets: 1n,
+      deadline: now + 1_200n,
+    };
+    const explicit = withChainTimestamp(now + 10_800n, () =>
+      entity.supply({ ...params, now }),
+    );
+    expect(
+      await withChainTimestamp(now + 86_400n, () => explicit.getRequirements()),
+    ).toEqual([]);
+    expect(() =>
+      withChainTimestamp(now + 10_800n, () => entity.supply(params)),
+    ).toThrow(ExpiredDeadlineError);
+    expect(() =>
+      withChainTimestamp(now - 10_800n, () =>
+        entity.supply({ ...params, now: params.deadline }),
+      ),
+    ).toThrow(ExpiredDeadlineError);
+    const legacy = withChainTimestamp(now, () => entity.supply(params));
+    expect(() =>
+      withChainTimestamp(now + 86_400n, () => legacy.getRequirements()),
+    ).toThrow(ExpiredDeadlineError);
+    expect(() =>
+      entity.repay({
+        userAddress,
+        positionData: makePosition(marketParams, { lastUpdate: now - 5_400n }),
+        repayShares: maxUint256,
+        now,
+        deadline: now + 7_201n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+  test("chain deadline remains valid with a fast device clock", () => {
+    const chainNow = 1_800_000_000n;
+    vi.useFakeTimers();
+    vi.setSystemTime(Number(chainNow + 10_800n) * 1_000);
+    try {
+      expect(() =>
+        makeEntity()
+          .supply({
+            userAddress,
+            marketData: supplyMarketData,
+            assets: 1n,
+            deadline: chainNow + 1_200n,
+            now: chainNow,
+          })
+          .buildTx(),
+      ).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  test("max repay accepts chain-time quote horizon with a slow device clock", () => {
+    const chainNow = 1_800_000_000n;
+    vi.useFakeTimers();
+    vi.setSystemTime(Number(chainNow - 9_000n) * 1_000);
+    try {
+      expect(() =>
+        makeEntity()
+          .repay({
+            userAddress,
+            positionData: makePosition(marketParams, {
+              lastUpdate: chainNow - 5_400n,
+            }),
+            repayShares: maxUint256,
+            deadline: chainNow + 7_200n,
+            now: chainNow,
+          })
+          .buildTx(),
+      ).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 const makeEntity = (entityChainId: number = mainnet.id) =>
   createMockClient(mainnet)
@@ -537,7 +713,7 @@ describe("MorphoBlue write surface", () => {
   });
 });
 
-describe("MorphoBlue common write validation", () => {
+describe.sequential("MorphoBlue common write validation", () => {
   test("error: ChainIdMismatchError across all direct entrypoint paths", () => {
     for (const [method, call] of getCommonWriteCalls(makeEntity(137))) {
       expect(call, method).toThrow(ChainIdMismatchError);

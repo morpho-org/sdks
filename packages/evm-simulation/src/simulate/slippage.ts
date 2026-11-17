@@ -1,5 +1,6 @@
 import { deepFreeze, MathLib } from "@morpho-org/morpho-ts";
 import {
+  type ConsumerLimitViolation,
   ConsumerLimitViolationError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
@@ -20,19 +21,18 @@ import {
 import { sharePriceMeasurement } from "./measurement-plan.js";
 
 /**
- * Compare observed amounts against the caller's quote and percentage tolerance.
+ * Find failures against the caller's quote and percentage tolerance in check order.
  * Minimum outputs round up and maximum inputs round down, so rounding never
  * permits a deviation greater than the requested percentage.
  * When `limits.sharePrice` is set, also bound the realized assets-per-share
  * rate of the pair `limits.type` prices.
- * @param params - Message prefix naming the operation, parsed limits with their operation `type`, matching observations, optional post-bundle Blue position or Midnight credit for `position` bounds, and optional debt-share semantics.
- * @returns The checked quote and tolerance, plus the checked `sharePrice`/`position` bounds when set, deep-frozen.
- * @throws {ConsumerLimitViolationError} When adverse slippage exceeds tolerance, the realized rate is past the `sharePrice` bound, or no shares moved, or the post-bundle position violates a `position` bound.
- * @throws {SlippageCheckUnavailableError} When a quoted amount, either side of the `sharePrice` pair, or the post-bundle position for a `position` bound has no observation, or the operation prices no single conversion.
+ * @param params - Message prefix and zero-based index naming the operation, parsed limits with their operation `type`, matching observations, optional post-bundle Blue position or Midnight credit for `position` bounds, and optional debt-share semantics.
+ * @returns Failures in check order and the deep-frozen checked limits for the success path.
  * @internal
  */
-export function checkSlippage(params: {
+export function findSlippageFailures(params: {
   readonly label: string;
+  readonly operationIndex: number;
   readonly limits: CheckedSlippageLimits & {
     readonly type: OperationType;
     readonly inputs?: OperationInputs[keyof OperationInputs];
@@ -40,6 +40,8 @@ export function checkSlippage(params: {
   readonly observed: SlippageQuote;
   /** Fields checked by a composed wallet bound instead of a scalar delta. */
   readonly skipFields?: readonly ScalarQuoteField[];
+  /** Fields whose missing observations were already reported during measurement. */
+  readonly unavailableFields?: readonly (keyof SlippageQuote)[];
   readonly debtShares?: boolean;
   readonly derivedFields?: readonly ScalarQuoteField[];
   readonly exactFields?: readonly ScalarQuoteField[];
@@ -58,7 +60,25 @@ export function checkSlippage(params: {
   readonly midnightDebt?: bigint;
   /** Final collateral balances by index for direct-repayment bounds. */
   readonly midnightCollateral?: ReadonlyMap<bigint, bigint>;
-}): CheckedSlippageLimits {
+  /** Collateral indices whose final observation was already reported missing. */
+  readonly unavailableCollateralIndices?: readonly bigint[];
+  /** Bounds whose required final read was already reported missing. */
+  readonly unavailableBounds?: readonly (
+    | "position"
+    | "position.maxDebt"
+    | "position.maxCredit"
+  )[];
+}): {
+  readonly failures: readonly (
+    | ConsumerLimitViolationError
+    | SlippageCheckUnavailableError
+  )[];
+  readonly checked: CheckedSlippageLimits;
+} {
+  const failures: (
+    | ConsumerLimitViolationError
+    | SlippageCheckUnavailableError
+  )[] = [];
   const {
     label,
     limits,
@@ -67,16 +87,39 @@ export function checkSlippage(params: {
     skipFields = [],
   } = params;
   const slippageTolerance = limits.slippageTolerance;
+  const violation = (
+    message: string,
+    facts: Omit<ConsumerLimitViolation, "operationIndex" | "operationType">,
+  ) =>
+    new ConsumerLimitViolationError(message, {
+      operationIndex: params.operationIndex,
+      operationType: limits.type,
+      ...facts,
+    });
   for (const field of params.inactiveFields ?? []) {
     const amount = observed[field];
-    if (amount === undefined)
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for inactive "${field}".`,
-      );
+    if (amount === undefined) {
+      if (!params.unavailableFields?.includes(field))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing observation for inactive "${field}".`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: field,
+              reason: "missingRead",
+            },
+          ),
+        );
+      continue;
+    }
     const output = field === "collateralSupplied";
     if (output ? amount < 0n : amount > 0n)
-      throw new ConsumerLimitViolationError(
-        `${label}: inactive "${field}" must not move adversely, got "${amount}".`,
+      failures.push(
+        violation(
+          `${label}: inactive "${field}" must not move adversely, got "${amount}".`,
+          { field, check: "inactiveLeg", expected: 0n, observed: amount },
+        ),
       );
   }
   const quote: { -readonly [K in keyof SlippageQuote]: SlippageQuote[K] } = {};
@@ -105,9 +148,19 @@ export function checkSlippage(params: {
     }
     const amount = observed[field];
     if (amount === undefined) {
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for "${field}". Supply the matching asset or position.`,
-      );
+      if (!params.unavailableFields?.includes(field))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing observation for "${field}". Supply the matching asset or position.`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: field,
+              reason: "missingRead",
+            },
+          ),
+        );
+      continue;
     }
     const derived =
       field !== "penalty" && (params.derivedFields?.includes(field) ?? false);
@@ -121,8 +174,17 @@ export function checkSlippage(params: {
       params.subjectShareRoundingAllowance !== undefined &&
       amount + params.subjectShareRoundingAllowance < expected
     )
-      throw new ConsumerLimitViolationError(
-        `${label}: subject shares for "${field}" expected at least "${expected - (params.subjectShareRoundingAllowance ?? 0n)}", got "${amount}". Check the operation subject.`,
+      failures.push(
+        violation(
+          `${label}: subject shares for "${field}" expected at least "${expected - (params.subjectShareRoundingAllowance ?? 0n)}", got "${amount}". Check the operation subject.`,
+          {
+            field,
+            check: "derivedBound",
+            expected,
+            observed: amount,
+            bound: expected - params.subjectShareRoundingAllowance,
+          },
+        ),
       );
     if (
       limits.inputs !== undefined &&
@@ -134,12 +196,18 @@ export function checkSlippage(params: {
         field === "collateralWithdrawn") &&
       !params.inactiveFields?.includes(field)
     )
-      throw new ConsumerLimitViolationError(
-        `${label}: no position movement on the selected subject for "${field}"; expected "${expected}", got "${amount}". Check the operation subject.`,
+      failures.push(
+        violation(
+          `${label}: no position movement on the selected subject for "${field}"; expected "${expected}", got "${amount}". Check the operation subject.`,
+          { field, check: "noMovement", expected, observed: amount },
+        ),
       );
     if (derived && exact && amount !== expected)
-      throw new ConsumerLimitViolationError(
-        `${label}: exact input "${field}" expected "${expected}", got "${amount}". Adjust the transaction or inputs.`,
+      failures.push(
+        violation(
+          `${label}: exact input "${field}" expected "${expected}", got "${amount}". Adjust the transaction or inputs.`,
+          { field, check: "exactQuote", expected, observed: amount },
+        ),
       );
     const tolerance = derived ? 0n : slippageTolerance;
     const bound = derived
@@ -152,15 +220,36 @@ export function checkSlippage(params: {
       field === "assetsPaid" &&
       amount !== expected
     ) {
-      throw new ConsumerLimitViolationError(
-        `${label}: wallet debit for "${field}" must equal quote "${expected}", got "${amount}". Adjust the transaction or quote.`,
+      failures.push(
+        violation(
+          `${label}: wallet debit for "${field}" must equal quote "${expected}", got "${amount}". Adjust the transaction or quote.`,
+          { field, check: "exactQuote", expected, observed: amount },
+        ),
       );
     }
     if (output ? amount < bound : amount > bound) {
-      throw new ConsumerLimitViolationError(
-        derived
-          ? `${label}: derived ${output ? "minimum" : "maximum"} for "${field}" is "${expected}", got "${amount}". Check the transaction against the typed inputs, or quote "${field}" explicitly.`
-          : `${label}: slippage for "${field}" exceeds tolerance "${tolerance}" against quote "${expected}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
+      failures.push(
+        violation(
+          derived
+            ? `${label}: derived ${output ? "minimum" : "maximum"} for "${field}" is "${expected}", got "${amount}". Check the transaction against the typed inputs, or quote "${field}" explicitly.`
+            : `${label}: slippage for "${field}" exceeds tolerance "${tolerance}" against quote "${expected}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
+          derived
+            ? {
+                field,
+                check: "derivedBound",
+                expected,
+                observed: amount,
+                bound,
+              }
+            : {
+                field,
+                check: "slippageTolerance",
+                expected,
+                observed: amount,
+                tolerance,
+                bound,
+              },
+        ),
       );
     }
     quote[field] = expected;
@@ -182,17 +271,38 @@ export function checkSlippage(params: {
           position.marketId.toLowerCase() === expected.marketId.toLowerCase(),
       )?.supplyShares;
       if (amount === undefined) {
-        throw new SlippageCheckUnavailableError(
-          `${label}: missing observation for "positions" in market "${expected.marketId}". Supply the matching asset or position.`,
-        );
+        if (!params.unavailableFields?.includes("positions"))
+          failures.push(
+            new SlippageCheckUnavailableError(
+              `${label}: missing observation for "positions" in market "${expected.marketId}". Supply the matching asset or position.`,
+              {
+                operationIndex: params.operationIndex,
+                operationType: limits.type,
+                field: "positions",
+                reason: "missingRead",
+              },
+            ),
+          );
+        continue;
       }
       const bound = MathLib.wMulUp(
         expected.supplyShares,
         MathLib.WAD - limits.slippageTolerance,
       );
       if (amount < bound) {
-        throw new ConsumerLimitViolationError(
-          `${label}: slippage for "positions" in market "${expected.marketId}" exceeds tolerance "${limits.slippageTolerance}" against quote "${expected.supplyShares}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
+        failures.push(
+          violation(
+            `${label}: slippage for "positions" in market "${expected.marketId}" exceeds tolerance "${limits.slippageTolerance}" against quote "${expected.supplyShares}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
+            {
+              field: "positions",
+              check: "slippageTolerance",
+              expected: expected.supplyShares,
+              observed: amount,
+              tolerance: limits.slippageTolerance,
+              bound,
+              entry: { marketId: expected.marketId },
+            },
+          ),
         );
       }
       checkedPositions.push({
@@ -203,9 +313,20 @@ export function checkSlippage(params: {
     quote.positions = checkedPositions;
   }
   if (limits.quote.collateralWithdrawals !== undefined) {
-    if (observed.collateralWithdrawals === undefined)
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for "collateralWithdrawals".`,
+    if (
+      observed.collateralWithdrawals === undefined &&
+      !params.unavailableFields?.includes("collateralWithdrawals")
+    )
+      failures.push(
+        new SlippageCheckUnavailableError(
+          `${label}: missing observation for "collateralWithdrawals".`,
+          {
+            operationIndex: params.operationIndex,
+            operationType: limits.type,
+            field: "collateralWithdrawals",
+            reason: "missingRead",
+          },
+        ),
       );
     quote.collateralWithdrawals = limits.quote.collateralWithdrawals.map(
       (entry) => ({ ...entry }),
@@ -213,68 +334,131 @@ export function checkSlippage(params: {
   }
   if (limits.quote.collateralSupplies !== undefined) {
     const observedSupplies = observed.collateralSupplies;
-    if (observedSupplies === undefined)
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for "collateralSupplies".`,
+    if (observedSupplies === undefined) {
+      if (!params.unavailableFields?.includes("collateralSupplies"))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing observation for "collateralSupplies".`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: "collateralSupplies",
+              reason: "missingRead",
+            },
+          ),
+        );
+    } else {
+      quote.collateralSupplies = limits.quote.collateralSupplies.map(
+        (expected) => {
+          const amount = observedSupplies.find(
+            (entry) => entry.collateralIndex === expected.collateralIndex,
+          )?.assets;
+          if (amount === undefined) {
+            if (!params.unavailableFields?.includes("collateralSupplies"))
+              failures.push(
+                new SlippageCheckUnavailableError(
+                  `${label}: missing observation for collateral index "${expected.collateralIndex}".`,
+                  {
+                    operationIndex: params.operationIndex,
+                    operationType: limits.type,
+                    field: "collateralSupplies",
+                    reason: "missingRead",
+                  },
+                ),
+              );
+            return { ...expected };
+          }
+          const minimum = expected.assets;
+          if (amount < minimum)
+            failures.push(
+              violation(
+                `${label}: collateral index "${expected.collateralIndex}" credit is below the exact quote "${expected.assets}"; got "${amount}".`,
+                {
+                  field: "collateralSupplies",
+                  check: "exactQuote",
+                  expected: expected.assets,
+                  observed: amount,
+                  bound: minimum,
+                  entry: { collateralIndex: expected.collateralIndex },
+                },
+              ),
+            );
+          return { ...expected };
+        },
       );
-    quote.collateralSupplies = limits.quote.collateralSupplies.map(
-      (expected) => {
-        const amount = observedSupplies.find(
-          (entry) => entry.collateralIndex === expected.collateralIndex,
-        )?.assets;
-        if (amount === undefined)
-          throw new SlippageCheckUnavailableError(
-            `${label}: missing observation for collateral index "${expected.collateralIndex}".`,
-          );
-        const minimum = expected.assets;
-        if (amount < minimum)
-          throw new ConsumerLimitViolationError(
-            `${label}: collateral index "${expected.collateralIndex}" credit is below the exact quote "${expected.assets}"; got "${amount}".`,
-          );
-        return { ...expected };
-      },
-    );
+    }
   }
   if (limits.quote.deallocations !== undefined) {
     const observedDeallocations = observed.deallocations;
     if (observedDeallocations === undefined) {
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for "deallocations". Supply the force-exit call logs.`,
-      );
-    }
-    const quoted = new Set(
-      limits.quote.deallocations.map((entry) => entry.marketId.toLowerCase()),
-    );
-    for (const realized of observedDeallocations) {
-      if (!quoted.has(realized.marketId.toLowerCase())) {
-        throw new ConsumerLimitViolationError(
-          `${label}: slippage for "deallocations" exceeds tolerance "${limits.slippageTolerance}"; deallocated "${realized.assets}" assets in unquoted market "${realized.marketId}". Adjust the transaction or tolerance.`,
+      if (!params.unavailableFields?.includes("deallocations"))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing observation for "deallocations". Supply the force-exit call logs.`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: "deallocations",
+              reason: "missingRead",
+            },
+          ),
         );
-      }
-    }
-    const checkedDeallocations: ForceExitDeallocationQuote[] = [];
-    for (const expected of limits.quote.deallocations) {
-      // More than quoted is adverse: an unobserved market deallocated nothing.
-      const amount =
-        observedDeallocations.find(
-          (entry) =>
-            entry.marketId.toLowerCase() === expected.marketId.toLowerCase(),
-        )?.assets ?? 0n;
-      const bound = MathLib.wMulDown(
-        expected.assets,
-        MathLib.WAD + limits.slippageTolerance,
+    } else {
+      const quoted = new Set(
+        limits.quote.deallocations.map((entry) => entry.marketId.toLowerCase()),
       );
-      if (amount > bound) {
-        throw new ConsumerLimitViolationError(
-          `${label}: slippage for "deallocations" in market "${expected.marketId}" exceeds tolerance "${limits.slippageTolerance}" against quote "${expected.assets}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
-        );
+      for (const realized of observedDeallocations) {
+        if (!quoted.has(realized.marketId.toLowerCase())) {
+          failures.push(
+            violation(
+              `${label}: slippage for "deallocations" exceeds tolerance "${limits.slippageTolerance}"; deallocated "${realized.assets}" assets in unquoted market "${realized.marketId}". Adjust the transaction or tolerance.`,
+              {
+                field: "deallocations",
+                check: "unquotedMarket",
+                expected: 0n,
+                observed: realized.assets,
+                tolerance: limits.slippageTolerance,
+                entry: { marketId: realized.marketId },
+              },
+            ),
+          );
+        }
       }
-      checkedDeallocations.push({
-        marketId: expected.marketId,
-        assets: expected.assets,
-      });
+      const checkedDeallocations: ForceExitDeallocationQuote[] = [];
+      for (const expected of limits.quote.deallocations) {
+        // More than quoted is adverse: an unobserved market deallocated nothing.
+        const amount =
+          observedDeallocations.find(
+            (entry) =>
+              entry.marketId.toLowerCase() === expected.marketId.toLowerCase(),
+          )?.assets ?? 0n;
+        const bound = MathLib.wMulDown(
+          expected.assets,
+          MathLib.WAD + limits.slippageTolerance,
+        );
+        if (amount > bound) {
+          failures.push(
+            violation(
+              `${label}: slippage for "deallocations" in market "${expected.marketId}" exceeds tolerance "${limits.slippageTolerance}" against quote "${expected.assets}"; allowed bound "${bound}", got "${amount}". Adjust the transaction or tolerance.`,
+              {
+                field: "deallocations",
+                check: "slippageTolerance",
+                expected: expected.assets,
+                observed: amount,
+                tolerance: limits.slippageTolerance,
+                bound,
+                entry: { marketId: expected.marketId },
+              },
+            ),
+          );
+        }
+        checkedDeallocations.push({
+          marketId: expected.marketId,
+          assets: expected.assets,
+        });
+      }
+      quote.deallocations = checkedDeallocations;
     }
-    quote.deallocations = checkedDeallocations;
   }
   let sharePrice: SharePriceLimit | undefined;
   if (limits.sharePrice !== undefined) {
@@ -282,31 +466,64 @@ export function checkSlippage(params: {
     const assets = pair === undefined ? undefined : observed[pair.assets];
     const shares = pair === undefined ? undefined : observed[pair.shares];
     if (pair === undefined || assets === undefined || shares === undefined) {
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing observation for "sharePrice". Supply the matching asset or position.`,
-      );
-    }
-    if (shares === 0n) {
-      throw new ConsumerLimitViolationError(
-        `${label}: slippage for "sharePrice" exceeds tolerance "${limits.sharePrice.tolerance}" against quote "${limits.sharePrice.expected}"; no shares moved, got "${assets}" assets. Adjust the transaction or tolerance.`,
-      );
-    }
-    const realized = pair.higherIsAdverse
-      ? MathLib.mulDivUp(assets, MathLib.RAY, shares)
-      : MathLib.mulDivDown(assets, MathLib.RAY, shares);
-    const bound = pair.higherIsAdverse
-      ? MathLib.wMulDown(
-          limits.sharePrice.expected,
-          MathLib.WAD + limits.sharePrice.tolerance,
+      if (
+        pair === undefined ||
+        !params.unavailableFields?.some(
+          (field) => field === pair.assets || field === pair.shares,
         )
-      : MathLib.wMulUp(
-          limits.sharePrice.expected,
-          MathLib.WAD - limits.sharePrice.tolerance,
+      )
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing observation for "sharePrice". Supply the matching asset or position.`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: "sharePrice",
+              reason: "missingRead",
+            },
+          ),
         );
-    if (pair.higherIsAdverse ? realized > bound : realized < bound) {
-      throw new ConsumerLimitViolationError(
-        `${label}: slippage for "sharePrice" exceeds tolerance "${limits.sharePrice.tolerance}" against quote "${limits.sharePrice.expected}"; allowed bound "${bound}", got "${realized}". Adjust the transaction or tolerance.`,
+    } else if (shares === 0n) {
+      failures.push(
+        violation(
+          `${label}: slippage for "sharePrice" exceeds tolerance "${limits.sharePrice.tolerance}" against quote "${limits.sharePrice.expected}"; no shares moved, got "${assets}" assets. Adjust the transaction or tolerance.`,
+          {
+            field: "sharePrice",
+            check: "noMovement",
+            expected: limits.sharePrice.expected,
+            observed: 0n,
+            tolerance: limits.sharePrice.tolerance,
+          },
+        ),
       );
+    } else {
+      const realized = pair.higherIsAdverse
+        ? MathLib.mulDivUp(assets, MathLib.RAY, shares)
+        : MathLib.mulDivDown(assets, MathLib.RAY, shares);
+      const bound = pair.higherIsAdverse
+        ? MathLib.wMulDown(
+            limits.sharePrice.expected,
+            MathLib.WAD + limits.sharePrice.tolerance,
+          )
+        : MathLib.wMulUp(
+            limits.sharePrice.expected,
+            MathLib.WAD - limits.sharePrice.tolerance,
+          );
+      if (pair.higherIsAdverse ? realized > bound : realized < bound) {
+        failures.push(
+          violation(
+            `${label}: slippage for "sharePrice" exceeds tolerance "${limits.sharePrice.tolerance}" against quote "${limits.sharePrice.expected}"; allowed bound "${bound}", got "${realized}". Adjust the transaction or tolerance.`,
+            {
+              field: "sharePrice",
+              check: "slippageTolerance",
+              expected: limits.sharePrice.expected,
+              observed: realized,
+              tolerance: limits.sharePrice.tolerance,
+              bound,
+            },
+          ),
+        );
+      }
     }
     sharePrice = {
       expected: limits.sharePrice.expected,
@@ -327,24 +544,65 @@ export function checkSlippage(params: {
     const bounds = limits.position;
     if (bounds.maxDebt !== undefined) {
       const amount = params.midnightDebt;
-      if (amount === undefined)
-        throw new SlippageCheckUnavailableError(
-          `${label}: missing post-bundle debt observation for "position.maxDebt".`,
-        );
-      if (amount > bounds.maxDebt)
-        throw new ConsumerLimitViolationError(
-          `${label}: post-bundle position.maxDebt "${amount}" is above the maximum "${bounds.maxDebt}". Adjust the transaction or the bound.`,
+      if (amount === undefined) {
+        if (!params.unavailableBounds?.includes("position.maxDebt"))
+          failures.push(
+            new SlippageCheckUnavailableError(
+              `${label}: missing post-bundle debt observation for "position.maxDebt".`,
+              {
+                operationIndex: params.operationIndex,
+                operationType: limits.type,
+                field: "position.maxDebt",
+                reason: "missingRead",
+              },
+            ),
+          );
+      } else if (amount > bounds.maxDebt)
+        failures.push(
+          violation(
+            `${label}: post-bundle position.maxDebt "${amount}" is above the maximum "${bounds.maxDebt}". Adjust the transaction or the bound.`,
+            {
+              field: "position.maxDebt",
+              check: "positionBound",
+              expected: bounds.maxDebt,
+              observed: amount,
+              bound: bounds.maxDebt,
+            },
+          ),
         );
     }
     for (const expected of bounds.maxCollateral ?? []) {
       const amount = params.midnightCollateral?.get(expected.collateralIndex);
-      if (amount === undefined)
-        throw new SlippageCheckUnavailableError(
-          `${label}: missing post-bundle collateral observation for index "${expected.collateralIndex}".`,
-        );
-      if (amount > expected.assets)
-        throw new ConsumerLimitViolationError(
-          `${label}: post-bundle position.maxCollateral for index "${expected.collateralIndex}" is "${amount}", above the maximum "${expected.assets}". Adjust the transaction or the bound.`,
+      if (amount === undefined) {
+        if (
+          !params.unavailableCollateralIndices?.includes(
+            expected.collateralIndex,
+          )
+        )
+          failures.push(
+            new SlippageCheckUnavailableError(
+              `${label}: missing post-bundle collateral observation for index "${expected.collateralIndex}".`,
+              {
+                operationIndex: params.operationIndex,
+                operationType: limits.type,
+                field: "position.maxCollateral",
+                reason: "missingRead",
+              },
+            ),
+          );
+      } else if (amount > expected.assets)
+        failures.push(
+          violation(
+            `${label}: post-bundle position.maxCollateral for index "${expected.collateralIndex}" is "${amount}", above the maximum "${expected.assets}". Adjust the transaction or the bound.`,
+            {
+              field: "position.maxCollateral",
+              check: "positionBound",
+              expected: expected.assets,
+              observed: amount,
+              bound: expected.assets,
+              entry: { collateralIndex: expected.collateralIndex },
+            },
+          ),
         );
     }
     positionBounds = {
@@ -357,13 +615,30 @@ export function checkSlippage(params: {
     };
   } else if (maxCredit !== undefined) {
     if (params.credit === undefined) {
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing post-bundle credit observation for "position"; the credit read failed or was not planned. Retry the simulation or report the RPC response.`,
-      );
-    }
-    if (params.credit > maxCredit) {
-      throw new ConsumerLimitViolationError(
-        `${label}: post-bundle position.maxCredit "${params.credit}" is above the maximum "${maxCredit}". Adjust the transaction or the bound.`,
+      if (!params.unavailableBounds?.includes("position.maxCredit"))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing post-bundle credit observation for "position"; the credit read failed or was not planned. Retry the simulation or report the RPC response.`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: "position.maxCredit",
+              reason: "missingRead",
+            },
+          ),
+        );
+    } else if (params.credit > maxCredit) {
+      failures.push(
+        violation(
+          `${label}: post-bundle position.maxCredit "${params.credit}" is above the maximum "${maxCredit}". Adjust the transaction or the bound.`,
+          {
+            field: "position.maxCredit",
+            check: "positionBound",
+            expected: maxCredit,
+            observed: params.credit,
+            bound: maxCredit,
+          },
+        ),
       );
     }
     positionBounds = { maxCredit };
@@ -371,20 +646,39 @@ export function checkSlippage(params: {
     const bounds = limits.position;
     const after = params.position;
     if (after === undefined) {
-      throw new SlippageCheckUnavailableError(
-        `${label}: missing post-bundle position observation for "position"; the position read failed or was not planned. Retry the simulation or report the RPC response.`,
-      );
-    }
-    for (const [field, bound, amount, minimum] of [
-      ["maxBorrowShares", bounds.maxBorrowShares, after.borrowShares, false],
-      ["minSupplyShares", bounds.minSupplyShares, after.supplyShares, true],
-      ["minCollateral", bounds.minCollateral, after.collateral, true],
-    ] as const) {
-      if (bound === undefined) continue;
-      if (minimum ? amount < bound : amount > bound) {
-        throw new ConsumerLimitViolationError(
-          `${label}: post-bundle position.${field} "${amount}" is ${minimum ? "below the minimum" : "above the maximum"} "${bound}". Adjust the transaction or the bound.`,
+      if (!params.unavailableBounds?.includes("position"))
+        failures.push(
+          new SlippageCheckUnavailableError(
+            `${label}: missing post-bundle position observation for "position"; the position read failed or was not planned. Retry the simulation or report the RPC response.`,
+            {
+              operationIndex: params.operationIndex,
+              operationType: limits.type,
+              field: "position",
+              reason: "missingRead",
+            },
+          ),
         );
+    } else {
+      for (const [field, bound, amount, minimum] of [
+        ["maxBorrowShares", bounds.maxBorrowShares, after.borrowShares, false],
+        ["minSupplyShares", bounds.minSupplyShares, after.supplyShares, true],
+        ["minCollateral", bounds.minCollateral, after.collateral, true],
+      ] as const) {
+        if (bound === undefined) continue;
+        if (minimum ? amount < bound : amount > bound) {
+          failures.push(
+            violation(
+              `${label}: post-bundle position.${field} "${amount}" is ${minimum ? "below the minimum" : "above the maximum"} "${bound}". Adjust the transaction or the bound.`,
+              {
+                field: `position.${field}`,
+                check: "positionBound",
+                expected: bound,
+                observed: amount,
+                bound,
+              },
+            ),
+          );
+        }
       }
     }
     positionBounds = {
@@ -399,11 +693,33 @@ export function checkSlippage(params: {
         : { minCollateral: bounds.minCollateral }),
     };
   }
-  return deepFreeze({
-    quote,
-    slippageTolerance: limits.slippageTolerance,
-    ...(params.derivedFields === undefined ? {} : { fieldChecks }),
-    ...(sharePrice === undefined ? {} : { sharePrice }),
-    ...(positionBounds === undefined ? {} : { position: positionBounds }),
-  });
+  return {
+    failures,
+    checked: deepFreeze({
+      quote,
+      slippageTolerance: limits.slippageTolerance,
+      ...(params.derivedFields === undefined ? {} : { fieldChecks }),
+      ...(sharePrice === undefined ? {} : { sharePrice }),
+      ...(positionBounds === undefined ? {} : { position: positionBounds }),
+    }),
+  };
+}
+
+/**
+ * Reject the first slippage failure.
+ * @param params - Observations and limits to check.
+ * @returns The checked values for the success path.
+ * @throws {ConsumerLimitViolationError} When a quoted limit is violated.
+ * @throws {SlippageCheckUnavailableError} When required evidence is unavailable.
+ * @internal
+ */
+export function checkSlippage(
+  params: Parameters<typeof findSlippageFailures>[0],
+): CheckedSlippageLimits {
+  const {
+    failures: [failure],
+    checked,
+  } = findSlippageFailures(params);
+  if (failure !== undefined) throw failure;
+  return checked;
 }

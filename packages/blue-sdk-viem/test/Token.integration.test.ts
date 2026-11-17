@@ -6,7 +6,13 @@ import {
   UnknownTokenError,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
-import { zeroHash } from "viem";
+import {
+  ContractFunctionExecutionError,
+  createPublicClient,
+  custom,
+  erc20Abi,
+  zeroHash,
+} from "viem";
 import { describe, expect } from "vitest";
 import { expectMalformedMetadataFailure } from "../src/__test__/errors.js";
 import { Token } from "../src/augment/Token.js";
@@ -16,6 +22,83 @@ import { test, testTreehouseEth } from "./setup.js";
 const { mkr, usdc, stEth, wstEth } = addressesRegistry[ChainId.EthMainnet];
 
 describe("augment/Token", () => {
+  for (const deployless of [true, false] as const) {
+    for (const [behavior, bytecode] of [
+      ["gas-burning", "0x5b600056"],
+      ["reverting", "0x60006000fd"],
+    ] as const) {
+      test(`isolates ${behavior} metadata with deployless=${deployless}`, async ({
+        client,
+      }) => {
+        const address = randomAddress();
+        await client.setCode({ address, bytecode });
+        const batchedClient = createPublicClient({
+          chain: client.chain,
+          transport: custom(client),
+          batch: { multicall: true },
+        });
+
+        const results = await Promise.allSettled([
+          Token.fetch(address, batchedClient, { deployless }),
+          Token.fetch(usdc, batchedClient, { deployless }),
+          batchedClient.readContract({
+            address: usdc,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [client.account.address],
+          }),
+        ]);
+
+        expect(results[1]).toMatchObject({
+          status: "fulfilled",
+          value: { decimals: 6, symbol: "USDC", name: "USD Coin" },
+        });
+        expect(results[2]).toMatchObject({
+          status: "fulfilled",
+          value: expect.any(BigInt),
+        });
+        expect(results[0]).toMatchObject({
+          status: "rejected",
+          reason: expect.any(
+            behavior === "gas-burning"
+              ? ContractFunctionExecutionError
+              : UnknownTokenError,
+          ),
+        });
+      });
+    }
+  }
+
+  for (const [behavior, bytecode] of [
+    // Return 18 for decimals(); loop or revert for every optional field.
+    [
+      "gas-burning",
+      "0x63313ce56760003560e01c146013575b600f565b601260005260206000f3",
+    ],
+    [
+      "reverting",
+      "0x63313ce56760003560e01c1460145760006000fd5b601260005260206000f3",
+    ],
+  ] as const) {
+    test(`bounds ${behavior} optional metadata`, async ({ client }) => {
+      const address = randomAddress();
+      await client.setCode({ address, bytecode });
+      for (const deployless of [true, "force", false] as const) {
+        if (behavior === "gas-burning" && deployless === false) {
+          await expect(
+            Token.fetch(address, client, { deployless }),
+          ).rejects.toBeInstanceOf(ContractFunctionExecutionError);
+        } else {
+          const token = await Token.fetch(address, client, { deployless });
+          expect(token.decimals).toBe(18);
+          expect(token.name).toBeUndefined();
+          expect(token.symbol).toBeUndefined();
+          expect(token.eip5267Domain).toBeUndefined();
+        }
+      }
+    });
+  }
+
   test("should fetch token data", async ({ client }) => {
     const expectedData = new Token({
       address: usdc,

@@ -1,6 +1,41 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, concatHex, type Hex, isHex, numberToHex } from "viem";
+import { InputExceedsMaxError, NegativeInputError } from "../types/error.js";
 import type { Metadata } from "../types/index.js";
+
+const MAX_METADATA_TIMESTAMP = (1n << 32n) - 1n;
+
+function validateMetadataTimestamp(timestamp: Metadata["timestamp"]): void {
+  if (typeof timestamp !== "bigint") return;
+  if (timestamp < 0n)
+    throw new NegativeInputError("metadata.timestamp", timestamp);
+  if (timestamp > MAX_METADATA_TIMESTAMP) {
+    throw new InputExceedsMaxError({
+      field: "metadata.timestamp",
+      value: timestamp,
+      max: MAX_METADATA_TIMESTAMP,
+    });
+  }
+}
+
+/**
+ * Replaces a device-clock metadata timestamp with the flow's explicit reference time.
+ * Returns the input unchanged when no replacement is needed; never mutates it.
+ * @throws {NegativeInputError} when the resolved bigint timestamp is negative.
+ * @throws {InputExceedsMaxError} when the resolved bigint timestamp exceeds uint32 seconds.
+ * @internal
+ */
+export function resolveTransactionMetadata(
+  metadata: Metadata | undefined,
+  now?: bigint,
+): Metadata | undefined {
+  const resolved =
+    metadata?.timestamp === true && now != null
+      ? { ...metadata, timestamp: now }
+      : metadata;
+  validateMetadataTimestamp(resolved?.timestamp);
+  return resolved;
+}
 
 /**
  * Adds metadata to a transaction object by concatenating additional
@@ -31,17 +66,21 @@ import type { Metadata } from "../types/index.js";
  * @returns The same `tx` object when `data` is missing, an empty string, or
  * canonical empty calldata (`"0x"`); otherwise, a new transaction object
  * with `data` containing any appended metadata. The input is never mutated.
+ * @throws {NegativeInputError} when an explicit bigint timestamp is negative.
+ * @throws {InputExceedsMaxError} when an explicit bigint timestamp exceeds uint32 seconds.
  * @example
  * ```ts
  * import { addTransactionMetadata } from "@morpho-org/morpho-sdk";
  * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
- * import type { Address, Hex } from "viem";
+ * import { type Address, createPublicClient, type Hex, http } from "viem";
  * import { mainnet } from "viem/chains";
  *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
  * const { blue } = getChainAddresses(mainnet.id);
  * const tx = { to: blue, value: 0n, data: "0x1234" as Hex };
+ * const { timestamp } = await client.getBlock();
  * const result: { to: Address; value: bigint; data: Hex } =
- *   addTransactionMetadata(tx, { origin: "deadbeef", timestamp: true });
+ *   addTransactionMetadata(tx, { origin: "deadbeef", timestamp });
  * // => { to: blue, value: 0n, data: "0x1234" + <4-byte timestamp> + "deadbeef" }
  * ```
  */
@@ -49,14 +88,20 @@ export function addTransactionMetadata(
   tx: { data: Hex; value: bigint; to: Address },
   metadata: Metadata,
 ) {
+  validateMetadataTimestamp(metadata.timestamp);
   const { data, ..._tx } = tx;
 
   if (!data || data === "0x") return tx;
 
   const concatItems = [data];
 
-  if (metadata.timestamp) {
-    concatItems.push(numberToHex(Time.timestamp(), { size: 4 }));
+  if (metadata.timestamp === true || typeof metadata.timestamp === "bigint") {
+    concatItems.push(
+      numberToHex(
+        metadata.timestamp === true ? Time.timestamp() : metadata.timestamp,
+        { size: 4 },
+      ),
+    );
   }
 
   try {

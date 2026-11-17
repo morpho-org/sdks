@@ -1422,10 +1422,19 @@ describe("getWithdrawableCollateral", () => {
     },
   );
 
-  // The SDK's inverse rounding can differ from Morpho's minimum collateral threshold.
-  test.fails.prop([healthyMarketCase], {
+  test.prop([healthyMarketCase], {
     numRuns: 1000,
     examples: [
+      [
+        {
+          totalBorrowAssets: 5n,
+          totalBorrowShares: 5533230n,
+          price: 7357772355224998991368731900376n,
+          collateral: 8361561358427930n,
+          lltv: 535784989738460623n,
+          borrowShares: 3176603n,
+        },
+      ],
       [
         {
           totalBorrowAssets: 1_000_000_000_000_000_000_000_000n,
@@ -1466,17 +1475,39 @@ describe("getWithdrawableCollateral", () => {
       input.collateral > minimumCollateral
         ? input.collateral - minimumCollateral
         : 0n;
+    const withdrawable = MarketUtils.getWithdrawableCollateral(
+      input,
+      {
+        totalBorrowAssets: input.totalBorrowAssets,
+        totalBorrowShares: input.totalBorrowShares,
+        price: input.price,
+      },
+      { lltv: input.lltv },
+    )!;
+    expect(withdrawable).toBe(expected);
+    const remaining = input.collateral - withdrawable;
     expect(
-      MarketUtils.getWithdrawableCollateral(
-        input,
-        {
-          totalBorrowAssets: input.totalBorrowAssets,
-          totalBorrowShares: input.totalBorrowShares,
-          price: input.price,
-        },
-        { lltv: input.lltv },
+      isHealthy(
+        remaining,
+        input.borrowShares,
+        input.totalBorrowAssets,
+        input.totalBorrowShares,
+        input.price,
+        input.lltv,
       ),
-    ).toBe(expected);
+    ).toBe(true);
+    if (withdrawable < input.collateral) {
+      expect(
+        isHealthy(
+          remaining - 1n,
+          input.borrowShares,
+          input.totalBorrowAssets,
+          input.totalBorrowShares,
+          input.price,
+          input.lltv,
+        ),
+      ).toBe(false);
+    }
   });
 });
 

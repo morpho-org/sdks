@@ -33,6 +33,7 @@ const RETIRED_PACKAGES = [
   "@morpho-org/examples",
   "@morpho-org/liquidation-sdk-viem",
   "@morpho-org/liquidity-sdk-ethers",
+  "@morpho-org/liquidity-sdk-viem",
   "@morpho-org/migration-sdk-viem",
   "@morpho-org/prool-viemtest",
   "@morpho-org/simulation-sdk",

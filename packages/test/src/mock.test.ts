@@ -80,6 +80,15 @@ describe("createMockClient", () => {
     ).resolves.toBe("0x");
   });
 
+  test("behavior: failed RPC calls are not retried", async () => {
+    const { client, request } = createMockClient(mainnet);
+    request.mockRejectedValue(new Error("rpc down"));
+    await expect(client.request({ method: "eth_chainId" })).rejects.toThrow(
+      /rpc down/,
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   test("the request fn is observable (call history)", async () => {
     const { client, request } = createMockClient(mainnet);
     await client.request({ method: "eth_chainId" });

@@ -11,8 +11,12 @@ import {
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
 import {
-  type ActionRequirement,
+  type ERC20ApprovalAction,
   ExpiredDeadlineError,
+  type PermitRequirementSignature,
+  type ReferenceTimestampParams,
+  type Requirement,
+  type Transaction,
 } from "../../types/index.js";
 
 /**
@@ -25,7 +29,7 @@ import {
  *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, minimum allowance, and deadline values.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns No requirement when the allowance is sufficient, otherwise one approval or permit.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
@@ -42,9 +46,13 @@ export const getVaultBundlesSharesRequirements = async (
     readonly requiredShareAllowance: bigint;
     readonly deadline: bigint;
     readonly supportSignature: boolean;
-    readonly now?: bigint;
-  },
-): Promise<readonly ActionRequirement[]> => {
+  } & ReferenceTimestampParams,
+): Promise<
+  readonly (
+    | Readonly<Transaction<ERC20ApprovalAction>>
+    | Requirement<PermitRequirementSignature>
+  )[]
+> => {
   validateChainId(viemClient.chain?.id, params.chainId);
   const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {

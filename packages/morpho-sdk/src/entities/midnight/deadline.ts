@@ -6,11 +6,11 @@ import { ExpiredDeadlineError } from "../../types/index.js";
  *
  * Midnight bundles revert with `DeadlinePassed()` once the deadline has passed, so a deadline at
  * or before `now` builds a transaction that cannot succeed. `maxUint256` still means
- * "no expiry". The check uses the local clock (`Time.timestamp()`), not chain time. Transaction
+ * "no expiry". The check uses the supplied reference timestamp, falling back to the device clock. Transaction
  * builders stay clock-free and only check the deadline's `uint256` shape.
  *
  * @param deadline - Bundle execution deadline timestamp, in seconds.
- * @param now - Reference timestamp, in seconds. Defaults to `Time.timestamp()`.
+ * @param now - Timestamp in seconds used to validate the deadline; defaults to `Time.timestamp()`.
  * @returns Nothing when `deadline` is after `now`.
  * @throws {ExpiredDeadlineError} when `deadline` is at or before `now`.
  * @internal

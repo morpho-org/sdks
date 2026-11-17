@@ -78,6 +78,10 @@ export interface MockClientHandle<chain extends Chain = Chain> {
  * methods (e.g. `eth_getBlockByNumber`) should override
  * `request.mockImplementation` directly.
  *
+ * The transport never retries (`retryCount: 0`): each RPC call reaches
+ * `request` exactly once, so a thrown error surfaces immediately and
+ * `request` call counts match the calls the code under test made.
+ *
  * @param chain - The viem {@link Chain} the mock client is bound to. The
  *   chain id is reported via the default `eth_chainId` handler. **No
  *   default**: callers must pass an explicit chain so chainId-validation
@@ -138,7 +142,10 @@ export function createMockClient<chain extends Chain>(
       `[createMockClient] unhandled RPC ${method} ${JSON.stringify(params)}`,
     );
   });
-  const client = createClient({ chain, transport: custom({ request }) });
+  const client = createClient({
+    chain,
+    transport: custom({ request }, { retryCount: 0 }),
+  });
   return { client, request, chain, dispatch };
 }
 

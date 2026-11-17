@@ -41,6 +41,17 @@ function walletClient(chainId: number = mainnet.id) {
 }
 
 describe("encodeBlueSignatureAuthorization", () => {
+  test("default authorization deadline uses the supplied reference time", async () => {
+    const now = 1_000n;
+    const requirement = await encodeBlueSignatureAuthorization(walletClient(), {
+      owner: account.address,
+      authorized: blueBundlesV1,
+      chainId: mainnet.id,
+      nonce: 0n,
+      now,
+    });
+    expect(requirement.action.args.deadline).toBe(now + 7_200n);
+  });
   test("error: ChainIdMismatchError when client chain differs", async () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(mainnet.id), {

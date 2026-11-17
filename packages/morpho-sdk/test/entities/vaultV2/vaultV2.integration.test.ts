@@ -10,7 +10,10 @@ import {
   NegativeInputError,
   VaultAddressMismatchError,
 } from "../../../src/types/index.js";
-import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
+import {
+  AvantgardeWethConservativeVaultV2,
+  SkyMoneyUsdcRiskCapitalVaultV2,
+} from "../../fixtures/vaultV2.js";
 import { seedVaultV2DeadDeposits } from "../../helpers/vaultV2.js";
 import { test } from "../../setup.js";
 
@@ -25,7 +28,7 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
 
@@ -54,7 +57,7 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
 
@@ -83,7 +86,7 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
 
@@ -107,7 +110,7 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
 
@@ -133,11 +136,11 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
       const vaultData = await morphoClient
-        .vaultV2(KpkWETHVaultV2.address, mainnet.id)
+        .vaultV2(AvantgardeWethConservativeVaultV2.address, mainnet.id)
         .getData();
 
       expect(() =>
@@ -158,7 +161,7 @@ describe("MorphoVaultV2 entity tests", () => {
         }),
       ).morpho;
       const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
+        SkyMoneyUsdcRiskCapitalVaultV2.address,
         mainnet.id,
       );
       const vaultData = await vault.getData();
@@ -180,7 +183,10 @@ describe("MorphoVaultV2 entity tests", () => {
           supportSignature: true,
         }),
       ).morpho;
-      const vault = morphoClient.vaultV2(KpkWETHVaultV2.address, mainnet.id);
+      const vault = morphoClient.vaultV2(
+        AvantgardeWethConservativeVaultV2.address,
+        mainnet.id,
+      );
 
       const vaultData = await vault.getData();
       expect(() =>
@@ -199,15 +205,18 @@ describe("MorphoVaultV2 entity tests", () => {
       });
       const vault = publicClient
         .extend(morphoViemExtension())
-        .morpho.vaultV2(KeyrockUsdcVaultV2.address, ChainId.CeloMainnet);
+        .morpho.vaultV2(
+          SkyMoneyUsdcRiskCapitalVaultV2.address,
+          ChainId.CeloMainnet,
+        );
 
       expect(() =>
         vault.deposit({
           nativeAmount: 1n,
-          userAddress: KeyrockUsdcVaultV2.address,
+          userAddress: SkyMoneyUsdcRiskCapitalVaultV2.address,
           vaultData: {
-            address: KeyrockUsdcVaultV2.address,
-            asset: KeyrockUsdcVaultV2.asset,
+            address: SkyMoneyUsdcRiskCapitalVaultV2.address,
+            asset: SkyMoneyUsdcRiskCapitalVaultV2.asset,
           } as never,
         }),
       ).toThrow(ChainWNativeMissingError);

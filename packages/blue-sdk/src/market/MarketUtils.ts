@@ -624,7 +624,7 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the amount of collateral that can be withdrawn given a certain borrow position.
+   * Returns the maximum collateral that can be withdrawn while preserving position health.
    * Return `undefined` iff the market's price is undefined.
    *
    * @param position.collateral - The collateral amount in the position.
@@ -666,13 +666,10 @@ export namespace MarketUtils {
 
     return MathLib.zeroFloorSub(
       collateral,
-      MathLib.wDivUp(
-        MathLib.mulDivUp(
-          toBorrowAssets(borrowShares, market),
-          ORACLE_PRICE_SCALE,
-          price,
-        ),
-        lltv,
+      MathLib.mulDivUp(
+        MathLib.wDivUp(toBorrowAssets(borrowShares, market), lltv),
+        ORACLE_PRICE_SCALE,
+        price,
       ),
     );
   }

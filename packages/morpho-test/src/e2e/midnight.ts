@@ -20,12 +20,15 @@ import {
   type Chain,
   erc20Abi,
   type Hex,
+  isAddressEqual,
   maxUint256,
   parseEther,
   zeroAddress,
 } from "viem";
-import { getE2eAsset } from "./asset.js";
+import { E2E_ASSET_BYTECODE, getE2eAsset } from "./asset.js";
 import { installE2eAsset, installE2eOracle, wrapE2eNative } from "./setup.js";
+
+const collateralToken: Address = "0xE2e0000000000000000000000000000000000004";
 
 /** Fork addresses of the named E2E wallets. */
 export const E2E_MIDNIGHT_WALLETS = {
@@ -64,8 +67,6 @@ export const createE2eMidnightMarket = async (
   const midnight = getChainAddress(chainId, "midnight");
   const loanAsset = getE2eAsset(chainId);
   const loanToken = loanAsset.address.toLowerCase() as Address;
-  const collateralToken =
-    "0xE2e0000000000000000000000000000000000004" as Address;
 
   if (loanAsset.requiresInstall) await installE2eAsset(client, loanToken);
   await installE2eAsset(client, collateralToken);
@@ -175,6 +176,14 @@ export const fundE2eMidnightWallets = async (
           account,
           amount: balanceBefore + amount,
         });
+        if (
+          isAddressEqual(token, collateralToken) &&
+          (await client.getCode({ address: token })) === E2E_ASSET_BYTECODE
+        )
+          await client.setBalance({
+            address: token,
+            value: (await client.getBalance({ address: token })) + amount,
+          });
       }
 
       strictEqual(

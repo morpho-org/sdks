@@ -294,4 +294,4 @@ Removed: `cancelOffer`, `midnightCancelOffer`, `MidnightCancelOfferParams`, `Mid
 
 ## Deployment
 
-MidnightBundlesV2 is pinned on Ethereum, Base, Arc, and Robinhood.
+MidnightBundlesV2 is pinned on Ethereum, Base, Arbitrum, Arc, Robinhood, and Tempo.

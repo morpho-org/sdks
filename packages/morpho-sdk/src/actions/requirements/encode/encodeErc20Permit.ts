@@ -12,12 +12,13 @@ import {
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
   ExpiredDeadlineError,
+  type ReferenceTimestampParams,
   type Requirement,
 } from "../../../types/index.js";
 import { validateClientChainId } from "../validateClientChainId.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
-interface EncodeErc20PermitParams {
+interface EncodeErc20PermitParams extends ReferenceTimestampParams {
   token: Address;
   /** Account that owns the tokens and signs the permit. */
   owner: Address;
@@ -27,8 +28,6 @@ interface EncodeErc20PermitParams {
   nonce: bigint;
   supportDeployless?: boolean;
   deadline?: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  now?: bigint;
 }
 
 /**
@@ -39,7 +38,7 @@ interface EncodeErc20PermitParams {
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
  * the selected transaction route can consume. The requirement's `action.typedData` holds that
  * EIP-712 payload so it can be inspected or displayed before signing. Deadline defaults to two
- * hours from `Time.timestamp()`.
+ * hours from `params.now` (the deprecated fallback uses the device clock).
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
@@ -52,7 +51,7 @@ interface EncodeErc20PermitParams {
  * @param params.nonce - The owner's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @param params.deadline - Signature expiration timestamp. Defaults to two hours from now.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`, or when the RPC
@@ -78,6 +77,7 @@ interface EncodeErc20PermitParams {
  * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
  *   client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @throws {MalformedSignatureError} from `sign()` when the wallet returns a malformed signature.
  * @example
  * ```ts
  * import { createWalletClient, http } from "viem";
@@ -124,7 +124,8 @@ export const encodeErc20Permit = async (
       throw new ExpiredDeadlineError(params.deadline, timestamp);
     }
   }
-  const deadline = params.deadline ?? Time.timestamp() + Time.s.from.h(2n);
+  const deadline =
+    params.deadline ?? (params.now ?? Time.timestamp()) + Time.s.from.h(2n);
 
   await validateClientChainId(viemClient, chainId);
   const tokenData = await fetchToken(token, viemClient, {

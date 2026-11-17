@@ -1,4 +1,4 @@
-import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
+import { ChainId, getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   type E2eScenario,
@@ -61,6 +61,8 @@ export const describeE2e = (
       const test = createViemTest(chain, {
         forkUrl: run.status === "run" ? run.forkUrl : undefined,
         forkBlockNumber,
+        // Midnight needs CLZ (Osaka), which Anvil's Arbitrum default does not enable.
+        hardfork: chainId === ChainId.ArbitrumMainnet ? "Osaka" : undefined,
         // HyperEVM small blocks cap gas at 3M, below a Vault V2 deployment.
         gasLimit: 60_000_000n,
         stepsTracing: false,

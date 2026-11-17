@@ -17,4 +17,4 @@
 - Keep this package dependency-free where possible (`@noble/hashes` for EIP-55 checksumming is the sole allowed runtime dependency) and unrelated to framework state. Protocol data is allowed only when it is shared source-of-truth data consumed by maintained packages, such as the unified Morpho address/deployment registries or shared ABI literals.
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
-- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
+- If a convention cannot yet be met, record the exception in [docs/EXCEPTIONS.md](../../docs/EXCEPTIONS.md), point to it from this file, and make the touched surface closer to the target design.

@@ -24,6 +24,35 @@ describe.sequential("spawnAnvil", () => {
     vi.unstubAllEnvs();
   });
 
+  test.each(["automatic", "explicit"])(
+    "starts silently with an %s port",
+    async (mode) => {
+      let port = 0;
+      if (mode === "explicit") {
+        const reservation = createServer();
+        await new Promise<void>((resolve) =>
+          reservation.listen(0, "127.0.0.1", resolve),
+        );
+        port = (reservation.address() as AddressInfo).port;
+        await new Promise<void>((resolve, reject) =>
+          reservation.close((error) => (error ? reject(error) : resolve())),
+        );
+      }
+      const node = await spawnAnvil(
+        { chainId: mainnet.id, silent: true, port },
+        { startupTimeoutMs: 1_500 },
+      );
+      try {
+        await expect(
+          createAnvilTestClient(http(node.rpcUrl), mainnet).getChainId(),
+        ).resolves.toBe(mainnet.id);
+      } finally {
+        await node.stopAndWait();
+      }
+      await expect(fetch(node.rpcUrl)).rejects.toThrow();
+    },
+  );
+
   test("behavior: isolates state on unique local nodes", async () => {
     const [firstResult, secondResult] = await Promise.allSettled([
       spawnAnvil({ chainId: mainnet.id }),
@@ -79,7 +108,12 @@ describe.sequential("spawnAnvil", () => {
   test("behavior: forks an RPC that never answers anvil_nodeInfo", async () => {
     const upstream = await spawnAnvil({ chainId: mainnet.id });
     const methods: string[] = [];
+    const headers: { authorization?: string; test?: string | string[] }[] = [];
     const server = createServer(async (req, res) => {
+      headers.push({
+        authorization: req.headers.authorization,
+        test: req.headers["x-test"],
+      });
       let body = "";
       for await (const chunk of req) body += chunk;
       const requests: { method: string }[] = [JSON.parse(body)].flat();
@@ -110,6 +144,10 @@ describe.sequential("spawnAnvil", () => {
         chainId: mainnet.id,
         forkUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
         noStorageCaching: true,
+        forkHeader: {
+          Authorization: "Bearer test:token",
+          "X-Test": "second value",
+        },
       });
       try {
         await expect(
@@ -122,6 +160,14 @@ describe.sequential("spawnAnvil", () => {
       }
       expect(methods).not.toContain("anvil_nodeInfo");
       expect(methods).toContain("eth_getBalance");
+      expect(headers.length).toBeGreaterThan(0);
+      expect(
+        headers.every(
+          (header) =>
+            header.authorization === "Bearer test:token" &&
+            header.test === "second value",
+        ),
+      ).toBe(true);
     } finally {
       server.closeAllConnections();
       server.close();

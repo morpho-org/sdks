@@ -1,5 +1,6 @@
 export {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureError,
   InvalidEcrecoverSignatureVError,
   InvalidMarketParameterError,
   InvalidMidnightApiQuoteTargetError,

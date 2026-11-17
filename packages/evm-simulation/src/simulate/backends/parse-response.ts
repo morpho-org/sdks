@@ -1,15 +1,8 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, isAddress, isHex } from "viem";
-import {
-  InvalidSimulationResponseError,
-  SimulationRevertedError,
-  SlippageCheckUnavailableError,
-} from "../../errors.js";
+import { type Hex, isAddress, isHex } from "viem";
+import { InvalidSimulationResponseError } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import { evaluateAssertion, evaluateLogAssertion } from "../assertions.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
-import { formatRevert } from "./decode-revert.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
@@ -33,13 +26,13 @@ interface ExecutedCall {
 }
 
 /** One executed state read with its raw return data. @internal */
-interface ExecutedStateRead {
+export interface ExecutedStateRead {
   readonly phase: "before" | "after";
   readonly read: StateRead;
   readonly returnData: Hex;
 }
 
-/** The output of {@link parseSimulationResponse}: the plan, its block, successful calls and state reads.
+/** The output of `evaluateCalls`: the plan, its block, successful calls and state reads.
  * @internal
  */
 export interface SimulationExecution {
@@ -48,6 +41,30 @@ export interface SimulationExecution {
   readonly calls: readonly ExecutedCall[];
   /** Successful state reads, in plan order, tagged by phase. */
   readonly stateReads: readonly ExecutedStateRead[];
+}
+
+/** A planned call with its normalized result and the node's failure details, before any call outcome is checked.
+ * @internal
+ */
+interface ParsedCall {
+  readonly planned: PlannedCall;
+  readonly result: SimulationCall;
+  /** The node's `error.data` when it is non-empty hex, otherwise `returnData`. */
+  readonly revertData: Hex;
+  /** The node's per-call `error` object, kept as the `cause` of a failed call. */
+  readonly error:
+    | { readonly message?: string; readonly data?: unknown }
+    | undefined;
+  readonly logsMissing: boolean;
+}
+
+/** The output of {@link parseSimulationResponse}: the plan, its block and every call, including failed ones.
+ * @internal
+ */
+export interface ParsedSimulationResponse {
+  readonly plan: ExecutionPlan;
+  readonly block: ExecutionBlock;
+  readonly calls: readonly ParsedCall[];
 }
 
 const isQuantity = (value: unknown): value is string =>
@@ -86,7 +103,9 @@ const isSimulateV1Response = (
 
 /**
  * Parse a raw `eth_simulateV1` result into a
- * {@link SimulationExecution}.
+ * {@link ParsedSimulationResponse}. The parser only checks the response's
+ * integrity; `evaluateCalls` then checks reverts, assertions and state
+ * reads in call order.
  *
  * The response must be exactly one block at the pinned state block or its
  * immediate successor. Block advancement is node-specific: geth-style nodes
@@ -97,19 +116,12 @@ const isSimulateV1Response = (
  *
  * @param params - The plan, the raw `eth_simulateV1` result, and the
  *   resolved state block.
- * @returns Deep-frozen execution: tagged calls plus one
- *   {@link ExecutedStateRead} per planned state read.
+ * @returns The executed block and every planned call with its normalized
+ *   result, revert data and node error, in plan order.
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
  *   block, on a call-count mismatch, a malformed per-call result, or on a
- *   transaction with `assertLogs` whose logs are omitted, or on a simulated
- *   block that is neither the pinned state block nor its immediate successor.
- * @throws {SimulationAssertError} When an assertion fails or its check throws;
- *   a thrown check error is preserved as `cause`.
- * @throws {SimulationLogAssertError} When an `assertLogs` check returns a
- *   failure message or throws; a thrown check error is kept as `cause`.
- * @throws {SimulationRevertedError} When a preparation or user-transaction
- *   call failed; the error preserves the failing call's original revert bytes.
- * @throws {SlippageCheckUnavailableError} When a planned state read fails.
+ *   simulated block that is neither the pinned state block nor its immediate
+ *   successor.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -119,7 +131,7 @@ export function parseSimulationResponse(params: {
   readonly stateBlockHash: Hex;
   readonly stateBlockTimestamp: bigint;
   readonly parentHashCheck: boolean;
-}): SimulationExecution {
+}): ParsedSimulationResponse {
   const { plan, blocks } = params;
 
   if (!isSimulateV1Response(blocks)) {
@@ -164,7 +176,7 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  const calls = block.calls.map((call, index) => {
+  const calls = block.calls.map((call, index): ParsedCall => {
     const planned = plan.calls[index]!;
     let result: SimulationCall;
     try {
@@ -219,138 +231,13 @@ export function parseSimulationResponse(params: {
     return {
       planned,
       result,
-      call,
       revertData,
+      error: call.error,
       logsMissing: call.logs == null,
     };
   });
 
-  // A preparation call that reverted did not produce its promised state —
-  // it is reported before user-transaction reverts it caused.
-  const failedPreparation = calls.find(
-    (
-      entry,
-    ): entry is (typeof calls)[number] & {
-      planned: Extract<PlannedCall, { type: "preparation" }>;
-    } => entry.planned.type === "preparation" && !entry.result.status,
-  );
-  if (failedPreparation) {
-    const { planned, revertData } = failedPreparation;
-    const message = formatRevert(revertData) ?? "Revert reason unavailable";
-    throw new SimulationRevertedError(
-      `Authorization ${planned.authorizationIndex} preparation call ${planned.callIndex} reverted: ${message}`,
-      revertData,
-      { cause: failedPreparation.call.error },
-    );
-  }
-
-  for (const [
-    transactionIndex,
-    transaction,
-  ] of plan.request.transactions.entries()) {
-    for (const [phase, assertions] of [
-      ["before", transaction.assertBefore],
-      ["after", transaction.assertAfter],
-    ] as const) {
-      if (phase === "after") {
-        const userCall = calls.find(
-          ({ planned }) =>
-            planned.type === "transaction" &&
-            planned.transactionIndex === transactionIndex,
-        );
-        if (
-          userCall?.planned.type === "transaction" &&
-          !userCall.result.status
-        ) {
-          const message =
-            formatRevert(userCall.revertData) ?? "Revert reason unavailable";
-          throw new SimulationRevertedError(
-            `Transaction ${transactionIndex} reverted: ${message}`,
-            userCall.revertData,
-            {
-              cause: userCall.call.error,
-              transactionIndex,
-            },
-          );
-        }
-        if (userCall?.planned.type !== "transaction") {
-          throw new InvalidSimulationResponseError(
-            `eth_simulateV1 plan is missing transaction result ${transactionIndex}.`,
-          );
-        }
-        const logAssertions = transaction.assertLogs;
-        if (logAssertions?.length) {
-          if (!Array.isArray(userCall.call.logs)) {
-            throw new InvalidSimulationResponseError(
-              `eth_simulateV1 omitted logs for transaction ${transactionIndex}. Log assertions cannot be evaluated.`,
-            );
-          }
-          const logs = deepFreeze(
-            userCall.result.logs.map(
-              (log): RawLog => ({
-                address: log.address.toLowerCase() as Address,
-                topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
-                data: log.data.toLowerCase() as Hex,
-              }),
-            ),
-          );
-          for (const [assertionIndex, assertion] of logAssertions.entries()) {
-            evaluateLogAssertion({
-              assertion,
-              logs,
-              transactionIndex,
-              assertionIndex,
-            });
-          }
-        }
-      }
-
-      for (const [assertionIndex, assertion] of (assertions ?? []).entries()) {
-        const executedAssertion = calls.find(
-          ({ planned }) =>
-            planned.type === "assertion" &&
-            planned.transactionIndex === transactionIndex &&
-            planned.phase === phase &&
-            planned.assertionIndex === assertionIndex,
-        );
-        if (executedAssertion?.planned.type !== "assertion") {
-          throw new InvalidSimulationResponseError(
-            `eth_simulateV1 plan is missing assertion result ${transactionIndex}:${phase}:${assertionIndex}.`,
-          );
-        }
-        evaluateAssertion({
-          assertion,
-          returnData: executedAssertion.result.returnData,
-          status: executedAssertion.result.status,
-          revertData: executedAssertion.revertData,
-          cause: executedAssertion.call.error,
-          transactionIndex,
-          phase,
-          assertionIndex,
-        });
-      }
-    }
-  }
-
-  const stateReads: ExecutedStateRead[] = [];
-  for (const { planned, result, call } of calls) {
-    if (planned.type !== "stateRead") continue;
-    if (!result.status) {
-      throw new SlippageCheckUnavailableError(
-        planned.read.kind === "derivation"
-          ? `Derivation read "${planned.read.id}" for limits.operations[${planned.read.operationIndex}] failed. Check the operation subject (${planned.read.subject}) and its support for this view call.`
-          : `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
-        { cause: call.error },
-      );
-    }
-    stateReads.push({
-      phase: planned.phase,
-      read: planned.read,
-      returnData: call.returnData,
-    });
-  }
-
-  return deepFreeze<SimulationExecution>({
+  return {
     plan,
     block: {
       chainId: plan.request.chainId,
@@ -360,14 +247,6 @@ export function parseSimulationResponse(params: {
       blockNumber,
       blockTimestamp,
     },
-    // Every failure was classified above: only successful calls remain.
-    calls: calls
-      .filter((entry) => entry.result.status)
-      .map(({ planned, result, logsMissing }) => ({
-        planned,
-        result,
-        logsMissing,
-      })),
-    stateReads,
-  });
+    calls,
+  };
 }

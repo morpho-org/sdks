@@ -55,9 +55,10 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Blue** | `withdrawBuyCallback` | Morpho Blue (direct `withdraw` for a BlueBuyCallback's owner) |
-| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
-| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arc, Robinhood, Tempo) |
+| | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.
@@ -267,11 +268,72 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 > High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 allocator and
 > low-level composition surfaces were removed in v6; direct Vault V1 flows remain.
 
+### TransactionPlan: sign and verify permits
+
+> **Beta:** TransactionPlan is experimental; breaking changes may ship in minor releases.
+> Existing entity flows remain the recommended stable path during the shadow-mode rollout.
+
+Prepare a Vault V2 deposit or withdrawal plan, then sign its pending requests with your wallet.
+`applySignatures(plan, signatures)` synchronously verifies every supplied signature before attaching
+it, without a client or RPC. It validates all requests against their actions, including permit/action
+deadline agreement, rejects unknown or duplicate input IDs, and recovers the permit owner from the
+EIP-712 typed-data hash. The domain
+binds the signature to its chain. Only low-s ECDSA permits encodable as `v/r/s` are supported
+(64-byte compact or 65-byte serialized signatures, stored in serialized form). Contract wallets
+should use `supportSignature: false` for direct approvals: deployed bundles do not consume
+arbitrary ERC-1271 or ERC-6492 signatures.
+
+`parseTransactionPlan` revives bigint tags and validates supported versions/actions, field shapes
+and uint256 ranges, unique IDs, references, action chain/account agreement and permit consistency,
+including requests with existing signatures. It allows extra keys. Malformed JSON, shapes or
+references throw `InvalidTransactionPlanError` with a JSON `path` and `reason`; unsupported versions
+and action types retain their dedicated errors. Serialization remains unchecked. Parsing uses no
+clock or RPC and does not check expiry, live state, signature ownership or action-layer business
+constraints. It does not prove authenticity or intent: tampered-but-well-formed, internally consistent
+plans pass, so integrators must still protect stored plans.
+
+When existing allowance is insufficient, withdrawal plans request an unlimited (`maxUint256`)
+ERC-2612 vault-share permit or direct share approval. The quote's `requiredShareAllowance` remains
+the minimum needed for that withdrawal; later withdrawals reuse sufficient allowance without a
+new signature. Deposit asset permits must instead sign the exact pull amount, not an unlimited
+value. Existing stored withdrawal permits covering the minimum allowance remain supported.
+
+Only deposit plans accept `slippageTolerance`, which sets their on-chain maximum share price.
+Withdrawal plans do not accept it: the share-allowance quote uses `DEFAULT_SLIPPAGE_TOLERANCE`
+internally, but withdrawals have no on-chain share-price or maximum-shares bound. A price drop
+before inclusion can burn more shares than quoted.
+
+```typescript
+import {
+  buildTransactions,
+  getPendingSignatureRequests,
+  applySignatures,
+  type TransactionPlan,
+} from "@morpho-org/morpho-sdk";
+import type { WalletClient } from "viem";
+import { signTypedData } from "viem/actions";
+
+async function finalize(wallet: WalletClient, plan: TransactionPlan) {
+  const signatures = await Promise.all(
+    getPendingSignatureRequests(plan).map(async ({ id, typedData }) => ({
+      id,
+      signature: await signTypedData(wallet, { ...typedData, account: plan.account }),
+    })),
+  );
+  return buildTransactions(applySignatures(plan, signatures));
+}
+```
+
+Protect stored plans: verification checks permit consistency and signers, not whether stored action
+inputs match your intended operation. Builders do not reverify signatures in restored plans. Do not
+change the plan after applying signatures. Empty signature input still validates all requests and
+returns the original plan; omitted IDs retain their existing signatures.
+
 ### Midnight: take a fixed-rate offer
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
 
-Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arc, Robinhood, and Tempo.
+Morpho-ts registers MidnightBundlesV2 on Ethereum, Base, Arbitrum, Arc, Robinhood, and Tempo.
 
 ```typescript
 const midnight = client.morpho.midnight(8453);
@@ -288,6 +350,62 @@ const output = midnight.takeLend({
 
 const requirements = await output.getRequirements();
 const tx = output.buildTx();
+```
+
+### Midnight: collateral batches
+
+`supplyCollateralBatch` and `withdrawCollateralBatch` move several collaterals of one position in
+one transaction: a Midnight core `multicall` of direct `supplyCollateral` or `withdrawCollateral`
+calls that reverts as a whole. Pass one entry per collateral index; duplicates throw
+`DuplicateMidnightCollateralIndexError`, unlike the bundle flows, which sum them.
+
+A supply batch returns one unlimited Midnight approval per collateral token whose allowance is
+below that token's total:
+
+```typescript
+const supply = midnight.supplyCollateralBatch({
+  accountAddress: user,
+  marketData,
+  collateralSupplies: [
+    { collateralIndex: 0n, assets: 1_000_000n },
+    { collateralIndex: 1n, assets: 2_000_000_000_000_000_000n },
+  ],
+});
+
+for (const approval of await supply.getRequirements()) {
+  const hash = await walletClient.sendTransaction({ ...approval, account: user });
+  await client.waitForTransactionReceipt({ hash });
+}
+await walletClient.sendTransaction({ ...supply.buildTx(), account: user });
+```
+
+A withdraw batch checks every entry against `positionData` and, when the position has debt, checks
+the remaining collateral against the LLTV buffer using `collateralPrices`. `maxUint256` withdraws
+that index's whole balance. It needs no requirements:
+
+```typescript
+import { blueOracleAbi } from "@morpho-org/morpho-sdk/abis";
+import { maxUint256 } from "viem";
+
+const positionData = await midnight.getPositionData({ marketId, accountAddress: user });
+const collateralPrices = await Promise.all(
+  marketData.params.collateralParams.map(({ oracle }) =>
+    client.readContract({ address: oracle, abi: blueOracleAbi, functionName: "price" }),
+  ),
+);
+
+const withdrawal = midnight.withdrawCollateralBatch({
+  accountAddress: user,
+  marketData,
+  positionData,
+  collateralPrices,
+  collateralWithdrawals: [
+    { collateralIndex: 0n, assets: 500_000n },
+    { collateralIndex: 1n, assets: maxUint256 },
+  ],
+  receiver: user,
+});
+await walletClient.sendTransaction({ ...withdrawal.buildTx(), account: user });
 ```
 
 See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API:
@@ -368,10 +486,12 @@ graph LR
         MN1 --> MNM[maker offer submission]
         MN1 --> MNR[repayWithdrawCollateral]
         MN1 --> MNP[collateral supply / redeem]
+        MN1 --> MNCB[collateral batches]
         MNT --> MNB2[MidnightBundlesV2]
         MNM --> MNB2
         MNR --> MNB2
         MNP --> MNC[Midnight]
+        MNCB -->|multicall| MNC
     end
 
 

@@ -58,6 +58,12 @@ export function deriveQuote(
     if (state.market === undefined)
       throw new SlippageCheckUnavailableError(
         `Missing accrued market state for "${limit.type}".`,
+        {
+          operationIndex: state.operationIndex ?? 0,
+          operationType: limit.type,
+          field: "market",
+          reason: "missingRead",
+        },
       );
     return state.market;
   };
@@ -65,6 +71,12 @@ export function deriveQuote(
     if (state.preview === undefined)
       throw new SlippageCheckUnavailableError(
         `Missing vault preview for "${limit.type}".`,
+        {
+          operationIndex: state.operationIndex ?? 0,
+          operationType: limit.type,
+          field: "preview",
+          reason: "missingRead",
+        },
       );
     return state.preview;
   };
@@ -78,6 +90,12 @@ export function deriveQuote(
       if (target === undefined)
         throw new SlippageCheckUnavailableError(
           "Missing target vault conversion state for migration.",
+          {
+            operationIndex: state.operationIndex ?? 0,
+            operationType: limit.type,
+            field: "sharesMinted",
+            reason: "missingRead",
+          },
         );
       quote.sharesMinted = MathLib.mulDivDown(
         net(withdrawn),
@@ -185,6 +203,12 @@ export function deriveQuote(
         if (shares === undefined)
           throw new SlippageCheckUnavailableError(
             `Missing owner debt for "${limit.type}" full repayment.`,
+            {
+              operationIndex: state.operationIndex ?? 0,
+              operationType: limit.type,
+              field: "sharesBurned",
+              reason: "missingRead",
+            },
           );
         exact("sharesBurned", shares);
         const assets = MarketUtils.toBorrowAssets(shares, market(), "Up");
@@ -232,6 +256,12 @@ export function deriveQuote(
     )
       throw new SlippageCheckUnavailableError(
         `Derived "${field}" is zero for "${limit.type}". Increase the amount or supply an explicit quote.`,
+        {
+          operationIndex: state.operationIndex ?? 0,
+          operationType: limit.type,
+          field: field,
+          reason: "zeroDerivedAmount",
+        },
       );
   }
   const mergedQuote: SlippageQuote = {

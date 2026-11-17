@@ -1,5 +1,86 @@
 # @morpho-org/evm-simulation
 
+## 8.8.0
+
+### Minor Changes
+
+- Export four abstract error group classes: `SimulationSafetyError`, `SimulationRejectedError`, `SimulationInvalidRequestError` and `SimulationInfrastructureError`. Every concrete simulation error extends one group so integrators can handle failures with `instanceof`, while messages, codes and concrete class names remain unchanged. All groups reject; they are not a severity scale.
+
+  Add a readonly `findings` list for other failure instances from the same simulation. It is optional on the type in 8.x for legacy structural objects, always set to a frozen empty array on package instances until collection lands, and becomes required in 9.0.0. The structural error guard narrows to `SimulationPackageError`, accepts objects with or without findings, and validates findings arrays and their entries; read `error.findings ?? []` after the guard. The JSON error response is unchanged.
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/evm-simulation"`, which takes precedence over the wildcards, and alias any others, for example `export { version as evmSimulationVersion } from "@morpho-org/evm-simulation"`.
+
+- `ConsumerLimitViolationError` now names what failed as fields, so integrators no longer parse its message: `operationIndex`, `operationType`, `field`, `check`, `expected` and `observed`, plus `tolerance` or `bound` when the check applies one. When a quote or bound has several entries, `entry` (`ConsumerLimitEntry`) names the one that failed: `{ marketId }` for `positions` and `deallocations`, `{ collateralIndex }` for `collateralSupplies`, `collateralWithdrawals` and `position.maxCollateral`, `{ token, account }` for `walletBalance`; it is undefined for single-value sides. `check` is one of the exported `CONSUMER_LIMIT_CHECKS`. The fields are optional in the type for 8.x, and `simulate` always sets them. Messages are unchanged.
+- Expose `reason` and `field` on `SlippageCheckUnavailableError`, with `operationIndex` and `operationType` for operation-scoped failures. Use the exported `SLIPPAGE_CHECK_UNAVAILABLE_REASONS` to distinguish missing evidence without parsing messages. The seven reasons describe unavailable evidence. Caller-input conflicts and combined flows that cannot be measured separately now throw `SimulationValidationError` with operation-scoped `fieldErrors` instead. Approval-token resolution also uses `SimulationValidationError` for zero vault subjects or Blue parking loan tokens, absent Midnight collateral indices, and missing `assetPaid` on first-market collateral supplies. The fields remain optional for 8.x constructor compatibility; SDK failures populate them without changing existing messages.
+
+  Missing-wNative diagnostics identify `assetsPaid` for native-funded Midnight repay-withdraw operations and `collateralWithdrawals` for batch withdrawals. Public helper and overload documentation distinguishes invalid caller requests from unavailable chain evidence.
+
+  Caller-mistake validation also runs for complete quotes without asset overrides, before quote metadata failures can hide it. Transport failures, unknown reverts and unusable market metadata remain unavailable-evidence errors.
+
+### Patch Changes
+
+- Check simulated call outcomes (preparation reverts, transaction assertions and reverts, and state reads) in a separate step after parsing the `eth_simulateV1` response. Errors, their order and results are unchanged.
+- Restructure post-execution simulation checks internally. The errors surfaced to callers, their order, and their messages are unchanged.
+- Restructure slippage checks internally while preserving the errors, messages, and order reported by `simulate`.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.8.0
+  - @morpho-org/blue-sdk@8.3.0
+  - @morpho-org/morpho-ts@4.4.0
+
+## 8.7.1
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+- Add experimental, static, serializable `TransactionPlan` preparation for Vault V2 deposits and withdrawals alongside the existing entity handles. The public TransactionPlan APIs, types and dedicated errors ship with `@experimental` tags during beta; breaking changes may ship in minor releases. Existing entity flows remain the recommended stable path during the shadow-mode rollout. Preparers take a plain viem client and a caller-fetched `vaultData` snapshot, resolve their remaining reads, and return self-contained actions and permit requests. The SDK never signs. `supportSignature` defaults to false; insufficient allowance requires a direct approval or, when enabled and supported, an ERC-2612 permit. TransactionPlan has no Permit2 route; entity flows retain their behavior and Permit2 support.
+
+  `applySignatures(plan, signatures)` synchronously verifies every supplied signature before attaching it, with no client or RPC. It validates all requests against their referencing actions, rejects unknown and duplicate input IDs with `TransactionPlanSignatureMismatchError` (`field: "reference"` or `"duplicate"`), and uses the bundle builders' `normalizeBundlesSignature` parser. Compact 64-byte and serialized 65-byte ECDSA signatures are accepted and stored in serialized form; unsupported encodings throw `BundlesPermitMismatchError`. Local secp256k1 recovery verifies the EIP-712 typed-data hash and owner; high-s signatures, recovery failures and wrong signers throw `InvalidSignatureError`. The EIP-712 domain binds the signature to the action chain. Empty input validates requests and returns the original plan; omitted IDs retain their signatures. The direct `@noble/curves` dependency enables synchronous recovery and reuses viem's version. Contract wallets should use `supportSignature: false` for direct approvals because deployed bundles consume ECDSA `v/r/s`, not arbitrary ERC-1271 or ERC-6492 signatures.
+
+  Only deposit parameters accept `slippageTolerance`, which controls the on-chain maximum share price. Withdrawal plans use `DEFAULT_SLIPPAGE_TOLERANCE` internally for their share-allowance quote and expose no slippage input, since withdrawal calldata enforces no share-price or maximum-shares bound. Insufficient share allowance results in unlimited (`maxUint256`) direct approvals or ERC-2612 share permits. Stored version-1 finite share permits covering the required minimum remain buildable without changing their signed value. Deposit asset permits sign the exact pull amount.
+
+  Pending signature selection and signature attachment reject a permit deadline that differs from any referencing action's deadline before signing, with `TransactionPlanSignatureMismatchError` (`field: "args.deadline"`). Parsing applies the same check and reports `InvalidTransactionPlanError` at the request's `args.deadline` path. Builders retain their `BundlesPermitMismatchError` (`field: "deadline"`) check for this mismatch.
+
+  Plan-interpreting helpers reject unsupported versions with `UnsupportedTransactionPlanVersionError` and unknown action types with `UnsupportedTransactionPlanActionError` before inspecting requests or signature updates, including empty inputs and prototype-property action names. Builders run action-layer validators, including registered approval-spender, amount, share-price, deadline and referral-fee checks. `buildTransaction(plan, step)` and `buildTransactions(plan)` return frozen SDK transactions (`{ to, data, value, action }`), without step IDs or kinds, and append optional `calldataOrigin` bytes.
+
+  `parseTransactionPlan` revives bigints and validates supported versions/actions, field shapes and uint256 ranges, unique IDs, references, action chain/account agreement and permit/action consistency, including already-signed requests. Extra keys remain allowed. Malformed JSON, fields or consistency violations throw the exported `InvalidTransactionPlanError`, exposing the first failure's JSON `path` and `reason`; unsupported versions and action types keep their existing typed errors. Serialization remains unchecked. Parsing is pure: expiry, live state, signature ownership and action-layer business constraints are not checked. It does not prove authenticity or intent; tampered-but-well-formed, internally consistent plans pass, so stored plans must still be protected. Builders do not reverify restored signatures. Missing signatures throw `IncompleteTransactionPlanError`; request consistency mismatches throw `TransactionPlanSignatureMismatchError`, while builders retain the separate permit/action deadline check described above. Preparation rejects malformed inputs before RPC reads, including zero accounts, invalid calldata origins and unsafe integer expiry or fee values. Update maintained direct runtime dependents to resolve the new SDK version; the deprecated liquidity SDK retains its v5 peer range.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+  - @morpho-org/blue-sdk@8.2.3
+  - @morpho-org/morpho-sdk@9.7.0
+
+## 8.7.0
+
+### Minor Changes
+
+- Support `midnightSupplyCollateralBatch` and `midnightWithdrawCollateralBatch` with per-collateral measurements, per-token supply approval limits, and receiver token balance checks.
+
+### Patch Changes
+
+- Correct withdrawable collateral rounding to return the maximum amount that preserves position health under Morpho's onchain check, preventing withdrawals that would revert because too little collateral remains.
+- Include projected lost assets in newly constructed MetaMorpho v1.1 accrual vault totals, so asset and share conversions account for losses before interest accrual is requested. Preserve loss accounting during subsequent accrual without counting losses twice.
+
+  For freshly constructed v1.1 vaults with losses, allocation proportions and APY now use the loss-inclusive total, as accrued vaults already did. Allocation proportions can sum to less than 100%, and the weighted yield rate reflects the ratio of real assets to total assets. Exact onchain parity requires underlying markets accrued to the current timestamp; share conversions also require pending vault fees to be accrued.
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.2.2
+  - @morpho-org/morpho-sdk@9.6.0
+  - @morpho-org/morpho-ts@4.3.0
+
+## 8.6.1
+
+### Patch Changes
+
+- Count vault shares minted to the measured account during the bundle (vault fee accrual) toward typed-input limits' observed `sharesBurned`. Reject outgoing vault-share transfers to other nonzero accounts, so neither an exact burn with an extra transfer nor a smaller burn supplemented by a transfer can pass. Quote-only limits keep the net balance change.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.5.1
+
 ## 8.6.1-next.0
 
 ### Patch Changes

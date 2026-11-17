@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "9.6.0-next.0",
+  "version": "9.8.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -104,7 +104,8 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/midnight-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@noble/curves": "1.9.1"
   },
   "peerDependencies": {
     "viem": "^2.0.0"

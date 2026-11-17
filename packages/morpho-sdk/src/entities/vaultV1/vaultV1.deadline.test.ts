@@ -16,6 +16,61 @@ import { ExpiredDeadlineError } from "../../types/index.js";
 const TARGET_VAULT = "0x0000000000000000000000000000000000001012";
 
 describe("MorphoVaultV1 bundles deadlines", () => {
+  test.each([-9_000n, 10_800n])(
+    "explicit reference time ignores a device skew of %s seconds",
+    async (skew) => {
+      const now = 1_800_000_000n;
+      const vaultData = withChainTimestamp(now, () => inKindVaultV1Data());
+      const handle = createMockClient(mainnet);
+      const vault = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      const deposit = withChainTimestamp(now + skew, () =>
+        vault.deposit({
+          amount: 100n,
+          userAddress: IN_KIND_USER,
+          vaultData,
+          now,
+        }),
+      );
+      const expected = withChainTimestamp(now, () =>
+        vault.deposit({ amount: 100n, userAddress: IN_KIND_USER, vaultData }),
+      );
+      expect(deposit.buildTx()).toEqual(expected.buildTx());
+      expect(deposit.buildTx().action.args.deadline).toBe(now + 7_200n);
+      const redemption = withChainTimestamp(now + skew, () =>
+        vault.redeem({
+          shares: 10n,
+          userAddress: IN_KIND_USER,
+          now,
+          deadline: now + 1_200n,
+        }),
+      );
+      expect(
+        await withChainTimestamp(now + 86_400n, () =>
+          redemption.getRequirements(),
+        ),
+      ).toHaveLength(1);
+      expect(() =>
+        withChainTimestamp(now - 86_400n, () =>
+          vault.redeem({
+            shares: 10n,
+            userAddress: IN_KIND_USER,
+            now,
+            deadline: now,
+          }),
+        ),
+      ).toThrow(ExpiredDeadlineError);
+    },
+  );
+
   test("behavior: deposit forecasts share price through a deadline beyond two hours", () => {
     const now = 1_800_000_000n;
     const deadline = now + Time.s.from.h(3n);

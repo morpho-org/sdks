@@ -31,12 +31,14 @@ import {
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
+  midnightSupplyCollateralBatch,
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
   midnightTakeLend,
   midnightTakeRepayWithdrawCollateral,
   midnightTakeWithdraw,
   midnightWithdrawCollateral,
+  midnightWithdrawCollateralBatch,
 } from "../../actions/midnight/index.js";
 import {
   getMidnightApprovalRequirements,
@@ -56,11 +58,13 @@ import {
   getMidnightMaxSafeDebt,
   validateChainId,
 } from "../../helpers/index.js";
+import { resolveTransactionMetadata } from "../../helpers/metadata.js";
 import {
   validateMidnightAccount,
   validateMidnightAddress,
 } from "../../helpers/validateMidnightAccount.js";
 import { validateMidnightUint128Field } from "../../helpers/validateMidnightBounds.js";
+import { validateMidnightCollateralBatch } from "../../helpers/validateMidnightCollateralBatch.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateMidnightBytes32 } from "../../helpers/validateMidnightPublication.js";
 import { validateMidnightTakeFeasibility } from "../../helpers/validateMidnightTakeFeasibility.js";
@@ -71,6 +75,8 @@ import {
   type ActionRequirement,
   BorrowExceedsSafeLtvError,
   EmptyBlueParkingMarketError,
+  EmptyMidnightCollateralSuppliesError,
+  EmptyMidnightCollateralWithdrawalsError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
@@ -92,6 +98,7 @@ import {
   MidnightRepayExceedsDebtError,
   type MidnightRepayWithdrawCollateralAction,
   type MidnightSupplyCollateralAction,
+  type MidnightSupplyCollateralBatchAction,
   type MidnightSupplyCollateralTakeBorrowAction,
   type MidnightTakeBorrowAction,
   MidnightTakeDeadlineTooFarError,
@@ -100,11 +107,13 @@ import {
   MidnightTakeTargetUnreachableError,
   type MidnightTakeWithdrawAction,
   type MidnightWithdrawCollateralAction,
+  type MidnightWithdrawCollateralBatchAction,
   MidnightZeroOnBehalfError,
   MissingAccrualPositionError,
   NegativeInputError,
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
+  type ReferenceTimestampParams,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
   ZeroBlueParkingSharesError,
@@ -128,6 +137,7 @@ import type {
   RedeemParams,
   RepayWithdrawCollateralParams,
   SupplyBlueMakeLendParams,
+  SupplyCollateralBatchParams,
   SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
@@ -135,6 +145,7 @@ import type {
   TakeLendParams,
   TakeRepayWithdrawCollateralParams,
   TakeWithdrawParams,
+  WithdrawCollateralBatchParams,
   WithdrawCollateralParams,
 } from "./types.js";
 
@@ -159,8 +170,10 @@ const validatePositionBinding = (params: {
   }
 };
 
-const validateTakeDeadlineWindow = (deadline: bigint): void => {
-  const now = Time.timestamp();
+const validateTakeDeadlineWindow = (
+  deadline: bigint,
+  now = Time.timestamp(),
+): void => {
   // Throws when the deadline is at or before now.
   validateMidnightDeadline(deadline, now);
   const maxDeadline = now + MIDNIGHT_TAKE_MAX_DEADLINE_SECONDS;
@@ -190,7 +203,8 @@ const validateTakeDeadlineWindow = (deadline: bigint): void => {
  *   target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
  *   takeableOffers: quote.data.takeableOffers,
  *   maxContinuousFee: maxUint256,
- *   deadline: Time.timestamp() + 600n,
+ *   now: (await client.getBlock()).timestamp,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  * const requirements = await output.getRequirements();
  * const tx = output.buildTx();
@@ -207,7 +221,9 @@ export type MidnightActions = Pick<
   | "supplyCollateralTakeBorrow"
   | "takeRepayWithdrawCollateral"
   | "supplyCollateral"
+  | "supplyCollateralBatch"
   | "withdrawCollateral"
+  | "withdrawCollateralBatch"
   | "makeLend"
   | "makeBorrow"
   | "supplyBlueMakeLend"
@@ -577,17 +593,23 @@ export class MorphoMidnight {
    *   target: { type: "assets", assets: 1_000_000n, minUnits: 900_000n },
    *   takeableOffers: quote.data.takeableOffers,
    *   maxContinuousFee: maxUint256,
-   *   deadline: Time.timestamp() + 600n,
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 600n,
    * });
    * ```
    */
   takeLend(
     params: TakeLendParams,
   ): MidnightActionOutput<MidnightTakeLendAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
-    validateTakeDeadlineWindow(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateTakeDeadlineWindow(params.deadline, now);
     const market = params.marketData.params;
     const rawParams = {
       chainId: this.chainId,
@@ -599,7 +621,7 @@ export class MorphoMidnight {
       deadline: params.deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
-      metadata: this.client.options.metadata,
+      metadata,
     };
     let tx = midnightTakeLend(rawParams);
     const takeableOffers = validateMidnightTakeFeasibility({
@@ -607,7 +629,7 @@ export class MorphoMidnight {
       takeableOffers: params.takeableOffers,
       accountAddress: params.accountAddress,
       marketData: params.marketData,
-      now: Time.timestamp(),
+      now: params.now ?? Time.timestamp(),
       deadline: params.deadline,
       referralFeePct: tx.action.args.referralFeePct,
       fallbackUnits: 0n,
@@ -733,17 +755,23 @@ export class MorphoMidnight {
    *   collateralPrices,
    *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
    *   takeableOffers: quote.data.takeableOffers,
-   *   deadline: Time.timestamp() + 600n,
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 600n,
    * });
    * ```
    */
   takeBorrow(
     params: TakeBorrowParams,
   ): MidnightActionOutput<MidnightTakeBorrowAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
-    validateTakeDeadlineWindow(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateTakeDeadlineWindow(params.deadline, now);
     const rawParams = {
       chainId: this.chainId,
       market: params.marketData.params,
@@ -753,7 +781,7 @@ export class MorphoMidnight {
       deadline: params.deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
-      metadata: this.client.options.metadata,
+      metadata,
     };
     let tx = midnightTakeBorrow(rawParams);
     validatePositionBinding({
@@ -779,7 +807,6 @@ export class MorphoMidnight {
         );
       }
     }
-    const now = Time.timestamp();
     const takeableOffers = validateMidnightTakeFeasibility({
       side: "sell",
       takeableOffers: params.takeableOffers,
@@ -872,17 +899,23 @@ export class MorphoMidnight {
    *   marketData,
    *   target: { type: "units", units: credit, minSellerAssets: 990_000n },
    *   takeableOffers: quote.data.takeableOffers,
-   *   deadline: Time.timestamp() + 600n,
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 600n,
    * });
    * ```
    */
   takeWithdraw(
     params: TakeWithdrawParams,
   ): MidnightActionOutput<MidnightTakeWithdrawAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
-    validateTakeDeadlineWindow(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateTakeDeadlineWindow(params.deadline, now);
     const rawParams = {
       chainId: this.chainId,
       market: params.marketData.params,
@@ -892,7 +925,7 @@ export class MorphoMidnight {
       deadline: params.deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
-      metadata: this.client.options.metadata,
+      metadata,
     };
     let tx = midnightTakeWithdraw(rawParams);
     const takeableOffers = validateMidnightTakeFeasibility({
@@ -900,7 +933,7 @@ export class MorphoMidnight {
       takeableOffers: params.takeableOffers,
       accountAddress: params.accountAddress,
       marketData: params.marketData,
-      now: Time.timestamp(),
+      now: params.now ?? Time.timestamp(),
       deadline: params.deadline,
       referralFeePct: tx.action.args.referralFeePct,
       // The bundle redeems credit first, up to the market's withdrawable liquidity.
@@ -1010,17 +1043,23 @@ export class MorphoMidnight {
    *   collateralSupplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
    *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
    *   takeableOffers: quote.data.takeableOffers,
-   *   deadline: Time.timestamp() + 600n,
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 600n,
    * });
    * ```
    */
   supplyCollateralTakeBorrow(
     params: SupplyCollateralTakeBorrowParams,
   ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
-    validateTakeDeadlineWindow(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateTakeDeadlineWindow(params.deadline, now);
     const market = params.marketData.params;
     const rawParams = {
       chainId: this.chainId,
@@ -1033,7 +1072,7 @@ export class MorphoMidnight {
       deadline: params.deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
-      metadata: this.client.options.metadata,
+      metadata,
     };
     let tx = midnightSupplyCollateralTakeBorrow(rawParams);
     validatePositionBinding({
@@ -1069,7 +1108,6 @@ export class MorphoMidnight {
         );
       }
     }
-    const now = Time.timestamp();
     const takeableOffers = validateMidnightTakeFeasibility({
       side: "sell",
       takeableOffers: params.takeableOffers,
@@ -1232,17 +1270,23 @@ export class MorphoMidnight {
    *   repayEnabled: true,
    *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
    *   maxContinuousFee: maxUint256,
-   *   deadline: Time.timestamp() + 600n,
+   *   now: (await client.getBlock()).timestamp,
+   *   deadline: (await client.getBlock()).timestamp + 600n,
    * });
    * ```
    */
   takeRepayWithdrawCollateral(
     params: TakeRepayWithdrawCollateralParams,
   ): MidnightActionOutput<MidnightTakeRepayWithdrawCollateralAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
-    validateTakeDeadlineWindow(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateTakeDeadlineWindow(params.deadline, now);
     const market = params.marketData.params;
     const rawParams = {
       chainId: this.chainId,
@@ -1257,7 +1301,7 @@ export class MorphoMidnight {
       deadline: params.deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
-      metadata: this.client.options.metadata,
+      metadata,
     };
     let tx = midnightTakeRepayWithdrawCollateral(rawParams);
     validatePositionBinding({
@@ -1315,7 +1359,7 @@ export class MorphoMidnight {
       takeableOffers: params.takeableOffers,
       accountAddress: params.accountAddress,
       marketData: params.marketData,
-      now: Time.timestamp(),
+      now: params.now ?? Time.timestamp(),
       deadline: params.deadline,
       referralFeePct: tx.action.args.referralFeePct,
       // With repayEnabled the bundle repays the unfilled debt directly, at par.
@@ -1404,6 +1448,10 @@ export class MorphoMidnight {
   withdrawCollateral(
     params: WithdrawCollateralParams,
   ): MidnightActionOutput<MidnightWithdrawCollateralAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject invalid owners before preparing the direct call.
     validateMidnightAccount("accountAddress", params.accountAddress);
@@ -1422,7 +1470,7 @@ export class MorphoMidnight {
       assets,
       onBehalf: params.accountAddress,
       receiver: params.receiver ?? params.accountAddress,
-      metadata: this.client.options.metadata,
+      metadata,
     });
     if (assets > available) {
       throw new WithdrawExceedsCollateralError({
@@ -1445,6 +1493,128 @@ export class MorphoMidnight {
       if (params.positionData.debt > maxSafeDebt) {
         throw new WithdrawMakesPositionUnhealthyError({
           withdrawAmount: assets,
+          borrowAssets: params.positionData.debt,
+          maxSafeBorrow: maxSafeDebt,
+        });
+      }
+    }
+    return { getRequirements: async () => [], buildTx: () => tx };
+  }
+
+  /**
+   * Withdraws an ordered collateral batch atomically from Midnight without bundle authorization or token pulls.
+   *
+   * Uses the supplied position snapshot to resolve maxUint256 and check collateral health.
+   * Duplicates are rejected, unlike bundle flows which sum them.
+   * No requirements or RPC reads are needed. The signing account must be accountAddress.
+   *
+   * @param params - Market, owner-bound position, collateral prices and withdrawal amount.
+   * @param params.accountAddress - Collateral owner. This account must send the transaction.
+   * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
+   * @param params.positionData - Owner-bound position snapshot returned by getPositionData.
+   * @param params.collateralPrices - Oracle prices indexed like positionData.collateral and scaled by
+   *   ORACLE_PRICE_SCALE; required when the position has debt, otherwise an empty array is safe.
+   * @param params.collateralWithdrawals - Nonempty ordered withdrawals, one per index.
+   *   maxUint256 resolves that index's full snapshot balance.
+   * @param params.receiver - Account receiving the withdrawn collateral; defaults to accountAddress.
+   * @returns Lazy handles for a direct Midnight withdrawal.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
+   * @throws {MidnightCalldataEncodingError} when accountAddress is malformed or an input cannot be ABI-encoded.
+   * @throws {MidnightZeroAccountError} when accountAddress is zero.
+   * @throws {MidnightMarketAddressMismatchError} when marketData targets another Midnight deployment.
+   * @throws {MissingMarketPriceError} when debt is positive and held collateral has no supplied price.
+   * @throws {MarketIdMismatchError} when positionData belongs to another market.
+   * @throws {AccrualPositionUserMismatchError} when positionData belongs to another account.
+   * @throws {UnknownCollateralIndexError} when collateralIndex is not configured.
+   * @throws {EmptyMidnightCollateralWithdrawalsError} when the list is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when an index repeats.
+   * @throws {NonPositiveInputError} when the resolved amount is not positive.
+   * @throws {InputExceedsMaxError} when assets exceeds uint128.
+   * @throws {WithdrawExceedsCollateralError} when assets exceeds the collateral balance.
+   * @throws {WithdrawMakesPositionUnhealthyError} when remaining collateral cannot safely cover debt.
+   * @throws {MidnightZeroReceiverError} when receiver is zero.
+   * @throws {MidnightContractReceiverError} when receiver cannot safely receive collateral.
+   * @example
+   * ```ts
+   * const output = midnight.withdrawCollateralBatch({
+   *   accountAddress: user,
+   *   marketData,
+   *   positionData,
+   *   collateralPrices,
+   *   collateralWithdrawals: [{ collateralIndex: 0n, assets: 1_000n }],
+   * });
+   * const tx = output.buildTx();
+   * ```
+   */
+  withdrawCollateralBatch(
+    params: WithdrawCollateralBatchParams,
+  ): MidnightActionOutput<MidnightWithdrawCollateralBatchAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject invalid owners before preparing the direct call.
+    validateMidnightAccount("accountAddress", params.accountAddress);
+    validateMarketData(params.marketData, this.chainId);
+    validatePositionBinding(params);
+    // Direct batches reject duplicates instead of summing them.
+    validateMidnightCollateralBatch(
+      params.collateralWithdrawals,
+      new EmptyMidnightCollateralWithdrawalsError(),
+    );
+    const collateralWithdrawals = params.collateralWithdrawals.map(
+      ({ collateralIndex, assets }) => {
+        // Reject unconfigured indexes before reading the position balance.
+        MarketUtils.getCollateralByIndex(
+          params.marketData.params,
+          collateralIndex,
+        );
+        return {
+          collateralIndex,
+          assets:
+            assets === maxUint256
+              ? (params.positionData.collateral[Number(collateralIndex)] ?? 0n)
+              : assets,
+        };
+      },
+    );
+    const tx = midnightWithdrawCollateralBatch({
+      chainId: this.chainId,
+      market: params.marketData.params,
+      collateralWithdrawals,
+      onBehalf: params.accountAddress,
+      receiver: params.receiver ?? params.accountAddress,
+      metadata,
+    });
+    const collateral = Array.from(
+      { length: params.marketData.params.collateralParams.length },
+      (_, i) => params.positionData.collateral[i] ?? 0n,
+    );
+    for (const { collateralIndex, assets } of collateralWithdrawals) {
+      const index = Number(collateralIndex);
+      const available = collateral[index]!;
+      if (assets > available) {
+        throw new WithdrawExceedsCollateralError({
+          withdrawAmount: assets,
+          available,
+          market: params.marketData.id,
+        });
+      }
+      collateral[index] = available - assets;
+    }
+    if (params.positionData.debt > 0n) {
+      const maxSafeDebt = getMidnightMaxSafeDebt({
+        market: params.marketData,
+        collateral,
+        collateralPrices: params.collateralPrices,
+      });
+      if (params.positionData.debt > maxSafeDebt) {
+        throw new WithdrawMakesPositionUnhealthyError({
+          withdrawAmount: collateralWithdrawals.reduce(
+            (sum, entry) => sum + entry.assets,
+            0n,
+          ),
           borrowAssets: params.positionData.debt,
           maxSafeBorrow: maxSafeDebt,
         });
@@ -1493,6 +1663,10 @@ export class MorphoMidnight {
   supplyCollateral(
     params: SupplyCollateralParams,
   ): MidnightActionOutput<MidnightSupplyCollateralAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject a malformed account here; the builder rejects the zero account.
     validateMidnightAddress("accountAddress", params.accountAddress);
@@ -1534,7 +1708,107 @@ export class MorphoMidnight {
           collateralIndex,
           assets: params.collateralAssets,
           onBehalf: params.accountAddress,
-          metadata: this.client.options.metadata,
+          metadata,
+        }),
+    };
+  }
+
+  /**
+   * Prepares ordered direct collateral supplies in one Midnight multicall.
+   * Pass one entry per index: duplicates are rejected, unlike bundle flows which sum them.
+   *
+   * @param params.accountAddress - Sender and collateral beneficiary.
+   * @param params.marketData - Snapshot of the target market.
+   * @param params.collateralSupplies - Ordered supplies with optional reserved allowance amounts.
+   * @returns A lazy approval resolver and synchronous stateless transaction builder.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when the deployment differs.
+   * @throws {MidnightCalldataEncodingError} when the account is malformed.
+   * @throws {NegativeInputError} when reserved assets are negative.
+   * @throws {NonPositiveInputError} when assets are not positive.
+   * @throws {InputExceedsMaxError} when assets exceed uint128.
+   * @throws {UnknownCollateralIndexError} when an index is not configured.
+   * @throws {EmptyMidnightCollateralSuppliesError} when the list is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when an index repeats.
+   * @throws {MidnightZeroOnBehalfError} when requirements or construction uses the zero account.
+   * @example
+   * ```ts
+   * const output = midnight.supplyCollateralBatch({
+   *   accountAddress: user, marketData,
+   *   collateralSupplies: [{ collateralIndex: 0n, assets: 100n }],
+   * });
+   * const tx = output.buildTx();
+   * ```
+   */
+  supplyCollateralBatch(
+    params: SupplyCollateralBatchParams,
+  ): MidnightActionOutput<MidnightSupplyCollateralBatchAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    // Reject malformed accounts before resolving token requirements.
+    validateMidnightAddress("accountAddress", params.accountAddress);
+    validateMarketData(params.marketData, this.chainId);
+    // Reject empty and duplicate-index batches before resolving allowance thresholds.
+    validateMidnightCollateralBatch(
+      params.collateralSupplies,
+      new EmptyMidnightCollateralSuppliesError(),
+    );
+    for (const supply of params.collateralSupplies) {
+      assertPositiveAmount("assets", supply.assets);
+      validateMidnightUint128Field("assets", supply.assets);
+      assertNonNegativeAmount(
+        "reservedCollateralAssets",
+        supply.reservedCollateralAssets ?? 0n,
+      );
+      // Fail eagerly for collateral absent from the supplied snapshot.
+      params.marketData.getCollateralByIndex(supply.collateralIndex);
+    }
+    const midnight = getChainAddress(this.chainId, "midnight");
+    return {
+      getRequirements: async (
+        _requirementsParams?: MidnightRequirementsParams,
+      ) => {
+        if (isAddressEqual(params.accountAddress, zeroAddress)) {
+          throw new MidnightZeroOnBehalfError("onBehalf");
+        }
+        const amounts = new Map<Address, bigint>();
+        for (const supply of params.collateralSupplies) {
+          const token = params.marketData.getCollateralByIndex(
+            supply.collateralIndex,
+          ).token;
+          amounts.set(
+            token,
+            (amounts.get(token) ?? 0n) +
+              supply.assets +
+              (supply.reservedCollateralAssets ?? 0n),
+          );
+        }
+        const requirements = await Promise.all(
+          [...amounts].map(([token, amount]) =>
+            getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: params.accountAddress,
+              spender: midnight,
+              amount,
+            }),
+          ),
+        );
+        return requirements.flat();
+      },
+      buildTx: () =>
+        midnightSupplyCollateralBatch({
+          chainId: this.chainId,
+          market: params.marketData.params,
+          collateralSupplies: params.collateralSupplies.map(
+            ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
+          ),
+          onBehalf: params.accountAddress,
+          metadata,
         }),
     };
   }
@@ -1595,7 +1869,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketLiquidationCursorNotEnabledError} when an uncreated market uses a disabled liquidation cursor.
    * @throws {MidnightMarketOracleWithoutCodeError} when an uncreated market's oracle has no code.
    * @throws {viem.BaseError} when a pinned block, contract, or oracle-code read fails.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const output = await midnight.makeLend({
@@ -1613,7 +1887,8 @@ export class MorphoMidnight {
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     rejectReduceOnlyOffers(tree.offers);
     return this.prepareLendOffers({ ...params, offers: tree });
@@ -1670,7 +1945,7 @@ export class MorphoMidnight {
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const output = await midnight.makeBorrow({
@@ -1685,7 +1960,8 @@ export class MorphoMidnight {
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     rejectReduceOnlyOffers(tree.offers);
     return this.prepareBorrowOffers({ ...params, offers: tree });
@@ -1697,6 +1973,10 @@ export class MorphoMidnight {
   private async prepareLendOffers(
     params: MakeLendParams,
   ): Promise<MakeOffersOutput> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     // Reject a malformed address before viem compares offer markets with it.
     validateMidnightAddress("loanToken", params.loanToken);
     assertPositiveAmount("loanAssets", params.loanAssets);
@@ -1727,7 +2007,7 @@ export class MorphoMidnight {
       chainId: this.chainId,
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
       publication: {
         ratifier: data.ratifier,
         root: data.tree.root,
@@ -1849,7 +2129,7 @@ export class MorphoMidnight {
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group or `callbackSalt` is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const callback = getMidnightBlueBuyCallbackAddress({ chainId, owner: maker, salt: callbackSalt });
@@ -1870,6 +2150,11 @@ export class MorphoMidnight {
   async supplyBlueMakeLend(
     params: SupplyBlueMakeLendParams,
   ): Promise<MakeOffersOutput> {
+    const suppliedNow = params.now;
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      suppliedNow,
+    );
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Reject wrong-sized salts before callback derivation pads them or any read occurs.
@@ -1881,7 +2166,8 @@ export class MorphoMidnight {
     rejectReduceOnlyOffers(tree.offers);
     await validateClientChainId(this.client.viemClient, this.chainId);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = suppliedNow ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const { callbackSalt } = params;
     // Encode the whole Blue market first so a malformed field fails typed, before the RPC read.
     const callbackData = wrapMidnightEncoding("blueMarket", () =>
@@ -1907,7 +2193,7 @@ export class MorphoMidnight {
       _try(
         () =>
           fetched.accrueInterest(
-            MathLib.max(Time.timestamp(), fetched.lastUpdate),
+            MathLib.max(suppliedNow ?? Time.timestamp(), fetched.lastUpdate),
           ),
         UnsupportedMarketIrmError,
       ) ?? fetched;
@@ -1960,7 +2246,7 @@ export class MorphoMidnight {
       nativeAmount: params.nativeAmount,
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
     });
 
     return {
@@ -1993,6 +2279,10 @@ export class MorphoMidnight {
   private async prepareBorrowOffers(
     params: MakeOffersParams,
   ): Promise<MakeOffersOutput> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     validateOfferSides(tree.offers, false);
     validateMidnightMakerOfferCallbacks(tree.offers);
@@ -2005,7 +2295,7 @@ export class MorphoMidnight {
       chainId: this.chainId,
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
       publication: {
         ratifier: data.ratifier,
         root: data.tree.root,
@@ -2078,7 +2368,7 @@ export class MorphoMidnight {
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const output = await midnight.makeWithdraw({
@@ -2095,7 +2385,8 @@ export class MorphoMidnight {
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, false);
@@ -2167,7 +2458,7 @@ export class MorphoMidnight {
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const output = await midnight.makeRepay({
@@ -2186,7 +2477,8 @@ export class MorphoMidnight {
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const tree = wrapMidnightEncoding("offers", () => Tree.from(params.offers));
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, true);
@@ -2265,7 +2557,7 @@ export class MorphoMidnight {
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * const output = await midnight.supplyCollateralMakeBorrow({
@@ -2282,11 +2574,16 @@ export class MorphoMidnight {
   async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
   ): Promise<MakeOffersOutput> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const market =
       params.collateral.market instanceof MarketParams
         ? params.collateral.market
@@ -2315,7 +2612,7 @@ export class MorphoMidnight {
       nativeAmount: params.nativeAmount,
       cancellations: params.cancellations ?? [],
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
       publication: {
         ratifier: data.ratifier,
         root: data.tree.root,
@@ -2420,6 +2717,10 @@ export class MorphoMidnight {
    * ```
    */
   redeem(params: RedeemParams): MidnightActionOutput<MidnightRedeemAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject a malformed account here; the builder rejects the zero account.
     validateMidnightAddress("accountAddress", params.accountAddress);
@@ -2442,8 +2743,9 @@ export class MorphoMidnight {
     validateMarketData(market, this.chainId);
     // Apply realized losses and continuous fees the way `Midnight._updatePosition` does before a
     // withdrawal; never accrue to before the snapshot's `lastAccrual`.
+    const now = params.now ?? Time.timestamp();
     const accrued = params.positionData.accrueInterest(
-      MathLib.max(Time.timestamp(), params.positionData.lastAccrual),
+      MathLib.max(now, params.positionData.lastAccrual),
     );
     const units = params.units ?? accrued.faceValue;
     if (params.units !== undefined && units <= 0n) {
@@ -2473,7 +2775,7 @@ export class MorphoMidnight {
       units,
       onBehalf: params.accountAddress,
       receiver: params.receiver,
-      metadata: this.client.options.metadata,
+      metadata,
     });
 
     return {
@@ -2540,7 +2842,7 @@ export class MorphoMidnight {
    *   during this method call, before the lazy output is returned.
    * @throws {MidnightContractReceiverError} when `collateralReceiver` is a Midnight protocol
    *   contract or a market token contract.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * // Close the position: repay all debt, withdraw all collateral.
@@ -2558,11 +2860,16 @@ export class MorphoMidnight {
   repayWithdrawCollateral(
     params: RepayWithdrawCollateralParams,
   ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     // Reject the zero account before preparing anything for it.
     validateMidnightAccount("accountAddress", params.accountAddress);
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
     const market = params.marketData.params;
     const tx = midnightRepayWithdrawCollateral({
       chainId: this.chainId,
@@ -2572,7 +2879,7 @@ export class MorphoMidnight {
       collateralWithdrawals: params.collateralWithdrawals ?? [],
       collateralReceiver: params.collateralReceiver ?? params.accountAddress,
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
     });
     validatePositionBinding({
       positionData: params.positionData,
@@ -2705,7 +3012,7 @@ export class MorphoMidnight {
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
    * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the local clock (`Time.timestamp()`), including zero or negative values.
+   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
@@ -2725,11 +3032,17 @@ export class MorphoMidnight {
    * });
    * ```
    */
-  cancelOffers(params: {
-    readonly accountAddress: Address;
-    readonly cancellations: readonly MidnightGroupCancellation[];
-    readonly deadline: bigint;
-  }): MidnightActionOutput<MidnightCancelAndMakeAction> {
+  cancelOffers(
+    params: {
+      readonly accountAddress: Address;
+      readonly cancellations: readonly MidnightGroupCancellation[];
+      readonly deadline: bigint;
+    } & ReferenceTimestampParams,
+  ): MidnightActionOutput<MidnightCancelAndMakeAction> {
+    const metadata = resolveTransactionMetadata(
+      this.client.options.metadata,
+      params.now,
+    );
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const { accountAddress } = params;
     if (
@@ -2739,13 +3052,14 @@ export class MorphoMidnight {
       throw new MidnightInvalidAccountAddressError(accountAddress);
     }
     // Fails before any API read or build when the deadline has already passed.
-    validateMidnightDeadline(params.deadline);
+    const now = params.now ?? Time.timestamp();
+    validateMidnightDeadline(params.deadline, now);
 
     const tx = midnightCancelAndMake({
       chainId: this.chainId,
       cancellations: params.cancellations,
       deadline: params.deadline,
-      metadata: this.client.options.metadata,
+      metadata,
     });
 
     return {

@@ -250,7 +250,7 @@ export interface IAccrualVault
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * @inheritdoc
-   * Reflects the sum of assets of the vault's allocations.
+   * Reflects allocated assets plus projected lost assets for MetaMorpho v1.1.
    * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
    */
   declare totalAssets: bigint;
@@ -274,13 +274,20 @@ export class AccrualVault extends Vault implements IAccrualVault {
      */
     allocations: Omit<IVaultMarketAllocation, "proportion">[],
   ) {
+    const realTotalAssets = allocations.reduce(
+      (total, { position }) => total + position.supplyAssets,
+      0n,
+    );
     super({
       ...vault,
       withdrawQueue: allocations.map(({ position }) => position.market.id),
-      totalAssets: allocations.reduce(
-        (total, { position }) => total + position.supplyAssets,
-        0n,
-      ),
+      totalAssets:
+        vault.lostAssets == null
+          ? realTotalAssets
+          : MathLib.max(
+              realTotalAssets + vault.lostAssets,
+              vault.lastTotalAssets,
+            ),
     });
 
     this.allocations = new Map(
@@ -396,6 +403,8 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * The MetaMorpho vault's per-second rate at which interest _would_ accrue,
    * weighted-averaged over its market deposits, before deducting the performance fee,
    * if interest was to be accrued on each market at the given timestamp.
+   * The denominator is `totalAssets`, including lost assets for v1.1 vaults, so the
+   * weighted rate is scaled by real assets divided by total assets.
    */
   private _getAvgRate(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0n;
@@ -413,6 +422,8 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * Calculates the allocation-weighted experienced APY before fees if each market accrued at a
    * timestamp.
+   * The weighted rate uses `totalAssets` as its denominator, including v1.1 lost assets;
+   * it is scaled by real assets divided by total assets before annualization.
    *
    * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
    *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
@@ -441,6 +452,8 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * Calculates the allocation-weighted experienced APY after fees if each market accrued at a
    * timestamp.
+   * The weighted rate uses `totalAssets` as its denominator, including v1.1 lost assets;
+   * it is scaled by real assets divided by total assets before annualization and fees.
    *
    * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
    *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
@@ -467,7 +480,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * Returns one market's share of the vault's allocated assets, rounded down.
+   * Returns one market's supply assets divided by the vault's `totalAssets`, rounded down.
+   * For v1.1 vaults, `totalAssets` includes lost assets, so allocation proportions can sum
+   * to less than 100%.
    *
    * @param marketId - Market whose allocation proportion to read.
    * @returns The WAD-scaled allocation proportion, or `0n` when the vault is empty or the market
@@ -637,12 +652,11 @@ export class AccrualVault extends Vault implements IAccrualVault {
     );
 
     if (vault.lostAssets != null) {
-      vault.lostAssets += MathLib.max(
-        vault.lastTotalAssets - vault.lostAssets - vault.totalAssets,
-        0n,
-      );
-
-      vault.totalAssets += vault.lostAssets;
+      vault.lostAssets =
+        vault.totalAssets -
+        vault.allocations
+          .values()
+          .reduce((total, { position }) => total + position.supplyAssets, 0n);
     }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);

@@ -1,5 +1,18 @@
 # @morpho-org/blue-sdk
 
+## 8.3.0
+
+### Minor Changes
+
+- Export the installed package version as a browser-safe `version` constant from the package root.
+
+  If you `export *` from more than one Morpho package, their `version` exports conflict. Pick one with an explicit `export { version } from "@morpho-org/blue-sdk"`, which takes precedence over the wildcards, and alias any others, for example `export { version as blueSdkVersion } from "@morpho-org/blue-sdk"`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.4.0
+
 ## 8.3.0-next.0
 
 ### Minor Changes
@@ -14,6 +27,30 @@
 
 - Updated dependencies
   - @morpho-org/morpho-ts@4.3.0-next.0
+
+## 8.2.3
+
+### Patch Changes
+
+- Register the Arbitrum (chain 42161) Midnight deployments from morpho-org/deployments
+  address-book.json at commit 69e72fe: `midnight`, `midnightBundlesV2`,
+  `midnightBlueBuyCallbackFactory`, `midnightMempool`, `ecrecoverAuthorizer`,
+  `priceRatifierV1`, and `rateRatifierV1`, each with its deployment block in the
+  registry. Addresses and deployment blocks were verified on-chain.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.1
+
+## 8.2.2
+
+### Patch Changes
+
+- Correct withdrawable collateral rounding to return the maximum amount that preserves position health under Morpho's onchain check, preventing withdrawals that would revert because too little collateral remains.
+- Include projected lost assets in newly constructed MetaMorpho v1.1 accrual vault totals, so asset and share conversions account for losses before interest accrual is requested. Preserve loss accounting during subsequent accrual without counting losses twice.
+
+  For freshly constructed v1.1 vaults with losses, allocation proportions and APY now use the loss-inclusive total, as accrued vaults already did. Allocation proportions can sum to less than 100%, and the weighted yield rate reflects the ratio of real assets to total assets. Exact onchain parity requires underlying markets accrued to the current timestamp; share conversions also require pending vault fees to be accrued.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.3.0
 
 ## 8.2.1
 

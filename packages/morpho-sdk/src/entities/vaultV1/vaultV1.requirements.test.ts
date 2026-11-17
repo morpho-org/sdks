@@ -31,6 +31,7 @@ import {
   signerAddress,
   signerWalletClient,
 } from "../../../test/helpers/signer.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -310,7 +311,8 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
     expect(await deposit.getRequirements()).toEqual([]);
   });
 
-  test("behavior: snapshots the owner and asset used by the prepared handle", async () => {
+  test("behavior: snapshots the owner, asset and reference time used by the prepared handle", async () => {
+    const now = Time.timestamp();
     const handle = createMockClient(mainnet);
     mockAssetPermitMetadata(handle);
     mockRead(handle, {
@@ -332,19 +334,22 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
       amount: bigint;
       userAddress: Address;
       vaultData: AccrualVault;
+      now?: bigint;
     } = {
       amount,
       userAddress: IN_KIND_USER,
       vaultData: inKindVaultV1Data(),
+      now,
     };
     const deposit = vault.deposit(params);
 
     params.userAddress = MUTATED_USER;
+    params.now = undefined;
     expect(Reflect.set(params.vaultData, "asset", MUTATED_ASSET)).toBe(true);
 
-    const requirements = await deposit.getRequirements({
-      useSimplePermit: true,
-    });
+    const requirements = await withChainTimestamp(now + 86_400n, () =>
+      deposit.getRequirements({ useSimplePermit: true }),
+    );
     const signatureRequirement = requirements.find(isRequirementSignature);
     if (signatureRequirement?.action.type !== "permit") {
       throw new Error("ERC-2612 requirement not found");
