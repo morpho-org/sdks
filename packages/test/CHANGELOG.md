@@ -1,5 +1,28 @@
 # @morpho-org/test
 
+## 2.14.0-next.1
+
+### Minor Changes
+
+- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+- Align the Vault V2 Midnight adapter integration with the frozen `MidnightAdapter` interface (morpho-org/vault-v2@e7821fd). The adapter, factory and ratifier ABIs are regenerated, so the factory detects adapters with `isCreated`, `createMidnightAdapter` takes per-adapter `durations` and an `enterGateFactory`, and `maxTtm` changes through `increaseMaxTtm` and `decreaseMaxTtm`.
+
+  `VaultV2MidnightAdapter` replaces `minRate`, `noSalesWithShortfall` and `noSalesBelowFaceValue` with `minNetBuyRate`, `maxNetSellRate` and `shortfallAllowance`, and adds `enterGateFactory`. Market data renames `rate` to `netRate` and adds `forceRemoved` and `minForceSellPrice`. `VaultV2MidnightAdapterUtils` returns the frozen cap ids (adapter, `familyCapId`, then one collateral-token id per collateral; duration ids use the `"this/duration"` tag) and values markets from live Midnight net credit once a market has a loss factor. The `VaultV2MidnightAdapterUtils` helpers `collateralParamsCapId`, `gateCapId` and `rcfThresholdCapId`, and the `VaultV2MidnightAdapter` statics `collateralParamsCapId`, `enterGateCapId`, `liquidatorGateCapId` and `rcfThresholdCapId`, are removed; use `familyCapId` and `collateralTokenCapId` instead.
+
+  Vault exits through a Midnight liquidity adapter now follow the frozen adapter's `withdrawToVault` path. When `liquidityData` encodes a held, non-force-removed market of the vault asset, `AccrualVaultV2MidnightAdapter.maxWithdraw` returns the adapter's accrued credit capped by the market's `withdrawable` liquidity (limiter `liquidity`) instead of zero. Accrual snapshots carry the market's `withdrawable` liquidity (fetched from Midnight `marketState`), `VaultV2MidnightAdapterUtils` adds `marketId` and `maxWithdraw`, and morpho-sdk `withdraw` and `redeem` accept exits up to idle assets plus that amount. Deposits through a Midnight liquidity adapter still have zero capacity. `@morpho-org/morpho-ts` adds `MidnightMarketLib.id` (and `InvalidHexError`), the shared SSTORE2/CREATE2 market-id hash that both `VaultV2MidnightAdapterUtils.marketId` and midnight-sdk's `MarketUtils.toId` now call.
+
+  The Base `midnightAdapterFactory` registry entry still points at the pre-audit factory, which lacks `isCreated`; fetching adapters from that factory fails until the frozen factory is deployed and registered. `@morpho-org/test` adds `installMidnightAdapterFactory` (throwing `MidnightAdapterFactoryDeploymentError` or `MidnightAdapterFactoryCodeError`) and `MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA` for fork tests.
+
+### Patch Changes
+
+- Align morpho-ts peers with the 4.5.0 release line containing the shared Midnight ABIs and `MidnightPositionLib`. Blue SDK, Blue SDK Viem and Midnight SDK require `^4.5.0-0`, accepting the planned `4.5.0-next` prereleases while rejecting stable 4.4.0, which lacks these exports. Blue SDK Viem requires `@morpho-org/blue-sdk` `^8.4.0-0` for the Midnight adapter entities.
+
+  The test packages retain their older stable morpho-ts alternatives and explicitly accept `4.5.0-next` prereleases. Only `@morpho-org/test/midnight` requires the new 4.5 exports; the root and `/fixtures` entrypoints remain independent of morpho-ts. Morpho Test also accepts the matching Blue SDK 8.4, Test 2.14 and Midnight SDK 2.7 prereleases without dropping its older stable peer alternatives.
+
+- The Vault V2 Midnight adapter fixture (`createVaultV2MidnightAdapterFixture`, `configureVaultV2MidnightAdapterCaps`, `takeVaultV2MidnightAdapterOffer`, `advanceVaultV2MidnightFixtureTime`, `BASE_MIDNIGHT_FORK_BLOCK_NUMBER`, `MAX_MIDNIGHT_ADAPTER_MARKETS` and their types) moves from the root and `/fixtures` entrypoints to the new `@morpho-org/test/midnight` subpath, and `@morpho-org/morpho-ts` becomes an optional peer dependency (`^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.5.0-0`: the older stable alternatives plus the `4.5.0-next` prereleases) instead of a runtime dependency. The root and `/fixtures` helpers do not import morpho-ts, so they install and load with any morpho-ts version in that range or with none at all; only `@morpho-org/test/midnight` needs morpho-ts 4.5 or later (its `4.5.0-next` prereleases included), and projects that use it resolve one morpho-ts copy with a single set of error classes.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0-next.1
+
 ## 2.14.0-next.0
 
 ### Minor Changes

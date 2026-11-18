@@ -1,5 +1,36 @@
 # @morpho-org/evm-simulation
 
+## 8.9.1-next.0
+
+### Patch Changes
+
+- `client.morpho.midnight(chainId).cancelOffers` now cancels offer groups with a direct call to Midnight instead of MidnightBundlesV2, so a wallet policy can approve a cancellation by method name. One group builds a bare `Midnight.setConsumed(group, maxUint128, accountAddress)`; two or more groups build one `Midnight.multicall` of those calls, which cancels every group or none. Only the single-group transaction is matchable by a `setConsumed` method-name policy, so cancel one group per transaction in MPC wallet flows.
+
+  Breaking migration: `cancelOffers` takes `{ accountAddress, groups }`. `cancellations`, `maxConsumed` and `deadline` are removed, and `getRequirements()` always resolves to an empty list: the Midnight authorization of MidnightBundlesV2 is no longer needed to cancel. Cancellation is always full. The transaction's action is `{ type: "midnightCancelOffers", args: { groups, onBehalf } }` and its target is Midnight, on every chain with a Midnight deployment.
+
+  ```ts
+  // Before
+  midnight.cancelOffers({
+    accountAddress: maker,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+
+  // After
+  midnight.cancelOffers({ accountAddress: maker, groups: [group] });
+  ```
+
+  The maker or an operator it authorized on Midnight can send the transaction. A transaction sent from any other account now reverts instead of cancelling the sender's own groups. See `MIGRATION-v9-to-v10.md`.
+
+  Add the pure `midnightCancelOffers` action and the `MidnightCancelOffersParams` and `MidnightCancelOffersAction` types. `midnightCancelAndMake` and the maker flows are unchanged and still cancel replaced groups inside the MidnightBundlesV2 call.
+
+  In `evm-simulation`, `toSimulationLimits` rejects a `midnightCancelOffers` action with `UnsupportedLimitActionError`, as it does for a cancel-only bundle: a cancellation moves no value, so pass `limits: "none"` to simulate it. Maintained dependents are updated for the new `morpho-sdk` major.
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.0.0-next.0
+  - @morpho-org/morpho-ts@4.5.0-next.1
+  - @morpho-org/blue-sdk@8.4.0-next.1
+
 ## 8.9.0
 
 ### Minor Changes

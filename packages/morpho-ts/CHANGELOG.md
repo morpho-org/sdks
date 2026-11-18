@@ -1,5 +1,25 @@
 # @morpho-org/morpho-ts
 
+## 4.5.0-next.1
+
+### Minor Changes
+
+- Add shared Midnight position accrual helpers and errors.
+- Align the Vault V2 Midnight adapter integration with the frozen `MidnightAdapter` interface (morpho-org/vault-v2@e7821fd). The adapter, factory and ratifier ABIs are regenerated, so the factory detects adapters with `isCreated`, `createMidnightAdapter` takes per-adapter `durations` and an `enterGateFactory`, and `maxTtm` changes through `increaseMaxTtm` and `decreaseMaxTtm`.
+
+  `VaultV2MidnightAdapter` replaces `minRate`, `noSalesWithShortfall` and `noSalesBelowFaceValue` with `minNetBuyRate`, `maxNetSellRate` and `shortfallAllowance`, and adds `enterGateFactory`. Market data renames `rate` to `netRate` and adds `forceRemoved` and `minForceSellPrice`. `VaultV2MidnightAdapterUtils` returns the frozen cap ids (adapter, `familyCapId`, then one collateral-token id per collateral; duration ids use the `"this/duration"` tag) and values markets from live Midnight net credit once a market has a loss factor. The `VaultV2MidnightAdapterUtils` helpers `collateralParamsCapId`, `gateCapId` and `rcfThresholdCapId`, and the `VaultV2MidnightAdapter` statics `collateralParamsCapId`, `enterGateCapId`, `liquidatorGateCapId` and `rcfThresholdCapId`, are removed; use `familyCapId` and `collateralTokenCapId` instead.
+
+  Vault exits through a Midnight liquidity adapter now follow the frozen adapter's `withdrawToVault` path. When `liquidityData` encodes a held, non-force-removed market of the vault asset, `AccrualVaultV2MidnightAdapter.maxWithdraw` returns the adapter's accrued credit capped by the market's `withdrawable` liquidity (limiter `liquidity`) instead of zero. Accrual snapshots carry the market's `withdrawable` liquidity (fetched from Midnight `marketState`), `VaultV2MidnightAdapterUtils` adds `marketId` and `maxWithdraw`, and morpho-sdk `withdraw` and `redeem` accept exits up to idle assets plus that amount. Deposits through a Midnight liquidity adapter still have zero capacity. `@morpho-org/morpho-ts` adds `MidnightMarketLib.id` (and `InvalidHexError`), the shared SSTORE2/CREATE2 market-id hash that both `VaultV2MidnightAdapterUtils.marketId` and midnight-sdk's `MarketUtils.toId` now call.
+
+  The Base `midnightAdapterFactory` registry entry still points at the pre-audit factory, which lacks `isCreated`; fetching adapters from that factory fails until the frozen factory is deployed and registered. `@morpho-org/test` adds `installMidnightAdapterFactory` (throwing `MidnightAdapterFactoryDeploymentError` or `MidnightAdapterFactoryCodeError`) and `MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA` for fork tests.
+
+- Add the shared Midnight core position and market-state ABI fragment.
+- Add the Vault V2 Midnight adapter ABIs and Base deployment addresses to the SDK facades, plus the shared Midnight tuple ABI literals (`midnightMarketAbi`, `midnightCollateralParamsAbi`, `midnightOfferAbi`) in `morpho-ts` `abis` and the `abis/midnight` subpath.
+
+  `@morpho-org/blue-sdk-viem` now peers `@morpho-org/morpho-ts` at `^4.5.0-0` (4.5.0 and its `4.5.0-next` prereleases, within 4.x). Morpho-ts 3.x and 4.0.x through 4.4.x are no longer accepted because they lack the new Midnight ABIs.
+
+  Projects still on `@morpho-org/blue-sdk` 8.1.x/8.2.x or `@morpho-org/morpho-ts` 3.x/4.0.x/4.1.x/4.2.x/4.3.x should pin `@morpho-org/blue-sdk-viem@~7.4`, the last line that accepts them; projects still on `@morpho-org/blue-sdk` 7.x or 8.0.x should pin `@morpho-org/blue-sdk-viem@~7.1`, the last line whose peer range (`^7.0.0 || ^8.0.0`) accepts them.
+
 ## 4.5.0-next.0
 
 ### Minor Changes
