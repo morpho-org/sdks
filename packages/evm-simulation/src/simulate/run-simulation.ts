@@ -9,6 +9,7 @@ import { type Address, isAddressEqual, zeroAddress } from "viem";
 import {
   ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
+  RpcTransportError,
   UnsupportedChainError,
 } from "../errors.js";
 import type {
@@ -23,7 +24,6 @@ import {
   findApprovalEventFailures,
 } from "./approvals.js";
 import { groupAssetChanges } from "./asset-changes.js";
-import { createSimulationClient } from "./backends/client.js";
 import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
 import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
@@ -142,20 +142,39 @@ export async function runSimulation(params: {
   readonly request: ParsedRequest;
 }): Promise<VerifiedSimulationInputResult> {
   const { config, request } = params;
-  const chain = resolveChain(config, request.chainId);
   const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const client = createSimulationClient(chain.simulateV1Url, signal);
+  const chain = resolveChain(config, { chainId: request.chainId, signal });
+  const client = chain.client;
 
   // An honest endpoint on another chain can fail as an RPC or missing-data error; one
   // `eth_chainId` probe after such a failure turns it into InvalidChainIdError.
-  const onServedChain = <T>(call: Promise<T>): Promise<T> =>
-    call.catch(async (error: unknown) => {
-      throw await toServedChainError({
-        client,
-        chainId: request.chainId,
-        error,
-      });
-    });
+  const onServedChain = async <T>(call: Promise<T>): Promise<T> => {
+    const timeoutError = () =>
+      new RpcTransportError(
+        "Simulation timed out. Increase timeoutMs or check the endpoint.",
+        { cause: signal.reason },
+      );
+    let onAbort: (() => void) | undefined;
+    try {
+      return await Promise.race([
+        call.catch(async (error: unknown) => {
+          if (signal.aborted) throw timeoutError();
+          throw await toServedChainError({
+            client,
+            chainId: request.chainId,
+            error,
+          });
+        }),
+        new Promise<never>((_, reject) => {
+          onAbort = () => reject(timeoutError());
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        }),
+      ]);
+    } finally {
+      if (onAbort) signal.removeEventListener("abort", onAbort);
+    }
+  };
 
   const limits = {
     operations: request.limits === "none" ? [] : request.limits.operations,
@@ -243,6 +262,7 @@ export async function runSimulation(params: {
   await onServedChain(
     assertTransactionTargetsHaveCode({
       client,
+      signal,
       transactions: request.transactions,
       chainId: request.chainId,
       blockNumber: pinnedBlock.number,
@@ -258,6 +278,7 @@ export async function runSimulation(params: {
   const resolved = await onServedChain(
     resolveAssets({
       client,
+      signal,
       morpho,
       midnight,
       wNative,

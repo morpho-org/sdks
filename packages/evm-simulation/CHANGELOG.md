@@ -1,5 +1,38 @@
 # @morpho-org/evm-simulation
 
+## 8.9.0
+
+### Minor Changes
+
+- Add consumer-owned viem clients and deprecate `simulateV1Url`, which remains supported until the next major. Migrate each chain entry from `{ simulateV1Url: url }` to `{ client: createPublicClient({ ccipRead: false, transport: http(url, { retryCount: 0, timeout: 5000 }) }) }`. Supplying both keys, fallback transports, enabled or unspecified CCIP-Read, nonzero or missing transport retry counts, and mismatched configured client chains are rejected before RPC.
+
+  The deprecated `ChainSimulationConfig` remains an extensible interface with a required string `simulateV1Url`. Use `ChainSimulationClientConfig` for the client form; `SimulationConfig.chains` accepts the `ChainSimulationConfigEntry` union of both interfaces.
+
+  The SDK retains the whole-pipeline `timeoutMs` deadline. It does not abort in-flight consumer transport requests; set the transport timeout at or below `timeoutMs`. For identical HTTP error classification on malformed JSON-typed non-2xx responses, use the recommended `fetchFn` in the README's Client configuration section. The deprecated URL path retains its signal-bound transport and status-preserving `fetchFn`.
+
+### Patch Changes
+
+- Disable CCIP-Read on the internal simulation client so OffchainLookup reverts cannot trigger arbitrary URL fetches. Require viem >=2.9.2 (within v2), the first version that supports the client-level `ccipRead: false` setting; earlier versions ignore it.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.9.0
+
+## 8.8.1-next.1
+
+### Patch Changes
+
+- Disable CCIP-Read on the internal simulation client so OffchainLookup reverts cannot trigger arbitrary URL fetches. Require viem >=2.9.2 (within v2), the first version that supports the client-level `ccipRead: false` setting; earlier versions ignore it.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.9.0-next.1
+
+## 8.8.1-next.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.9.0-next.0
+  - @morpho-org/morpho-ts@4.5.0-next.0
+  - @morpho-org/blue-sdk@8.4.0-next.0
+
 ## 8.8.0
 
 ### Minor Changes

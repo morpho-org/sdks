@@ -121,7 +121,7 @@ export async function fetchVaultV2Adapter(
           ...parameters,
           address: midnightAdapterFactory,
           abi: midnightAdapterFactoryAbi,
-          functionName: "isMidnightAdapter",
+          functionName: "isCreated",
           args: [address],
         }).catch(catchRevertOnly(false))
       : false,
@@ -237,7 +237,7 @@ export async function fetchAccrualVaultV2Adapter(
           ...parameters,
           address: midnightAdapterFactory,
           abi: midnightAdapterFactoryAbi,
-          functionName: "isMidnightAdapter",
+          functionName: "isCreated",
           args: [address],
         }).catch(catchRevertOnly(false))
       : false,

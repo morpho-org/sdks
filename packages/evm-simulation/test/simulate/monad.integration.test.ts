@@ -2,6 +2,7 @@ import { createPublicClient, encodeFunctionData, erc20Abi, http } from "viem";
 import { monad } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { RpcTransportError, simulate } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const MONAD_RPC = "https://rpc.monad.xyz";
 
@@ -12,7 +13,7 @@ const paramsFor = (callGasLimit?: bigint) => ({
       [
         143,
         {
-          simulateV1Url: MONAD_RPC,
+          client: createTestSimulationClient(MONAD_RPC),
           ...(callGasLimit !== undefined && { callGasLimit }),
         },
       ],

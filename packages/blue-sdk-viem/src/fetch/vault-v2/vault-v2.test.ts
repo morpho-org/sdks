@@ -103,9 +103,10 @@ const emptyMidnightAdapterResponse = {
   skimRecipient: zeroAddress,
   midnight: zeroAddress,
   maxTtm: 0n,
-  minRate: 0n,
-  noSalesWithShortfall: false,
-  noSalesBelowFaceValue: false,
+  minNetBuyRate: 0n,
+  maxNetSellRate: 0n,
+  shortfallAllowance: 0n,
+  enterGateFactory: "0x0000000000000000000000000000000000000000",
   durations: [],
   durationAllocations: [],
   markets: [],
@@ -505,7 +506,7 @@ describe("fetchVaultV2", () => {
     mockRead(handle, {
       address: BASE_ADDRESSES.midnightAdapterFactory!,
       abi: midnightAdapterFactoryAbi,
-      functionName: "isMidnightAdapter",
+      functionName: "isCreated",
       result: true,
     });
     const adapterCapId = VaultV2MidnightAdapter.adapterCapId(ADAPTER);
@@ -2206,10 +2207,12 @@ describe("fetchAccrualVaultV2 deployless path", () => {
                 id: ID,
                 marketData: {
                   netCredit: 100n,
-                  rate: 0n,
+                  netRate: 0n,
                   maturity: timestamp,
                   index: 0n,
                   forceSellable: false,
+                  forceRemoved: false,
+                  minForceSellPrice: 0n,
                 },
                 position: {
                   credit: 100n,
@@ -2218,6 +2221,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
                   lastAccrual: timestamp,
                 },
                 lossFactor: 0n,
+                withdrawable: 0n,
               },
             ],
             timestamp,
@@ -2263,10 +2267,12 @@ describe("fetchAccrualVaultV2 deployless path", () => {
               id: ID,
               marketData: {
                 netCredit: 100n,
-                rate: 0n,
+                netRate: 0n,
                 maturity: timestamp,
                 index: 0n,
                 forceSellable: false,
+                forceRemoved: false,
+                minForceSellPrice: 0n,
               },
               position: {
                 credit: 100n,
@@ -2275,6 +2281,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
                 lastAccrual: timestamp,
               },
               lossFactor: 0n,
+              withdrawable: 0n,
             },
           ],
           timestamp,

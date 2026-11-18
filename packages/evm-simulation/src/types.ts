@@ -1,11 +1,14 @@
-import type { Address, Hex } from "viem";
+import type { Address, Client, Hex } from "viem";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 // Shapes the caller constructs once and passes into `simulate()`.
 
-/** Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`. */
+/**
+ * Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`.
+ * @deprecated Use `ChainSimulationClientConfig`; removed in the next major.
+ */
 export interface ChainSimulationConfig {
-  /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
+  /** JSON-RPC URL supporting `eth_simulateV1`. @deprecated Use the client config; removed in the next major. */
   readonly simulateV1Url: string;
   /**
    * Block overrides forwarded to `eth_simulateV1` as the simulated block's
@@ -37,18 +40,32 @@ export interface ChainSimulationConfig {
   readonly parentHashCheck?: boolean;
 }
 
+/** Per-chain consumer-owned client and execution settings for `eth_simulateV1`. */
+export interface ChainSimulationClientConfig
+  extends Omit<ChainSimulationConfig, "simulateV1Url"> {
+  /** Consumer-owned client with CCIP-Read disabled, no fallback and zero transport retries. */
+  readonly client: Client;
+  /** Supply only `client`, not a deprecated URL. */
+  readonly simulateV1Url?: never;
+}
+
+/** A consumer-owned client configuration or the deprecated URL configuration. */
+export type ChainSimulationConfigEntry =
+  | ChainSimulationClientConfig
+  | ChainSimulationConfig;
+
 /**
  * Top-level configuration for `simulate`.
  *
- * Every chain entry must supply an `eth_simulateV1` endpoint. An absent chain
- * or missing endpoint throws `UnsupportedChainError`; execution never selects
+ * Every chain entry must supply a client or deprecated URL supporting `eth_simulateV1`. An absent chain
+ * or missing client and URL throws `UnsupportedChainError`; execution never selects
  * another provider after a failure.
  */
 export interface SimulationConfig {
-  /** Per-chain simulation endpoints. */
-  chains: Map<number, ChainSimulationConfig>;
+  /** Per-chain `ChainSimulationClientConfig` or deprecated `ChainSimulationConfig` entries. */
+  chains: Map<number, ChainSimulationConfigEntry>;
   logger?: SimulationLogger;
-  /** Overall execution timeout budget in ms (default 5000). */
+  /** Whole-pipeline deadline in ms (default 5000); does not abort in-flight consumer transport requests. */
   timeoutMs?: number;
 }
 

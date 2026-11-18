@@ -28,6 +28,7 @@ import {
 } from "viem";
 import {
   midnightCancelAndMake,
+  midnightCancelOffers,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
@@ -79,8 +80,7 @@ import {
   EmptyMidnightCollateralWithdrawalsError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
-  type MidnightCancelAndMakeAction,
-  type MidnightGroupCancellation,
+  type MidnightCancelOffersAction,
   MidnightInvalidAccountAddressError,
   MidnightOfferCallbackDataMismatchError,
   MidnightOfferCallbackMismatchError,
@@ -367,6 +367,36 @@ const getOffersDataInternal = async ({
     ratifier,
     payload: await Payload.encode(items),
   };
+};
+
+const getPostWithdrawalCollateral = (
+  params: TakeRepayWithdrawCollateralParams | RepayWithdrawCollateralParams,
+) => {
+  const market = params.marketData.params;
+  const collateralWithdrawals = params.collateralWithdrawals ?? [];
+  const postCollateral = Array.from(
+    { length: market.collateralParams.length },
+    (_, index) => params.positionData.collateral[index] ?? 0n,
+  );
+  let withdrawAmount = 0n;
+  for (const withdrawal of collateralWithdrawals) {
+    // Reject unconfigured collateral indexes before updating postCollateral.
+    MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
+    const index = Number(withdrawal.collateralIndex);
+    const available = postCollateral[index] ?? 0n;
+    const amount =
+      withdrawal.assets === maxUint256 ? available : withdrawal.assets;
+    if (amount > available) {
+      throw new WithdrawExceedsCollateralError({
+        withdrawAmount: amount,
+        available,
+        market: params.marketData.id,
+      });
+    }
+    postCollateral[index] = available - amount;
+    withdrawAmount += amount;
+  }
+  return { postCollateral, withdrawAmount };
 };
 
 const validateMarketData = (market: Market, chainId: number) => {
@@ -1310,28 +1340,8 @@ export class MorphoMidnight {
       marketData: params.marketData,
     });
     const collateralWithdrawals = params.collateralWithdrawals ?? [];
-    const postCollateral = Array.from(
-      { length: market.collateralParams.length },
-      (_, index) => params.positionData.collateral[index] ?? 0n,
-    );
-    let withdrawAmount = 0n;
-    for (const withdrawal of collateralWithdrawals) {
-      // Reject unconfigured collateral indexes before updating postCollateral.
-      MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
-      const index = Number(withdrawal.collateralIndex);
-      const available = postCollateral[index] ?? 0n;
-      const amount =
-        withdrawal.assets === maxUint256 ? available : withdrawal.assets;
-      if (amount > available) {
-        throw new WithdrawExceedsCollateralError({
-          withdrawAmount: amount,
-          available,
-          market: params.marketData.id,
-        });
-      }
-      postCollateral[index] = available - amount;
-      withdrawAmount += amount;
-    }
+    const { postCollateral, withdrawAmount } =
+      getPostWithdrawalCollateral(params);
     const debtReduction =
       params.target.type === "units"
         ? params.target.units
@@ -1593,7 +1603,7 @@ export class MorphoMidnight {
     );
     for (const { collateralIndex, assets } of collateralWithdrawals) {
       const index = Number(collateralIndex);
-      const available = collateral[index]!;
+      const available = collateral[index] ?? 0n;
       if (assets > available) {
         throw new WithdrawExceedsCollateralError({
           withdrawAmount: assets,
@@ -2887,28 +2897,8 @@ export class MorphoMidnight {
       marketData: params.marketData,
     });
     const collateralWithdrawals = params.collateralWithdrawals ?? [];
-    const postCollateral = Array.from(
-      { length: market.collateralParams.length },
-      (_, index) => params.positionData.collateral[index] ?? 0n,
-    );
-    let withdrawAmount = 0n;
-    for (const withdrawal of collateralWithdrawals) {
-      // Reject unconfigured collateral indexes before updating postCollateral.
-      MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
-      const index = Number(withdrawal.collateralIndex);
-      const available = postCollateral[index] ?? 0n;
-      const amount =
-        withdrawal.assets === maxUint256 ? available : withdrawal.assets;
-      if (amount > available) {
-        throw new WithdrawExceedsCollateralError({
-          withdrawAmount: amount,
-          available,
-          market: params.marketData.id,
-        });
-      }
-      postCollateral[index] = available - amount;
-      withdrawAmount += amount;
-    }
+    const { postCollateral, withdrawAmount } =
+      getPostWithdrawalCollateral(params);
     // The bundle must fill the whole assets target and the direct repay is capped at the debt, so a repay above it reverts `OutOfOffers()`.
     if (
       params.repay.type === "assets" &&
@@ -2930,12 +2920,13 @@ export class MorphoMidnight {
         limit: params.positionData.debt,
       });
     }
-    const postDebt =
-      params.repay.type === "full"
-        ? 0n
-        : params.positionData.debt > params.repay.assets
-          ? params.positionData.debt - params.repay.assets
-          : 0n;
+    let postDebt = 0n;
+    if (
+      params.repay.type !== "full" &&
+      params.positionData.debt > params.repay.assets
+    ) {
+      postDebt = params.positionData.debt - params.repay.assets;
+    }
     if (collateralWithdrawals.length > 0 && postDebt > 0n) {
       const maxSafeDebt = getMidnightMaxSafeDebt({
         market: params.marketData,
@@ -2981,42 +2972,37 @@ export class MorphoMidnight {
   }
 
   /**
-   * Prepares guarded cancellation of several maker offer groups through `MidnightBundlesV2`.
+   * Prepares a full cancellation of one or more maker offer groups as a direct call to Midnight.
    *
-   * The transaction reverts as a whole when any group's consumption exceeds its
-   * `maxConsumed` ceiling, so fills landing before execution never leave a partial cancel.
+   * One group builds a bare `setConsumed(group, maxUint128, accountAddress)`. Two or more groups
+   * build one Midnight `multicall` of such calls, in list order, which cancels every group or
+   * none. Only the single-group transaction is matchable by a wallet policy that allows
+   * `setConsumed` by method name; cancel one group per transaction when the signer's policy names
+   * `setConsumed`.
    *
-   * @param params - Maker account, groups with consumption ceilings, and deadline.
-   * @param params.accountAddress - Maker that must send the transaction. It is used only to check
-   *   the maker's Midnight authorization of `MidnightBundlesV2`; the bundle cancels the groups of
-   *   `msg.sender`. A transaction sent from another account that has also authorized
-   *   `MidnightBundlesV2` does not revert: it cancels that account's groups and leaves the maker's
-   *   offers fillable.
-   * @param params.cancellations - Offer groups and the largest consumption accepted for each.
-   *   To cancel unconditionally, set `maxConsumed` to `maxUint128`; the contract treats
-   *   `type(uint128).max` as no limit.
-   *   Cancellation is per group: it does not unratify roots or revoke
-   *   `MidnightBundlesV2` or ratifier authorization.
-   * @param params.deadline - Bundle execution deadline timestamp.
-   * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain, or from
-   *   `getRequirements()` when the RPC reports another chain via `eth_chainId`.
-   * @throws {MidnightCalldataEncodingError} when an input cannot be ABI-encoded, such as an out-of-range integer.
-   * @throws {viem.BaseError} from `getRequirements()` when an `eth_chainId` request or requirement
-   *   RPC read fails.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
-   * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
+   * Nothing is required before sending: no Midnight authorization, approval, signature or
+   * deadline. Cancellation is per group and always full; it does not unratify roots or revoke
+   * authorizations, and cancelling a group again succeeds.
+   *
+   * @param params - Maker account and the offer groups to cancel.
+   * @param params.accountAddress - Maker whose groups are cancelled. The maker, or an operator it
+   *   authorized on Midnight, must send the transaction; a transaction from any other account
+   *   reverts `Unauthorized()` and changes no group.
+   * @param params.groups - Nonempty list of distinct 32-byte offer groups to cancel.
+   * @param params.now - Optional reference timestamp used to resolve `metadata.timestamp: true`.
+   * @returns A handle whose `getRequirements()` resolves to an empty list without reading the
+   *   chain, and whose synchronous `buildTx()` returns the transaction targeting `Midnight`.
+   * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightInvalidAccountAddressError} when `accountAddress` is malformed or zero.
-   * @throws {InvalidMidnightHexInputError} when a cancellation group is not 32-byte hex.
+   * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
+   * @throws {InvalidMidnightHexInputError} when a group is not 32-byte hex.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
-   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
-   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
-   * @throws {ExpiredDeadlineError} when `params.deadline` is at or before the reference timestamp (`params.now`, or the deprecated device-clock fallback), including zero or negative values.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no `midnight` deployment.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-   * import { createPublicClient, http, maxUint256, type Address, type Hex } from "viem";
+   * import { createPublicClient, http, type Address, type Hex } from "viem";
    * import { base } from "viem/chains";
    *
    * declare const maker: Address;
@@ -3025,20 +3011,17 @@ export class MorphoMidnight {
    *   morphoViemExtension(),
    * );
    * const midnight = client.morpho.midnight(base.id);
-   * const output = midnight.cancelOffers({
-   *   accountAddress: maker,
-   *   cancellations: [{ group, maxConsumed: 0n }],
-   *   deadline: maxUint256,
-   * });
+   * const output = midnight.cancelOffers({ accountAddress: maker, groups: [group] });
+   * await output.getRequirements(); // => []
+   * const tx = output.buildTx(); // calldata: setConsumed(group, maxUint128, maker)
    * ```
    */
   cancelOffers(
     params: {
       readonly accountAddress: Address;
-      readonly cancellations: readonly MidnightGroupCancellation[];
-      readonly deadline: bigint;
+      readonly groups: readonly Hex[];
     } & ReferenceTimestampParams,
-  ): MidnightActionOutput<MidnightCancelAndMakeAction> {
+  ): MidnightActionOutput<MidnightCancelOffersAction> {
     const metadata = resolveTransactionMetadata(
       this.client.options.metadata,
       params.now,
@@ -3051,20 +3034,16 @@ export class MorphoMidnight {
     ) {
       throw new MidnightInvalidAccountAddressError(accountAddress);
     }
-    // Fails before any API read or build when the deadline has already passed.
-    const now = params.now ?? Time.timestamp();
-    validateMidnightDeadline(params.deadline, now);
 
-    const tx = midnightCancelAndMake({
+    const tx = midnightCancelOffers({
       chainId: this.chainId,
-      cancellations: params.cancellations,
-      deadline: params.deadline,
+      groups: params.groups,
+      onBehalf: accountAddress,
       metadata,
     });
 
     return {
-      getRequirements: () =>
-        this.getBundlesV2AuthorizationRequirements(accountAddress),
+      getRequirements: async () => [],
       buildTx: () => tx,
     };
   }

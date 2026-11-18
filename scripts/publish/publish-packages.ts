@@ -10,6 +10,7 @@ import {
   type RegistryFetch,
 } from "./plan-npm-publish.ts";
 import type { ReleaseChannel } from "./verify-release-set.ts";
+import { waitForNpmVersion } from "./wait-for-npm-version.ts";
 
 const REGISTRY = "https://registry.npmjs.org";
 const ATTEMPTS = 3;
@@ -150,18 +151,34 @@ export async function publishTarball(
   );
 }
 
+function readRows(file: string) {
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => {
+      const [name, version, tgz, ...rest] = line.split("\t");
+      if (!name || !version || !tgz || rest.length > 0) {
+        throw new Error(`Invalid publish row ${JSON.stringify(line)}.`);
+      }
+      return { name, version, tgz };
+    });
+}
+
 /**
- * `publish-packages.ts [--tag latest|next] <to-publish.tsv>` publishes each
+ * `publish-packages.ts [--tag latest|next] [--already-published <tsv>] <to-publish.tsv>` publishes each
  * `<name>\t<version>\t<file>` row that plan-npm-publish.ts printed, in order, stopping at the
- * first failure.
+ * first failure. Confirms each version is visible to installs before publishing the next.
+ * When --already-published is supplied, validates its rows and awaits visibility of all
+ * those versions before publishing anything. A failed wait prevents publishing.
  *
  * @param argv - Command-line arguments.
- * @param options - Injectable npm, registry and sleep, for tests.
+ * @param options - Injectable npm, registry, visibility wait and sleep, for tests.
  */
 export async function main(
   argv: readonly string[] = process.argv.slice(2),
   options: {
     readonly runNpm?: RunNpm;
+    readonly waitForVersion?: typeof waitForNpmVersion;
     readonly fetchFn?: RegistryFetch;
     readonly sleep?: (ms: number) => Promise<void>;
     readonly log?: (message: string) => void;
@@ -170,7 +187,10 @@ export async function main(
   const { positionals, values } = parseArgs({
     args: [...argv],
     allowPositionals: true,
-    options: { tag: { type: "string", default: "latest" } },
+    options: {
+      tag: { type: "string", default: "latest" },
+      "already-published": { type: "string" },
+    },
   });
   const [file] = positionals;
   const { tag } = values;
@@ -180,19 +200,21 @@ export async function main(
     (tag !== "latest" && tag !== "next")
   ) {
     throw new Error(
-      "Usage: node scripts/publish/publish-packages.ts [--tag latest|next] <to-publish.tsv>",
+      "Usage: node scripts/publish/publish-packages.ts [--tag latest|next] [--already-published <tsv>] <to-publish.tsv>",
     );
   }
   const runNpm =
     options.runNpm ??
     ((args) => spawnSync("npm", args, { stdio: "inherit" }).status ?? 1);
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    if (line === "") continue;
-    const [name, version, tgz, ...rest] = line.split("\t");
-    if (!name || !version || !tgz || rest.length > 0) {
-      throw new Error(`Invalid publish row ${JSON.stringify(line)}.`);
+  const waitForVersion = options.waitForVersion ?? waitForNpmVersion;
+  if (values["already-published"] != null) {
+    for (const row of readRows(values["already-published"])) {
+      await waitForVersion(row);
     }
-    await publishTarball({ name, version, tgz }, { ...options, tag, runNpm });
+  }
+  for (const row of readRows(file)) {
+    await publishTarball(row, { ...options, tag, runNpm });
+    await waitForVersion(row);
   }
 }
 

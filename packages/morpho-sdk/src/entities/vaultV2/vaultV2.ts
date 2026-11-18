@@ -2,6 +2,7 @@ import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  type InputMarketParams,
   MarketParams,
   MarketUtils,
   MathLib,
@@ -97,12 +98,144 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 // accrual model stays well-defined inside it.
 const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
+function getInKindShareAllowance({
+  soleAdapter,
+  marketParamsListSnapshot,
+  marketIdListSnapshot,
+  vaultData,
+  now,
+  deadline,
+  idleAssets,
+  assetsToDeallocate,
+  penalty,
+}: {
+  readonly soleAdapter: AccrualVaultV2MorphoMarketV1AdapterV2;
+  readonly marketParamsListSnapshot: readonly InputMarketParams[];
+  readonly marketIdListSnapshot: readonly ReturnType<
+    typeof MarketUtils.getMarketId
+  >[];
+  readonly vaultData: AccrualVaultV2;
+  readonly now: bigint;
+  readonly deadline: bigint;
+  readonly idleAssets: bigint;
+  readonly assetsToDeallocate: bigint;
+  readonly penalty: bigint;
+}) {
+  const assetsByMarket = new Map(
+    soleAdapter.markets
+      .filter((market) => (soleAdapter.supplyShares[market.id] ?? 0n) !== 0n)
+      .map((market) => [
+        market.id,
+        market
+          .accrueInterest(now)
+          .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
+      ]),
+  );
+  const uniqueMarketIds = new Set(marketIdListSnapshot);
+  let covered = 0n;
+  for (const id of uniqueMarketIds) covered += assetsByMarket.get(id) ?? 0n;
+  if (covered < assetsToDeallocate) {
+    const maxExitAssets =
+      covered === 0n
+        ? idleAssets
+        : idleAssets + MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) - 1n;
+    throw new InKindRedeemCoverageError({
+      required: assetsToDeallocate,
+      covered,
+      maxExitAssets,
+    });
+  }
+
+  let remaining = assetsToDeallocate;
+  let peak = 0n;
+  const consumedMarketIds = new Set<string>();
+  const { vault: allowanceVault } = vaultData.accrueInterest(deadline);
+  // Interest can lower the burn, while management fees can raise it; bound both endpoints.
+  const previewAllowance = (assets: bigint) =>
+    MathLib.max(
+      vaultData.toShares(assets, "Up"),
+      allowanceVault.toShares(assets, "Up"),
+    );
+
+  let requiredShareAllowance = previewAllowance(
+    BigInt(marketParamsListSnapshot.length),
+  );
+  // Pre-burn previews upper-bound each separately rounded idle, penalty, and main burn.
+  requiredShareAllowance += previewAllowance(idleAssets);
+  for (const id of marketIdListSnapshot) {
+    const available = consumedMarketIds.has(id)
+      ? 0n
+      : (assetsByMarket.get(id) ?? 0n);
+    consumedMarketIds.add(id);
+    const chunk = MathLib.min(available, remaining);
+    peak = MathLib.max(peak, chunk);
+    requiredShareAllowance += previewAllowance(MathLib.wMulUp(chunk, penalty));
+    requiredShareAllowance += previewAllowance(chunk);
+    remaining -= chunk;
+  }
+
+  return { peak, requiredShareAllowance };
+}
+
+function getForceWithdrawSharePrice({
+  minSharePriceE27Override,
+  withdrawnAssets,
+  sharesBurntForFloor,
+  slippageTolerance,
+}: {
+  readonly minSharePriceE27Override?: bigint;
+  readonly withdrawnAssets: bigint;
+  readonly sharesBurntForFloor: bigint;
+  readonly slippageTolerance: bigint;
+}) {
+  if (minSharePriceE27Override != null) {
+    // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
+    // may round to zero, in which case every positive override is acceptable.
+    const minAllowedSharePriceE27 =
+      _try(
+        () =>
+          computeMinForceWithdrawSharePrice({
+            withdrawnAssets: withdrawnAssets,
+            sharesBurnt: sharesBurntForFloor,
+            slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+          }),
+        VaultV2ForceWithdrawZeroSharePriceError,
+      ) ?? 1n;
+    if (minSharePriceE27Override < minAllowedSharePriceE27) {
+      throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
+        minSharePriceE27: minSharePriceE27Override,
+        floorE27: minAllowedSharePriceE27,
+      });
+    }
+  }
+  const minSharePriceE27 =
+    minSharePriceE27Override ??
+    computeMinForceWithdrawSharePrice({
+      withdrawnAssets: withdrawnAssets,
+      sharesBurnt: sharesBurntForFloor,
+      slippageTolerance,
+    });
+  // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
+  // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
+  // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
+  // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
+  validateUint256Field("minSharePriceE27", minSharePriceE27);
+  return minSharePriceE27;
+}
+
 /**
- * Midnight adapters revert vault-initiated `allocate` and `deallocate` (`SelfAllocationOnly`), so a
- * vault routing liquidity through one accepts no deposit and serves exits from idle assets only.
+ * Midnight adapters revert vault-initiated `allocate` (`SelfAllocationOnly`), so a vault routing
+ * liquidity through one accepts no deposit. Exits are served from idle assets plus what the adapter's
+ * `withdrawToVault` path can withdraw from the liquidity market.
  */
 const isMidnightLiquidityAdapter = (vaultData: AccrualVaultV2) =>
   vaultData.accrualLiquidityAdapter?.type === "VaultV2MidnightAdapter";
+
+/** Idle assets plus what the Midnight liquidity adapter can withdraw to the vault onchain. */
+const midnightWithdrawLiquidity = (vaultData: AccrualVaultV2) =>
+  vaultData.assetBalance +
+  (vaultData.accrualLiquidityAdapter?.maxWithdraw(vaultData.liquidityData)
+    .value ?? 0n);
 
 /**
  * Action surface for Vault V2 reads and writes; writes route through VaultBundlesV1 and
@@ -261,7 +394,7 @@ export interface VaultV2Actions {
    *   at any `getRequirements()` call.
    * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation,
    *   or when the vault's liquidity adapter is a Midnight adapter and `amount` exceeds the vault's
-   *   idle assets.
+   *   idle assets plus what the adapter can withdraw from the liquidity market.
    * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
@@ -335,7 +468,8 @@ export interface VaultV2Actions {
    *   requirement resolution.
    * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256, or from
    *   `getRequirements()` when the vault's liquidity adapter is a Midnight adapter and `shares`
-   *   are worth more than the vault's idle assets.
+   *   are worth more than the vault's idle assets plus what the adapter can withdraw from the
+   *   liquidity market.
    * @throws {UnknownBlueFactory} from `getRequirements()` when the configured chain has no VaultV2 factory.
    * @throws {UnknownBlueOfFactory} from `getRequirements()` when the vault is not a VaultV2 from the
    *   configured factory.
@@ -891,12 +1025,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
     validateUint256Field("amount", amount);
     if (
       isMidnightLiquidityAdapter(vaultData) &&
-      amount > vaultData.assetBalance
+      amount > midnightWithdrawLiquidity(vaultData)
     ) {
       throw new InputExceedsMaxError({
         field: "amount",
         value: amount,
-        max: vaultData.assetBalance,
+        max: midnightWithdrawLiquidity(vaultData),
       });
     }
     const createdAt = suppliedNow ?? Time.timestamp();
@@ -995,11 +1129,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
         if (isMidnightLiquidityAdapter(vaultData)) {
           // Onchain redeem accrues interest before converting shares to assets.
           const { vault: accrued } = vaultData.accrueInterest(now);
-          if (accrued.toAssets(shares) > accrued.assetBalance) {
+          const liquidity = midnightWithdrawLiquidity(accrued);
+          if (accrued.toAssets(shares) > liquidity) {
             throw new InputExceedsMaxError({
               field: "shares",
               value: shares,
-              max: accrued.toShares(accrued.assetBalance),
+              max: accrued.toShares(liquidity),
             });
           }
         }
@@ -1125,62 +1260,17 @@ export class MorphoVaultV2 implements VaultV2Actions {
       throw new EmptyMarketParamsListError();
     }
 
-    const assetsByMarket = new Map(
-      soleAdapter.markets
-        .filter((market) => (soleAdapter.supplyShares[market.id] ?? 0n) !== 0n)
-        .map((market) => [
-          market.id,
-          market
-            .accrueInterest(now)
-            .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
-        ]),
-    );
-    const uniqueMarketIds = new Set(marketIdListSnapshot);
-    let covered = 0n;
-    for (const id of uniqueMarketIds) covered += assetsByMarket.get(id) ?? 0n;
-    if (covered < assetsToDeallocate) {
-      const maxExitAssets =
-        covered === 0n
-          ? idleAssets
-          : idleAssets +
-            MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) -
-            1n;
-      throw new InKindRedeemCoverageError({
-        required: assetsToDeallocate,
-        covered,
-        maxExitAssets,
-      });
-    }
-
-    let remaining = assetsToDeallocate;
-    let peak = 0n;
-    const consumedMarketIds = new Set<string>();
-    const { vault: allowanceVault } = vaultData.accrueInterest(deadline);
-    // Interest can lower the burn, while management fees can raise it; bound both endpoints.
-    const previewAllowance = (assets: bigint) =>
-      MathLib.max(
-        vaultData.toShares(assets, "Up"),
-        allowanceVault.toShares(assets, "Up"),
-      );
-
-    let requiredShareAllowance = previewAllowance(
-      BigInt(marketParamsListSnapshot.length),
-    );
-    // Pre-burn previews upper-bound each separately rounded idle, penalty, and main burn.
-    requiredShareAllowance += previewAllowance(idleAssets);
-    for (const id of marketIdListSnapshot) {
-      const available = consumedMarketIds.has(id)
-        ? 0n
-        : (assetsByMarket.get(id) ?? 0n);
-      consumedMarketIds.add(id);
-      const chunk = MathLib.min(available, remaining);
-      peak = MathLib.max(peak, chunk);
-      requiredShareAllowance += previewAllowance(
-        MathLib.wMulUp(chunk, penalty),
-      );
-      requiredShareAllowance += previewAllowance(chunk);
-      remaining -= chunk;
-    }
+    const { peak, requiredShareAllowance } = getInKindShareAllowance({
+      soleAdapter,
+      marketParamsListSnapshot,
+      marketIdListSnapshot,
+      vaultData,
+      now,
+      deadline,
+      idleAssets,
+      assetsToDeallocate,
+      penalty,
+    });
 
     const vaultExitBundlesV1 = getChainAddress(
       this.chainId,
@@ -1462,38 +1552,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
       sharesBurntRaw,
       sharesBurntNow - feeSharesNow,
     );
-    if (minSharePriceE27Override != null) {
-      // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
-      // may round to zero, in which case every positive override is acceptable.
-      const minAllowedSharePriceE27 =
-        _try(
-          () =>
-            computeMinForceWithdrawSharePrice({
-              withdrawnAssets: plan.withdrawnAssets,
-              sharesBurnt: sharesBurntForFloor,
-              slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
-            }),
-          VaultV2ForceWithdrawZeroSharePriceError,
-        ) ?? 1n;
-      if (minSharePriceE27Override < minAllowedSharePriceE27) {
-        throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
-          minSharePriceE27: minSharePriceE27Override,
-          floorE27: minAllowedSharePriceE27,
-        });
-      }
-    }
-    const minSharePriceE27 =
-      minSharePriceE27Override ??
-      computeMinForceWithdrawSharePrice({
-        withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: sharesBurntForFloor,
-        slippageTolerance,
-      });
-    // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
-    // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
-    // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
-    // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
-    validateUint256Field("minSharePriceE27", minSharePriceE27);
+    const minSharePriceE27 = getForceWithdrawSharePrice({
+      minSharePriceE27Override,
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurntForFloor,
+      slippageTolerance,
+    });
     // This is the minimum allowance needed for successful execution, not an exit cap: the bundle
     // independently rejects a realized share price below `minSharePriceE27`. Include the fee
     // shares minted by the first withdrawal and enough headroom for the configured tolerance.

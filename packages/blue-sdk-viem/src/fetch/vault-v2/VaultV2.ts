@@ -358,7 +358,7 @@ export async function fetchVaultV2(
       ? readContract(client, {
           address: midnightAdapterFactory,
           abi: midnightAdapterFactoryAbi,
-          functionName: "isMidnightAdapter",
+          functionName: "isCreated",
           args: [liquidityAdapter],
           ...parameters,
         }).catch(catchRevertOnly(false))

@@ -22,6 +22,7 @@ import {
   UnexpectedMorphoAuthorizationError,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -48,7 +49,9 @@ const CbbtcUsdcBlue = new MarketParams({
 });
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const expectTokenApprovalFailure = async (

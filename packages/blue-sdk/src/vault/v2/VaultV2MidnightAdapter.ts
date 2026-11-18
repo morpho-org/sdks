@@ -1,7 +1,6 @@
 import type { Address, BigIntish, Hash } from "../../types.js";
 import { type IVaultV2Adapter, VaultV2Adapter } from "./VaultV2Adapter.js";
 import {
-  type IVaultV2MidnightAdapterCollateralParams,
   type IVaultV2MidnightAdapterMarket,
   type IVaultV2MidnightAdapterMarketData,
   type VaultV2MidnightAdapterMarketData,
@@ -19,7 +18,7 @@ export interface IVaultV2MidnightAdapter
   readonly midnight: Address;
   /** Midnight market ids the adapter holds positions in (at most 250). */
   readonly marketIds: readonly Hash[];
-  /** Stored per-market data keyed by Midnight market id: `netCredit` in asset units, `rate` WAD-scaled per second, `maturity` as a Unix timestamp in seconds. */
+  /** Stored per-market data keyed by Midnight market id: `netCredit` in asset units, `netRate` WAD-scaled per second, `maturity` as a Unix timestamp in seconds. */
   readonly marketData: Readonly<
     Record<Hash, IVaultV2MidnightAdapterMarketData>
   >;
@@ -27,14 +26,16 @@ export interface IVaultV2MidnightAdapter
   readonly durations: readonly BigIntish[];
   /** Stored cumulative net-credit totals in asset units: entry `i` sums `marketData.netCredit` over markets with `max(maturity - block.timestamp, 0) >= durations[i]` (inclusive, overlapping, not disjoint buckets). */
   readonly durationAllocations: readonly BigIntish[];
+  /** Enter gate factory fixed at deployment (zero address when markets' enter gates are unrestricted). */
+  readonly enterGateFactory: Address;
   /** Maximum time to maturity accepted on buys, in seconds. */
   readonly maxTtm: BigIntish;
-  /** Minimum rate accepted on buys, WAD-scaled per second. */
-  readonly minRate: BigIntish;
-  /** Whether sales are blocked while the adapter has a shortfall. */
-  readonly noSalesWithShortfall: boolean;
-  /** Whether sales below face value are blocked. */
-  readonly noSalesBelowFaceValue: boolean;
+  /** Minimum WAD-scaled net rate per second implied by a buy, relative to the paid assets. */
+  readonly minNetBuyRate: BigIntish;
+  /** Maximum WAD-scaled net rate per second implied by a sale, relative to the received assets; ignored for `forceSellable` markets. */
+  readonly maxNetSellRate: BigIntish;
+  /** Total shortfall, in asset units, that sales can still incur; ignored for `forceSellable` markets. */
+  readonly shortfallAllowance: BigIntish;
 }
 
 /**
@@ -54,7 +55,7 @@ export class VaultV2MidnightAdapter
   public readonly midnight: Address;
   /** Midnight market ids the adapter holds positions in (at most 250). */
   public readonly marketIds: readonly Hash[];
-  /** Stored per-market data keyed by Midnight market id: `netCredit` in asset units, `rate` WAD-scaled per second, `maturity` as a Unix timestamp in seconds. */
+  /** Stored per-market data keyed by Midnight market id: `netCredit` in asset units, `netRate` WAD-scaled per second, `maturity` as a Unix timestamp in seconds. */
   public readonly marketData: Readonly<
     Record<Hash, VaultV2MidnightAdapterMarketData>
   >;
@@ -62,14 +63,16 @@ export class VaultV2MidnightAdapter
   public readonly durations: readonly bigint[];
   /** Stored cumulative net-credit totals in asset units: entry `i` sums `marketData.netCredit` over markets with `max(maturity - block.timestamp, 0) >= durations[i]` (inclusive, overlapping, not disjoint buckets). */
   public readonly durationAllocations: readonly bigint[];
+  /** Enter gate factory fixed at deployment (zero address when markets' enter gates are unrestricted). */
+  public readonly enterGateFactory: Address;
   /** Maximum time to maturity accepted on buys, in seconds. */
   public readonly maxTtm: bigint;
-  /** Minimum rate accepted on buys, WAD-scaled per second. */
-  public readonly minRate: bigint;
-  /** Whether sales are blocked while the adapter has a shortfall. */
-  public readonly noSalesWithShortfall: boolean;
-  /** Whether sales below face value are blocked. */
-  public readonly noSalesBelowFaceValue: boolean;
+  /** Minimum WAD-scaled net rate per second implied by a buy, relative to the paid assets. */
+  public readonly minNetBuyRate: bigint;
+  /** Maximum WAD-scaled net rate per second implied by a sale, relative to the received assets; ignored for `forceSellable` markets. */
+  public readonly maxNetSellRate: bigint;
+  /** Total shortfall, in asset units, that sales can still incur; ignored for `forceSellable` markets. */
+  public readonly shortfallAllowance: bigint;
 
   /**
    * Returns the adapter allocation-cap id.
@@ -110,83 +113,31 @@ export class VaultV2MidnightAdapter
   }
 
   /**
-   * Returns the collateral-parameters allocation-cap id.
+   * Returns the market-family allocation-cap id (collateral params, RCF
+   * threshold and liquidator gate; maturity and enter gate excluded).
    *
-   * @param params - Midnight collateral parameters.
-   * @returns The collateral-parameters allocation-cap id.
-   * @throws {viem.InvalidAddressError} when `params.token` or `params.oracle` is not a valid address.
-   * @throws {viem.IntegerOutOfRangeError} when `params.lltv` or `params.liquidationCursor` is not a uint256.
+   * @param market - Midnight market fields used by the family id.
+   * @returns The family allocation-cap id.
+   * @throws {viem.InvalidAddressError} when a token, oracle, or the liquidator gate is not a valid address.
+   * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
    * import { VaultV2MidnightAdapter } from "@morpho-org/blue-sdk";
    *
-   * const id = VaultV2MidnightAdapter.collateralParamsCapId({
-   *   token: "0x0000000000000000000000000000000000000001",
-   *   lltv: 860000000000000000n,
-   *   liquidationCursor: 800000000000000000n,
-   *   oracle: "0x0000000000000000000000000000000000000002",
+   * const id = VaultV2MidnightAdapter.familyCapId({
+   *   collateralParams: [],
+   *   rcfThreshold: 0n,
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
    * });
    * ```
    */
-  static collateralParamsCapId(
-    params: IVaultV2MidnightAdapterCollateralParams,
+  static familyCapId(
+    market: Pick<
+      IVaultV2MidnightAdapterMarket,
+      "collateralParams" | "rcfThreshold" | "liquidatorGate"
+    >,
   ): Hash {
-    return VaultV2MidnightAdapterUtils.collateralParamsCapId(params);
-  }
-
-  /**
-   * Returns an enter-gate allocation-cap id.
-   *
-   * @param gate - Enter-gate address.
-   * @returns The enter-gate allocation-cap id.
-   * @throws {viem.InvalidAddressError} when `gate` is not a valid address.
-   * @example
-   * ```ts
-   * import { VaultV2MidnightAdapter } from "@morpho-org/blue-sdk";
-   *
-   * const id = VaultV2MidnightAdapter.enterGateCapId(
-   *   "0x0000000000000000000000000000000000000001",
-   * );
-   * ```
-   */
-  static enterGateCapId(gate: Address): Hash {
-    return VaultV2MidnightAdapterUtils.gateCapId("enterGate", gate);
-  }
-
-  /**
-   * Returns a liquidator-gate allocation-cap id.
-   *
-   * @param gate - Liquidator-gate address.
-   * @returns The liquidator-gate allocation-cap id.
-   * @throws {viem.InvalidAddressError} when `gate` is not a valid address.
-   * @example
-   * ```ts
-   * import { VaultV2MidnightAdapter } from "@morpho-org/blue-sdk";
-   *
-   * const id = VaultV2MidnightAdapter.liquidatorGateCapId(
-   *   "0x0000000000000000000000000000000000000001",
-   * );
-   * ```
-   */
-  static liquidatorGateCapId(gate: Address): Hash {
-    return VaultV2MidnightAdapterUtils.gateCapId("liquidatorGate", gate);
-  }
-
-  /**
-   * Returns an RCF-threshold allocation-cap id.
-   *
-   * @param threshold - RCF threshold.
-   * @returns The RCF-threshold allocation-cap id.
-   * @throws {viem.IntegerOutOfRangeError} when `threshold` is not a uint256.
-   * @example
-   * ```ts
-   * import { VaultV2MidnightAdapter } from "@morpho-org/blue-sdk";
-   *
-   * const id = VaultV2MidnightAdapter.rcfThresholdCapId(1n);
-   * ```
-   */
-  static rcfThresholdCapId(threshold: BigIntish): Hash {
-    return VaultV2MidnightAdapterUtils.rcfThresholdCapId(threshold);
+    return VaultV2MidnightAdapterUtils.familyCapId(market);
   }
 
   /**
@@ -221,10 +172,11 @@ export class VaultV2MidnightAdapter
     marketData,
     durations,
     durationAllocations,
+    enterGateFactory,
     maxTtm,
-    minRate,
-    noSalesWithShortfall,
-    noSalesBelowFaceValue,
+    minNetBuyRate,
+    maxNetSellRate,
+    shortfallAllowance,
   }: IVaultV2MidnightAdapter) {
     super({
       type: "VaultV2MidnightAdapter",
@@ -241,27 +193,30 @@ export class VaultV2MidnightAdapter
         id,
         {
           netCredit: BigInt(data.netCredit),
-          rate: BigInt(data.rate),
+          netRate: BigInt(data.netRate),
           maturity: BigInt(data.maturity),
           index: BigInt(data.index),
           forceSellable: data.forceSellable,
+          forceRemoved: data.forceRemoved,
+          minForceSellPrice: BigInt(data.minForceSellPrice),
         },
       ]),
     );
     this.durations = durations.map(BigInt);
     this.durationAllocations = durationAllocations.map(BigInt);
+    this.enterGateFactory = enterGateFactory;
     this.maxTtm = BigInt(maxTtm);
-    this.minRate = BigInt(minRate);
-    this.noSalesWithShortfall = noSalesWithShortfall;
-    this.noSalesBelowFaceValue = noSalesBelowFaceValue;
+    this.minNetBuyRate = BigInt(minNetBuyRate);
+    this.maxNetSellRate = BigInt(maxNetSellRate);
+    this.shortfallAllowance = BigInt(shortfallAllowance);
   }
 
   /**
    * Returns the allocation-cap ids for a Midnight market.
    *
    * @param market - Midnight market fields used by the adapter.
-   * @returns Adapter, gate, RCF-threshold, and collateral cap ids in contract order.
-   * @throws {viem.InvalidAddressError} when a gate, token, or oracle is not a valid address.
+   * @returns Adapter, family, and collateral-token cap ids in contract order.
+   * @throws {viem.InvalidAddressError} when the liquidator gate, a token, or an oracle is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
@@ -277,10 +232,11 @@ export class VaultV2MidnightAdapter
    *   marketData: {},
    *   durations: [],
    *   durationAllocations: [],
+   *   enterGateFactory: "0x0000000000000000000000000000000000000000",
    *   maxTtm: 0n,
-   *   minRate: 0n,
-   *   noSalesWithShortfall: false,
-   *   noSalesBelowFaceValue: false,
+   *   minNetBuyRate: 0n,
+   *   maxNetSellRate: 0n,
+   *   shortfallAllowance: 0n,
    * });
    * const ids = adapter.ids({
    *   collateralParams: [],

@@ -25,6 +25,7 @@ import {
   toSimulationLimits,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 /** Pinned after the Base Midnight deployment, matching morpho-sdk's Midnight fork tests. */
 const test = createViemTest(base, {
@@ -62,7 +63,9 @@ const market = new MarketParams({
   liquidatorGate: zeroAddress,
 });
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const supply = (assets: bigint, onBehalf: Address) =>

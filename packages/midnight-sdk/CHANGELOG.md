@@ -1,5 +1,32 @@
 # @morpho-org/midnight-sdk
 
+## 2.7.0-next.0
+
+### Minor Changes
+
+- Delegate Midnight position accrual to `MidnightPositionLib` from morpho-ts. `InvalidPositionAccrualTimestampError`, `InvalidPositionLossFactorError` and `InvalidPositionAccrualStateError` are now the morpho-ts classes, re-exported as deprecated aliases (a temporary exception to the rule against re-exporting morpho-ts primitives); import them from `@morpho-org/morpho-ts`. They will be removed in the next major.
+
+  `@morpho-org/midnight-sdk` now peers `@morpho-org/morpho-ts` at `^4.5.0-0` (4.5.0 and its `4.5.0-next` prereleases, within 4.x); morpho-ts 2.x, 3.x and 4.0.x through 4.4.x are no longer accepted because they lack `MidnightPositionLib`.
+
+- Expose the Router's per-take execution deadline as `validUntil: bigint` on Midnight API quotes and takeable offers. Reject missing or malformed `valid_until` values and bounds above the offer expiry.
+
+### Patch Changes
+
+- Align the Vault V2 Midnight adapter integration with the frozen `MidnightAdapter` interface (morpho-org/vault-v2@e7821fd). The adapter, factory and ratifier ABIs are regenerated, so the factory detects adapters with `isCreated`, `createMidnightAdapter` takes per-adapter `durations` and an `enterGateFactory`, and `maxTtm` changes through `increaseMaxTtm` and `decreaseMaxTtm`.
+
+  `VaultV2MidnightAdapter` replaces `minRate`, `noSalesWithShortfall` and `noSalesBelowFaceValue` with `minNetBuyRate`, `maxNetSellRate` and `shortfallAllowance`, and adds `enterGateFactory`. Market data renames `rate` to `netRate` and adds `forceRemoved` and `minForceSellPrice`. `VaultV2MidnightAdapterUtils` returns the frozen cap ids (adapter, `familyCapId`, then one collateral-token id per collateral; duration ids use the `"this/duration"` tag) and values markets from live Midnight net credit once a market has a loss factor. The `VaultV2MidnightAdapterUtils` helpers `collateralParamsCapId`, `gateCapId` and `rcfThresholdCapId`, and the `VaultV2MidnightAdapter` statics `collateralParamsCapId`, `enterGateCapId`, `liquidatorGateCapId` and `rcfThresholdCapId`, are removed; use `familyCapId` and `collateralTokenCapId` instead.
+
+  Vault exits through a Midnight liquidity adapter now follow the frozen adapter's `withdrawToVault` path. When `liquidityData` encodes a held, non-force-removed market of the vault asset, `AccrualVaultV2MidnightAdapter.maxWithdraw` returns the adapter's accrued credit capped by the market's `withdrawable` liquidity (limiter `liquidity`) instead of zero. Accrual snapshots carry the market's `withdrawable` liquidity (fetched from Midnight `marketState`), `VaultV2MidnightAdapterUtils` adds `marketId` and `maxWithdraw`, and morpho-sdk `withdraw` and `redeem` accept exits up to idle assets plus that amount. Deposits through a Midnight liquidity adapter still have zero capacity. `@morpho-org/morpho-ts` adds `MidnightMarketLib.id` (and `InvalidHexError`), the shared SSTORE2/CREATE2 market-id hash that both `VaultV2MidnightAdapterUtils.marketId` and midnight-sdk's `MarketUtils.toId` now call.
+
+  The Base `midnightAdapterFactory` registry entry still points at the pre-audit factory, which lacks `isCreated`; fetching adapters from that factory fails until the frozen factory is deployed and registered. `@morpho-org/test` adds `installMidnightAdapterFactory` (throwing `MidnightAdapterFactoryDeploymentError` or `MidnightAdapterFactoryCodeError`) and `MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA` for fork tests.
+
+- Align morpho-ts peers with the 4.5.0 release line containing the shared Midnight ABIs and `MidnightPositionLib`. Blue SDK, Blue SDK Viem and Midnight SDK require `^4.5.0-0`, accepting the planned `4.5.0-next` prereleases while rejecting stable 4.4.0, which lacks these exports. Blue SDK Viem requires `@morpho-org/blue-sdk` `^8.4.0-0` for the Midnight adapter entities.
+
+  The test packages retain their older stable morpho-ts alternatives and explicitly accept `4.5.0-next` prereleases. Only `@morpho-org/test/midnight` requires the new 4.5 exports; the root and `/fixtures` entrypoints remain independent of morpho-ts. Morpho Test also accepts the matching Blue SDK 8.4, Test 2.14 and Midnight SDK 2.7 prereleases without dropping its older stable peer alternatives.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0-next.0
+
 ## 2.6.0
 
 ### Minor Changes

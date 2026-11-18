@@ -204,6 +204,74 @@ describe("publishTarball", () => {
 });
 
 describe("main", () => {
+  test.each([
+    {
+      label: "multiple rows",
+      rows: `${name}\t7.1.0\t${tgz}\n${name}\t7.2.0\t${tgz}\n`,
+      waits: ["7.1.0", "7.2.0"],
+    },
+    { label: "an empty file", rows: "", waits: [] },
+  ])(
+    "awaits already-published versions before publishing: $label",
+    async ({ rows, waits }) => {
+      const dir = mkdtempSync(join(tmpdir(), "publish-packages-"));
+      const published = join(dir, "published.tsv");
+      const pending = join(dir, "pending.tsv");
+      writeFileSync(published, rows);
+      writeFileSync(pending, `${name}\t${version}\t${tgz}\n`);
+      const events: string[] = [];
+      await main(["--already-published", published, pending], {
+        waitForVersion: async (identity) => {
+          events.push(identity.version);
+        },
+        runNpm: () => {
+          events.push("publish");
+          return 0;
+        },
+        log: () => {},
+      });
+      expect(events).toEqual([...waits, "publish", version]);
+    },
+  );
+
+  test.each([
+    {
+      label: "malformed row",
+      rows: `${name}\t7.1.0\t${tgz}\n${name}\t7.2.0\n`,
+      error: "Invalid publish row",
+      failWait: false,
+    },
+    {
+      label: "visibility failure",
+      rows: `${name}\t7.1.0\t${tgz}\n`,
+      error: "visibility failed",
+      failWait: true,
+    },
+  ])(
+    "prevents publishing on already-published $label",
+    async ({ rows, error, failWait }) => {
+      const dir = mkdtempSync(join(tmpdir(), "publish-packages-"));
+      const published = join(dir, "published.tsv");
+      const pending = join(dir, "pending.tsv");
+      writeFileSync(published, rows);
+      writeFileSync(pending, `${name}\t${version}\t${tgz}\n`);
+      let publishes = 0;
+      await expect(
+        main(["--already-published", published, pending], {
+          waitForVersion: async () => {
+            if (failWait) throw new Error("visibility failed");
+          },
+          runNpm: () => {
+            publishes++;
+            return 0;
+          },
+          log: () => {},
+        }),
+      ).rejects.toThrow(error);
+      expect(publishes).toBe(0);
+    },
+  );
+
   test("publishes each row under the requested tag", async () => {
     const file = join(
       mkdtempSync(join(tmpdir(), "publish-packages-")),
@@ -211,7 +279,11 @@ describe("main", () => {
     );
     writeFileSync(file, `${name}\t${version}\t${tgz}\n`);
     const calls: (readonly string[])[] = [];
+    const visible: string[] = [];
     await main(["--tag", "next", file], {
+      waitForVersion: async (identity) => {
+        visible.push(`${identity.name}@${identity.version}`);
+      },
       runNpm: (args) => {
         calls.push(args);
         return 0;
@@ -219,6 +291,71 @@ describe("main", () => {
       log: () => {},
     });
     expect(calls.map((args) => args.slice(0, 2))).toEqual([["publish", tgz]]);
+    expect(visible).toEqual([`${name}@${version}`]);
+  });
+
+  test("waits for visibility before publishing the next row", async () => {
+    const file = join(
+      mkdtempSync(join(tmpdir(), "publish-packages-")),
+      "rows.tsv",
+    );
+    writeFileSync(
+      file,
+      `${name}\t${version}\t${tgz}\n${name}\t7.4.0\t${tgz}\n`,
+    );
+    const events: string[] = [];
+    await main([file], {
+      runNpm: () => {
+        events.push("publish");
+        return 0;
+      },
+      waitForVersion: async (identity) => {
+        events.push(identity.version);
+      },
+      log: () => {},
+    });
+    expect(events).toEqual(["publish", version, "publish", "7.4.0"]);
+  });
+
+  test("stops when visibility fails", async () => {
+    const file = join(
+      mkdtempSync(join(tmpdir(), "publish-packages-")),
+      "rows.tsv",
+    );
+    writeFileSync(
+      file,
+      `${name}\t${version}\t${tgz}\n${name}\t7.4.0\t${tgz}\n`,
+    );
+    let publishes = 0;
+    await expect(
+      main([file], {
+        runNpm: () => {
+          publishes++;
+          return 0;
+        },
+        waitForVersion: async () => {
+          throw new Error("visibility failed");
+        },
+        log: () => {},
+      }),
+    ).rejects.toThrow("visibility failed");
+    expect(publishes).toBe(1);
+  });
+
+  test("does nothing for an empty set", async () => {
+    const file = join(
+      mkdtempSync(join(tmpdir(), "publish-packages-")),
+      "rows.tsv",
+    );
+    writeFileSync(file, "");
+    await main([file], {
+      runNpm: () => {
+        throw new Error("unexpected publish");
+      },
+      waitForVersion: async () => {
+        throw new Error("unexpected wait");
+      },
+    });
   });
 
   test("rejects a malformed row", async () => {

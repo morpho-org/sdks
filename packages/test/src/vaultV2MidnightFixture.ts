@@ -9,6 +9,7 @@ import {
 import {
   type Address,
   type ContractFunctionArgs,
+  concatHex,
   encodeAbiParameters,
   encodeFunctionData,
   type Hash,
@@ -16,13 +17,61 @@ import {
   maxUint32,
   maxUint128,
   parseEther,
+  zeroAddress,
   zeroHash,
 } from "viem";
 import type { base } from "viem/chains";
 import type { AnvilTestClient } from "./client.js";
+import {
+  MidnightAdapterFactoryCodeError,
+  MidnightAdapterFactoryDeploymentError,
+} from "./errors.js";
+import { MIDNIGHT_ADAPTER_FACTORY_CREATION_CODE } from "./midnightAdapterFactoryCode.js";
 
 /** Base block used by Midnight adapter fork fixtures. */
 export const BASE_MIDNIGHT_FORK_BLOCK_NUMBER = 52_513_513n;
+
+/** Default duration-cap thresholds, in seconds, given to fixture adapters. */
+export const DEFAULT_MIDNIGHT_ADAPTER_DURATIONS = [
+  86_400n,
+  604_800n,
+  2_592_000n,
+  7_776_000n,
+  15_552_000n,
+] as const;
+
+/**
+ * Installs the frozen vault-v2@e7821fd `MidnightAdapterFactory` at the registry
+ * address on the fork: deploys it with the registry Midnight, then copies its
+ * runtime code (immutables included) to `address`. No official deployment of
+ * this version exists yet, so the registry address still holds the pre-audit
+ * factory onchain.
+ *
+ * @param params.client - Base Anvil test client.
+ * @param params.address - Address that receives the factory code.
+ * @returns Resolves once `address` holds the frozen factory code.
+ */
+export const installMidnightAdapterFactory = async (params: {
+  readonly client: BaseTestClient;
+  readonly address: Address;
+}): Promise<void> => {
+  const { client } = params;
+  const hash = await client.sendTransaction({
+    data: concatHex([
+      MIDNIGHT_ADAPTER_FACTORY_CREATION_CODE,
+      encodeAbiParameters(
+        [{ type: "address" }],
+        [getChainAddress(ChainId.BaseMainnet, "midnight")],
+      ),
+    ]),
+  });
+  const { contractAddress } = await client.waitForTransactionReceipt({ hash });
+  if (contractAddress == null)
+    throw new MidnightAdapterFactoryDeploymentError(hash);
+  const code = await client.getCode({ address: contractAddress });
+  if (code == null) throw new MidnightAdapterFactoryCodeError(contractAddress);
+  await client.setCode({ address: params.address, bytecode: code });
+};
 
 /** Maximum number of distinct Midnight markets supported by the adapter. */
 export const MAX_MIDNIGHT_ADAPTER_MARKETS = 250;
@@ -41,9 +90,9 @@ export interface MidnightAdapterCollateralCap {
 
 /** Market fields needed to configure adapter caps. */
 export interface MidnightAdapterMarketCap {
-  /** Entry gate (`zeroAddress` when ungated); encoded into the `enterGate` cap ID. */
+  /** Entry gate (`zeroAddress` when ungated); not part of any cap ID. */
   readonly enterGate: Address;
-  /** Liquidation gate (`zeroAddress` when ungated); encoded into the `liquidatorGate` cap ID. */
+  /** Liquidation gate (`zeroAddress` when ungated); part of the `family` cap ID. */
   readonly liquidatorGate: Address;
   /** Recovery close factor threshold. */
   readonly rcfThreshold: bigint;
@@ -59,11 +108,11 @@ export interface VaultV2MidnightAdapterFixtureAdapter {
   readonly salt: Hash;
 }
 
-/** Vault V2, its factory durations, and its factory-created Midnight adapters. */
+/** Vault V2, its adapter durations, and its factory-created Midnight adapters. */
 export interface VaultV2MidnightAdapterFixture {
   /** Factory-created Vault V2 address. */
   readonly vault: Address;
-  /** Factory-configured adapter durations, in seconds. */
+  /** Adapter durations passed to `createMidnightAdapter`, in seconds. */
   readonly durations: readonly bigint[];
   /** Midnight adapters created for the vault. */
   readonly adapters: readonly VaultV2MidnightAdapterFixtureAdapter[];
@@ -109,6 +158,16 @@ export const advanceVaultV2MidnightFixtureTime = async (params: {
   await params.client.mine({ blocks: 1 });
 };
 
+/**
+ * Taker callback data for `MidnightAdapter.take` when a buy is funded from the
+ * vault's idle assets: `abi.encode(address(0), "")`. The frozen adapter's `onBuy`
+ * decodes `(fundingAdapter, fundingData)` from it, so empty data reverts.
+ */
+export const MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA = encodeAbiParameters(
+  [{ type: "address" }, { type: "bytes" }],
+  [zeroAddress, "0x"],
+);
+
 /** Takes a ratified offer through the fixture adapter's allocator path. */
 export const takeVaultV2MidnightAdapterOffer = async (params: {
   readonly client: BaseTestClient;
@@ -133,7 +192,7 @@ export const takeVaultV2MidnightAdapterOffer = async (params: {
  * @param params.client - Base Anvil test client.
  * @param params.vault - Parent Vault V2.
  * @param params.adapter - Factory-created Midnight adapter.
- * @param params.durations - Factory-configured adapter durations.
+ * @param params.durations - Adapter durations passed to `createMidnightAdapter`.
  * @param params.markets - Optional markets to configure.
  * @returns Resolves after the caps are accepted by Vault V2.
  */
@@ -152,32 +211,33 @@ export const configureVaultV2MidnightAdapterCaps = async (params: {
     ...params.durations.map((duration) =>
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }, { type: "uint256" }],
-        ["duration", params.adapter, duration],
+        ["this/duration", params.adapter, duration],
       ),
     ),
     ...(params.markets ?? []).flatMap((market) => [
       encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["enterGate", market.enterGate],
+        [
+          { type: "string" },
+          {
+            type: "tuple[]",
+            components: midnightCollateralParamsAbi.components,
+          },
+          { type: "uint256" },
+          { type: "address" },
+        ],
+        [
+          "family",
+          market.collateralParams,
+          market.rcfThreshold,
+          market.liquidatorGate,
+        ],
       ),
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["liquidatorGate", market.liquidatorGate],
-      ),
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "uint256" }],
-        ["rcfThreshold", market.rcfThreshold],
-      ),
-      ...market.collateralParams.flatMap((collateral) => [
+      ...market.collateralParams.map((collateral) =>
         encodeAbiParameters(
           [{ type: "string" }, { type: "address" }],
           ["collateralToken", collateral.token],
         ),
-        encodeAbiParameters(
-          [{ type: "string" }, midnightCollateralParamsAbi],
-          ["collateralParams", collateral],
-        ),
-      ]),
+      ),
     ]),
   ]);
 
@@ -208,11 +268,13 @@ export const configureVaultV2MidnightAdapterCaps = async (params: {
 /**
  * Creates a Base-fork Vault V2 and one or more registry-factory Midnight adapters.
  *
- * @remarks Adapter ABI source: morpho-org/vault-v2@6476e9d. To refresh after a
- * redeployment, update the Base factory address in the morpho-ts registry and
- * regenerate its ABI from the new implementation; never deploy a local factory.
+ * @remarks Adapter ABI and factory code source: morpho-org/vault-v2@e7821fd
+ * (frozen, not yet deployed). The fixture installs that factory at the registry
+ * address with {@link installMidnightAdapterFactory}. Once the official factory
+ * is deployed, point the registry at it, move the fork block past its deploy
+ * block and drop the install step.
  *
- * The fixture configures `setMaxTtm` before adding each adapter, grants allocator
+ * The fixture raises `maxTtm` with `increaseMaxTtm` before adding each adapter, grants allocator
  * access to both the test account and adapter, and enables adapter, market, and
  * duration caps. Adapter salts are supplied by the caller so multiple adapters
  * can be created deterministically for the same parent vault.
@@ -220,16 +282,14 @@ export const configureVaultV2MidnightAdapterCaps = async (params: {
  * Anvil v1.8.5, which CI pins in `.github/workflows/test-packages.yml`: its
  * default Base hardfork runs Osaka, so no `hardfork` option is needed. On older
  * Anvil versions, `take` halts with `NotActivated`.
- * A redeploy also requires moving `BASE_MIDNIGHT_FORK_BLOCK_NUMBER` to or past
- * the new factory deploy block. A factory deployed after the pinned block has
- * no code on the fork, so `createMidnightAdapter` fails.
  *
  * @param params.client - Base Anvil test client.
  * @param params.asset - Vault underlying asset.
  * @param params.vaultSalt - CREATE2 salt for the Vault V2; defaults to zero. Use distinct salts to create several vaults for the same owner and asset on one fork.
  * @param params.salts - Distinct CREATE2 salts for the adapters.
  * @param params.markets - Optional markets to configure.
- * @returns The Vault V2 address, factory durations, and each created adapter with its salt.
+ * @param params.durations - Ascending adapter durations in seconds; defaults to {@link DEFAULT_MIDNIGHT_ADAPTER_DURATIONS}.
+ * @returns The Vault V2 address, adapter durations, and each created adapter with its salt.
  */
 export const createVaultV2MidnightAdapterFixture = async (params: {
   readonly client: BaseTestClient;
@@ -237,6 +297,7 @@ export const createVaultV2MidnightAdapterFixture = async (params: {
   readonly vaultSalt?: Hash;
   readonly salts: readonly [Hash, ...Hash[]];
   readonly markets?: readonly MidnightAdapterMarketCap[];
+  readonly durations?: readonly bigint[];
 }): Promise<VaultV2MidnightAdapterFixture> => {
   const { client } = params;
   const vaultV2Factory = getChainAddress(ChainId.BaseMainnet, "vaultV2Factory");
@@ -245,6 +306,10 @@ export const createVaultV2MidnightAdapterFixture = async (params: {
     "midnightAdapterFactory",
   );
 
+  await installMidnightAdapterFactory({
+    client,
+    address: midnightAdapterFactory,
+  });
   await client.deal({ amount: parseEther("1") });
   const { result: vault, request: createVaultRequest } =
     await client.simulateContract({
@@ -276,21 +341,7 @@ export const createVaultV2MidnightAdapterFixture = async (params: {
     }),
   });
 
-  const durationsLength = await client.readContract({
-    address: midnightAdapterFactory,
-    abi: midnightAdapterFactoryAbi,
-    functionName: "durationsLength",
-  });
-  const durations = await Promise.all(
-    Array.from({ length: Number(durationsLength) }, (_, index) =>
-      client.readContract({
-        address: midnightAdapterFactory,
-        abi: midnightAdapterFactoryAbi,
-        functionName: "durations",
-        args: [BigInt(index)],
-      }),
-    ),
-  );
+  const durations = params.durations ?? DEFAULT_MIDNIGHT_ADAPTER_DURATIONS;
 
   const adapters: VaultV2MidnightAdapterFixtureAdapter[] = [];
   for (const salt of params.salts) {
@@ -299,7 +350,7 @@ export const createVaultV2MidnightAdapterFixture = async (params: {
         address: midnightAdapterFactory,
         abi: midnightAdapterFactoryAbi,
         functionName: "createMidnightAdapter",
-        args: [vault, salt],
+        args: [vault, durations, zeroAddress, salt],
       });
     await client.writeContract(createAdapterRequest);
 
@@ -309,7 +360,7 @@ export const createVaultV2MidnightAdapterFixture = async (params: {
       contract: "adapter",
       data: encodeFunctionData({
         abi: midnightAdapterAbi,
-        functionName: "setMaxTtm",
+        functionName: "increaseMaxTtm",
         args: [maxUint32],
       }),
     });

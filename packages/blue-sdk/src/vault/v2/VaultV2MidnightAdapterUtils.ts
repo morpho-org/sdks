@@ -1,5 +1,14 @@
-import { MidnightPositionLib } from "@morpho-org/morpho-ts";
-import { midnightCollateralParamsAbi } from "@morpho-org/morpho-ts/abis/midnight";
+import { MidnightMarketLib, MidnightPositionLib } from "@morpho-org/morpho-ts";
+import {
+  midnightCollateralParamsAbi,
+  midnightMarketAbi,
+} from "@morpho-org/morpho-ts/abis/midnight";
+import {
+  decodeAbiParameters,
+  encodeAbiParameters,
+  type Hex,
+  isAddressEqual,
+} from "viem";
 import {
   InvalidVaultV2MidnightAdapterMarketsError,
   VaultV2Errors,
@@ -25,19 +34,19 @@ export interface IVaultV2MidnightAdapterCollateralParams {
 }
 
 /**
- * Midnight `Market` fields read by the adapter's `ids()`, plus `maturity` (not used by cap ids).
+ * Midnight `Market` fields read by the adapter's `ids()`, plus `maturity` and `enterGate` (not used by cap ids).
  * Structurally compatible with midnight-sdk's `IMarketParams` (pass `market.params`).
  */
 export interface IVaultV2MidnightAdapterMarket {
-  /** Market collateral definitions; each yields a collateral-token and a collateral-params cap id. */
+  /** Market collateral definitions; they are part of the family cap id and each yields a collateral-token cap id. */
   readonly collateralParams: readonly IVaultV2MidnightAdapterCollateralParams[];
   /** Market maturity as a Unix timestamp in seconds; not used by cap ids. */
   readonly maturity: BigIntish;
-  /** Recovery close factor threshold in loan-token units: the RCF is deactivated when a liquidation could leave collateral worth less than this amount. */
+  /** Recovery close factor threshold in loan-token units, part of the family cap id: the RCF is deactivated when a liquidation could leave collateral worth less than this amount. */
   readonly rcfThreshold: BigIntish;
-  /** Entry gate address (zero address when ungated). */
+  /** Entry gate address (zero address when ungated); not used by cap ids. */
   readonly enterGate: Address;
-  /** Liquidator gate address (zero address when ungated). */
+  /** Liquidator gate address (zero address when ungated), part of the family cap id. */
   readonly liquidatorGate: Address;
 }
 
@@ -45,28 +54,36 @@ export interface IVaultV2MidnightAdapterMarket {
 export interface IVaultV2MidnightAdapterMarketData {
   /** Stored net credit in asset units, updated on buy, sell and forceDeallocate and used by duration caps; not the live value. */
   readonly netCredit: BigIntish;
-  /** WAD-scaled simple interest rate per second. */
-  readonly rate: BigIntish;
+  /** WAD-scaled simple interest rate per second earned on the net credit, so net of Midnight fees. */
+  readonly netRate: BigIntish;
   /** Market maturity as a Unix timestamp in seconds. */
   readonly maturity: BigIntish;
   /** Position of the market in the adapter's `marketIds` array (swap-and-pop on removal). */
   readonly index: BigIntish;
-  /** Whether the market can be sold at an arbitrary loss; sales then don't lower `rate` and buying is blocked. */
+  /** Whether the market can be sold at a loss down to `minForceSellPrice`, also after maturity; sales then don't lower `netRate` and buying is blocked. */
   readonly forceSellable: boolean;
+  /** Whether the curator permanently removed the market; buys, sales, withdrawals and in-kind redemptions in it then revert. */
+  readonly forceRemoved: boolean;
+  /** WAD-scaled minimum assets received per unit of sold net credit (WAD = face value) while `forceSellable`. */
+  readonly minForceSellPrice: BigIntish;
 }
 
 /** Normalized Midnight adapter market data. */
 export interface VaultV2MidnightAdapterMarketData {
   /** Stored net credit in asset units, updated on buy, sell and forceDeallocate and used by duration caps; not the live value. */
   readonly netCredit: bigint;
-  /** WAD-scaled simple interest rate per second. */
-  readonly rate: bigint;
+  /** WAD-scaled simple interest rate per second earned on the net credit, so net of Midnight fees. */
+  readonly netRate: bigint;
   /** Market maturity as a Unix timestamp in seconds. */
   readonly maturity: bigint;
   /** Position of the market in the adapter's `marketIds` array (swap-and-pop on removal). */
   readonly index: bigint;
-  /** Whether the market can be sold at an arbitrary loss; sales then don't lower `rate` and buying is blocked. */
+  /** Whether the market can be sold at a loss down to `minForceSellPrice`, also after maturity; sales then don't lower `netRate` and buying is blocked. */
   readonly forceSellable: boolean;
+  /** Whether the curator permanently removed the market; buys, sales, withdrawals and in-kind redemptions in it then revert. */
+  readonly forceRemoved: boolean;
+  /** WAD-scaled minimum assets received per unit of sold net credit (WAD = face value) while `forceSellable`. */
+  readonly minForceSellPrice: bigint;
 }
 
 /** Raw Midnight position state at an adapter snapshot. */
@@ -85,6 +102,8 @@ export interface IVaultV2MidnightAdapterPosition {
 export interface IVaultV2MidnightAdapterMarketState {
   /** Midnight market loss factor scaled by uint128; `MAX_UINT_128` represents total loss. */
   readonly lossFactor: BigIntish;
+  /** Midnight market liquidity available to lender withdrawals, in loan-asset units. Defaults to zero. */
+  readonly withdrawable?: BigIntish;
 }
 
 /** Position and loss-factor state used to value one Midnight market. */
@@ -116,7 +135,20 @@ export interface VaultV2MidnightAdapterAccrualMarket {
   readonly market: {
     /** Midnight market loss factor scaled by uint128; `MAX_UINT_128` represents total loss. */
     readonly lossFactor: bigint;
+    /** Midnight market liquidity available to lender withdrawals, in loan-asset units. */
+    readonly withdrawable: bigint;
   };
+}
+
+/** Midnight market struct accepted by `IdLib.toId` and encoded as Midnight adapter liquidity data. */
+export interface IVaultV2MidnightAdapterMidnightMarket
+  extends IVaultV2MidnightAdapterMarket {
+  /** Chain id the market is bound to. */
+  readonly chainId: BigIntish;
+  /** Midnight core address. */
+  readonly midnight: Address;
+  /** Market loan token, which must be the adapter asset. */
+  readonly loanToken: Address;
 }
 
 /** Pure helpers for Vault V2 Midnight adapter identifiers and caps. */
@@ -140,10 +172,12 @@ export namespace VaultV2MidnightAdapterUtils {
    *     marketData: {
    *       "0x0000000000000000000000000000000000000000000000000000000000000001": {
    *         netCredit: 1_000n,
-   *         rate: 0n,
+   *         netRate: 0n,
    *         maturity: 200n,
    *         index: 0n,
    *         forceSellable: false,
+   *         forceRemoved: false,
+   *         minForceSellPrice: 0n,
    *       },
    *     },
    *   },
@@ -201,7 +235,11 @@ export namespace VaultV2MidnightAdapterUtils {
   }
 
   /**
-   * Values held Midnight markets using a hyperbolic discount until maturity.
+   * Values held Midnight markets using a hyperbolic discount until maturity,
+   * mirroring `MidnightAdapter.realAssets`: each market contributes
+   * `floor(netCredit * WAD / (WAD + netRate * ttm))`, where `netCredit` is the
+   * stored `marketData.netCredit` when the market's loss factor is zero and the
+   * position's live net credit (after slashing and pending fees) otherwise.
    *
    * @param adapter - Adapter market ids and stored Midnight market data.
    * @param markets - Position and loss-factor snapshots matching the adapter market ids.
@@ -222,10 +260,12 @@ export namespace VaultV2MidnightAdapterUtils {
    *     marketData: {
    *       [id]: {
    *         netCredit: 1_000n,
-   *         rate: 10_000_000_000_000_000n,
+   *         netRate: 10_000_000_000_000_000n,
    *         maturity: 200n,
    *         index: 0n,
    *         forceSellable: false,
+   *         forceRemoved: false,
+   *         minForceSellPrice: 0n,
    *       },
    *     },
    *   },
@@ -263,27 +303,24 @@ export namespace VaultV2MidnightAdapterUtils {
     const requested = BigInt(timestamp);
 
     return adapter.marketIds.reduce((total, id) => {
-      const market = marketsById.get(id);
-      if (market === undefined) {
-        throw new InvalidVaultV2MidnightAdapterMarketsError(id);
-      }
-      const marketData = adapter.marketData[id];
-      if (marketData === undefined) {
-        throw new InvalidVaultV2MidnightAdapterMarketsError(id);
-      }
-      const accrualTimestamp = MathLib.max(
-        requested,
-        BigInt(market.position.lastAccrual),
-      );
-      const netCredit = MidnightPositionLib.netCredit({
-        ...market.position,
-        marketLossFactor: market.market.lossFactor,
-        maturity: marketData.maturity,
-        timestamp: accrualTimestamp,
-      });
+      // validateMarkets guarantees a position and market data for every held id.
+      const market = marketsById.get(id)!;
+      const marketData = adapter.marketData[id]!;
+      const netCredit =
+        BigInt(market.market.lossFactor) === 0n
+          ? BigInt(marketData.netCredit)
+          : MidnightPositionLib.netCredit({
+              ...market.position,
+              marketLossFactor: market.market.lossFactor,
+              maturity: marketData.maturity,
+              timestamp: MathLib.max(
+                requested,
+                BigInt(market.position.lastAccrual),
+              ),
+            });
       const denominator =
         MathLib.WAD +
-        BigInt(marketData.rate) *
+        BigInt(marketData.netRate) *
           MathLib.zeroFloorSub(BigInt(marketData.maturity), requested);
       return total + MathLib.mulDivDown(netCredit, MathLib.WAD, denominator);
     }, 0n);
@@ -311,10 +348,12 @@ export namespace VaultV2MidnightAdapterUtils {
    *     marketData: {
    *       [id]: {
    *         netCredit: 1_000n,
-   *         rate: 10_000_000_000_000_000n,
+   *         netRate: 10_000_000_000_000_000n,
    *         maturity: 200n,
    *         index: 0n,
    *         forceSellable: false,
+   *         forceRemoved: false,
+   *         minForceSellPrice: 0n,
    *       },
    *     },
    *   },
@@ -351,10 +390,8 @@ export namespace VaultV2MidnightAdapterUtils {
     const requested = BigInt(timestamp);
 
     return markets.map((market) => {
-      const marketData = adapter.marketData[market.id];
-      if (marketData === undefined) {
-        throw new InvalidVaultV2MidnightAdapterMarketsError(market.id);
-      }
+      // validateMarkets guarantees market data for every position id.
+      const marketData = adapter.marketData[market.id]!;
       const lastAccrual = BigInt(market.position.lastAccrual);
       const lossFactor = BigInt(market.market.lossFactor);
       const accrualTimestamp = MathLib.max(requested, lastAccrual);
@@ -372,9 +409,120 @@ export namespace VaultV2MidnightAdapterUtils {
           lastLossFactor: lossFactor,
           lastAccrual: accrualTimestamp,
         },
-        market: { lossFactor },
+        market: {
+          lossFactor,
+          withdrawable: BigInt(market.market.withdrawable ?? 0n),
+        },
       };
     });
+  }
+
+  /**
+   * Computes the Midnight market id of a market struct, matching Midnight's `IdLib.toId`.
+   *
+   * @param market - Midnight market struct.
+   * @returns The CREATE2-derived Midnight market id.
+   * @example
+   * ```ts
+   * import { VaultV2MidnightAdapterUtils } from "@morpho-org/blue-sdk";
+   *
+   * const id = VaultV2MidnightAdapterUtils.marketId({
+   *   chainId: 8453n,
+   *   midnight: "0x0000000000000000000000000000000000000001",
+   *   loanToken: "0x0000000000000000000000000000000000000002",
+   *   collateralParams: [],
+   *   maturity: 1n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   * });
+   * ```
+   */
+  export function marketId(
+    market: IVaultV2MidnightAdapterMidnightMarket,
+  ): Hash {
+    return MidnightMarketLib.id(
+      market.midnight,
+      encodeAbiParameters(
+        [midnightMarketAbi],
+        [
+          {
+            ...market,
+            collateralParams: market.collateralParams.map((params) => ({
+              ...params,
+              lltv: BigInt(params.lltv),
+              liquidationCursor: BigInt(params.liquidationCursor),
+            })),
+            chainId: BigInt(market.chainId),
+            maturity: BigInt(market.maturity),
+            rcfThreshold: BigInt(market.rcfThreshold),
+          },
+        ],
+      ),
+    );
+  }
+
+  /**
+   * Returns how much a vault withdrawal can deallocate through the adapter's `withdrawToVault` path.
+   *
+   * Mirrors the frozen adapter's non-forced `deallocate`: `data` must decode as a held Midnight
+   * market whose loan token is the adapter asset and that is not force-removed. The amount is
+   * bounded by the adapter's credit accrued to `lastUpdate` and the market's withdrawable liquidity. A liquidation
+   * in progress also reverts onchain but is transient and not modeled.
+   *
+   * @param adapter - Adapter asset, stored market data, snapshot timestamp and per-market position and market state.
+   * @param data - Vault liquidity data, expected to be an ABI-encoded Midnight market.
+   * @returns The withdrawable amount, or zero when the call would revert.
+   * @example
+   * ```ts
+   * import { VaultV2MidnightAdapterUtils } from "@morpho-org/blue-sdk";
+   *
+   * const limit = VaultV2MidnightAdapterUtils.maxWithdraw(
+   *   {
+   *     asset: "0x0000000000000000000000000000000000000002",
+   *     marketData: {},
+   *     lastUpdate: 0n,
+   *     markets: [],
+   *   },
+   *   "0x",
+   * );
+   * // limit is 0n
+   * ```
+   */
+  export function maxWithdraw(
+    adapter: {
+      readonly asset: Address;
+      readonly marketData: Readonly<
+        Record<Hash, IVaultV2MidnightAdapterMarketData>
+      >;
+      readonly lastUpdate: BigIntish;
+      readonly markets: readonly VaultV2MidnightAdapterAccrualMarket[];
+    },
+    data: Hex,
+  ): bigint {
+    let market: IVaultV2MidnightAdapterMidnightMarket;
+    try {
+      [market] = decodeAbiParameters([midnightMarketAbi], data);
+    } catch {
+      // Onchain `abi.decode` reverts on malformed data.
+      return 0n;
+    }
+    if (!isAddressEqual(market.loanToken, adapter.asset)) return 0n;
+    const id = marketId(market);
+    if (adapter.marketData[id]?.forceRemoved !== false) return 0n;
+    const held = adapter.markets.find((entry) => entry.id === id);
+    if (held === undefined) return 0n;
+    // Midnight.withdraw runs `_updatePosition` first, so cap by credit net of continuous fees accrued since `lastAccrual`.
+    const { credit } = MidnightPositionLib.accrue({
+      ...held.position,
+      marketLossFactor: held.market.lossFactor,
+      maturity: adapter.marketData[id].maturity,
+      timestamp: MathLib.max(
+        BigInt(adapter.lastUpdate),
+        held.position.lastAccrual,
+      ),
+    });
+    return MathLib.min(credit, held.market.withdrawable);
   }
 
   /**
@@ -397,87 +545,58 @@ export namespace VaultV2MidnightAdapterUtils {
   }
 
   /**
-   * Returns the collateral-parameters allocation-cap id.
+   * Returns the market-family allocation-cap id: the market configuration
+   * without its maturity and enter gate, so markets differing only by those
+   * share caps.
    *
-   * @param params - Midnight collateral parameters.
-   * @returns The collateral-parameters allocation-cap id.
-   * @throws {viem.InvalidAddressError} when `token` or `oracle` is not a valid address.
-   * @throws {viem.IntegerOutOfRangeError} when `lltv` or `liquidationCursor` is not a uint256.
+   * @param market - Midnight market fields used by the family id.
+   * @returns The family allocation-cap id, `keccak256(abi.encode("family", collateralParams, rcfThreshold, liquidatorGate))`.
+   * @throws {viem.InvalidAddressError} when a token, oracle, or the liquidator gate is not a valid address.
+   * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
    * import { VaultV2MidnightAdapterUtils } from "@morpho-org/blue-sdk";
    *
-   * const id = VaultV2MidnightAdapterUtils.collateralParamsCapId({
-   *   token: "0x0000000000000000000000000000000000000001",
-   *   lltv: 860000000000000000n,
-   *   liquidationCursor: 800000000000000000n,
-   *   oracle: "0x0000000000000000000000000000000000000002",
+   * const id = VaultV2MidnightAdapterUtils.familyCapId({
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000000001",
+   *       lltv: 860000000000000000n,
+   *       liquidationCursor: 800000000000000000n,
+   *       oracle: "0x0000000000000000000000000000000000000002",
+   *     },
+   *   ],
+   *   rcfThreshold: 0n,
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
    * });
    * ```
    */
-  export function collateralParamsCapId(
-    params: IVaultV2MidnightAdapterCollateralParams,
+  export function familyCapId(
+    market: Pick<
+      IVaultV2MidnightAdapterMarket,
+      "collateralParams" | "rcfThreshold" | "liquidatorGate"
+    >,
   ): Hash {
     return VaultV2Utils.capId({
-      tag: "collateralParams",
-      params: [midnightCollateralParamsAbi],
-      values: [
+      tag: "family",
+      params: [
         {
+          type: "tuple[]",
+          components: midnightCollateralParamsAbi.components,
+        },
+        { type: "uint256" },
+        { type: "address" },
+      ],
+      values: [
+        market.collateralParams.map((params) => ({
           token: params.token,
           lltv: BigInt(params.lltv),
           liquidationCursor: BigInt(params.liquidationCursor),
           oracle: params.oracle,
-        },
+        })),
+        BigInt(market.rcfThreshold),
+        market.liquidatorGate,
       ],
-    });
-  }
-
-  /**
-   * Returns a gate allocation-cap id.
-   *
-   * @param tag - Contract cap-id tag.
-   * @param gate - Gate address.
-   * @returns The gate allocation-cap id.
-   * @throws {viem.InvalidAddressError} when `gate` is not a valid address.
-   * @example
-   * ```ts
-   * import { VaultV2MidnightAdapterUtils } from "@morpho-org/blue-sdk";
-   *
-   * const id = VaultV2MidnightAdapterUtils.gateCapId(
-   *   "enterGate",
-   *   "0x0000000000000000000000000000000000000001",
-   * );
-   * ```
-   */
-  export function gateCapId(
-    tag: "enterGate" | "liquidatorGate",
-    gate: Address,
-  ): Hash {
-    return VaultV2Utils.capId({
-      tag,
-      params: [{ type: "address" }],
-      values: [gate],
-    });
-  }
-
-  /**
-   * Returns the RCF-threshold allocation-cap id.
-   *
-   * @param threshold - RCF threshold.
-   * @returns The RCF-threshold allocation-cap id.
-   * @throws {viem.IntegerOutOfRangeError} when `threshold` is not a uint256.
-   * @example
-   * ```ts
-   * import { VaultV2MidnightAdapterUtils } from "@morpho-org/blue-sdk";
-   *
-   * const id = VaultV2MidnightAdapterUtils.rcfThresholdCapId(1n);
-   * ```
-   */
-  export function rcfThresholdCapId(threshold: BigIntish): Hash {
-    return VaultV2Utils.capId({
-      tag: "rcfThreshold",
-      params: [{ type: "uint256" }],
-      values: [BigInt(threshold)],
     });
   }
 
@@ -501,7 +620,7 @@ export namespace VaultV2MidnightAdapterUtils {
    */
   export function durationCapId(adapter: Address, duration: BigIntish): Hash {
     return VaultV2Utils.capId({
-      tag: "duration",
+      tag: "this/duration",
       params: [{ type: "address" }, { type: "uint256" }],
       values: [adapter, BigInt(duration)],
     });
@@ -509,13 +628,13 @@ export namespace VaultV2MidnightAdapterUtils {
 
   /**
    * Returns the allocation-cap ids of a Midnight market, in contract order:
-   * adapter id, enter gate, liquidator gate, RCF threshold, then the
-   * collateral-token and collateral-parameters ids of each collateral.
+   * adapter id, family id, then the collateral-token id of each collateral.
+   * Maturity and enter gate are not part of any id.
    *
    * @param params.adapterId - Adapter allocation-cap id.
    * @param params.market - Midnight market fields used by the adapter.
-   * @returns The market's `4 + 2 * collateralParams.length` allocation-cap ids.
-   * @throws {viem.InvalidAddressError} when a gate, token, or oracle is not a valid address.
+   * @returns The market's `2 + collateralParams.length` allocation-cap ids.
+   * @throws {viem.InvalidAddressError} when the liquidator gate, a token, or an oracle is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
@@ -544,13 +663,10 @@ export namespace VaultV2MidnightAdapterUtils {
   }): Hash[] {
     return [
       adapterId,
-      gateCapId("enterGate", market.enterGate),
-      gateCapId("liquidatorGate", market.liquidatorGate),
-      rcfThresholdCapId(market.rcfThreshold),
-      ...market.collateralParams.flatMap((params) => [
+      familyCapId(market),
+      ...market.collateralParams.map((params) =>
         collateralTokenCapId(params.token),
-        collateralParamsCapId(params),
-      ]),
+      ),
     ];
   }
 

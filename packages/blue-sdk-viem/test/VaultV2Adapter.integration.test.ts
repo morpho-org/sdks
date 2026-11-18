@@ -28,6 +28,7 @@ import { testAccount } from "@morpho-org/test/fixtures";
 import {
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
+  MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
   takeVaultV2MidnightAdapterOffer,
 } from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -448,14 +449,17 @@ describe("VaultV2 Midnight adapter", () => {
           OfferUtils.toStruct({ offer: item.offer }),
           item.ratifierData,
           units,
-          "0x",
+          MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
         ],
       });
       const oneMarketQueryGas = await traceDeploylessGas();
       const estimated250MarketGas =
         emptyQueryGas + (oneMarketQueryGas - emptyQueryGas) * 250n;
       expect(oneMarketQueryGas).toBeGreaterThan(emptyQueryGas);
-      expect(estimated250MarketGas).toBeLessThan(30_000_000n);
+      // The frozen adapter stores `minForceSellPrice` in its own slot, which puts
+      // a full 250-market query just above 30M gas; it must stay under geth's
+      // default `eth_call` gas cap (`--rpc.gascap`, 50M).
+      expect(estimated250MarketGas).toBeLessThan(50_000_000n);
 
       const [deployless, fallback, force] = await Promise.all([
         fetchVaultV2MidnightAdapter(address, client),
@@ -518,19 +522,28 @@ describe("VaultV2 Midnight adapter", () => {
       );
 
       const marketId = MarketUtils.toId(market);
-      const [netCredit, rate, maturity, index, forceSellable] =
-        await client.readContract({
-          address,
-          abi: midnightAdapterAbi,
-          functionName: "marketData",
-          args: [marketId],
-        });
+      const [
+        netCredit,
+        netRate,
+        maturity,
+        index,
+        forceSellable,
+        forceRemoved,
+        minForceSellPrice,
+      ] = await client.readContract({
+        address,
+        abi: midnightAdapterAbi,
+        functionName: "marketData",
+        args: [marketId],
+      });
       expect(deployless.marketData[marketId]).toStrictEqual({
         netCredit,
-        rate,
+        netRate,
         maturity: BigInt(maturity),
         index: BigInt(index),
         forceSellable,
+        forceRemoved,
+        minForceSellPrice,
       });
       const [credit, pendingFee, lastLossFactor, lastAccrual] =
         await client.readContract({
@@ -539,7 +552,7 @@ describe("VaultV2 Midnight adapter", () => {
           functionName: "position",
           args: [marketId, address],
         });
-      const [, lossFactor] = await client.readContract({
+      const [, lossFactor, withdrawable] = await client.readContract({
         address: midnight,
         abi: midnightAbi,
         functionName: "marketState",
@@ -552,10 +565,10 @@ describe("VaultV2 Midnight adapter", () => {
       expect(accruedSnapshot.markets[0]).toStrictEqual({
         id: marketId,
         position: { credit, pendingFee, lastLossFactor, lastAccrual },
-        market: { lossFactor },
+        market: { lossFactor, withdrawable },
       });
       expect(accruedSnapshot.marketData[marketId]).toMatchObject({
-        rate,
+        netRate,
         maturity: BigInt(maturity),
         forceSellable,
       });

@@ -16,13 +16,13 @@ import {
   SimulationRevertedError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
+import { createTestSimulationClient } from "../../test-helpers/create-test-simulation-client.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
-import { createSimulationClient } from "./client.js";
 import { rpc as callRpc, executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -94,7 +94,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   params = {
-    client: createSimulationClient(RPC_URL),
+    client: createTestSimulationClient(RPC_URL),
     plan: makePlan(),
     stateBlock: {
       number: STATE_BLOCK,

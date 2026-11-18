@@ -11,6 +11,7 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { simulate } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -55,7 +56,9 @@ for (const [version, vault, feeRecipient] of [
       const result = await simulate(
         {
           timeoutMs: 30_000,
-          chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+          chains: new Map([
+            [1, { client: createTestSimulationClient(client.transport.url!) }],
+          ]),
         },
         {
           chainId: 1,

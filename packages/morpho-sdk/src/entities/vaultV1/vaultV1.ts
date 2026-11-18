@@ -3,6 +3,7 @@ import {
   type AccrualVaultV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
   Eip5267Domain,
+  type InputMarketParams,
   type MarketParams,
   MarketUtils,
   MathLib,
@@ -80,6 +81,68 @@ import {
 import { assertRegistryTargetsHaveCode } from "../requirements/assertContractCode.js";
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
+
+function validateInKindCoverage({
+  amount,
+  marketParamsListSnapshot,
+  vaultData,
+  now,
+}: {
+  readonly amount: bigint;
+  readonly marketParamsListSnapshot: readonly InputMarketParams[];
+  readonly vaultData: AccrualVault;
+  readonly now: bigint;
+}) {
+  let covered = 0n;
+  const assignedByMarket = new Map<string, bigint>();
+  for (const marketParams of marketParamsListSnapshot) {
+    if (covered === amount) break;
+    const marketId = MarketUtils.getMarketId(marketParams);
+    const allocation = vaultData.allocations.get(marketId);
+    if (allocation?.config.enabled !== true) continue;
+    if (allocation.position.supplyShares === 0n) continue;
+
+    const market = allocation.position.market.accrueInterest(now);
+    const available = market.toSupplyAssets(allocation.position.supplyShares);
+    const assigned = assignedByMarket.get(marketId) ?? 0n;
+    const chunk = MathLib.min(available, amount - covered);
+    if (assigned + chunk > available) {
+      throw new InKindRedeemCoverageError({
+        required: amount,
+        covered,
+        maxExitAssets: covered,
+      });
+    }
+    assignedByMarket.set(marketId, assigned + chunk);
+    covered += chunk;
+  }
+  if (covered < amount) {
+    throw new InKindRedeemCoverageError({
+      required: amount,
+      covered,
+      maxExitAssets: covered,
+    });
+  }
+}
+
+function getMigrationAmounts(params: {
+  readonly assets?: bigint;
+  readonly shares?: bigint;
+}) {
+  const assets = "assets" in params ? params.assets : undefined;
+  const shares = "shares" in params ? params.shares : undefined;
+  if ((assets == null) === (shares == null)) {
+    throw new AmountAndSharesExclusiveError();
+  }
+  const selectedAmount = assets ?? shares ?? 0n;
+  if (selectedAmount <= 0n) {
+    throw new NonPositiveInputError(
+      assets != null ? "assets" : "shares",
+      selectedAmount,
+    );
+  }
+  return { assets, shares };
+}
 
 /** Action surface for Vault V1 reads and writes; writes route through VaultBundlesV1 and VaultExitBundlesV1. */
 export interface VaultV1Actions {
@@ -940,36 +1003,13 @@ export class MorphoVaultV1 implements VaultV1Actions {
       "bundles.vaultExitBundlesV1",
     );
     const blue = getChainAddress(this.chainId, "blue");
-    let covered = 0n;
-    const assignedByMarket = new Map<string, bigint>();
-    for (const marketParams of marketParamsListSnapshot) {
-      if (covered === amount) break;
-      const marketId = MarketUtils.getMarketId(marketParams);
-      const allocation = vaultData.allocations.get(marketId);
-      if (allocation?.config.enabled !== true) continue;
-      if (allocation.position.supplyShares === 0n) continue;
-
-      const market = allocation.position.market.accrueInterest(now);
-      const available = market.toSupplyAssets(allocation.position.supplyShares);
-      const assigned = assignedByMarket.get(marketId) ?? 0n;
-      const chunk = MathLib.min(available, amount - covered);
-      if (assigned + chunk > available) {
-        throw new InKindRedeemCoverageError({
-          required: amount,
-          covered,
-          maxExitAssets: covered,
-        });
-      }
-      assignedByMarket.set(marketId, assigned + chunk);
-      covered += chunk;
-    }
-    if (covered < amount) {
-      throw new InKindRedeemCoverageError({
-        required: amount,
-        covered,
-        maxExitAssets: covered,
-      });
-    }
+    // Reject insufficient ordered market coverage before preparing share requirements.
+    validateInKindCoverage({
+      amount,
+      marketParamsListSnapshot,
+      vaultData,
+      now,
+    });
 
     const requiredShareAllowance = computeVaultMaxShareAllowance({
       vaultData,
@@ -1118,18 +1158,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     if (isAddressEqual(this.vault, params.targetVault.address)) {
       throw new SameVaultMigrationError(this.vault);
     }
-    const assets = "assets" in params ? params.assets : undefined;
-    const shares = "shares" in params ? params.shares : undefined;
-    if ((assets == null) === (shares == null)) {
-      throw new AmountAndSharesExclusiveError();
-    }
-    const selectedAmount = assets ?? shares ?? 0n;
-    if (selectedAmount <= 0n) {
-      throw new NonPositiveInputError(
-        assets != null ? "assets" : "shares",
-        selectedAmount,
-      );
-    }
+    const { assets, shares } = getMigrationAmounts(params);
     const slippageTolerance =
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);

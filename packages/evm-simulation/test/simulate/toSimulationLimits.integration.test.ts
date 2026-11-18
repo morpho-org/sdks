@@ -6,6 +6,7 @@ import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { simulate, toSimulationLimits } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData } from "../setup.js";
 
 /**
@@ -25,7 +26,9 @@ const test = createViemTest(mainnet, {
 });
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";

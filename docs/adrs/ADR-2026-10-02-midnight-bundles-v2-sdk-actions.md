@@ -566,3 +566,5 @@ quote and offer selection, or any `evm-simulation` change beyond the bundle-rete
   — precedent for removing an unsupported route without a coexistence minor.
 - Accepted in the PR that added this file.
 - approvalAmount allowance-bound rationale superseded by ADR-2026-10-21-unlimited-sdk-approvals.
+- `cancelOffers` route, signature and single-group cancellation rule, and the rejected direct-call
+  alternative, superseded by ADR-2026-11-17-midnight-direct-offer-cancellation.

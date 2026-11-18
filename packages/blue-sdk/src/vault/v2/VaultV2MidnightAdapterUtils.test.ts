@@ -1,3 +1,4 @@
+import { MidnightPositionLib } from "@morpho-org/morpho-ts";
 import {
   getAddress,
   IntegerOutOfRangeError,
@@ -25,10 +26,12 @@ const ID = `0x${"01".padStart(64, "0")}` as Hash;
 const SECOND_ID = `0x${"02".padStart(64, "0")}` as Hash;
 const MARKET_DATA: IVaultV2MidnightAdapterMarketData = {
   netCredit: 800n,
-  rate: 0n,
+  netRate: 0n,
   maturity: 200n,
   index: 0n,
   forceSellable: false,
+  forceRemoved: false,
+  minForceSellPrice: 0n,
 };
 
 function createMarket(id: Hash = ID): IVaultV2MidnightAdapterAccrualMarket {
@@ -47,17 +50,21 @@ function createMarket(id: Hash = ID): IVaultV2MidnightAdapterAccrualMarket {
 const marketData = {
   [ADDRESS]: {
     netCredit: 10n,
-    rate: 0n,
+    netRate: 0n,
     maturity: 7_000n,
     index: 0n,
     forceSellable: false,
+    forceRemoved: false,
+    minForceSellPrice: 0n,
   },
   [OTHER]: {
     netCredit: "20",
-    rate: 0,
+    netRate: 0,
     maturity: 500,
     index: 1,
     forceSellable: true,
+    forceRemoved: false,
+    minForceSellPrice: 0n,
   },
 };
 
@@ -190,7 +197,11 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
     expect(isAddress(badChecksum, { strict: true })).toBe(false);
 
     expect(() =>
-      VaultV2MidnightAdapterUtils.gateCapId("enterGate", "0x1234"),
+      VaultV2MidnightAdapterUtils.familyCapId({
+        collateralParams: [],
+        rcfThreshold: 0n,
+        liquidatorGate: "0x1234",
+      }),
     ).toThrow(InvalidAddressError);
     expect(() =>
       VaultV2MidnightAdapterUtils.durationCapId(badChecksum, 1n),
@@ -198,28 +209,40 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
   });
 
   test("error: rejects integers outside uint256", () => {
-    expect(() => VaultV2MidnightAdapterUtils.rcfThresholdCapId(-1n)).toThrow(
-      IntegerOutOfRangeError,
-    );
+    expect(() =>
+      VaultV2MidnightAdapterUtils.familyCapId({
+        collateralParams: [],
+        rcfThreshold: -1n,
+        liquidatorGate: OTHER,
+      }),
+    ).toThrow(IntegerOutOfRangeError);
     expect(() =>
       VaultV2MidnightAdapterUtils.durationCapId(ADDRESS, 2n ** 256n),
     ).toThrow(IntegerOutOfRangeError);
     expect(() =>
-      VaultV2MidnightAdapterUtils.collateralParamsCapId({
-        token: ADDRESS,
-        lltv: 2n ** 256n,
-        liquidationCursor: 0n,
-        oracle: OTHER,
+      VaultV2MidnightAdapterUtils.familyCapId({
+        collateralParams: [
+          {
+            token: ADDRESS,
+            lltv: 2n ** 256n,
+            liquidationCursor: 0n,
+            oracle: OTHER,
+          },
+        ],
+        rcfThreshold: 0n,
+        liquidatorGate: OTHER,
       }),
     ).toThrow(IntegerOutOfRangeError);
   });
 });
 
-// Expected ids come from `adapterId()` and `ids(Market)` on a VaultV2MidnightAdapter
-// created through the Base factory on an Anvil fork at block 52513513. The duration id
-// has no onchain view, so it is pinned from the pre-refactor encoder's output.
+// Expected ids come from `adapterId()` and `ids(Market)` on a frozen
+// (vault-v2@e7821fd) MidnightAdapter, created by a locally deployed
+// MidnightAdapterFactory on an Anvil Base fork at block 52513513. The duration id
+// has no onchain view, so it is pinned from
+// `keccak256(abi.encode("this/duration", adapter, 2592000))` computed with cast.
 describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
-  const adapter = "0xa5d93ca75aB778b1CDa3d6579788a577ba89D4c0" as const;
+  const adapter = "0x56D7EDbA8bEF0AcB4b3c7D8cEb808d166c92309c" as const;
   const market = {
     collateralParams: [
       {
@@ -241,16 +264,12 @@ describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
     liquidatorGate: "0x4444444444444444444444444444444444444444",
   } as const;
   const adapterId =
-    "0x355eef140979b86f1415666608c053e5896bf67bbd98b8216bfee1d72626bd38";
+    "0x6fa08db8133b8ef0976386b0ef2ba7d54955ee25b7e37342088a9ed4d3effc0c";
   const onchainIds = [
     adapterId,
-    "0x4516e22b4002f82da644525126d6193a2bdc81467626c25c3d50c9494bd55f1e",
-    "0xae317afd68d43287e0c4167edd9b01100c07c72e775bda6ea6d7efc88f53c04c",
-    "0x2e1e8d117faed13ce4cac7a4c938ecf6c15eb50a6d8155008bbe0983632cf7b4",
+    "0xe043e960861ca6fcc17e297ee01c73803e45ae0ad81d9e9fdf5eaf67fe53e970",
     "0x207cf9968961dcdfb8e4007f249958d856244d4356441a5379d11c267f651be4",
-    "0xd40245bbcfc6d817f63d01c9aa4998aa1dd4e9958196da769d88c5e58a7f61b8",
     "0x13ff47043c4f28ff9eb52ff2a760b64b77707c842acabb83558f6415c9cb4797",
-    "0x11ee8756632c3bdeb977a4c5725972b198a7884983a5d805c5df6b97b35a3da8",
   ];
 
   test("default: adapterCapId matches adapterId()", () => {
@@ -258,25 +277,11 @@ describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
   });
 
   test("default: each tag matches ids(Market)", () => {
-    const [weth] = market.collateralParams;
-    expect(
-      VaultV2MidnightAdapterUtils.gateCapId("enterGate", market.enterGate),
-    ).toBe(onchainIds[1]);
-    expect(
-      VaultV2MidnightAdapterUtils.gateCapId(
-        "liquidatorGate",
-        market.liquidatorGate,
-      ),
-    ).toBe(onchainIds[2]);
-    expect(
-      VaultV2MidnightAdapterUtils.rcfThresholdCapId(market.rcfThreshold),
-    ).toBe(onchainIds[3]);
-    expect(VaultV2Utils.collateralCapId(weth.token)).toBe(onchainIds[4]);
-    expect(VaultV2MidnightAdapterUtils.collateralTokenCapId(weth.token)).toBe(
-      onchainIds[4],
-    );
-    expect(VaultV2MidnightAdapterUtils.collateralParamsCapId(weth)).toBe(
-      onchainIds[5],
+    const [weth, cbBtc] = market.collateralParams;
+    expect(VaultV2MidnightAdapterUtils.familyCapId(market)).toBe(onchainIds[1]);
+    expect(VaultV2Utils.collateralCapId(weth.token)).toBe(onchainIds[2]);
+    expect(VaultV2MidnightAdapterUtils.collateralTokenCapId(cbBtc.token)).toBe(
+      onchainIds[3],
     );
   });
 
@@ -286,31 +291,35 @@ describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
     ).toStrictEqual(onchainIds);
   });
 
-  test("default: durationCapId matches the pre-refactor encoder", () => {
+  test('default: durationCapId matches abi.encode("this/duration", ...)', () => {
     expect(VaultV2MidnightAdapterUtils.durationCapId(adapter, 2592000n)).toBe(
-      "0x6baf7378d249f341a058f18315f7e25c42c9a6717e34312de525e0e270e9e497",
+      "0xcb2190df1042fc104793376cf39d11bb3dadcce2d93787c6053ca189cb0f4e0c",
     );
   });
 });
 
 describe("VaultV2MidnightAdapterUtils accrual", () => {
-  test("values markets from their positions and stored market data", () => {
+  test("values zero-loss-factor markets from stored net credit", () => {
     const adapter = {
       marketIds: [ID, SECOND_ID],
       marketData: {
         [ID]: {
           netCredit: 800n,
-          rate: 10_000_000_000_000_000n,
+          netRate: 10_000_000_000_000_000n,
           maturity: 200n,
           index: 0n,
           forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
         [SECOND_ID]: {
           netCredit: 900n,
-          rate: 0n,
+          netRate: 0n,
           maturity: 1_000n,
           index: 1n,
           forceSellable: true,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       } satisfies Record<Hash, IVaultV2MidnightAdapterMarketData>,
     };
@@ -337,8 +346,50 @@ describe("VaultV2MidnightAdapterUtils accrual", () => {
       },
     ];
 
+    // Stored net credit, as onchain: 800 / (1 + 0.01 * 100) + 900.
     expect(VaultV2MidnightAdapterUtils.realAssets(adapter, markets, 100n)).toBe(
-      1_500n,
+      1_300n,
+    );
+  });
+
+  test("values markets with a loss factor from their live positions", () => {
+    const adapter = {
+      marketIds: [ID],
+      marketData: {
+        [ID]: {
+          netCredit: 1_000n,
+          netRate: 10_000_000_000_000_000n,
+          maturity: 200n,
+          index: 0n,
+          forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
+        },
+      } satisfies Record<Hash, IVaultV2MidnightAdapterMarketData>,
+    };
+    const lossFactor = 2n ** 127n;
+    const markets: readonly IVaultV2MidnightAdapterAccrualMarket[] = [
+      {
+        id: ID,
+        position: {
+          credit: 1_000n,
+          pendingFee: 0n,
+          lastLossFactor: 0n,
+          lastAccrual: 100n,
+        },
+        market: { lossFactor },
+      },
+    ];
+    const liveNetCredit = MidnightPositionLib.netCredit({
+      ...markets[0]!.position,
+      marketLossFactor: lossFactor,
+      maturity: 200n,
+      timestamp: 100n,
+    });
+
+    expect(liveNetCredit).toBeLessThan(1_000n);
+    expect(VaultV2MidnightAdapterUtils.realAssets(adapter, markets, 100n)).toBe(
+      liveNetCredit / 2n,
     );
   });
 
@@ -348,10 +399,12 @@ describe("VaultV2MidnightAdapterUtils accrual", () => {
       marketData: {
         [ID]: {
           netCredit: 800n,
-          rate: 0n,
+          netRate: 0n,
           maturity: 200n,
           index: 0n,
           forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       } satisfies Record<Hash, IVaultV2MidnightAdapterMarketData>,
     };
@@ -379,7 +432,7 @@ describe("VaultV2MidnightAdapterUtils accrual", () => {
           lastLossFactor: (1n << 128n) / 2n,
           lastAccrual: 150n,
         },
-        market: { lossFactor: (1n << 128n) / 2n },
+        market: { lossFactor: (1n << 128n) / 2n, withdrawable: 0n },
       },
     ]);
     expect(adapter.marketData[ID]?.netCredit).toBe(800n);

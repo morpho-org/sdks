@@ -250,15 +250,19 @@ import { runSimulation } from "./run-simulation.js";
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
+ * import { type Address, createPublicClient, encodeFunctionData, erc20Abi, getAddress, http } from "viem";
  *
  * const rpcUrl = "https://rpc.example";
  * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
  * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
  * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
+ * const client = createPublicClient({
+ *   ccipRead: false,
+ *   transport: http(rpcUrl, { retryCount: 0, timeout: 5000 }),
+ * });
  *
  * const result = await simulate(
- *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
+ *   { chains: new Map([[1, { client }]]) },
  *   {
  *     chainId: 1,
  *     transactions: [
@@ -304,14 +308,18 @@ export function simulate(
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { encodeFunctionData, erc4626Abi, getAddress } from "viem";
+ * import { createPublicClient, encodeFunctionData, erc4626Abi, getAddress, http } from "viem";
  *
  * const rpcUrl = "https://rpc.example";
  * const user = getAddress("0x1111111111111111111111111111111111111111");
  * const vault = getAddress("0x3333333333333333333333333333333333333333");
  * const assets = 1_000_000n;
+ * const client = createPublicClient({
+ *   ccipRead: false,
+ *   transport: http(rpcUrl, { retryCount: 0, timeout: 5000 }),
+ * });
  * const config = {
- *   chains: new Map([[1, { simulateV1Url: rpcUrl }]]),
+ *   chains: new Map([[1, { client }]]),
  * };
  *
  * const result = await simulate(config, {

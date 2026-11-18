@@ -502,8 +502,7 @@ describe("Midnight maker offers on fork", () => {
         .morpho.midnight(base.id)
         .cancelOffers({
           accountAddress: zeroAddress,
-          cancellations: [{ group: groupA, maxConsumed: 0n }],
-          deadline: maxUint256,
+          groups: [groupA],
         }),
     ).toThrow(MidnightInvalidAccountAddressError);
   });

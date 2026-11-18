@@ -21,11 +21,12 @@ import { rpc } from "./eth-simulate-v1.js";
  * the pipeline does not model in-bundle contract creations.
  *
  * @param params - Check parameters.
- * @param params.client - Shared simulation client (created by `createSimulationClient`).
+ * @param params.client - Consumer-supplied simulation client.
  * @param params.transactions - Parsed caller transactions, in execution order.
  * @param params.chainId - Request chain id, named in the validation error.
  * @param params.blockNumber - Pinned state block the `eth_getCode` reads run at.
  * @param params.stateOverrides - Caller code overrides, checked instead of onchain code when present.
+ * @param params.signal - Pipeline deadline; prevents starting reads after expiry.
  * @returns Nothing when every calldata target and its EIP-7702 delegate hold code.
  * @throws {SimulationValidationError} when a transaction with calldata targets
  *   a code-less address or EIP-7702 delegate, in overrides or at the pinned block;
@@ -43,6 +44,7 @@ export async function assertTransactionTargetsHaveCode(params: {
   readonly chainId: number;
   readonly blockNumber: bigint;
   readonly stateOverrides?: SimulationStateOverrides;
+  readonly signal?: AbortSignal;
 }): Promise<void> {
   const { client, transactions, chainId, blockNumber, stateOverrides } = params;
   const overrides = new Map(
@@ -60,12 +62,13 @@ export async function assertTransactionTargetsHaveCode(params: {
       transaction.to,
       (code !== undefined
         ? Promise.resolve(code)
-        : rpc("eth_getCode", () =>
-            getBytecode(client, {
+        : rpc("eth_getCode", () => {
+            params.signal?.throwIfAborted();
+            return getBytecode(client, {
               address: transaction.to,
               blockNumber,
-            }),
-          )
+            });
+          })
       ).then((resolvedCode) => {
         if (
           resolvedCode === undefined ||
@@ -77,9 +80,10 @@ export async function assertTransactionTargetsHaveCode(params: {
         const delegateCode = overrides.get(delegate.toLowerCase())?.code;
         return delegateCode !== undefined
           ? delegateCode
-          : rpc("eth_getCode", () =>
-              getBytecode(client, { address: delegate, blockNumber }),
-            );
+          : rpc("eth_getCode", () => {
+              params.signal?.throwIfAborted();
+              return getBytecode(client, { address: delegate, blockNumber });
+            });
       }),
     );
   }

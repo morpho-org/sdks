@@ -31,10 +31,12 @@ type MidnightAdapterResponseMarket = {
   readonly id: Hash;
   readonly marketData: {
     readonly netCredit: BigIntish;
-    readonly rate: BigIntish;
+    readonly netRate: BigIntish;
     readonly maturity: BigIntish;
     readonly index: BigIntish;
     readonly forceSellable: boolean;
+    readonly forceRemoved: boolean;
+    readonly minForceSellPrice: BigIntish;
   };
 };
 
@@ -43,10 +45,11 @@ type MidnightAdapterResponse = {
   readonly asset: Address;
   readonly skimRecipient: Address;
   readonly midnight: Address;
+  readonly enterGateFactory: Address;
   readonly maxTtm: BigIntish;
-  readonly minRate: BigIntish;
-  readonly noSalesWithShortfall: boolean;
-  readonly noSalesBelowFaceValue: boolean;
+  readonly minNetBuyRate: BigIntish;
+  readonly maxNetSellRate: BigIntish;
+  readonly shortfallAllowance: BigIntish;
   readonly durations: readonly BigIntish[];
   readonly durationAllocations: readonly BigIntish[];
   readonly markets: readonly MidnightAdapterResponseMarket[];
@@ -61,6 +64,7 @@ type MidnightAccrualAdapterResponseMarket = {
     readonly lastAccrual: BigIntish;
   };
   readonly lossFactor: BigIntish;
+  readonly withdrawable: BigIntish;
 };
 
 /**
@@ -87,10 +91,11 @@ export function toVaultV2MidnightAdapter(
     ),
     durations: data.durations,
     durationAllocations: data.durationAllocations,
+    enterGateFactory: data.enterGateFactory,
     maxTtm: data.maxTtm,
-    minRate: data.minRate,
-    noSalesWithShortfall: data.noSalesWithShortfall,
-    noSalesBelowFaceValue: data.noSalesBelowFaceValue,
+    minNetBuyRate: data.minNetBuyRate,
+    maxNetSellRate: data.maxNetSellRate,
+    shortfallAllowance: data.shortfallAllowance,
   });
 }
 
@@ -113,10 +118,10 @@ export function toAccrualVaultV2MidnightAdapter(
   return new AccrualVaultV2MidnightAdapter({
     adapter,
     lastUpdate,
-    markets: markets.map(({ id, position, lossFactor }) => ({
+    markets: markets.map(({ id, position, lossFactor, withdrawable }) => ({
       id,
       position,
-      market: { lossFactor },
+      market: { lossFactor, withdrawable },
     })),
   });
 }
@@ -156,8 +161,9 @@ export function toAccrualVaultV2MidnightAdapter(
  * declare const midnightAdapter: Address;
  * const adapter = await fetchVaultV2MidnightAdapter(midnightAdapter, client);
  * ```
- * @remarks At 250 markets, deployless query gas is estimated at ~26.6M by linear extrapolation
- *   from 0 and 1 funded market on Base fork block 52,513,513.
+ * @remarks At 250 markets, deployless query gas is estimated at ~30.4M (frozen vault-v2@e7821fd
+ *   adapter, Base fork block 52,513,513), so RPCs capping `eth_call` gas at 30M reject a full
+ *   250-market query: with `deployless: "force"` it errors; by default it falls back to direct reads.
  *   With `deployless: "force"`, deployless query errors propagate unmapped.
  */
 // biome-ignore lint/complexity/useMaxParams: Mirrors sibling fetchers.
@@ -204,10 +210,11 @@ export async function fetchVaultV2MidnightAdapter(
     asset,
     skimRecipient,
     midnight,
+    enterGateFactory,
     maxTtm,
-    minRate,
-    noSalesWithShortfall,
-    noSalesBelowFaceValue,
+    minNetBuyRate,
+    maxNetSellRate,
+    shortfallAllowance,
     durations,
     marketIdsLength,
   ] = await Promise.all([
@@ -215,7 +222,7 @@ export async function fetchVaultV2MidnightAdapter(
       ...blockParameters,
       address: midnightAdapterFactory,
       abi: midnightAdapterFactoryAbi,
-      functionName: "isMidnightAdapter",
+      functionName: "isCreated",
       args: [address],
     }).catch(catchRevertOnly(false)),
     readContract(client, {
@@ -246,25 +253,31 @@ export async function fetchVaultV2MidnightAdapter(
       ...blockParameters,
       address,
       abi: midnightAdapterAbi,
+      functionName: "enterGateFactory",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
       functionName: "maxTtm",
     }),
     readContract(client, {
       ...blockParameters,
       address,
       abi: midnightAdapterAbi,
-      functionName: "minRate",
+      functionName: "minNetBuyRate",
     }),
     readContract(client, {
       ...blockParameters,
       address,
       abi: midnightAdapterAbi,
-      functionName: "noSalesWithShortfall",
+      functionName: "maxNetSellRate",
     }),
     readContract(client, {
       ...blockParameters,
       address,
       abi: midnightAdapterAbi,
-      functionName: "noSalesBelowFaceValue",
+      functionName: "shortfallAllowance",
     }),
     readContract(client, {
       ...blockParameters,
@@ -322,10 +335,11 @@ export async function fetchVaultV2MidnightAdapter(
     asset,
     skimRecipient,
     midnight,
+    enterGateFactory,
     maxTtm,
-    minRate,
-    noSalesWithShortfall,
-    noSalesBelowFaceValue,
+    minNetBuyRate,
+    maxNetSellRate,
+    shortfallAllowance,
     durations,
     durationAllocations,
     markets,
@@ -446,7 +460,12 @@ export async function fetchAccrualVaultV2MidnightAdapter(
           args: [id],
         }),
       ]);
-      return { id, position, lossFactor: marketState.lossFactor };
+      return {
+        id,
+        position,
+        lossFactor: marketState.lossFactor,
+        withdrawable: marketState.withdrawable,
+      };
     }),
   );
 

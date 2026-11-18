@@ -7,7 +7,8 @@ import { isMain, reportCliError, writeStdout } from "../workflow.ts";
 import type { TarballIdentity } from "./read-tarball-identity.ts";
 import type { ReleaseChannel } from "./verify-release-set.ts";
 
-const REGISTRY = "https://registry.npmjs.org";
+/** npm registry URL used by release planning and version visibility checks. */
+export const REGISTRY = "https://registry.npmjs.org";
 
 /** A maintainer's explicit hold on a package's latest tag. */
 export interface RollbackPin {
@@ -317,6 +318,8 @@ export async function fetchRegistryState(
  *
  * Each tarball must remain available; promotions require its SHA-512 to match npm.
  * Skipped rows are reported on stderr.
+ * When `--already-published-output <path>` is given, skipped rows already on npm are also
+ * written to that path in the same `<name>\t<version>\t<file>` format.
  *
  * @param argv - Command-line arguments.
  * @param io - Registry fetch and output writers, injectable for tests.
@@ -340,6 +343,7 @@ export async function main(
     options: {
       tag: { type: "string", default: "latest" },
       promotions: { type: "string" },
+      "already-published-output": { type: "string" },
       rollbacks: {
         type: "string",
         default: fileURLToPath(
@@ -350,6 +354,7 @@ export async function main(
   });
   const [file] = positionals;
   const { tag } = values;
+  const alreadyPublishedOutput = values["already-published-output"];
   if (
     !file ||
     !values.rollbacks ||
@@ -357,10 +362,11 @@ export async function main(
     (tag !== "latest" && tag !== "next")
   ) {
     throw new Error(
-      "Usage: node scripts/publish/plan-npm-publish.ts [--tag latest|next] [--promotions <file>] [--rollbacks <file>] <release-set.tsv>",
+      "Usage: node scripts/publish/plan-npm-publish.ts [--tag latest|next] [--promotions <file>] [--rollbacks <file>] [--already-published-output <path>] <release-set.tsv>",
     );
   }
   const rows: string[] = [];
+  const alreadyPublishedRows: string[] = [];
   const promotions: string[] = [];
   const pins = parseRollbackPins(
     JSON.parse(readFileSync(values.rollbacks, "utf8")),
@@ -387,8 +393,10 @@ export async function main(
     if (operation === "publish") {
       rows.push(`${line}\n`);
     } else if (operation === "promote") {
+      alreadyPublishedRows.push(`${line}\n`);
       promotions.push(`${name}\t${version}\n`);
     } else {
+      alreadyPublishedRows.push(`${line}\n`);
       stderr(
         pin == null
           ? `Already on npm: ${name}@${version}\n`
@@ -411,6 +419,8 @@ export async function main(
   }
   if (values.promotions != null)
     writeFileSync(values.promotions, promotions.join(""));
+  if (alreadyPublishedOutput != null)
+    writeFileSync(alreadyPublishedOutput, alreadyPublishedRows.join(""));
   stdout(rows.join(""));
 }
 

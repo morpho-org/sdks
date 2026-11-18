@@ -321,23 +321,8 @@ export function computeVaultV2ForceWithdrawPlan(params: {
     );
   }
 
-  let coveredAssets = 0n;
-  const nonEmpty: bigint[] = [];
-  for (const available of availableByMarket.values()) {
-    if (available <= 0n) continue;
-    coveredAssets += available;
-    nonEmpty.push(available);
-  }
-
-  // `maxExitAssets` must not depend on the requested amount. At the ceiling the penalty-free leg
-  // always drains the liquidity market completely, so that market contributes nothing to the
-  // force-deallocation loop — whereas a small request leaves part of it, which would overstate the
-  // ceiling for callers using it to cap an input.
-  let saturatedCoveredAssets = 0n;
-  for (const [marketId, available] of availableByMarket) {
-    if (marketId === liquidityMarketId) continue;
-    if (available > 0n) saturatedCoveredAssets += available;
-  }
+  const { coveredAssets, nonEmpty, saturatedCoveredAssets } =
+    summarizeMarketCoverage(availableByMarket, liquidityMarketId);
 
   // Worst-case leg count is the ascending walk: the most markets the loop can touch is the number
   // of smallest positions that together reach `assetsToDeallocate`. Deliberately an upper bound, not
@@ -351,9 +336,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
   // coverage of the snapshot-vs-execution divergence.
   let penaltyLegs = 0;
   let remaining = assetsToDeallocate;
-  for (const available of nonEmpty.toSorted((a, b) =>
-    a === b ? 0 : a > b ? 1 : -1,
-  )) {
+  for (const available of nonEmpty.toSorted((a, b) => {
+    if (a === b) return 0;
+    if (a > b) return 1;
+    return -1;
+  })) {
     if (remaining <= 0n) break;
     penaltyLegs += 1;
     remaining -= MathLib.min(available, remaining);
@@ -581,4 +568,30 @@ export function computeVaultV2ForceWithdrawMinSharesBurnt(params: {
     ),
     "Down",
   );
+}
+
+/** Sums usable market liquidity and the ceiling's non-liquidity-market coverage. @internal */
+function summarizeMarketCoverage(
+  availableByMarket: ReadonlyMap<MarketId, bigint>,
+  liquidityMarketId: MarketId | undefined,
+) {
+  let coveredAssets = 0n;
+  const nonEmpty: bigint[] = [];
+  for (const available of availableByMarket.values()) {
+    if (available <= 0n) continue;
+    coveredAssets += available;
+    nonEmpty.push(available);
+  }
+
+  // `maxExitAssets` must not depend on the requested amount. At the ceiling the penalty-free leg
+  // always drains the liquidity market completely, so that market contributes nothing to the
+  // force-deallocation loop — whereas a small request leaves part of it, which would overstate the
+  // ceiling for callers using it to cap an input.
+  let saturatedCoveredAssets = 0n;
+  for (const [marketId, available] of availableByMarket) {
+    if (marketId === liquidityMarketId) continue;
+    if (available > 0n) saturatedCoveredAssets += available;
+  }
+
+  return { coveredAssets, nonEmpty, saturatedCoveredAssets };
 }

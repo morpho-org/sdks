@@ -25,6 +25,7 @@ import {
   SimulationRevertedError,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { test } from "../setup.js";
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -34,7 +35,9 @@ const APPROVAL_TOPIC = toEventSelector("Approval(address,address,uint256)");
 
 const configFor = (client: { transport: { url?: string } }) => ({
   timeoutMs: 30_000,
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const expectAssertionFailure = async (

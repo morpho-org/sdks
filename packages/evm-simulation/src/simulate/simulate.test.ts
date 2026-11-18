@@ -10,6 +10,7 @@ import {
 } from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
+import { createTestSimulationClient } from "../test-helpers/create-test-simulation-client.js";
 import type { SimulationConfig } from "../types.js";
 import type { runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
@@ -33,7 +34,9 @@ function makeConfig(
   overrides: Partial<SimulationConfig> = {},
 ): SimulationConfig {
   return {
-    chains: new Map([[1, { simulateV1Url: "http://localhost:8545" }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient("http://localhost:8545") }],
+    ]),
     timeoutMs: 5000,
     ...overrides,
   };
@@ -76,11 +79,12 @@ beforeEach(() => {
 
 describe.sequential("simulate — pipeline delegation", () => {
   it("delegates to runSimulation with the parsed request and config", async () => {
-    const result = await simulate(makeConfig(), makeParams());
+    const config = makeConfig();
+    const result = await simulate(config, makeParams());
     expect(result).toEqual(makeResult());
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
     const arg = mockRunSimulation.mock.calls[0]![0];
-    expect(arg.config).toEqual(makeConfig());
+    expect(arg.config).toBe(config);
     expect(arg.request.chainId).toBe(1);
   });
 

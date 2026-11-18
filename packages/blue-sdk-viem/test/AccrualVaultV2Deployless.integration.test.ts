@@ -27,6 +27,7 @@ import { testAccount } from "@morpho-org/test/fixtures";
 import {
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
+  MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
   takeVaultV2MidnightAdapterOffer,
 } from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -48,8 +49,10 @@ import {
   blueAbi,
   fetchAccrualVaultV2,
   fetchVault,
+  fetchVaultV2,
   metaMorphoAbi,
   midnightAdapterAbi,
+  midnightAdapterFactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
 } from "../src/index.js";
@@ -806,7 +809,7 @@ describe("fetchAccrualVaultV2 with Midnight adapters", () => {
           OfferUtils.toStruct({ offer: item.offer }),
           item.ratifierData,
           units,
-          "0x",
+          MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
         ],
       });
 
@@ -959,6 +962,39 @@ describe("fetchAccrualVaultV2 with Midnight adapters", () => {
       expect(deployless.accrualLiquidityAdapter?.address).toBe(
         liquidityAdapter,
       );
+    },
+  );
+
+  midnightAccrualTest(
+    "reads a non-Midnight vault deployless while the registered Midnight factory lacks isCreated",
+    async ({ client }) => {
+      // The Base registry still points at the pre-audit factory; no replacement is installed here.
+      await expect(
+        readContract(client, {
+          address: getChainAddress(
+            ChainId.BaseMainnet,
+            "midnightAdapterFactory",
+          ),
+          abi: midnightAdapterFactoryAbi,
+          functionName: "isCreated",
+          args: [zeroAddress],
+        }),
+      ).rejects.toThrow();
+
+      const [deployless, multicall, vault, vaultMulticall] = await Promise.all([
+        fetchAccrualVaultV2(vaultV2MarketV1V2, client, { deployless: "force" }),
+        fetchAccrualVaultV2(vaultV2MarketV1V2, client, { deployless: false }),
+        fetchVaultV2(vaultV2MarketV1V2, client, { deployless: "force" }),
+        fetchVaultV2(vaultV2MarketV1V2, client, { deployless: false }),
+      ]);
+
+      expect(deployless.accrualLiquidityAdapter?.type).toBe(
+        "VaultV2MorphoMarketV1AdapterV2",
+      );
+      expectEquivalent(deployless, multicall);
+      expect(vault.liquidityAdapter).toBe(vaultMulticall.liquidityAdapter);
+      expect(vault.adapters).toStrictEqual(vaultMulticall.adapters);
+      expect(vault._totalAssets).toBe(vaultMulticall._totalAssets);
     },
   );
 });

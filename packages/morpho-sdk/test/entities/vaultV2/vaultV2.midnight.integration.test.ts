@@ -17,6 +17,7 @@ import {
   advanceVaultV2MidnightFixtureTime,
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
+  MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
   takeVaultV2MidnightAdapterOffer,
 } from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -256,7 +257,7 @@ describe("MorphoVaultV2 on a vault holding a Midnight adapter", () => {
         OfferUtils.toStruct({ offer: item.offer }),
         item.ratifierData,
         units,
-        "0x",
+        MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
       ],
     });
 

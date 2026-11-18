@@ -75,6 +75,7 @@ import {
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   DuplicateMidnightCollateralIndexError,
+  DuplicateMidnightGroupCancellationError,
   EmptyBlueParkingMarketError,
   EmptyMidnightCollateralSuppliesError,
   EmptyMidnightCollateralWithdrawalsError,
@@ -5194,145 +5195,168 @@ describe("MorphoMidnight", () => {
   });
 
   describe("cancelOffers", () => {
-    test("behavior: authorizes and targets MidnightBundlesV2", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, false);
-      const cancellations = [{ group: previousGroup, maxConsumed: 0n }];
-      const output = new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
+    const entityFor = (
+      handle: MidnightMockHandle,
+      options: { readonly metadata?: { readonly origin: string } } = {},
+    ) =>
+      new MorphoMidnight(
+        { viemClient: handle.client, options } as unknown as MorphoClientType,
         midnightChainId,
-      ).cancelOffers({
+      );
+
+    test("default: one group builds a bare setConsumed to Midnight with no requirements", async () => {
+      const handle = createMockClient(midnightTestChain);
+      const output = entityFor(handle).cancelOffers({
         accountAddress: midnightAddresses.maker,
-        cancellations,
-        deadline: maxUint256,
-      });
-
-      const requirements = await output.getRequirements();
-      const tx = output.buildTx();
-
-      expect(requirements).toHaveLength(1);
-      expect(requirements[0]?.action).toEqual({
-        type: "midnightAuthorization",
-        args: {
-          authorized: midnightBundlesV2,
-          isAuthorized: true,
-          onBehalf: midnightAddresses.maker,
-        },
-      });
-      expect(tx.to).toBe(midnightBundlesV2);
-      expect(tx.action.args).toEqual({
-        market: zeroHash,
-        ratifier: zeroAddress,
-        root: zeroHash,
-        groups: [],
-        cancellations,
-        collateralSupplies: [],
-        deadline: maxUint256,
-      });
-    });
-
-    test("behavior: snapshots accountAddress for authorization requirements", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, false);
-      let accountAddressReads = 0;
-      const output = new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      ).cancelOffers({
-        get accountAddress() {
-          accountAddressReads += 1;
-          return accountAddressReads === 1
-            ? midnightAddresses.maker
-            : zeroAddress;
-        },
-        cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-        deadline: maxUint256,
-      });
-
-      const requirements = await output.getRequirements();
-
-      expect(accountAddressReads).toBe(1);
-      expect(requirements[0]?.action).toEqual({
-        type: "midnightAuthorization",
-        args: {
-          authorized: midnightBundlesV2,
-          isAuthorized: true,
-          onBehalf: midnightAddresses.maker,
-        },
-      });
-    });
-
-    test("behavior: appends metadata", () => {
-      const handle = createMockClient(midnightTestChain);
-      const tx = new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: { metadata: { origin: "a1b2c3d4" } },
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      )
-        .cancelOffers({
-          accountAddress: midnightAddresses.maker,
-          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-          deadline: maxUint256,
-        })
-        .buildTx();
-
-      expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
-    });
-
-    test("behavior: already authorized returns no requirements", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, true);
-      const output = new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      ).cancelOffers({
-        accountAddress: midnightAddresses.maker,
-        cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-        deadline: maxUint256,
+        groups: [previousGroup],
       });
 
       await expect(output.getRequirements()).resolves.toEqual([]);
+      const tx = output.buildTx();
+
+      // No authorization, allowance or chain read: the handle resolves without the RPC.
+      expect(handle.request).not.toHaveBeenCalled();
+      expect(tx.to).toBe(midnightAddresses.midnight);
+      expect(tx.to).not.toBe(midnightBundlesV2);
+      expect(tx.value).toBe(0n);
+      expect(decodeFunctionData({ abi: midnightAbi, data: tx.data })).toEqual({
+        functionName: "setConsumed",
+        args: [previousGroup, maxUint128, midnightAddresses.maker],
+      });
+      expect(tx.action).toEqual({
+        type: "midnightCancelOffers",
+        args: {
+          groups: [previousGroup],
+          onBehalf: midnightAddresses.maker,
+        },
+      });
+      expect(Object.isFrozen(tx)).toBe(true);
     });
 
-    test("error: invalid cancellations throw before requirements", () => {
+    test("behavior: several groups build one Midnight multicall with no requirements", async () => {
+      const handle = createMockClient(midnightTestChain);
+      const groups = [previousGroup, makerGroup];
+      const output = entityFor(handle).cancelOffers({
+        accountAddress: midnightAddresses.maker,
+        groups,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+      const tx = output.buildTx();
+
+      expect(handle.request).not.toHaveBeenCalled();
+      expect(tx.to).toBe(midnightAddresses.midnight);
+      const decoded = decodeFunctionData({ abi: midnightAbi, data: tx.data });
+      expect(decoded.functionName).toBe("multicall");
+      if (decoded.functionName !== "multicall")
+        throw new Error("expected multicall");
+      expect(
+        decoded.args[0].map((data) =>
+          decodeFunctionData({ abi: midnightAbi, data }),
+        ),
+      ).toEqual(
+        groups.map((group) => ({
+          functionName: "setConsumed",
+          args: [group, maxUint128, midnightAddresses.maker],
+        })),
+      );
+      expect(tx.action).toEqual({
+        type: "midnightCancelOffers",
+        args: { groups, onBehalf: midnightAddresses.maker },
+      });
+    });
+
+    test("behavior: buildTx is independent of getRequirements and identical across handles", async () => {
+      const params = {
+        accountAddress: midnightAddresses.maker,
+        groups: [previousGroup, makerGroup],
+      };
+      const prepared = entityFor(
+        createMockClient(midnightTestChain),
+      ).cancelOffers(params);
+      const fresh = entityFor(createMockClient(midnightTestChain)).cancelOffers(
+        params,
+      );
+
+      const beforeRequirements = prepared.buildTx();
+      await prepared.getRequirements();
+
+      expect(prepared.buildTx()).toEqual(beforeRequirements);
+      expect(fresh.buildTx()).toEqual(beforeRequirements);
+      await expect(prepared.getRequirements()).resolves.toEqual([]);
+    });
+
+    test("behavior: snapshots accountAddress", () => {
+      let accountAddressReads = 0;
+      const tx = entityFor(createMockClient(midnightTestChain))
+        .cancelOffers({
+          get accountAddress() {
+            accountAddressReads += 1;
+            return accountAddressReads === 1
+              ? midnightAddresses.maker
+              : zeroAddress;
+          },
+          groups: [previousGroup],
+        })
+        .buildTx();
+
+      expect(accountAddressReads).toBe(1);
+      expect(tx.action.args.onBehalf).toBe(midnightAddresses.maker);
+    });
+
+    test("behavior: appends metadata", () => {
+      const plain = entityFor(createMockClient(midnightTestChain))
+        .cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          groups: [previousGroup],
+        })
+        .buildTx();
+      const tx = entityFor(createMockClient(midnightTestChain), {
+        metadata: { origin: "a1b2c3d4" },
+      })
+        .cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          groups: [previousGroup],
+        })
+        .buildTx();
+
+      expect(tx.data).toBe(`${plain.data}a1b2c3d4`);
+    });
+
+    test("error: EmptyMidnightGroupCancellationsError", () => {
       expect(() =>
         new MorphoMidnight(client, midnightChainId).cancelOffers({
           accountAddress: midnightAddresses.maker,
-          cancellations: [],
-          deadline: maxUint256,
+          groups: [],
         }),
       ).toThrow(EmptyMidnightGroupCancellationsError);
     });
 
-    test("error: invalid cancellation group throws InvalidMidnightHexInputError", () => {
+    test("error: DuplicateMidnightGroupCancellationError", () => {
       expect(() =>
         new MorphoMidnight(client, midnightChainId).cancelOffers({
           accountAddress: midnightAddresses.maker,
-          cancellations: [{ group: "0x01", maxConsumed: 0n }],
-          deadline: maxUint256,
+          groups: [previousGroup, makerGroup, previousGroup],
+        }),
+      ).toThrow(DuplicateMidnightGroupCancellationError);
+    });
+
+    test("error: InvalidMidnightHexInputError", () => {
+      expect(() =>
+        new MorphoMidnight(client, midnightChainId).cancelOffers({
+          accountAddress: midnightAddresses.maker,
+          groups: ["0x01"],
         }),
       ).toThrow(InvalidMidnightHexInputError);
     });
 
     test.each(["not-an-address", zeroAddress] as const)(
-      "error: rejects invalid cancelOffers account addresses",
+      "error: MidnightInvalidAccountAddressError on %s",
       (accountAddress) => {
         expect(() =>
           new MorphoMidnight(client, midnightChainId).cancelOffers({
             accountAddress: accountAddress as Address,
-            cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-            deadline: maxUint256,
+            groups: [previousGroup],
           }),
         ).toThrow(MidnightInvalidAccountAddressError);
       },
@@ -5348,8 +5372,7 @@ describe("MorphoMidnight", () => {
       try {
         new MorphoMidnight(client, midnightChainId).cancelOffers({
           accountAddress: badChecksum,
-          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-          deadline: maxUint256,
+          groups: [previousGroup],
         });
       } catch (cause) {
         error = cause;
@@ -5363,8 +5386,7 @@ describe("MorphoMidnight", () => {
       expect(() =>
         new MorphoMidnight(client, midnightChainId + 1).cancelOffers({
           accountAddress: midnightAddresses.maker,
-          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
-          deadline: maxUint256,
+          groups: [previousGroup],
         }),
       ).toThrow(ChainIdMismatchError);
     });

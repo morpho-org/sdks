@@ -410,9 +410,14 @@ contract GetAccrualVaultV2 {
         IMidnightAdapterFactory factory,
         address adapter
     ) private view returns (bool) {
-        return address(factory) != address(0)
-            && address(factory).code.length > 0
-            && factory.isMidnightAdapter(adapter);
+        if (address(factory) == address(0) || address(factory).code.length == 0) return false;
+        // A registered factory without `isCreated` (e.g. a pre-release deployment) reverts: treat it
+        // as "not Midnight" so non-Midnight vaults stay readable, like the direct-read path.
+        try factory.isCreated(adapter) returns (bool created) {
+            return created;
+        } catch {
+            return false;
+        }
     }
 
     /// @dev Reads a MetaMorpho V1 vault's governance, accounting, and queue state.

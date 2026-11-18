@@ -6,10 +6,12 @@ import {IMidnight} from "./interfaces/IMidnight.sol";
 
 struct MidnightAdapterMarketData {
     uint128 netCredit;
-    uint64 rate;
-    uint48 maturity;
+    uint64 netRate;
+    uint40 maturity;
     uint8 index;
     bool forceSellable;
+    bool forceRemoved;
+    uint256 minForceSellPrice;
 }
 
 struct MidnightAdapterPosition {
@@ -24,6 +26,7 @@ struct MidnightAdapterMarketResponse {
     MidnightAdapterMarketData marketData;
     MidnightAdapterPosition position;
     uint128 lossFactor;
+    uint128 withdrawable;
 }
 
 struct VaultV2MidnightAdapterResponse {
@@ -31,10 +34,11 @@ struct VaultV2MidnightAdapterResponse {
     address asset;
     address skimRecipient;
     address midnight;
-    uint32 maxTtm;
-    uint64 minRate;
-    bool noSalesWithShortfall;
-    bool noSalesBelowFaceValue;
+    address enterGateFactory;
+    uint128 maxTtm;
+    uint128 minNetBuyRate;
+    uint128 maxNetSellRate;
+    uint128 shortfallAllowance;
     uint256[] durations;
     uint256[] durationAllocations;
     MidnightAdapterMarketResponse[] markets;
@@ -51,10 +55,11 @@ library VaultV2MidnightAdapterQuery {
         res.asset = adapter.asset();
         res.skimRecipient = adapter.skimRecipient();
         res.midnight = adapter.midnight();
+        res.enterGateFactory = adapter.enterGateFactory();
         res.maxTtm = adapter.maxTtm();
-        res.minRate = adapter.minRate();
-        res.noSalesWithShortfall = adapter.noSalesWithShortfall();
-        res.noSalesBelowFaceValue = adapter.noSalesBelowFaceValue();
+        res.minNetBuyRate = adapter.minNetBuyRate();
+        res.maxNetSellRate = adapter.maxNetSellRate();
+        res.shortfallAllowance = adapter.shortfallAllowance();
         res.durations = adapter.durations();
         res.durationAllocations = adapter.durationAllocations(res.durations.length);
 
@@ -65,8 +70,15 @@ library VaultV2MidnightAdapterQuery {
         for (uint256 i; i < length; ++i) {
             bytes32 id = adapter.marketIds(i);
             MidnightAdapterMarketData memory marketData;
-            (marketData.netCredit, marketData.rate, marketData.maturity, marketData.index, marketData.forceSellable) =
-                adapter.marketData(id);
+            (
+                marketData.netCredit,
+                marketData.netRate,
+                marketData.maturity,
+                marketData.index,
+                marketData.forceSellable,
+                marketData.forceRemoved,
+                marketData.minForceSellPrice
+            ) = adapter.marketData(id);
 
             MidnightAdapterPosition memory position;
             (
@@ -76,13 +88,14 @@ library VaultV2MidnightAdapterQuery {
                 position.lastAccrual,,
 
             ) = midnight.position(id, address(adapter));
-            (, uint128 lossFactor,,,,,,,,,,,) = midnight.marketState(id);
+            (, uint128 lossFactor, uint128 withdrawable,,,,,,,,,,) = midnight.marketState(id);
 
             res.markets[i] = MidnightAdapterMarketResponse({
                 id: id,
                 marketData: marketData,
                 position: position,
-                lossFactor: lossFactor
+                lossFactor: lossFactor,
+                withdrawable: withdrawable
             });
         }
 

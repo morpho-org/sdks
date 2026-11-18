@@ -10216,10 +10216,10 @@ export const morphoMarketV1AdapterV2FactoryAbi = [
   },
 ] as const;
 
-// Generated from morpho-org/vault-v2@6476e9d via `forge inspect <Contract> abi`; do not edit by hand.
+// Generated from morpho-org/vault-v2@e7821fd via `forge inspect <Contract> abi`; do not edit by hand.
 // Market, CollateralParams, and Offer tuple components are hoisted to ./abis/midnight.ts; re-hoist them on regeneration.
 
-/** MidnightAdapter ABI used to read Vault V2 adapter state and encode adapter calls (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+/** MidnightAdapter ABI used to read Vault V2 adapter state and encode adapter calls (vault-v2@e7821fd; frozen pre-release code, not deployed or Etherscan-verified). */
 export const midnightAdapterAbi = [
   {
     type: "constructor",
@@ -10239,8 +10239,26 @@ export const midnightAdapterAbi = [
         type: "uint256[]",
         internalType: "uint256[]",
       },
+      {
+        name: "_enterGateFactory",
+        type: "address",
+        internalType: "address",
+      },
     ],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "MAX_DURATIONS",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
   },
   {
     type: "function",
@@ -10302,6 +10320,19 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
+    name: "admitting",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "allocate",
     inputs: [
       {
@@ -10320,7 +10351,7 @@ export const midnightAdapterAbi = [
         internalType: "bytes4",
       },
       {
-        name: "caller",
+        name: "sender",
         type: "address",
         internalType: "address",
       },
@@ -10367,12 +10398,12 @@ export const midnightAdapterAbi = [
         internalType: "uint256",
       },
       {
-        name: "messageSig",
+        name: "selector",
         type: "bytes4",
         internalType: "bytes4",
       },
       {
-        name: "caller",
+        name: "sender",
         type: "address",
         internalType: "address",
       },
@@ -10389,6 +10420,19 @@ export const midnightAdapterAbi = [
         internalType: "int256",
       },
     ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "decreaseMaxTtm",
+    inputs: [
+      {
+        name: "newMaxTtm",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
     stateMutability: "nonpayable",
   },
   {
@@ -10421,7 +10465,7 @@ export const midnightAdapterAbi = [
     ],
     outputs: [
       {
-        name: "allocations",
+        name: "",
         type: "uint256[]",
         internalType: "uint256[]",
       },
@@ -10456,6 +10500,19 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
+    name: "enterGateFactory",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "executableAt",
     inputs: [
       {
@@ -10472,6 +10529,32 @@ export const midnightAdapterAbi = [
       },
     ],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "factory",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "forceRemove",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -10492,6 +10575,71 @@ export const midnightAdapterAbi = [
       },
     ],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "inForceDeallocate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "inProgressBuyMarketId",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "inProgressBuyNetCredit",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "inProgressBuyNetRate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "increaseMaxTtm",
+    inputs: [
+      {
+        name: "newMaxTtm",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -10522,7 +10670,7 @@ export const midnightAdapterAbi = [
         components: midnightOfferAbi.components,
       },
       {
-        name: "data",
+        name: "ratifierData",
         type: "bytes",
         internalType: "bytes",
       },
@@ -10577,14 +10725,14 @@ export const midnightAdapterAbi = [
         internalType: "uint128",
       },
       {
-        name: "rate",
+        name: "netRate",
         type: "uint64",
         internalType: "uint64",
       },
       {
         name: "maturity",
-        type: "uint48",
-        internalType: "uint48",
+        type: "uint40",
+        internalType: "uint40",
       },
       {
         name: "index",
@@ -10595,6 +10743,16 @@ export const midnightAdapterAbi = [
         name: "forceSellable",
         type: "bool",
         internalType: "bool",
+      },
+      {
+        name: "forceRemoved",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "minForceSellPrice",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -10633,13 +10791,26 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
+    name: "maxNetSellRate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "maxTtm",
     inputs: [],
     outputs: [
       {
         name: "",
-        type: "uint32",
-        internalType: "uint32",
+        type: "uint128",
+        internalType: "uint128",
       },
     ],
     stateMutability: "view",
@@ -10659,49 +10830,36 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
-    name: "minRate",
+    name: "minNetBuyRate",
     inputs: [],
     outputs: [
       {
         name: "",
-        type: "uint64",
-        internalType: "uint64",
+        type: "uint128",
+        internalType: "uint128",
       },
     ],
     stateMutability: "view",
   },
   {
     type: "function",
-    name: "noSalesBelowFaceValue",
-    inputs: [],
-    outputs: [
+    name: "multicall",
+    inputs: [
       {
-        name: "",
-        type: "bool",
-        internalType: "bool",
+        name: "data",
+        type: "bytes[]",
+        internalType: "bytes[]",
       },
     ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "noSalesWithShortfall",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "bool",
-        internalType: "bool",
-      },
-    ],
-    stateMutability: "view",
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "onBuy",
     inputs: [
       {
-        name: "marketId",
+        name: "id",
         type: "bytes32",
         internalType: "bytes32",
       },
@@ -10712,17 +10870,17 @@ export const midnightAdapterAbi = [
         components: midnightMarketAbi.components,
       },
       {
-        name: "paidAssets",
+        name: "buyerAssets",
         type: "uint256",
         internalType: "uint256",
       },
       {
-        name: "boughtCredit",
+        name: "units",
         type: "uint256",
         internalType: "uint256",
       },
       {
-        name: "buyPendingFeeIncrease",
+        name: "pendingFeeIncrease",
         type: "uint256",
         internalType: "uint256",
       },
@@ -10732,7 +10890,7 @@ export const midnightAdapterAbi = [
         internalType: "address",
       },
       {
-        name: "callbackData",
+        name: "data",
         type: "bytes",
         internalType: "bytes",
       },
@@ -10751,7 +10909,7 @@ export const midnightAdapterAbi = [
     name: "onSell",
     inputs: [
       {
-        name: "marketId",
+        name: "id",
         type: "bytes32",
         internalType: "bytes32",
       },
@@ -10767,12 +10925,12 @@ export const midnightAdapterAbi = [
         internalType: "uint256",
       },
       {
-        name: "soldCredit",
+        name: "units",
         type: "uint256",
         internalType: "uint256",
       },
       {
-        name: "sellPendingFeeDecrease",
+        name: "pendingFeeDecrease",
         type: "uint256",
         internalType: "uint256",
       },
@@ -10787,7 +10945,7 @@ export const midnightAdapterAbi = [
         internalType: "address",
       },
       {
-        name: "callbackData",
+        name: "data",
         type: "bytes",
         internalType: "bytes",
       },
@@ -10904,10 +11062,10 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
-    name: "setMaxTtm",
+    name: "setMaxNetSellRate",
     inputs: [
       {
-        name: "newMaxTtm",
+        name: "newMaxNetSellRate",
         type: "uint256",
         internalType: "uint256",
       },
@@ -10917,10 +11075,15 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
-    name: "setMinRate",
+    name: "setMinForceSellPrice",
     inputs: [
       {
-        name: "newMinRate",
+        name: "marketId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "newMinForceSellPrice",
         type: "uint256",
         internalType: "uint256",
       },
@@ -10930,12 +11093,12 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
-    name: "setNoSalesBelowFaceValue",
+    name: "setMinNetBuyRate",
     inputs: [
       {
-        name: "newNoSalesBelowFaceValue",
-        type: "bool",
-        internalType: "bool",
+        name: "newMinNetBuyRate",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     outputs: [],
@@ -10943,12 +11106,12 @@ export const midnightAdapterAbi = [
   },
   {
     type: "function",
-    name: "setNoSalesWithShortfall",
+    name: "setShortfallAllowance",
     inputs: [
       {
-        name: "newNoSalesWithShortfall",
-        type: "bool",
-        internalType: "bool",
+        name: "newShortfallAllowance",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     outputs: [],
@@ -10966,6 +11129,19 @@ export const midnightAdapterAbi = [
     ],
     outputs: [],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "shortfallAllowance",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
+    stateMutability: "view",
   },
   {
     type: "function",
@@ -11068,25 +11244,6 @@ export const midnightAdapterAbi = [
     stateMutability: "nonpayable",
   },
   {
-    type: "function",
-    name: "withdrawToVault",
-    inputs: [
-      {
-        name: "market",
-        type: "tuple",
-        internalType: "struct Market",
-        components: midnightMarketAbi.components,
-      },
-      {
-        name: "withdrawnAssets",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
     type: "event",
     name: "Abdicate",
     inputs: [
@@ -11129,7 +11286,7 @@ export const midnightAdapterAbi = [
         internalType: "bytes32",
       },
       {
-        name: "paidAssets",
+        name: "buyerAssets",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11147,7 +11304,57 @@ export const midnightAdapterAbi = [
         internalType: "uint256",
       },
       {
-        name: "newRate",
+        name: "newNetRate",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Constructor",
+    inputs: [
+      {
+        name: "parentVault",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "midnight",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "durations",
+        type: "uint256[]",
+        indexed: false,
+        internalType: "uint256[]",
+      },
+      {
+        name: "enterGateFactory",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "DecreaseMaxTtm",
+    inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newMaxTtm",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11201,6 +11408,38 @@ export const midnightAdapterAbi = [
   },
   {
     type: "event",
+    name: "ForceRemove",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "netCredit",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "IncreaseMaxTtm",
+    inputs: [
+      {
+        name: "newMaxTtm",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "IncreaseTimelock",
     inputs: [
       {
@@ -11211,6 +11450,25 @@ export const midnightAdapterAbi = [
       },
       {
         name: "newDuration",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ReduceRate",
+    inputs: [
+      {
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newRate",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11272,7 +11530,13 @@ export const midnightAdapterAbi = [
         internalType: "uint256",
       },
       {
-        name: "newRate",
+        name: "shortfall",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "newShortfallAllowance",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11345,10 +11609,10 @@ export const midnightAdapterAbi = [
   },
   {
     type: "event",
-    name: "SetMaxTtm",
+    name: "SetMaxNetSellRate",
     inputs: [
       {
-        name: "newMaxTtm",
+        name: "newMaxNetSellRate",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11358,10 +11622,16 @@ export const midnightAdapterAbi = [
   },
   {
     type: "event",
-    name: "SetMinRate",
+    name: "SetMinForceSellPrice",
     inputs: [
       {
-        name: "newMinRate",
+        name: "marketId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newMinForceSellPrice",
         type: "uint256",
         indexed: false,
         internalType: "uint256",
@@ -11371,26 +11641,26 @@ export const midnightAdapterAbi = [
   },
   {
     type: "event",
-    name: "SetNoSalesBelowFaceValue",
+    name: "SetMinNetBuyRate",
     inputs: [
       {
-        name: "newNoSalesBelowFaceValue",
-        type: "bool",
+        name: "newMinNetBuyRate",
+        type: "uint256",
         indexed: false,
-        internalType: "bool",
+        internalType: "uint256",
       },
     ],
     anonymous: false,
   },
   {
     type: "event",
-    name: "SetNoSalesWithShortfall",
+    name: "SetShortfallAllowance",
     inputs: [
       {
-        name: "newNoSalesWithShortfall",
-        type: "bool",
+        name: "newShortfallAllowance",
+        type: "uint256",
         indexed: false,
-        internalType: "bool",
+        internalType: "uint256",
       },
     ],
     anonymous: false,
@@ -11454,8 +11724,27 @@ export const midnightAdapterAbi = [
   },
   {
     type: "event",
+    name: "Take",
+    inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "UnsetForceSellable",
     inputs: [
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
       {
         name: "marketId",
         type: "bytes32",
@@ -11522,11 +11811,6 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
-    name: "BuyRateTooLow",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "BuyTtmTooHigh",
     inputs: [],
   },
@@ -11547,6 +11831,11 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
+    name: "DataTooLong",
+    inputs: [],
+  },
+  {
+    type: "error",
     name: "DurationAbsoluteCapExceeded",
     inputs: [],
   },
@@ -11562,7 +11851,22 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
+    name: "DurationZeroAbsoluteCap",
+    inputs: [],
+  },
+  {
+    type: "error",
     name: "DurationsNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ForceRemoved",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ForceSellPriceTooLow",
     inputs: [],
   },
   {
@@ -11572,12 +11876,12 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
-    name: "IncorrectMaker",
+    name: "IncorrectEnterGate",
     inputs: [],
   },
   {
     type: "error",
-    name: "IncorrectOffer",
+    name: "IncorrectMaker",
     inputs: [],
   },
   {
@@ -11593,6 +11897,26 @@ export const midnightAdapterAbi = [
   {
     type: "error",
     name: "LoanAssetMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "MaxTtmTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "MaxTtmTooLow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NetBuyRateTooLow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NetSellRateTooHigh",
     inputs: [],
   },
   {
@@ -11627,11 +11951,6 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
-    name: "SaleBelowFaceValue",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "SelfAllocationOnly",
     inputs: [],
   },
@@ -11642,12 +11961,22 @@ export const midnightAdapterAbi = [
   },
   {
     type: "error",
+    name: "ShortfallAllowanceExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
     name: "ShortfallTooHigh",
     inputs: [],
   },
   {
     type: "error",
     name: "SubRatifierFailed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TakerHasNoShares",
     inputs: [],
   },
   {
@@ -11702,7 +12031,7 @@ export const midnightAdapterAbi = [
   },
 ] as const;
 
-/** MidnightAdapterFactory ABI used to deploy and look up Vault V2 Midnight adapters (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+/** MidnightAdapterFactory ABI used to deploy and look up Vault V2 Midnight adapters (vault-v2@e7821fd; frozen pre-release code, not deployed or Etherscan-verified). */
 export const midnightAdapterFactoryAbi = [
   {
     type: "constructor",
@@ -11711,11 +12040,6 @@ export const midnightAdapterFactoryAbi = [
         name: "_midnight",
         type: "address",
         internalType: "address",
-      },
-      {
-        name: "_durations",
-        type: "uint256[]",
-        internalType: "uint256[]",
       },
     ],
     stateMutability: "nonpayable",
@@ -11730,7 +12054,17 @@ export const midnightAdapterFactoryAbi = [
         internalType: "address",
       },
       {
-        name: "salt",
+        name: "durations",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
+      {
+        name: "enterGateFactory",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "preSalt",
         type: "bytes32",
         internalType: "bytes32",
       },
@@ -11746,39 +12080,7 @@ export const midnightAdapterFactoryAbi = [
   },
   {
     type: "function",
-    name: "durations",
-    inputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "durationsLength",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "isMidnightAdapter",
+    name: "isCreated",
     inputs: [
       {
         name: "account",
@@ -11809,33 +12111,15 @@ export const midnightAdapterFactoryAbi = [
     stateMutability: "view",
   },
   {
-    type: "function",
-    name: "midnightAdapter",
-    inputs: [
-      {
-        name: "parentVault",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "salt",
-        type: "bytes32",
-        internalType: "bytes32",
-      },
-    ],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
-  {
     type: "event",
     name: "CreateMidnightAdapter",
     inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
       {
         name: "parentVault",
         type: "address",
@@ -11843,7 +12127,13 @@ export const midnightAdapterFactoryAbi = [
         internalType: "address",
       },
       {
-        name: "salt",
+        name: "durations",
+        type: "uint256[]",
+        indexed: false,
+        internalType: "uint256[]",
+      },
+      {
+        name: "preSalt",
         type: "bytes32",
         indexed: false,
         internalType: "bytes32",
@@ -11852,6 +12142,12 @@ export const midnightAdapterFactoryAbi = [
         name: "midnightAdapter",
         type: "address",
         indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "enterGateFactory",
+        type: "address",
+        indexed: false,
         internalType: "address",
       },
     ],
@@ -11867,18 +12163,12 @@ export const midnightAdapterFactoryAbi = [
         indexed: true,
         internalType: "address",
       },
-      {
-        name: "durations",
-        type: "uint256[]",
-        indexed: false,
-        internalType: "uint256[]",
-      },
     ],
     anonymous: false,
   },
 ] as const;
 
-/** MidnightAdapterRateRatifierV1 ABI used to manage parent-vault-ratified rate roots and verify rate offers (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+/** MidnightAdapterRateRatifierV1 ABI used to manage parent-vault-ratified rate roots and verify rate offers (vault-v2@e7821fd; frozen pre-release code, not deployed or Etherscan-verified). */
 export const midnightAdapterRateRatifierV1Abi = [
   {
     type: "function",
@@ -12019,6 +12309,11 @@ export const midnightAdapterRateRatifierV1Abi = [
         type: "bool",
         internalType: "bool",
       },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [
       {
@@ -12094,6 +12389,12 @@ export const midnightAdapterRateRatifierV1Abi = [
     inputs: [
       {
         name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "onBehalf",
         type: "address",
         indexed: true,
         internalType: "address",
@@ -12236,7 +12537,7 @@ export const midnightAdapterRateRatifierV1Abi = [
   },
 ] as const;
 
-/** MidnightAdapterPriceRatifierV1 ABI used to manage parent-vault-ratified offer roots and verify offer proofs (vault-v2@6476e9d; pre-audit, not Etherscan-verified). */
+/** MidnightAdapterPriceRatifierV1 ABI used to manage parent-vault-ratified offer roots and verify offer proofs (vault-v2@e7821fd; frozen pre-release code, not deployed or Etherscan-verified). */
 export const midnightAdapterPriceRatifierV1Abi = [
   {
     type: "function",
@@ -12377,6 +12678,11 @@ export const midnightAdapterPriceRatifierV1Abi = [
         type: "bool",
         internalType: "bool",
       },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [
       {
@@ -12452,6 +12758,12 @@ export const midnightAdapterPriceRatifierV1Abi = [
     inputs: [
       {
         name: "caller",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "onBehalf",
         type: "address",
         indexed: true,
         internalType: "address",

@@ -31,6 +31,90 @@ export interface ReleaseTarball extends TarballIdentity {
   readonly file: string;
 }
 
+function describeCycle(
+  pending: readonly ReleaseTarball[],
+  dependencies: ReadonlyMap<string, ReadonlySet<string>>,
+): string {
+  const pendingNames = new Set(pending.map(({ name }) => name));
+  const pendingOrder = new Map(
+    pending.map(({ name }, index) => [name, index] as const),
+  );
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const path: string[] = [];
+  const findCycle = (name: string): string[] | undefined => {
+    if (visiting.has(name)) {
+      return [...path.slice(path.indexOf(name)), name];
+    }
+    if (visited.has(name)) return;
+    visiting.add(name);
+    path.push(name);
+    const names = [...(dependencies.get(name) ?? [])]
+      .filter((dependency) => pendingNames.has(dependency))
+      .sort((a, b) => (pendingOrder.get(a) ?? 0) - (pendingOrder.get(b) ?? 0));
+    for (const dependency of names) {
+      const cycle = findCycle(dependency);
+      if (cycle) return cycle;
+    }
+    path.pop();
+    visiting.delete(name);
+    visited.add(name);
+    return;
+  };
+  for (const { name } of pending) {
+    const cycle = findCycle(name);
+    if (cycle) return cycle.join(" -> ");
+  }
+  return pending.map(({ name }) => name).join(", ");
+}
+
+/**
+ * Orders release tarballs so in-set dependencies are published first.
+ *
+ * @param tarballs - Release tarballs with dependency names from their stored manifests.
+ * @returns Tarballs ordered by dependency, with file names breaking ties.
+ * @throws If two tarballs have the same package name or their dependencies contain a cycle.
+ */
+export function orderByDependencies(
+  tarballs: readonly (ReleaseTarball & {
+    readonly dependencies: readonly string[];
+  })[],
+): ReleaseTarball[] {
+  const byName = new Map<string, ReleaseTarball>();
+  for (const tarball of tarballs) {
+    if (byName.has(tarball.name)) {
+      throw new Error(`Two tarballs for ${tarball.name}.`);
+    }
+    byName.set(tarball.name, tarball);
+  }
+  const dependencies = new Map<string, Set<string>>();
+  for (const { name, dependencies: names } of tarballs) {
+    dependencies.set(
+      name,
+      new Set(names.filter((dependency) => byName.has(dependency))),
+    );
+  }
+  const compareFiles = (a: ReleaseTarball, b: ReleaseTarball) =>
+    a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
+  const pending = [...tarballs].sort(compareFiles);
+  const ordered: ReleaseTarball[] = [];
+  while (pending.length > 0) {
+    const nextIndex = pending.findIndex(
+      ({ name }) => dependencies.get(name)?.size === 0,
+    );
+    if (nextIndex === -1) {
+      throw new Error(
+        `Release package dependencies contain a cycle: ${describeCycle(pending, dependencies)}.`,
+      );
+    }
+    const [next] = pending.splice(nextIndex, 1);
+    if (next == null) throw new Error("Unreachable.");
+    ordered.push(next);
+    for (const names of dependencies.values()) names.delete(next.name);
+  }
+  return ordered;
+}
+
 /** npm dist-tag a release publishes under: `latest` from public `main`, `next` from `next`. */
 export type ReleaseChannel = "latest" | "next";
 
@@ -203,7 +287,7 @@ export function verifyChecksums(dir: string): string[] {
  * @param options.expected - Packages declared at this commit.
  * @param options.tar - node-tar, as bundled with npm.
  * @param options.pacote - pacote, as bundled with npm.
- * @returns The tarballs to publish, sorted by file name.
+ * @returns The tarballs to publish, ordered by dependency and then file name.
  */
 export async function verifyReleaseSet(options: {
   dir: string;
@@ -211,7 +295,7 @@ export async function verifyReleaseSet(options: {
   tar: EntryLister;
   pacote: ManifestReader;
 }): Promise<ReleaseTarball[]> {
-  const received: ReleaseTarball[] = [];
+  const received: (ReleaseTarball & { dependencies: string[] })[] = [];
   for (const file of verifyChecksums(options.dir)) {
     const path = join(options.dir, file);
     const manifestChunks: Buffer[] = [];
@@ -232,22 +316,43 @@ export async function verifyReleaseSet(options: {
     });
     verifyTarballStructure(file, entries);
     verifyTarballEntries(entries);
-    const stored = verifyTarballManifest(
-      parseTarballManifest(
-        Buffer.concat(manifestChunks).toString("utf8"),
-        `${file}:package/package.json`,
-      ),
+    const storedManifest = parseTarballManifest(
+      Buffer.concat(manifestChunks).toString("utf8"),
+      `${file}:package/package.json`,
     );
+    const stored = verifyTarballManifest(storedManifest);
     const { name, version } = await readTarballIdentity(path, options.pacote);
     if (stored.name !== name || stored.version !== version) {
       throw new Error(
         `Tarball "${file}": package.json says ${stored.name}@${stored.version} but npm would publish ${name}@${version}.`,
       );
     }
-    received.push({ file: path, name, version });
+    const dependencies = new Set<string>();
+    for (const field of [
+      "dependencies",
+      "peerDependencies",
+      "optionalDependencies",
+    ] as const) {
+      const names = storedManifest[field];
+      if (typeof names === "object" && names != null && !Array.isArray(names)) {
+        for (const dependency of Object.keys(names)) {
+          dependencies.add(dependency);
+        }
+      }
+    }
+    received.push({
+      file: path,
+      name,
+      version,
+      dependencies: [...dependencies],
+    });
   }
   verifyReleaseMatch(options.expected, received);
-  return received;
+  return orderByDependencies(received).map(({ file, name, version }) => ({
+    file,
+    name,
+    version,
+  }));
 }
 
 /**

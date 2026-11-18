@@ -30,6 +30,7 @@ import {
   toSimulationAuthorizations,
   type VerifiedSimulationResult,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 import {
   createE2eMarket,
@@ -62,7 +63,9 @@ const sharesMinted = SharesMath.toShares(assets, 0n, 0n, "Down");
 const configFor = (client: AnvilTestClient<Chain>, chainId: number) => ({
   // Cold fork reads may exceed the production default while fetching upstream state.
   timeoutMs: 30_000,
-  chains: new Map([[chainId, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [chainId, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const diffOf = (

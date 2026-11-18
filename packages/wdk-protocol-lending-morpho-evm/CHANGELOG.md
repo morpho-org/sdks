@@ -1,5 +1,14 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.6.1-next.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @morpho-org/blue-sdk-viem@7.6.0-next.0
+  - @morpho-org/morpho-sdk@9.9.0-next.0
+  - @morpho-org/blue-sdk@8.4.0-next.0
+
 ## 4.6.0
 
 ### Minor Changes

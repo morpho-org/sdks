@@ -16,6 +16,7 @@ import {
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { simulate, toSimulationAuthorizations } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const source = `
 pragma solidity ^0.8.20;
@@ -254,7 +255,10 @@ describe.each([
         const result = await simulate(
           {
             chains: new Map([
-              [mainnet.id, { simulateV1Url: client.transport.url! }],
+              [
+                mainnet.id,
+                { client: createTestSimulationClient(client.transport.url!) },
+              ],
             ]),
             timeoutMs: 30_000,
           },

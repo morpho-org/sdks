@@ -52,18 +52,21 @@ export interface IAccrualVaultV2MidnightAdapter
  *   marketData: {
  *     [marketId]: {
  *       netCredit: 1_000n,
- *       rate: 10_000_000_000_000_000n,
+ *       netRate: 10_000_000_000_000_000n,
  *       maturity: 200n,
  *       index: 0n,
  *       forceSellable: false,
+ *       forceRemoved: false,
+ *       minForceSellPrice: 0n,
  *     },
  *   },
  *   durations: [],
  *   durationAllocations: [],
  *   maxTtm: 0n,
- *   minRate: 0n,
- *   noSalesWithShortfall: false,
- *   noSalesBelowFaceValue: false,
+ *   minNetBuyRate: 0n,
+ *   maxNetSellRate: 0n,
+ *   shortfallAllowance: 0n,
+ *   enterGateFactory: "0x0000000000000000000000000000000000000000",
  * };
  * const midnightAdapter = new AccrualVaultV2MidnightAdapter({
  *   adapter,
@@ -126,7 +129,10 @@ export class AccrualVaultV2MidnightAdapter
         lastLossFactor: BigInt(market.position.lastLossFactor),
         lastAccrual: BigInt(market.position.lastAccrual),
       },
-      market: { lossFactor: BigInt(market.market.lossFactor) },
+      market: {
+        lossFactor: BigInt(market.market.lossFactor),
+        withdrawable: BigInt(market.market.withdrawable ?? 0n),
+      },
     }));
     this.lastUpdate = BigInt(lastUpdate);
   }
@@ -160,18 +166,21 @@ export class AccrualVaultV2MidnightAdapter
    *   marketData: {
    *     [marketId]: {
    *       netCredit: 1_000n,
-   *       rate: 10_000_000_000_000_000n,
+   *       netRate: 10_000_000_000_000_000n,
    *       maturity: 200n,
    *       index: 0n,
    *       forceSellable: false,
+   *       forceRemoved: false,
+   *       minForceSellPrice: 0n,
    *     },
    *   },
    *   durations: [],
    *   durationAllocations: [],
    *   maxTtm: 0n,
-   *   minRate: 0n,
-   *   noSalesWithShortfall: false,
-   *   noSalesBelowFaceValue: false,
+   *   minNetBuyRate: 0n,
+   *   maxNetSellRate: 0n,
+   *   shortfallAllowance: 0n,
+   *   enterGateFactory: "0x0000000000000000000000000000000000000000",
    * };
    * const midnightAdapter = new AccrualVaultV2MidnightAdapter({
    *   adapter,
@@ -230,18 +239,21 @@ export class AccrualVaultV2MidnightAdapter
    *   marketData: {
    *     [marketId]: {
    *       netCredit: 1_000n,
-   *       rate: 10_000_000_000_000_000n,
+   *       netRate: 10_000_000_000_000_000n,
    *       maturity: 200n,
    *       index: 0n,
    *       forceSellable: false,
+   *       forceRemoved: false,
+   *       minForceSellPrice: 0n,
    *     },
    *   },
    *   durations: [],
    *   durationAllocations: [],
    *   maxTtm: 0n,
-   *   minRate: 0n,
-   *   noSalesWithShortfall: false,
-   *   noSalesBelowFaceValue: false,
+   *   minNetBuyRate: 0n,
+   *   maxNetSellRate: 0n,
+   *   shortfallAllowance: 0n,
+   *   enterGateFactory: "0x0000000000000000000000000000000000000000",
    * };
    * const midnightAdapter = new AccrualVaultV2MidnightAdapter({
    *   adapter,
@@ -308,18 +320,21 @@ export class AccrualVaultV2MidnightAdapter
    *     marketData: {
    *       [marketId]: {
    *         netCredit: 1_000n,
-   *         rate: 10_000_000_000_000_000n,
+   *         netRate: 10_000_000_000_000_000n,
    *         maturity: 200n,
    *         index: 0n,
    *         forceSellable: false,
+   *         forceRemoved: false,
+   *         minForceSellPrice: 0n,
    *       },
    *     },
    *     durations: [],
    *     durationAllocations: [],
    *     maxTtm: 0n,
-   *     minRate: 0n,
-   *     noSalesWithShortfall: false,
-   *     noSalesBelowFaceValue: false,
+   *     minNetBuyRate: 0n,
+   *     maxNetSellRate: 0n,
+   *     shortfallAllowance: 0n,
+   *     enterGateFactory: "0x0000000000000000000000000000000000000000",
    *   },
    *   markets: [
    *     {
@@ -347,10 +362,11 @@ export class AccrualVaultV2MidnightAdapter
   }
 
   /**
-   * Returns zero because Midnight is `SelfAllocationOnly`.
+   * Returns how much a vault withdrawal can pull through the adapter's `withdrawToVault` path.
    *
-   * @param _data - Unused adapter liquidity data.
-   * @returns Zero capacity limited by the Midnight adapter.
+   * @param data - Vault liquidity data, an ABI-encoded Midnight market.
+   * @returns The adapter's accrued credit capped by the market's withdrawable liquidity, or zero
+   * when `data` is not a held, non-force-removed market of the adapter asset.
    * @example
    * ```ts
    * import {
@@ -373,18 +389,21 @@ export class AccrualVaultV2MidnightAdapter
    *     marketData: {
    *       [marketId]: {
    *         netCredit: 1_000n,
-   *         rate: 10_000_000_000_000_000n,
+   *         netRate: 10_000_000_000_000_000n,
    *         maturity: 200n,
    *         index: 0n,
    *         forceSellable: false,
+   *         forceRemoved: false,
+   *         minForceSellPrice: 0n,
    *       },
    *     },
    *     durations: [],
    *     durationAllocations: [],
    *     maxTtm: 0n,
-   *     minRate: 0n,
-   *     noSalesWithShortfall: false,
-   *     noSalesBelowFaceValue: false,
+   *     minNetBuyRate: 0n,
+   *     maxNetSellRate: 0n,
+   *     shortfallAllowance: 0n,
+   *     enterGateFactory: "0x0000000000000000000000000000000000000000",
    *   },
    *   markets: [
    *     {
@@ -401,12 +420,15 @@ export class AccrualVaultV2MidnightAdapter
    *   lastUpdate: 100n,
    * });
    * const limit = adapter.maxWithdraw("0x");
-   * // limit is { value: 0n, limiter: CapacityLimitReason.midnightSelfAllocation }
+   * // limit is { value: 0n, limiter: CapacityLimitReason.liquidity }: "0x" is not a Midnight market
    * ```
    */
   public maxWithdraw(
-    _data: Parameters<IAccrualVaultV2Adapter["maxWithdraw"]>[0],
+    data: Parameters<IAccrualVaultV2Adapter["maxWithdraw"]>[0],
   ): CapacityLimit {
-    return { value: 0n, limiter: CapacityLimitReason.midnightSelfAllocation };
+    return {
+      value: VaultV2MidnightAdapterUtils.maxWithdraw(this, data),
+      limiter: CapacityLimitReason.liquidity,
+    };
   }
 }

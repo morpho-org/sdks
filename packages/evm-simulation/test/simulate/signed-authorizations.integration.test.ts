@@ -25,6 +25,7 @@ import {
   type Erc2612PermitAuthorization,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -49,7 +50,9 @@ const market = new MarketParams({
 const amount = 1_000_000n;
 const configFor = (client: AnvilTestClient<typeof mainnet>) => ({
   timeoutMs: 30_000,
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const permitFor = async (

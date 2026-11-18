@@ -86,7 +86,7 @@ jobs:
     name: Publish to npm
     needs: pack
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: npm
     permissions:
       contents: read # checkout
@@ -128,7 +128,7 @@ jobs:
       # Plan the whole set before mutating npm. Rollback pins must agree with
       # latest, and never hide a release version missing from the registry.
       - name: Plan publish
-        run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" --promotions "$RUNNER_TEMP/to-promote.tsv" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
+        run: node scripts/publish/plan-npm-publish.ts --tag "$RELEASE_CHANNEL" --promotions "$RUNNER_TEMP/to-promote.tsv" --already-published-output "$RUNNER_TEMP/already-published.tsv" "$RUNNER_TEMP/release-set.tsv" > "$RUNNER_TEMP/to-publish.tsv"
 
       - name: Promote packages to latest
         shell: bash
@@ -142,8 +142,11 @@ jobs:
       # A failed publish is checked against npm before deciding: the exact bytes
       # under an up-to-date dist-tag count as published, other bytes fail, and
       # anything else is retried, three tries in all.
+      # Every release first waits until npm serves each version the plan found
+      # already published, then publishes the rest in dependency order and
+      # waits until npm serves each one before publishing its dependents.
       - name: Publish packages
-        run: node scripts/publish/publish-packages.ts --tag "$RELEASE_CHANNEL" "$RUNNER_TEMP/to-publish.tsv"
+        run: node scripts/publish/publish-packages.ts --tag "$RELEASE_CHANNEL" --already-published "$RUNNER_TEMP/already-published.tsv" "$RUNNER_TEMP/to-publish.tsv"
 
   prepare-release:
     name: Prepare tags & release notes

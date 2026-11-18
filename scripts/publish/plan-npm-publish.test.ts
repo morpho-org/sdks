@@ -667,6 +667,26 @@ describe("main", () => {
     expect(err.join("")).toBe("Already on npm: @morpho-org/blue-sdk@7.3.0\n");
   });
 
+  test("writes already-published rows separately from publish rows", async () => {
+    const input = tsv(
+      "@morpho-org/blue-sdk\t7.3.0\ta.tgz\n@morpho-org/morpho-ts\t1.0.0\tb.tgz\n",
+    );
+    const output = tsv("");
+    const publishRows: string[] = [];
+    await main(["--already-published-output", output, input], {
+      fetchFn: registry,
+      stdout: (text) => publishRows.push(text),
+      stderr: () => {},
+    });
+
+    expect(publishRows.join("")).toBe(
+      `@morpho-org/morpho-ts\t1.0.0\t${join(dirname(input), "b.tgz")}\n`,
+    );
+    expect(readFileSync(output, "utf8")).toBe(
+      `@morpho-org/blue-sdk\t7.3.0\t${join(dirname(input), "a.tgz")}\n`,
+    );
+  });
+
   test("fails on an existing version ahead of latest without writing stdout", async () => {
     const out: string[] = [];
     await expect(

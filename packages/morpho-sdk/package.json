@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "9.8.0",
+  "version": "9.9.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -91,6 +91,7 @@
     "MIGRATION-v6-to-v7.md",
     "MIGRATION-v7-to-v8.md",
     "MIGRATION-v8-to-v9.md",
+    "MIGRATION-v9-to-v10.md",
     "DEAD-SHARE-PROTECTION.md"
   ],
   "scripts": {

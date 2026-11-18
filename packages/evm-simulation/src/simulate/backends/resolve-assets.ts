@@ -123,6 +123,7 @@ export async function resolveAssets(params: {
   readonly wNative?: Address;
   readonly operations: readonly ParsedOperationLimit[];
   readonly blockNumber: bigint;
+  readonly signal?: AbortSignal;
 }): Promise<readonly ResolvedApprovalOperation[]> {
   const {
     client,
@@ -130,6 +131,7 @@ export async function resolveAssets(params: {
     midnight = zeroAddress,
     operations,
     blockNumber,
+    signal,
   } = params;
   // Blue: [loan, collateral]; vault: [asset]; Midnight: [loan, ...collaterals].
   const tokens = new Map<string, readonly Address[]>();
@@ -325,6 +327,7 @@ export async function resolveAssets(params: {
       if (pair === undefined) {
         try {
           if (source.type === "market") {
+            signal?.throwIfAborted();
             const values = await readContract(client, {
               address: morpho,
               abi: blueAbi,
@@ -366,6 +369,7 @@ export async function resolveAssets(params: {
             source.type === "midnightCollateral" ||
             source.type === "midnightLoan"
           ) {
+            signal?.throwIfAborted();
             const market = await readContract(client, {
               address: midnight,
               abi: midnightAbi,
@@ -379,6 +383,7 @@ export async function resolveAssets(params: {
               ...market.collateralParams.map((entry) => entry.token),
             ];
           } else {
+            signal?.throwIfAborted();
             const asset = await readContract(client, {
               address: source.vault,
               abi: erc4626Abi,
@@ -581,6 +586,7 @@ export async function resolveAssets(params: {
       const pair = await readPair(
         `market:${marketId.toLowerCase()}`,
         async () => {
+          signal?.throwIfAborted();
           const values = await readContract(client, {
             address: morpho,
             abi: blueAbi,
@@ -628,6 +634,7 @@ export async function resolveAssets(params: {
         const [asset = zeroAddress] = await readPair(
           `vault:${limit.vault.toLowerCase()}`,
           async () => {
+            signal?.throwIfAborted();
             const token = await readContract(client, {
               address: limit.vault,
               abi: erc4626Abi,
@@ -708,6 +715,7 @@ export async function resolveAssets(params: {
         limit.type === "midnightSupplyCollateralMakeBorrow")
     ) {
       try {
+        signal?.throwIfAborted();
         const market = await readContract(client, {
           address: midnight,
           abi: midnightAbi,

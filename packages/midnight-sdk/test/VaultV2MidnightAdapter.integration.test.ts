@@ -11,6 +11,7 @@ import {
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
   MAX_MIDNIGHT_ADAPTER_MARKETS,
+  MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
   takeVaultV2MidnightAdapterOffer,
 } from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -103,23 +104,15 @@ describe("Vault V2 Midnight adapter funding on Base", () => {
       ChainId.BaseMainnet,
       "midnightAdapterFactory",
     );
-    for (const { address, salt } of adapters) {
+    for (const { address } of adapters) {
       await expect(
         client.readContract({
           address: factory,
           abi: midnightAdapterFactoryAbi,
-          functionName: "isMidnightAdapter",
+          functionName: "isCreated",
           args: [address],
         }),
       ).resolves.toBe(true);
-      await expect(
-        client.readContract({
-          address: factory,
-          abi: midnightAdapterFactoryAbi,
-          functionName: "midnightAdapter",
-          args: [vault, salt],
-        }),
-      ).resolves.toBe(address);
       const adapterId = await client.readContract({
         address,
         abi: midnightAdapterAbi,
@@ -153,7 +146,7 @@ describe("Vault V2 Midnight adapter funding on Base", () => {
           abi: midnightAdapterAbi,
           functionName: "maxTtm",
         }),
-      ).resolves.toBe(0xffff_ffff);
+      ).resolves.toBe(0xffff_ffffn);
       await expect(
         client.readContract({
           address: vault,
@@ -167,7 +160,7 @@ describe("Vault V2 Midnight adapter funding on Base", () => {
         keccak256(
           encodeAbiParameters(
             [{ type: "string" }, { type: "address" }, { type: "uint256" }],
-            ["duration", address, duration],
+            ["this/duration", address, duration],
           ),
         ),
       );
@@ -282,7 +275,7 @@ describe("Vault V2 Midnight adapter funding on Base", () => {
         OfferUtils.toStruct({ offer: item.offer }),
         item.ratifierData,
         units,
-        "0x",
+        MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
       ],
     });
 
@@ -333,10 +326,10 @@ describe("Vault V2 Midnight adapter funding on Base", () => {
         client.readContract({
           address: factory,
           abi: midnightAdapterFactoryAbi,
-          functionName: "midnightAdapter",
-          args: [fixture.vault, adapterSalt],
+          functionName: "isCreated",
+          args: [adapter.address],
         }),
-      ).resolves.toBe(adapter.address);
+      ).resolves.toBe(true);
     }
   });
 });

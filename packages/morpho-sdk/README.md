@@ -28,6 +28,9 @@ Read [Dead-share validators](./DEAD-SHARE-PROTECTION.md) for the exported checks
 enforce the dead-deposit rule; integrators should validate their snapshot before building.
 Snapshot-free Blue `supply` remains deprecated.
 
+Upgrading from v9? Read the [v9 → v10 migration guide](./MIGRATION-v9-to-v10.md) for the direct
+Midnight `cancelOffers` route.
+
 Upgrading from v8? Read the [v8 → v9 migration guide](./MIGRATION-v8-to-v9.md) for the approval
 API removals and the new unlimited-approval behavior.
 
@@ -58,7 +61,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `takeRepayWithdrawCollateral`, `repayWithdrawCollateral`, `takeWithdraw` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
 | | `supplyCollateral`, `withdrawCollateral`, `redeem` | Direct call |
 | | `supplyCollateralBatch`, `withdrawCollateralBatch` | Midnight multicall |
-| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend`, `cancelOffers` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
+| | `cancelOffers` | Direct call for one group (`setConsumed`), Midnight multicall for several; every Midnight chain |
+| | `makeLend`, `makeBorrow`, `makeWithdraw`, `makeRepay`, `supplyCollateralMakeBorrow`, `supplyBlueMakeLend` | MidnightBundlesV2 (Ethereum, Base, Arbitrum, Arc, Robinhood, Tempo) |
 
 `makeBorrow` publishes without collateral; `supplyCollateralMakeBorrow` requires collateral and
 supplies it in the same transaction.

@@ -34,7 +34,7 @@ pnpm lint
 pnpm test
 ```
 
-Fork suites need Foundry's Anvil v1.8.7, the version CI pins (`foundryup -i v1.8.7`). On older Anvil versions, the Base Midnight fork tests fail.
+Fork suites need Foundry's Anvil v1.9.0, the version CI pins (`foundryup -i v1.9.0`). On older Anvil versions, the Base Midnight fork tests fail.
 
 Hand-written Anvil fork suites fall back to the chain's public RPC when `ERPC_SECRET` is unset. Registry-driven E2E suites require the Morpho eRPC and skip eligible chains without the secret; WDK integration suites are skipped without it. Outside contributors can run tests that do not require those fork suites:
 

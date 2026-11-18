@@ -1,9 +1,18 @@
 import {
   AccrualVaultV2,
   AccrualVaultV2MidnightAdapter,
+  VaultV2MidnightAdapterUtils,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, type Hash, padHex, zeroAddress } from "viem";
+import { midnightMarketAbi } from "@morpho-org/morpho-ts/abis/midnight";
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hash,
+  type Hex,
+  padHex,
+  zeroAddress,
+} from "viem";
 
 /** Address of the Midnight adapter added by {@link withMidnightAdapter}. */
 export const MIDNIGHT_ADAPTER = "0x0000000000000000000000000000000000001A01";
@@ -15,6 +24,8 @@ export const MIDNIGHT_ADAPTER = "0x0000000000000000000000000000000000001A01";
  * @param params.liquidity - Routes the vault's liquidity through the Midnight adapter.
  * @param params.sole - Replaces the vault's adapters with the Midnight adapter.
  * @param params.credit - Credit the adapter holds in one Midnight market maturing in a year.
+ * @param params.withdrawable - Withdrawable liquidity of that market. When set, the market is a real
+ * Midnight market struct and, with `liquidity`, the vault's liquidity data encodes it.
  * @returns A new Vault V2 snapshot holding the Midnight adapter.
  */
 export const withMidnightAdapter = (
@@ -23,9 +34,28 @@ export const withMidnightAdapter = (
     readonly liquidity?: boolean;
     readonly sole?: boolean;
     readonly credit?: bigint;
+    readonly withdrawable?: bigint;
   } = {},
 ) => {
-  const marketId: Hash = padHex("0x1", { size: 32 });
+  const maturity = vaultData.lastUpdate + Time.s.from.y(1n);
+  const liquidityMarket = {
+    chainId: 1n,
+    midnight: zeroAddress,
+    loanToken: vaultData.asset,
+    collateralParams: [],
+    maturity,
+    rcfThreshold: 0n,
+    enterGate: zeroAddress,
+    liquidatorGate: zeroAddress,
+  } as const;
+  const marketId: Hash =
+    params.withdrawable == null
+      ? padHex("0x1", { size: 32 })
+      : VaultV2MidnightAdapterUtils.marketId(liquidityMarket);
+  const liquidityData: Hex =
+    params.withdrawable == null
+      ? "0x"
+      : encodeAbiParameters([midnightMarketAbi], [liquidityMarket]);
   const markets =
     params.credit == null
       ? []
@@ -38,7 +68,7 @@ export const withMidnightAdapter = (
               lastLossFactor: 0n,
               lastAccrual: vaultData.lastUpdate,
             },
-            market: { lossFactor: 0n },
+            market: { lossFactor: 0n, withdrawable: params.withdrawable },
           },
         ];
   const midnight = new AccrualVaultV2MidnightAdapter({
@@ -54,19 +84,22 @@ export const withMidnightAdapter = (
           id,
           {
             netCredit: position.credit,
-            rate: 0n,
-            maturity: vaultData.lastUpdate + Time.s.from.y(1n),
+            netRate: 0n,
+            maturity,
             index: 0n,
             forceSellable: false,
+            forceRemoved: false,
+            minForceSellPrice: 0n,
           },
         ]),
       ),
       durations: [],
       durationAllocations: [],
       maxTtm: 0n,
-      minRate: 0n,
-      noSalesWithShortfall: false,
-      noSalesBelowFaceValue: false,
+      minNetBuyRate: 0n,
+      maxNetSellRate: 0n,
+      shortfallAllowance: 0n,
+      enterGateFactory: "0x0000000000000000000000000000000000000000",
     },
     markets,
     lastUpdate: vaultData.lastUpdate,
@@ -79,7 +112,7 @@ export const withMidnightAdapter = (
     {
       ...vaultData,
       liquidityAdapter,
-      liquidityData: params.liquidity ? "0x" : vaultData.liquidityData,
+      liquidityData: params.liquidity ? liquidityData : vaultData.liquidityData,
     },
     params.liquidity ? midnight : vaultData.accrualLiquidityAdapter,
     params.sole ? [midnight] : [...vaultData.accrualAdapters, midnight],

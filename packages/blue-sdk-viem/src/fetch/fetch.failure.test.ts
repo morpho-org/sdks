@@ -799,7 +799,7 @@ describe("chaos: S7 partial reads", () => {
         factory: baseAddresses.midnightAdapterFactory!,
         data: encodeFunctionData({
           abi: midnightAdapterFactoryAbi,
-          functionName: "isMidnightAdapter",
+          functionName: "isCreated",
           args: [address],
         }),
       },
@@ -841,7 +841,7 @@ describe("chaos: S7 partial reads", () => {
     const midnightFactory = baseAddresses.midnightAdapterFactory!;
     const isMidnightAdapterRead = encodeFunctionData({
       abi: midnightAdapterFactoryAbi,
-      functionName: "isMidnightAdapter",
+      functionName: "isCreated",
       args: [address],
     });
     const isVaultV2Read = encodeFunctionData({

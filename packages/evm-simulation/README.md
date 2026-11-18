@@ -19,10 +19,16 @@ import {
   type SimulationConfig,
   SimulationRevertedError
 } from "@morpho-org/evm-simulation";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
 
 const config: SimulationConfig = {
   chains: new Map([
-    [1, { simulateV1Url: "https://<your-mainnet-rpc>" }],
+    [1, { client: createPublicClient({
+      chain: mainnet,
+      ccipRead: false,
+      transport: http("https://<your-mainnet-rpc>", { retryCount: 0, timeout: 5000 }),
+    }) }],
   ]),
   timeoutMs: 5000,
 };
@@ -60,7 +66,77 @@ try {
 
 Every call inside `eth_simulateV1`, including preparation calls, state reads and assertions, carries the request's `chainId` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain with `InvalidChainIdError`.
 
-Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` on a chain entry to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+Every chain entry requires a `client` or deprecated `simulateV1Url` connected to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` on a chain entry to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+
+### Client configuration
+
+Create and configure a viem `Client` in your application, then pass it as
+`chains.get(chainId).client`.
+Migrate `{ simulateV1Url: url }` to `{ client: createPublicClient(...) }`, as in
+the usage example above.
+
+`simulateV1Url` remains supported but is deprecated and will be removed in the
+next major. The legacy `ChainSimulationConfig` interface retains its required
+string URL and can still be extended. New clients use `ChainSimulationClientConfig`;
+`SimulationConfig.chains` accepts their union, `ChainSimulationConfigEntry`.
+Supply either `client` or `simulateV1Url`, not both. The deprecated
+URL path creates an internal client with the same safety checks, a signal-bound
+transport that aborts in-flight requests at the shared deadline, and the
+status-preserving `fetchFn` below. These settings remain automatic only for
+the deprecated URL path.
+
+| Setting | Requirement | Reason |
+| --- | --- | --- |
+| `ccipRead: false` | Required; validated before RPC | Contract `OffchainLookup` reverts must not fetch arbitrary URLs. The default, `true`, and custom CCIP-Read handlers are rejected. |
+| Transport `retryCount: 0` | Required; validated before RPC | An execution must never be retried. viem HTTP, WebSocket and custom transports expose this field; transports without it are rejected. |
+| No `fallback` transport | Required; validated before RPC | A failure must not select another provider. |
+| `client.chain.id` matches the map key/request chain | Required when a client chain is set; validated before RPC | A client configured for another chain is rejected with `InvalidChainIdError`. The chain may be omitted. |
+| `eth_simulateV1` support | Required; checked by the execution RPC | Unsupported methods fail with a typed error; the SDK does not probe capability or select another backend. |
+| No `batch.multicall` or transport JSON-RPC batching | Recommended | Preserve standalone pinned reads and predictable request counts and latency. |
+| Transport `timeout` ≤ `timeoutMs` | Recommended | Bound the lifetime of an HTTP request after the SDK's deadline. |
+| Error-response `fetchFn` below | Recommended for HTTP | Preserve HTTP status classification when a non-2xx JSON-typed response contains malformed JSON. |
+| Dedicated simulation endpoint | Recommended | Isolate simulation capacity and configuration from unrelated application reads. |
+
+For custom transports, these checks cover viem's exposed configuration, not
+retry or fallback logic hidden inside a consumer-supplied provider.
+
+The SDK enforces one whole-pipeline `timeoutMs` deadline (default 5000 ms),
+including block, code, metadata and execution reads, and reports expiration as
+`RpcTransportError`. It does not abort an in-flight HTTP request owned by the
+consumer's transport. The pipeline does not advance to another stage after the
+deadline, but an outstanding RPC stage may finish in the background. Configure
+a transport timeout to release those requests independently.
+
+For consistent HTTP error classification, use this copy-pasteable transport
+configuration. viem parses JSON-typed bodies before checking HTTP status;
+without this wrapper, a malformed JSON-typed non-2xx response can instead be
+reported as `InvalidSimulationResponseError`, because viem discards its status.
+Valid JSON-RPC error bodies still retain their normal classification.
+
+```ts
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
+
+const client = createPublicClient({
+  chain: mainnet,
+  ccipRead: false,
+  transport: http("https://your-simulation-rpc.example", {
+    retryCount: 0,
+    timeout: 5000,
+    fetchFn: async (input, init) => {
+      const response = await fetch(input, init);
+      if (response.ok) return response;
+      const headers = new Headers(response.headers);
+      headers.delete("content-type");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    },
+  }),
+});
+```
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls. No state overrides or helper contracts are added automatically.
 
@@ -122,7 +198,7 @@ Upgrading from v7? See the [v7 → v8 migration guide](../../docs/migrations/evm
 All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
-- Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
+- Config types: `SimulationConfig`, `ChainSimulationClientConfig`, `ChainSimulationConfigEntry`, deprecated `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
@@ -265,7 +341,8 @@ takes precedence over its `assertAfter` assertions.
 and their state reads. Final-mode signed-authorization use checks still run.
 `"none"` is
 reserved for transactions that no operation type covers (Merkl reward claims,
-unsupported Midnight actions and `midnightCancelAndMake` bundles that combine
+unsupported Midnight actions such as direct `midnightCancelOffers`
+cancellations, and `midnightCancelAndMake` bundles that combine
 a Blue supply with collateral supplies, contain unfunded publications, or
 contain cancellations only, and approval/authorization-only bundles), and
 every transaction an operation type covers must pass limits. Missing `limits`
@@ -478,10 +555,10 @@ pass the struct via `market` to `toSimulationLimits`, or, when no market is
 passed, set `assetPaid` to `collateralParams[collateralIndex].token` on each
 returned operation.
 Otherwise, `simulate()` throws `SimulationValidationError`.
-Other Midnight actions—including `midnightCancelAndMake` bundles that combine
-Blue parking with collateral supplies, contain unfunded publications, or
-contain cancellations only—remain unsupported; pass `limits: "none"` only
-when no covered operation is present.
+Other Midnight actions—including direct `midnightCancelOffers` cancellations and
+`midnightCancelAndMake` bundles that combine Blue parking with collateral
+supplies, contain unfunded publications, or contain cancellations only—remain
+unsupported; pass `limits: "none"` only when no covered operation is present.
 
 When supplied collateral is wNative, the check counts ETH sent plus the
 sender's net wNative change against `assetsPaid`, so native funding needs no
@@ -1002,8 +1079,9 @@ what to compute. Supported Midnight actions are `midnightSupplyCollateral`,
 `midnightTakeRepayWithdrawCollateral`, and `midnightSupplyCollateralTakeBorrow`, plus
 `midnightCancelAndMake` with either non-empty `collateralSupplies` and no
 `blueSupply`, or a `blueSupply` and no collateral supplies (which emits
-`midnightSupplyBlueMakeLend`). Other Midnight actions and action types without
-a supported operation throw `UnsupportedLimitActionError`.
+`midnightSupplyBlueMakeLend`). Other Midnight actions, including
+`midnightCancelOffers` (a direct offer cancellation moves no value), and action
+types without a supported operation throw `UnsupportedLimitActionError`.
 
 A full repay does not require `expected.debtRepaid`; when supplied, it acts as a
 minimum.

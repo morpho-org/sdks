@@ -64,7 +64,17 @@ describe("Midnight adapter ABIs", () => {
       durationsLength: toFunctionSelector("durationsLength()"),
       durationAllocations: toFunctionSelector("durationAllocations(uint256)"),
       maxTtm: toFunctionSelector("maxTtm()"),
-      minRate: toFunctionSelector("minRate()"),
+      increaseMaxTtm: toFunctionSelector("increaseMaxTtm(uint256)"),
+      decreaseMaxTtm: toFunctionSelector("decreaseMaxTtm(uint256)"),
+      minNetBuyRate: toFunctionSelector("minNetBuyRate()"),
+      maxNetSellRate: toFunctionSelector("maxNetSellRate()"),
+      shortfallAllowance: toFunctionSelector("shortfallAllowance()"),
+      enterGateFactory: toFunctionSelector("enterGateFactory()"),
+      factory: toFunctionSelector("factory()"),
+      forceRemove: toFunctionSelector("forceRemove(bytes32)"),
+      setMinForceSellPrice: toFunctionSelector(
+        "setMinForceSellPrice(bytes32,uint256)",
+      ),
       ids: toFunctionSelector(
         "ids((uint256,address,address,(address,uint256,uint256,address)[],uint256,uint256,address,address))",
       ),
@@ -85,18 +95,12 @@ describe("Midnight adapter ABIs", () => {
       take: toFunctionSelector(
         "take(((uint256,address,address,(address,uint256,uint256,address)[],uint256,uint256,address,address),bool,address,uint256,uint256,uint256,bytes32,address,bytes,address,address,bool,uint128,uint128,uint256),bytes,uint256,bytes)",
       ),
-      withdrawToVault: toFunctionSelector(
-        "withdrawToVault((uint256,address,address,(address,uint256,uint256,address)[],uint256,uint256,address,address),uint256)",
-      ),
     });
 
     expect(getFunctionSelectors(midnightAdapterFactoryAbi)).toMatchObject({
-      durations: toFunctionSelector("durations(uint256)"),
-      durationsLength: toFunctionSelector("durationsLength()"),
-      isMidnightAdapter: toFunctionSelector("isMidnightAdapter(address)"),
-      midnightAdapter: toFunctionSelector("midnightAdapter(address,bytes32)"),
+      isCreated: toFunctionSelector("isCreated(address)"),
       createMidnightAdapter: toFunctionSelector(
-        "createMidnightAdapter(address,bytes32)",
+        "createMidnightAdapter(address,uint256[],address,bytes32)",
       ),
       midnight: toFunctionSelector("midnight()"),
     });
@@ -108,6 +112,11 @@ describe("Midnight adapter ABIs", () => {
       expect(getFunctionSelectors(abi)).toMatchObject({
         DOMAIN_SEPARATOR: toFunctionSelector("DOMAIN_SEPARATOR()"),
         ratification: toFunctionSelector("ratification(address,bytes32)"),
+        isRootRatified: toFunctionSelector("isRootRatified(address,bytes32)"),
+        rootNonce: toFunctionSelector("rootNonce(address,bytes32)"),
+        setIsRootRatified: toFunctionSelector(
+          "setIsRootRatified(address,bytes32,bool,address)",
+        ),
         isRatified: toFunctionSelector(
           "isRatified(((uint256,address,address,(address,uint256,uint256,address)[],uint256,uint256,address,address),bool,address,uint256,uint256,uint256,bytes32,address,bytes,address,address,bool,uint128,uint128,uint256),bytes,address)",
         ),
@@ -125,18 +134,24 @@ describe("Midnight adapter ABIs", () => {
       DecreaseTimelock: "DecreaseTimelock(bytes4,uint256)",
       SetIsSubRatifier: "SetIsSubRatifier(address,address,bool)",
       SetSkimRecipient: "SetSkimRecipient(address)",
-      SetMinRate: "SetMinRate(uint256)",
-      SetMaxTtm: "SetMaxTtm(uint256)",
-      SetNoSalesWithShortfall: "SetNoSalesWithShortfall(bool)",
-      SetNoSalesBelowFaceValue: "SetNoSalesBelowFaceValue(bool)",
+      Constructor: "Constructor(address,address,uint256[],address)",
+      SetMinNetBuyRate: "SetMinNetBuyRate(uint256)",
+      IncreaseMaxTtm: "IncreaseMaxTtm(uint256)",
+      DecreaseMaxTtm: "DecreaseMaxTtm(address,uint256)",
+      SetShortfallAllowance: "SetShortfallAllowance(uint256)",
+      SetMaxNetSellRate: "SetMaxNetSellRate(uint256)",
+      SetMinForceSellPrice: "SetMinForceSellPrice(bytes32,uint256)",
       SetForceSellable: "SetForceSellable(bytes32)",
-      UnsetForceSellable: "UnsetForceSellable(bytes32)",
+      UnsetForceSellable: "UnsetForceSellable(address,bytes32)",
       SetConsumed: "SetConsumed(address,bytes32,uint256)",
       Skim: "Skim(address,uint256)",
+      Take: "Take(address)",
       WithdrawToVault: "WithdrawToVault(bytes32,uint256,uint256)",
       ForceDeallocate: "ForceDeallocate(bytes32,uint256,uint256)",
+      ForceRemove: "ForceRemove(bytes32,uint256)",
       Buy: "Buy(bytes32,uint256,uint256,uint256,uint256)",
-      Sell: "Sell(bytes32,uint256,uint256,uint256,uint256)",
+      Sell: "Sell(bytes32,uint256,uint256,uint256,uint256,uint256)",
+      ReduceRate: "ReduceRate(bytes32,uint256)",
     } as const;
 
     expect(getEventSelectors(midnightAdapterAbi)).toMatchObject(
@@ -150,10 +165,10 @@ describe("Midnight adapter ABIs", () => {
 
     expect(getEventSelectors(midnightAdapterFactoryAbi)).toMatchObject({
       CreateMidnightAdapter: toEventSelector(
-        "CreateMidnightAdapter(address,bytes32,address)",
+        "CreateMidnightAdapter(address,address,uint256[],bytes32,address,address)",
       ),
       CreateMidnightAdapterFactory: toEventSelector(
-        "CreateMidnightAdapterFactory(address,uint256[])",
+        "CreateMidnightAdapterFactory(address)",
       ),
     });
 
@@ -163,7 +178,7 @@ describe("Midnight adapter ABIs", () => {
     ]) {
       expect(getEventSelectors(abi)).toMatchObject({
         SetIsRootRatified: toEventSelector(
-          "SetIsRootRatified(address,address,bytes32,bool)",
+          "SetIsRootRatified(address,address,address,bytes32,bool)",
         ),
         SetIsRootRatifiedWithSig: toEventSelector(
           "SetIsRootRatifiedWithSig(address,address,address,bytes32,uint256,bool,uint128,uint128)",
@@ -179,10 +194,12 @@ describe("Midnight adapter ABIs", () => {
 
     expect(marketData?.outputs?.map(({ name, type }) => [name, type])).toEqual([
       ["netCredit", "uint128"],
-      ["rate", "uint64"],
-      ["maturity", "uint48"],
+      ["netRate", "uint64"],
+      ["maturity", "uint40"],
       ["index", "uint8"],
       ["forceSellable", "bool"],
+      ["forceRemoved", "bool"],
+      ["minForceSellPrice", "uint256"],
     ]);
   });
 
@@ -232,46 +249,54 @@ describe("Midnight adapter ABIs", () => {
     const errorSignatures = {
       adapter: [
         "Abdicated()",
-        "ApproveReverted()",
         "ApproveReturnedFalse()",
+        "ApproveReverted()",
         "AutomaticallyTimelocked()",
         "BuyAtLoss()",
         "BuyPostMaturity()",
-        "BuyRateTooLow()",
         "BuyTtmTooHigh()",
         "CastOverflow()",
         "DataAlreadyPending()",
         "DataNotTimelocked()",
+        "DataTooLong()",
         "DurationAbsoluteCapExceeded()",
         "DurationRelativeCapExceeded()",
         "DurationTooHigh()",
+        "DurationZeroAbsoluteCap()",
         "DurationsNotIncreasing()",
+        "ForceRemoved()",
+        "ForceSellPriceTooLow()",
         "IncorrectCallbackAddress()",
+        "IncorrectEnterGate()",
         "IncorrectMaker()",
-        "IncorrectOffer()",
         "IncorrectReceiver()",
         "InvalidLength()",
         "LoanAssetMismatch()",
+        "MaxTtmTooHigh()",
+        "MaxTtmTooLow()",
+        "NetBuyRateTooLow()",
+        "NetSellRateTooHigh()",
         "NoCode()",
         "NonEmptyCallbackData()",
         "NotAuthorized()",
         "NotMidnight()",
         "NotSelf()",
         "OtherSellInProgress()",
-        "SaleBelowFaceValue()",
         "SelfAllocationOnly()",
         "SellInProgress()",
+        "ShortfallAllowanceExceeded()",
         "ShortfallTooHigh()",
         "SubRatifierFailed()",
+        "TakerHasNoShares()",
         "TimelockNotDecreasing()",
         "TimelockNotExpired()",
         "TimelockNotIncreasing()",
         "TooManyDurations()",
         "TooManyMarkets()",
-        "TransferFromReverted()",
         "TransferFromReturnedFalse()",
-        "TransferReverted()",
+        "TransferFromReverted()",
         "TransferReturnedFalse()",
+        "TransferReverted()",
         "UnauthorizedBuy()",
       ],
       factory: [],

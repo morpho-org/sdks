@@ -15,6 +15,7 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { ConsumerLimitViolationError, simulate } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -120,7 +121,12 @@ test("error: owner observations reject an understated quote for a caller-sensiti
   };
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [
+        mainnet.id,
+        { client: createTestSimulationClient(client.transport.url!) },
+      ],
+    ]),
   };
   const request = (assetsPaid: bigint) => ({
     chainId: mainnet.id,

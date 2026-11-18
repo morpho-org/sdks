@@ -196,14 +196,10 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       const index = result.signatureRequests.findIndex(
         (request) => request.id === cause.id,
       );
-      const field =
-        cause.field === "reference"
-          ? "id"
-          : cause.field === "value"
-            ? "args.amount"
-            : cause.field.startsWith("args.")
-              ? cause.field
-              : `typedData.${cause.field}`;
+      let field = `typedData.${cause.field}`;
+      if (cause.field === "reference") field = "id";
+      else if (cause.field === "value") field = "args.amount";
+      else if (cause.field.startsWith("args.")) field = cause.field;
       throw new InvalidTransactionPlanError({
         path: `$.signatureRequests[${index}].${field}`,
         reason: "expected agreement with every referencing action",

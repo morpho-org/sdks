@@ -41,6 +41,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const takeRepayViolation = (field: string) => (error: unknown) =>
   error instanceof ConsumerLimitViolationError &&
@@ -158,7 +159,9 @@ const wNativeLoanFixture = {
 type MarketFixture = typeof baseFixture;
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const readDebtAt = (

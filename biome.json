@@ -53,5 +53,51 @@
         "useExhaustiveSwitchCases": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/*/src/**", "!**/*.test.ts", "!**/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "warn",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            }
+          },
+          "style": {
+            "noNestedTernary": "warn",
+            "noNonNullAssertion": "warn"
+          },
+          "suspicious": { "noExplicitAny": "warn", "noTsIgnore": "warn" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/morpho-sdk/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "noNonNullAssertion": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    }
+  ]
 }

@@ -1280,6 +1280,59 @@ export class MorphoBlue implements BlueActions {
     return MathLib.max(now, lastUpdate) + Time.s.from.h(2n);
   }
 
+  private quoteRepay({
+    positionData,
+    repayAssets,
+    repayShares,
+    deadline,
+    now,
+  }: {
+    readonly positionData: AccrualPosition;
+    readonly repayAssets: bigint;
+    readonly repayShares: bigint;
+    readonly deadline: bigint;
+    readonly now: bigint;
+  }) {
+    const saturatedRepay = repayShares === maxUint256;
+    const simulatedRepayShares = saturatedRepay
+      ? positionData.borrowShares
+      : repayShares;
+    if (repayAssets > 0n) {
+      validateRepayAmount({
+        positionData,
+        repayAssets,
+        marketId: this.marketParams.id,
+      });
+    } else if (repayShares > 0n && !saturatedRepay) {
+      validateRepayShares({
+        positionData,
+        repayShares,
+        marketId: this.marketParams.id,
+      });
+    }
+    const quoteHorizon = this.getBlueBundlesV1QuoteTimestamp(
+      positionData.market.lastUpdate,
+      now,
+    );
+    if (repayShares > 0n && deadline > quoteHorizon) {
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: deadline,
+        max: quoteHorizon,
+      });
+    }
+    const accrualTimestamp = repayShares > 0n ? deadline : quoteHorizon;
+    const accruedPosition = positionData.accrueInterest(accrualTimestamp);
+    let expectedRepayAssets = repayAssets;
+    if (repayAssets <= 0n && repayShares > 0n) {
+      expectedRepayAssets = accruedPosition.market.toBorrowAssets(
+        simulatedRepayShares,
+        "Up",
+      );
+    }
+    return { simulatedRepayShares, accruedPosition, expectedRepayAssets };
+  }
+
   private async getTokenRequirements(
     params: {
       token: Address;
@@ -1508,19 +1561,14 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
-    if (shares > 0n) {
-      validateWithdrawShares({
-        positionData,
-        withdrawShares: shares,
-        marketId: this.marketParams.id,
-      });
-    } else {
-      validateWithdrawAmount({
-        positionData,
-        withdrawAssets: assets,
-        marketId: this.marketParams.id,
-      });
-    }
+    const validateWithdrawal =
+      shares > 0n ? validateWithdrawShares : validateWithdrawAmount;
+    validateWithdrawal({
+      positionData,
+      withdrawShares: shares,
+      withdrawAssets: assets,
+      marketId: this.marketParams.id,
+    });
     const reallocations = [...(params.reallocations ?? [])];
     // Validate the exact PublicAllocations mapping before requirement reads.
     const publicAllocations = getBlueBundlesV1PublicAllocations(
@@ -1990,43 +2038,14 @@ export class MorphoBlue implements BlueActions {
       expectedUser: userAddress,
     });
 
-    const saturatedRepay = repayShares === maxUint256;
-    const simulatedRepayShares = saturatedRepay
-      ? positionData.borrowShares
-      : repayShares;
-    if (repayAssets > 0n) {
-      validateRepayAmount({
+    const { simulatedRepayShares, accruedPosition, expectedRepayAssets } =
+      this.quoteRepay({
         positionData,
         repayAssets,
-        marketId: this.marketParams.id,
-      });
-    } else if (repayShares > 0n && !saturatedRepay) {
-      validateRepayShares({
-        positionData,
         repayShares,
-        marketId: this.marketParams.id,
+        deadline,
+        now: createdAt,
       });
-    }
-
-    const quoteHorizon = this.getBlueBundlesV1QuoteTimestamp(
-      positionData.market.lastUpdate,
-      createdAt,
-    );
-    if (repayShares > 0n && deadline > quoteHorizon) {
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: deadline,
-        max: quoteHorizon,
-      });
-    }
-    const accrualTimestamp = repayShares > 0n ? deadline : quoteHorizon;
-    const accruedPosition = positionData.accrueInterest(accrualTimestamp);
-    const expectedRepayAssets =
-      repayAssets > 0n
-        ? repayAssets
-        : hasRepay
-          ? accruedPosition.market.toBorrowAssets(simulatedRepayShares, "Up")
-          : 0n;
     const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
       expectedRepayAssets,
       referralFeePct,

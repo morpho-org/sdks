@@ -8,9 +8,9 @@ justify that PR's own change: it must already allow the exact behavior on the
 base branch and have been accepted through its own earlier PR.
 
 Rules that define their own permanent carve-outs keep them inline, including
-root §2.6 mocked-transport unit tests, the §7 Unlimited SDK approvals exception,
-§7 critical-security minimumReleaseAge bypasses and tagged first-party actions in
-ci-release-security. Workflow-security baselines remain in `.github/workflows/AGENTS.md`.
+root §2.6 mocked-transport unit tests, §7 critical-security minimumReleaseAge
+bypasses and tagged first-party actions in ci-release-security. Workflow-security
+baselines remain in `.github/workflows/AGENTS.md`.
 
 ## WDK private-field validation gap
 
@@ -59,3 +59,11 @@ ci-release-security. Workflow-security baselines remain in `.github/workflows/AG
 - **Why:** These beta APIs may break with a minor changeset describing the break instead of a major bump or deprecation steps; stored-format version guards still apply. All TransactionPlan code lives in that directory, with every public export tagged during beta; only `src/index.ts` re-exports and tests under `test/` may live outside, and other code must not import from it.
 - **Approved in:** PR #686, which accepted ADR-2026-11-04-transaction-plan-format.
 - **Remove when:** All scoped symbols have graduated from beta. Removing `@experimental` graduates a symbol for good; tagging an already-released stable symbol needs maintainer approval.
+
+## Midnight `cancelOffers` retyping in morpho-sdk v10
+
+- **Waives:** Only the deprecation steps of root [§7 deprecation flow](../AGENTS.md#7-releases--versioning) (introduce a successor, deprecate, maintain both for one minor). The major bump, the changeset and the migration guide remain required.
+- **Scope:** The `cancelOffers` method of `client.morpho.midnight(chainId)` in `@morpho-org/morpho-sdk` 10.0.0: its parameters change from `{ accountAddress, cancellations, deadline }` to `{ accountAddress, groups }` and its action from `MidnightCancelAndMakeAction` to `MidnightCancelOffersAction`. No other symbol, package or version inherits this exception.
+- **Why:** [ADR-2026-11-17-midnight-direct-offer-cancellation](./adrs/ADR-2026-11-17-midnight-direct-offer-cancellation.md) moves offer cancellation from MidnightBundlesV2 to a direct Midnight call so a wallet policy can approve it by method name. Keeping the old shape for a deprecation period would leave a bundle cancel route alive and several names for one intent; the name is kept and retyped in the major instead, and `MIGRATION-v9-to-v10.md` shows the call before and after.
+- **Approved in:** The documentation-only PR that added this entry and accepted ADR-2026-11-17-midnight-direct-offer-cancellation, ahead of the implementation in PR #933, with maintainer approval from Jinsuk (GitHub @jinmel).
+- **Remove when:** `@morpho-org/morpho-sdk` 10.0.0 is published, so the retyping no longer relies on this waiver.

@@ -30,9 +30,10 @@ function adapterInput(
     durations: [3600n, 7200n],
     durationAllocations: [0n, 0n],
     maxTtm: 86_400n,
-    minRate: 0n,
-    noSalesWithShortfall: false,
-    noSalesBelowFaceValue: false,
+    minNetBuyRate: 0n,
+    maxNetSellRate: 0n,
+    shortfallAllowance: 0n,
+    enterGateFactory: "0x0000000000000000000000000000000000000000",
     ...overrides,
   };
 }
@@ -62,10 +63,12 @@ describe("VaultV2MidnightAdapter", () => {
         marketData: {
           [OTHER]: {
             netCredit: "10",
-            rate: 2,
+            netRate: 2,
             maturity: 100,
             index: 0,
             forceSellable: true,
+            forceRemoved: true,
+            minForceSellPrice: "990000000000000000",
           },
         },
         durations: ["3600"],
@@ -73,9 +76,10 @@ describe("VaultV2MidnightAdapter", () => {
         asset: ASSET,
         midnight: MIDNIGHT,
         maxTtm: "86400",
-        minRate: 7,
-        noSalesWithShortfall: true,
-        noSalesBelowFaceValue: false,
+        minNetBuyRate: 7,
+        maxNetSellRate: "8",
+        shortfallAllowance: 9n,
+        enterGateFactory: ADDRESS,
       }),
     );
 
@@ -89,19 +93,22 @@ describe("VaultV2MidnightAdapter", () => {
     );
     expect(adapter.marketData[OTHER]).toStrictEqual({
       netCredit: 10n,
-      rate: 2n,
+      netRate: 2n,
       maturity: 100n,
       index: 0n,
       forceSellable: true,
+      forceRemoved: true,
+      minForceSellPrice: 990_000_000_000_000_000n,
     });
     expect(adapter.durations).toStrictEqual([3600n]);
     expect(adapter.durationAllocations).toStrictEqual([10n]);
     expect(adapter.maxTtm).toBe(86_400n);
-    expect(adapter.minRate).toBe(7n);
+    expect(adapter.minNetBuyRate).toBe(7n);
+    expect(adapter.maxNetSellRate).toBe(8n);
+    expect(adapter.shortfallAllowance).toBe(9n);
+    expect(adapter.enterGateFactory).toBe(ADDRESS);
     expect(adapter.asset).toBe(ASSET);
     expect(adapter.midnight).toBe(MIDNIGHT);
-    expect(adapter.noSalesWithShortfall).toBe(true);
-    expect(adapter.noSalesBelowFaceValue).toBe(false);
   });
 
   test("matches contract cap-id encodings and ids order", () => {
@@ -136,48 +143,28 @@ describe("VaultV2MidnightAdapter", () => {
         values: [ADDRESS],
       }),
     );
-    expect(VaultV2MidnightAdapter.collateralParamsCapId(collateral)).toBe(
+    expect(VaultV2MidnightAdapter.familyCapId(market)).toBe(
       taggedHash({
-        tag: "collateralParams",
-        types: [tuple],
-        values: [collateral],
-      }),
-    );
-    expect(VaultV2MidnightAdapter.enterGateCapId(ADDRESS)).toBe(
-      taggedHash({
-        tag: "enterGate",
-        types: [{ type: "address" }],
-        values: [ADDRESS],
-      }),
-    );
-    expect(VaultV2MidnightAdapter.liquidatorGateCapId(OTHER)).toBe(
-      taggedHash({
-        tag: "liquidatorGate",
-        types: [{ type: "address" }],
-        values: [OTHER],
-      }),
-    );
-    expect(VaultV2MidnightAdapter.rcfThresholdCapId(42n)).toBe(
-      taggedHash({
-        tag: "rcfThreshold",
-        types: [{ type: "uint256" }],
-        values: [42n],
+        tag: "family",
+        types: [
+          { type: "tuple[]", components: tuple.components },
+          { type: "uint256" },
+          { type: "address" },
+        ],
+        values: [[collateral], 42n, OTHER],
       }),
     );
     expect(VaultV2MidnightAdapter.durationCapId(ADDRESS, 3600n)).toBe(
       taggedHash({
-        tag: "duration",
+        tag: "this/duration",
         types: [{ type: "address" }, { type: "uint256" }],
         values: [ADDRESS, 3600n],
       }),
     );
     expect(adapter.ids(market)).toStrictEqual([
       adapter.adapterId,
-      VaultV2MidnightAdapter.enterGateCapId(ADDRESS),
-      VaultV2MidnightAdapter.liquidatorGateCapId(OTHER),
-      VaultV2MidnightAdapter.rcfThresholdCapId(42n),
+      VaultV2MidnightAdapter.familyCapId(market),
       VaultV2MidnightAdapter.collateralTokenCapId(ADDRESS),
-      VaultV2MidnightAdapter.collateralParamsCapId(collateral),
     ]);
   });
 
@@ -185,17 +172,21 @@ describe("VaultV2MidnightAdapter", () => {
     const marketData = {
       [ADDRESS]: {
         netCredit: 10n,
-        rate: 0n,
+        netRate: 0n,
         maturity: 7_000n,
         index: 0n,
         forceSellable: false,
+        forceRemoved: false,
+        minForceSellPrice: 0n,
       },
       [OTHER]: {
         netCredit: 20n,
-        rate: 0n,
+        netRate: 0n,
         maturity: 4_000n,
         index: 1n,
         forceSellable: true,
+        forceRemoved: false,
+        minForceSellPrice: 0n,
       },
     };
 
@@ -234,10 +225,12 @@ describe("VaultV2MidnightAdapter", () => {
         id,
         {
           netCredit: index,
-          rate: 0n,
+          netRate: 0n,
           maturity: 1n,
           index,
           forceSellable: index % 2 === 0,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       ]),
     );

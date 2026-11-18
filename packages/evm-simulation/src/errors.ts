@@ -937,15 +937,19 @@ const ERROR_NAME_BY_CODE: Readonly<
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
- * import type { Address, Hex } from "viem";
+ * import { type Address, createPublicClient, type Hex, http } from "viem";
  *
  * declare const user: Address;
  * declare const vault: Address;
  * declare const encodedDeposit: Hex;
  * declare const depositAssets: bigint;
  * declare const quotedShares: bigint;
+ * const client = createPublicClient({
+ *   ccipRead: false,
+ *   transport: http("https://rpc.example", { retryCount: 0, timeout: 5000 }),
+ * });
  * const config = {
- *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
+ *   chains: new Map([[1, { client }]]),
  * };
  * try {
  *   await simulate(config, {

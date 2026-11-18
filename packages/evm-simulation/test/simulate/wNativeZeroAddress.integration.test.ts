@@ -32,6 +32,7 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { simulate } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { test } from "../setup.js";
 
 const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -55,7 +56,10 @@ describe("simulate — unwrapped WETH sent to zero", () => {
       {
         timeoutMs: 30_000,
         chains: new Map([
-          [mainnet.id, { simulateV1Url: client.transport.url! }],
+          [
+            mainnet.id,
+            { client: createTestSimulationClient(client.transport.url!) },
+          ],
         ]),
       },
       {

@@ -10,6 +10,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 /** A tracked balance delta that differs from simulation, or has no measurement. */
 export interface E2eMidnightMismatch {
@@ -144,7 +145,10 @@ export const sendE2eMidnightSimulated = async (
     {
       timeoutMs: 30_000,
       chains: new Map([
-        [params.chainId, { simulateV1Url: client.transport.url! }],
+        [
+          params.chainId,
+          { client: createTestSimulationClient(client.transport.url!) },
+        ],
       ]),
     },
     {

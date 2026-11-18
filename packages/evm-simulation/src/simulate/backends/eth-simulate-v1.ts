@@ -111,8 +111,9 @@ const toBoundaryError = (
   }
   // A node that answered 2xx with a body that is not JSON or not a JSON-RPC
   // object returned something, not nothing: an integrity failure the caller
-  // must not bypass as an outage. The simulation client keeps the status on
-  // every error status, so a status-less parse failure is a 2xx reply.
+  // must not bypass as an outage. The recommended consumer fetchFn preserves
+  // error status codes. Plain viem http() loses the status on malformed
+  // JSON-typed error bodies, so it cannot distinguish that case here.
   if (
     (error instanceof HttpRequestError &&
       error.status === undefined &&

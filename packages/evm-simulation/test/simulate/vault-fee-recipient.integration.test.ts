@@ -26,6 +26,7 @@ import {
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -165,7 +166,12 @@ for (const exit of ["redeem", "withdraw"] as const) {
     };
     const config = {
       timeoutMs: 30_000,
-      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+      chains: new Map([
+        [
+          mainnet.id,
+          { client: createTestSimulationClient(client.transport.url!) },
+        ],
+      ]),
     };
     const result = await simulate(config, {
       ...request,
@@ -320,7 +326,12 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
     };
     const config = {
       timeoutMs: 30_000,
-      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+      chains: new Map([
+        [
+          mainnet.id,
+          { client: createTestSimulationClient(client.transport.url!) },
+        ],
+      ]),
     };
     const result = await simulate(config, {
       ...request,

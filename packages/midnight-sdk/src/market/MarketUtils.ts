@@ -2,14 +2,9 @@ import {
   assertNonNegative,
   type BigIntish,
   MathLib,
+  MidnightMarketLib,
 } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  concat,
-  encodeAbiParameters,
-  encodePacked,
-  keccak256,
-} from "viem";
+import { type Address, concat, encodeAbiParameters, keccak256 } from "viem";
 import {
   CBP,
   COLLATERAL_PARAMS_TYPEHASH,
@@ -27,8 +22,6 @@ import {
   MarketParams,
   type SettlementFeeCbps,
 } from "./Market.js";
-
-const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
 
 const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -438,13 +431,6 @@ export namespace MarketUtils {
       [marketParamsAbiParameter],
       [toStruct(marketParams)],
     );
-    const creationHash = keccak256(concat([SSTORE2_PREFIX, encodedMarket]));
-
-    return keccak256(
-      encodePacked(
-        ["uint8", "address", "uint256", "bytes32"],
-        [255, marketParams.midnight, 0n, creationHash],
-      ),
-    );
+    return MidnightMarketLib.id(marketParams.midnight, encodedMarket);
   }
 }

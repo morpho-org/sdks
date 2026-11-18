@@ -176,21 +176,22 @@ export const getBundlesTokenRequirements = async (
 
   const { dai } = getChainAddresses(params.chainId);
 
-  if (params.supportSignature) {
-    const isDai = isDefined(dai) && isAddressEqual(params.token, dai);
-    if ((params.useSimplePermit ?? true) && !isDai) {
-      const permit = await getErc2612Permit(viemClient, {
-        token: params.token,
-        owner: params.owner,
-        spender: params.spender,
-        amount: params.amount,
-        chainId: params.chainId,
-        deadline: params.deadline,
-        now: timestamp,
-        supportDeployless: params.supportDeployless,
-      });
-      if (isDefined(permit)) return [permit];
-    }
+  const isDai =
+    params.supportSignature &&
+    isDefined(dai) &&
+    isAddressEqual(params.token, dai);
+  if (params.supportSignature && (params.useSimplePermit ?? true) && !isDai) {
+    const permit = await getErc2612Permit(viemClient, {
+      token: params.token,
+      owner: params.owner,
+      spender: params.spender,
+      amount: params.amount,
+      chainId: params.chainId,
+      deadline: params.deadline,
+      now: timestamp,
+      supportDeployless: params.supportDeployless,
+    });
+    if (isDefined(permit)) return [permit];
   }
 
   return resolveBundlesTokenRequirements({

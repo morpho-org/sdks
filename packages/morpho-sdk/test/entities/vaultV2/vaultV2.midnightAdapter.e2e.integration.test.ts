@@ -26,12 +26,14 @@ import {
   Tree,
 } from "@morpho-org/midnight-sdk";
 import { Time } from "@morpho-org/morpho-ts";
+import { midnightMarketAbi } from "@morpho-org/morpho-ts/abis/midnight";
 import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { testAccount } from "@morpho-org/test/fixtures";
 import {
   advanceVaultV2MidnightFixtureTime,
   BASE_MIDNIGHT_FORK_BLOCK_NUMBER,
   createVaultV2MidnightAdapterFixture,
+  MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
   takeVaultV2MidnightAdapterOffer,
 } from "@morpho-org/test/midnight";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -45,6 +47,7 @@ import {
   type Hex,
   type LocalAccount,
   maxUint64,
+  maxUint128,
   padHex,
   parseEther,
   parseUnits,
@@ -68,9 +71,6 @@ const wNative = getChainAddress(ChainId.BaseMainnet, "wNative");
 const midnight = getChainAddress(ChainId.BaseMainnet, "midnight");
 const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
 const oracle = "0x0000000000000000000000000000000000080000";
-const offerTuple = midnightAbi.find(
-  (item) => item.type === "function" && item.name === "take",
-)?.inputs[0];
 const COLLATERAL = parseEther("10");
 const UNITS = parseUnits("1", 6);
 const TICK = 5_000n;
@@ -130,7 +130,8 @@ const takeOffer = async (params: {
       OfferUtils.toStruct({ offer: item.offer }),
       item.ratifierData,
       units,
-      "0x",
+      // The adapter buys from sell offers, funded from idle; `onSell` requires empty data.
+      offer.buy ? "0x" : MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA,
     ],
   });
 };
@@ -257,14 +258,29 @@ const readMarketData = async (params: {
   adapter: Address;
   marketId: Hash;
 }) => {
-  const [netCredit, rate, maturity, index, forceSellable] =
-    await params.client.readContract({
-      address: params.adapter,
-      abi: midnightAdapterAbi,
-      functionName: "marketData",
-      args: [params.marketId],
-    });
-  return { netCredit, rate, maturity, index, forceSellable };
+  const [
+    netCredit,
+    netRate,
+    maturity,
+    index,
+    forceSellable,
+    forceRemoved,
+    minForceSellPrice,
+  ] = await params.client.readContract({
+    address: params.adapter,
+    abi: midnightAdapterAbi,
+    functionName: "marketData",
+    args: [params.marketId],
+  });
+  return {
+    netCredit,
+    netRate,
+    maturity,
+    index,
+    forceSellable,
+    forceRemoved,
+    minForceSellPrice,
+  };
 };
 
 const fetchMidnightAdapter = async (client: TestClient, adapter: Address) => {
@@ -363,22 +379,27 @@ const expectAdapterMatchesChain = async (params: {
   const onchainMinRate = await client.readContract({
     address: adapter,
     abi: midnightAdapterAbi,
-    functionName: "minRate",
+    functionName: "minNetBuyRate",
   });
   const onchainMaxTtm = await client.readContract({
     address: adapter,
     abi: midnightAdapterAbi,
     functionName: "maxTtm",
   });
-  const onchainNoSalesWithShortfall = await client.readContract({
+  const onchainMaxNetSellRate = await client.readContract({
     address: adapter,
     abi: midnightAdapterAbi,
-    functionName: "noSalesWithShortfall",
+    functionName: "maxNetSellRate",
   });
-  const onchainNoSalesBelowFaceValue = await client.readContract({
+  const onchainShortfallAllowance = await client.readContract({
     address: adapter,
     abi: midnightAdapterAbi,
-    functionName: "noSalesBelowFaceValue",
+    functionName: "shortfallAllowance",
+  });
+  const onchainEnterGateFactory = await client.readContract({
+    address: adapter,
+    abi: midnightAdapterAbi,
+    functionName: "enterGateFactory",
   });
   const onchainSkimRecipient = await client.readContract({
     address: adapter,
@@ -396,19 +417,24 @@ const expectAdapterMatchesChain = async (params: {
       if (stored === undefined)
         throw new Error(`Missing SDK marketData for ${marketId}`);
       expect(stored.netCredit).toBe(onchain.netCredit);
-      expect(stored.rate).toBe(onchain.rate);
+      expect(stored.netRate).toBe(onchain.netRate);
       expect(stored.maturity).toBe(BigInt(onchain.maturity));
       expect(stored.index).toBe(BigInt(onchain.index));
       expect(stored.forceSellable).toBe(onchain.forceSellable);
+      expect(stored.forceRemoved).toBe(onchain.forceRemoved);
+      expect(stored.minForceSellPrice).toBe(onchain.minForceSellPrice);
     }
     expect([...sdkAdapter.durations]).toEqual([...onchainDurations]);
     expect([...sdkAdapter.durationAllocations]).toEqual([
       ...onchainDurationAllocations,
     ]);
-    expect(sdkAdapter.minRate).toBe(BigInt(onchainMinRate));
+    expect(sdkAdapter.minNetBuyRate).toBe(BigInt(onchainMinRate));
     expect(sdkAdapter.maxTtm).toBe(BigInt(onchainMaxTtm));
-    expect(sdkAdapter.noSalesWithShortfall).toBe(onchainNoSalesWithShortfall);
-    expect(sdkAdapter.noSalesBelowFaceValue).toBe(onchainNoSalesBelowFaceValue);
+    expect(sdkAdapter.maxNetSellRate).toBe(BigInt(onchainMaxNetSellRate));
+    expect(sdkAdapter.shortfallAllowance).toBe(
+      BigInt(onchainShortfallAllowance),
+    );
+    expect(sdkAdapter.enterGateFactory).toBe(onchainEnterGateFactory);
     expect(sdkAdapter.skimRecipient).toBe(onchainSkimRecipient);
 
     // Each cap id reported by `ids(market)` accumulates the net credit deltas
@@ -736,8 +762,19 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     });
     const marketId = MarketUtils.toId(market);
     const before = await readMarketData({ client, adapter, marketId });
-    expect(before.rate).toBeGreaterThan(0n);
+    expect(before.netRate).toBeGreaterThan(0n);
 
+    // Allow discounted sales and absorb their shortfall.
+    for (const functionName of [
+      "setMaxNetSellRate",
+      "setShortfallAllowance",
+    ] as const)
+      await client.writeContract({
+        address: adapter,
+        abi: midnightAdapterAbi,
+        functionName,
+        args: [maxUint128],
+      });
     const lender = testAccount(11);
     await fundLender({ client, lender, units: before.netCredit });
     const discountedTick = TickLib.priceToTick(
@@ -758,17 +795,17 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     });
 
     const after = await readMarketData({ client, adapter, marketId });
-    expect(after.rate).toBeLessThan(before.rate);
+    expect(after.netRate).toBeLessThan(before.netRate);
     const { sdkAdapter } = await expectAdapterMatchesChain({
       client,
       vault,
       adapter,
       markets: [market],
     });
-    expect(sdkAdapter.marketData[marketId]?.rate).toBe(after.rate);
+    expect(sdkAdapter.marketData[marketId]?.netRate).toBe(after.netRate);
   });
 
-  test("repays the borrower then withdrawToVault returns credit to idle", async ({
+  test("repays the borrower then deallocate returns credit to idle", async ({
     client,
   }) => {
     const timestamp = await client.timestamp();
@@ -838,12 +875,95 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
       functionName: "balanceOf",
       args: [vault],
     });
-    const stored = await readMarketData({ client, adapter, marketId });
+    // A vault exit through the Midnight liquidity adapter withdraws repaid credit to the vault.
+    const liquidityData = encodeAbiParameters(
+      [midnightMarketAbi],
+      [MarketUtils.toStruct(market)],
+    );
     await client.writeContract({
-      address: adapter,
-      abi: midnightAdapterAbi,
-      functionName: "withdrawToVault",
-      args: [MarketUtils.toStruct(market), stored.netCredit],
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "setLiquidityAdapterAndData",
+      args: [adapter, liquidityData],
+    });
+    const [credit] = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "updatePositionView",
+      args: [MarketUtils.toStruct(market), marketId, adapter],
+    });
+    const [, , withdrawable] = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "marketState",
+      args: [marketId],
+    });
+    const liquidityVault = await fetchAccrualVaultV2(vault, client, {
+      deployless: "force",
+    });
+    const adapterLiquidity =
+      liquidityVault.accrualLiquidityAdapter?.maxWithdraw(liquidityData).value;
+    expect(adapterLiquidity).toBe(
+      credit < withdrawable ? credit : withdrawable,
+    );
+    expect(adapterLiquidity).toBeGreaterThan(0n);
+    // An exit beyond idle assets withdraws the remainder from Midnight through the adapter.
+    const fromAdapter = adapterLiquidity! / 2n;
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "withdraw",
+      args: [
+        idleBefore + fromAdapter,
+        client.account.address,
+        client.account.address,
+      ],
+    });
+    const [creditAfter] = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "updatePositionView",
+      args: [MarketUtils.toStruct(market), marketId, adapter],
+    });
+    expect(creditAfter).toBe(credit - fromAdapter);
+    const exitedVault = await fetchAccrualVaultV2(vault, client, {
+      deployless: "force",
+    });
+    expect(exitedVault.assetBalance).toBe(0n);
+    expect(
+      exitedVault.accrualLiquidityAdapter?.maxWithdraw(liquidityData).value,
+    ).toBe(
+      creditAfter < withdrawable - fromAdapter
+        ? creditAfter
+        : withdrawable - fromAdapter,
+    );
+    await expectAdapterMatchesChain({
+      client,
+      vault,
+      adapter,
+      markets: [market],
+    });
+
+    const idleBeforeDeallocate = await client.readContract({
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [vault],
+    });
+    const stored = await readMarketData({ client, adapter, marketId });
+    // The vault's allocator deallocates `abi.encode(market)` through the adapter.
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "deallocate",
+      args: [
+        adapter,
+        encodeAbiParameters(
+          [midnightMarketAbi],
+          [MarketUtils.toStruct(market)],
+        ),
+        stored.netCredit,
+      ],
     });
     const { sdkAdapter } = await expectAdapterMatchesChain({
       client,
@@ -858,11 +978,11 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
       functionName: "balanceOf",
       args: [vault],
     });
-    expect(idleAfter).toBeGreaterThan(idleBefore);
-    expect(idleAfter - idleBefore).toBe(stored.netCredit);
+    expect(idleAfter).toBeGreaterThan(idleBeforeDeallocate);
+    expect(idleAfter - idleBeforeDeallocate).toBe(stored.netCredit);
   });
 
-  test("forceDeallocate through a buy offer pays face assets plus penalty shares", async ({
+  test("forceDeallocate buys the adapter credit at face and burns penalty shares", async ({
     client,
   }) => {
     const timestamp = await client.timestamp();
@@ -898,26 +1018,9 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
 
     const stored = await readMarketData({ client, adapter, marketId });
     const assets = stored.netCredit / 2n;
-    const lender = testAccount(12);
-    await fundLender({ client, lender, units: stored.netCredit });
-    const offer = buyOffer({
-      lender,
-      market,
-      units: stored.netCredit,
-      tick: TickLib.priceToTick(990_000_000_000_000_000n),
-    });
-    const tree = Tree.create([offer]);
-    await client.writeContract({
-      account: lender,
-      address: setterRatifier,
-      abi: setterRatifierAbi,
-      functionName: "setIsRootRatified",
-      args: [lender.address, tree.root, true],
-    });
-    const item = SetterRatifierUtils.ratify({ tree })[0];
-    if (item === undefined) throw new Error("Expected a ratified offer");
 
-    // The caller pays `assets` face to the adapter and burns penalty shares.
+    // The caller buys `assets` units of the adapter's credit at face, paying
+    // `assets` plus the settlement fee, and burns penalty shares.
     const forceDeallocateCaller = testAccount(16);
     await client.setBalance({
       address: forceDeallocateCaller.address,
@@ -932,15 +1035,35 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
       functionName: "transfer",
       args: [forceDeallocateCaller.address, sharesToTransfer],
     });
+    // The adapter takes on Midnight on behalf of the caller.
+    await client.writeContract({
+      account: forceDeallocateCaller,
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "setIsAuthorized",
+      args: [adapter, true, forceDeallocateCaller.address],
+    });
+    const blockTimestamp = (await client.getBlock()).timestamp + 1n;
+    const settlementFee = await client.readContract({
+      address: midnight,
+      abi: midnightAbi,
+      functionName: "settlementFee",
+      args: [marketId, market.maturity - blockTimestamp],
+    });
+    const settlementFeeAssets = MathLib.mulDivUp(
+      assets,
+      settlementFee,
+      MathLib.WAD,
+    );
     await client.deal({
       erc20: usdc,
       account: forceDeallocateCaller.address,
-      amount: assets,
+      amount: assets + settlementFeeAssets,
     });
     await client.approve({
       account: forceDeallocateCaller,
       address: usdc,
-      args: [adapter, assets],
+      args: [adapter, assets + settlementFeeAssets],
     });
     const [owner, curator, isAllocator] = await Promise.all([
       client.readContract({
@@ -971,31 +1094,6 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
       erc20: usdc,
       owner: forceDeallocateCaller.address,
     });
-    if (offerTuple === undefined)
-      throw new Error("Expected a take offer tuple");
-    const forceDeallocateArgs = [
-      adapter,
-      encodeAbiParameters(
-        [offerTuple, { type: "bytes" }],
-        [OfferUtils.toStruct({ offer: item.offer }), item.ratifierData],
-      ),
-      assets,
-      forceDeallocateCaller.address,
-    ] as const;
-    // The caller receives `sellerAssets` from the take and pays face `assets`.
-    const blockTimestamp = (await client.getBlock()).timestamp + 1n;
-    await client.setNextBlockTimestamp({ timestamp: blockTimestamp });
-    const settlementFee = await client.readContract({
-      address: midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, market.maturity - blockTimestamp],
-    });
-    const proceeds = MathLib.mulDivDown(
-      assets,
-      TickLib.tickToPrice(offer.tick) - settlementFee,
-      MathLib.WAD,
-    );
     // forceDeallocate withdraws `penaltyAssets = assets * penalty / WAD` (up)
     // from the caller; the conversion uses the vault accrued at the same
     // timestamp before the sale, which the SDK reproduces from the pre-tx
@@ -1014,12 +1112,21 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     const expectedPenaltyShares = sdkVault
       .accrueInterest(blockTimestamp)
       .vault.toShares(penaltyAssets, "Up");
+    await client.setNextBlockTimestamp({ timestamp: blockTimestamp });
     await client.writeContract({
       account: forceDeallocateCaller,
       address: vault,
       abi: vaultV2Abi,
       functionName: "forceDeallocate",
-      args: forceDeallocateArgs,
+      args: [
+        adapter,
+        encodeAbiParameters(
+          [midnightMarketAbi, { type: "address" }],
+          [MarketUtils.toStruct(market), forceDeallocateCaller.address],
+        ),
+        assets,
+        forceDeallocateCaller.address,
+      ],
     });
 
     const { sdkAdapter } = await expectAdapterMatchesChain({
@@ -1039,14 +1146,13 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
         owner: forceDeallocateCaller.address,
       }));
     expect(penaltyShares).toBe(expectedPenaltyShares);
-    // The caller paid face `assets` and received the `proceeds` of the take.
     const spent =
       usdcBefore -
       (await client.balanceOf({
         erc20: usdc,
         owner: forceDeallocateCaller.address,
       }));
-    expect(spent).toBe(assets - proceeds);
+    expect(spent).toBe(assets + settlementFeeAssets);
   });
 
   test("config setters are reflected and their guards revert", async ({
@@ -1077,40 +1183,23 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     const marketId = MarketUtils.toId(market);
     const markets = [market, marketShort];
 
-    await submitAndAcceptAdapterCall({
-      client,
-      adapter,
-      data: encodeFunctionData({
+    // Allocator guardrails are curator settings without a timelock.
+    for (const [functionName, value] of [
+      ["setMinNetBuyRate", 1_000n],
+      ["setMaxNetSellRate", 2_000n],
+      ["setShortfallAllowance", 3_000n],
+    ] as const) {
+      await client.writeContract({
+        address: adapter,
         abi: midnightAdapterAbi,
-        functionName: "setMinRate",
-        args: [1_000n],
-      }),
-    });
-    expect((await fetchMidnightAdapter(client, adapter)).minRate).toBe(1_000n);
-    await submitAndAcceptAdapterCall({
-      client,
-      adapter,
-      data: encodeFunctionData({
-        abi: midnightAdapterAbi,
-        functionName: "setNoSalesWithShortfall",
-        args: [true],
-      }),
-    });
-    expect(
-      (await fetchMidnightAdapter(client, adapter)).noSalesWithShortfall,
-    ).toBe(true);
-    await submitAndAcceptAdapterCall({
-      client,
-      adapter,
-      data: encodeFunctionData({
-        abi: midnightAdapterAbi,
-        functionName: "setNoSalesBelowFaceValue",
-        args: [true],
-      }),
-    });
-    expect(
-      (await fetchMidnightAdapter(client, adapter)).noSalesBelowFaceValue,
-    ).toBe(true);
+        functionName,
+        args: [value],
+      });
+    }
+    const configured = await fetchMidnightAdapter(client, adapter);
+    expect(configured.minNetBuyRate).toBe(1_000n);
+    expect(configured.maxNetSellRate).toBe(2_000n);
+    expect(configured.shortfallAllowance).toBe(3_000n);
     await submitAndAcceptAdapterCall({
       client,
       adapter,
@@ -1125,7 +1214,7 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     );
     await expectAdapterMatchesChain({ client, vault, adapter, markets });
 
-    // Sales below face value are rejected while `noSalesBelowFaceValue` holds.
+    // A sale implying a net rate above `maxNetSellRate` is rejected.
     const lender = testAccount(13);
     await fundLender({ client, lender, units: UNITS });
     const belowFaceOffer = buyOffer({
@@ -1142,15 +1231,15 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
         offer: belowFaceOffer,
         units: UNITS / 10n,
       }),
-    ).rejects.toThrow("SaleBelowFaceValue");
+    ).rejects.toThrow("NetSellRateTooHigh");
 
-    // With `noSalesBelowFaceValue` cleared, the same below-amortized sale hits
-    // the `noSalesWithShortfall` guard instead.
+    // With `maxNetSellRate` lifted, the same below-amortized sale exceeds the
+    // remaining `shortfallAllowance` instead.
     await client.writeContract({
       address: adapter,
       abi: midnightAdapterAbi,
-      functionName: "setNoSalesBelowFaceValue",
-      args: [false],
+      functionName: "setMaxNetSellRate",
+      args: [maxUint64],
     });
     await expect(
       takeOffer({
@@ -1160,12 +1249,12 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
         offer: belowFaceOffer,
         units: UNITS / 10n,
       }),
-    ).rejects.toThrow("ShortfallTooHigh");
+    ).rejects.toThrow("ShortfallAllowanceExceeded");
     await client.writeContract({
       address: adapter,
       abi: midnightAdapterAbi,
-      functionName: "setNoSalesBelowFaceValue",
-      args: [true],
+      functionName: "setMaxNetSellRate",
+      args: [2_000n],
     });
 
     await submitAndAcceptAdapterCall({
@@ -1194,11 +1283,11 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
       }),
     ).rejects.toThrow("UnauthorizedBuy");
 
-    // A buy whose implied rate is below `minRate` is rejected.
+    // A buy whose implied net rate is below `minNetBuyRate` is rejected.
     await client.writeContract({
       address: adapter,
       abi: midnightAdapterAbi,
-      functionName: "setMinRate",
+      functionName: "setMinNetBuyRate",
       args: [maxUint64],
     });
     await expect(
@@ -1213,23 +1302,20 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
         }),
         units: UNITS,
       }),
-    ).rejects.toThrow("BuyRateTooLow");
+    ).rejects.toThrow("NetBuyRateTooLow");
     await client.writeContract({
       address: adapter,
       abi: midnightAdapterAbi,
-      functionName: "setMinRate",
+      functionName: "setMinNetBuyRate",
       args: [0n],
     });
 
     // maxTtm is checked before the other guards, so it is lowered last.
-    await submitAndAcceptAdapterCall({
-      client,
-      adapter,
-      data: encodeFunctionData({
-        abi: midnightAdapterAbi,
-        functionName: "setMaxTtm",
-        args: [Time.s.from.d(20n)],
-      }),
+    await client.writeContract({
+      address: adapter,
+      abi: midnightAdapterAbi,
+      functionName: "decreaseMaxTtm",
+      args: [Time.s.from.d(20n)],
     });
     expect((await fetchMidnightAdapter(client, adapter)).maxTtm).toBe(
       Time.s.from.d(20n),
@@ -1284,7 +1370,7 @@ describe("Vault V2 Midnight adapter on-chain parity on Base", () => {
     const sdkBefore = await fetchMidnightAdapter(client, adapter);
     const durationIdData = encodeAbiParameters(
       [{ type: "string" }, { type: "address" }, { type: "uint256" }],
-      ["duration", adapter, durations[0]!],
+      ["this/duration", adapter, durations[0]!],
     );
     await client.writeContract({
       address: vault,

@@ -1,8 +1,10 @@
 import { createPublicClient, http, type PublicClient } from "viem";
+import { SimulationValidationError } from "../../errors.js";
 
 /**
  * Create the viem public client shared by every simulation backend stage
  * (pinned block resolution, binding/pinned reads, `eth_simulateV1`).
+ * CCIP-Read is disabled so contract reverts cannot trigger arbitrary URL fetches.
  *
  * A supplied abort signal is bound into the transport: a failed or aborted
  * request must not consume another attempt or a fresh budget, and the pipeline
@@ -14,13 +16,15 @@ import { createPublicClient, http, type PublicClient } from "viem";
  * @param rpcUrl - Endpoint URL; each caller supplies the transport it trusts.
  * @param signal - Optional pipeline abort signal shared by every request.
  * @returns A viem {@link PublicClient} honoring the shared abort/timeout budget.
+ * @throws {SimulationValidationError} if viem does not disable CCIP-Read.
  * @internal
  */
 export function createSimulationClient(
   rpcUrl: string,
   signal?: AbortSignal,
 ): PublicClient {
-  return createPublicClient({
+  const client = createPublicClient({
+    ccipRead: false,
     transport: http(rpcUrl, {
       // viem parses a JSON-typed body before checking `response.ok`, so an
       // error status with an unparseable JSON-typed body would lose its
@@ -42,4 +46,10 @@ export function createSimulationClient(
       timeout: signal ? 0 : undefined,
     }),
   });
+  if (client.ccipRead !== false)
+    throw new SimulationValidationError(
+      "Simulation client did not disable CCIP-Read. Upgrade viem to >=2.9.2 to prevent offchain URL fetches.",
+      ["client.ccipRead: must be false"],
+    );
+  return client;
 }

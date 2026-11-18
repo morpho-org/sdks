@@ -27,6 +27,7 @@ import { createFaultProxy, expectFailClosed } from "@morpho-org/test/chaos";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
+  concatHex,
   encodeErrorResult,
   encodeFunctionData,
   erc20Abi,
@@ -34,19 +35,24 @@ import {
   isAddressEqual,
   isHex,
   maxUint256,
+  offchainLookupAbiItem,
   parseAbi,
   parseEventLogs,
   parseSignature,
   parseUnits,
+  size,
+  toHex,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, expect, vi } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
+  SlippageCheckUnavailableError,
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 
 /**
@@ -55,7 +61,9 @@ import { seededMarketData, seededVaultData } from "../setup.js";
  * `test/setup.ts` predates them and predates this pipeline's supported routes.
  */
 const test = createViemTest(mainnet, {
-  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
+  forkUrl:
+    process.env.MAINNET_RPC_URL ??
+    getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
   forkBlockNumber: 25_832_676n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
@@ -83,7 +91,9 @@ const CbbtcUsdcBlue = new MarketParams({
 });
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const executeApprovals = async (
@@ -1055,6 +1065,93 @@ describe.sequential("simulate pipeline — vault V1", () => {
 
 describe.sequential("simulate pipeline — vault V2", () => {
   const KEYROCK: Address = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("error: vault asset OffchainLookup never fetches a gateway or executes the bundle", async ({
+    client,
+  }) => {
+    const gateway = "https://gateway.example.com/ccip/{sender}/{data}";
+    const revertData = encodeErrorResult({
+      abi: [offchainLookupAbiItem],
+      errorName: "OffchainLookup",
+      args: [KEYROCK, [gateway], "0x1234", "0x12345678", "0x"],
+    });
+    const length = toHex(size(revertData), { size: 2 });
+    // Copy the encoded error after this 15-byte header into memory and revert.
+    await client.setCode({
+      address: KEYROCK,
+      bytecode: concatHex([
+        "0x61",
+        length,
+        "0x61000f60003961",
+        length,
+        "0x6000fd",
+        revertData,
+      ]),
+    });
+    const originalFetch = globalThis.fetch;
+    let gatewayRequests = 0;
+    const methods: string[] = [];
+    const assetReads: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (input, init) => {
+        if (String(input).startsWith("https://gateway.example.com/")) {
+          gatewayRequests++;
+          return Response.json({ data: "0x" });
+        }
+        if (String(input) === new URL(client.transport.url!).href) {
+          const body = JSON.parse(String(init?.body)) as {
+            method: string;
+            params?: { to?: string; data?: string }[];
+          };
+          methods.push(body.method);
+          if (
+            body.method === "eth_call" &&
+            body.params?.[0]?.data ===
+              encodeFunctionData({ abi: vaultV2Abi, functionName: "asset" })
+          )
+            assetReads.push(body.params[0].to!);
+        }
+        return originalFetch(input, init);
+      }),
+    );
+
+    await expect(
+      simulate(
+        { ...configFor(client), timeoutMs: 30_000 },
+        {
+          chainId: mainnet.id,
+          transactions: [
+            {
+              from: client.account.address,
+              to: KEYROCK,
+              data: encodeFunctionData({
+                abi: vaultV2Abi,
+                functionName: "deposit",
+                args: [1n, client.account.address],
+              }),
+            },
+          ],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: KEYROCK,
+                quote: { assetsPaid: 1n, sharesMinted: 1n },
+              },
+            ],
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
+
+    expect(assetReads.map((address) => address.toLowerCase())).toContain(
+      KEYROCK.toLowerCase(),
+    );
+    expect(gatewayRequests).toBe(0);
+    expect(methods).not.toContain("eth_simulateV1");
+  });
 
   test("vaultV2Deposit: optional slippage checks use the selected share recipient", async ({
     client,
@@ -1084,7 +1181,10 @@ describe.sequential("simulate pipeline — vault V2", () => {
         }),
       },
     ];
-    const config = { ...configFor(client), timeoutMs: 30_000 };
+    const config = {
+      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+      timeoutMs: 30_000,
+    };
     const input = {
       chainId: mainnet.id,
       limits: "none" as const,
@@ -2197,7 +2297,11 @@ describe.sequential("chaos: S11 invalid authorization", () => {
       let result: unknown;
       const error = await expectFailClosed(
         simulate(
-          { chains: new Map([[mainnet.id, { simulateV1Url: proxy.url }]]) },
+          {
+            chains: new Map([
+              [mainnet.id, { client: createTestSimulationClient(proxy.url) }],
+            ]),
+          },
           {
             chainId: mainnet.id,
             limits: "none",

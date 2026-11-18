@@ -18,6 +18,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -79,7 +80,12 @@ test("verifies callback burns and owner proceeds independently on a real Blue wi
     expected: { assetsReceived: positionData.supplyAssets },
   });
   const config = {
-    chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [
+        mainnet.id,
+        { client: createTestSimulationClient(client.transport.url!) },
+      ],
+    ]),
   };
   const run = (
     transaction: { to: Address; data: `0x${string}`; value: bigint },

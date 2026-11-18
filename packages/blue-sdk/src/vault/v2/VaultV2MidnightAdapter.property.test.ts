@@ -41,26 +41,31 @@ const addressId = (tag: string, value: `0x${string}`) =>
       [tag, value],
     ),
   );
-const uintId = (tag: string, value: bigint) =>
-  keccak256(
-    encodeAbiParameters(
-      [{ type: "string" }, { type: "uint256" }],
-      [tag, value],
-    ),
-  );
 type Collateral = IVaultV2MidnightAdapterMarket["collateralParams"][number];
-const paramsId = (params: Collateral) =>
+const familyId = (
+  input: Pick<
+    IVaultV2MidnightAdapterMarket,
+    "collateralParams" | "rcfThreshold" | "liquidatorGate"
+  >,
+) =>
   keccak256(
     encodeAbiParameters(
-      [{ type: "string" }, collateralParamsAbi],
       [
-        "collateralParams",
-        {
+        { type: "string" },
+        { type: "tuple[]", components: collateralParamsAbi.components },
+        { type: "uint256" },
+        { type: "address" },
+      ],
+      [
+        "family",
+        input.collateralParams.map((params: Collateral) => ({
           token: params.token,
           lltv: BigInt(params.lltv),
           liquidationCursor: BigInt(params.liquidationCursor),
           oracle: params.oracle,
-        },
+        })),
+        BigInt(input.rcfThreshold),
+        input.liquidatorGate,
       ],
     ),
   );
@@ -69,37 +74,24 @@ test.prop([
   fc.record({
     adapter: address,
     token: address,
-    params: collateral,
-    threshold: uint256,
-    gate: address,
+    input: market,
     duration: uint256,
   }),
 ])(
   "invariant: every cap id matches abi.encode(string,...)",
-  ({ adapter, token, params, threshold, gate, duration }) => {
+  ({ adapter, token, input, duration }) => {
     expect(VaultV2MidnightAdapter.adapterCapId(adapter)).toBe(
       addressId("this", adapter),
     );
     expect(VaultV2MidnightAdapter.collateralTokenCapId(token)).toBe(
       addressId("collateralToken", token),
     );
-    expect(VaultV2MidnightAdapter.collateralParamsCapId(params)).toBe(
-      paramsId(params),
-    );
-    expect(VaultV2MidnightAdapter.enterGateCapId(gate)).toBe(
-      addressId("enterGate", gate),
-    );
-    expect(VaultV2MidnightAdapter.liquidatorGateCapId(gate)).toBe(
-      addressId("liquidatorGate", gate),
-    );
-    expect(VaultV2MidnightAdapter.rcfThresholdCapId(threshold)).toBe(
-      uintId("rcfThreshold", threshold),
-    );
+    expect(VaultV2MidnightAdapter.familyCapId(input)).toBe(familyId(input));
     expect(VaultV2MidnightAdapter.durationCapId(adapter, duration)).toBe(
       keccak256(
         encodeAbiParameters(
           [{ type: "string" }, { type: "address" }, { type: "uint256" }],
-          ["duration", adapter, duration],
+          ["this/duration", adapter, duration],
         ),
       ),
     );
@@ -120,19 +112,17 @@ test.prop([address, market])(
       durations: [],
       durationAllocations: [],
       maxTtm: 0n,
-      minRate: 0n,
-      noSalesWithShortfall: false,
-      noSalesBelowFaceValue: false,
+      minNetBuyRate: 0n,
+      maxNetSellRate: 0n,
+      shortfallAllowance: 0n,
+      enterGateFactory: "0x0000000000000000000000000000000000000000",
     });
     const expected = [
       addressId("this", adapterAddress),
-      addressId("enterGate", input.enterGate),
-      addressId("liquidatorGate", input.liquidatorGate),
-      uintId("rcfThreshold", BigInt(input.rcfThreshold)),
-      ...input.collateralParams.flatMap((params) => [
+      familyId(input),
+      ...input.collateralParams.map((params) =>
         addressId("collateralToken", params.token),
-        paramsId(params),
-      ]),
+      ),
     ];
 
     expect(
@@ -159,10 +149,12 @@ const marketDataRecord = fc
         `0x${i.toString(16).padStart(64, "0")}` as const,
         {
           netCredit,
-          rate: 0n,
+          netRate: 0n,
           maturity,
           index: BigInt(i),
           forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       ]),
     ),

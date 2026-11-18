@@ -40,6 +40,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -98,7 +99,9 @@ const LENT = 1_234_567n;
 const REFERRAL_FEE = 10_000_000_000_000_000n;
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 const asTransaction = (
   from: Address,

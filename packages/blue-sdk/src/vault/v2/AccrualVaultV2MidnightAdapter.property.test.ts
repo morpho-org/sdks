@@ -15,7 +15,7 @@ const marketArb = fc.bigInt({ min: 0n, max: 1_000_000n }).chain((credit) =>
       lossFactor: fc.bigInt({ min: 0n, max: MAX_UINT_128 }),
       maturity: fc.bigInt({ min: 1n, max: 10_000n }),
       lastAccrualOffset: fc.integer({ min: -5_000, max: 5_000 }),
-      rate: fc.bigInt({ min: 0n, max: MathLib.WAD }),
+      netRate: fc.bigInt({ min: 0n, max: MathLib.WAD }),
     })
     .map((generated) => ({ credit, ...generated })),
 );
@@ -43,7 +43,7 @@ const lossAndFeeMarketArb = fc
         lossFactors: lossFactorPairArb,
         maturity: fc.bigInt({ min: 1n, max: 10_000n }),
         lastAccrualOffset: fc.integer({ min: -5_000, max: 5_000 }),
-        rate: fc.bigInt({ min: 0n, max: MathLib.WAD }),
+        netRate: fc.bigInt({ min: 0n, max: MathLib.WAD }),
       })
       .map((generated) => ({ credit, ...generated })),
   );
@@ -80,10 +80,12 @@ test.prop([scenarioArb], { numRuns: 1_000 })(
         marketIds[index]!,
         {
           netCredit: generated.credit - generated.pendingFee,
-          rate: generated.rate,
+          netRate: generated.netRate,
           maturity: generated.maturity,
           index: BigInt(index),
           forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       ]),
     );
@@ -100,9 +102,10 @@ test.prop([scenarioArb], { numRuns: 1_000 })(
         durations: [],
         durationAllocations: [],
         maxTtm: 20_000n,
-        minRate: 0n,
-        noSalesWithShortfall: false,
-        noSalesBelowFaceValue: false,
+        minNetBuyRate: 0n,
+        maxNetSellRate: 0n,
+        shortfallAllowance: 0n,
+        enterGateFactory: "0x0000000000000000000000000000000000000000",
       },
       markets,
       lastUpdate: 0n,
@@ -144,10 +147,12 @@ test.prop([lossAndFeeScenarioArb], { numRuns: 1_000 })(
         market: { lossFactor: generated.lossFactors.lossFactor },
         marketData: {
           netCredit: generated.credit - generated.pendingFee,
-          rate: generated.rate,
+          netRate: generated.netRate,
           maturity: generated.maturity,
           index: BigInt(index),
           forceSellable: false,
+          forceRemoved: false,
+          minForceSellPrice: 0n,
         },
       };
     });
@@ -166,9 +171,10 @@ test.prop([lossAndFeeScenarioArb], { numRuns: 1_000 })(
         durations: [],
         durationAllocations: [],
         maxTtm: 20_000n,
-        minRate: 0n,
-        noSalesWithShortfall: false,
-        noSalesBelowFaceValue: false,
+        minNetBuyRate: 0n,
+        maxNetSellRate: 0n,
+        shortfallAllowance: 0n,
+        enterGateFactory: "0x0000000000000000000000000000000000000000",
       },
       markets: scenarios.map(({ id, position, market }) => ({
         id,

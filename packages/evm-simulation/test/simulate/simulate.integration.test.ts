@@ -22,6 +22,7 @@ import {
   SimulationRevertedError,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData } from "../setup.js";
 
 // Pinned with the bundles deployments the verified pipeline routes through —
@@ -69,7 +70,9 @@ const WstethWethBlue = new MarketParams({
 const configFor = (client: { transport: { url?: string } }) => ({
   // Cold fork reads may exceed the production default while fetching upstream state.
   timeoutMs: 30_000,
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 describe.sequential("simulate — real revert propagation", () => {

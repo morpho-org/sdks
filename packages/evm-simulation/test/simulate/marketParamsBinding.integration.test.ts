@@ -14,6 +14,7 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { SlippageCheckUnavailableError, simulate } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -153,7 +154,9 @@ test("rejects a foreign Blue market tuple during public simulation", async ({
       simulate(
         {
           timeoutMs: 30_000,
-          chains: new Map([[mainnet.id, { simulateV1Url: proxyUrl }]]),
+          chains: new Map([
+            [mainnet.id, { client: createTestSimulationClient(proxyUrl) }],
+          ]),
         },
         {
           chainId: mainnet.id,

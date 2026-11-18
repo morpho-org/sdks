@@ -687,6 +687,21 @@ export interface MidnightCancelAndMakeAction
   > {}
 
 /**
+ * Metadata for a direct Midnight cancellation of offer groups. One group is a bare
+ * `setConsumed` call; two or more are one Midnight `multicall` of `setConsumed` calls.
+ */
+export interface MidnightCancelOffersAction
+  extends BaseAction<
+    "midnightCancelOffers",
+    {
+      /** Offer groups cancelled in full, in encoded order. */
+      readonly groups: readonly Hex[];
+      /** Maker whose groups are cancelled. */
+      readonly onBehalf: Address;
+    }
+  > {}
+
+/**
  * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
  * consumers can `switch` exhaustively on it.
@@ -727,7 +742,8 @@ export type TransactionAction =
   | MidnightRedeemAction
   | MidnightTakeRepayWithdrawCollateralAction
   | MidnightRepayWithdrawCollateralAction
-  | MidnightCancelAndMakeAction;
+  | MidnightCancelAndMakeAction
+  | MidnightCancelOffersAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:

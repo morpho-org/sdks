@@ -39,6 +39,7 @@ import {
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -140,7 +141,9 @@ async function check(
   };
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   const result = await simulate(config, {
     ...params,
@@ -344,7 +347,9 @@ test("same-token combined Blue operations derive net wallets, including on-behal
   ].map((data) => ({ from: userAddress, to: blue, data }));
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   await expect(
     simulate(config, {
@@ -459,7 +464,9 @@ test("full and share-mode Blue repayments derive from live debt", async ({
     };
     const config = {
       timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+      chains: new Map([
+        [1, { client: createTestSimulationClient(client.transport.url!) }],
+      ]),
     };
     const operation: InputOperationLimit = {
       type: "blueRepayWithdrawCollateral",
@@ -510,7 +517,9 @@ test("full and share-mode Blue repayments derive from live debt", async ({
   const result = await simulate(
     {
       timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+      chains: new Map([
+        [1, { client: createTestSimulationClient(client.transport.url!) }],
+      ]),
     },
     {
       chainId: 1,
@@ -691,7 +700,9 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   };
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   await expect(
     simulate(config, { ...params, limits: { operations: [cases[3]![1]] } }),
@@ -792,7 +803,9 @@ test("native input aliases verify real SDK wrapping and reject mismatched amount
   const tx = action.buildTx();
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   const params = {
     chainId: 1,
@@ -961,7 +974,9 @@ test("borrows and withdrawals split across same-token markets fail while honest 
       const result = simulate(
         {
           timeoutMs: 30_000,
-          chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+          chains: new Map([
+            [1, { client: createTestSimulationClient(client.transport.url!) }],
+          ]),
         },
         {
           chainId: 1,
@@ -1104,7 +1119,9 @@ test("assets-mode migration rejects a different V1 source vault", async ({
   };
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   const operation: InputOperationLimit = {
     type: "vaultV1MigrateToV2",
@@ -1336,7 +1353,9 @@ test("migration into a target holding the source fails closed on any adverse con
   };
   const config = {
     timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+    chains: new Map([
+      [1, { client: createTestSimulationClient(client.transport.url!) }],
+    ]),
   };
   const operation: InputOperationLimit = {
     type: "vaultV1MigrateToV2",
@@ -1552,7 +1571,9 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
     };
     const config = {
       timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
+      chains: new Map([
+        [1, { client: createTestSimulationClient(client.transport.url!) }],
+      ]),
     };
     const operation: InputOperationLimit = {
       type: "blueBorrow",

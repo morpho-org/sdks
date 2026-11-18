@@ -126,7 +126,7 @@ const countingValidation = () => {
 };
 
 describe("Midnight deadline guard on fork", () => {
-  test("behavior: an expired cancelAndMake deadline reverts DeadlinePassed onchain; cancelOffers rejects it first", async ({
+  test("behavior: an expired cancelAndMake deadline reverts DeadlinePassed onchain", async ({
     client,
   }) => {
     const deadline = await pastDeadline(client);
@@ -139,14 +139,6 @@ describe("Midnight deadline guard on fork", () => {
     await expect(
       client.call({ ...raw, account: client.account.address }),
     ).rejects.toThrow(deadlinePassed);
-
-    expect(() =>
-      midnightEntity(client).cancelOffers({
-        accountAddress: client.account.address,
-        cancellations,
-        deadline,
-      }),
-    ).toThrow(ExpiredDeadlineError);
   });
 
   test("behavior: an expired repayWithdrawCollateral deadline reverts DeadlinePassed onchain; the entity rejects it first", async ({

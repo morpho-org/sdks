@@ -35,6 +35,7 @@ export type {
   IVaultV2MidnightAdapterMarket,
   IVaultV2MidnightAdapterMarketData,
   IVaultV2MidnightAdapterMarketState,
+  IVaultV2MidnightAdapterMidnightMarket,
   IVaultV2MidnightAdapterPosition,
   IVaultV2MorphoMarketV1Adapter,
   IVaultV2MorphoMarketV1AdapterV2,

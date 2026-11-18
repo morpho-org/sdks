@@ -1333,13 +1333,15 @@ export class InvalidReallocationSourceTypeError extends Error {
     public readonly sourceType: string | undefined,
     public readonly missingField?: "adapter" | "marketParams",
   ) {
-    super(
-      missingField == null
-        ? sourceType === undefined
-          ? 'Reallocation source must specify type "market" or "idle".'
-          : `Reallocation source type must be "market" or "idle", got "${sourceType}".`
-        : `Reallocation market source must include a valid "${missingField}".`,
-    );
+    let message: string;
+    if (missingField != null) {
+      message = `Reallocation market source must include a valid "${missingField}".`;
+    } else if (sourceType === undefined) {
+      message = 'Reallocation source must specify type "market" or "idle".';
+    } else {
+      message = `Reallocation source type must be "market" or "idle", got "${sourceType}".`;
+    }
+    super(message);
     this.name = "InvalidReallocationSourceTypeError";
   }
 }

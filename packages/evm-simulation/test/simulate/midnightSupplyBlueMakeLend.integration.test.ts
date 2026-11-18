@@ -41,6 +41,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(base, {
@@ -273,7 +274,9 @@ const asTransaction = (from: Address, tx: ParkingTransaction) => ({
 });
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 const measureSupplySharesDeltas = async (

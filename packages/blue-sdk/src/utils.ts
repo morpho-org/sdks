@@ -8,9 +8,9 @@ export enum CapacityLimitReason {
   vaultV2_absoluteCap = "VaultV2_AbsoluteCap",
   vaultV2_relativeCap = "VaultV2_RelativeCap",
   /**
-   * The vault's liquidity adapter is a Midnight adapter. Midnight adapters revert vault-initiated
-   * allocations and deallocations (`SelfAllocationOnly`), so deposits cannot be pushed to it and exits
-   * can only draw on the vault's idle assets.
+   * Applies only to deposits: Midnight liquidity adapters revert vault-initiated allocations
+   * (`SelfAllocationOnly`). Exits can draw on adapter credit via `withdrawToVault`, subject to
+   * market liquidity (`CapacityLimitReason.liquidity`).
    */
   midnightSelfAllocation = "Midnight_SelfAllocationOnly",
 }

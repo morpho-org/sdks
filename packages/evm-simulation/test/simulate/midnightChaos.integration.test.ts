@@ -43,6 +43,7 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -82,7 +83,7 @@ const market = new MarketParams({
   liquidatorGate: zeroAddress,
 });
 const configFor = (url: string) => ({
-  chains: new Map([[base.id, { simulateV1Url: url }]]),
+  chains: new Map([[base.id, { client: createTestSimulationClient(url) }]]),
   timeoutMs: 30_000,
 });
 

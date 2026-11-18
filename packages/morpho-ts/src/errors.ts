@@ -247,6 +247,28 @@ export class InvalidAddressError extends Error {
 }
 
 /**
+ * Thrown when a string is not `0x`-prefixed hex with a whole number of bytes.
+ *
+ * @example
+ * ```ts
+ * import { InvalidHexError } from "@morpho-org/morpho-ts";
+ *
+ * throw new InvalidHexError("0x123");
+ * ```
+ */
+export class InvalidHexError extends Error {
+  public readonly value: string;
+
+  public constructor(value: string) {
+    super(
+      `Value "${value}" is not valid hex bytes. Provide "0x" followed by an even number of hexadecimal characters.`,
+    );
+    this.value = value;
+    this.name = "InvalidHexError";
+  }
+}
+
+/**
  * Thrown when the retry attempt budget is exhausted, preserving the last failure as `cause`.
  *
  * @example

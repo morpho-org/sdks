@@ -13,7 +13,7 @@ contract GetVaultV2MidnightAdapter {
         view
         returns (VaultV2MidnightAdapterResponse memory)
     {
-        if (!factory.isMidnightAdapter(address(adapter))) {
+        if (!factory.isCreated(address(adapter))) {
             revert UnknownOfFactory(address(factory), address(adapter));
         }
 

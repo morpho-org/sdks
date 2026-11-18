@@ -2,6 +2,8 @@ import {
   InvalidPositionAccrualStateError,
   InvalidPositionLossFactorError,
 } from "@morpho-org/morpho-ts";
+import { midnightMarketAbi } from "@morpho-org/morpho-ts/abis/midnight";
+import { encodeAbiParameters, zeroAddress } from "viem";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   ADAPTER,
@@ -45,9 +47,10 @@ function adapterInput() {
     durations: [],
     durationAllocations: [],
     maxTtm: 1000n,
-    minRate: 0n,
-    noSalesWithShortfall: false,
-    noSalesBelowFaceValue: false,
+    minNetBuyRate: 0n,
+    maxNetSellRate: 0n,
+    shortfallAllowance: 0n,
+    enterGateFactory: "0x0000000000000000000000000000000000000000",
   };
 }
 
@@ -85,10 +88,12 @@ function accrualAdapter(
       {
         netCredit:
           BigInt(market.position.credit) - BigInt(market.position.pendingFee),
-        rate: MathLib.WAD / 100n,
+        netRate: MathLib.WAD / 100n,
         maturity: 200n,
         index: BigInt(index),
         forceSellable: false,
+        forceRemoved: false,
+        minForceSellPrice: 0n,
         ...marketDataOverrides[market.id],
       },
     ]),
@@ -218,10 +223,12 @@ describe("AccrualVaultV2MidnightAdapter", () => {
     const market = accrualMarket();
     const data = {
       netCredit: 1_000n,
-      rate: 0n,
+      netRate: 0n,
       maturity: 200n,
       index: 0n,
       forceSellable: false,
+      forceRemoved: false,
+      minForceSellPrice: 0n,
     };
     const adapter = {
       ...adapterInput(),
@@ -269,6 +276,7 @@ describe("AccrualVaultV2MidnightAdapter", () => {
           lastLossFactor: 0n,
           lastAccrual: 100n,
         },
+        market: { lossFactor: 1n },
       }),
     ]);
 
@@ -364,7 +372,7 @@ describe("AccrualVaultV2MidnightAdapter", () => {
       marketDataOverrides: { [ID]: { forceSellable: true } },
     });
     const zeroRate = accrualAdapter([accrualMarket()], {
-      marketDataOverrides: { [ID]: { rate: 0n } },
+      marketDataOverrides: { [ID]: { netRate: 0n } },
     });
     const empty = accrualAdapter([
       accrualMarket({
@@ -410,8 +418,8 @@ describe("AccrualVaultV2MidnightAdapter", () => {
       {
         lastUpdate: 100n,
         marketDataOverrides: {
-          [ID]: { rate: 1n, maturity: MathLib.WAD },
-          [SECOND_ID]: { rate: 1n, maturity: MathLib.WAD },
+          [ID]: { netRate: 1n, maturity: MathLib.WAD },
+          [SECOND_ID]: { netRate: 1n, maturity: MathLib.WAD },
         },
       },
     );
@@ -510,7 +518,7 @@ describe("AccrualVaultV2MidnightAdapter", () => {
       {
         lastUpdate: 100n,
         marketDataOverrides: {
-          [ID]: { netCredit: 800n, rate: 0n, maturity: 200n },
+          [ID]: { netCredit: 800n, netRate: 0n, maturity: 200n },
         },
       },
     );
@@ -527,15 +535,17 @@ describe("AccrualVaultV2MidnightAdapter", () => {
     expect(accrued.marketIds).toStrictEqual([ID]);
   });
 
-  test("limits deposit and withdraw capacity to zero", () => {
+  test("limits deposit capacity to zero and rejects malformed liquidity data", () => {
     const adapter = accrualAdapter();
-    const limit = {
+
+    expect(adapter.maxDeposit(EMPTY_HEX, 123n)).toStrictEqual({
       value: 0n,
       limiter: CapacityLimitReason.midnightSelfAllocation,
-    };
-
-    expect(adapter.maxDeposit(EMPTY_HEX, 123n)).toStrictEqual(limit);
-    expect(adapter.maxWithdraw(EMPTY_HEX)).toStrictEqual(limit);
+    });
+    expect(adapter.maxWithdraw(EMPTY_HEX)).toStrictEqual({
+      value: 0n,
+      limiter: CapacityLimitReason.liquidity,
+    });
   });
 
   test("values a mixed Blue/Midnight vault under the vault max-rate cap", () => {
@@ -571,7 +581,7 @@ describe("AccrualVaultV2MidnightAdapter", () => {
       ],
       {
         lastUpdate: 100n,
-        marketDataOverrides: { [ID]: { rate: 0n } },
+        marketDataOverrides: { [ID]: { netRate: 0n } },
       },
     );
     const vault = new AccrualVaultV2(
@@ -654,5 +664,195 @@ describe("AccrualVaultV2MidnightAdapter", () => {
 
     expect(accrued.accrualLiquidityAdapter).toBe(accruedMidnightAdapter);
     expect(accrued.accrualLiquidityAdapter).not.toBe(midnightAdapter);
+  });
+});
+
+const MIDNIGHT_MARKET = {
+  chainId: 8453n,
+  midnight: "0x00000000000000000000000000000000000000AA",
+  loanToken: OTHER,
+  collateralParams: [
+    {
+      token: "0x0000000000000000000000000000000000000003",
+      lltv: 860_000_000_000_000_000n,
+      liquidationCursor: 300_000_000_000_000_000n,
+      oracle: "0x0000000000000000000000000000000000000004",
+    },
+  ],
+  maturity: 200n,
+  rcfThreshold: 5n,
+  enterGate: zeroAddress,
+  liquidatorGate: zeroAddress,
+} as const;
+// Computed with midnight-sdk `MarketUtils.toId(MIDNIGHT_MARKET)`.
+const MIDNIGHT_MARKET_ID =
+  "0x46e2923ebe4d79cb307962f15d0a04f01f7639db2a42d4bc72fdd8bbba7553be" as const;
+
+function liquidityData(market: typeof MIDNIGHT_MARKET = MIDNIGHT_MARKET) {
+  return encodeAbiParameters([midnightMarketAbi], [market]);
+}
+
+function withdrawAdapter({
+  credit = 1_000n,
+  pendingFee = 0n,
+  withdrawable,
+  forceRemoved = false,
+  asset = OTHER,
+  lastUpdate = 100n,
+  lastAccrual = lastUpdate,
+}: {
+  readonly lastAccrual?: bigint;
+  readonly credit?: bigint;
+  readonly pendingFee?: bigint;
+  readonly withdrawable?: bigint;
+  readonly forceRemoved?: boolean;
+  readonly asset?: typeof OTHER | typeof ADDRESS;
+  readonly lastUpdate?: bigint;
+} = {}) {
+  const base = accrualAdapter(
+    [
+      {
+        id: MIDNIGHT_MARKET_ID,
+        position: {
+          credit,
+          pendingFee,
+          lastLossFactor: 0n,
+          lastAccrual,
+        },
+        market: { lossFactor: 0n, withdrawable },
+      },
+    ],
+    {
+      lastUpdate,
+      marketDataOverrides: { [MIDNIGHT_MARKET_ID]: { forceRemoved } },
+    },
+  );
+  return new AccrualVaultV2MidnightAdapter({
+    adapter: { ...base, asset },
+    markets: base.markets,
+    lastUpdate: base.lastUpdate,
+  });
+}
+
+describe("VaultV2MidnightAdapterUtils.marketId", () => {
+  test("default: matches Midnight IdLib.toId", () => {
+    expect(VaultV2MidnightAdapterUtils.marketId(MIDNIGHT_MARKET)).toBe(
+      MIDNIGHT_MARKET_ID,
+    );
+  });
+
+  test("behavior: binds every market field", () => {
+    expect(
+      VaultV2MidnightAdapterUtils.marketId({ ...MIDNIGHT_MARKET, chainId: 1n }),
+    ).not.toBe(MIDNIGHT_MARKET_ID);
+    expect(
+      VaultV2MidnightAdapterUtils.marketId({
+        ...MIDNIGHT_MARKET,
+        maturity: 201n,
+      }),
+    ).not.toBe(MIDNIGHT_MARKET_ID);
+  });
+});
+
+describe("AccrualVaultV2MidnightAdapter.maxWithdraw", () => {
+  test("default: caps credit by market withdrawable liquidity", () => {
+    expect(
+      withdrawAdapter({ withdrawable: 400n }).maxWithdraw(liquidityData()),
+    ).toStrictEqual({ value: 400n, limiter: CapacityLimitReason.liquidity });
+  });
+
+  test("behavior: caps withdrawable liquidity by gross position credit", () => {
+    // Midnight.withdraw debits gross credit; the pending fee shrinks pro rata.
+    expect(
+      withdrawAdapter({
+        credit: 300n,
+        pendingFee: 50n,
+        withdrawable: 1_000n,
+      }).maxWithdraw(liquidityData()).value,
+    ).toBe(300n);
+  });
+
+  test("behavior: caps by credit net of continuous fees accrued to lastUpdate", () => {
+    // Midnight.withdraw updates the position first: half the pending fee accrues by t = 150.
+    expect(
+      withdrawAdapter({
+        credit: 300n,
+        pendingFee: 100n,
+        withdrawable: 1_000n,
+        lastAccrual: 100n,
+        lastUpdate: 150n,
+      }).maxWithdraw(liquidityData()).value,
+    ).toBe(250n);
+  });
+
+  test("behavior: missing withdrawable snapshot defaults to zero", () => {
+    const adapter = withdrawAdapter();
+
+    expect(adapter.markets[0]?.market.withdrawable).toBe(0n);
+    expect(adapter.maxWithdraw(liquidityData()).value).toBe(0n);
+  });
+
+  test("behavior: zero for a force-removed market", () => {
+    expect(
+      withdrawAdapter({ withdrawable: 400n, forceRemoved: true }).maxWithdraw(
+        liquidityData(),
+      ).value,
+    ).toBe(0n);
+  });
+
+  test("behavior: zero when the market loan token is not the adapter asset", () => {
+    expect(
+      withdrawAdapter({ withdrawable: 400n, asset: ADDRESS }).maxWithdraw(
+        liquidityData(),
+      ).value,
+    ).toBe(0n);
+  });
+
+  test("behavior: zero for a market the adapter does not hold", () => {
+    expect(
+      withdrawAdapter({ withdrawable: 400n }).maxWithdraw(
+        liquidityData({ ...MIDNIGHT_MARKET, maturity: 201n } as never),
+      ).value,
+    ).toBe(0n);
+  });
+
+  test("behavior: zero for truncated liquidity data", () => {
+    expect(
+      withdrawAdapter({ withdrawable: 400n }).maxWithdraw(
+        liquidityData().slice(0, 66) as `0x${string}`,
+      ).value,
+    ).toBe(0n);
+  });
+
+  test("behavior: preserves withdrawable liquidity through accrual", () => {
+    const accrued = withdrawAdapter({ withdrawable: 400n }).accrueInterest(
+      150n,
+    );
+
+    expect(accrued.markets[0]?.market.withdrawable).toBe(400n);
+    expect(accrued.maxWithdraw(liquidityData()).value).toBe(400n);
+  });
+
+  test("behavior: vault max withdraw adds adapter liquidity to idle assets", () => {
+    const midnightAdapter = withdrawAdapter({ withdrawable: 40n });
+    const vault = new AccrualVaultV2(
+      vaultV2Input({
+        _totalAssets: 100n,
+        totalSupply: 100n,
+        virtualShares: 0n,
+        liquidityAdapter: midnightAdapter.address,
+        liquidityData: liquidityData(),
+        liquidityAllocations: [],
+      }),
+      midnightAdapter,
+      [midnightAdapter],
+      25n,
+      {},
+    );
+
+    expect(vault.maxWithdraw(100n)).toStrictEqual({
+      value: 65n,
+      limiter: CapacityLimitReason.liquidity,
+    });
   });
 });

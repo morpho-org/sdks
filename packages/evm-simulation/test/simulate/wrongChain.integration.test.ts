@@ -15,6 +15,7 @@ import {
   SlippageCheckUnavailableError,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 const baseTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -50,7 +51,9 @@ const proxiedConfig = async (
   const proxy = await createFaultProxy({ upstream: forkUrl });
   onTestFinished(() => proxy.kill());
   const config = {
-    chains: new Map([[mainnet.id, { simulateV1Url: proxy.url }]]),
+    chains: new Map([
+      [mainnet.id, { client: createTestSimulationClient(proxy.url) }],
+    ]),
   };
   return { config, proxy };
 };

@@ -94,9 +94,7 @@ contract GetVaultV2 {
             && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter);
         bool isMorphoMarketV1AdapterV2 = address(morphoMarketV1AdapterV2Factory) != address(0)
             && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter);
-        bool isMidnightAdapter = address(midnightAdapterFactory) != address(0)
-            && address(midnightAdapterFactory).code.length > 0
-            && midnightAdapterFactory.isMidnightAdapter(res.liquidityAdapter);
+        bool isMidnightAdapter = _isMidnightAdapter(midnightAdapterFactory, res.liquidityAdapter);
 
         if (isMorphoVaultV1Adapter && res.liquidityData.length > 0) {
             revert UnsupportedVaultV2Adapter(res.liquidityAdapter);
@@ -139,6 +137,20 @@ contract GetVaultV2 {
             allocation.absoluteCap = vault.absoluteCap(allocation.id);
             allocation.relativeCap = vault.relativeCap(allocation.id);
             allocation.allocation = vault.allocation(allocation.id);
+        }
+    }
+
+    function _isMidnightAdapter(
+        IMidnightAdapterFactory factory,
+        address adapter
+    ) private view returns (bool) {
+        if (address(factory) == address(0) || address(factory).code.length == 0) return false;
+        // A registered factory without `isCreated` (e.g. a pre-release deployment) reverts: treat it
+        // as "not Midnight" so non-Midnight vaults stay readable, like the direct-read path.
+        try factory.isCreated(adapter) returns (bool created) {
+            return created;
+        } catch {
+            return false;
         }
     }
 }

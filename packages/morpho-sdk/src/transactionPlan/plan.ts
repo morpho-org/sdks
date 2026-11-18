@@ -83,7 +83,9 @@ export function applySignatures(
   }
   if (updates.size === 0) return plan;
   for (const [id, signature] of updates) {
-    const request = requests.find((candidate) => candidate.id === id)!;
+    const request = requests.find((candidate) => candidate.id === id);
+    if (request === undefined)
+      throw new TransactionPlanSignatureMismatchError(id, "reference");
     const normalized = normalizeBundlesSignature(signature);
     let recovered: Address;
     try {
@@ -108,11 +110,10 @@ export function applySignatures(
   }
   return {
     ...plan,
-    signatureRequests: plan.signatureRequests.map((request) =>
-      updates.has(request.id)
-        ? { ...request, signature: updates.get(request.id)! }
-        : request,
-    ),
+    signatureRequests: plan.signatureRequests.map((request) => {
+      const signature = updates.get(request.id);
+      return signature === undefined ? request : { ...request, signature };
+    }),
   };
 }
 

@@ -38,6 +38,7 @@ import {
   UnusedAuthorizationError,
 } from "../errors.js";
 import type { StateBlock } from "../params.js";
+import { createTestSimulationClient } from "../test-helpers/create-test-simulation-client.js";
 import { encodeUint256, padAddress } from "../test-helpers/index.js";
 import type {
   RawLog,
@@ -230,7 +231,9 @@ function stubFetch(
 }
 
 const config: SimulationConfig = {
-  chains: new Map([[CHAIN_ID, { simulateV1Url: RPC_URL }]]),
+  chains: new Map([
+    [CHAIN_ID, { client: createTestSimulationClient(RPC_URL) }],
+  ]),
 };
 
 beforeEach(() => {
@@ -243,6 +246,188 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("runSimulation", () => {
+  test("error: a late vault asset response never starts the next metadata read", async () => {
+    const controller = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValueOnce(controller.signal);
+    const reached = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<Response>();
+    const { fetch, methods } = stubFetch([]);
+    const original = fetch.getMockImplementation()!;
+    fetch.mockImplementation((input, init) => {
+      const { method } = JSON.parse(String(init?.body)) as { method: string };
+      if (method !== "eth_call") return original(input, init);
+      methods.push(method);
+      reached.resolve();
+      return response.promise;
+    });
+    try {
+      const pending = simulate(
+        { chains: new Map([[1, config.chains.get(CHAIN_ID)!]]) },
+        {
+          chainId: 1,
+          transactions: [TRANSACTION],
+          limits: {
+            operations: [TARGET, OWNER].map((vault) => ({
+              type: "vaultV2Deposit" as const,
+              vault,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+            })),
+          },
+        },
+      );
+      await reached.promise;
+      controller.abort(new DOMException("Deadline exceeded", "TimeoutError"));
+      await expect(pending).rejects.toBeInstanceOf(RpcTransportError);
+      response.resolve(
+        rpc(encodeAbiParameters([{ type: "address" }], [TARGET])),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(methods.filter((method) => method === "eth_call")).toHaveLength(1);
+      expect(methods).not.toContain("eth_simulateV1");
+      expect(methods).not.toContain("eth_chainId");
+    } finally {
+      response.resolve(rpc("0x"));
+      timeout.mockRestore();
+    }
+  });
+
+  test("error: deprecated URL deadline aborts the internal transport", async () => {
+    const controller = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValueOnce(controller.signal);
+    const reached = Promise.withResolvers<void>();
+    let transportSignal: AbortSignal | null | undefined;
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation((_, init) => {
+        transportSignal = init?.signal;
+        reached.resolve();
+        return new Promise((_resolve, reject) => {
+          transportSignal?.addEventListener(
+            "abort",
+            () => reject(transportSignal?.reason),
+            { once: true },
+          );
+        });
+      });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const pending = simulate(
+        { chains: new Map([[CHAIN_ID, { simulateV1Url: RPC_URL }]]) },
+        { chainId: CHAIN_ID, transactions: [TRANSACTION], limits: "none" },
+      );
+      await reached.promise;
+      controller.abort(new DOMException("Deadline exceeded", "TimeoutError"));
+      await expect(pending).rejects.toBeInstanceOf(RpcTransportError);
+      expect(transportSignal?.aborted).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  test("behavior: deprecated URL configuration runs a simulation", async () => {
+    const { fetch, methods } = stubFetch([]);
+    const result = await simulate(
+      { chains: new Map([[CHAIN_ID, { simulateV1Url: RPC_URL }]]) },
+      { chainId: CHAIN_ID, transactions: [TRANSACTION], limits: "none" },
+    );
+    expect(result.verification.operations).toEqual([]);
+    expect(methods).toContain("eth_getBlockByNumber");
+    expect(fetch.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("error: enabled CCIP-Read is rejected before any request", async () => {
+    const { fetch } = stubFetch([]);
+    const client = {
+      ...createTestSimulationClient(RPC_URL),
+      ccipRead: {},
+    };
+    await expect(
+      simulate(
+        { chains: new Map([[CHAIN_ID, { client }]]) },
+        {
+          chainId: CHAIN_ID,
+          transactions: [TRANSACTION],
+          limits: "none",
+        },
+      ),
+    ).rejects.toBeInstanceOf(SimulationValidationError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "eth_getBlockByNumber",
+    "eth_getCode",
+    "eth_call",
+    "eth_simulateV1",
+  ])(
+    "error: pipeline deadline covers a stalled %s without aborting the consumer transport",
+    async (stalledMethod) => {
+      const actual = await vi.importActual<
+        typeof import("./backends/index.js")
+      >("./backends/index.js");
+      if (stalledMethod === "eth_simulateV1")
+        mockExecutePlan.mockImplementationOnce(actual.executePlan);
+      const controller = new AbortController();
+      const timeout = vi
+        .spyOn(AbortSignal, "timeout")
+        .mockReturnValueOnce(controller.signal);
+      const reached = Promise.withResolvers<void>();
+      const response = Promise.withResolvers<Response>();
+      const { fetch, methods } = stubFetch([], "0x6000", 1);
+      const original = fetch.getMockImplementation()!;
+      let transportSignal: AbortSignal | null | undefined;
+      fetch.mockImplementation(async (input, init) => {
+        const { method } = JSON.parse(String(init?.body)) as { method: string };
+        if (method !== stalledMethod) return original(input, init);
+        methods.push(method);
+        transportSignal = init?.signal;
+        reached.resolve();
+        return response.promise;
+      });
+      try {
+        const pending = simulate(
+          {
+            chains: new Map([
+              [1, { client: createTestSimulationClient(RPC_URL) }],
+            ]),
+          },
+          {
+            chainId: 1,
+            transactions: [TRANSACTION],
+            limits:
+              stalledMethod === "eth_call"
+                ? {
+                    operations: [
+                      {
+                        type: "vaultV2Deposit",
+                        vault: TARGET,
+                        quote: { assetsPaid: 1n, sharesMinted: 1n },
+                      },
+                    ],
+                  }
+                : "none",
+          },
+        );
+        await reached.promise;
+        controller.abort(new DOMException("Deadline exceeded", "TimeoutError"));
+        await expect(pending).rejects.toBeInstanceOf(RpcTransportError);
+        expect(transportSignal?.aborted).not.toBe(true);
+        const count = methods.length;
+        response.resolve(rpc("0x"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(methods).toHaveLength(count);
+      } finally {
+        response.resolve(rpc("0x"));
+        timeout.mockRestore();
+      }
+    },
+  );
+
   test.each([
     { chainId: CHAIN_ID, omitAssertionLogs: false },
     { chainId: 1, omitAssertionLogs: true },
@@ -264,7 +449,11 @@ describe.sequential("runSimulation", () => {
         ]),
       );
       const result = await simulate(
-        { chains: new Map([[chainId, { simulateV1Url: RPC_URL }]]) },
+        {
+          chains: new Map([
+            [chainId, { client: createTestSimulationClient(RPC_URL) }],
+          ]),
+        },
         {
           chainId,
           mode: "final",
@@ -304,7 +493,11 @@ describe.sequential("runSimulation", () => {
     );
     await expect(
       simulate(
-        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chains: new Map([
+            [1, { client: createTestSimulationClient(RPC_URL) }],
+          ]),
+        },
         {
           chainId: 1,
           limits: "none",
@@ -325,7 +518,11 @@ describe.sequential("runSimulation", () => {
     );
     await expect(
       simulate(
-        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chains: new Map([
+            [1, { client: createTestSimulationClient(RPC_URL) }],
+          ]),
+        },
         {
           chainId: 1,
           limits: "none",
@@ -349,7 +546,11 @@ describe.sequential("runSimulation", () => {
     userCallCount = 0;
     await expect(
       simulate(
-        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chains: new Map([
+            [1, { client: createTestSimulationClient(RPC_URL) }],
+          ]),
+        },
         {
           chainId: 1,
           limits: "none",
@@ -364,7 +565,11 @@ describe.sequential("runSimulation", () => {
     stubFetch([], "0x6000", 1);
     await expect(
       simulate(
-        { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+        {
+          chains: new Map([
+            [1, { client: createTestSimulationClient(RPC_URL) }],
+          ]),
+        },
         {
           chainId: 1,
           authorizations: [PERMIT],
@@ -466,7 +671,10 @@ describe.sequential("runSimulation", () => {
           simulate(
             {
               chains: new Map([
-                [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+                [
+                  ChainId.BaseMainnet,
+                  { client: createTestSimulationClient(RPC_URL) },
+                ],
               ]),
             },
             {
@@ -560,7 +768,14 @@ describe.sequential("runSimulation", () => {
       };
     });
     const result = simulate(
-      { chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]) },
+      {
+        chains: new Map([
+          [
+            ChainId.BaseMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
+      },
       {
         chainId: ChainId.BaseMainnet,
         mode: "preview",
@@ -644,7 +859,12 @@ describe.sequential("runSimulation", () => {
         },
       };
       const simulationConfig = {
-        chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.BaseMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       };
       const error =
         from === TARGET
@@ -761,7 +981,9 @@ describe.sequential("runSimulation", () => {
     }));
     const { fetch } = stubFetch([], "0x6000", ChainId.BaseMainnet, mockClient);
     const simulationConfig = {
-      chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+      chains: new Map([
+        [ChainId.BaseMainnet, { client: createTestSimulationClient(RPC_URL) }],
+      ]),
     };
     const request = {
       chainId: ChainId.BaseMainnet,
@@ -898,7 +1120,10 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
+              [
+                ChainId.OptimismMainnet,
+                { client: createTestSimulationClient(RPC_URL) },
+              ],
             ]),
           },
           {
@@ -927,7 +1152,10 @@ describe.sequential("runSimulation", () => {
       simulate(
         {
           chains: new Map([
-            [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
+            [
+              ChainId.OptimismMainnet,
+              { client: createTestSimulationClient(RPC_URL) },
+            ],
           ]),
         },
         {
@@ -997,7 +1225,10 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.OptimismMainnet, { simulateV1Url: RPC_URL }],
+              [
+                ChainId.OptimismMainnet,
+                { client: createTestSimulationClient(RPC_URL) },
+              ],
             ]),
           },
           {
@@ -1063,7 +1294,7 @@ describe.sequential("runSimulation", () => {
 
   test("error: approval checks fail closed when an execution call omits logs", async () => {
     const mainnetConfig: SimulationConfig = {
-      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+      chains: new Map([[1, { client: createTestSimulationClient(RPC_URL) }]]),
     };
     stubFetch([], "0x6000", 1);
     mockExecutePlan.mockImplementationOnce(
@@ -1092,7 +1323,7 @@ describe.sequential("runSimulation", () => {
 
   test("error: approval checks fail closed when a preparation call omits logs", async () => {
     const mainnetConfig: SimulationConfig = {
-      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+      chains: new Map([[1, { client: createTestSimulationClient(RPC_URL) }]]),
     };
     stubFetch([], "0x6000", 1);
     mockExecutePlan.mockImplementationOnce(
@@ -1134,7 +1365,7 @@ describe.sequential("runSimulation", () => {
 
   test("behavior: missing execution logs are allowed when limits are none", async () => {
     const mainnetConfig: SimulationConfig = {
-      chains: new Map([[1, { simulateV1Url: RPC_URL }]]),
+      chains: new Map([[1, { client: createTestSimulationClient(RPC_URL) }]]),
     };
     stubFetch([], "0x6000", 1);
     mockExecutePlan.mockImplementationOnce(
@@ -1180,7 +1411,12 @@ describe.sequential("runSimulation", () => {
 
     const result = await simulate(
       {
-        chains: new Map([[ChainId.ScrollMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.ScrollMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       },
       {
         chainId: ChainId.ScrollMainnet,
@@ -1243,7 +1479,12 @@ describe.sequential("runSimulation", () => {
 
     const result = await simulate(
       {
-        chains: new Map([[ChainId.BaseMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.BaseMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       },
       {
         chainId: ChainId.BaseMainnet,
@@ -1310,7 +1551,10 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+              [
+                ChainId.BaseMainnet,
+                { client: createTestSimulationClient(RPC_URL) },
+              ],
             ]),
           },
           {
@@ -1352,7 +1596,10 @@ describe.sequential("runSimulation", () => {
         simulate(
           {
             chains: new Map([
-              [ChainId.BaseMainnet, { simulateV1Url: RPC_URL }],
+              [
+                ChainId.BaseMainnet,
+                { client: createTestSimulationClient(RPC_URL) },
+              ],
             ]),
           },
           {
@@ -1386,7 +1633,7 @@ describe.sequential("runSimulation", () => {
           [
             CHAIN_ID,
             {
-              simulateV1Url: RPC_URL,
+              client: createTestSimulationClient(RPC_URL),
               blockOverrides: { gasLimit: 16_777_216n },
             },
           ],
@@ -1402,7 +1649,13 @@ describe.sequential("runSimulation", () => {
     await simulate(
       {
         chains: new Map([
-          [CHAIN_ID, { simulateV1Url: RPC_URL, callGasLimit: 30_000_000n }],
+          [
+            CHAIN_ID,
+            {
+              client: createTestSimulationClient(RPC_URL),
+              callGasLimit: 30_000_000n,
+            },
+          ],
         ]),
       },
       { chainId: CHAIN_ID, limits: "none", transactions: [TRANSACTION] },
@@ -1414,7 +1667,12 @@ describe.sequential("runSimulation", () => {
     stubFetch([]);
     await simulate(
       {
-        chains: new Map([[ChainId.StableMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.StableMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       },
       {
         chainId: ChainId.StableMainnet,
@@ -1432,7 +1690,10 @@ describe.sequential("runSimulation", () => {
         chains: new Map([
           [
             ChainId.StableMainnet,
-            { simulateV1Url: RPC_URL, parentHashCheck: true },
+            {
+              client: createTestSimulationClient(RPC_URL),
+              parentHashCheck: true,
+            },
           ],
         ]),
       },
@@ -1448,7 +1709,13 @@ describe.sequential("runSimulation", () => {
     await simulate(
       {
         chains: new Map([
-          [CHAIN_ID, { simulateV1Url: RPC_URL, parentHashCheck: false }],
+          [
+            CHAIN_ID,
+            {
+              client: createTestSimulationClient(RPC_URL),
+              parentHashCheck: false,
+            },
+          ],
         ]),
       },
       { chainId: CHAIN_ID, limits: "none", transactions: [TRANSACTION] },
@@ -1460,7 +1727,12 @@ describe.sequential("runSimulation", () => {
     const { fetch } = stubFetch([]);
     await simulate(
       {
-        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.MonadMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       },
       {
         chainId: ChainId.MonadMainnet,
@@ -1476,7 +1748,12 @@ describe.sequential("runSimulation", () => {
     const { fetch } = stubFetch([]);
     await simulate(
       {
-        chains: new Map([[ChainId.MonadMainnet, { simulateV1Url: RPC_URL }]]),
+        chains: new Map([
+          [
+            ChainId.MonadMainnet,
+            { client: createTestSimulationClient(RPC_URL) },
+          ],
+        ]),
       },
       {
         chainId: ChainId.MonadMainnet,
@@ -1624,7 +1901,9 @@ describe.sequential("runSimulation", () => {
         }),
     }));
     const error = await simulate(
-      { chains: new Map([[1, { simulateV1Url: RPC_URL }]]) },
+      {
+        chains: new Map([[1, { client: createTestSimulationClient(RPC_URL) }]]),
+      },
       {
         chainId: 1,
         transactions: [TRANSACTION],

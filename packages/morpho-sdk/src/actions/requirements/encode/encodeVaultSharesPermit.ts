@@ -98,32 +98,33 @@ export const encodeVaultSharesPermit = (
     deadline,
   } = params;
   const inputDomain = inputVault.eip5267Domain;
+  let eip5267Domain: Eip5267Domain | undefined;
+  if (version === "vaultV2") {
+    eip5267Domain = new Eip5267Domain({
+      // Only the bitmap-selected fields enter Vault V2's domain separator.
+      fields: "0x0c",
+      name: "",
+      version: "",
+      chainId: BigInt(chainId),
+      verifyingContract: inputVault.address,
+      salt: zeroHash,
+      extensions: [],
+    });
+  } else if (inputDomain != null) {
+    eip5267Domain = new Eip5267Domain({
+      fields: inputDomain.fields,
+      name: inputDomain.name,
+      version: inputDomain.version,
+      chainId: inputDomain.chainId,
+      verifyingContract: inputDomain.verifyingContract,
+      salt: inputDomain.salt,
+      extensions: [...inputDomain.extensions],
+    });
+  }
   const vault = new Token({
     address: inputVault.address,
     name: inputVault.name,
-    eip5267Domain:
-      version === "vaultV2"
-        ? new Eip5267Domain({
-            // Only the bitmap-selected fields enter Vault V2's domain separator.
-            fields: "0x0c",
-            name: "",
-            version: "",
-            chainId: BigInt(chainId),
-            verifyingContract: inputVault.address,
-            salt: zeroHash,
-            extensions: [],
-          })
-        : inputDomain == null
-          ? undefined
-          : new Eip5267Domain({
-              fields: inputDomain.fields,
-              name: inputDomain.name,
-              version: inputDomain.version,
-              chainId: inputDomain.chainId,
-              verifyingContract: inputDomain.verifyingContract,
-              salt: inputDomain.salt,
-              extensions: [...inputDomain.extensions],
-            }),
+    eip5267Domain,
   });
 
   // Bind the permit to one of the registered fixed vault bundles deployments.

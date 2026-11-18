@@ -27,6 +27,7 @@ import {
   SlippageCheckUnavailableError,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -54,7 +55,7 @@ const REVERTING_TOKEN: Address = "0x00000000000000000000000000000000000c4A05";
 const SIMULATE = "eth_simulateV1";
 
 const configFor = (url: string) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: url }]]),
+  chains: new Map([[mainnet.id, { client: createTestSimulationClient(url) }]]),
   timeoutMs: 30_000,
 });
 

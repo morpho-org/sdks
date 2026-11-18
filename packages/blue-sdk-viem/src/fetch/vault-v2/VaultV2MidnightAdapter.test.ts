@@ -107,7 +107,7 @@ function mockAdapterReads(
   mockRead(handle, {
     address: FACTORY,
     abi: midnightAdapterFactoryAbi,
-    functionName: "isMidnightAdapter",
+    functionName: "isCreated",
     result: isAdapter,
   });
   for (const [functionName, result] of [
@@ -116,14 +116,15 @@ function mockAdapterReads(
     ["skimRecipient", RECIPIENT],
     ["midnight", MIDNIGHT],
     ["maxTtm", 10n],
-    ["minRate", 20n],
-    ["noSalesWithShortfall", true],
-    ["noSalesBelowFaceValue", false],
+    ["enterGateFactory", "0x0000000000000000000000000000000000000000"],
+    ["minNetBuyRate", 20n],
+    ["maxNetSellRate", 0n],
+    ["shortfallAllowance", 0n],
     ["durations", [30n, 60n]],
     ["marketIdsLength", 1n],
     ["durationAllocations", [40n, 50n]],
     ["marketIds", MARKET_ID],
-    ["marketData", [11n, 12n, 13n, 14n, true]],
+    ["marketData", [11n, 12n, 13n, 14n, true, false, 15n]],
   ] as const) {
     mockRead(handle, {
       address: ADDRESS,
@@ -152,7 +153,7 @@ function mockMidnightCoreReads(handle: ReturnType<typeof createMockClient>) {
     address: MIDNIGHT,
     abi: midnightCoreReadAbi,
     functionName: "marketState",
-    result: [0n, 5n, 0n, 0n, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    result: [0n, 5n, 7n, 0n, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   });
 }
 
@@ -176,7 +177,7 @@ describe("Vault V2 Midnight adapter fetchers", () => {
     mockRead(handle, {
       address: FACTORY,
       abi: midnightAdapterFactoryAbi,
-      functionName: "isMidnightAdapter",
+      functionName: "isCreated",
       result: true,
     });
     for (const [functionName, result] of [
@@ -185,14 +186,15 @@ describe("Vault V2 Midnight adapter fetchers", () => {
       ["skimRecipient", RECIPIENT],
       ["midnight", MIDNIGHT],
       ["maxTtm", 10n],
-      ["minRate", 20n],
-      ["noSalesWithShortfall", true],
-      ["noSalesBelowFaceValue", false],
+      ["enterGateFactory", "0x0000000000000000000000000000000000000000"],
+      ["minNetBuyRate", 20n],
+      ["maxNetSellRate", 0n],
+      ["shortfallAllowance", 0n],
       ["durations", [30n, 60n]],
       ["marketIdsLength", 1n],
       ["durationAllocations", [40n, 50n]],
       ["marketIds", MARKET_ID],
-      ["marketData", [11n, 12n, 13n, 14n, true]],
+      ["marketData", [11n, 12n, 13n, 14n, true, false, 15n]],
     ] as const) {
       mockRead(handle, {
         address: ADDRESS,
@@ -221,10 +223,12 @@ describe("Vault V2 Midnight adapter fetchers", () => {
     ).not.toThrow();
     expect(adapter.marketData[MARKET_ID]).toEqual({
       netCredit: 11n,
-      rate: 12n,
+      netRate: 12n,
       maturity: 13n,
       index: 14n,
       forceSellable: true,
+      forceRemoved: false,
+      minForceSellPrice: 15n,
     });
     expect(adapter.durationAllocations).toEqual([40n, 50n]);
   });
@@ -256,9 +260,10 @@ describe("Vault V2 Midnight adapter fetchers", () => {
       skimRecipient: RECIPIENT,
       midnight: MIDNIGHT,
       maxTtm: 10n,
-      minRate: 20n,
-      noSalesWithShortfall: true,
-      noSalesBelowFaceValue: false,
+      minNetBuyRate: 20n,
+      maxNetSellRate: 0n,
+      shortfallAllowance: 0n,
+      enterGateFactory: "0x0000000000000000000000000000000000000000",
       durations: [30n],
       durationAllocations: [40n],
       markets: [
@@ -266,13 +271,16 @@ describe("Vault V2 Midnight adapter fetchers", () => {
           id: MARKET_ID,
           marketData: {
             netCredit: 11n,
-            rate: 12n,
+            netRate: 12n,
             maturity: 13n,
             index: 14n,
             forceSellable: true,
+            forceRemoved: false,
+            minForceSellPrice: 0n,
           },
           position: POSITION,
           lossFactor: 5n,
+          withdrawable: 7n,
         },
       ],
       timestamp: BLOCK_TIMESTAMP,
@@ -373,7 +381,30 @@ describe("Vault V2 Midnight adapter fetchers", () => {
       {
         id: MARKET_ID,
         position: POSITION,
-        market: { lossFactor: 5n },
+        market: { lossFactor: 5n, withdrawable: 7n },
+      },
+    ]);
+    expectCallsPinned(handle, BLOCK_NUMBER);
+  });
+
+  test("accrual fetcher pins an explicit block number", async () => {
+    const handle = createMockClient(base);
+    mockBlock(handle, BLOCK_NUMBER);
+    mockAdapterReads(handle);
+    mockMidnightCoreReads(handle);
+
+    const adapter = await fetchAccrualVaultV2MidnightAdapter(
+      ADDRESS,
+      handle.client,
+      { blockNumber: BLOCK_NUMBER, deployless: false },
+    );
+
+    expect(adapter.lastUpdate).toBe(BLOCK_TIMESTAMP);
+    expect(adapter.markets).toMatchObject([
+      {
+        id: MARKET_ID,
+        position: POSITION,
+        market: { lossFactor: 5n, withdrawable: 7n },
       },
     ]);
     expectCallsPinned(handle, BLOCK_NUMBER);
@@ -408,6 +439,22 @@ describe("Vault V2 Midnight adapter fetchers", () => {
     await expect(
       fetchAccrualVaultV2MidnightAdapter(ADDRESS, handle.client, {
         blockTag: "pending",
+        deployless: false,
+      }),
+    ).rejects.toBeInstanceOf(UnresolvedBlockNumberError);
+  });
+
+  test("throws for a latest block without a number in both fetchers", async () => {
+    const handle = createMockClient(base);
+    mockBlock(handle, null);
+
+    await expect(
+      fetchVaultV2MidnightAdapter(ADDRESS, handle.client, {
+        deployless: false,
+      }),
+    ).rejects.toBeInstanceOf(UnresolvedBlockNumberError);
+    await expect(
+      fetchAccrualVaultV2MidnightAdapter(ADDRESS, handle.client, {
         deployless: false,
       }),
     ).rejects.toBeInstanceOf(UnresolvedBlockNumberError);
@@ -481,9 +528,10 @@ describe("Vault V2 Midnight adapter fetchers", () => {
       skimRecipient: RECIPIENT,
       midnight: MIDNIGHT,
       maxTtm: 10n,
-      minRate: 20n,
-      noSalesWithShortfall: true,
-      noSalesBelowFaceValue: false,
+      minNetBuyRate: 20n,
+      maxNetSellRate: 0n,
+      shortfallAllowance: 0n,
+      enterGateFactory: "0x0000000000000000000000000000000000000000",
       durations: [30n],
       durationAllocations: [40n],
       markets: [
@@ -491,10 +539,12 @@ describe("Vault V2 Midnight adapter fetchers", () => {
           id: MARKET_ID,
           marketData: {
             netCredit: 11n,
-            rate: 12n,
+            netRate: 12n,
             maturity: 13n,
             index: 14n,
             forceSellable: true,
+            forceRemoved: false,
+            minForceSellPrice: 0n,
           },
         },
       ],
@@ -520,7 +570,7 @@ describe("Vault V2 Midnight adapter fetchers", () => {
     mockRead(handle, {
       address: FACTORY,
       abi: midnightAdapterFactoryAbi,
-      functionName: "isMidnightAdapter",
+      functionName: "isCreated",
       result: false,
     });
     for (const [functionName, result] of [
@@ -529,9 +579,10 @@ describe("Vault V2 Midnight adapter fetchers", () => {
       ["skimRecipient", RECIPIENT],
       ["midnight", MIDNIGHT],
       ["maxTtm", 10n],
-      ["minRate", 20n],
-      ["noSalesWithShortfall", true],
-      ["noSalesBelowFaceValue", false],
+      ["enterGateFactory", "0x0000000000000000000000000000000000000000"],
+      ["minNetBuyRate", 20n],
+      ["maxNetSellRate", 0n],
+      ["shortfallAllowance", 0n],
       ["durations", []],
       ["marketIdsLength", 0n],
     ] as const) {
@@ -561,19 +612,22 @@ describe("Vault V2 Midnight adapter fetchers", () => {
           id: MARKET_ID,
           marketData: {
             netCredit: 11n,
-            rate: 12n,
+            netRate: 12n,
             maturity: 13n,
             index: 14n,
             forceSellable: true,
+            forceRemoved: false,
+            minForceSellPrice: 0n,
           },
         },
       ],
       durations: [30n],
       durationAllocations: [40n],
       maxTtm: 10n,
-      minRate: 20n,
-      noSalesWithShortfall: true,
-      noSalesBelowFaceValue: false,
+      minNetBuyRate: 20n,
+      maxNetSellRate: 0n,
+      shortfallAllowance: 0n,
+      enterGateFactory: "0x0000000000000000000000000000000000000000",
     });
     const markets = [
       {
@@ -592,6 +646,7 @@ describe("Vault V2 Midnight adapter fetchers", () => {
         id,
         position,
         lossFactor: market.lossFactor,
+        withdrawable: 7n,
       })),
       lastUpdate: 6n,
     });
@@ -600,7 +655,7 @@ describe("Vault V2 Midnight adapter fetchers", () => {
     expect(accrued.markets[0]).toMatchObject({
       id: MARKET_ID,
       position: POSITION,
-      market: { lossFactor: 5n },
+      market: { lossFactor: 5n, withdrawable: 7n },
     });
     expect(accrued.markets[0]).not.toHaveProperty("rate");
     expect(accrued.markets[0]).not.toHaveProperty("forceSellable");

@@ -11,8 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 
+import { listPublicPackages } from "./pack.ts";
 import { loadBundledPacote } from "./read-tarball-identity.ts";
 import {
+  orderByDependencies,
   selectChannelTarballs,
   verifyChecksums,
   verifyReleaseMatch,
@@ -56,6 +58,76 @@ function tarballs(packages: Record<string, Record<string, string>>): string {
 
 const manifest = (extra: object = {}) =>
   JSON.stringify({ name: "@x/a", version: "1.0.0", ...extra });
+
+const releaseTarball = ({
+  name,
+  file,
+  dependencies = [],
+}: {
+  name: string;
+  file: string;
+  dependencies?: readonly string[];
+}) => ({ name, version: "1.0.0", file, dependencies });
+
+describe("orderByDependencies", () => {
+  test("orders a diamond dependency graph", () => {
+    expect(
+      orderByDependencies([
+        releaseTarball({
+          name: "@x/a",
+          file: "a.tgz",
+          dependencies: ["@x/b", "@x/c"],
+        }),
+        releaseTarball({ name: "@x/b", file: "b.tgz", dependencies: ["@x/d"] }),
+        releaseTarball({ name: "@x/c", file: "c.tgz", dependencies: ["@x/d"] }),
+        releaseTarball({ name: "@x/d", file: "d.tgz" }),
+      ]).map(({ name }) => name),
+    ).toEqual(["@x/d", "@x/b", "@x/c", "@x/a"]);
+  });
+
+  test("orders peer dependencies and ignores names outside the release set", () => {
+    expect(
+      orderByDependencies([
+        releaseTarball({
+          name: "@x/a",
+          file: "a.tgz",
+          dependencies: ["@x/peer", "@outside/pkg"],
+        }),
+        releaseTarball({ name: "@x/peer", file: "z.tgz" }),
+      ]).map(({ name }) => name),
+    ).toEqual(["@x/peer", "@x/a"]);
+  });
+
+  test("breaks ties by file name at each step", () => {
+    expect(
+      orderByDependencies([
+        releaseTarball({ name: "@x/c", file: "c.tgz" }),
+        releaseTarball({ name: "@x/b", file: "b.tgz", dependencies: ["@x/a"] }),
+        releaseTarball({ name: "@x/a", file: "a.tgz" }),
+      ]).map(({ name }) => name),
+    ).toEqual(["@x/a", "@x/b", "@x/c"]);
+  });
+
+  test("rejects duplicate package names", () => {
+    expect(() =>
+      orderByDependencies([
+        releaseTarball({ name: "@x/a", file: "a.tgz" }),
+        releaseTarball({ name: "@x/a", file: "b.tgz" }),
+      ]),
+    ).toThrow("Two tarballs for @x/a.");
+  });
+
+  test("reports a dependency cycle", () => {
+    expect(() =>
+      orderByDependencies([
+        releaseTarball({ name: "@x/a", file: "a.tgz", dependencies: ["@x/b"] }),
+        releaseTarball({ name: "@x/b", file: "b.tgz", dependencies: ["@x/a"] }),
+      ]),
+    ).toThrow(
+      "Release package dependencies contain a cycle: @x/a -> @x/b -> @x/a.",
+    );
+  });
+});
 
 describe("verifyTarballStructure", () => {
   const ok = [
@@ -127,6 +199,11 @@ describe("verifyReleaseMatch", () => {
 describe("selectChannelTarballs", () => {
   const stable = { file: "a.tgz", name: "@x/a", version: "1.0.0" };
   const pre = { file: "b.tgz", name: "@x/b", version: "1.1.0-next.0" };
+
+  test("preserves the dependency order provided by the release set", () => {
+    const ordered = [{ file: "b.tgz", name: "@x/b", version: "1.0.0" }, stable];
+    expect(selectChannelTarballs(ordered, "latest")).toEqual(ordered);
+  });
 
   test("latest publishes every stable version and rejects a prerelease", () => {
     expect(selectChannelTarballs([stable], "latest")).toEqual([stable]);
@@ -202,6 +279,144 @@ describe("verifyReleaseSet", () => {
     });
     await expect(run(dir)).resolves.toEqual([
       { file: join(dir, "a.tgz"), name: "@x/a", version: "1.0.0" },
+    ]);
+  });
+
+  test("orders from stored dependencies but ignores devDependencies", async () => {
+    const names = ["@x/a", "@x/peer", "@x/optional", "@x/dev"];
+    const dir = tarballs({
+      "a.tgz": {
+        "package/package.json": manifest({
+          dependencies: { "@outside/pkg": "^1.0.0" },
+          peerDependencies: { "@x/peer": "^1.0.0" },
+          optionalDependencies: { "@x/optional": "^1.0.0" },
+          devDependencies: { "@x/dev": "^1.0.0" },
+        }),
+      },
+      "peer.tgz": {
+        "package/package.json": manifest({ name: "@x/peer" }),
+      },
+      "optional.tgz": {
+        "package/package.json": manifest({ name: "@x/optional" }),
+      },
+      "z-dev.tgz": {
+        "package/package.json": manifest({ name: "@x/dev" }),
+      },
+    });
+    const received = await verifyReleaseSet({
+      dir,
+      expected: names.map((name) => ({ name, version: "1.0.0" })),
+      tar,
+      pacote,
+    });
+    expect(received.map(({ name }) => name)).toEqual([
+      "@x/optional",
+      "@x/peer",
+      "@x/a",
+      "@x/dev",
+    ]);
+  });
+
+  test("orders every public workspace dependency before its dependent", () => {
+    const packages = listPublicPackages(".");
+    const packageNames = new Set(packages.map(({ name }) => name));
+    const releaseSet = packages.map((pkg) => {
+      const pkgManifest: {
+        dependencies?: Record<string, unknown>;
+        peerDependencies?: Record<string, unknown>;
+        optionalDependencies?: Record<string, unknown>;
+      } = JSON.parse(readFileSync(join(pkg.dir, "package.json"), "utf8"));
+      const dependencies = [
+        pkgManifest.dependencies,
+        pkgManifest.peerDependencies,
+        pkgManifest.optionalDependencies,
+      ].flatMap((declared) => (declared == null ? [] : Object.keys(declared)));
+      return {
+        file: `${pkg.dir}.tgz`,
+        name: pkg.name,
+        version: pkg.version,
+        dependencies,
+      };
+    });
+    const ordered = orderByDependencies(releaseSet);
+    const positions = new Map(
+      ordered.map(({ name }, index) => [name, index] as const),
+    );
+    expect(ordered).toHaveLength(releaseSet.length);
+    for (const pkg of releaseSet) {
+      const packagePosition = positions.get(pkg.name) ?? -1;
+      expect(packagePosition).toBeGreaterThanOrEqual(0);
+      for (const dependency of pkg.dependencies) {
+        if (packageNames.has(dependency)) {
+          const dependencyPosition = positions.get(dependency) ?? -1;
+          expect(dependencyPosition).toBeGreaterThanOrEqual(0);
+          expect(dependencyPosition).toBeLessThan(packagePosition);
+        }
+      }
+    }
+  });
+
+  test("orders the packages from release 59471c3 before their dependents", () => {
+    // Dependency edges are frozen from release commit 59471c3.
+    const releaseSet = [
+      {
+        file: "blue-sdk.tgz",
+        name: "@morpho-org/blue-sdk",
+        version: "8.0.2",
+        dependencies: ["@morpho-org/morpho-ts"],
+      },
+      {
+        file: "blue-sdk-viem.tgz",
+        name: "@morpho-org/blue-sdk-viem",
+        version: "7.1.0",
+        dependencies: ["@morpho-org/blue-sdk", "@morpho-org/morpho-ts"],
+      },
+      {
+        file: "evm-simulation.tgz",
+        name: "@morpho-org/evm-simulation",
+        version: "8.3.0",
+        dependencies: [
+          "@morpho-org/blue-sdk",
+          "@morpho-org/morpho-sdk",
+          "@morpho-org/morpho-ts",
+        ],
+      },
+      {
+        file: "midnight-sdk.tgz",
+        name: "@morpho-org/midnight-sdk",
+        version: "2.2.1",
+        dependencies: ["@morpho-org/morpho-ts"],
+      },
+      {
+        file: "morpho-sdk.tgz",
+        name: "@morpho-org/morpho-sdk",
+        version: "9.1.0",
+        dependencies: [
+          "@morpho-org/blue-sdk",
+          "@morpho-org/blue-sdk-viem",
+          "@morpho-org/midnight-sdk",
+          "@morpho-org/morpho-ts",
+        ],
+      },
+      {
+        file: "wdk-protocol-lending-morpho-evm.tgz",
+        name: "@morpho-org/wdk-protocol-lending-morpho-evm",
+        version: "4.1.0",
+        dependencies: [
+          "@morpho-org/blue-sdk",
+          "@morpho-org/blue-sdk-viem",
+          "@morpho-org/morpho-sdk",
+        ],
+      },
+    ];
+
+    expect(orderByDependencies(releaseSet).map(({ name }) => name)).toEqual([
+      "@morpho-org/blue-sdk",
+      "@morpho-org/blue-sdk-viem",
+      "@morpho-org/midnight-sdk",
+      "@morpho-org/morpho-sdk",
+      "@morpho-org/evm-simulation",
+      "@morpho-org/wdk-protocol-lending-morpho-evm",
     ]);
   });
 

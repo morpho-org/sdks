@@ -147,6 +147,99 @@ describe("MorphoVaultV2 with a Midnight adapter", () => {
     );
   });
 
+  test("behavior: withdraw beyond idle assets builds within the Midnight liquidity market's withdrawable credit", () => {
+    const vaultData = withMidnightAdapter(
+      inKindVaultV2Data({ assetBalance: 50n }),
+      { liquidity: true, credit: 100n, withdrawable: 30n },
+    );
+    expect(
+      vaultData.accrualLiquidityAdapter?.maxWithdraw(vaultData.liquidityData)
+        .value,
+    ).toBe(30n);
+
+    const tx = vaultFor()
+      .withdraw({ amount: 80n, userAddress: IN_KIND_USER, vaultData })
+      .buildTx();
+    expect(tx.to).toBe(getChainAddress(mainnet.id, "bundles.vaultBundlesV1"));
+    expect(() =>
+      vaultFor().withdraw({
+        amount: 81n,
+        userAddress: IN_KIND_USER,
+        vaultData,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        constructor: InputExceedsMaxError,
+        field: "amount",
+        value: 81n,
+        max: 80n,
+      }),
+    );
+  });
+
+  test("behavior: withdrawable credit of a market other than the liquidity data's is not withdrawable", () => {
+    const vaultData = withMidnightAdapter(
+      inKindVaultV2Data({ assetBalance: 50n }),
+      { liquidity: true, credit: 100n, withdrawable: 30n },
+    );
+    const withOtherData = new AccrualVaultV2(
+      { ...vaultData, liquidityData: "0x" },
+      vaultData.accrualLiquidityAdapter,
+      vaultData.accrualAdapters,
+      vaultData.assetBalance,
+      vaultData.forceDeallocatePenalties,
+    );
+
+    expect(() =>
+      vaultFor().withdraw({
+        amount: 51n,
+        userAddress: IN_KIND_USER,
+        vaultData: withOtherData,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("behavior: redeem requirements include the Midnight liquidity market's withdrawable credit", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const vaultData = withMidnightAdapter(
+        inKindVaultV2Data({ assetBalance: 50n }),
+        { liquidity: true, credit: 100n, withdrawable: 30n },
+      );
+      vi.setSystemTime(Number(vaultData.lastUpdate) * 1000);
+      const handle = createMockClient(mainnet);
+      const vault = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
+      const shares = vaultData.toShares(80n);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 2n * shares,
+      });
+
+      await expect(
+        vault.redeem({ shares, userAddress: IN_KIND_USER }).getRequirements(),
+      ).resolves.toEqual([]);
+      await expect(
+        vault
+          .redeem({
+            shares: vaultData.toShares(81n, "Up"),
+            userAddress: IN_KIND_USER,
+          })
+          .getRequirements(),
+      ).rejects.toMatchObject({
+        constructor: InputExceedsMaxError,
+        field: "shares",
+        max: vaultData.toShares(80n),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("error: InputExceedsMaxError from redeem requirements beyond idle assets through a Midnight liquidity adapter", async () => {
     const vault = vaultFor();
     const vaultData = withMidnightAdapter(

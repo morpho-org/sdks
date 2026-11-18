@@ -12,6 +12,7 @@ import {
   SimulationValidationError,
   simulate,
 } from "../../src/index.js";
+import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
 
 /**
  * Chaos S8: transactions that target a code-less address. `eth_simulateV1`
@@ -40,7 +41,9 @@ const KEYROCK_USDC_VAULT_V2: Address =
 const EOA: Address = getAddress("0x00000000000000000000000000000000DeaDBeef");
 
 const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
+  chains: new Map([
+    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
+  ]),
 });
 
 describe.sequential("chaos: S8 missing contract", () => {

@@ -14,6 +14,7 @@ import {
   blueWithdrawBuyCallback,
   type MidnightBuyTarget,
   midnightCancelAndMake,
+  midnightCancelOffers,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
@@ -795,6 +796,37 @@ describe("toSimulationLimits", () => {
       );
     }
   });
+
+  it.each([
+    ["one group", [`0x${"aa".repeat(32)}`]],
+    ["several groups", [`0x${"aa".repeat(32)}`, `0x${"bb".repeat(32)}`]],
+  ] as const)(
+    "rejects a direct Midnight offer cancellation of %s",
+    (_, groups) => {
+      const tx = midnightCancelOffers({
+        chainId: base.id,
+        groups,
+        onBehalf: OWNER,
+      });
+
+      expect(tx.action.type).toBe("midnightCancelOffers");
+      let error: unknown;
+      try {
+        toSimulationLimits(tx.action, { owner: OWNER });
+      } catch (cause) {
+        error = cause;
+      }
+      expect(error).toBeInstanceOf(UnsupportedLimitActionError);
+      expect(error).toMatchObject({ actionType: "midnightCancelOffers" });
+      // No quote makes a cancellation coverable.
+      expect(() =>
+        toSimulationLimits(tx.action, {
+          owner: OWNER,
+          expected: { assetsPaid: 1n },
+        }),
+      ).toThrowError(UnsupportedLimitActionError);
+    },
+  );
 
   it("throws UnsupportedLimitActionError before checking onBehalf", () => {
     // A Midnight action carrying a foreign onBehalf is unsupported first.

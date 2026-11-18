@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 
 /**
  * Error thrown when Anvil exits or fails before its RPC server starts listening.
@@ -175,3 +175,64 @@ export const createAnvilFailureCleanupError = (parameters: {
       parameters.summary ?? "Anvil operation and cleanup both failed.",
     ),
   });
+
+/**
+ * Thrown when deploying the `MidnightAdapterFactory` creation code on a fork returns a receipt
+ * without a contract address.
+ *
+ * @example
+ * ```ts
+ * import { MidnightAdapterFactoryDeploymentError } from "@morpho-org/test";
+ *
+ * const isDeploymentFailure = (error: unknown) =>
+ *   error instanceof MidnightAdapterFactoryDeploymentError;
+ * ```
+ */
+export class MidnightAdapterFactoryDeploymentError extends Error {
+  /**
+   * Creates a Midnight adapter factory deployment error.
+   *
+   * @param hash Hash of the deployment transaction.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(
+    public readonly hash: Hex,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `MidnightAdapterFactory deployment transaction "${hash}" has no contract address. Check that the creation code matches the fork's EVM version and that the constructor did not revert.`,
+      options,
+    );
+    this.name = "MidnightAdapterFactoryDeploymentError";
+  }
+}
+
+/**
+ * Thrown when the `MidnightAdapterFactory` deployed on a fork has no runtime code to install at
+ * the registry address.
+ *
+ * @example
+ * ```ts
+ * import { MidnightAdapterFactoryCodeError } from "@morpho-org/test";
+ *
+ * const isMissingCode = (error: unknown) => error instanceof MidnightAdapterFactoryCodeError;
+ * ```
+ */
+export class MidnightAdapterFactoryCodeError extends Error {
+  /**
+   * Creates a Midnight adapter factory missing-code error.
+   *
+   * @param address Address of the deployed factory that returned no code.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(
+    public readonly address: Address,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `MidnightAdapterFactory deployed at "${address}" has no runtime code. Regenerate MIDNIGHT_ADAPTER_FACTORY_CREATION_CODE from the frozen vault-v2 build.`,
+      options,
+    );
+    this.name = "MidnightAdapterFactoryCodeError";
+  }
+}

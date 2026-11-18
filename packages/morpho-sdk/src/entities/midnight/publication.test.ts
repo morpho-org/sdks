@@ -1,3 +1,4 @@
+import { UnknownDataError } from "@morpho-org/blue-sdk";
 import {
   type IOffer,
   Market,
@@ -157,6 +158,16 @@ const validate = (params: {
   });
 
 describe("validateMidnightMakerOfferStates", () => {
+  test("rejects missing offer state with a named error", () => {
+    expect(() =>
+      validateMidnightMakerOfferStates({
+        tree: priceTree(offer()),
+        states: [],
+        now: 1_000n,
+      }),
+    ).toThrow(UnknownDataError);
+  });
+
   test("rejects expiry equal to now and accepts expiry one second later", () => {
     expect(() => validate({ offer: offer({ expiry: 1_000n }) })).toThrow(
       MidnightOfferExpiredError,

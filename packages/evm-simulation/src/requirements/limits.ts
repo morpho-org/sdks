@@ -337,6 +337,9 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
         quote: { assetsPaid: blueSupply.assets },
       };
     }
+    case "midnightCancelOffers":
+      // A direct offer cancellation moves no value, so there is no operation limit to verify.
+      return undefined;
     case "midnightRedeem":
       // Midnight removes exactly `units` of `onBehalf`'s accrued credit and
       // transfers exactly `units` loan tokens to `receiver`.
@@ -703,16 +706,16 @@ const missingQuote = (
  * @throws {SimulationValidationError} when `expected.collateralSupplies` is
  *   supplied, expected collateral withdrawals are invalid, or a supplied
  *   Midnight market struct cannot be converted.
- * @throws {UnsupportedLimitActionError} when the action type has no operation limit, or
- *   `midnightCancelAndMake` has no `blueSupply` and no collateral supplies, or combines Blue
- *   parking with collateral supplies.
+ * @throws {UnsupportedLimitActionError} when the action type has no operation limit (including
+ *   `midnightCancelOffers`, a direct offer cancellation), or `midnightCancelAndMake` has no
+ *   `blueSupply` and no collateral supplies, or combines Blue parking with collateral supplies.
  * @example
  * ```ts
  * import { MarketParams } from "@morpho-org/blue-sdk";
  * import { blueSupply, midnightCancelAndMake } from "@morpho-org/morpho-sdk";
  * import { simulate, toSimulationLimits } from "@morpho-org/evm-simulation";
  * import type { Address, Hex } from "viem";
- * import { maxUint256, zeroHash } from "viem";
+ * import { createPublicClient, http, maxUint256, zeroHash } from "viem";
  * import { base, mainnet } from "viem/chains";
  *
  * declare const user: Address;
@@ -723,8 +726,14 @@ const missingQuote = (
  * declare const quotedCallbackShares: bigint;
  * const config = {
  *   chains: new Map([
- *     [1, { simulateV1Url: "https://rpc.example" }],
- *     [base.id, { simulateV1Url: "https://base-rpc.example" }],
+ *     [1, { client: createPublicClient({
+ *       chain: mainnet, ccipRead: false,
+ *       transport: http("https://rpc.example", { retryCount: 0, timeout: 5000 }),
+ *     }) }],
+ *     [base.id, { client: createPublicClient({
+ *       chain: base, ccipRead: false,
+ *       transport: http("https://base-rpc.example", { retryCount: 0, timeout: 5000 }),
+ *     }) }],
  *   ]),
  * };
  * declare const rateRatifierV1: Address;
