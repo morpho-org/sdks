@@ -49,10 +49,12 @@ import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
   SlippageCheckUnavailableError,
-  simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 
 /**
@@ -90,11 +92,8 @@ const CbbtcUsdcBlue = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const executeApprovals = async (
   client: AnvilTestClient<typeof mainnet>,
@@ -115,8 +114,7 @@ const simulateFinalTransaction = (
   client: AnvilTestClient<typeof mainnet>,
   tx: { readonly to: Address; readonly data: Hex; readonly value: bigint },
 ) =>
-  simulate(configFor(client), {
-    chainId: mainnet.id,
+  simulateOrThrow(configFor(client), {
     limits: "none",
     mode: "final",
     transactions: [
@@ -183,8 +181,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
     await client.deal({ erc20: USDC, amount: assets });
 
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -239,8 +236,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
       requirements,
     });
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -307,7 +303,6 @@ describe.sequential("simulate pipeline — blue supply", () => {
       10n ** 9n;
 
     const params = (tolerance: bigint) => ({
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations,
       limits: {
@@ -339,7 +334,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
     // comparison, not rounding. `setNextBlockTimestamp` warps the fork clock;
     // `increaseTime` has no effect on this client.
     const sharePrice = { expected, tolerance: 10n ** 15n };
-    const result = await simulate(
+    const result = await simulateOrThrow(
       configFor(client),
       params(sharePrice.tolerance),
     );
@@ -352,7 +347,10 @@ describe.sequential("simulate pipeline — blue supply", () => {
     });
     await client.mine({ blocks: 1 });
 
-    const denied = simulate(configFor(client), params(sharePrice.tolerance));
+    const denied = simulateOrThrow(
+      configFor(client),
+      params(sharePrice.tolerance),
+    );
     await expect(denied).rejects.toThrow(ConsumerLimitViolationError);
     await expect(denied).rejects.toThrowError(/"sharePrice"/);
   }, 120_000);
@@ -391,7 +389,6 @@ describe.sequential("simulate pipeline — blue supply", () => {
       maxBorrowShares?: bigint;
       minCollateral?: bigint;
     }) => ({
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations,
       limits: {
@@ -425,7 +422,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
 
     // A debt cap below the resulting borrow shares fails, on the position
     // bound alone.
-    const denied = simulate(
+    const denied = simulateOrThrow(
       configFor(client),
       simulateParams({ maxBorrowShares: finalBorrowShares / 2n }),
     );
@@ -433,7 +430,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
     await expect(denied).rejects.toThrowError(/position\.maxBorrowShares/);
 
     // Exact final values pass inclusively and echo the bounds.
-    const result = await simulate(
+    const result = await simulateOrThrow(
       configFor(client),
       simulateParams({
         maxBorrowShares: finalBorrowShares,
@@ -478,8 +475,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     );
 
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -557,8 +553,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     }
     await client.deal({ erc20: USDC, amount: parseUnits("100", 6) });
     const repayTx = repay.buildTx();
-    const repayResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const repayResult = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -662,8 +657,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
         maxUint256,
       ],
     });
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -724,8 +718,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     }).map((a) => (a.type === "erc20Approval" ? { ...a, amount: 1n } : a));
     const tx = action.buildTx();
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         mode: "preview",
         authorizations,
@@ -757,8 +750,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -798,8 +790,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     }
     const tx = action.buildTx();
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -828,8 +819,7 @@ describe.sequential("simulate pipeline — negatives", () => {
   test("behavior: a raw WETH deposit runs unchecked without limits.operations", async ({
     client,
   }) => {
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -869,8 +859,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     }
     const tx = action.buildTx();
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -918,8 +907,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
       });
     }
     const depositTx = deposit.buildTx();
-    const depositResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const depositResult = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -982,8 +970,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
       requirements: withdrawReqs,
     });
     const withdrawTx = withdraw.buildTx();
-    const withdrawResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const withdrawResult = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations: withdrawAuths,
       limits: {
@@ -1031,8 +1018,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
       });
     }
     const redeemTx = redeem.buildTx();
-    const redeemResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const redeemResult = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -1118,32 +1104,28 @@ describe.sequential("simulate pipeline — vault V2", () => {
     );
 
     await expect(
-      simulate(
-        { ...configFor(client), timeoutMs: 30_000 },
-        {
-          chainId: mainnet.id,
-          transactions: [
+      simulateOrThrow(configFor(client), {
+        transactions: [
+          {
+            from: client.account.address,
+            to: KEYROCK,
+            data: encodeFunctionData({
+              abi: vaultV2Abi,
+              functionName: "deposit",
+              args: [1n, client.account.address],
+            }),
+          },
+        ],
+        limits: {
+          operations: [
             {
-              from: client.account.address,
-              to: KEYROCK,
-              data: encodeFunctionData({
-                abi: vaultV2Abi,
-                functionName: "deposit",
-                args: [1n, client.account.address],
-              }),
+              type: "vaultV2Deposit",
+              vault: KEYROCK,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
             },
           ],
-          limits: {
-            operations: [
-              {
-                type: "vaultV2Deposit",
-                vault: KEYROCK,
-                quote: { assetsPaid: 1n, sharesMinted: 1n },
-              },
-            ],
-          },
         },
-      ),
+      }),
     ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
 
     expect(assetReads.map((address) => address.toLowerCase())).toContain(
@@ -1181,16 +1163,12 @@ describe.sequential("simulate pipeline — vault V2", () => {
         }),
       },
     ];
-    const config = {
-      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-      timeoutMs: 30_000,
-    };
+    const config = configFor(client);
     const input = {
-      chainId: mainnet.id,
       limits: "none" as const,
       transactions,
     };
-    const unchecked = await simulate(config, input);
+    const unchecked = await simulateOrThrow(config, input);
     expect(unchecked.verification.operations).toEqual([]);
     const sharesMinted = unchecked.transfers
       .filter(
@@ -1207,7 +1185,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       slippageTolerance: 0n,
       quote: { sharesMinted, assetsPaid: assets },
     };
-    const result = await simulate(config, {
+    const result = await simulateOrThrow(config, {
       ...input,
       limits: { operations: [operation] },
     });
@@ -1215,7 +1193,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       slippageTolerance: 0n,
       quote: { sharesMinted, assetsPaid: assets },
     });
-    const tolerated = await simulate(config, {
+    const tolerated = await simulateOrThrow(config, {
       ...input,
       limits: {
         operations: [
@@ -1250,7 +1228,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       { account: client.account.address },
     ]) {
       await expect(
-        simulate(config, {
+        simulateOrThrow(config, {
           ...input,
           limits: { operations: [{ ...operation, ...override }] },
         }),
@@ -1427,7 +1405,6 @@ describe.sequential("simulate pipeline — vault V2", () => {
       penalty: bigint;
       deallocations: { marketId: MarketId; assets: bigint }[];
     }) => ({
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: exitAuths,
       limits: {
@@ -1457,7 +1434,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
         },
       ],
     });
-    const result = await simulate(
+    const result = await simulateOrThrow(
       configFor(client),
       simulateParams({ penalty, deallocations: quotedDeallocations }),
     );
@@ -1472,7 +1449,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
     });
     // Quoting less deallocated than realized is adverse beyond tolerance.
     await expect(
-      simulate(
+      simulateOrThrow(
         configFor(client),
         simulateParams({
           penalty,
@@ -1483,7 +1460,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
       ),
     ).rejects.toThrow(ConsumerLimitViolationError);
     await expect(
-      simulate(
+      simulateOrThrow(
         configFor(client),
         simulateParams({
           penalty: penalty - 1n,
@@ -1589,8 +1566,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
       requirements: await migration.getRequirements(),
     });
     const tx = migration.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations: auths,
       limits: {
@@ -1675,8 +1651,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
     // forceRedeem emits no requirements — the multicall burns the caller's
     // shares inside the vault itself.
     const tx = exit.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations: [],
       limits: {
@@ -1809,7 +1784,6 @@ describe.sequential("simulate pipeline — vault exits", () => {
       penalty: bigint;
       deallocations: { marketId: MarketId; assets: bigint }[];
     }) => ({
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: [],
       limits: {
@@ -1835,7 +1809,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
         },
       ],
     });
-    const result = await simulate(
+    const result = await simulateOrThrow(
       configFor(client),
       simulateParams({ penalty, deallocations: quotedDeallocations }),
     );
@@ -1848,7 +1822,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
 
     // Quoting less deallocated than realized is adverse beyond tolerance.
     await expect(
-      simulate(
+      simulateOrThrow(
         configFor(client),
         simulateParams({
           penalty,
@@ -1861,7 +1835,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
     expect(penalty).toBeGreaterThan(0n);
     // Quoting a penalty below the realized charge violates as well.
     await expect(
-      simulate(
+      simulateOrThrow(
         configFor(client),
         simulateParams({
           penalty: penalty - 1n,
@@ -1949,8 +1923,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
       .filter((position) => position.supplyShares > 0n);
     expect(positions.length).toBeGreaterThan(0);
 
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations: auths,
       limits: {
@@ -2070,7 +2043,6 @@ describe.sequential("simulate pipeline — vault exits", () => {
       quote: { positions: { marketId: MarketId; supplyShares: bigint }[] },
       tolerance: bigint,
     ) => ({
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: auths,
       limits: {
@@ -2095,11 +2067,11 @@ describe.sequential("simulate pipeline — vault exits", () => {
       ],
     });
     await expect(
-      simulate(configFor(client), simulateParams({ positions }, 0n)),
+      simulateOrThrow(configFor(client), simulateParams({ positions }, 0n)),
     ).rejects.toThrow(ConsumerLimitViolationError);
 
     const slippageTolerance = parseUnits("0.01", 18);
-    const result = await simulate(
+    const result = await simulateOrThrow(
       configFor(client),
       simulateParams({ positions }, slippageTolerance),
     );
@@ -2176,8 +2148,7 @@ describe.sequential("simulate pipeline — blue refinance", () => {
       requirements: await refinance.getRequirements(),
     });
     const tx = refinance.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -2296,25 +2267,17 @@ describe.sequential("chaos: S11 invalid authorization", () => {
     try {
       let result: unknown;
       const error = await expectFailClosed(
-        simulate(
-          {
-            chains: new Map([
-              [mainnet.id, { client: createTestSimulationClient(proxy.url) }],
-            ]),
-          },
-          {
-            chainId: mainnet.id,
-            limits: "none",
-            transactions: [
-              {
-                from: client.account.address,
-                to: tx.to,
-                data: tx.data,
-                value: tx.value,
-              },
-            ],
-          },
-        ).then((value) => {
+        simulateOrThrow(simulationClientFor(proxy.url, mainnet), {
+          limits: "none",
+          transactions: [
+            {
+              from: client.account.address,
+              to: tx.to,
+              data: tx.data,
+              value: tx.value,
+            },
+          ],
+        }).then((value) => {
           result = value;
           return value;
         }),

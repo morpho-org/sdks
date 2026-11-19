@@ -35,10 +35,12 @@ import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   type OperationLimit,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 /** Pinned after the Base Midnight deployment, matching morpho-sdk's Midnight fork tests. */
 const test = createViemTest(base, {
@@ -92,11 +94,8 @@ const marketId = MarketUtils.toId(market);
 /** Non-round credit, so an off-by-one payout or credit change is visible. */
 const LENT = 1_234_567n;
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 const redeem = (
   units: bigint,
   accounts: { readonly onBehalf: Address; readonly receiver?: Address },
@@ -258,8 +257,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
   }) => {
     const user = await setUp(client);
     const tx = redeem(LENT - 1n, { onBehalf: user, receiver: RECEIVER });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -304,8 +302,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
       OperationLimit,
       { type: "midnightRedeem" }
     >[];
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: {
         operations: [
@@ -366,8 +363,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
       { type: "midnightRedeem" }
     >[];
     const exact = { ...limit!, slippageTolerance: 0n };
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: { operations: [{ ...exact, position: { maxCredit: 0n } }] },
     });
@@ -379,8 +375,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
 
     // A stored-credit reading would measure a `LENT` drop and fail the exact
     // quote above; one unit below the normalized credit must fail.
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: {
         operations: [
@@ -412,8 +407,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
       }),
     });
     const tx = redeem(LENT, { onBehalf: user, receiver: RECEIVER });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(OTHER, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: OTHER,
@@ -444,8 +438,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
       OperationLimit,
       { type: "midnightRedeem" }
     >[];
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions,
       limits: { operations: [{ ...aggregate!, position: { maxCredit: 0n } }] },
     });
@@ -456,8 +449,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
 
     // Only the first redeem is quoted: the bundle removes more credit than it.
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions,
         limits: toSimulationLimits(first.action, { owner: user }),
       }),
@@ -474,8 +466,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
       OperationLimit,
       { type: "midnightRedeem" }
     >[];
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: { operations: [{ ...limit!, position: { maxCredit: 0n } }] },
     }).catch((caught: unknown) => caught);
@@ -491,8 +482,7 @@ describe.sequential("midnightRedeem limits — Base fork", () => {
     const user = await setUp(client);
     const intended = redeem(LENT, { onBehalf: user, receiver: RECEIVER });
     const misdirected = redeem(LENT, { onBehalf: user, receiver: OTHER });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, misdirected)],
       limits: toSimulationLimits(intended.action, {
         owner: user,

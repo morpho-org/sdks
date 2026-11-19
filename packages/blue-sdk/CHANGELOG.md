@@ -1,5 +1,11 @@
 # @morpho-org/blue-sdk
 
+## 8.4.0-next.2
+
+### Patch Changes
+
+- Cap `PreLiquidationPosition.seizableCollateral` repayable shares at the borrower's shares, matching the contract when the pre-liquidation close factor exceeds 100%.
+
 ## 8.4.0-next.1
 
 ### Minor Changes

@@ -141,7 +141,6 @@ const toBlueAuthorization = (
  * async function prepare(userAddress: Address) {
  *   const client = createPublicClient({
  *     chain: mainnet,
- *     ccipRead: false,
  *     transport: http(undefined, { retryCount: 0, timeout: 5000 }),
  *   })
  *     .extend(morphoViemExtension());

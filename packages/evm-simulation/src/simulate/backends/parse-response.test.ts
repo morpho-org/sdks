@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
   SimulationAssertError,
+  SimulationRevertedError,
 } from "../../errors.js";
 import {
   assertionPlan,
@@ -116,7 +117,12 @@ describe("parseSimulationResponse", () => {
       planned: { type: "assertion", phase: "before" },
       result: { status: true, returnData: balanceHex(4n) },
     });
-    expect(() => evaluateCalls(response)).toThrow(SimulationAssertError);
+    const execution = evaluateCalls(response);
+    expect(execution.reverted).toBe(true);
+    expect(execution.failures).toEqual([
+      expect.any(SimulationAssertError),
+      expect.any(SimulationRevertedError),
+    ]);
     expect(checked).toBe(false);
   });
 

@@ -3,6 +3,8 @@ import { type Address, ethAddress, isAddressEqual, zeroAddress } from "viem";
 import {
   type ConsumerLimitViolation,
   ConsumerLimitViolationError,
+  InvalidSimulationResponseError,
+  SimulationPackageError,
   SlippageCheckUnavailableError,
 } from "../errors.js";
 import {
@@ -27,54 +29,44 @@ import type { SlippageOperationReads, StateValue } from "./state/read-state.js";
  * Typed-input vault burns add back share mints to the account and reject its
  * outgoing non-burn share transfers; quote-only limits retain net balances.
  * @param params - Planned observations, decoded before/after values, and user transfer traces.
- * @param stopOnFirstFailure - Optional compatibility mode that rejects the first failure before later checks run.
  * @returns Failures in operation and check order, and checked operations for the success path.
- * @throws {InvalidSimulationResponseError} When a matching `ForceDeallocate`/
- *   `Withdraw` event log fails to decode.
- * @throws {ConsumerLimitViolationError} When compatibility mode encounters a limit failure.
- * @throws {SlippageCheckUnavailableError} When compatibility mode encounters unavailable evidence.
  * @internal
  */
-export function findOperationSlippageFailures(
-  params: {
-    readonly ctx: CheckContext;
-    readonly operations: readonly SlippageOperationReads[];
-    readonly before: ReadonlyMap<string, StateValue>;
-    readonly after: ReadonlyMap<string, StateValue>;
-    readonly transfers: readonly Transfer[];
-    /** User-call logs for force-exit and Blue supply-rounding evidence. */
-    readonly logs: readonly (readonly RawLog[])[];
-    /** Canonical Morpho Blue address, emitter of the `Withdraw` events counted
-     * toward `deallocations` quotes. */
-    readonly morpho: Address;
-    readonly requestTransactions: readonly {
-      readonly from: Address;
-      readonly value?: bigint;
-    }[];
-  },
-  stopOnFirstFailure = false,
-): {
-  readonly failures: readonly (
-    | ConsumerLimitViolationError
-    | SlippageCheckUnavailableError
-  )[];
+export function findOperationSlippageFailures(params: {
+  readonly ctx: CheckContext;
+  readonly reportedMissingReadIds?: ReadonlySet<string>;
+  readonly skippedOperationIndices?: ReadonlySet<number>;
+  readonly operations: readonly SlippageOperationReads[];
+  readonly before: ReadonlyMap<string, StateValue>;
+  readonly after: ReadonlyMap<string, StateValue>;
+  readonly transfers: readonly Transfer[];
+  /** User-call logs for force-exit and Blue supply-rounding evidence. */
+  readonly logs: readonly (readonly RawLog[])[];
+  /** Canonical Morpho Blue address, emitter of the `Withdraw` events counted
+   * toward `deallocations` quotes. */
+  readonly morpho: Address;
+  readonly requestTransactions: readonly {
+    readonly from: Address;
+    readonly value?: bigint;
+  }[];
+}): {
+  readonly failures: readonly SimulationPackageError[];
   readonly checked: readonly SimulatedOperation[];
 } {
-  const failures: (
-    | ConsumerLimitViolationError
-    | SlippageCheckUnavailableError
-  )[] = [];
-  const reportedMissingReadIds = new Set<string>();
+  const failures: SimulationPackageError[] = [];
+  const reportedMissingReadIds = new Set(params.reportedMissingReadIds);
   const recordFailure = (
-    failure: ConsumerLimitViolationError | SlippageCheckUnavailableError,
+    failure:
+      | ConsumerLimitViolationError
+      | SlippageCheckUnavailableError
+      | InvalidSimulationResponseError,
   ) => {
-    if (stopOnFirstFailure) throw failure;
     failures.push(failure);
   };
   const { ctx, before, after, transfers, logs, morpho, requestTransactions } =
     params;
-  const checked = params.operations.map(
-    (
+  const operationCheck = {
+    run(
       {
         limit,
         measurements,
@@ -85,9 +77,11 @@ export function findOperationSlippageFailures(
         collateralSupplyReads,
         walletBounds,
         counterSide,
-      },
-      index,
-    ) => {
+      }: SlippageOperationReads,
+      index: number,
+    ) {
+      const derivationSkipped =
+        params.skippedOperationIndices?.has(index) === true;
       const label =
         limit.type === "midnightSupplyCollateralTakeBorrow"
           ? `Limit operation ${index} (${limit.type}, marketId "${limit.marketId}")`
@@ -113,7 +107,6 @@ export function findOperationSlippageFailures(
         unavailableFields.push(failure.field as keyof SlippageQuote);
         const ids = readIds.filter((id) => id !== undefined);
         if (
-          stopOnFirstFailure ||
           ids.length === 0 ||
           ids.some((id) => !reportedMissingReadIds.has(id))
         )
@@ -197,7 +190,7 @@ export function findOperationSlippageFailures(
         limit.type === "midnightRepayWithdrawCollateral" ||
         limit.type === "midnightTakeRepayWithdrawCollateral"
       ) {
-        if (limit.quote.debtRepaid === undefined) {
+        if (!derivationSkipped && limit.quote.debtRepaid === undefined) {
           const beforeDebt =
             debtReadId === undefined ? undefined : before.get(debtReadId);
           const afterDebt =
@@ -270,6 +263,52 @@ export function findOperationSlippageFailures(
               },
             ),
           );
+      }
+      // Without derivation data only the position bounds, which read ordinary observations, still run.
+      if (derivationSkipped) {
+        const afterPosition =
+          positionBoundsReadId === undefined
+            ? undefined
+            : after.get(positionBoundsReadId);
+        const debt =
+          debtReadId === undefined ? undefined : after.get(debtReadId);
+        const { failures: boundFailures } = findSlippageFailures({
+          label,
+          operationIndex: index,
+          limits: {
+            type: limit.type,
+            quote: {},
+            slippageTolerance: 0n,
+            ...(limit.position === undefined
+              ? {}
+              : { position: limit.position }),
+          },
+          observed: {},
+          position:
+            typeof afterPosition === "object" ? afterPosition : undefined,
+          credit: typeof afterPosition === "bigint" ? afterPosition : undefined,
+          midnightDebt: typeof debt === "bigint" ? debt : undefined,
+          midnightCollateral: new Map(
+            (collateralReads ?? []).flatMap((read) => {
+              const value = after.get(read.positionReadId);
+              return typeof value === "bigint"
+                ? [[read.collateralIndex, value] as const]
+                : [];
+            }),
+          ),
+          unavailableCollateralIndices: (collateralReads ?? [])
+            .filter(
+              (read) => typeof after.get(read.positionReadId) !== "bigint",
+            )
+            .map((read) => read.collateralIndex),
+          unavailableBounds: [
+            "position",
+            "position.maxDebt",
+            "position.maxCredit",
+          ],
+        });
+        for (const failure of boundFailures) recordFailure(failure);
+        return undefined;
       }
       const observed: {
         -readonly [K in keyof SlippageQuote]: SlippageQuote[K];
@@ -723,28 +762,48 @@ export function findOperationSlippageFailures(
         (limit.quote.penalty !== undefined ||
           limit.quote.deallocations !== undefined)
       ) {
-        const forceExitResult = findForceExitFailures({
-          logs,
-          vault: limit.vault,
-          morpho,
-          account: limit.account ?? ctx.owner,
-          operationType: limit.type,
-          requireDeallocations: limit.quote.deallocations !== undefined,
-          operationIndex: index,
-        });
+        const forceExitResult = (() => {
+          try {
+            return findForceExitFailures({
+              logs,
+              vault: limit.vault,
+              morpho,
+              account: limit.account ?? ctx.owner,
+              operationType: limit.type,
+              requireDeallocations: limit.quote.deallocations !== undefined,
+              operationIndex: index,
+            });
+          } catch (error) {
+            if (!(error instanceof InvalidSimulationResponseError)) throw error;
+            return {
+              failures: [error],
+              checked: { penalty: 0n, deallocations: [] },
+            };
+          }
+        })();
         for (const failure of forceExitResult.failures) recordFailure(failure);
+        if (
+          forceExitResult.failures.some(
+            (failure) => failure instanceof InvalidSimulationResponseError,
+          )
+        )
+          unavailableFields.push("penalty", "deallocations");
         const forceExit = forceExitResult.checked;
         if (
           limit.quote.penalty !== undefined &&
           !forceExitResult.failures.some(
-            (failure) => failure.field === "penalty",
+            (failure) =>
+              failure instanceof InvalidSimulationResponseError ||
+              failure.field === "penalty",
           )
         )
           observed.penalty = forceExit.penalty;
         if (
           limit.quote.deallocations !== undefined &&
           !forceExitResult.failures.some(
-            (failure) => failure.field === "deallocations",
+            (failure) =>
+              failure instanceof InvalidSimulationResponseError ||
+              failure.field === "deallocations",
           )
         )
           observed.deallocations = forceExit.deallocations;
@@ -757,12 +816,35 @@ export function findOperationSlippageFailures(
           : after.get(positionBoundsReadId);
       const position =
         typeof afterPosition === "object" ? afterPosition : undefined;
+      // A malformed Blue event voids only the share-rounding allowance; the
+      // operation's other bounds still run.
+      let subjectShareRoundingAllowance: bigint | undefined;
+      let roundingUnavailable = false;
+      if (
+        limit.type === "blueWithdraw" &&
+        typeof limit.inputs === "object" &&
+        "assets" in limit.inputs &&
+        limit.inputs.assets !== undefined
+      ) {
+        try {
+          subjectShareRoundingAllowance = countPrecedingBlueSupplies({
+            logs,
+            morpho,
+            marketId: limit.marketId,
+            account: limit.account ?? ctx.owner,
+          });
+        } catch (error) {
+          if (!(error instanceof InvalidSimulationResponseError)) throw error;
+          recordFailure(error);
+          roundingUnavailable = true;
+        }
+      }
       const result = findSlippageFailures({
         unavailableFields: [
           ...unavailableFields,
           ...failures
             .filter(
-              (failure) =>
+              (failure): failure is SlippageCheckUnavailableError =>
                 failure instanceof SlippageCheckUnavailableError &&
                 failure.operationIndex === index,
             )
@@ -802,22 +884,13 @@ export function findOperationSlippageFailures(
               ),
           )
           .map((read) => read.collateralIndex),
-        skipFields:
-          limit.type === "midnightSupplyCollateralTakeBorrow"
-            ? ["assetsReceived"]
-            : undefined,
-        subjectShareRoundingAllowance:
-          limit.type === "blueWithdraw" &&
-          typeof limit.inputs === "object" &&
-          "assets" in limit.inputs &&
-          limit.inputs.assets !== undefined
-            ? countPrecedingBlueSupplies({
-                logs,
-                morpho,
-                marketId: limit.marketId,
-                account: limit.account ?? ctx.owner,
-              })
-            : undefined,
+        skipFields: [
+          ...(limit.type === "midnightSupplyCollateralTakeBorrow"
+            ? (["assetsReceived"] as const)
+            : []),
+          ...(roundingUnavailable ? (["sharesBurned"] as const) : []),
+        ],
+        subjectShareRoundingAllowance,
       });
       for (const failure of result.failures) {
         if (
@@ -841,21 +914,18 @@ export function findOperationSlippageFailures(
         checkedLimits: result.checked,
       };
     },
-  );
-  return { failures, checked };
-}
-
-/**
- * Reject the first slippage failure before evaluating later checks.
- * @param params - Planned observations, decoded values, and user transfer traces.
- * @returns Each subject and its checked limits.
- * @throws {ConsumerLimitViolationError} When a quoted limit is violated.
- * @throws {SlippageCheckUnavailableError} When required evidence is unavailable.
- * @throws {InvalidSimulationResponseError} When a matching force-exit event log cannot be decoded.
- * @internal
- */
-export function verifySlippage(
-  params: Parameters<typeof findOperationSlippageFailures>[0],
-): readonly SimulatedOperation[] {
-  return findOperationSlippageFailures(params, true).checked;
+  };
+  const checked = params.operations.map((operation, index) => {
+    try {
+      return operationCheck.run(operation, index);
+    } catch (error) {
+      if (!(error instanceof SimulationPackageError)) throw error;
+      failures.push(error);
+      return undefined;
+    }
+  });
+  return {
+    failures,
+    checked: checked.filter((operation) => operation !== undefined),
+  };
 }

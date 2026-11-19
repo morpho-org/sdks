@@ -2,7 +2,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { InvalidChainIdError } from "../../../src/errors.js";
+import { RpcTransportError } from "../../../src/errors.js";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
@@ -33,11 +33,13 @@ function planFor(
   owner: Address,
 ) {
   return planExecution({
-    request: parseRequest({
-      chainId: mainnet.id,
-      limits: "none",
-      transactions: transactions.map((tx) => ({ ...tx, from: owner })),
-    }),
+    request: parseRequest(
+      {
+        limits: "none",
+        transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+      },
+      mainnet.id,
+    ),
     owner,
     preparations: [],
     reads: [],
@@ -51,17 +53,19 @@ const pin = async (client: AnvilTestClient<typeof mainnet>) => {
 };
 
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
-  test("error: InvalidChainIdError when the node rejects a different call chainId", async ({
+  test("error: RpcTransportError when the node rejects a different call chainId", async ({
     client,
   }) => {
     const chainId = 8453;
     const owner = client.account.address;
     const plan = planExecution({
-      request: parseRequest({
+      request: parseRequest(
+        {
+          limits: "none",
+          transactions: [{ from: owner, to: RECIPIENT, data: "0x" }],
+        },
         chainId,
-        limits: "none",
-        transactions: [{ from: owner, to: RECIPIENT, data: "0x" }],
-      }),
+      ),
       owner,
       preparations: [],
       reads: [],
@@ -74,7 +78,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
         validation: false,
         parentHashCheck: true,
       }),
-    ).rejects.toBeInstanceOf(InvalidChainIdError);
+    ).rejects.toBeInstanceOf(RpcTransportError);
   });
 
   test("deterministic pinned metadata", async ({ client }) => {

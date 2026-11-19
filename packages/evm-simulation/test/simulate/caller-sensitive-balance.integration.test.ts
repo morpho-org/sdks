@@ -14,8 +14,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { ConsumerLimitViolationError, simulate } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import { ConsumerLimitViolationError } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -119,17 +122,8 @@ test("error: owner observations reject an understated quote for a caller-sensiti
       args: [amount, owner],
     }),
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([
-      [
-        mainnet.id,
-        { client: createTestSimulationClient(client.transport.url!) },
-      ],
-    ]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const request = (assetsPaid: bigint) => ({
-    chainId: mainnet.id,
     transactions: [transaction],
     limits: {
       operations: [
@@ -142,10 +136,10 @@ test("error: owner observations reject an understated quote for a caller-sensiti
       ],
     },
   });
-  await expect(simulate(config, request(amount - 1n))).rejects.toThrow(
+  await expect(simulateOrThrow(config, request(amount - 1n))).rejects.toThrow(
     ConsumerLimitViolationError,
   );
-  await expect(simulate(config, request(amount))).resolves.toBeDefined();
+  await expect(simulateOrThrow(config, request(amount))).resolves.toBeDefined();
   const balance = () =>
     client.readContract({
       address: token,

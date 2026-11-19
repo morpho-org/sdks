@@ -13,8 +13,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { SlippageCheckUnavailableError, simulate } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import { SlippageCheckUnavailableError } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -151,35 +154,26 @@ test("rejects a foreign Blue market tuple during public simulation", async ({
 
   try {
     await expect(
-      simulate(
-        {
-          timeoutMs: 30_000,
-          chains: new Map([
-            [mainnet.id, { client: createTestSimulationClient(proxyUrl) }],
-          ]),
-        },
-        {
-          chainId: mainnet.id,
-          limits: {
-            operations: [
-              {
-                type: "blueSupply",
-                marketId: targetMarket.id,
-                quote: { assetsPaid: quotedMaximum, sharesMinted: 1n },
-                slippageTolerance: 0n,
-              },
-            ],
-          },
-          transactions: [
+      simulateOrThrow(simulationClientFor(proxyUrl, mainnet), {
+        limits: {
+          operations: [
             {
-              from: client.account.address,
-              to: transaction.to,
-              data: transaction.data,
-              value: transaction.value,
+              type: "blueSupply",
+              marketId: targetMarket.id,
+              quote: { assetsPaid: quotedMaximum, sharesMinted: 1n },
+              slippageTolerance: 0n,
             },
           ],
         },
-      ),
+        transactions: [
+          {
+            from: client.account.address,
+            to: transaction.to,
+            data: transaction.data,
+            value: transaction.value,
+          },
+        ],
+      }),
     ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
     expect(intercepted).toBe(true);
   } finally {

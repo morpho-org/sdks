@@ -1,15 +1,27 @@
-import type { Address, Client, Hex } from "viem";
+import type { Address, Chain, Client, Hex, Transport } from "viem";
 
-// ─── Config ────────────────────────────────────────────────────────────────────
-// Shapes the caller constructs once and passes into `simulate()`.
+// ─── Client and options ──────────────────────────────────────────────────────
+// What the caller passes into `simulate()` besides the request.
 
 /**
- * Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`.
- * @deprecated Use `ChainSimulationClientConfig`; removed in the next major.
+ * A viem client the caller owns, with `chain` set. Its transport must support
+ * `eth_simulateV1`; the simulated chain is `client.chain.id`. The SDK sets no
+ * retry policy or per-request timeout; `options.timeoutMs` bounds the whole
+ * simulation.
  */
-export interface ChainSimulationConfig {
-  /** JSON-RPC URL supporting `eth_simulateV1`. @deprecated Use the client config; removed in the next major. */
-  readonly simulateV1Url: string;
+export type SimulationClient = Client<Transport, Chain>;
+
+/** Optional settings for one `simulate()` call. */
+export interface SimulationOptions {
+  /** Receives the SDK's diagnostic logs. */
+  readonly logger?: SimulationLogger;
+  /**
+   * Whole-simulation deadline in milliseconds (default 5000). After it passes,
+   * no further read starts and the report fails with `RpcTransportError`. It
+   * does not abort a request already sent by the caller's transport, so set the
+   * transport's own `timeout` to at most this value.
+   */
+  readonly timeoutMs?: number;
   /**
    * Block overrides forwarded to `eth_simulateV1` as the simulated block's
    * `blockOverrides`. Omitted fields leave the node's defaults untouched.
@@ -38,35 +50,6 @@ export interface ChainSimulationConfig {
    * `parentHash` that never matches the pinned block.
    */
   readonly parentHashCheck?: boolean;
-}
-
-/** Per-chain consumer-owned client and execution settings for `eth_simulateV1`. */
-export interface ChainSimulationClientConfig
-  extends Omit<ChainSimulationConfig, "simulateV1Url"> {
-  /** Consumer-owned client with CCIP-Read disabled, no fallback and zero transport retries. */
-  readonly client: Client;
-  /** Supply only `client`, not a deprecated URL. */
-  readonly simulateV1Url?: never;
-}
-
-/** A consumer-owned client configuration or the deprecated URL configuration. */
-export type ChainSimulationConfigEntry =
-  | ChainSimulationClientConfig
-  | ChainSimulationConfig;
-
-/**
- * Top-level configuration for `simulate`.
- *
- * Every chain entry must supply a client or deprecated URL supporting `eth_simulateV1`. An absent chain
- * or missing client and URL throws `UnsupportedChainError`; execution never selects
- * another provider after a failure.
- */
-export interface SimulationConfig {
-  /** Per-chain `ChainSimulationClientConfig` or deprecated `ChainSimulationConfig` entries. */
-  chains: Map<number, ChainSimulationConfigEntry>;
-  logger?: SimulationLogger;
-  /** Whole-pipeline deadline in ms (default 5000); does not abort in-flight consumer transport requests. */
-  timeoutMs?: number;
 }
 
 // ─── Call-site data ────────────────────────────────────────────────────────────

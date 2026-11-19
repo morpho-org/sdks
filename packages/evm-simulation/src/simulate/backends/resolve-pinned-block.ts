@@ -11,14 +11,11 @@ import { rpc } from "./eth-simulate-v1.js";
  * when the caller supplies `SimulateParams.block`.
  *
  * @param params - Resolution parameters.
- * @param params.client - Consumer-supplied simulation client.
+ * @param params.client - The caller's viem client.
  * @param params.blockNumber - Requested block number or tag; defaults to
  *   `latest`.
- * @param params.signal - Optional pipeline abort signal; checked around the
- *   request so an aborted pipeline never produces a pin.
  * @returns The resolved {@link StateBlock}.
- * @throws {RpcTransportError} For transport failures, timeouts, or an
- *   aborted signal.
+ * @throws {RpcTransportError} For transport failures and timeouts.
  * @throws {InvalidSimulationResponseError} When the node returns a 2xx body
  *   that is not JSON or is the JSON value `null`, or a block without a number
  *   or hash. Other JSON bodies without an RPC result are interpreted as a
@@ -28,20 +25,16 @@ import { rpc } from "./eth-simulate-v1.js";
 export async function resolvePinnedBlock(params: {
   readonly client: Client;
   readonly blockNumber?: bigint | BlockTag;
-  readonly signal?: AbortSignal;
 }): Promise<StateBlock> {
-  const { client, blockNumber, signal } = params;
-  const block = await rpc("eth_getBlock", async () => {
-    signal?.throwIfAborted();
-    const resolved = await getBlock(
+  const { client, blockNumber } = params;
+  const block = await rpc("eth_getBlock", () =>
+    getBlock(
       client,
       typeof blockNumber === "bigint"
         ? { blockNumber }
         : { blockTag: blockNumber ?? "latest" },
-    );
-    signal?.throwIfAborted();
-    return resolved;
-  });
+    ),
+  );
   if (block.number === null || block.hash === null) {
     throw new InvalidSimulationResponseError(
       "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",

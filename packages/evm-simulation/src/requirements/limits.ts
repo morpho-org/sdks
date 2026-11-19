@@ -713,7 +713,11 @@ const missingQuote = (
  * ```ts
  * import { MarketParams } from "@morpho-org/blue-sdk";
  * import { blueSupply, midnightCancelAndMake } from "@morpho-org/morpho-sdk";
- * import { simulate, toSimulationLimits } from "@morpho-org/evm-simulation";
+ * import {
+ *   type SimulationClient,
+ *   simulate,
+ *   toSimulationLimits,
+ * } from "@morpho-org/evm-simulation";
  * import type { Address, Hex } from "viem";
  * import { createPublicClient, http, maxUint256, zeroHash } from "viem";
  * import { base, mainnet } from "viem/chains";
@@ -724,18 +728,8 @@ const missingQuote = (
  * declare const deadline: bigint;
  * declare const quotedShares: bigint;
  * declare const quotedCallbackShares: bigint;
- * const config = {
- *   chains: new Map([
- *     [1, { client: createPublicClient({
- *       chain: mainnet, ccipRead: false,
- *       transport: http("https://rpc.example", { retryCount: 0, timeout: 5000 }),
- *     }) }],
- *     [base.id, { client: createPublicClient({
- *       chain: base, ccipRead: false,
- *       transport: http("https://base-rpc.example", { retryCount: 0, timeout: 5000 }),
- *     }) }],
- *   ]),
- * };
+ * declare const mainnetClient: SimulationClient;
+ * declare const baseClient: SimulationClient;
  * declare const rateRatifierV1: Address;
  * declare const root: Hex;
  * declare const groups: readonly Hex[];
@@ -750,8 +744,7 @@ const missingQuote = (
  *     deadline,
  *   },
  * });
- * const result = await simulate(config, {
- *   chainId: 1,
+ * const result = await simulate(mainnetClient, {
  *   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner: user,
@@ -779,8 +772,7 @@ const missingQuote = (
  *     },
  *   },
  * });
- * await simulate(config, {
- *   chainId: base.id,
+ * await simulate(baseClient, {
  *   transactions: [{
  *     from: user,
  *     to: midnightTx.to,
@@ -804,14 +796,16 @@ const missingQuote = (
  * import { createPublicClient, type Address, http, maxUint256 } from "viem";
  * import { base } from "viem/chains";
  *
- * const client = createPublicClient({ chain: base, transport: http() }).extend(
+ * const client = createPublicClient({
+ *   chain: base,
+ *   transport: http(),
+ * }).extend(
  *   morphoViemExtension(),
  * );
  * declare const user: Address;
  * declare const market: MarketParams;
  * declare const offers: Tree<"rateV1">;
  * declare const collateralAssets: bigint;
- * declare const config: Parameters<typeof simulate>[0];
  *
  * const output = await client.morpho.midnight(base.id).supplyCollateralMakeBorrow({
  *   accountAddress: user,
@@ -823,8 +817,7 @@ const missingQuote = (
  *   deadline: maxUint256,
  * });
  * const tx = output.buildTx();
- * const result = await simulate(config, {
- *   chainId: base.id,
+ * const result = await simulate(client, {
  *   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, { owner: user }),
  * });
@@ -843,8 +836,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -868,8 +860,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, { owner }),
  * });
@@ -889,8 +880,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -903,10 +893,10 @@ const missingQuote = (
  * import { maxUint256, type Address } from "viem";
  * import { midnightRepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
  * import type { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
- * import { simulate, toSimulationLimits, type SimulationConfig } from "@morpho-org/evm-simulation";
+ * import { simulate, toSimulationLimits, type SimulationClient } from "@morpho-org/evm-simulation";
  *
  * declare const chainId: 8453;
- * declare const config: SimulationConfig;
+ * declare const client: SimulationClient;
  * declare const owner: Address;
  * declare const market: MarketParams;
  * declare const deadline: bigint;
@@ -918,8 +908,7 @@ const missingQuote = (
  *   collateralReceiver: owner,
  *   deadline,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -935,10 +924,10 @@ const missingQuote = (
  *   type MidnightTakeableOffer,
  * } from "@morpho-org/morpho-sdk";
  * import type { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
- * import { simulate, toSimulationLimits, type SimulationConfig } from "@morpho-org/evm-simulation";
+ * import { simulate, toSimulationLimits, type SimulationClient } from "@morpho-org/evm-simulation";
  *
  * declare const chainId: 8453;
- * declare const config: SimulationConfig;
+ * declare const client: SimulationClient;
  * declare const owner: Address;
  * declare const market: MarketParams;
  * declare const takeableOffers: readonly MidnightTakeableOffer[];
@@ -955,8 +944,7 @@ const missingQuote = (
  *   collateralReceiver: owner,
  *   deadline,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   // Derives assetsPaid: 1_000n and position.maxDebt: 0n.
  *   limits: toSimulationLimits(tx.action, { owner, slippageTolerance: 0n }),

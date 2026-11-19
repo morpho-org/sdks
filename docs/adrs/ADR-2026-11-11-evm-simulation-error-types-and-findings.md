@@ -212,3 +212,16 @@ signature or response field is removed or retyped.
   which collection preserves.
 - ADR-2026-10-22-evm-simulation-approval-allowlist — the approval checks whose failures are safety
   errors.
+- Primary plus findings, primary selection, throwing on failure, the rule that the SDK exports no
+  severity, level, rank or numeric order, and the rejected alternatives "One aggregate error listing
+  every failure" and "SDK-defined severity levels", and the group name `SimulationRejectedError`
+  (renamed `SimulationExecutionError`), superseded by
+  ADR-2026-11-17-evm-simulation-failure-report.
+- The post-check `eth_chainId` probe, the rule and invariant that `InvalidChainIdError` outranks
+  every collected failure, and `InvalidChainIdError` in the group table superseded by
+  ADR-2026-11-17-evm-simulation-failure-report.
+- The rule that 9.0.0 makes the structured fields of `ConsumerLimitViolationError` and
+  `SlippageCheckUnavailableError` required superseded by
+  ADR-2026-11-17-evm-simulation-failure-report; they stay optional.
+- The rule that the shape-based guard accepts an error from an older copy that lacks a newer field
+  superseded by ADR-2026-11-17-evm-simulation-failure-report.

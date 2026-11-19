@@ -25,12 +25,9 @@ import {
   type VaultOperationType,
 } from "./limits.js";
 import type { SimulateInputParams, SimulateParams } from "./params.js";
-import type {
-  VerifiedSimulationInputResult,
-  VerifiedSimulationResult,
-} from "./result.js";
+import type { SimulationInputReport, SimulationReport } from "./result.js";
 import { simulate } from "./simulate/simulate.js";
-import type { SimulationConfig } from "./types.js";
+import type { SimulationClient } from "./types.js";
 
 test("fee and penalty input arrays cover their public unions", () => {
   expectTypeOf<
@@ -52,10 +49,10 @@ type MidnightRepayWithdrawCollateralLimit = Extract<
 >;
 
 describe("OPERATION_TYPES", () => {
-  test("minor release preserves quote-only exported limit readers", () => {
+  test("9.0 returns reports for both overloads and keeps limit readers", () => {
     expectTypeOf<
       Awaited<ReturnType<typeof simulate>>
-    >().toEqualTypeOf<VerifiedSimulationResult>();
+    >().toEqualTypeOf<SimulationReport>();
     expectTypeOf<
       Parameters<typeof simulate>[1]
     >().toEqualTypeOf<SimulateParams>();
@@ -69,32 +66,31 @@ describe("OPERATION_TYPES", () => {
     expect(
       limits.operations.map((operation) => operation.quote.assetsPaid),
     ).toEqual([]);
-    const quoted = (config: SimulationConfig, quoteLimits: SimulationLimits) =>
-      simulate(config, { chainId: 1, transactions: [], limits: quoteLimits });
+    const quoted = (client: SimulationClient, quoteLimits: SimulationLimits) =>
+      simulate(client, { transactions: [], limits: quoteLimits });
     const inputs = (
-      config: SimulationConfig,
+      client: SimulationClient,
       inputLimits: SimulationInputLimits,
-    ) =>
-      simulate(config, { chainId: 1, transactions: [], limits: inputLimits });
+    ) => simulate(client, { transactions: [], limits: inputLimits });
     expectTypeOf<ReturnType<typeof quoted>>().toEqualTypeOf<
-      Promise<VerifiedSimulationResult>
+      Promise<SimulationReport>
     >();
     expectTypeOf<ReturnType<typeof inputs>>().toEqualTypeOf<
-      Promise<VerifiedSimulationInputResult>
+      Promise<SimulationInputReport>
     >();
     const quotedWrapper = (
-      config: SimulationConfig,
+      client: SimulationClient,
       params: SimulateParams,
-    ): Promise<VerifiedSimulationResult> => simulate(config, params);
+    ): Promise<SimulationReport> => simulate(client, params);
     const inputWrapper = (
-      config: SimulationConfig,
+      client: SimulationClient,
       params: SimulateInputParams,
-    ) => simulate(config, params);
+    ) => simulate(client, params);
     expectTypeOf<ReturnType<typeof quotedWrapper>>().toEqualTypeOf<
-      Promise<VerifiedSimulationResult>
+      Promise<SimulationReport>
     >();
     expectTypeOf<ReturnType<typeof inputWrapper>>().toEqualTypeOf<
-      Promise<VerifiedSimulationInputResult>
+      Promise<SimulationInputReport>
     >();
     expectTypeOf<
       Exclude<SimulateParams["limits"], "none">["operations"][number]["quote"]

@@ -1,6 +1,10 @@
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
+  SimulationErrorSeverity,
+  SimulationPackageError,
+} from "./errors.js";
+import type {
   CheckedSimulationInputLimits,
   CheckedSimulationLimits,
   CheckedSlippageLimits,
@@ -75,3 +79,22 @@ export interface SimulationInputVerification
 export interface VerifiedSimulationInputResult extends SimulationResult {
   readonly verification: SimulationInputVerification;
 }
+
+/** Failure branch of a simulation report: the bundle is rejected and no result exists. */
+export interface SimulationFailure {
+  readonly ok: false;
+  /** Highest severity of `failures` (`fatal` > `error` > `warn`); index a logger with it. */
+  readonly severity: SimulationErrorSeverity;
+  /** Every SDK failure of the run, flat, in pipeline order; never empty. */
+  readonly failures: readonly SimulationPackageError[];
+}
+
+/** Report returned by `simulate` for quote-only `SimulateParams`. Read `result` only after `ok`. */
+export type SimulationReport =
+  | { readonly ok: true; readonly result: VerifiedSimulationResult }
+  | SimulationFailure;
+
+/** Report returned by `simulate` for `SimulateInputParams`. Read `result` only after `ok`. */
+export type SimulationInputReport =
+  | { readonly ok: true; readonly result: VerifiedSimulationInputResult }
+  | SimulationFailure;

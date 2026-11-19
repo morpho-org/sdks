@@ -23,10 +23,12 @@ import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   type InputOperationLimit,
-  simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -156,7 +158,6 @@ for (const exit of ["redeem", "withdraw"] as const) {
           };
     const tx = action.buildTx();
     const request = {
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner,
@@ -164,16 +165,8 @@ for (const exit of ["redeem", "withdraw"] as const) {
       }),
       transactions: [{ from: owner, to: tx.to, data: tx.data }],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([
-        [
-          mainnet.id,
-          { client: createTestSimulationClient(client.transport.url!) },
-        ],
-      ]),
-    };
-    const result = await simulate(config, {
+    const config = simulationClientFor(client.transport.url, mainnet);
+    const result = await simulateOrThrowFirst(config, {
       ...request,
       limits: {
         operations: [operation],
@@ -206,7 +199,7 @@ for (const exit of ["redeem", "withdraw"] as const) {
       sharesBurned: "exact",
     });
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...request,
         limits: {
           operations: [
@@ -316,7 +309,6 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
             };
     const tx = action.buildTx();
     const request = {
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner,
@@ -324,16 +316,8 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
       }),
       transactions: [{ from: owner, to: tx.to, data: tx.data }],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([
-        [
-          mainnet.id,
-          { client: createTestSimulationClient(client.transport.url!) },
-        ],
-      ]),
-    };
-    const result = await simulate(config, {
+    const config = simulationClientFor(client.transport.url, mainnet);
+    const result = await simulateOrThrowFirst(config, {
       ...request,
       limits: { operations: [operation] },
     });
@@ -354,7 +338,10 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
         ? { ...operation, inputs: { assets: 1_000_001n } }
         : { ...operation, inputs: { shares: shares + 1n } };
     await expect(
-      simulate(config, { ...request, limits: { operations: [wrongAmount] } }),
+      simulateOrThrowFirst(config, {
+        ...request,
+        limits: { operations: [wrongAmount] },
+      }),
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   }, 180_000);
 }

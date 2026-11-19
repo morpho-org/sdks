@@ -25,15 +25,17 @@ const market = new MarketParams({
   irm: vault,
   lltv: 1n,
 });
-const request = parseRequest({
-  chainId: 1,
-  transactions: [{ from: owner, to: vault, data: "0x12345678" }],
-  limits: {
-    operations: [
-      { type: "blueRepay", marketId: market.id as MarketId, inputs: "full" },
-    ],
+const request = parseRequest(
+  {
+    transactions: [{ from: owner, to: vault, data: "0x12345678" }],
+    limits: {
+      operations: [
+        { type: "blueRepay", marketId: market.id as MarketId, inputs: "full" },
+      ],
+    },
   },
-});
+  1,
+);
 if (request.limits === "none") throw new TypeError("Missing limits");
 const limit = request.limits.operations[0]!;
 
@@ -41,20 +43,22 @@ describe("hidden derivation calls", () => {
   test.each(["vaultV1Deposit", "vaultV2Deposit"] as const)(
     "%s previews the deposit after deducting referral fees",
     (type) => {
-      const parsed = parseRequest({
-        chainId: 1,
-        transactions: [{ from: owner, to: vault, data: "0x12345678" }],
-        limits: {
-          operations: [
-            {
-              type,
-              vault,
-              inputs: { assets: 101n },
-              referralFee: 100_000_000_000_000_000n,
-            },
-          ],
+      const parsed = parseRequest(
+        {
+          transactions: [{ from: owner, to: vault, data: "0x12345678" }],
+          limits: {
+            operations: [
+              {
+                type,
+                vault,
+                inputs: { assets: 101n },
+                referralFee: 100_000_000_000_000_000n,
+              },
+            ],
+          },
         },
-      });
+        1,
+      );
       if (parsed.limits === "none") throw new TypeError("Missing limits");
       const reads = planDerivationReads(
         parsed.limits.operations.map((operation) => ({ limit: operation })),

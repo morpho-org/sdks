@@ -29,10 +29,7 @@ import {
   type SlippageOperationReads,
   type StateValue,
 } from "./state/read-state.js";
-import {
-  findOperationSlippageFailures,
-  verifySlippage,
-} from "./verify-slippage.js";
+import { findOperationSlippageFailures } from "./verify-slippage.js";
 
 type ParsedRepayWithdrawLimit = Extract<
   ParsedOperationLimit,
@@ -192,6 +189,14 @@ describe("Midnight direct collateral batches", () => {
     },
   );
 });
+
+const verifySlippage = (
+  params: Parameters<typeof findOperationSlippageFailures>[0],
+) => {
+  const { failures, checked } = findOperationSlippageFailures(params);
+  if (failures[0]) throw failures[0];
+  return checked;
+};
 
 describe("verifySlippage", () => {
   test.each([
@@ -4042,7 +4047,104 @@ describe("findOperationSlippageFailures", () => {
     expect(() => verifySlippage(params)).toThrowError(failures[0]);
   });
 
-  test("keeps an earlier limit failure ahead of a later response-integrity throw", () => {
+  test("continues collecting across an undecodable Blue event", () => {
+    const params = {
+      ...base,
+      morpho: vault,
+      before: new Map<string, StateValue>([["shares", 0n]]),
+      after: new Map<string, StateValue>([["shares", 1n]]),
+      logs: [
+        [
+          {
+            address: vault,
+            topics: encodeEventTopics({
+              abi: blueAbi,
+              eventName: "Supply",
+            }) as Hex[],
+            data: "0x" as Hex,
+          },
+        ],
+      ],
+      operations: [
+        {
+          limit,
+          measurements: [
+            { type: "balance", field: "sharesMinted", readId: "shares" },
+          ],
+        },
+        {
+          limit: {
+            type: "blueWithdraw",
+            marketId: `0x${"11".repeat(32)}` as MarketId,
+            inputs: { assets: 1n },
+            quote: {},
+            slippageTolerance: 0n,
+          },
+          measurements: [],
+        },
+        {
+          limit,
+          measurements: [
+            { type: "balance", field: "sharesMinted", readId: "shares" },
+          ],
+        },
+      ],
+    } as const;
+    const { failures, checked } = findOperationSlippageFailures(params);
+    expect(failures).toHaveLength(3);
+    expect(failures[0]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(failures[0]).toMatchObject({ operationIndex: 0 });
+    expect(failures[1]).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(failures[2]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(failures[2]).toMatchObject({ operationIndex: 2 });
+    expect(checked).toHaveLength(3);
+    expect(() => verifySlippage(params)).toThrow(ConsumerLimitViolationError);
+    expect(() =>
+      verifySlippage({ ...params, operations: [params.operations[1]] }),
+    ).toThrow(InvalidSimulationResponseError);
+  });
+
+  test("behavior: an undecodable Blue event still checks the withdrawal's other bounds", () => {
+    const params = {
+      ...base,
+      morpho: vault,
+      before: new Map<string, StateValue>([["received", 0n]]),
+      after: new Map<string, StateValue>([["received", 1n]]),
+      logs: [
+        [
+          {
+            address: vault,
+            topics: encodeEventTopics({
+              abi: blueAbi,
+              eventName: "Supply",
+            }) as Hex[],
+            data: "0x" as Hex,
+          },
+        ],
+      ],
+      operations: [
+        {
+          limit: {
+            type: "blueWithdraw",
+            marketId: `0x${"11".repeat(32)}` as MarketId,
+            inputs: { assets: 1n },
+            quote: { assetsReceived: 10n },
+            slippageTolerance: 0n,
+          },
+          measurements: [
+            { type: "balance", field: "assetsReceived", readId: "received" },
+          ],
+        },
+      ],
+    } as const;
+    const { failures } = findOperationSlippageFailures(params);
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(failures[1]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(failures[1]).toMatchObject({ field: "assetsReceived" });
+  });
+
+  test("collects an earlier limit failure and a later undecodable event once each", () => {
     const malformed: RawLog = {
       address: vault,
       topics: encodeEventTopics({
@@ -4074,9 +4176,14 @@ describe("findOperationSlippageFailures", () => {
         },
       ] as const,
     };
-    expect(() => findOperationSlippageFailures(params)).toThrow(
-      InvalidSimulationResponseError,
-    );
+    const collected = findOperationSlippageFailures(params).failures;
+    expect(collected).toHaveLength(2);
+    expect(collected[0]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(
+      collected.some(
+        (failure) => failure instanceof InvalidSimulationResponseError,
+      ),
+    ).toBe(true);
     expect(() => verifySlippage(params)).toThrow(ConsumerLimitViolationError);
     expect(() =>
       verifySlippage({ ...params, operations: [params.operations[1]] }),
@@ -4145,6 +4252,73 @@ test("slippage collection keeps independent collateral delivery checks when the 
     }),
   ]);
   expect(() => verifySlippage(params)).toThrowError(failures[0]);
+});
+
+describe("findOperationSlippageFailures with a skipped derivation", () => {
+  test("behavior: a skipped operation still reports its violated position bound", () => {
+    const borrowLimit: ParsedOperationLimit = {
+      type: "blueSupplyCollateralBorrow",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
+      quote: { sharesMinted: 200n },
+      slippageTolerance: 0n,
+      position: { maxBorrowShares: 100n },
+    };
+    const plan = planStateReads({
+      operations: [{ limit: borrowLimit }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    const id = plan.operations[0]!.positionBoundsReadId!;
+    const { failures, checked } = findOperationSlippageFailures({
+      ctx,
+      logs: [],
+      morpho: zeroAddress,
+      operations: plan.operations,
+      before: new Map(),
+      after: new Map<string, StateValue>([
+        [id, { supplyShares: 0n, borrowShares: 101n, collateral: 5n }],
+      ]),
+      transfers: [],
+      requestTransactions: [],
+      skippedOperationIndices: new Set([0]),
+    });
+    expect(checked).toEqual([]);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(failures[0]).toMatchObject({ field: "position.maxBorrowShares" });
+  });
+
+  test("behavior: a skipped operation reports no quote or missing-bound failure", () => {
+    const borrowLimit: ParsedOperationLimit = {
+      type: "blueSupplyCollateralBorrow",
+      marketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
+      quote: { sharesMinted: 200n },
+      slippageTolerance: 0n,
+      position: { maxBorrowShares: 100n },
+    };
+    const plan = planStateReads({
+      operations: [{ limit: borrowLimit }],
+      owner,
+      morpho: zeroAddress,
+      midnight: zeroAddress,
+    });
+    expect(
+      findOperationSlippageFailures({
+        ctx,
+        logs: [],
+        morpho: zeroAddress,
+        operations: plan.operations,
+        before: new Map(),
+        after: new Map(),
+        transfers: [],
+        requestTransactions: [],
+        skippedOperationIndices: new Set([0]),
+      }),
+    ).toEqual({ failures: [], checked: [] });
+  });
 });
 
 describe("shared-read position bounds", () => {
@@ -4616,10 +4790,11 @@ describe("shared-read position bounds", () => {
     };
     const { failures } = findOperationSlippageFailures(params);
     expect(failures).toHaveLength(2);
-    expect(failures.map(({ field }) => field)).toEqual([
-      "position",
-      "position",
-    ]);
+    expect(
+      failures.map((failure) =>
+        "field" in failure ? failure.field : undefined,
+      ),
+    ).toEqual(["position", "position"]);
     expect(() => verifySlippage(params)).toThrowError(failures[0]);
   });
 });

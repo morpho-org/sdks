@@ -42,7 +42,6 @@ export type SimulationStateOverrides = Readonly<
  * Input to `simulate()`. `mode` defaults to "final".
  */
 export interface SimulateParams {
-  readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
   /** Defaults to "final". */
   readonly mode?: SimulationMode;

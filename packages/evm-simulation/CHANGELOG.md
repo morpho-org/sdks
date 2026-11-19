@@ -1,5 +1,31 @@
 # @morpho-org/evm-simulation
 
+## 9.0.0-next.1
+
+### Major Changes
+
+- `simulate` now returns a report instead of throwing SDK failures: `{ ok: true, result }` or `{ ok: false, failures }`, typed `SimulationReport` for quote-only params and `SimulationInputReport` for typed-input params (`SimulationFailure` is the shared failure branch). `failures` lists every SDK failure of the run, flat, in check order. A transaction revert is terminal: the failures are the assertion failures evaluated before it, then the revert. A pre-execution failure (invalid request, unsupported chain, RPC failure) is reported alone. With approval limits (any `limits` other than `"none"`), missing transaction logs are reported as `ApprovalCheckUnavailableError` and the slippage checks, which would read incomplete transfers, are skipped; if that transaction also declares `assertLogs`, the report also holds an `InvalidSimulationResponseError` for the log checks that could not run. With `limits: "none"` the approval check does not run, so missing logs are reported only by `assertLogs` or the final-mode signed-authorization use check, and a run with neither can return `ok: true`. An operation whose quote cannot be derived still reports its `position` bound violations. `simulate` rejects only with `UnexpectedSimulationError`, for failures the SDK did not classify. `toSimulationLimits` still throws.
+
+  Migrate `try { const result = await simulate(...) } catch (err) { ... }` to `const report = await simulate(...); if (!report.ok) { ... }`, then read `report.result`. Map each failure with `toSimulationErrorResponse`, which is unchanged and handles one failure. This change keeps the error classes, codes, messages and JSON response; later 9.0.0 entries list the classes and messages that change. A bare `await simulate(...)` that relied on a throw to stop still compiles but now continues after a failed run: find each one and branch on `ok`.
+
+  `findings`, added in 8.8.0, is removed: read `report.failures` instead, which lists every failure in check order, so the error 8.8.0 threw is not necessarily first.
+
+- `simulate(client, params, options?)` takes a viem client you own, with `chain` set, instead of `SimulationConfig`; the simulated chain is `client.chain.id`. Migrating from 8.9.0, pass each `config.chains` entry's `{ client }` as the first argument; for a `simulateV1Url` entry, create a viem client with `chain` set and `http(url)`. The SDK's own client dropped `content-type` from non-2xx replies and yours keeps it, so a non-JSON error body labeled `application/json` is now reported as `InvalidSimulationResponseError` instead of `RpcTransportError`, unless your transport's `fetchFn` drops `content-type` on non-2xx replies. `params.chainId`, `SimulationConfig`, `ChainSimulationConfig`, `ChainSimulationClientConfig`, `ChainSimulationConfigEntry`, `simulateV1Url` and `InvalidChainIdError` are removed. `options` holds `logger`, `timeoutMs`, `blockOverrides`, `callGasLimit` and `parentHashCheck`; `timeoutMs` keeps its whole-simulation deadline (default 5000 ms), which does not abort a request already sent, so set the transport's `timeout` to at most this value. The SDK no longer probes `eth_chainId`; a node rejecting the chain ID reports `RpcTransportError`. `UnsupportedChainError` is now reported only when Morpho's address registry lacks an address the simulation needs, and its message changed (its code did not). Retries and endpoints are your transport's: a single-endpoint `http()` with `retryCount: 0` is recommended, and a `fallback()` or retrying transport is accepted but not enforced against. `simulate` runs every request on its own copy of your client with CCIP-Read off, so `OffchainLookup` reverts cannot trigger URL fetches whatever your client's `ccipRead` setting; your client is not changed, and a client without `ccipRead: false` is no longer rejected.
+
+  `simulate` rejects an unknown `options` key, such as 8.x's `chainId`, with a `SimulationValidationError` before any RPC call, so stale 8.x settings fail instead of being ignored.
+
+- Add a required `severity` (`"fatal"`, `"error"` or `"warn"`, exported as `SimulationErrorSeverity`) to every simulation error and to the failed simulation report. Safety errors are `"fatal"`, execution errors `"warn"` (except `UnusedAuthorizationError`, `"error"`), and invalid-request and infrastructure errors `"error"`. A failed report's `severity` is the highest of its failures' (`fatal` > `error` > `warn`), so `logger[report.severity](...)` logs a run with one call. Severity is for logging only: every failure blocks the bundle, and the JSON error response does not include it. `isSimulationPackageError` now rejects structural objects without a known `severity`, so `toSimulationErrorResponse` maps such an error, for example one from an 8.x copy of the package, to the generic `UNEXPECTED_SIMULATION_ERROR` response instead of keeping its `code` and `message`.
+
+  `SimulationPackageError` defaults `severity` to `"error"`, so an existing direct subclass outside the four groups still compiles and inherits `"error"`.
+
+- Rename the error group `SimulationRejectedError`, added in 8.8.0, to `SimulationExecutionError`, with no alias. The same concrete classes extend it, and their codes, messages and severities are unchanged. Replace `instanceof SimulationRejectedError` with `instanceof SimulationExecutionError` and update imports.
+
+### Patch Changes
+
+- `toSimulationLimits` rejects a `midnightCancelOffers` action, the direct Midnight cancellation `morpho-sdk` now builds, with `UnsupportedLimitActionError`, as it does for a cancel-only bundle: a cancellation moves no value, so pass `limits: "none"` to simulate it.
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.4.0-next.2
+
 ## 8.9.1-next.0
 
 ### Patch Changes

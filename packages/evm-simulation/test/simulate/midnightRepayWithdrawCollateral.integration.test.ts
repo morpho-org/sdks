@@ -38,10 +38,12 @@ import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const takeRepayViolation = (field: string) => (error: unknown) =>
   error instanceof ConsumerLimitViolationError &&
@@ -158,11 +160,8 @@ const wNativeLoanFixture = {
 };
 type MarketFixture = typeof baseFixture;
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 
 const readDebtAt = (
   client: AnvilTestClient<typeof base>,
@@ -518,8 +517,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       onBehalf: user,
       collateralSupplies: supplies,
     });
-    const supplied = await simulate(configFor(client), {
-      chainId: base.id,
+    const supplied = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, supply)],
       limits: toSimulationLimits(supply.action, { owner: user }),
     });
@@ -539,8 +537,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       receiver: RECEIVER,
       collateralWithdrawals: withdrawals,
     });
-    const withdrawn = await simulate(configFor(client), {
-      chainId: base.id,
+    const withdrawn = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, withdraw)],
       limits: toSimulationLimits(withdraw.action, {
         owner: user,
@@ -563,8 +560,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       ],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, unhealthy)],
         limits: toSimulationLimits(unhealthy.action, {
           owner: user,
@@ -588,8 +584,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       deadline: Time.timestamp() + 600n,
     });
     const limits = toSimulationLimits(tx.action, { owner: user });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits,
     });
@@ -601,8 +596,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
     });
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -627,8 +621,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       deadline: Time.timestamp() + 600n,
     });
     const limits = toSimulationLimits(repay.action, { owner: user });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, repay)],
       limits,
     });
@@ -644,8 +637,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       takeableOffers: offers,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [
         asTransaction(user, repay),
         asTransaction(user, laterBorrow),
@@ -677,8 +669,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       },
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits,
       }),
@@ -693,8 +684,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       ),
     };
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: wrongReceiverLimits,
       }),
@@ -718,8 +708,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       collateralReceiver: user,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -750,8 +739,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       nativeAmount: amount,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -782,8 +770,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       nativeAmount: maxBuyerAssets,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -813,8 +800,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
     });
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -844,8 +830,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       collateralReceiver: user,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -857,8 +842,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
     ).toMatchObject({ assetsPaid: units, debtRepaid: units });
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -868,8 +852,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       }),
     ).rejects.toSatisfy(takeRepayViolation('"debtRepaid"'));
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -898,8 +881,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       collateralReceiver: user,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -911,8 +893,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
     ).toMatchObject({ assetsPaid: assets, debtRepaid: assets });
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -948,8 +929,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       },
       slippageTolerance: 0n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits,
     });
@@ -958,8 +938,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       maxCollateral: [{ collateralIndex: 0n, assets: 0n }],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -996,8 +975,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       takeableOffers: offers,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [
         asTransaction(user, repayOnly),
         asTransaction(user, laterBorrow),
@@ -1056,8 +1034,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       collateralReceiver: user,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -1073,8 +1050,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
     });
     // Direct repayment is 1:1, so the fallback spends every quoted asset.
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -1085,8 +1061,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
     ).rejects.toSatisfy(takeRepayViolation('"assetsPaid"'));
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, tx)],
         limits: toSimulationLimits(tx.action, {
           owner: user,
@@ -1125,8 +1100,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       maxContinuousFee: maxUint256,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, repay), asTransaction(user, lend)],
       limits: toSimulationLimits(repay.action, { owner: user }),
     }).catch((caught: unknown) => caught);
@@ -1155,8 +1129,7 @@ describe.sequential("Midnight take-repay-withdraw limits — Base fork", () => {
       nativeAmount: units,
       deadline: Time.timestamp() + 600n,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });

@@ -37,10 +37,12 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -98,11 +100,8 @@ const marketId = MarketUtils.toId(market);
 const LENT = 1_234_567n;
 const REFERRAL_FEE = 10_000_000_000_000_000n;
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 const asTransaction = (
   from: Address,
   tx: {
@@ -442,8 +441,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -471,8 +469,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -496,8 +493,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -530,8 +526,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
     expect(OTHER).not.toBe(RECEIVER);
     expect(OTHER).not.toBe(user);
     expect(tx.action.args.referralFeePct).toBeGreaterThan(0n);
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -572,8 +567,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -599,8 +593,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -626,8 +619,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       },
       takeableOffers: offers,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -651,8 +643,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const unitsResult = await simulate(configFor(client), {
-      chainId: base.id,
+    const unitsResult = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, unitsTx)],
       limits: toSimulationLimits(unitsTx.action, {
         owner: user,
@@ -685,8 +676,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
     });
     expect(unitsTx.action.args.referralFeePct).toBeGreaterThan(0n);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, unitsTx)],
       limits: toSimulationLimits(unitsTx.action, {
         owner: user,
@@ -717,8 +707,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
     expect(OTHER).not.toBe(RECEIVER);
     expect(OTHER).not.toBe(user);
     expect(assetsTx.action.args.referralFeePct).toBeGreaterThan(0n);
-    const assetsResult = await simulate(configFor(client), {
-      chainId: base.id,
+    const assetsResult = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, assetsTx)],
       limits: toSimulationLimits(assetsTx.action, {
         owner: user,
@@ -757,8 +746,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "assets", assets: 120_003n, maxUnits: 130_007n },
       takeableOffers: offers,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, assetsTx)],
       limits: toSimulationLimits(assetsTx.action, {
         owner: user,
@@ -784,8 +772,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       receiver: user,
       referralFeeRecipient: OTHER,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [
         asTransaction(user, tx),
         {
@@ -819,8 +806,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -853,8 +839,7 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       takeableOffers: offers,
       receiver: OTHER,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [
         asTransaction(user, reduce),
         asTransaction(user, increase),

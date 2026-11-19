@@ -33,11 +33,13 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
@@ -94,11 +96,8 @@ const marketData = new Market({
 });
 const market = marketData.params;
 const marketId = MarketUtils.toId(market);
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [base.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 const asTransaction = (
   from: Address,
   tx: {
@@ -372,8 +371,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -405,8 +403,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -430,8 +427,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -483,15 +479,13 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       slippageTolerance: 0n,
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [approve(midnightBundlesV2), asTransaction(owner, tx)],
         limits,
       }),
     ).resolves.toBeDefined();
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           approve(midnightBundlesV2),
           approve(OTHER),
@@ -509,8 +503,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       target: { type: "assets", assets: 120_003n, maxUnits: 130_007n },
       takeableOffers: offers,
     });
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -542,8 +535,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
     expect(OTHER).not.toBe(owner);
     expect(tx.action.args.referralFeePct).toBeGreaterThan(0n);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -581,8 +573,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
     });
     expect(tx.value).toBe(nativeAmount);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -614,8 +605,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
     });
     expect(tx.value).toBe(SUPPLIED);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,
@@ -650,8 +640,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       receiver,
       slippageTolerance: 0n,
     });
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, tx)],
       limits: {
         operations: limits.operations.map((operation) => ({
@@ -700,8 +689,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       }),
       value: SUPPLIED,
     };
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(owner, deposit), asTransaction(owner, tx)],
       limits: toSimulationLimits(tx.action, {
         owner,

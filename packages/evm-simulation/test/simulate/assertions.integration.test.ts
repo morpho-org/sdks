@@ -23,9 +23,11 @@ import {
   SimulationAssertError,
   SimulationLogAssertError,
   SimulationRevertedError,
-  simulate,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { test } from "../setup.js";
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -33,12 +35,8 @@ const STEAKHOUSE: Address = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
 const RECIPIENT: Address = "0x3333333333333333333333333333333333333333";
 const APPROVAL_TOPIC = toEventSelector("Approval(address,address,uint256)");
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  timeoutMs: 30_000,
-  chains: new Map([
-    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const expectAssertionFailure = async (
   result: Promise<unknown>,
@@ -47,9 +45,20 @@ const expectAssertionFailure = async (
     phase: "before" | "after";
     observed: bigint;
     to: Address;
+    reverted?: boolean;
   },
 ) => {
-  const error = await result.catch((cause: unknown) => cause);
+  const rejection = await result.catch((cause: unknown) => cause);
+  if (expected.reverted) {
+    expect(rejection).toBeInstanceOf(AggregateError);
+    expect((rejection as AggregateError).errors).toEqual([
+      expect.any(SimulationAssertError),
+      expect.any(SimulationRevertedError),
+    ]);
+  }
+  const error = expected.reverted
+    ? (rejection as AggregateError).errors[0]
+    : rejection;
   expect(error).toBeInstanceOf(SimulationAssertError);
   expect(error).not.toBeInstanceOf(SimulationRevertedError);
   expect(error).toMatchObject({
@@ -72,8 +81,7 @@ describe.sequential("simulate — transaction assertions", () => {
     await client.deal({ erc20: USDC, amount: balance });
 
     await expectAssertionFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -99,6 +107,7 @@ describe.sequential("simulate — transaction assertions", () => {
         phase: "before",
         observed: balance,
         to: USDC,
+        reverted: true,
       },
     );
   }, 60_000);
@@ -108,8 +117,7 @@ describe.sequential("simulate — transaction assertions", () => {
   }) => {
     const account = privateKeyToAddress(generatePrivateKey());
     await expectAssertionFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -131,6 +139,7 @@ describe.sequential("simulate — transaction assertions", () => {
         phase: "before",
         observed: 0n,
         to: USDC,
+        reverted: true,
       },
     );
   }, 60_000);
@@ -158,8 +167,7 @@ describe.sequential("simulate — transaction assertions", () => {
     }
 
     await expectAssertionFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -185,6 +193,7 @@ describe.sequential("simulate — transaction assertions", () => {
         phase: "before",
         observed: 0n,
         to: STEAKHOUSE,
+        reverted: true,
       },
     );
   }, 60_000);
@@ -197,8 +206,7 @@ describe.sequential("simulate — transaction assertions", () => {
     const recipient = privateKeyToAddress(generatePrivateKey());
 
     await expectAssertionFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -265,13 +273,11 @@ describe.sequential("simulate — transaction assertions", () => {
           : `Allowance is "${hexToBigInt(returnData)}", expected "0".`,
     };
 
-    const withoutAssertions = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const withoutAssertions = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [transaction],
     });
-    const withAssertions = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const withAssertions = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -290,8 +296,7 @@ describe.sequential("simulate — transaction assertions", () => {
     client,
   }) => {
     const amount = 123n;
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -339,8 +344,7 @@ describe.sequential("simulate — transaction assertions", () => {
   test("error: assertLogs reports a matching prohibited Approval event", async ({
     client,
   }) => {
-    const error = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const error = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {

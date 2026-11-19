@@ -247,8 +247,7 @@ export function maxDepositAssertion(
  * Evaluate a caller check using its in-block call result.
  *
  * @param params - Assertion, raw read result and transaction coordinates.
- * @returns Nothing when the check returns `undefined`.
- * @throws {SimulationAssertError} When the read reverts, the check returns a
+ * @returns Undefined on success, otherwise {@link SimulationAssertError} when the read reverts, the check returns a
  *   failure message, or the check throws; it carries the transaction index,
  *   phase, assertion index, a copy of the caller's assertion (`to`, `data`,
  *   and `check`), and return data. A thrown check error is retained as the
@@ -264,7 +263,7 @@ export function evaluateAssertion(params: {
   readonly transactionIndex: number;
   readonly phase: "before" | "after";
   readonly assertionIndex: number;
-}): void {
+}): SimulationAssertError | undefined {
   const {
     assertion,
     returnData,
@@ -278,7 +277,7 @@ export function evaluateAssertion(params: {
   const assertionLocation = `Transaction ${transactionIndex} assert${phase === "before" ? "Before" : "After"}[${assertionIndex}]`;
   if (!status) {
     const message = formatRevert(revertData) ?? "Revert reason unavailable";
-    throw new SimulationAssertError(
+    return new SimulationAssertError(
       `${assertionLocation} read reverted: ${message}.`,
       {
         transactionIndex,
@@ -295,7 +294,7 @@ export function evaluateAssertion(params: {
   try {
     failure = assertion.check(returnData);
   } catch (error) {
-    throw new SimulationAssertError(
+    return new SimulationAssertError(
       `${assertionLocation} check threw: ${error instanceof Error ? error.message : String(error)}`,
       {
         transactionIndex,
@@ -308,7 +307,7 @@ export function evaluateAssertion(params: {
     );
   }
   if (failure === undefined) return;
-  throw new SimulationAssertError(
+  return new SimulationAssertError(
     `${assertionLocation} failed ${phase} execution: ${failure}`,
     {
       transactionIndex,
@@ -325,7 +324,7 @@ export function evaluateAssertion(params: {
  * lowercase log copy.
  *
  * @param params - Assertion, emitted logs, and transaction coordinates.
- * @throws {SimulationLogAssertError} When the check returns a failure message
+ * @returns Undefined on success, otherwise {@link SimulationLogAssertError} when the check returns a failure message
  *   or throws; the error carries the transaction index, assertion index, a
  *   copy of the assertion, and the lowercase logs passed to the check. A thrown
  *   check error is retained as the error's cause.
@@ -336,14 +335,14 @@ export function evaluateLogAssertion(params: {
   readonly logs: readonly RawLog[];
   readonly transactionIndex: number;
   readonly assertionIndex: number;
-}): void {
+}): SimulationLogAssertError | undefined {
   const { assertion, logs, transactionIndex, assertionIndex } = params;
   const assertionLocation = `Transaction ${transactionIndex} assertLogs[${assertionIndex}]`;
   let failure: string | undefined;
   try {
     failure = assertion.check(logs);
   } catch (error) {
-    throw new SimulationLogAssertError(
+    return new SimulationLogAssertError(
       `${assertionLocation} check threw: ${error instanceof Error ? error.message : String(error)}`,
       {
         transactionIndex,
@@ -355,7 +354,7 @@ export function evaluateLogAssertion(params: {
     );
   }
   if (failure === undefined) return;
-  throw new SimulationLogAssertError(
+  return new SimulationLogAssertError(
     `${assertionLocation} failed: ${failure}`,
     {
       transactionIndex,

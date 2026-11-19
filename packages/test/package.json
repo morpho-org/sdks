@@ -52,7 +52,7 @@
   },
   "scripts": {
     "prepublish": "pnpm build",
-    "build": "pnpm build:cjs && pnpm build:esm",
+    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },

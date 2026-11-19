@@ -31,11 +31,13 @@ export const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 export const balanceAssertion = (min: bigint) =>
   erc20BalanceAssertion({ token: TOKEN, account: OWNER, min });
 
-export const parsed = parseRequest({
-  limits: "none",
-  chainId: 1,
-  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-});
+export const parsed = parseRequest(
+  {
+    limits: "none",
+    transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+  },
+  1,
+);
 
 export const reads = [makeBalanceRead(TOKEN, OWNER)];
 
@@ -73,11 +75,13 @@ export const balanceHex = (value: bigint): `0x${string}` =>
 export const assertionPlan = (transactions: readonly SimulationTransaction[]) =>
   makePlan(
     [],
-    parseRequest({
-      chainId: 1,
-      limits: "none",
-      transactions,
-    }),
+    parseRequest(
+      {
+        limits: "none",
+        transactions,
+      },
+      1,
+    ),
   );
 
 /** Build a successful `eth_simulateV1` response for `plan`, with per-call overrides. */

@@ -10,9 +10,11 @@ import {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   SimulationValidationError,
-  simulate,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 /**
  * Chaos S8: transactions that target a code-less address. `eth_simulateV1`
@@ -40,18 +42,14 @@ const KEYROCK_USDC_VAULT_V2: Address =
   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
 const EOA: Address = getAddress("0x00000000000000000000000000000000DeaDBeef");
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 describe.sequential("chaos: S8 missing contract", () => {
   test("error: SimulationValidationError when the calldata target has no code", async ({
     client,
   }) => {
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -77,8 +75,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     client,
   }) => {
     await client.setCode({ address: USDC, bytecode: "0x" });
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -96,8 +93,7 @@ describe.sequential("chaos: S8 missing contract", () => {
   test("default: value-only transfer to an EOA stays allowed", async ({
     client,
   }) => {
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -141,8 +137,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     // Native funding emits no token requirement to satisfy.
     await action.getRequirements();
     const tx = action.buildTx();
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -190,8 +185,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     }
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -248,8 +242,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     }
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {

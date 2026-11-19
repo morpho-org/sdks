@@ -119,11 +119,13 @@ describe("Midnight collateral batch limits", () => {
       },
     ]);
     expect(
-      parseRequest({
-        chainId: base.id,
-        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
-        limits,
-      }).limits,
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+          limits,
+        },
+        base.id,
+      ).limits,
     ).not.toBe("none");
   });
 
@@ -141,11 +143,13 @@ describe("Midnight collateral batch limits", () => {
       },
     ]);
     expect(
-      parseRequest({
-        chainId: base.id,
-        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
-        limits,
-      }).limits,
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+          limits,
+        },
+        base.id,
+      ).limits,
     ).not.toBe("none");
     expect(() => toSimulationLimits(withdraw, { owner: OWNER })).toThrow(
       new LimitAccountMismatchError({
@@ -180,11 +184,13 @@ describe("Midnight collateral batch limits", () => {
         ? { collateralSupplies: [] }
         : { collateralWithdrawals: [] };
     expect(() =>
-      parseRequest({
-        chainId: base.id,
-        transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
-        limits: { operations: [{ type, marketId: MARKET, quote }] },
-      }),
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: RECEIVER, data: "0x" }],
+          limits: { operations: [{ type, marketId: MARKET, quote }] },
+        },
+        base.id,
+      ),
     ).toThrow(SimulationValidationError);
   });
 });
@@ -291,13 +297,15 @@ describe("toSimulationLimits — blueWithdrawBuyCallback", () => {
     ]);
     expect(Object.isFrozen(limits.operations[0]?.quote)).toBe(true);
     expect(() =>
-      parseRequest({
-        chainId: base.id,
-        transactions: [
-          { from: OWNER, to: tx.to, data: tx.data, value: tx.value },
-        ],
-        limits,
-      }),
+      parseRequest(
+        {
+          transactions: [
+            { from: OWNER, to: tx.to, data: tx.data, value: tx.value },
+          ],
+          limits,
+        },
+        base.id,
+      ),
     ).not.toThrow();
   });
 
@@ -1339,11 +1347,10 @@ describe("toSimulationLimits", () => {
         ...options,
       } as Parameters<typeof toSimulationLimits>[1]);
       const params: SimulateParams = {
-        chainId: 1,
         transactions: [{ from: OWNER, to: VAULT, data: "0x", value: 0n }],
         limits,
       };
-      expect(() => parseRequest(params)).not.toThrow();
+      expect(() => parseRequest(params, 1)).not.toThrow();
     }
   });
 
@@ -1538,11 +1545,10 @@ describe("toSimulationLimits", () => {
       });
       expect(limits.operations[0]?.quote.assetsReceived).toBe(assetsReceived);
       const params: SimulateParams = {
-        chainId: 1,
         transactions: [{ from: OWNER, to: VAULT, data: "0x", value: 0n }],
         limits,
       };
-      expect(() => parseRequest(params)).not.toThrow();
+      expect(() => parseRequest(params, 1)).not.toThrow();
     },
   );
 
@@ -1720,11 +1726,10 @@ describe("toSimulationLimits", () => {
       expect(quote.penalty).toBe(0n);
       expect(quote.deallocations).toEqual([...deallocations]);
       const params: SimulateParams = {
-        chainId: 1,
         transactions: [{ from: OWNER, to: VAULT, data: "0x", value: 0n }],
         limits,
       };
-      expect(() => parseRequest(params)).not.toThrow();
+      expect(() => parseRequest(params, 1)).not.toThrow();
     });
 
     it("blueSupply derives assetsPaid from the gross funded amount", () => {
@@ -1863,11 +1868,10 @@ describe("toSimulationLimits", () => {
       });
       expect(limits.operations[0]?.quote.sharesMinted).toBe(0n);
       const params: SimulateParams = {
-        chainId: 1,
         transactions: [{ from: OWNER, to: VAULT, data: "0x", value: 0n }],
         limits,
       };
-      expect(() => parseRequest(params)).toThrowError(
+      expect(() => parseRequest(params, 1)).toThrowError(
         SimulationValidationError,
       );
     });
@@ -2095,11 +2099,13 @@ describe("toSimulationLimits — midnightSupplyCollateral", () => {
       },
     });
   const parse = (limits: ReturnType<typeof toSimulationLimits>) =>
-    parseRequest({
-      chainId: base.id,
-      transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
-      limits,
-    });
+    parseRequest(
+      {
+        transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
+        limits,
+      },
+      base.id,
+    );
 
   it("derives the debit cap and indexed collateral floor from the real builder", () => {
     const tx = supply(OWNER);
@@ -2578,11 +2584,13 @@ describe("toSimulationLimits — Midnight sells", () => {
     target: { type: "assets", assets: 100n, maxUnits: 123n },
   });
   const parse = (limits: ReturnType<typeof toSimulationLimits>) =>
-    parseRequest({
-      chainId: base.id,
-      transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
-      limits,
-    });
+    parseRequest(
+      {
+        transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
+        limits,
+      },
+      base.id,
+    );
 
   it.each([
     [borrowUnits, { assetsReceived: 100n, unitsSold: 123n }],
@@ -2878,11 +2886,13 @@ describe("toSimulationLimits — midnightRedeem", () => {
       ...(receiver === undefined ? {} : { receiver }),
     });
   const parse = (limits: ReturnType<typeof toSimulationLimits>) =>
-    parseRequest({
-      chainId: base.id,
-      transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
-      limits,
-    });
+    parseRequest(
+      {
+        transactions: [{ from: OWNER, to: midnight, data: "0x", value: 0n }],
+        limits,
+      },
+      base.id,
+    );
 
   it("derives the exact payout floor and credit cap from the real builder", () => {
     const tx = redeem(OWNER);

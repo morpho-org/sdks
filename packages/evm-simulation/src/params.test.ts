@@ -18,7 +18,6 @@ describe("SimulateParams", () => {
 
   test("behavior: v5 field set", () => {
     expectTypeOf<keyof SimulateParams>().toEqualTypeOf<
-      | "chainId"
       | "transactions"
       | "mode"
       | "authorizations"
@@ -27,7 +26,6 @@ describe("SimulateParams", () => {
       | "stateOverrides"
       | "limits"
     >();
-    expectTypeOf<SimulateParams["chainId"]>().toEqualTypeOf<number>();
     expectTypeOf<SimulateParams["transactions"]>().toEqualTypeOf<
       readonly SimulationTransaction[]
     >();

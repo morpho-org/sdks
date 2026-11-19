@@ -5,8 +5,11 @@ import solc from "solc";
 import { type Abi, encodeFunctionData, erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { SimulationValidationError, simulate } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import { SimulationValidationError } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const source = `
 pragma solidity ^0.8.20;
@@ -77,41 +80,29 @@ test("preview rejects an approval transferring assets to BlueBundlesV1", async (
   const receipt = await client.waitForTransactionReceipt({ hash });
   const token = receipt.contractAddress!;
   await expect(
-    simulate(
-      {
-        timeoutMs: 30_000,
-        chains: new Map([
-          [
-            mainnet.id,
-            { client: createTestSimulationClient(client.transport.url!) },
-          ],
-        ]),
-      },
-      {
-        chainId: mainnet.id,
-        mode: "preview",
-        limits: "none",
-        authorizations: [
-          {
-            type: "erc20Approval",
-            owner,
-            token,
-            spender: restricted,
-            amount: 100n,
-          },
-        ],
-        transactions: [
-          {
-            from: owner,
-            to: token,
-            data: encodeFunctionData({
-              abi: erc20Abi,
-              functionName: "transfer",
-              args: ["0x1111111111111111111111111111111111111111", 100n],
-            }),
-          },
-        ],
-      },
-    ),
+    simulateOrThrow(simulationClientFor(client.transport.url, mainnet), {
+      mode: "preview",
+      limits: "none",
+      authorizations: [
+        {
+          type: "erc20Approval",
+          owner,
+          token,
+          spender: restricted,
+          amount: 100n,
+        },
+      ],
+      transactions: [
+        {
+          from: owner,
+          to: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "transfer",
+            args: ["0x1111111111111111111111111111111111111111", 100n],
+          }),
+        },
+      ],
+    }),
   ).rejects.toBeInstanceOf(SimulationValidationError);
 }, 60_000);

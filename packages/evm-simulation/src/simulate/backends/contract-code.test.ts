@@ -5,7 +5,7 @@ import {
   RpcTransportError,
   SimulationValidationError,
 } from "../../errors.js";
-import { createTestSimulationClient } from "../../test-helpers/create-test-simulation-client.js";
+import { simulationClientFor } from "../../test-helpers/index.js";
 import type { ParsedTransaction } from "../request/parse-request.js";
 import { assertTransactionTargetsHaveCode } from "./contract-code.js";
 
@@ -13,7 +13,7 @@ const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-const client = () => createTestSimulationClient("https://rpc.example");
+const client = () => simulationClientFor("https://rpc.example", 1);
 
 const FROM = "0x1111111111111111111111111111111111111111" as Address;
 const TARGET = "0x2222222222222222222222222222222222222222" as Address;

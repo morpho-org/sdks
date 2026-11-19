@@ -62,3 +62,4 @@ or continued availability of `evm-simulation` 4.x. No other removal inherits it.
 - [ADR-2026-05-13: SDK package deprecation lifecycle](./ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)
 - Accepted in https://github.com/morpho-org/sdks/pull/1204.
 - `ExternalServiceError` on failed requests superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.
+- required per-chain `simulateV1Url`, the abort signal behind `timeoutMs` (the deadline itself stays) and the no-fallback/no-retry guarantee superseded by ADR-2026-11-17-evm-simulation-failure-report.

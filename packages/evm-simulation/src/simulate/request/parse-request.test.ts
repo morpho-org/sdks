@@ -53,15 +53,17 @@ test.each(["vaultV1Deposit", "vaultV2Deposit"] as const)(
   "%s undefined quote fields behave like omitted fields",
   (type) => {
     const parse = (quote: { sharesMinted?: bigint } | undefined) =>
-      parseRequest({
-        chainId: 1,
-        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-        limits: {
-          operations: [
-            { type, vault: TARGET, inputs: { assets: 100n }, quote },
-          ],
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+          limits: {
+            operations: [
+              { type, vault: TARGET, inputs: { assets: 100n }, quote },
+            ],
+          },
         },
-      });
+        1,
+      );
     expect(parse({ sharesMinted: undefined })).toEqual(parse({}));
     expect(parse({ sharesMinted: undefined })).toEqual(parse(undefined));
   },
@@ -79,22 +81,24 @@ test.each([
       { collateralIndex: 1n, assets: 20n },
     ];
     const parse = (amounts: typeof entries) =>
-      parseRequest({
-        chainId: 1,
-        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-        limits: {
-          operations: [
-            {
-              type,
-              marketId: MIDNIGHT_MARKET_ID,
-              quote:
-                type === "midnightSupplyCollateralBatch"
-                  ? { collateralSupplies: amounts }
-                  : { collateralWithdrawals: amounts },
-            },
-          ],
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+          limits: {
+            operations: [
+              {
+                type,
+                marketId: MIDNIGHT_MARKET_ID,
+                quote:
+                  type === "midnightSupplyCollateralBatch"
+                    ? { collateralSupplies: amounts }
+                    : { collateralWithdrawals: amounts },
+              },
+            ],
+          },
         },
-      });
+        1,
+      );
     expect(parse(entries).limits).not.toBe("none");
     expect(() => parse([])).toThrow(SimulationValidationError);
     expect(() => parse([entries[0]!, entries[0]!])).toThrow(
@@ -109,19 +113,21 @@ test.each([{}, { collateralWithdrawals: undefined }])(
   "error: withdraw batches reject missing collateral withdrawals in quote %j",
   (quote) => {
     expect(() =>
-      parseRequest({
-        chainId: 1,
-        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-        limits: {
-          operations: [
-            {
-              type: "midnightWithdrawCollateralBatch",
-              marketId: MIDNIGHT_MARKET_ID,
-              quote,
-            },
-          ],
+      parseRequest(
+        {
+          transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+          limits: {
+            operations: [
+              {
+                type: "midnightWithdrawCollateralBatch",
+                marketId: MIDNIGHT_MARKET_ID,
+                quote,
+              },
+            ],
+          },
         },
-      }),
+        1,
+      ),
     ).toThrow(
       expect.objectContaining({
         name: "SimulationValidationError",
@@ -137,22 +143,26 @@ test.each([{}, { collateralWithdrawals: undefined }])(
 
 test("error: withdraw batches reject position.maxCollateral as an unknown field", () => {
   expect(() =>
-    parseRequest({
-      chainId: 1,
-      transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
-      limits: {
-        operations: [
-          {
-            type: "midnightWithdrawCollateralBatch",
-            marketId: MIDNIGHT_MARKET_ID,
-            quote: {
-              collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+    parseRequest(
+      {
+        transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+        limits: {
+          operations: [
+            {
+              type: "midnightWithdrawCollateralBatch",
+              marketId: MIDNIGHT_MARKET_ID,
+              quote: {
+                collateralWithdrawals: [{ collateralIndex: 0n, assets: 10n }],
+              },
+              position: {
+                maxCollateral: [{ collateralIndex: 0n, assets: 0n }],
+              },
             },
-            position: { maxCollateral: [{ collateralIndex: 0n, assets: 0n }] },
-          },
-        ],
-      },
-    } as unknown as SimulateParams),
+          ],
+        },
+      } as unknown as SimulateParams,
+      1,
+    ),
   ).toThrowError(
     expect.objectContaining({
       fieldErrors: expect.arrayContaining([
@@ -189,12 +199,14 @@ const tx = (overrides: object = {}) => ({
 
 describe("state overrides", () => {
   const parse = (stateOverrides?: unknown) =>
-    parseRequest({
-      chainId: 1,
-      transactions: [tx()],
-      limits: "none",
-      stateOverrides,
-    } as unknown as SimulateParams);
+    parseRequest(
+      {
+        transactions: [tx()],
+        limits: "none",
+        stateOverrides,
+      } as unknown as SimulateParams,
+      1,
+    );
 
   test("copies and freezes overrides without changing keys or freezing the input", () => {
     const address = TOKEN.toLowerCase() as Address;
@@ -285,8 +297,10 @@ const permit2Auth: SimulationAuthorization = {
   },
 };
 
-const parse = (input: unknown) =>
-  parseRequest({ limits: "none", ...(input as object) } as SimulateParams);
+const parse = (input: unknown) => {
+  const { chainId = 1, ...rest } = input as { readonly chainId?: unknown };
+  return parseRequest({ limits: "none", ...rest } as SimulateParams, chainId);
+};
 
 /** Operations of a parsed request whose limits are an object. */
 const limitsOperations = (request: ParsedRequest) =>
@@ -1207,11 +1221,13 @@ describe("parseRequest", () => {
     (_name, limits) => {
       const error = (() => {
         try {
-          parseRequest({
-            chainId: 1,
-            transactions: [tx()],
-            ...(limits === undefined ? {} : { limits }),
-          } as SimulateParams);
+          parseRequest(
+            {
+              transactions: [tx()],
+              ...(limits === undefined ? {} : { limits }),
+            } as SimulateParams,
+            1,
+          );
         } catch (caught) {
           return caught;
         }
@@ -2592,20 +2608,19 @@ describe("parseRequest", () => {
   });
 
   test("error: SimulationValidationError for non-object input", () => {
-    expect(() => parseRequest(null as unknown as SimulateParams)).toThrow(
+    expect(() => parseRequest(null as unknown as SimulateParams, 1)).toThrow(
       SimulationValidationError,
     );
-    expect(() => parseRequest("x" as unknown as SimulateParams)).toThrow(
+    expect(() => parseRequest("x" as unknown as SimulateParams, 1)).toThrow(
       SimulationValidationError,
     );
-    expect(() => parseRequest(42 as unknown as SimulateParams)).toThrow(
+    expect(() => parseRequest(42 as unknown as SimulateParams, 1)).toThrow(
       SimulationValidationError,
     );
   });
 
   test("type-level: SimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
-      readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
       readonly limits: "none";
     }>().toExtend<SimulateParams>();
@@ -3191,13 +3206,15 @@ describe("parseRequest", () => {
   test.each([undefined, "final"] as const)(
     "behavior: retains final signed requests in mode %s",
     (mode) => {
-      const request = parseRequest({
-        chainId: 1,
-        mode,
-        limits: "none",
-        transactions: [{ ...tx(), data: "0x12345678" }],
-        authorizations: [permitAuth, blueSigAuth, midnightSigAuth],
-      });
+      const request = parseRequest(
+        {
+          mode,
+          limits: "none",
+          transactions: [{ ...tx(), data: "0x12345678" }],
+          authorizations: [permitAuth, blueSigAuth, midnightSigAuth],
+        },
+        1,
+      );
       expect(request.authorizations).toEqual([
         permitAuth,
         blueSigAuth,

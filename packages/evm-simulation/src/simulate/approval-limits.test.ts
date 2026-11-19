@@ -84,11 +84,13 @@ test("batch supplies allow each distinct collateral token only to Midnight", () 
 });
 
 const parsed = (operation: object) => {
-  const request = parseRequest({
-    chainId: 1,
-    transactions: [{ from: OWNER, to: VAULT, data: "0x12345678" }],
-    limits: { operations: [operation] },
-  } as SimulateParams);
+  const request = parseRequest(
+    {
+      transactions: [{ from: OWNER, to: VAULT, data: "0x12345678" }],
+      limits: { operations: [operation] },
+    } as SimulateParams,
+    1,
+  );
   if (request.limits === "none") throw new Error("test limit was omitted");
   const limit = request.limits.operations[0];
   if (limit === undefined) throw new Error("test limit was not parsed");
@@ -166,25 +168,27 @@ test("collateral withdrawals fail closed without a resolved loan token", () => {
 });
 
 test("unions explicit approvals with operation-derived registry spenders", () => {
-  const request = parseRequest({
-    chainId: 1,
-    transactions: [
-      {
-        from: OWNER,
-        to: VAULT,
-        data: "0x12345678",
-      },
-    ],
-    limits: {
-      operations: [
+  const request = parseRequest(
+    {
+      transactions: [
         {
-          type: "vaultV1Deposit",
-          vault: VAULT,
-          quote: { assetsPaid: 1n, sharesMinted: 1n },
+          from: OWNER,
+          to: VAULT,
+          data: "0x12345678",
         },
       ],
-    },
-  } as SimulateParams);
+      limits: {
+        operations: [
+          {
+            type: "vaultV1Deposit",
+            vault: VAULT,
+            quote: { assetsPaid: 1n, sharesMinted: 1n },
+          },
+        ],
+      },
+    } as SimulateParams,
+    1,
+  );
   if (request.limits === "none") return;
   const limit = request.limits.operations[0];
   if (limit === undefined) return;
@@ -276,25 +280,27 @@ test("blueBorrow allows the collateral Approval re-emitted by BlueBundlesV1's ze
 });
 
 test("does not derive an approval for V2 forceRedeem", () => {
-  const request = parseRequest({
-    chainId: 1,
-    transactions: [
-      {
-        from: OWNER,
-        to: VAULT,
-        data: "0x12345678",
-      },
-    ],
-    limits: {
-      operations: [
+  const request = parseRequest(
+    {
+      transactions: [
         {
-          type: "vaultV2ForceRedeem",
-          vault: VAULT,
-          quote: { sharesBurned: 1n, assetsReceived: 1n },
+          from: OWNER,
+          to: VAULT,
+          data: "0x12345678",
         },
       ],
-    },
-  } as SimulateParams);
+      limits: {
+        operations: [
+          {
+            type: "vaultV2ForceRedeem",
+            vault: VAULT,
+            quote: { sharesBurned: 1n, assetsReceived: 1n },
+          },
+        ],
+      },
+    } as SimulateParams,
+    1,
+  );
   if (request.limits === "none") return;
   const limit = request.limits.operations[0];
   if (limit === undefined) return;

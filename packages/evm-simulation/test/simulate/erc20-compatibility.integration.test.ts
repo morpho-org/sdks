@@ -15,8 +15,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { simulate, toSimulationAuthorizations } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import { toSimulationAuthorizations } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const source = `
 pragma solidity ^0.8.20;
@@ -252,18 +255,9 @@ describe.each([
                     collateralWithdrawn: amount,
                   },
                 };
-        const result = await simulate(
+        const result = await simulateOrThrow(
+          simulationClientFor(client.transport.url, mainnet),
           {
-            chains: new Map([
-              [
-                mainnet.id,
-                { client: createTestSimulationClient(client.transport.url!) },
-              ],
-            ]),
-            timeoutMs: 30_000,
-          },
-          {
-            chainId: mainnet.id,
             mode: "preview",
             authorizations,
             limits: { operations: [{ ...limit, slippageTolerance: 0n }] },

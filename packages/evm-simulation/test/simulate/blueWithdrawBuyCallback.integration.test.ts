@@ -15,10 +15,12 @@ import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -79,20 +81,12 @@ test("verifies callback burns and owner proceeds independently on a real Blue wi
     onBehalf: callback,
     expected: { assetsReceived: positionData.supplyAssets },
   });
-  const config = {
-    chains: new Map([
-      [
-        mainnet.id,
-        { client: createTestSimulationClient(client.transport.url!) },
-      ],
-    ]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const run = (
     transaction: { to: Address; data: `0x${string}`; value: bigint },
     selectedLimits = limits,
   ) =>
-    simulate(config, {
-      chainId: mainnet.id,
+    simulateOrThrow(config, {
       mode: "final",
       transactions: [
         {

@@ -17,12 +17,14 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
-  simulate,
   toSimulationAuthorizations,
   UnexpectedMorphoAuthorizationError,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
@@ -48,11 +50,8 @@ const CbbtcUsdcBlue = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([
-    [mainnet.id, { client: createTestSimulationClient(client.transport.url!) }],
-  ]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const expectTokenApprovalFailure = async (
   simulation: Promise<unknown>,
@@ -113,8 +112,7 @@ describe.sequential("simulate approval allowlist", () => {
     };
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -181,8 +179,7 @@ describe.sequential("simulate approval allowlist", () => {
     };
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -236,8 +233,7 @@ describe.sequential("simulate approval allowlist", () => {
     });
     const addresses = getChainAddresses(mainnet.id)!;
     const tx = action.buildTx();
-    const error = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const error = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -339,8 +335,7 @@ describe.sequential("simulate approval allowlist", () => {
       requirements,
     });
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -419,8 +414,7 @@ describe.sequential("simulate approval allowlist", () => {
     }
     const transaction = deposit.buildTx();
     const addresses = getChainAddresses(mainnet.id)!;
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -470,8 +464,7 @@ describe.sequential("simulate approval allowlist", () => {
     });
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         mode: "preview",
         authorizations: [
           {

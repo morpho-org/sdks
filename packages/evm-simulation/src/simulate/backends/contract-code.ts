@@ -21,7 +21,7 @@ import { rpc } from "./eth-simulate-v1.js";
  * the pipeline does not model in-bundle contract creations.
  *
  * @param params - Check parameters.
- * @param params.client - Consumer-supplied simulation client.
+ * @param params.client - Caller-owned viem client.
  * @param params.transactions - Parsed caller transactions, in execution order.
  * @param params.chainId - Request chain id, named in the validation error.
  * @param params.blockNumber - Pinned state block the `eth_getCode` reads run at.
@@ -127,11 +127,11 @@ export async function assertTransactionTargetsHaveCode(params: {
     }
   }
   // A confirmed empty target wins over a failed read: the deterministic
-  // validation error carries the same wrong-chain signal a probe upgrades,
-  // whereas a flaky getCode would mask it as an external failure.
+  // validation error is the caller's to fix, whereas a flaky getCode would
+  // mask it as an external failure.
   if (fieldErrors.length > 0) {
     throw new SimulationValidationError(
-      `Transaction targets with calldata must hold contract code at the state block: ${fieldErrors.join("; ")}. Check the transaction list and that the endpoint serves chain ${chainId}.`,
+      `Transaction targets with calldata must hold contract code at the state block: ${fieldErrors.join("; ")}. Check the transaction list and that the client's endpoint serves chain ${chainId}.`,
       fieldErrors,
     );
   }

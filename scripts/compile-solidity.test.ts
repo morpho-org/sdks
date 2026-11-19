@@ -66,6 +66,36 @@ describe("compile-solidity", () => {
     }
   };
 
+  test("behavior: cleanup preserves query barrel files", () => {
+    const { root, scripts, queries } = setup();
+    try {
+      const preserved = {
+        "index.ts": 'export * as Nested from "./nested/index.js";\n',
+        "nested/index.ts": 'export * from "./Other.js";\n',
+      };
+      for (const [name, content] of Object.entries(preserved)) {
+        writeFileSync(join(queries, name), content);
+      }
+      const staleArtifact = join(queries, "nested/Removed.ts");
+      writeFileSync(
+        staleArtifact,
+        "/** @internal Deployless `Removed` query ABI. */\nexport const abi = [] as const;\n",
+      );
+
+      execFileSync(process.execPath, [
+        join(scripts, "compile-solidity.ts"),
+        "blue-sdk-viem",
+      ]);
+
+      for (const [name, content] of Object.entries(preserved)) {
+        expect(readFileSync(join(queries, name), "utf8")).toBe(content);
+      }
+      expect(existsSync(staleArtifact)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("behavior: skips ABI-less libraries and preserves handwritten TypeScript files and query barrels", () => {
     const { root, scripts, queries } = setup();
     try {

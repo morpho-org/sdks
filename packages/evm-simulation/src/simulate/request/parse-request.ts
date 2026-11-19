@@ -1769,17 +1769,21 @@ export function requiredQuoteErrors({
  * `PermitSingle` payloads rather than silently reinterpreting them. Cross-field
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
- * must bind to `chainId`. Final-mode signed requests are retained for use-event checks.
+ * must bind to the client's chain. Final-mode signed requests are retained for use-event checks.
  * Caller `stateOverrides` are copied without validation or normalization.
  *
  * @param input - Caller input (`SimulateInputParams`-shaped, including quote-only requests).
+ * @param chainId - `client.chain.id` of the caller's client; validated as a positive safe integer.
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
  * @throws {SimulationValidationError} On any unknown key, value or cross-field
  *   violation.
  * @internal
  */
-export function parseRequest(input: SimulateInputParams): ParsedRequest {
+export function parseRequest(
+  input: SimulateInputParams,
+  chainId: unknown,
+): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 
@@ -1790,7 +1794,6 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
   }
   check.keys(input, {
     allow: [
-      "chainId",
       "transactions",
       "blockNumber",
       "block",
@@ -1804,15 +1807,13 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
 
   const stateOverrides = structuredClone(input.stateOverrides);
 
-  // chainId
-  const chainId = input.chainId;
   if (
     typeof chainId !== "number" ||
     !Number.isInteger(chainId) ||
     !Number.isSafeInteger(chainId) ||
     chainId <= 0
   ) {
-    fieldErrors.push("chainId: must be a positive safe integer");
+    fieldErrors.push("client.chain.id: must be a positive safe integer");
   }
 
   // transactions
@@ -2060,7 +2061,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
       BigInt(domainChainId) !== BigInt(chainId)
     ) {
       fieldErrors.push(
-        `authorizations[${i}].typedData.domain.chainId: must equal the request chainId ${chainId} (got ${domainChainId})`,
+        `authorizations[${i}].typedData.domain.chainId: must equal the client chain ${chainId} (got ${domainChainId})`,
       );
     }
   }

@@ -457,3 +457,4 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 - error context, revert-error surface, `ExternalServiceError` bypass and `MissingVerificationEvidenceError` name superseded by ADR-2026-10-12-evm-simulation-simplify-errors-without-deprecation.
 - VaultBundlesV1 exit share-allowance rule superseded by ADR-2026-10-21-unlimited-sdk-approvals.
 - rule that error additions extend the base error directly superseded by ADR-2026-11-11-evm-simulation-error-types-and-findings.
+- `simulate(config, params)` signature with `config.chains` and `simulateV1Url` superseded by ADR-2026-11-17-evm-simulation-failure-report.

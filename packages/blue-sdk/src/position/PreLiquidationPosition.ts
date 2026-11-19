@@ -197,9 +197,12 @@ export class PreLiquidationPosition
       this._lltv - this.preLiquidationParams.preLltv,
     );
 
-    const repayableShares = MathLib.wMulDown(
+    const repayableShares = MathLib.min(
       this.borrowShares,
-      this.preLiquidationParams.getCloseFactor(quotient),
+      MathLib.wMulDown(
+        this.borrowShares,
+        this.preLiquidationParams.getCloseFactor(quotient),
+      ),
     );
 
     const repayableAssets = MathLib.wMulDown(

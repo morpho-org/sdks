@@ -1,5 +1,8 @@
 import { type Hex, isAddress, isHex } from "viem";
-import { InvalidSimulationResponseError } from "../../errors.js";
+import {
+  InvalidSimulationResponseError,
+  type SimulationPackageError,
+} from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
@@ -38,6 +41,10 @@ export interface ExecutedStateRead {
 export interface SimulationExecution {
   readonly plan: ExecutionPlan;
   readonly block: ExecutionBlock;
+  /** A transaction reverted; nothing after the revert may be checked. */
+  readonly reverted: boolean;
+  /** Post-execution failures, in call-outcome order. */
+  readonly failures: readonly SimulationPackageError[];
   readonly calls: readonly ExecutedCall[];
   /** Successful state reads, in plan order, tagged by phase. */
   readonly stateReads: readonly ExecutedStateRead[];

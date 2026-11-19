@@ -25,9 +25,11 @@ import {
   type SimulateParams,
   SimulationRevertedError,
   SlippageCheckUnavailableError,
-  simulate,
 } from "../../src/index.js";
-import { createTestSimulationClient } from "../../src/test-helpers/create-test-simulation-client.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
@@ -54,10 +56,7 @@ const CbbtcUsdcBlue = new MarketParams({
 const REVERTING_TOKEN: Address = "0x00000000000000000000000000000000000c4A05";
 const SIMULATE = "eth_simulateV1";
 
-const configFor = (url: string) => ({
-  chains: new Map([[mainnet.id, { client: createTestSimulationClient(url) }]]),
-  timeoutMs: 30_000,
-});
+const configFor = (url: string) => simulationClientFor(url, mainnet);
 
 /**
  * Reads, requirements and construction run against the healthy fork; only
@@ -86,7 +85,6 @@ async function buildFundedSupply(client: AnvilTestClient<typeof mainnet>) {
   await client.deal({ erc20: USDC, amount: assets });
   const tx = action.buildTx();
   const params = {
-    chainId: mainnet.id,
     limits: "none",
     transactions: [
       {
@@ -130,7 +128,7 @@ describe.sequential("chaos: S9 RPC dies between construction and simulation", ()
   }) => {
     const { params } = await buildFundedSupply(client);
     await withProxy({ client }, async (proxy) => {
-      const result = await simulate(configFor(proxy.url), params);
+      const result = await simulateOrThrowFirst(configFor(proxy.url), params);
       expect(result.simulationTxs).toHaveLength(1);
       expect(calls(proxy).map((entry) => entry.outcome)).toEqual(["forwarded"]);
     });
@@ -143,7 +141,7 @@ describe.sequential("chaos: S9 RPC dies between construction and simulation", ()
     await withProxy({ client }, async (proxy) => {
       await proxy.kill();
       const error = await expectFailClosed(
-        simulate(configFor(proxy.url), params),
+        simulateOrThrowFirst(configFor(proxy.url), params),
         "infra",
       );
       expect(error).toBeInstanceOf(RpcTransportError);
@@ -166,7 +164,7 @@ describe.sequential("chaos: S9 RPC dies between construction and simulation", ()
         { client, faults: [{ method: SIMULATE, fault: rule }] },
         async (proxy) => {
           const error = await expectFailClosed(
-            simulate(configFor(proxy.url), params),
+            simulateOrThrowFirst(configFor(proxy.url), params),
             "infra",
           );
           expect(error).toBeInstanceOf(RpcTransportError);
@@ -174,11 +172,9 @@ describe.sequential("chaos: S9 RPC dies between construction and simulation", ()
             calls(proxy, "eth_getBlockByNumber").map((e) => e.outcome),
           ).toEqual(["forwarded"]);
           expect(calls(proxy).map((e) => e.outcome)).toEqual([rule.kind]);
-          // After the failed eth_simulateV1, only the served-chain probe runs.
+          // Nothing runs after the failed eth_simulateV1: no served-chain probe.
           const failedAt = proxy.log.findIndex((e) => e.method === SIMULATE);
-          expect(
-            proxy.log.slice(failedAt + 1).map((e) => [e.method, e.outcome]),
-          ).toEqual([["eth_chainId", "forwarded"]]);
+          expect(proxy.log.slice(failedAt + 1)).toEqual([]);
         },
       );
       expect(Object.isFrozen(tx)).toBe(true);
@@ -196,7 +192,7 @@ describe.sequential("chaos: S9 RPC dies between construction and simulation", ()
     });
     await withProxy({ client }, async (proxy) => {
       const error = await expectFailClosed(
-        simulate(configFor(proxy.url), {
+        simulateOrThrowFirst(configFor(proxy.url), {
           ...params,
           limits: {
             operations: [
@@ -268,7 +264,7 @@ describe.sequential("chaos: S3 malformed RPC responses", () => {
         { client, faults: [{ method, fault: fault.rawBody(body) }] },
         async (proxy) => {
           const error = await expectFailClosed(
-            simulate(configFor(proxy.url), params),
+            simulateOrThrowFirst(configFor(proxy.url), params),
             "integrity",
           );
           expect(error).toBeInstanceOf(InvalidSimulationResponseError);
@@ -304,7 +300,7 @@ describe.sequential("chaos: S3 malformed RPC responses", () => {
       },
       async (proxy) => {
         const error = await expectFailClosed(
-          simulate(configFor(proxy.url), params),
+          simulateOrThrowFirst(configFor(proxy.url), params),
           "infra",
         );
         expect(error).toBeInstanceOf(RpcTransportError);
@@ -334,7 +330,7 @@ describe.sequential("chaos: S4 simulation revert with a healthy RPC", () => {
     await client.deal({ erc20: USDC, amount: 0n });
     await withProxy({ client }, async (proxy) => {
       await expectRevert(
-        simulate(configFor(proxy.url), params),
+        simulateOrThrowFirst(configFor(proxy.url), params),
         /ERC20InsufficientBalance|transfer amount exceeds balance/,
       );
       expect(calls(proxy).map((e) => e.outcome)).toEqual(["forwarded"]);
@@ -346,8 +342,7 @@ describe.sequential("chaos: S4 simulation revert with a healthy RPC", () => {
   }) => {
     await withProxy({ client }, async (proxy) => {
       await expectRevert(
-        simulate(configFor(proxy.url), {
-          chainId: mainnet.id,
+        simulateOrThrowFirst(configFor(proxy.url), {
           limits: "none",
           transactions: [
             {
@@ -378,8 +373,7 @@ describe.sequential("chaos: S4 simulation revert with a healthy RPC", () => {
     await client.deal({ erc20: USDC, amount: 0n });
     await withProxy({ client }, async (proxy) => {
       await expectRevert(
-        simulate(configFor(proxy.url), {
-          chainId: mainnet.id,
+        simulateOrThrowFirst(configFor(proxy.url), {
           limits: "none",
           transactions: [
             {
