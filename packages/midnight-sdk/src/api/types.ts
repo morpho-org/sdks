@@ -434,10 +434,12 @@ export interface MidnightApiBookResult {
  * ABI-ready take returned by Midnight API book and quote routes.
  *
  * This shape matches the Midnight periphery `Take` tuple. Pass `offer`,
- * `ratifierData`, and `units` directly to `IMidnight.take`. `marketId` is API
- * metadata and is ignored by ABI encoders.
+ * `ratifierData`, and `units` directly to `IMidnight.take`. `marketId` and
+ * `validUntil` are API metadata and are ignored by ABI encoders.
  */
 export interface MidnightApiTake {
+  /** Inclusive Unix-second execution bound, never above `offer.expiry`. */
+  readonly validUntil: bigint;
   /** Market id the offer belongs to. */
   readonly marketId: Hash;
   /** Executable or currently reserved offer size in units. */
@@ -606,6 +608,7 @@ type ApiOfferResponse = {
 
 /** @internal Takeable-offer response shape returned by the API. */
 export type ApiTakeableOfferResponse = {
+  readonly valid_until: number;
   readonly market_id: Hash;
   readonly units: string;
   readonly offer: ApiOfferResponse;

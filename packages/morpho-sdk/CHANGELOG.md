@@ -1,5 +1,13 @@
 # @morpho-org/morpho-sdk
 
+## 10.0.1
+
+### Patch Changes
+
+- Expose the Router's per-take execution deadline as `validUntil: bigint` on Midnight API quotes and takeable offers. Reject missing or malformed `valid_until` values and bounds above the offer expiry.
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.7.0
+
 ## 10.0.0
 
 ### Major Changes

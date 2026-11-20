@@ -105,6 +105,7 @@ export const midnightApiTake = (
 
   return {
     marketId: MarketUtils.toId(offer.market),
+    validUntil: offer.expiry,
     units: 100n,
     offer,
     ratifierData: "0x1234" as Hex,

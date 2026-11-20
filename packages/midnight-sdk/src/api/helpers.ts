@@ -339,6 +339,17 @@ function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
 ): MidnightApiTake {
   const offer = takeableOffer.offer;
+  const validUntil = takeableOffer.valid_until;
+  if (
+    typeof validUntil !== "number" ||
+    !Number.isSafeInteger(validUntil) ||
+    validUntil < 0 ||
+    BigInt(validUntil) > BigInt(offer.expiry)
+  ) {
+    throw new InvalidMidnightApiResponseError(
+      "Midnight API takeable offer valid_until must be a non-negative safe integer no greater than offer.expiry.",
+    );
+  }
   // The filters after mapping call viem helpers that throw their own errors on non-address values.
   for (const [field, value] of [
     ["maker", offer.maker],
@@ -403,6 +414,7 @@ function mapTakeableOffer(
       continuousFeeCap: BigInt(offer.continuous_fee_cap),
     },
     ratifierData: takeableOffer.ratifier_data,
+    validUntil: BigInt(validUntil),
   };
 }
 
