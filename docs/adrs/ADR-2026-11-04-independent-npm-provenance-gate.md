@@ -159,6 +159,7 @@ publishing has exactly one OIDC path.
 
 ## References
 
+- Human npm-approval requirement and assumption superseded by ADR-2026-11-18-npm-release-sign-off-without-deployment-reviewers.
 - [Creating custom deployment protection rules](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/create-custom-protection-rules)
 - [Deployments and environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
 - [Artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations)

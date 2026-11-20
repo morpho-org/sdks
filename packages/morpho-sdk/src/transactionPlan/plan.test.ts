@@ -1,7 +1,13 @@
 import { Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { maxUint256, serializeSignature, toHex, zeroAddress } from "viem";
+import {
+  type Address,
+  maxUint256,
+  serializeSignature,
+  toHex,
+  zeroAddress,
+} from "viem";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   IN_KIND_ASSET,
@@ -33,14 +39,14 @@ const inputs = {
   vault: IN_KIND_VAULT,
   asset: IN_KIND_ASSET,
   maxSharePrice: 10n ** 27n,
-  amount: 100n,
+  assets: 100n,
   deadline: 2_000_000_000n,
   referralFeePct: 0n,
   referralFeeRecipient: zeroAddress,
 };
 const permitArgs = {
   spender,
-  amount: inputs.amount,
+  amount: inputs.assets,
   deadline: inputs.deadline,
   nonce: 0n,
 };
@@ -72,7 +78,7 @@ const approveStep = {
     inputs: {
       token: IN_KIND_ASSET,
       spender,
-      amount: inputs.amount,
+      assets: inputs.assets,
       chainId: 1,
       account: IN_KIND_USER,
     },
@@ -88,7 +94,7 @@ const depositStep = {
   },
 } as const satisfies Step;
 const pendingPlan: TransactionPlan = {
-  version: 1,
+  version: 2,
   chainId: 1,
   account: IN_KIND_USER,
   expiresAt: Number(inputs.deadline),
@@ -104,13 +110,14 @@ const expectedDeposit = vaultV2Deposit({
   vault: { chainId, address: IN_KIND_VAULT, asset },
   args: {
     ...depositArgs,
+    amount: inputs.assets,
     userAddress: account,
     requirementSignature: {
       action: { type: "permit", args: permitArgs, typedData },
       args: {
         owner: IN_KIND_USER,
         asset,
-        amount: inputs.amount,
+        amount: inputs.assets,
         nonce: 0n,
         deadline: inputs.deadline,
         signature,
@@ -261,6 +268,23 @@ describe("getPendingSignatureRequests", () => {
     );
   });
 
+  test("rejects a stray permit reference on a hand-built approval step", () => {
+    const approval = {
+      ...approveStep,
+      action: {
+        ...approveStep.action,
+        signatureRequestIds: { tokenPermit: "tokenPermit" },
+      },
+    };
+    const plan = { ...pendingPlan, steps: [approval] };
+    const error = new TransactionPlanSignatureMismatchError(
+      "tokenPermit",
+      "reference",
+    );
+    expect(() => getPendingSignatureRequests(plan)).toThrow(error);
+    expect(() => applySignatures(plan, [])).toThrow(error);
+  });
+
   test("rejects unreferenced requests, including signed ones", () => {
     for (const request of [
       permitRequest("unrelated"),
@@ -277,34 +301,103 @@ describe("getPendingSignatureRequests", () => {
     }
   });
 
-  test.each(["vaultV2Deposit", "vaultV2Withdraw"] as const)(
-    "%s validates all permit fields before prompting or building",
-    (type) => {
-      const step: Step =
-        type === "vaultV2Deposit"
-          ? depositStep
-          : {
-              ...depositStep,
-              action: {
-                type,
-                inputs: { ...inputs, requiredShareAllowance: 100n },
-                signatureRequestIds: { tokenPermit: "tokenPermit" },
-              },
-            };
-      const amount = type === "vaultV2Deposit" ? inputs.amount : maxUint256;
-      const request: SignatureRequest = {
-        ...permitRequest("tokenPermit"),
-        args: { ...permitArgs, amount },
-        typedData: {
-          ...typedData,
-          domain: {
-            ...typedData.domain,
-            verifyingContract:
-              type === "vaultV2Deposit" ? inputs.asset : inputs.vault,
-          },
-          message: { ...typedData.message, value: amount },
+  const permitFor = (verifyingContract: Address, amount: bigint) =>
+    ({
+      ...permitRequest("tokenPermit"),
+      args: { ...permitArgs, amount },
+      typedData: {
+        ...typedData,
+        domain: { ...typedData.domain, verifyingContract },
+        message: { ...typedData.message, value: amount },
+      },
+    }) satisfies SignatureRequest;
+  const withdrawStep: Step = {
+    ...depositStep,
+    action: {
+      type: "vaultV2Withdraw",
+      inputs: { ...inputs, requiredShareAllowance: 100n },
+      signatureRequestIds: { tokenPermit: "tokenPermit" },
+    },
+  };
+  const permitCases = [
+    {
+      type: "vaultV1Deposit",
+      step: {
+        ...depositStep,
+        action: { ...depositStep.action, type: "vaultV1Deposit" },
+      },
+      request: permitFor(inputs.asset, inputs.assets),
+      tamperedAmounts: [99n, 101n, maxUint256],
+    },
+    {
+      type: "vaultV2Deposit",
+      step: depositStep,
+      request: permitFor(inputs.asset, inputs.assets),
+      tamperedAmounts: [99n, 101n, maxUint256],
+    },
+    {
+      type: "vaultV2Withdraw",
+      step: withdrawStep,
+      request: permitFor(inputs.vault, maxUint256),
+      tamperedAmounts: [99n],
+    },
+    {
+      type: "vaultV1Withdraw",
+      step: {
+        ...withdrawStep,
+        action: {
+          type: "vaultV1Withdraw",
+          inputs: { ...inputs, requiredShareAllowance: 100n },
+          signatureRequestIds: { tokenPermit: "tokenPermit" },
         },
-      };
+      },
+      request: permitFor(inputs.vault, maxUint256),
+      tamperedAmounts: [99n],
+    },
+    {
+      type: "vaultV1Redeem",
+      step: {
+        ...depositStep,
+        action: {
+          type: "vaultV1Redeem",
+          inputs: { ...inputs, shares: 100n },
+          signatureRequestIds: { tokenPermit: "tokenPermit" },
+        },
+      },
+      request: permitFor(inputs.vault, maxUint256),
+      tamperedAmounts: [99n],
+    },
+    {
+      type: "vaultV1MigrateToV2",
+      step: {
+        ...depositStep,
+        action: {
+          type: "vaultV1MigrateToV2",
+          inputs: {
+            ...inputs,
+            sourceVault: inputs.vault,
+            targetVault: inputs.asset,
+            assets: undefined,
+            shares: 100n,
+            maxSharePrice: 10n ** 27n,
+            requiredShareAllowance: 100n,
+          },
+          signatureRequestIds: { tokenPermit: "tokenPermit" },
+        },
+      },
+      request: permitFor(inputs.vault, maxUint256),
+      tamperedAmounts: [99n],
+    },
+  ] satisfies {
+    type: Step["action"]["type"];
+    step: Step;
+    request: SignatureRequest;
+    tamperedAmounts: bigint[];
+  }[];
+
+  test.each(permitCases)(
+    "$type prompts and builds a matching permit and rejects another amount",
+    ({ step, request, tamperedAmounts }) => {
       const plan = {
         ...pendingPlan,
         steps: [step],
@@ -344,85 +437,130 @@ describe("getPendingSignatureRequests", () => {
           cause: expect.any(TransactionPlanSignatureMismatchError),
         }),
       );
-      if (type === "vaultV2Withdraw") {
-        const minimumPermit = {
-          ...request,
-          args: { ...request.args, amount: 100n },
-          typedData: {
-            ...request.typedData,
-            message: { ...request.typedData.message, value: 100n },
-          },
-        };
-        expect(
-          getPendingSignatureRequests({
-            ...plan,
-            signatureRequests: [minimumPermit],
-          }),
-        ).toEqual([minimumPermit]);
-      }
-      for (const tamperedAmount of type === "vaultV2Deposit"
-        ? [99n, 101n, maxUint256]
-        : [99n]) {
-        const tampered = {
-          ...request,
-          args: { ...request.args, amount: tamperedAmount },
-          typedData: {
-            ...request.typedData,
-            message: { ...request.typedData.message, value: tamperedAmount },
-          },
-        };
-        expect(() =>
-          getPendingSignatureRequests({
-            ...plan,
-            signatureRequests: [tampered],
-          }),
-        ).toThrow(
-          new TransactionPlanSignatureMismatchError(request.id, "value"),
-        );
-        expect(() =>
-          buildTransaction(
-            { ...plan, signatureRequests: [{ ...tampered, signature }] },
-            step,
-          ),
-        ).toThrow(
-          new TransactionPlanSignatureMismatchError(request.id, "value"),
-        );
-      }
       expect(() =>
         buildTransaction(
           { ...plan, signatureRequests: [{ ...request, signature }] },
           step,
         ),
       ).not.toThrow();
-      for (const [field, value] of [
-        ["domain.chainId", 2],
-        ["domain.verifyingContract", zeroAddress],
-        ["message.owner", zeroAddress],
-        ["message.spender", zeroAddress],
-        ["args.spender", zeroAddress],
-        ["message.value", 123n],
-        ["message.nonce", 42n],
-        ["message.deadline", 123n],
-        ["primaryType", "Other"],
-      ] as const) {
-        const [section, key] = field.split(".");
-        const tampered: SignatureRequest =
-          section === "args"
-            ? { ...request, args: { ...request.args, spender: zeroAddress } }
-            : {
-                ...request,
-                typedData:
-                  section === "primaryType"
-                    ? { ...request.typedData, primaryType: "Other" }
-                    : {
-                        ...request.typedData,
-                        [section!]: {
-                          ...request.typedData[section as "domain" | "message"],
-                          [key!]: value,
-                        },
-                      },
-              };
+      const error = new TransactionPlanSignatureMismatchError(
+        request.id,
+        "value",
+      );
+      for (const amount of tamperedAmounts) {
+        const tampered = {
+          ...request,
+          args: { ...request.args, amount },
+          typedData: {
+            ...request.typedData,
+            message: { ...request.typedData.message, value: amount },
+          },
+        };
         const corrupted = { ...plan, signatureRequests: [tampered] };
+        expect(() => getPendingSignatureRequests(corrupted)).toThrow(error);
+        expect(() =>
+          buildTransaction(
+            { ...corrupted, signatureRequests: [{ ...tampered, signature }] },
+            step,
+          ),
+        ).toThrow(error);
+      }
+    },
+  );
+
+  test.each(permitCases)(
+    "$type rejects a permit with any other field changed",
+    ({ step, request }) => {
+      const { domain, message } = request.typedData;
+      const tamperings: readonly (readonly [string, SignatureRequest])[] = [
+        [
+          "domain.chainId",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              domain: { ...domain, chainId: 2 },
+            },
+          },
+        ],
+        [
+          "domain.verifyingContract",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              domain: { ...domain, verifyingContract: zeroAddress },
+            },
+          },
+        ],
+        [
+          "message.owner",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              message: { ...message, owner: zeroAddress },
+            },
+          },
+        ],
+        [
+          "message.spender",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              message: { ...message, spender: zeroAddress },
+            },
+          },
+        ],
+        [
+          "args.spender",
+          { ...request, args: { ...request.args, spender: zeroAddress } },
+        ],
+        [
+          "message.value",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              message: { ...message, value: 123n },
+            },
+          },
+        ],
+        [
+          "message.nonce",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              message: { ...message, nonce: 42n },
+            },
+          },
+        ],
+        [
+          "message.deadline",
+          {
+            ...request,
+            typedData: {
+              ...request.typedData,
+              message: { ...message, deadline: 123n },
+            },
+          },
+        ],
+        [
+          "primaryType",
+          {
+            ...request,
+            typedData: { ...request.typedData, primaryType: "Other" },
+          },
+        ],
+      ];
+      for (const [field, tampered] of tamperings) {
+        const corrupted = {
+          ...pendingPlan,
+          steps: [step],
+          signatureRequests: [tampered],
+        };
         const error = new TransactionPlanSignatureMismatchError(
           request.id,
           field,
@@ -460,6 +598,29 @@ describe("getPendingSignatureRequests", () => {
       new TransactionPlanSignatureMismatchError("tokenPermit", "args.deadline"),
     );
   });
+
+  test.each(["vaultV2Withdraw", "vaultV1Withdraw"] as const)(
+    "%s accepts a permit for exactly the required share allowance",
+    (type) => {
+      const minimumPermit = permitFor(inputs.vault, 100n);
+      expect(
+        getPendingSignatureRequests({
+          ...pendingPlan,
+          steps: [
+            {
+              ...withdrawStep,
+              action: {
+                type,
+                inputs: { ...inputs, requiredShareAllowance: 100n },
+                signatureRequestIds: { tokenPermit: "tokenPermit" },
+              },
+            },
+          ],
+          signatureRequests: [minimumPermit],
+        }),
+      ).toEqual([minimumPermit]);
+    },
+  );
 
   test("checks every action sharing a pending request", () => {
     const other = {

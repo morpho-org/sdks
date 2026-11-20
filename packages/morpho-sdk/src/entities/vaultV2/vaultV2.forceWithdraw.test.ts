@@ -16,7 +16,7 @@ import {
   zeroAddress,
 } from "viem";
 import { arc, mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_ADAPTER,
   IN_KIND_BUNDLER,
@@ -185,6 +185,31 @@ const priceFloorCeiling = (params: {
 };
 
 describe("MorphoVaultV2.forceWithdraw", () => {
+  test.sequential("explicit chain time reaches the share permit after device-clock expiry", async () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now + 10_800n, () =>
+      vaultFor(handle, { supportSignature: true }).forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        now,
+        deadline: now + 1_200n,
+      }),
+    );
+    const clock = vi.spyOn(Time, "timestamp").mockReturnValue(now + 10_800n);
+    try {
+      const [requirement] = await exit.getRequirements();
+      expect(requirement?.action.type).toBe("permit");
+      expect(requirement?.action.args).toMatchObject({
+        deadline: now + 1_200n,
+      });
+      expect(clock).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
   test("default", () => {
     const handle = createMockClient(mainnet);
     const exit = vaultFor(handle).forceWithdraw({

@@ -1,5 +1,9 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
-import { getErpcForkUrl, spawnAnvil } from "@morpho-org/test";
+import {
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+  spawnAnvil,
+} from "@morpho-org/test";
 import {
   createFaultProxy,
   expectFailClosed,
@@ -98,7 +102,7 @@ describe("chaos: S6 token metadata", () => {
   test("a 429 on the name() read fails closed before any Requirement", async () => {
     const anvil = await spawnAnvil({
       forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-      forkBlockNumber: 25_730_000n,
+      forkBlockNumber: MAINNET_FORK_BLOCK,
       chainId: mainnet.id,
     });
     // Fault only the name() read (selector 0x06fdde03); the unbatched client

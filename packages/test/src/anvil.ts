@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import _kebabCase from "lodash.kebabcase";
 import {
   AnvilCleanupError,
@@ -7,6 +9,7 @@ import {
   AnvilStartupError,
   createAnvilFailureCleanupError,
 } from "./errors.js";
+import { isolateForkCache } from "./forkCache.js";
 import { type ForkProxy, startForkProxy } from "./forkProxy.js";
 
 // The fork proxy's fetch ignores these, so Anvil forks directly when one is set.
@@ -108,6 +111,11 @@ export interface AnvilArgs {
    * startup probe with "Method not found", so a slow fork RPC can't block startup. Anvil's fork disk
    * cache still works across runs. If `HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY` is set, Anvil
    * forks the URL directly through that proxy instead, without this protection.
+   * HTTP(S) and WebSocket forks isolate storage-cache writes with a private HOME.
+   * Standard mise data/configuration and asdf data paths are preserved, but other HOME-relative
+   * settings (including global tool-version files and Foundry configuration) are not.
+   * Use an absolute `binary` path for unsupported shims, or set `noStorageCaching`
+   * to retain the original HOME.
    */
   forkUrl?: string | undefined;
   /**
@@ -225,8 +233,19 @@ export interface AnvilArgs {
    * Explicitly disables the use of RPC caching.
    *
    * All storage slots are read entirely from the endpoint.
+   * Also retains the original HOME instead of isolating Foundry's disk cache. This can
+   * work around tool shims or global settings that require the original HOME.
    */
   noStorageCaching?: boolean | undefined;
+  /**
+   * Disable opportunistic BAL post-state prefill of the remote fork cache, including on reset.
+   * This does not disable BAL RPC methods or change local block execution.
+   * The default requires an Anvil that supports `--no-bal` (CI uses Foundry v1.10.0).
+   * Set `noBal: false` to avoid the flag on older Anvil versions and retain Foundry's prefill.
+   *
+   * @defaultValue true for forks
+   */
+  readonly noBal?: boolean | undefined;
   /**
    * How transactions are sorted in the mempool.
    *
@@ -498,21 +517,41 @@ export const spawnAnvil = async (
   let port = args.port ?? 0;
   let forkProxy: ForkProxy | undefined;
 
+  let forkCache: Awaited<ReturnType<typeof isolateForkCache>>;
+  let childLaunched = false;
   try {
     // Keep a trailing `@<block>` on the URL passed to Anvil, which parses it.
     const forkUrlParts = anvilArgs.forkUrl?.match(
-      /^(https?:\/\/.*?)(@[^@:./]+)?$/i,
+      /^((?:https?|wss?):\/\/.*?)(@[^@:./]+)?$/i,
     );
     const upstreamUrl = forkUrlParts?.[1];
     if (
       upstreamUrl !== undefined &&
+      /^https?:/i.test(upstreamUrl) &&
       !EGRESS_PROXY_VARIABLES.some((name) => process.env[name])
     )
       forkProxy = await startForkProxy(upstreamUrl);
+    if (upstreamUrl !== undefined && !anvilArgs.noStorageCaching)
+      forkCache = await isolateForkCache(
+        undefined,
+        anvilArgs.forkBlockNumber ??
+          (forkUrlParts?.[2] && /^@\d+$/.test(forkUrlParts[2])
+            ? BigInt(forkUrlParts[2].slice(1))
+            : undefined),
+      );
+    const originalHome = homedir();
+    const dataHome =
+      process.env.XDG_DATA_HOME ??
+      (process.platform === "win32"
+        ? (process.env.LOCALAPPDATA ?? join(originalHome, "AppData/Local"))
+        : join(originalHome, ".local/share"));
+    const configHome =
+      process.env.XDG_CONFIG_HOME ?? join(originalHome, ".config");
     const subprocess = spawn(
       binary,
       toArgs({
         ...anvilArgs,
+        noBal: anvilArgs.noBal ?? anvilArgs.forkUrl !== undefined,
         forkUrl:
           forkProxy === undefined
             ? anvilArgs.forkUrl
@@ -525,18 +564,31 @@ export const spawnAnvil = async (
         port,
       }),
       {
-        env:
-          forkProxy === undefined
-            ? process.env
-            : {
-                ...process.env,
-                HTTP_PROXY: forkProxy.url,
-                http_proxy: forkProxy.url,
-                NO_PROXY: "",
-                no_proxy: "",
-              },
+        env: {
+          ...process.env,
+          ...(forkCache && {
+            XDG_DATA_HOME: dataHome,
+            XDG_CONFIG_HOME: configHome,
+            ASDF_DATA_DIR:
+              process.env.ASDF_DATA_DIR ?? join(originalHome, ".asdf"),
+            MISE_DATA_DIR: process.env.MISE_DATA_DIR ?? join(dataHome, "mise"),
+            MISE_CONFIG_DIR:
+              process.env.MISE_CONFIG_DIR ?? join(configHome, "mise"),
+            HOME: forkCache.home,
+            ...(process.platform === "win32" && {
+              USERPROFILE: forkCache.home,
+            }),
+          }),
+          ...(forkProxy && {
+            HTTP_PROXY: forkProxy.url,
+            http_proxy: forkProxy.url,
+            NO_PROXY: "",
+            no_proxy: "",
+          }),
+        },
       },
     );
+    childLaunched = true;
     subprocess.stderr.setEncoding("utf8");
     let stopInitiated = false;
     let stopRequested = false;
@@ -553,7 +605,7 @@ export const spawnAnvil = async (
       resolve: resolveProcessClosed,
       reject: rejectProcessClosed,
     } = Promise.withResolvers<void>();
-    const processClosed = processCloseResult.finally(() => {
+    const processClosed = processCloseResult.finally(async () => {
       forkProxy?.close();
       subprocess.stdin.destroy();
       subprocess.stdout.destroy();
@@ -812,8 +864,11 @@ export const spawnAnvil = async (
           globalThis.clearTimeout(forceKillTimeout);
         if (processCloseTimeout !== undefined)
           globalThis.clearTimeout(processCloseTimeout);
-        if (processExitError === undefined) resolveProcessClosed();
-        else rejectProcessClosed(processExitError);
+        void (async () => {
+          await forkCache?.close();
+          if (processExitError === undefined) resolveProcessClosed();
+          else rejectProcessClosed(processExitError);
+        })();
         if (settled) return;
         fail(
           new AnvilStartupError(
@@ -835,6 +890,7 @@ export const spawnAnvil = async (
     };
   } catch (error) {
     forkProxy?.close();
+    if (!childLaunched) await forkCache?.close();
     const failure =
       error instanceof AnvilStartupError || error instanceof AnvilCleanupError
         ? error

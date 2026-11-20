@@ -1,11 +1,37 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
 import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
+
+test("chain deadline remains valid with a fast device clock", () => {
+  const chainNow = 1_800_000_000n;
+  vi.useFakeTimers();
+  vi.setSystemTime(Number(chainNow + 10_800n) * 1_000);
+  try {
+    const vault = createPublicClient({
+      chain: mainnet,
+      transport: http("https://rpc.example"),
+    })
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+    expect(() =>
+      vault
+        .redeem({
+          userAddress: KeyrockUsdcVaultV2.address,
+          shares: 1n,
+          deadline: chainNow + 1_200n,
+          now: chainNow,
+        })
+        .buildTx(),
+    ).not.toThrow();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 describe("MorphoVaultV2 chain validation", () => {
   test("getData throws ChainIdMismatchError when client chain differs", async () => {

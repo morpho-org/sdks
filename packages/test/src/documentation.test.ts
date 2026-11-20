@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 test.each(["README spawn", "getFunctionCalls JSDoc"])(
@@ -27,10 +28,14 @@ test.each(["README spawn", "getFunctionCalls JSDoc"])(
       const fileName = join(directory, "example.ts");
       writeFileSync(fileName, code);
       const result = spawnSync(
-        "pnpm",
+        process.execPath,
         [
-          "exec",
-          "tsc",
+          fileURLToPath(
+            new URL(
+              "../../../node_modules/typescript/lib/tsc.js",
+              import.meta.url,
+            ),
+          ),
           "--ignoreConfig",
           "--noEmit",
           "--strict",

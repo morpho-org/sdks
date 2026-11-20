@@ -6,7 +6,11 @@ import {
 } from "@morpho-org/morpho-sdk/abis";
 import { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -27,15 +31,18 @@ import {
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  simulate,
   toSimulationLimits,
   UnexpectedMidnightAuthorizationError,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -76,9 +83,8 @@ const market = new MarketParams({
   enterGate: zeroAddress,
   liquidatorGate: zeroAddress,
 });
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 
 const setIsAuthorized = ({
   from,
@@ -214,8 +220,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
   }) => {
     const { user, supply, limits } = await setUp(client);
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           supply,
           setIsAuthorized({ from: user, authorized: UNKNOWN }),
@@ -239,16 +244,14 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
     if (operation?.type !== "midnightSupplyCollateral")
       throw new Error("Expected a direct collateral-supply limit");
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions,
         limits,
       }),
       { onBehalf: user, authorized: rateRatifier },
     );
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions,
         limits: {
           ...limits,
@@ -285,8 +288,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
     }
 
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           supply,
           setIsAuthorized({
@@ -349,8 +351,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       }),
     };
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [supply, cancelAndMake],
         limits,
       }),
@@ -394,8 +395,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       }),
     };
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [supply, signed],
         limits,
       }),
@@ -409,8 +409,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
     const { user, supply, limits } = await setUp(client);
     const authorization = typedAuthorization({ authorizer: user, nonce: 0n });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         mode: "preview",
         transactions: [supply],
         authorizations: [
@@ -438,8 +437,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
   }) => {
     const { user, supply, limits } = await setUp(client);
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         mode: "preview",
         transactions: [supply],
         authorizations: [
@@ -465,8 +463,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       args: [user],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         mode: "final",
         transactions: [
           {
@@ -518,8 +515,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       }),
     );
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         mode: "final",
         transactions: [
           {
@@ -548,8 +544,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
   }) => {
     const { user, supply, limits } = await setUp(client);
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           setIsAuthorized({ from: user, authorized: midnightBundlesV2 }),
           supply,
@@ -558,8 +553,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       }),
     ).resolves.toBeDefined();
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           setIsAuthorized({ from: user, authorized: UNKNOWN }),
           supply,
@@ -583,8 +577,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
   }) => {
     const { user, supply, limits } = await setUp(client);
     await expectRejection(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           setIsAuthorized({ from: user, authorized: UNKNOWN }),
           supply,
@@ -599,8 +592,7 @@ describe.sequential("simulate Midnight authorization allowlist — Base fork", (
       { onBehalf: user, authorized: UNKNOWN },
     );
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           setIsAuthorized({
             from: user,

@@ -97,25 +97,37 @@ export const bigIntComparator =
     const xA = getter(a);
     const xB = getter(b);
 
-    if (xA == null && xB == null) return 0;
-    if (xA == null) return 1;
-    if (xB == null) return -1;
+    if (xA == null && xB == null) {
+      return 0;
+    }
+    if (xA == null) {
+      return 1;
+    }
+    if (xB == null) {
+      return -1;
+    }
 
-    if (order === "asc") return xA > xB ? 1 : -1;
+    if (order === "asc") {
+      return xA > xB ? 1 : -1;
+    }
 
     return xA > xB ? -1 : 1;
   };
 
-// biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
-const _get = (data: any, path: string[]): unknown => {
-  if (data === null) return null;
-  if (data === undefined) return undefined;
-
-  if (path.length === 0) return data;
+const _get = (data: unknown, path: string[]): unknown => {
+  if (data === null) {
+    return null;
+  }
+  if (data === undefined) {
+    return undefined;
+  }
 
   const [key, ...rest] = path;
+  if (key === undefined) {
+    return data;
+  }
 
-  return _get(data[key!], rest);
+  return _get((Object(data) as Record<string, unknown>)[key], rest);
 };
 
 /**
@@ -365,8 +377,12 @@ export const retryPromiseLinearBackoff = async <R>(
     try {
       return await func();
     } catch (error) {
-      if (await onError?.(error, i)) throw new RetryStoppedError(i + 1, error);
-      if (!(++i < retries)) throw new RetriesExhaustedError(i, error);
+      if (await onError?.(error, i)) {
+        throw new RetryStoppedError(i + 1, error);
+      }
+      if (!(++i < retries)) {
+        throw new RetriesExhaustedError(i, error);
+      }
       await Time.wait(timeout * i);
     }
   }
@@ -531,7 +547,9 @@ export function getLastDefined<T>(array: T[]) {
  * ```
  */
 export function assertNonNegative(field: string, value: bigint) {
-  if (value < 0n) throw new NegativeValueError(field, value);
+  if (value < 0n) {
+    throw new NegativeValueError(field, value);
+  }
 }
 
 /**
@@ -556,8 +574,7 @@ export function deepFreeze<T>(obj: T): T {
   const propNames = Object.getOwnPropertyNames(obj);
 
   for (const name of propNames) {
-    // biome-ignore lint/suspicious/noExplicitAny: name is a property of obj
-    const value = (obj as any)[name];
+    const value = (obj as Record<string, unknown>)[name];
 
     if (value && typeof value === "object") {
       deepFreeze(value);

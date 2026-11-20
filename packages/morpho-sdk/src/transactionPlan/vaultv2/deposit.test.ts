@@ -20,19 +20,20 @@ import {
   IN_KIND_USER,
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import { computeVaultMaxSharePrice } from "../../helpers/index.js";
 import {
   ChainIdMismatchError,
   ExcessiveSlippageToleranceError,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   MissingContractCodeError,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   ReferralFeePctExceededError,
-  VaultAddressMismatchError,
 } from "../../types/index.js";
 import { ZeroAccountError } from "../error.js";
 import { buildTransactions } from "../plan.js";
@@ -41,12 +42,60 @@ import { prepareVaultV2Withdraw } from "./withdraw.js";
 
 const vaultData = inKindVaultV2Data();
 const params = {
-  vault: vaultData.address,
-  vaultData,
+  vault: vaultData,
   chainId: 1,
   account: IN_KIND_USER,
-  amount: 100n,
+  assets: 100n,
 };
+
+test.each([
+  { explicitNow: true, customExpiry: false },
+  { explicitNow: true, customExpiry: true },
+  { explicitNow: false, customExpiry: false },
+  { explicitNow: false, customExpiry: true },
+])(
+  "deposit uses reference time with explicitNow=$explicitNow and customExpiry=$customExpiry",
+  async ({ explicitNow, customExpiry }) => {
+    const chainNow = vaultData.lastUpdate;
+    const deviceNow = chainNow + 10_800n;
+    const now = explicitNow ? chainNow : deviceNow;
+    const expiresAt = customExpiry ? Number(chainNow + 1_200n) : undefined;
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: vaultData.asset,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: maxUint256,
+    });
+    const preparation = withChainTimestamp(deviceNow, () =>
+      prepareVaultV2Deposit(handle.client, {
+        ...params,
+        now: explicitNow ? chainNow : undefined,
+        expiresAt,
+      }),
+    );
+    if (!explicitNow && customExpiry) {
+      await expect(preparation).rejects.toThrow(ExpiredDeadlineError);
+      expect(handle.request).not.toHaveBeenCalled();
+      return;
+    }
+    const plan = await preparation;
+    const expectedExpiry = expiresAt ?? Number(now + 7_200n);
+    expect(plan.expiresAt).toBe(expectedExpiry);
+    const step = plan.steps.at(-1)!;
+    assert(step.action.type === "vaultV2Deposit");
+    expect(step.action.inputs.deadline).toBe(BigInt(expectedExpiry));
+    expect(step.action.inputs.maxSharePrice).toBe(
+      computeVaultMaxSharePrice({
+        vaultData,
+        deadline: BigInt(expectedExpiry),
+        assets: params.assets,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      }),
+    );
+    expect(buildTransactions(plan)).toHaveLength(1);
+  },
+);
 
 test.each([undefined, 0n, MAX_SLIPPAGE_TOLERANCE])(
   "deposit share-price bound uses slippage %s",
@@ -70,7 +119,7 @@ test.each([undefined, 0n, MAX_SLIPPAGE_TOLERANCE])(
       computeVaultMaxSharePrice({
         vaultData,
         deadline: BigInt(expiresAt),
-        assets: params.amount,
+        assets: params.assets,
         slippageTolerance: slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
       }),
     );
@@ -115,9 +164,9 @@ test("fee and slippage deposit calldata matches the entity flow", async () => {
   expect(plan.signatureRequests).toEqual([]);
   const entityTx = handle.client
     .extend(morphoViemExtension())
-    .morpho.vaultV2(params.vault, params.chainId)
+    .morpho.vaultV2(params.vault.address, params.chainId)
     .deposit({
-      amount: params.amount,
+      amount: params.assets,
       vaultData,
       userAddress: params.account,
       deadline: BigInt(expiresAt),
@@ -147,7 +196,7 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
     for (const bps of [0, 9999]) {
       const plan = await prepare(handle.client, {
         ...params,
-        amount: 10_000n,
+        assets: 10_000n,
         referralFee: { bps, recipient: IN_KIND_USER },
       });
       expect(plan.steps.at(-1)?.action.inputs).toMatchObject({
@@ -200,9 +249,9 @@ test("rejects the wrong chain before a failing allowance read", async () => {
   ).toBe(false);
 });
 
-test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
+test.for([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
   "%s starts requirements before code checks resolve",
-  async (prepare) => {
+  async (prepare, { expect: expectInTest }) => {
     const handle = createMockClient(mainnet);
     const request = handle.request.getMockImplementation()!;
     let release!: () => void;
@@ -222,7 +271,7 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
     });
     const pending = prepare(handle.client, params);
     try {
-      await expect
+      await expectInTest
         .poll(
           () => new Set(handle.request.mock.calls.map(([call]) => call.method)),
         )
@@ -264,14 +313,6 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
   },
 );
 
-test("rejects a snapshot for another vault before RPC reads", async () => {
-  const handle = createMockClient(mainnet);
-  await expect(
-    prepareVaultV2Deposit(handle.client, { ...params, vault: zeroAddress }),
-  ).rejects.toBeInstanceOf(VaultAddressMismatchError);
-  expect(handle.request).not.toHaveBeenCalled();
-});
-
 test.each([
   [0n, NonPositiveInputError],
   [-1n, NonPositiveInputError],
@@ -281,7 +322,7 @@ test.each([
   async (amount, error) => {
     const handle = createMockClient(mainnet);
     await expect(
-      prepareVaultV2Deposit(handle.client, { ...params, amount }),
+      prepareVaultV2Deposit(handle.client, { ...params, assets: amount }),
     ).rejects.toBeInstanceOf(error);
     expect(handle.request).not.toHaveBeenCalled();
   },
@@ -304,7 +345,7 @@ test("omits token prerequisites when allowance covers the deposit", async () => 
     address: vaultData.asset,
     abi: erc20Abi,
     functionName: "allowance",
-    result: params.amount,
+    result: params.assets,
   });
   const plan = await prepareVaultV2Deposit(handle.client, {
     ...params,
@@ -322,7 +363,7 @@ test("omits token prerequisites when allowance covers the deposit", async () => 
   expect(Object.isFrozen(plan)).toBe(true);
   expect(Object.isFrozen(plan.steps[0]?.action.inputs)).toBe(true);
   expect(plan.steps[0]?.action.inputs).toMatchObject({
-    amount: params.amount,
+    assets: params.assets,
     asset: vaultData.asset,
     chainId: params.chainId,
     account: params.account,
@@ -353,7 +394,7 @@ test("defaults to a direct approval instead of probing a permit", async () => {
   });
   const plan = await prepareVaultV2Deposit(handle.client, {
     ...params,
-    vaultData: snapshot,
+    vault: snapshot,
   });
   expect(plan.steps.map(({ action }) => action.type)).toEqual([
     "erc20Approval",
@@ -361,7 +402,7 @@ test("defaults to a direct approval instead of probing a permit", async () => {
   ]);
   expect(plan.steps[0]?.action.inputs).toMatchObject({
     token: asset,
-    amount: maxUint256,
+    assets: maxUint256,
   });
   expect(plan.signatureRequests).toEqual([]);
   expect(
@@ -387,7 +428,7 @@ test("orders reset approvals before the deposit with stable IDs and labels", asy
   });
   const plan = await prepareVaultV2Deposit(handle.client, {
     ...params,
-    vaultData: snapshot,
+    vault: snapshot,
   });
   expect(plan.steps.map(({ id, label }) => [id, label])).toEqual([
     ["vaultV2Deposit:approval", "Approve token spending"],
@@ -398,7 +439,7 @@ test("orders reset approvals before the deposit with stable IDs and labels", asy
     [0n, maxUint256].map((amount) => ({
       token: asset,
       spender: getChainAddress(1, "bundles.vaultBundlesV1"),
-      amount,
+      assets: amount,
       chainId: 1,
       account: params.account,
     })),
@@ -470,7 +511,7 @@ test("attaches a frozen concrete token permit by ID", async () => {
   });
   const plan = await prepareVaultV2Deposit(handle.client, {
     ...params,
-    vaultData: snapshot,
+    vault: snapshot,
     supportSignature: true,
     deployless: false,
     calldataOrigin: "0xcafe",
@@ -481,7 +522,7 @@ test("attaches a frozen concrete token permit by ID", async () => {
     kind: "permit",
     args: {
       spender: getChainAddress(1, "bundles.vaultBundlesV1"),
-      amount: params.amount,
+      amount: params.assets,
       nonce: 7n,
       deadline: BigInt(plan.expiresAt),
     },
@@ -514,18 +555,18 @@ test("native funding skips token requirements and builds a transaction with nati
   );
   const plan = await prepareVaultV2Deposit(handle.client, {
     ...params,
-    vaultData: snapshot,
+    vault: snapshot,
     funding: { type: "native" },
   });
   expect(plan.steps.map(({ action }) => action.type)).toEqual([
     "vaultV2Deposit",
   ]);
   expect(plan.steps[0]?.action.inputs).toMatchObject({
-    nativeAmount: params.amount,
+    nativeAssets: params.assets,
   });
-  expect(plan.steps[0]?.action.inputs).not.toHaveProperty("amount");
+  expect(plan.steps[0]?.action.inputs).not.toHaveProperty("assets");
   expect(plan.signatureRequests).toEqual([]);
-  expect(buildTransactions(plan)[0]?.value).toBe(params.amount);
+  expect(buildTransactions(plan)[0]?.value).toBe(params.assets);
   expect(
     handle.request.mock.calls.every(([call]) => call.method !== "eth_call"),
   ).toBe(true);

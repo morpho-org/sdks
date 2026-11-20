@@ -23,6 +23,7 @@ export const SIMULATION_ERROR_CODES = [
   "AMBIGUOUS_EXPECTED_QUOTE",
   "UNSUPPORTED_LIMIT_ACTION",
   "UNEXPECTED_TOKEN_APPROVAL",
+  "UNEXPECTED_TOKEN_TRANSFER",
   "UNEXPECTED_MORPHO_AUTHORIZATION",
   "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
   "APPROVAL_CHECK_UNAVAILABLE",
@@ -33,6 +34,13 @@ export const SIMULATION_ERROR_CODES = [
 export type SimulationErrorCode = (typeof SIMULATION_ERROR_CODES)[number];
 
 /**
+ * Default log level of an SDK error, named like pino's levels so it indexes a logger with no mapping.
+ * Every severity blocks the bundle: `simulate` returns no result for `warn` as for `fatal`. It is
+ * for logging and alerting only; a failed report's `severity` is the highest of its failures'.
+ */
+export type SimulationErrorSeverity = "fatal" | "error" | "warn";
+
+/**
  * Base class for SDK failures, including wrapped RPC errors. Transport-agnostic — no HTTP status codes.
  * Consumers pattern-match with `instanceof` on the concrete subclass.
  */
@@ -41,12 +49,13 @@ export abstract class SimulationPackageError extends Error {
   abstract readonly code: SimulationErrorCode;
 
   /**
-   * Other rejections from the same simulation in pipeline order, never this error and never nested.
-   * Empty unless attached by the SDK; these are additional rejections, never alternatives.
-   * Always set on package instances, but may be missing on legacy structural objects in 8.x.
-   * Becomes required in 9.0.0.
+   * Log level. Defaults to `"error"`; each of the four groups sets its own, and one class
+   * (`UnusedAuthorizationError`) overrides its group's. A direct subclass outside the groups inherits
+   * `"error"`.
+   * Every failure blocks the bundle whatever its severity; it is for logging and alerting only and is
+   * absent from the JSON error response. A failed report's `severity` is the highest of its failures'.
    */
-  readonly findings?: readonly SimulationPackageError[] = Object.freeze([]);
+  readonly severity: SimulationErrorSeverity = "error";
 
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -56,32 +65,46 @@ export abstract class SimulationPackageError extends Error {
 
 /**
  * Base class for failures where funds or permissions are at risk.
- * Every group rejects; these groups are not a severity scale.
+ * Every group blocks the bundle; groups say who acts, not how bad it is. Default severity: `"fatal"`.
  */
-export abstract class SimulationSafetyError extends SimulationPackageError {}
+export abstract class SimulationSafetyError extends SimulationPackageError {
+  /** Default log level of this group; every severity blocks the bundle. */
+  readonly severity: SimulationErrorSeverity = "fatal";
+}
 
 /**
  * Base class for failures where the user or caller acts.
- * Every group rejects; these groups are not a severity scale.
+ * Every group blocks the bundle; groups say who acts, not how bad it is. Default severity: `"warn"`.
  */
-export abstract class SimulationRejectedError extends SimulationPackageError {}
+export abstract class SimulationExecutionError extends SimulationPackageError {
+  /** Default log level of this group; every severity blocks the bundle. */
+  readonly severity: SimulationErrorSeverity = "warn";
+}
 
 /**
  * Base class for failures where the integrator fixes the request or configuration.
- * Every group rejects; these groups are not a severity scale.
+ * Every group blocks the bundle; groups say who acts, not how bad it is. Default severity: `"error"`.
  */
-export abstract class SimulationInvalidRequestError extends SimulationPackageError {}
+export abstract class SimulationInvalidRequestError extends SimulationPackageError {
+  /** Default log level of this group; every severity blocks the bundle. */
+  readonly severity: SimulationErrorSeverity = "error";
+}
 
 /**
  * Base class for failures where the operator investigates the RPC/node or a check that could not run.
- * Every group rejects; these groups are not a severity scale.
+ * Every group blocks the bundle; groups say who acts, not how bad it is. Default severity: `"error"`.
  */
-export abstract class SimulationInfrastructureError extends SimulationPackageError {}
+export abstract class SimulationInfrastructureError extends SimulationPackageError {
+  /** Default log level of this group; every severity blocks the bundle. */
+  readonly severity: SimulationErrorSeverity = "error";
+}
 
-/** A final-mode signed request has no matching use event in the user transactions. Extends {@link SimulationRejectedError}. */
-export class UnusedAuthorizationError extends SimulationRejectedError {
+/** A final-mode signed request has no matching use event in the user transactions. Extends {@link SimulationExecutionError}. */
+export class UnusedAuthorizationError extends SimulationExecutionError {
   override readonly name = "UnusedAuthorizationError";
   readonly code = "UNUSED_AUTHORIZATION";
+  /** `"error"`, not the group's `"warn"`: the signed request stays valid and the integrator assembled the bundle wrong. */
+  override readonly severity: SimulationErrorSeverity = "error";
 
   /**
    * Identify the signed request whose event evidence is missing.
@@ -100,8 +123,13 @@ export class UnusedAuthorizationError extends SimulationRejectedError {
       }
     >,
   ) {
+    const event = {
+      erc2612Permit: "Approval",
+      blueAuthorizationSignature: "IncrementNonce",
+      midnightAuthorizationSignature: "SetIsAuthorized",
+    }[authorization.type];
     super(
-      `Authorization "${authorizationIndex}" (${authorization.type}) has no matching ${authorization.type === "erc2612Permit" ? "Approval" : authorization.type === "blueAuthorizationSignature" ? "IncrementNonce" : "SetIsAuthorized"} event in the bundle. Include and execute the signed request in the final transactions.`,
+      `Authorization "${authorizationIndex}" (${authorization.type}) has no matching ${event} event in the bundle. Include and execute the signed request in the final transactions.`,
     );
   }
 }
@@ -111,7 +139,7 @@ export class UnusedAuthorizationError extends SimulationRejectedError {
  * Read `message` for the decoded error and every argument; use `revertData`
  * with a contract ABI for programmatic inspection. Messages are not stable codes.
  *
- * Extends {@link SimulationRejectedError}.
+ * Extends {@link SimulationExecutionError}.
  * @example
  * ```ts
  * import { SimulationRevertedError } from "@morpho-org/evm-simulation";
@@ -121,7 +149,7 @@ export class UnusedAuthorizationError extends SimulationRejectedError {
  * console.log(error.message, error.revertData);
  * ```
  */
-export class SimulationRevertedError extends SimulationRejectedError {
+export class SimulationRevertedError extends SimulationExecutionError {
   override readonly name = "SimulationRevertedError";
   readonly code = "SIMULATION_REVERTED";
 
@@ -150,7 +178,7 @@ export class SimulationRevertedError extends SimulationRejectedError {
  * state or its read reverted. The error includes a copy of the caller's
  * assertion (`to`, `data`, and `check`) and the read's raw return or revert data.
  *
- * Extends {@link SimulationRejectedError}.
+ * Extends {@link SimulationExecutionError}.
  * @example
  * ```ts
  * import {
@@ -170,7 +198,7 @@ export class SimulationRevertedError extends SimulationRejectedError {
  * console.log(error.phase, error.returnData); // "before", "0x"
  * ```
  */
-export class SimulationAssertError extends SimulationRejectedError {
+export class SimulationAssertError extends SimulationExecutionError {
   override readonly name = "SimulationAssertError";
   readonly code = "SIMULATION_ASSERT_FAILED";
   /** Zero-based index in the caller's transactions. */
@@ -221,7 +249,7 @@ export class SimulationAssertError extends SimulationRejectedError {
  * A caller-supplied `assertLogs` check did not hold for a simulated
  * transaction's emitted logs.
  *
- * Extends {@link SimulationRejectedError}.
+ * Extends {@link SimulationExecutionError}.
  * @example
  * ```ts
  * import {
@@ -239,7 +267,7 @@ export class SimulationAssertError extends SimulationRejectedError {
  * console.log(error.transactionIndex, error.logs);
  * ```
  */
-export class SimulationLogAssertError extends SimulationRejectedError {
+export class SimulationLogAssertError extends SimulationExecutionError {
   /** Stable discriminator used by consumers that inspect `error.name`. */
   override readonly name = "SimulationLogAssertError";
   /** Shares the existing error code for read-assertion failures. */
@@ -340,7 +368,11 @@ export class SimulationValidationError extends SimulationInvalidRequestError {
   }
 }
 
-/** Chain ID not configured for any simulation method. Not bypassable. Extends {@link SimulationInvalidRequestError}. */
+/**
+ * The request needs a Morpho contract address that Morpho's address registry
+ * does not list for the client's chain. Not bypassable.
+ * Extends {@link SimulationInvalidRequestError}.
+ */
 export class UnsupportedChainError extends SimulationInvalidRequestError {
   override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
@@ -349,7 +381,10 @@ export class UnsupportedChainError extends SimulationInvalidRequestError {
     public readonly chainId: number,
     options?: ErrorOptions,
   ) {
-    super(`Chain ${chainId} is not configured for simulation`, options);
+    super(
+      `Chain ${chainId} lacks a Morpho address this simulation needs in Morpho's address registry. Simulate on a chain where the required Morpho contracts are deployed.`,
+      options,
+    );
   }
 }
 
@@ -365,25 +400,12 @@ export class UnsupportedOperationError extends SimulationInvalidRequestError {
 
 /**
  * The simulation backend returned a response that cannot be parsed.
- * {@link InvalidChainIdError} subclasses this class and shares its `name`
- * and `code`; check `instanceof InvalidChainIdError` first to tell the two
- * apart.
  * Extends {@link SimulationInfrastructureError}.
  */
 export class InvalidSimulationResponseError extends SimulationInfrastructureError {
   override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
 }
-
-/**
- * The node rejected the request `chainId`: the endpoint is on a different
- * chain than configured. Callers must not bypass this configuration failure.
- * Extends {@link InvalidSimulationResponseError} and shares its `name` and
- * `code`, so v5 callers that match on either still catch it;
- * `instanceof InvalidChainIdError` is how to tell the two apart.
- * Extends {@link SimulationInfrastructureError}.
- */
-export class InvalidChainIdError extends InvalidSimulationResponseError {}
 
 /** Reasons a slippage check lacks usable evidence. */
 export const SLIPPAGE_CHECK_UNAVAILABLE_REASONS = [
@@ -421,8 +443,9 @@ export interface SlippageCheckUnavailable {
 
 /**
  * A slippage limit could not be checked because its quoted amount could not be read or measured.
- * Fields are optional in 8.x for constructor compatibility; the SDK sets the reason
- * and field, plus operation coordinates for operation-scoped failures.
+ * Fields are optional because the constructor accepts a message alone; every
+ * instance the SDK creates sets the reason and field, plus operation coordinates
+ * for operation-scoped failures.
  * Extends {@link SimulationInfrastructureError}.
  */
 export class SlippageCheckUnavailableError extends SimulationInfrastructureError {
@@ -451,6 +474,41 @@ export class SlippageCheckUnavailableError extends SimulationInfrastructureError
     this.operationType = options?.operationType;
     this.field = options?.field;
     this.reason = options?.reason;
+  }
+}
+
+/** A sender outflow uses a token not spendable by the declared operations. Extends {@link SimulationSafetyError}. */
+export class UnexpectedTokenTransferError extends SimulationSafetyError {
+  override readonly name = "UnexpectedTokenTransferError";
+  readonly code = "UNEXPECTED_TOKEN_TRANSFER";
+  /** Token whose movements are not declared. */
+  readonly token: Address;
+  /** Simulation owner losing or forwarding tokens. */
+  readonly sender: Address;
+  /** Recipients observed in parsed transfer events. */
+  readonly recipients: readonly Address[];
+
+  /**
+   * Identify the undeclared token, sender and observed recipients.
+   * @param params.token - Token whose sender movements are not declared.
+   * @param params.sender - Simulation owner losing or forwarding tokens.
+   * @param params.recipients - Observed recipients, empty when unknown.
+   */
+  constructor({
+    token,
+    sender,
+    recipients,
+  }: {
+    readonly token: Address;
+    readonly sender: Address;
+    readonly recipients: readonly Address[];
+  }) {
+    super(
+      `Unexpected transfer of token "${token}" from sender "${sender}" to ${recipients.length === 0 ? "an unknown recipient" : recipients.join(", ")}. Do not sign this request.`,
+    );
+    this.recipients = [...recipients];
+    this.token = token;
+    this.sender = sender;
   }
 }
 
@@ -655,8 +713,9 @@ export interface ConsumerLimitViolation {
 
 /**
  * A consumer-supplied limit was violated. The fields repeat what the message
- * says. They are optional in the type in 8.x; `simulate` always sets them.
- * Extends {@link SimulationRejectedError}.
+ * says. They are optional because the constructor accepts a message alone;
+ * every instance `simulate` reports sets them.
+ * Extends {@link SimulationExecutionError}.
  *
  * @example
  * ```ts
@@ -675,7 +734,7 @@ export interface ConsumerLimitViolation {
  * console.log(error.code, error.check, error.field); // "CONSUMER_LIMIT_VIOLATION", "slippageTolerance", "sharesMinted"
  * ```
  */
-export class ConsumerLimitViolationError extends SimulationRejectedError {
+export class ConsumerLimitViolationError extends SimulationExecutionError {
   override readonly name = "ConsumerLimitViolationError";
   readonly code = "CONSUMER_LIMIT_VIOLATION";
 
@@ -786,25 +845,30 @@ export class LimitAccountMismatchError extends SimulationInvalidRequestError {
     /** The address the action encodes, or the passed option when `field` is `"receiver"` or `"options.onBehalf"`. */
     readonly actual: Address;
   }) {
-    super(
-      mismatch.field === "receiver"
-        ? `receiver: "${mismatch.actual}" was passed, but this action pays ` +
-            `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
-            `receiver or set it to owner; only vaultV2ForceRedeem, ` +
-            `midnightRedeem, midnightTakeBorrow, ` +
-            `midnightSupplyCollateralTakeBorrow, midnightTakeWithdraw and a ` +
-            `collateral-withdrawing midnightRepayWithdrawCollateral or ` +
-            `midnightTakeRepayWithdrawCollateral encode a distinct receiver.`
-        : mismatch.field === "options.onBehalf"
-          ? `onBehalf: "${mismatch.actual}" was passed, but this action ` +
-            `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
-            `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
-            `and midnightRedeem act on a distinct account.`
-          : `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
-            `limit measures "${mismatch.expected}". Build the action for the ` +
-            `same account passed as owner/receiver, or as onBehalf on ` +
-            `midnightSupplyCollateral or midnightRedeem`,
-    );
+    let message: string;
+    if (mismatch.field === "receiver") {
+      message =
+        `receiver: "${mismatch.actual}" was passed, but this action pays ` +
+        `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
+        `receiver or set it to owner; only vaultV2ForceRedeem, ` +
+        `midnightRedeem, midnightTakeBorrow, ` +
+        `midnightSupplyCollateralTakeBorrow, midnightTakeWithdraw and a ` +
+        `collateral-withdrawing midnightRepayWithdrawCollateral or ` +
+        `midnightTakeRepayWithdrawCollateral encode a distinct receiver.`;
+    } else if (mismatch.field === "options.onBehalf") {
+      message =
+        `onBehalf: "${mismatch.actual}" was passed, but this action ` +
+        `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
+        `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
+        `and midnightRedeem act on a distinct account.`;
+    } else {
+      message =
+        `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
+        `limit measures "${mismatch.expected}". Build the action for the ` +
+        `same account passed as owner/receiver, or as onBehalf on ` +
+        `midnightSupplyCollateral or midnightRedeem`;
+    }
+    super(message);
     this.field = mismatch.field;
     this.expected = mismatch.expected;
     this.actual = mismatch.actual;
@@ -917,6 +981,7 @@ const ERROR_NAME_BY_CODE: Readonly<
   AMBIGUOUS_EXPECTED_QUOTE: ["AmbiguousExpectedQuoteError"],
   UNSUPPORTED_LIMIT_ACTION: ["UnsupportedLimitActionError"],
   UNEXPECTED_TOKEN_APPROVAL: ["UnexpectedTokenApprovalError"],
+  UNEXPECTED_TOKEN_TRANSFER: ["UnexpectedTokenTransferError"],
   UNEXPECTED_MORPHO_AUTHORIZATION: ["UnexpectedMorphoAuthorizationError"],
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: ["UnexpectedMidnightAuthorizationError"],
   APPROVAL_CHECK_UNAVAILABLE: ["ApprovalCheckUnavailableError"],
@@ -929,73 +994,45 @@ const ERROR_NAME_BY_CODE: Readonly<
  * @param value - Anything caught.
  * @returns `true` for package instances or objects carrying a message string,
  *   a known code and one of its matching class names. Subclass-specific fields
- *   are not checked. Legacy objects without `findings` are accepted; when present,
- *   findings must be an array whose entries also pass this guard and are flat:
- *   each entry's findings must be absent or an empty array.
- *   Findings are optional in 8.x and become required in 9.0.0.
- *   Read `e.findings ?? []` after the guard because findings remain optional.
+ *   are not checked. `severity` must be `"fatal"`, `"error"` or `"warn"`.
  * @example
  * ```ts
- * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
- * import type { Address, Hex } from "viem";
+ * import { isSimulationPackageError } from "@morpho-org/evm-simulation";
  *
- * declare const user: Address;
- * declare const vault: Address;
- * declare const encodedDeposit: Hex;
- * declare const depositAssets: bigint;
- * declare const quotedShares: bigint;
- * const config = {
- *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
- * };
- * try {
- *   await simulate(config, {
- *     chainId: 1,
- *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
- *     limits: {
- *       operations: [
- *         {
- *           type: "vaultV1Deposit",
- *           vault,
- *           quote: { assetsPaid: depositAssets, sharesMinted: quotedShares },
- *         },
- *       ],
- *     },
- *   });
- * } catch (e) {
- *   if (!isSimulationPackageError(e)) throw e;
- *   if (e.code !== "SIMULATION_REVERTED") throw e;
- *   console.log(e.code, e.message);
+ * // An error from another bundled copy of this package, where `instanceof` fails.
+ * // A worker's structured clone drops `code` and `severity`; post a plain object instead.
+ * declare const received: unknown;
+ * if (isSimulationPackageError(received)) {
+ *   console.log(received.code, received.severity, received.message);
  * }
  * ```
  */
 export function isSimulationPackageError(
   value: unknown,
 ): value is SimulationPackageError {
-  if (typeof value !== "object" || value === null) return false;
-  if (
-    "findings" in value &&
-    (!Array.isArray(value.findings) ||
-      !value.findings.every(
-        (entry: unknown) =>
-          typeof entry === "object" &&
-          entry !== null &&
-          (!("findings" in entry) ||
-            (Array.isArray(entry.findings) && entry.findings.length === 0)) &&
-          isSimulationPackageError(entry),
-      ))
-  )
+  if (typeof value !== "object" || value === null) {
     return false;
-  if (value instanceof SimulationPackageError) return true;
+  }
+  if (value instanceof SimulationPackageError) {
+    return true;
+  }
   const { name, message, code } = value as {
     name?: unknown;
     message?: unknown;
     code?: unknown;
   };
-  if (typeof message !== "string") return false;
-  if (typeof name !== "string" || typeof code !== "string") return false;
-  if (!(SIMULATION_ERROR_CODES as readonly string[]).includes(code))
+  if (typeof message !== "string") {
     return false;
-  if (!ERROR_NAME_BY_CODE[code as SimulationErrorCode].includes(name))
+  }
+  if (typeof name !== "string" || typeof code !== "string") {
     return false;
-  return true;
+  }
+  if (!(SIMULATION_ERROR_CODES as readonly string[]).includes(code)) {
+    return false;
+  }
+  if (!ERROR_NAME_BY_CODE[code as SimulationErrorCode].includes(name)) {
+    return false;
+  }
+  const { severity } = value as { severity?: unknown };
+  return severity === "fatal" || severity === "error" || severity === "warn";
 }

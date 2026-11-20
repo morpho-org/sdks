@@ -8,7 +8,20 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   ReferralFeePctExceededError,
+  VaultAddressMismatchError,
 } from "./error.js";
+
+test("VaultAddressMismatchError exposes expected and actual without changing its message", () => {
+  const expected = "0x0000000000000000000000000000000000000001";
+  const actual = "0x0000000000000000000000000000000000000002";
+  const error = new VaultAddressMismatchError(expected, actual);
+  expect(error).toBeInstanceOf(Error);
+  expect(error.name).toBe("VaultAddressMismatchError");
+  expect(error).toMatchObject({ expected, actual });
+  expect(error.message).toBe(
+    `Vault address mismatch between vault: ${expected} and args: ${actual}`,
+  );
+});
 
 describe("NegativeInputError", () => {
   test("default", () => {

@@ -2,7 +2,11 @@ import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { metaMorphoAbi } from "@morpho-org/morpho-ts/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -20,16 +24,18 @@ import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
-  simulate,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
-// Pinned with the bundles deployments the verified pipeline routes through —
-// the shared 24_593_903 pin in `test/setup.ts` predates them.
+// Pinned after the bundles deployments the verified pipeline routes through.
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -66,11 +72,9 @@ const WstethWethBlue = new MarketParams({
   lltv: 945_000_000_000_000_000n,
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  // Cold fork reads may exceed the production default while fetching upstream state.
-  timeoutMs: 30_000,
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  // Cold fork reads may exceed viem's default timeout while fetching upstream state.
+  simulationClientFor(client.transport.url, mainnet);
 
 describe.sequential("simulate — real revert propagation", () => {
   test("error: SimulationRevertedError for insufficient ERC-20 balance", async ({
@@ -100,8 +104,7 @@ describe.sequential("simulate — real revert propagation", () => {
 
     const tx = action.buildTx();
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -145,8 +148,7 @@ describe.sequential("simulate — real native funding", () => {
     expect(tx.value).toBe(assets);
 
     await client.setBalance({ address: client.account.address, value: 0n });
-    const error = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const error = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -185,8 +187,7 @@ describe.sequential("simulate — real native funding", () => {
       .buildTx();
 
     await client.setBalance({ address: client.account.address, value: assets });
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -269,8 +270,7 @@ describe.sequential("simulate — sequential state and stable indices", () => {
     });
     await client.deal({ erc20: WETH, amount: supplies[2]![2] });
 
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: supplies.map(([marketParams, asset]) => ({
           type: "blueSupply" as const,
@@ -363,8 +363,7 @@ describe.sequential("simulate — named revert errors", () => {
     test(`error: ${name} preserves all revert arguments`, async ({
       client,
     }) => {
-      const error = await simulate(configFor(client), {
-        chainId: mainnet.id,
+      const error = await simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -415,8 +414,7 @@ describe.sequential("simulate — named revert errors", () => {
       args: [RE7_WETH, assets],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         transactions: [
           {
@@ -479,8 +477,7 @@ describe.sequential("simulate — account attribution", () => {
     });
 
     await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -539,8 +536,7 @@ describe.sequential("simulate — account attribution", () => {
       ],
     });
 
-    const denied = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const denied = simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {

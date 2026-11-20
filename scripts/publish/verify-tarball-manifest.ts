@@ -25,8 +25,8 @@ const NPMJS_REGISTRY_URLS = new Set([
 const NPM_NAME_PATTERN =
   /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
-// Official semver regex from https://semver.org (no leading `v`, no whitespace).
-const SEMVER_PATTERN =
+/** Official SemVer regex from https://semver.org; shared with release verifiers. */
+export const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
 /** The part of a packed package manifest this validator inspects. */

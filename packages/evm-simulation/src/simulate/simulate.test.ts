@@ -10,7 +10,7 @@ import {
 } from "../errors.js";
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
-import type { SimulationConfig } from "../types.js";
+import { simulationClientFor } from "../test-helpers/index.js";
 import type { runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
 
@@ -29,19 +29,12 @@ const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
 
-function makeConfig(
-  overrides: Partial<SimulationConfig> = {},
-): SimulationConfig {
-  return {
-    chains: new Map([[1, { simulateV1Url: "http://localhost:8545" }]]),
-    timeoutMs: 5000,
-    ...overrides,
-  };
+function makeConfig() {
+  return simulationClientFor("http://localhost:8545", 1);
 }
 
 function makeParams(overrides: object = {}): SimulateParams {
   return {
-    chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
     limits: "none",
@@ -71,16 +64,18 @@ function makeResult(): VerifiedSimulationResult {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRunSimulation.mockResolvedValue(makeResult());
+  mockRunSimulation.mockResolvedValue({ ok: true, result: makeResult() });
 });
 
 describe.sequential("simulate — pipeline delegation", () => {
   it("delegates to runSimulation with the parsed request and config", async () => {
-    const result = await simulate(makeConfig(), makeParams());
-    expect(result).toEqual(makeResult());
+    const config = makeConfig();
+    const result = await simulate(config, makeParams());
+    expect(result).toEqual({ ok: true, result: makeResult() });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
     const arg = mockRunSimulation.mock.calls[0]![0];
-    expect(arg.config).toEqual(makeConfig());
+    expect(arg.client.chain.id).toBe(1);
+    expect(arg.options).toEqual({});
     expect(arg.request.chainId).toBe(1);
   });
 
@@ -111,7 +106,7 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeConfig(),
       makeParams({ mode: "preview" }),
     );
-    expect(result).toEqual(makeResult());
+    expect(result).toEqual({ ok: true, result: makeResult() });
   });
 
   it("preview with authorizations executes through the pipeline", async () => {
@@ -128,7 +123,7 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeConfig(),
       makeParams({ mode: "preview", authorizations }),
     );
-    expect(result).toEqual(makeResult());
+    expect(result).toEqual({ ok: true, result: makeResult() });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
@@ -147,29 +142,59 @@ describe.sequential("simulate — pipeline delegation", () => {
         },
       }),
     );
-    expect(result).toEqual(makeResult());
+    expect(result).toEqual({ ok: true, result: makeResult() });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
-  it("missing limits throws SimulationValidationError", async () => {
-    await expect(
-      simulate(makeConfig(), makeParams({ limits: undefined } as never)),
-    ).rejects.toThrow(SimulationValidationError);
+  it("missing limits reports SimulationValidationError", async () => {
+    const report = await simulate(
+      makeConfig(),
+      makeParams({ limits: undefined } as never),
+    );
+    expect(report.ok).toBe(false);
+    expect(!report.ok && report.failures[0]).toBeInstanceOf(
+      SimulationValidationError,
+    );
     expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
-  it("legacy signature authorization variant throws SimulationValidationError", async () => {
-    await expect(
-      simulate(
-        makeConfig(),
-        makeParams({
-          mode: "preview",
-          authorizations: [
-            { type: "signature", token: USDC, spender: SPENDER },
-          ],
-        }),
-      ),
-    ).rejects.toThrow(SimulationValidationError);
+  it("params.chainId reports SimulationValidationError", async () => {
+    const report = await simulate(
+      makeConfig(),
+      makeParams({ chainId: 8453 } as never),
+    );
+    expect(!report.ok && report.failures).toEqual([
+      expect.any(SimulationValidationError),
+    ]);
+    expect(mockRunSimulation).not.toHaveBeenCalled();
+  });
+
+  it("client without chain reports SimulationValidationError", async () => {
+    const report = await simulate(
+      { ...makeConfig(), chain: undefined } as never,
+      makeParams(),
+    );
+    expect(!report.ok && report.failures).toEqual([
+      expect.any(SimulationValidationError),
+    ]);
+    const [failure] = report.ok ? [] : report.failures;
+    expect((failure as SimulationValidationError).fieldErrors).toContain(
+      "client.chain.id: must be a positive safe integer",
+    );
+    expect(mockRunSimulation).not.toHaveBeenCalled();
+  });
+
+  it("legacy signature authorization variant reports SimulationValidationError", async () => {
+    const report = await simulate(
+      makeConfig(),
+      makeParams({
+        mode: "preview",
+        authorizations: [{ type: "signature", token: USDC, spender: SPENDER }],
+      }),
+    );
+    expect(!report.ok && report.failures).toEqual([
+      expect.any(SimulationValidationError),
+    ]);
     expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
@@ -196,31 +221,38 @@ describe.sequential("simulate — error propagation", () => {
     expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
-  it("propagates SimulationRevertedError from the pipeline", async () => {
-    mockRunSimulation.mockRejectedValueOnce(
-      new SimulationRevertedError("ERC20: transfer amount exceeds balance"),
-    );
-    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
-      SimulationRevertedError,
-    );
+  it("passes a failure report from the pipeline through unchanged", async () => {
+    const report = {
+      ok: false,
+      severity: "error",
+      failures: [
+        new RpcTransportError("RPC failed"),
+        new SimulationRevertedError(
+          "ERC20: transfer amount exceeds balance",
+          undefined,
+        ),
+      ],
+    } as const;
+    mockRunSimulation.mockResolvedValueOnce(report);
+    await expect(simulate(makeConfig(), makeParams())).resolves.toBe(report);
   });
 
   it.each([
     new RpcTransportError("RPC failed"),
     new SimulationRevertedError("reverted", "0xdeadbeef"),
     new UnsupportedChainError(999999),
-  ])(
-    "preserves $name and never returns a transaction on failure",
-    async (error) => {
-      mockRunSimulation.mockRejectedValueOnce(error);
-      const returnTransaction = vi.fn();
-      await expect(
-        simulate(makeConfig(), makeParams()).then(returnTransaction),
-      ).rejects.toBe(error);
-      expect(returnTransaction).not.toHaveBeenCalled();
-      expect(mockRunSimulation).toHaveBeenCalledTimes(1);
-    },
-  );
+  ])("reports a thrown $name alone and exposes no result", async (error) => {
+    mockRunSimulation.mockRejectedValueOnce(error);
+    const report = await simulate(makeConfig(), makeParams());
+    expect(report).toEqual({
+      ok: false,
+      severity: error.severity,
+      failures: [error],
+    });
+    expect(report.ok ? report.result : undefined).toBeUndefined();
+    expect(Object.isFrozen(report)).toBe(true);
+    expect(mockRunSimulation).toHaveBeenCalledTimes(1);
+  });
 
   it("wraps local viem errors with UnexpectedSimulationError, not RpcTransportError", async () => {
     const cause = new BaseError("Address is invalid.");
@@ -253,10 +285,11 @@ describe.sequential("simulate — error propagation", () => {
     },
   );
 
-  it("propagates UnsupportedChainError", async () => {
+  it("reports UnsupportedChainError", async () => {
     mockRunSimulation.mockRejectedValueOnce(new UnsupportedChainError(999999));
-    await expect(
-      simulate(makeConfig(), makeParams({ chainId: 999999 })),
-    ).rejects.toThrow(UnsupportedChainError);
+    const report = await simulate(makeConfig(), makeParams());
+    expect(!report.ok && report.failures).toEqual([
+      expect.any(UnsupportedChainError),
+    ]);
   });
 });

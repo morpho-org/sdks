@@ -137,6 +137,8 @@ type WdkProvider = {
   ) => Promise<unknown>;
 };
 
+type WdkRequestBody = Parameters<Eip1193Provider["request"]>[0];
+
 type ViemPublicClient = Client<Transport, Chain> &
   PublicActions<Transport, Chain>;
 
@@ -814,7 +816,9 @@ type NormalizedDepositAmounts =
 function snapshotRequirementSignature<TSignature extends RequirementSignature>(
   signature: TSignature | undefined,
 ): TSignature | undefined {
-  if (signature === undefined) return undefined;
+  if (signature === undefined) {
+    return undefined;
+  }
 
   return {
     ...signature,
@@ -857,7 +861,9 @@ function normalizeDepositAmounts({
       throw new NegativeInputError(field, BigInt(value));
     }
   }
-  if (amount !== undefined) return { amount: normalizeAmount(amount) };
+  if (amount !== undefined) {
+    return { amount: normalizeAmount(amount) };
+  }
   if (nativeAmount !== undefined) {
     return { nativeAmount: normalizeAmount(nativeAmount, "nativeAmount") };
   }
@@ -867,7 +873,9 @@ function normalizeDepositAmounts({
 function snapshotRequirementSignatureOptions<
   TOptions extends { readonly requirementSignature?: RequirementSignature },
 >(options: TOptions): TOptions {
-  if (options.requirementSignature === undefined) return { ...options };
+  if (options.requirementSignature === undefined) {
+    return { ...options };
+  }
 
   return {
     ...options,
@@ -902,7 +910,9 @@ function normalizeBorrowOptions(
 function normalizeTransactionConfig(
   config: Erc4337TransactionConfig | undefined,
 ): Erc4337TransactionConfig | undefined {
-  if (config === undefined) return undefined;
+  if (config === undefined) {
+    return undefined;
+  }
 
   return "paymasterToken" in config && config.paymasterToken !== undefined
     ? { ...config, paymasterToken: { ...config.paymasterToken } }
@@ -943,6 +953,228 @@ function toWdkTransaction(tx: {
     value: tx.value ?? 0n,
     data: tx.data,
   };
+}
+
+function createWdkProvider(accountProvider: WdkProvider): Eip1193Provider {
+  return {
+    async request(args) {
+      const body = { method: args.method, params: args.params ?? [] };
+      try {
+        const currentRequest = accountProvider.request;
+        if (currentRequest !== undefined) {
+          return await currentRequest.call(accountProvider, args);
+        }
+        const currentSend = accountProvider.send as NonNullable<
+          WdkProvider["send"]
+        >;
+        return await currentSend.call(
+          accountProvider,
+          args.method,
+          args.params ?? [],
+        );
+      } catch (error) {
+        throw normalizeWdkProviderError(error, body);
+      }
+    },
+  };
+}
+
+function normalizeWdkProviderError(
+  error: unknown,
+  body: WdkRequestBody,
+): unknown {
+  if (
+    error instanceof BaseError ||
+    typeof error !== "object" ||
+    error === null
+  ) {
+    return error;
+  }
+  const errorMessage: unknown = Reflect.get(error, "message");
+  const providerError =
+    error instanceof Error
+      ? error
+      : Object.assign(
+          new Error(
+            typeof errorMessage === "string"
+              ? errorMessage
+              : "WDK account provider rejection",
+          ),
+          { cause: error },
+        );
+  const errorCode: unknown = Reflect.get(error, "code");
+  const isDomException =
+    typeof DOMException !== "undefined" && error instanceof DOMException;
+  const isTimeout =
+    (isDomException &&
+      (error.name === "TimeoutError" || error.name === "AbortError")) ||
+    errorCode === "TIMEOUT";
+  if (isTimeout) {
+    const timeoutError = new TimeoutError({
+      body,
+      url: WDK_ACCOUNT_PROVIDER_URL,
+    });
+    Object.defineProperty(timeoutError, "cause", {
+      value: providerError,
+      configurable: true,
+      writable: true,
+    });
+    return timeoutError;
+  }
+  if (isDomException) {
+    return error;
+  }
+
+  const context = { body, providerError, errorCode, errorMessage };
+  return (
+    getWdkRpcError(error, context) ?? getWdkHttpError(error, context) ?? error
+  );
+}
+
+function getWdkRpcError(
+  error: object,
+  {
+    body,
+    providerError,
+    errorCode,
+    errorMessage,
+  }: {
+    body: WdkRequestBody;
+    providerError: Error;
+    errorCode: unknown;
+    errorMessage: unknown;
+  },
+): RpcRequestError | undefined {
+  const info: unknown = Reflect.get(error, "info");
+  const infoError: unknown =
+    typeof info === "object" && info !== null
+      ? Reflect.get(info, "error")
+      : undefined;
+  const nestedError: unknown = Reflect.get(error, "error") ?? infoError;
+  const nestedCode: unknown =
+    typeof nestedError === "object" && nestedError !== null
+      ? Reflect.get(nestedError, "code")
+      : undefined;
+  const nestedMessage: unknown =
+    typeof nestedError === "object" && nestedError !== null
+      ? Reflect.get(nestedError, "message")
+      : undefined;
+  for (const candidate of [
+    { source: nestedError, code: nestedCode, message: nestedMessage },
+    { source: error, code: errorCode, message: errorMessage },
+  ]) {
+    if (
+      typeof candidate.source !== "object" ||
+      candidate.source === null ||
+      typeof candidate.code !== "number" ||
+      !Number.isInteger(candidate.code) ||
+      typeof candidate.message !== "string"
+    ) {
+      continue;
+    }
+    const data: unknown = Reflect.get(candidate.source, "data");
+    const rpcError = new RpcRequestError({
+      body,
+      error: {
+        code: candidate.code,
+        message: candidate.message,
+        ...(data === undefined ? {} : { data }),
+      },
+      url: WDK_ACCOUNT_PROVIDER_URL,
+    });
+    // viem's RpcRequestError constructor doesn't accept a `cause`.
+    Object.defineProperty(rpcError, "cause", {
+      value: providerError,
+      configurable: true,
+      writable: true,
+    });
+    return rpcError;
+  }
+  return undefined;
+}
+
+function getWdkHttpError(
+  error: object,
+  {
+    body,
+    providerError,
+    errorCode,
+  }: {
+    body: WdkRequestBody;
+    providerError: Error;
+    errorCode: unknown;
+  },
+): HttpRequestError | undefined {
+  const cause: unknown = Reflect.get(error, "cause");
+  const causeCode: unknown =
+    typeof cause === "object" && cause !== null
+      ? Reflect.get(cause, "code")
+      : undefined;
+  const errorName: unknown = Reflect.get(error, "name");
+  const details =
+    typeof errorCode === "string"
+      ? `WDK account provider error (${errorCode})`
+      : `WDK account provider error (${typeof errorName === "string" ? errorName : "unknown"})`;
+  if (
+    errorCode === "NETWORK_ERROR" ||
+    [errorCode, causeCode].some(
+      (code) =>
+        typeof code === "string" &&
+        (NETWORK_ERROR_CODES.has(code) || code.startsWith("UND_ERR_")),
+    )
+  ) {
+    return new HttpRequestError({
+      body,
+      cause: providerError,
+      details,
+      url: WDK_ACCOUNT_PROVIDER_URL,
+    });
+  }
+
+  const response: unknown = Reflect.get(error, "response");
+  const responseStatus: unknown =
+    typeof response === "object" && response !== null
+      ? Reflect.get(response, "status")
+      : undefined;
+  const responseStatusCode: unknown =
+    typeof response === "object" && response !== null
+      ? Reflect.get(response, "statusCode")
+      : undefined;
+  const status = [
+    Reflect.get(error, "status"),
+    Reflect.get(error, "statusCode"),
+    responseStatus,
+    responseStatusCode,
+  ].find((value): value is number => typeof value === "number");
+  return status === undefined
+    ? undefined
+    : new HttpRequestError({
+        body,
+        cause: providerError,
+        details,
+        status,
+        url: WDK_ACCOUNT_PROVIDER_URL,
+      });
+}
+
+function getEoaTransactionMaxFee(
+  account: WalletAccountEvm,
+): bigint | undefined {
+  const walletConfig: unknown = Reflect.get(account, "_config");
+  if (typeof walletConfig !== "object" || walletConfig === null) {
+    throw new InvalidTransactionMaxFeeError(walletConfig);
+  }
+  const fee: unknown = Reflect.get(walletConfig, "transactionMaxFee");
+  if (fee === undefined || fee === null) {
+    return undefined;
+  }
+  if (typeof fee === "bigint" && fee >= 0n) {
+    return fee;
+  }
+  if (typeof fee === "number" && Number.isInteger(fee) && fee >= 0) {
+    return BigInt(fee);
+  }
+  throw new InvalidTransactionMaxFeeError(fee);
 }
 
 /**
@@ -1030,177 +1262,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       Array.isArray(provider) &&
       (typeof retries === "number" ? retries : DEFAULT_RETRIES) > 0;
     const accountProvider = Reflect.get(account, "_provider") as WdkProvider;
-    this._provider = {
-      request: async (args) => {
-        const body = { method: args.method, params: args.params ?? [] };
-        try {
-          const currentRequest = accountProvider.request;
-          if (currentRequest !== undefined) {
-            return await currentRequest.call(accountProvider, args);
-          }
-
-          const currentSend = accountProvider.send as NonNullable<
-            WdkProvider["send"]
-          >;
-          return await currentSend.call(
-            accountProvider,
-            args.method,
-            args.params ?? [],
-          );
-        } catch (error) {
-          if (error instanceof BaseError) {
-            throw error;
-          }
-          if (typeof error !== "object" || error === null) {
-            throw error;
-          }
-          const errorMessage: unknown = Reflect.get(error, "message");
-          const providerError =
-            error instanceof Error
-              ? error
-              : Object.assign(
-                  new Error(
-                    typeof errorMessage === "string"
-                      ? errorMessage
-                      : "WDK account provider rejection",
-                  ),
-                  { cause: error },
-                );
-          const errorCode: unknown = Reflect.get(error, "code");
-          const isDomException =
-            typeof DOMException !== "undefined" &&
-            error instanceof DOMException;
-          const isTimeout =
-            (isDomException &&
-              (error.name === "TimeoutError" || error.name === "AbortError")) ||
-            errorCode === "TIMEOUT";
-          if (isTimeout) {
-            const timeoutError = new TimeoutError({
-              body,
-              url: WDK_ACCOUNT_PROVIDER_URL,
-            });
-            Object.defineProperty(timeoutError, "cause", {
-              value: providerError,
-              configurable: true,
-              writable: true,
-            });
-            throw timeoutError;
-          }
-          if (isDomException) throw error;
-
-          const info: unknown = Reflect.get(error, "info");
-          const infoError: unknown =
-            typeof info === "object" && info !== null
-              ? Reflect.get(info, "error")
-              : undefined;
-          const nestedError: unknown = Reflect.get(error, "error") ?? infoError;
-          const nestedCode: unknown =
-            typeof nestedError === "object" && nestedError !== null
-              ? Reflect.get(nestedError, "code")
-              : undefined;
-          const nestedMessage: unknown =
-            typeof nestedError === "object" && nestedError !== null
-              ? Reflect.get(nestedError, "message")
-              : undefined;
-          const providerErrorCandidates = [
-            {
-              source: nestedError,
-              code: nestedCode,
-              message: nestedMessage,
-            },
-            {
-              source: error,
-              code: errorCode,
-              message: errorMessage,
-            },
-          ];
-          for (const candidate of providerErrorCandidates) {
-            if (
-              typeof candidate.source !== "object" ||
-              candidate.source === null ||
-              typeof candidate.code !== "number" ||
-              !Number.isInteger(candidate.code) ||
-              typeof candidate.message !== "string"
-            ) {
-              continue;
-            }
-
-            const data: unknown = Reflect.get(candidate.source, "data");
-            const rpcError = new RpcRequestError({
-              body,
-              error: {
-                code: candidate.code,
-                message: candidate.message,
-                ...(data === undefined ? {} : { data }),
-              },
-              url: WDK_ACCOUNT_PROVIDER_URL,
-            });
-            // viem's RpcRequestError/TimeoutError constructors don't accept a `cause`.
-            Object.defineProperty(rpcError, "cause", {
-              value: providerError,
-              configurable: true,
-              writable: true,
-            });
-            throw rpcError;
-          }
-
-          const cause: unknown = Reflect.get(error, "cause");
-          const causeCode: unknown =
-            typeof cause === "object" && cause !== null
-              ? Reflect.get(cause, "code")
-              : undefined;
-          const errorName: unknown = Reflect.get(error, "name");
-          const details =
-            typeof errorCode === "string"
-              ? `WDK account provider error (${errorCode})`
-              : `WDK account provider error (${typeof errorName === "string" ? errorName : "unknown"})`;
-          if (
-            errorCode === "NETWORK_ERROR" ||
-            [errorCode, causeCode].some(
-              (code) =>
-                typeof code === "string" &&
-                (NETWORK_ERROR_CODES.has(code) || code.startsWith("UND_ERR_")),
-            )
-          ) {
-            throw new HttpRequestError({
-              body,
-              cause: providerError,
-              details,
-              url: WDK_ACCOUNT_PROVIDER_URL,
-            });
-          }
-
-          const response: unknown = Reflect.get(error, "response");
-          const responseStatus: unknown =
-            typeof response === "object" && response !== null
-              ? Reflect.get(response, "status")
-              : undefined;
-          const responseStatusCode: unknown =
-            typeof response === "object" && response !== null
-              ? Reflect.get(response, "statusCode")
-              : undefined;
-          const errorStatus: unknown = Reflect.get(error, "status");
-          const errorStatusCode: unknown = Reflect.get(error, "statusCode");
-          const status = [
-            errorStatus,
-            errorStatusCode,
-            responseStatus,
-            responseStatusCode,
-          ].find((value): value is number => typeof value === "number");
-          if (status !== undefined) {
-            throw new HttpRequestError({
-              body,
-              cause: providerError,
-              details,
-              status,
-              url: WDK_ACCOUNT_PROVIDER_URL,
-            });
-          }
-
-          throw error;
-        }
-      },
-    };
+    this._provider = createWdkProvider(accountProvider);
 
     const accountChainId = "chainId" in config ? config.chainId : undefined;
     this._accountConfiguredChainId =
@@ -1575,8 +1637,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertWritable("withdraw(options)");
     const prepared = await this.prepareWithdraw(options);
     const requirements = await prepared.getRequirements();
-    if (requirements.length > 0)
+    if (requirements.length > 0) {
       throw new UnresolvedVaultWithdrawRequirementsError(requirements.length);
+    }
     return await prepared.submit(undefined, config);
   }
 
@@ -2359,13 +2422,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const operationConfig = normalizeTransactionConfig(config);
     const depositAmounts = normalizeDepositAmounts(operationOptions);
     const context = await this._getMarketContext();
-    if (depositAmounts.amount != null) {
+    if (depositAmounts.amount == null) {
+      this._assertAddress("token", operationOptions.token);
+    } else {
       await this._assertTokenBalance(context, {
         token: operationOptions.token,
         amount: depositAmounts.amount,
       });
-    } else {
-      this._assertAddress("token", operationOptions.token);
     }
 
     const tx = await this._getSupplyCollateralTransaction(
@@ -3090,7 +3153,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private _getViemChain(chainId: number): Chain {
     const known = SUPPORTED_CHAINS[chainId];
-    if (known) return known;
+    if (known) {
+      return known;
+    }
 
     return {
       id: chainId,
@@ -3128,7 +3193,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const observation = (async () => {
       await previousObservation?.catch(() => undefined);
       const result = await observedChain;
-      if (result.type === "failure") throw result.error;
+      if (result.type === "failure") {
+        throw result.error;
+      }
 
       const observedChainId = result.chainId;
       const context =
@@ -3400,334 +3467,367 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
     if (this._evmAccount instanceof WalletAccountEvmErc4337) {
-      const account = this._evmAccount;
-      if (typeof Reflect.get(account, "_signUserOperation") !== "function")
-        throw new UnsupportedOperationError(
-          "_signUserOperation (install the pinned @tetherto/wdk-wallet-evm-erc-4337 version to restore chain revalidation before signing and submission)",
-        );
-      const walletConfig: unknown = Reflect.get(account, "_config");
-      const effectiveConfig = {
-        ...(typeof walletConfig === "object" && walletConfig !== null
-          ? walletConfig
-          : {}),
-        ...config,
-      };
-      const isTokenPaymaster =
-        !(
-          "useNativeCoins" in effectiveConfig && effectiveConfig.useNativeCoins
-        ) && !("isSponsored" in effectiveConfig && effectiveConfig.isSponsored);
-      if (
-        isTokenPaymaster &&
-        typeof Reflect.get(account, "_getSmartAccount") !== "function"
-      )
-        throw new PaymasterApprovalGuardUnavailableError("_getSmartAccount");
-      const hasNonceLane =
-        ("nonceKey" in effectiveConfig &&
-          effectiveConfig.nonceKey !== undefined &&
-          effectiveConfig.nonceKey !== null) ||
-        ("parallel" in effectiveConfig && effectiveConfig.parallel === true);
-      await this._revalidate(prepared.context);
-
-      // WDK's quote cache omits config; a nonce lane forces a fresh build.
-      const operationConfig = hasNonceLane
-        ? config
-        : { ...config, nonceKey: 0n };
-      const paymasterAddress =
-        "paymasterAddress" in effectiveConfig
-          ? effectiveConfig.paymasterAddress
-          : undefined;
-      // WDK reads these protected hooks while signing. Bind the chain to the
-      // validated context so a provider switch cannot change the signature
-      // domain, and the fee-token approval to the configured paymaster.
-      const chainBoundAccount = new Proxy(account, {
-        // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
-        get: (target, property, receiver) => {
-          if (property === "_getChainId")
-            return async () => BigInt(prepared.context.chainId);
-          const value: unknown = Reflect.get(target, property, receiver);
-          if (property === "_signUserOperation" && typeof value === "function")
-            return async (...args: unknown[]) => {
-              // Reject switches during WDK's build before it signs.
-              await this._revalidate(prepared.context);
-              const signed: unknown = await Reflect.apply(
-                value,
-                receiver,
-                args,
-              );
-              // WDK calls the bundler immediately after this hook returns.
-              await this._revalidate(prepared.context);
-              return signed;
-            };
-          if (property !== "_getSmartAccount" || typeof value !== "function")
-            return value;
-          return async (...args: unknown[]) => {
-            const smartAccount: unknown = await Reflect.apply(
-              value,
-              receiver,
-              args,
-            );
-            if (typeof smartAccount !== "object" || smartAccount === null) {
-              if (isTokenPaymaster)
-                throw new PaymasterApprovalGuardUnavailableError(
-                  "_getSmartAccount",
-                );
-              return smartAccount;
-            }
-            if (
-              isTokenPaymaster &&
-              typeof Reflect.get(
-                smartAccount,
-                "prependTokenPaymasterApproveToCallData",
-              ) !== "function"
-            )
-              throw new PaymasterApprovalGuardUnavailableError(
-                "prependTokenPaymasterApproveToCallData",
-              );
-            // AbstractionKit takes the approval spender from the paymaster quote.
-            return new Proxy(smartAccount, {
-              // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
-              get(innerTarget, innerProperty, innerReceiver) {
-                const method: unknown = Reflect.get(
-                  innerTarget,
-                  innerProperty,
-                  innerReceiver,
-                );
-                if (
-                  innerProperty !== "prependTokenPaymasterApproveToCallData" ||
-                  typeof method !== "function"
-                )
-                  return method;
-                return (...approveArgs: unknown[]) => {
-                  const spender = approveArgs[2];
-                  if (
-                    !(
-                      typeof spender === "string" &&
-                      typeof paymasterAddress === "string" &&
-                      isAddress(spender, { strict: false }) &&
-                      isAddress(paymasterAddress, { strict: false }) &&
-                      isAddressEqual(spender, paymasterAddress)
-                    )
-                  )
-                    throw new PaymasterApprovalSpenderMismatchError(
-                      typeof spender === "string" ? spender : undefined,
-                      typeof paymasterAddress === "string"
-                        ? paymasterAddress
-                        : undefined,
-                    );
-                  return Reflect.apply(method, innerReceiver, approveArgs);
-                };
-              },
-            });
-          };
-        },
-      });
-
-      const result = await chainBoundAccount.sendTransaction(
-        prepared.transaction,
-        operationConfig,
+      return await this._sendErc4337Transaction(
+        { account: this._evmAccount, prepared },
+        config,
       );
-      if (!(isHex(result.hash, { strict: true }) && result.hash.length === 66))
-        throw new InvalidTransactionHashError(result.hash);
-      return result;
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
-      const address = (await this._evmAccount.getAddress()) as Address;
-      const key = `${prepared.context.chainId}:${address.toLowerCase()}`;
-      const previous = eoaSendQueues.get(key) ?? Promise.resolve();
-      let release!: () => void;
-      const tail = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      const entry = previous.then(() => tail);
-      eoaSendQueues.set(key, entry);
-      try {
-        await previous;
-        const walletConfig: unknown = Reflect.get(this._evmAccount, "_config");
-        if (typeof walletConfig !== "object" || walletConfig === null)
-          throw new InvalidTransactionMaxFeeError(walletConfig);
-        const transactionMaxFee: unknown = Reflect.get(
-          walletConfig,
-          "transactionMaxFee",
-        );
-        if (
-          transactionMaxFee !== undefined &&
-          transactionMaxFee !== null &&
-          !(
-            (typeof transactionMaxFee === "bigint" &&
-              transactionMaxFee >= 0n) ||
-            (typeof transactionMaxFee === "number" &&
-              Number.isInteger(transactionMaxFee) &&
-              transactionMaxFee >= 0)
-          )
-        )
-          throw new InvalidTransactionMaxFeeError(transactionMaxFee);
-        const maxFee =
-          typeof transactionMaxFee === "bigint"
-            ? transactionMaxFee
-            : typeof transactionMaxFee === "number"
-              ? BigInt(transactionMaxFee)
-              : undefined;
-        const { fee } = await this._evmAccount.quoteSendTransaction(
-          prepared.transaction,
-        );
-        const client = await this._getViemClient(prepared.context);
-        const transaction = await client.prepareTransactionRequest({
-          account: address,
-          chainId: prepared.context.chainId,
-          to: prepared.transaction.to,
-          value: prepared.transaction.value,
-          data: prepared.transaction.data,
-        });
-        const gasPriceOracle = client.chain?.contracts?.gasPriceOracle;
-        const gasPriceOracleAddress =
-          gasPriceOracle !== undefined && "address" in gasPriceOracle
-            ? gasPriceOracle.address
-            : undefined;
-        const feeParameters =
-          transaction.gasPrice === undefined
-            ? {
-                maxFeePerGas: transaction.maxFeePerGas,
-                maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
-              }
-            : { gasPrice: transaction.gasPrice };
-        if (maxFee !== undefined && gasPriceOracleAddress !== undefined) {
-          // Optimism and Base define the GasPriceOracle; WDK's cap omits L1 data and operator fees.
-          const serialized = serializeTransaction({
-            chainId: prepared.context.chainId,
-            to: transaction.to,
-            value: transaction.value,
-            data: transaction.data,
-            gas: transaction.gas,
-            nonce: transaction.nonce,
-            ...feeParameters,
-          });
-          const [l1Fee, operatorFee] = await Promise.all([
-            readContract(client, {
-              address: gasPriceOracleAddress,
-              abi: GAS_PRICE_ORACLE_ABI,
-              functionName: "getL1Fee",
-              args: [serialized],
-            }),
-            readContract(client, {
-              address: gasPriceOracleAddress,
-              abi: GAS_PRICE_ORACLE_ABI,
-              functionName: "getOperatorFee",
-              args: [transaction.gas],
-            }),
-          ]);
-          const executionFeePerGas =
-            transaction.maxFeePerGas ?? transaction.gasPrice;
-          const executionFee =
-            executionFeePerGas === undefined
-              ? fee
-              : transaction.gas * executionFeePerGas;
-          const execution = fee > executionFee ? fee : executionFee;
-          const totalFee = execution + l1Fee + operatorFee;
-          if (totalFee > maxFee)
-            throw new MaximumFeeExceededError(
-              `Transaction fee "${totalFee}" (execution "${execution}" + L1 "${l1Fee}" + operator "${operatorFee}") exceeds transactionMaxFee "${maxFee}". Raise transactionMaxFee or retry when L1 fees are lower.`,
-              {},
-            );
-        }
-        const signed = await this._evmAccount.signTransaction({
-          ...prepared.transaction,
-          chainId: prepared.context.chainId,
-          gasLimit: transaction.gas,
-          nonce: transaction.nonce,
-          ...feeParameters,
-        });
-        await this._revalidate(prepared.context);
-        const serializedTransaction = signed as `0x${string}`;
-        const signedChainId = parseTransaction(serializedTransaction).chainId;
-        if (signedChainId !== prepared.context.chainId) {
-          throw new ChainIdMismatchError(
-            signedChainId,
-            prepared.context.chainId,
-          );
-        }
-        let hash: Hash;
-        try {
-          // The returned hash is shape-checked but not compared with the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
-          hash = await client.sendRawTransaction({
-            serializedTransaction,
-          });
-        } catch (error) {
-          if (
-            error instanceof BaseError &&
-            error.walk(
-              (cause) =>
-                cause instanceof TimeoutError ||
-                (cause instanceof HttpRequestError &&
-                  (cause.status === undefined ||
-                    GATEWAY_UNCERTAIN_STATUSES.has(cause.status))),
-            )
-          ) {
-            throw new UnconfirmedBroadcastError(
-              keccak256(serializedTransaction),
-              serializedTransaction,
-              error,
-            );
-          }
-          const isReconciliationError =
-            error instanceof BaseError &&
-            error.walk(
-              (cause) =>
-                cause instanceof RpcRequestError ||
-                (cause instanceof HttpRequestError &&
-                  cause.status !== undefined),
-            );
-          // When a failover provider (array `provider` with retries) rejects or fails a send
-          // that an earlier endpoint may have accepted, reconcile even unrecognized errors.
-          if (!this._sendMayRetry && !isReconciliationError) {
-            throw error;
-          }
-          const localHash = keccak256(serializedTransaction);
-          let transactionFound = false;
-          try {
-            const foundTransaction = await client.getTransaction({
-              hash: localHash,
-            });
-            transactionFound = foundTransaction !== null;
-          } catch (lookupError) {
-            if (!(lookupError instanceof TransactionNotFoundError)) {
-              throw new UnconfirmedBroadcastError(
-                localHash,
-                serializedTransaction,
-                new AggregateError(
-                  [error, lookupError],
-                  "Broadcast and reconciliation lookup both failed",
-                ),
-              );
-            }
-          }
-          if (!transactionFound) {
-            if (this._sendMayRetry) {
-              throw new UnconfirmedBroadcastError(
-                localHash,
-                serializedTransaction,
-                error,
-              );
-            }
-            throw error;
-          }
-          hash = localHash;
-        }
-        if (!(isHex(hash, { strict: true }) && hash.length === 66)) {
-          throw new InvalidTransactionHashError(hash, {
-            localHash: keccak256(serializedTransaction),
-            serializedTransaction,
-          });
-        }
-
-        return { hash, fee };
-      } finally {
-        release();
-        if (eoaSendQueues.get(key) === entry) eoaSendQueues.delete(key);
-      }
+      return await this._sendEoaTransaction(this._evmAccount, prepared);
     }
     throw new ReadOnlyAccountError(
       "The method requires the protocol to be initialized with a non read-only account.",
     );
+  }
+
+  private async _sendErc4337Transaction(
+    {
+      account,
+      prepared,
+    }: { account: WalletAccountEvmErc4337; prepared: PreparedTransaction },
+    config?: Erc4337TransactionConfig,
+  ): Promise<SupplyResult> {
+    if (typeof Reflect.get(account, "_signUserOperation") !== "function") {
+      throw new UnsupportedOperationError(
+        "_signUserOperation (install the pinned @tetherto/wdk-wallet-evm-erc-4337 version to restore chain revalidation before signing and submission)",
+      );
+    }
+    const walletConfig: unknown = Reflect.get(account, "_config");
+    const effectiveConfig = {
+      ...(typeof walletConfig === "object" && walletConfig !== null
+        ? walletConfig
+        : {}),
+      ...config,
+    };
+    const isTokenPaymaster =
+      !(
+        "useNativeCoins" in effectiveConfig && effectiveConfig.useNativeCoins
+      ) && !("isSponsored" in effectiveConfig && effectiveConfig.isSponsored);
+    if (
+      isTokenPaymaster &&
+      typeof Reflect.get(account, "_getSmartAccount") !== "function"
+    ) {
+      throw new PaymasterApprovalGuardUnavailableError("_getSmartAccount");
+    }
+    const hasNonceLane =
+      ("nonceKey" in effectiveConfig &&
+        effectiveConfig.nonceKey !== undefined &&
+        effectiveConfig.nonceKey !== null) ||
+      ("parallel" in effectiveConfig && effectiveConfig.parallel === true);
+    await this._revalidate(prepared.context);
+
+    // WDK's quote cache omits config; a nonce lane forces a fresh build.
+    const operationConfig = hasNonceLane ? config : { ...config, nonceKey: 0n };
+    const paymasterAddress =
+      "paymasterAddress" in effectiveConfig
+        ? effectiveConfig.paymasterAddress
+        : undefined;
+    // WDK reads these protected hooks while signing. Bind the chain to the
+    // validated context so a provider switch cannot change the signature
+    // domain, and the fee-token approval to the configured paymaster.
+    const chainBoundAccount = new Proxy(account, {
+      // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
+      get: (target, property, receiver) => {
+        if (property === "_getChainId") {
+          return async () => BigInt(prepared.context.chainId);
+        }
+        const value: unknown = Reflect.get(target, property, receiver);
+        if (property === "_signUserOperation" && typeof value === "function") {
+          return async (...args: unknown[]) => {
+            // Reject switches during WDK's build before it signs.
+            await this._revalidate(prepared.context);
+            const signed: unknown = await Reflect.apply(value, receiver, args);
+            // WDK calls the bundler immediately after this hook returns.
+            await this._revalidate(prepared.context);
+            return signed;
+          };
+        }
+        if (property !== "_getSmartAccount" || typeof value !== "function") {
+          return value;
+        }
+        return async (...args: unknown[]) => {
+          const smartAccount: unknown = await Reflect.apply(
+            value,
+            receiver,
+            args,
+          );
+          if (typeof smartAccount !== "object" || smartAccount === null) {
+            if (isTokenPaymaster) {
+              throw new PaymasterApprovalGuardUnavailableError(
+                "_getSmartAccount",
+              );
+            }
+            return smartAccount;
+          }
+          if (
+            isTokenPaymaster &&
+            typeof Reflect.get(
+              smartAccount,
+              "prependTokenPaymasterApproveToCallData",
+            ) !== "function"
+          ) {
+            throw new PaymasterApprovalGuardUnavailableError(
+              "prependTokenPaymasterApproveToCallData",
+            );
+          }
+          // AbstractionKit takes the approval spender from the paymaster quote.
+          return new Proxy(smartAccount, {
+            // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
+            get(innerTarget, innerProperty, innerReceiver) {
+              const method: unknown = Reflect.get(
+                innerTarget,
+                innerProperty,
+                innerReceiver,
+              );
+              if (
+                innerProperty !== "prependTokenPaymasterApproveToCallData" ||
+                typeof method !== "function"
+              ) {
+                return method;
+              }
+              return (...approveArgs: unknown[]) => {
+                const spender = approveArgs[2];
+                if (
+                  !(
+                    typeof spender === "string" &&
+                    typeof paymasterAddress === "string" &&
+                    isAddress(spender, { strict: false }) &&
+                    isAddress(paymasterAddress, { strict: false }) &&
+                    isAddressEqual(spender, paymasterAddress)
+                  )
+                ) {
+                  throw new PaymasterApprovalSpenderMismatchError(
+                    typeof spender === "string" ? spender : undefined,
+                    typeof paymasterAddress === "string"
+                      ? paymasterAddress
+                      : undefined,
+                  );
+                }
+                return Reflect.apply(method, innerReceiver, approveArgs);
+              };
+            },
+          });
+        };
+      },
+    });
+
+    const result = await chainBoundAccount.sendTransaction(
+      prepared.transaction,
+      operationConfig,
+    );
+    if (!(isHex(result.hash, { strict: true }) && result.hash.length === 66)) {
+      throw new InvalidTransactionHashError(result.hash);
+    }
+    return result;
+  }
+
+  private async _sendEoaTransaction(
+    account: WalletAccountEvm,
+    prepared: PreparedTransaction,
+  ): Promise<SupplyResult> {
+    const address = (await account.getAddress()) as Address;
+    const key = `${prepared.context.chainId}:${address.toLowerCase()}`;
+    const previous = eoaSendQueues.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entry = previous.then(() => tail);
+    eoaSendQueues.set(key, entry);
+    try {
+      await previous;
+      return await this._signAndBroadcastEoaTransaction(
+        { account, prepared },
+        address,
+      );
+    } finally {
+      release();
+      if (eoaSendQueues.get(key) === entry) {
+        eoaSendQueues.delete(key);
+      }
+    }
+  }
+
+  private async _signAndBroadcastEoaTransaction(
+    {
+      account,
+      prepared,
+    }: { account: WalletAccountEvm; prepared: PreparedTransaction },
+    address: Address,
+  ): Promise<SupplyResult> {
+    const maxFee = getEoaTransactionMaxFee(account);
+    const { fee } = await account.quoteSendTransaction(prepared.transaction);
+    const client = await this._getViemClient(prepared.context);
+    const transaction = await client.prepareTransactionRequest({
+      account: address,
+      chainId: prepared.context.chainId,
+      to: prepared.transaction.to,
+      value: prepared.transaction.value,
+      data: prepared.transaction.data,
+    });
+    const gasPriceOracle = client.chain?.contracts?.gasPriceOracle;
+    const gasPriceOracleAddress =
+      gasPriceOracle !== undefined && "address" in gasPriceOracle
+        ? gasPriceOracle.address
+        : undefined;
+    const feeParameters =
+      transaction.gasPrice === undefined
+        ? {
+            maxFeePerGas: transaction.maxFeePerGas,
+            maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
+          }
+        : { gasPrice: transaction.gasPrice };
+    if (maxFee !== undefined && gasPriceOracleAddress !== undefined) {
+      // Optimism and Base define the GasPriceOracle; WDK's cap omits L1 data and operator fees.
+      const serialized = serializeTransaction({
+        chainId: prepared.context.chainId,
+        to: transaction.to,
+        value: transaction.value,
+        data: transaction.data,
+        gas: transaction.gas,
+        nonce: transaction.nonce,
+        ...feeParameters,
+      });
+      const [l1Fee, operatorFee] = await Promise.all([
+        readContract(client, {
+          address: gasPriceOracleAddress,
+          abi: GAS_PRICE_ORACLE_ABI,
+          functionName: "getL1Fee",
+          args: [serialized],
+        }),
+        readContract(client, {
+          address: gasPriceOracleAddress,
+          abi: GAS_PRICE_ORACLE_ABI,
+          functionName: "getOperatorFee",
+          args: [transaction.gas],
+        }),
+      ]);
+      const executionFeePerGas =
+        transaction.maxFeePerGas ?? transaction.gasPrice;
+      const executionFee =
+        executionFeePerGas === undefined
+          ? fee
+          : transaction.gas * executionFeePerGas;
+      const execution = fee > executionFee ? fee : executionFee;
+      const totalFee = execution + l1Fee + operatorFee;
+      if (totalFee > maxFee) {
+        throw new MaximumFeeExceededError(
+          `Transaction fee "${totalFee}" (execution "${execution}" + L1 "${l1Fee}" + operator "${operatorFee}") exceeds transactionMaxFee "${maxFee}". Raise transactionMaxFee or retry when L1 fees are lower.`,
+          {},
+        );
+      }
+    }
+    const signed = await account.signTransaction({
+      ...prepared.transaction,
+      chainId: prepared.context.chainId,
+      gasLimit: transaction.gas,
+      nonce: transaction.nonce,
+      ...feeParameters,
+    });
+    await this._revalidate(prepared.context);
+    const serializedTransaction = signed as `0x${string}`;
+    const signedChainId = parseTransaction(serializedTransaction).chainId;
+    if (signedChainId !== prepared.context.chainId) {
+      throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
+    }
+    const hash = await this._broadcastEoaTransaction(
+      client,
+      serializedTransaction,
+    );
+    return { hash, fee };
+  }
+
+  private async _broadcastEoaTransaction(
+    client: ViemPublicClient,
+    serializedTransaction: `0x${string}`,
+  ): Promise<Hash> {
+    let hash: Hash;
+    try {
+      // The returned hash is shape-checked but not compared with the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
+      hash = await client.sendRawTransaction({
+        serializedTransaction,
+      });
+    } catch (error) {
+      if (
+        error instanceof BaseError &&
+        error.walk(
+          (cause) =>
+            cause instanceof TimeoutError ||
+            (cause instanceof HttpRequestError &&
+              (cause.status === undefined ||
+                GATEWAY_UNCERTAIN_STATUSES.has(cause.status))),
+        )
+      ) {
+        throw new UnconfirmedBroadcastError(
+          keccak256(serializedTransaction),
+          serializedTransaction,
+          error,
+        );
+      }
+      hash = await this._reconcileEoaBroadcast(client, {
+        serializedTransaction,
+        error,
+      });
+    }
+    if (!(isHex(hash, { strict: true }) && hash.length === 66)) {
+      throw new InvalidTransactionHashError(hash, {
+        localHash: keccak256(serializedTransaction),
+        serializedTransaction,
+      });
+    }
+
+    return hash;
+  }
+
+  private async _reconcileEoaBroadcast(
+    client: ViemPublicClient,
+    {
+      serializedTransaction,
+      error,
+    }: { serializedTransaction: `0x${string}`; error: unknown },
+  ): Promise<Hash> {
+    const isReconciliationError =
+      error instanceof BaseError &&
+      error.walk(
+        (cause) =>
+          cause instanceof RpcRequestError ||
+          (cause instanceof HttpRequestError && cause.status !== undefined),
+      );
+    // When a failover provider (array `provider` with retries) rejects or fails a send
+    // that an earlier endpoint may have accepted, reconcile even unrecognized errors.
+    if (!this._sendMayRetry && !isReconciliationError) {
+      throw error;
+    }
+    const localHash = keccak256(serializedTransaction);
+    let transactionFound = false;
+    try {
+      const foundTransaction = await client.getTransaction({
+        hash: localHash,
+      });
+      transactionFound = foundTransaction !== null;
+    } catch (lookupError) {
+      if (!(lookupError instanceof TransactionNotFoundError)) {
+        throw new UnconfirmedBroadcastError(
+          localHash,
+          serializedTransaction,
+          new AggregateError(
+            [error, lookupError],
+            "Broadcast and reconciliation lookup both failed",
+          ),
+        );
+      }
+    }
+    if (!transactionFound) {
+      if (this._sendMayRetry) {
+        throw new UnconfirmedBroadcastError(
+          localHash,
+          serializedTransaction,
+          error,
+        );
+      }
+      throw error;
+    }
+    return localHash;
   }
 
   private async _quoteTransaction(

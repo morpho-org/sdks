@@ -65,7 +65,9 @@ const insertString = (
   let filler = "";
   if (offset < 0) {
     /* v8 ignore next -- callers only omit fillWith when offset stays non-negative. */
-    if (fillWith) filler = fillWith.repeat(-offset).slice(offset);
+    if (fillWith) {
+      filler = fillWith.repeat(-offset).slice(offset);
+    }
     offset = 0;
   }
   return value.slice(0, offset) + substr + filler + value.slice(offset);
@@ -148,10 +150,10 @@ const _formatCommas = (
     ? insertString(bi.toString(), -decimals, ".", "0")
     : bi.toString();
 
-  const [wholePart, decimalPart] = stringValue.split(".");
+  const [wholePart = "", decimalPart] = stringValue.split(".");
 
   return _applyOptions(
-    wholePart!.split("").reduce(
+    wholePart.split("").reduce(
       // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
       (formattedNumber, digit, i, arr) =>
         `${formattedNumber}${!i || (arr.length - i) % 3 ? "" : ","}${digit}`,
@@ -167,7 +169,9 @@ const _formatNumber = (
   decimals: number,
   formatOptions: Omit<FormatNumberOptions, "format">,
 ) => {
-  if (decimals === 0) return _applyOptions(bi.toString(), formatOptions);
+  if (decimals === 0) {
+    return _applyOptions(bi.toString(), formatOptions);
+  }
   return _applyOptions(
     insertString(bi.toString(), -decimals, ".", "0"),
     formatOptions,
@@ -175,7 +179,9 @@ const _formatNumber = (
 };
 
 const _withUnit = (value: string, unit?: string) => {
-  if (!unit) return value;
+  if (!unit) {
+    return value;
+  }
   switch (unit) {
     case "$":
       return `$${value}`;
@@ -220,19 +226,22 @@ const _applyOptions = (
     formatOptions.digits &&
     !isZero &&
     formatOptions.readable
-  )
+  ) {
     return `< 0${decimalSymbol}${"0".repeat(formatOptions.digits - 1)}1`;
+  }
 
   return value;
 };
 
 const numberToScaledBigInt = (value: number, decimals: number): bigint => {
   const str = decimals <= 100 ? value.toFixed(decimals) : value.toString();
-  const [significant, exp] = str.split(/[eE]/);
-  const [whole, digits = ""] = significant!.split(".");
+  const [significant = "", exp] = str.split(/[eE]/);
+  const [whole, digits = ""] = significant.split(".");
   const coefficient = BigInt(whole + digits);
   const shift = decimals + Number(exp ?? 0) - digits.length;
-  if (shift >= 0) return coefficient * 10n ** BigInt(shift);
+  if (shift >= 0) {
+    return coefficient * 10n ** BigInt(shift);
+  }
 
   const divisor = 10n ** BigInt(-shift);
   const magnitude = coefficient < 0n ? -coefficient : coefficient;
@@ -247,18 +256,22 @@ function formatBI(
   decimals: number,
   formatOptions: FormatOptions = { format: Format.hex },
 ): string {
-  if (formatOptions.format === Format.hex)
+  if (formatOptions.format === Format.hex) {
     return (formatOptions.prefix ? "0x" : "") + bi.toString(16);
+  }
 
   if (formatOptions.max != null) {
     const maxBI = numberToScaledBigInt(formatOptions.max, decimals);
-    if (bi > maxBI) return `> ${formatBI(maxBI, decimals, formatOptions)}`;
+    if (bi > maxBI) {
+      return `> ${formatBI(maxBI, decimals, formatOptions)}`;
+    }
   }
 
   if (formatOptions.min != null) {
     const minBI = numberToScaledBigInt(formatOptions.min, decimals);
-    if (bi < minBI && bi !== 0n)
+    if (bi < minBI && bi !== 0n) {
       return `< ${formatBI(minBI, decimals, formatOptions)}`;
+    }
   }
 
   let value: string;
@@ -280,10 +293,11 @@ function formatBI(
       break;
   }
 
-  return (
-    (isNegative && /[1-9]/.test(value) ? "-" : formatOptions.sign ? "+" : "") +
-    _withUnit(value, formatOptions.unit)
-  );
+  let sign = formatOptions.sign ? "+" : "";
+  if (isNegative && /[1-9]/.test(value)) {
+    sign = "-";
+  }
+  return sign + _withUnit(value, formatOptions.unit);
 }
 
 type FormatterWithDefault<F extends BaseFormatter> = {
@@ -328,7 +342,9 @@ export abstract class BaseFormatter {
   default(_d: string): FormatterWithDefault<this>;
   default(_d: string | undefined | null): this;
   default(_d: string | undefined | null) {
-    if (_d == null) return this;
+    if (_d == null) {
+      return this;
+    }
     const newOptions = { ...this._options, default: _d };
 
     return this._clone(newOptions) as FormatterWithDefault<this>;
@@ -360,6 +376,8 @@ export abstract class BaseFormatter {
    *  - The default value `value` or `decimals` is `null` or `undefined`.
    *  - `null`or `undefined` in case `value` or `decimals` is `null` or `undefined` and no default value is set
    *
+   * @throws {MissingLocalePartError} when formatting a non-hex value and the number formatter omits a required separator.
+   *
    * @example
    * // Example with bigint input
    * console.log(formatter.of(123456789n, 2)); // Output: "1234567.89"
@@ -383,25 +401,29 @@ export abstract class BaseFormatter {
     value: bigint | number | null | undefined,
     decimals?: number | null | undefined,
   ) {
-    if (value == null || (typeof value === "bigint" && decimals == null))
-      return this._options.default ?? (value == null ? value : decimals);
+    if (value == null) {
+      return this._options.default ?? value;
+    }
 
     if (typeof value === "number") {
-      if (!Number.isFinite(value))
+      if (!Number.isFinite(value)) {
         return this._options.default ?? String(value);
+      }
       const str = value.toString();
-      const [significant, exp] = str.split(/[eE]/);
-      const [, digits = ""] = significant!.split(".");
+      const [significant = "", exp] = str.split(/[eE]/);
+      const [, digits = ""] = significant.split(".");
 
       const numberExp = Number(exp ?? 0);
 
-      // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-      decimals = Math.max(0, digits.length - numberExp);
-      // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-      value = numberToScaledBigInt(value, decimals);
+      const numberDecimals = Math.max(0, digits.length - numberExp);
+      const scaledValue = numberToScaledBigInt(value, numberDecimals);
+      return formatBI(scaledValue, numberDecimals, this._options);
     }
 
-    return formatBI(value, decimals!, this._options);
+    if (decimals == null) {
+      return this._options.default ?? decimals;
+    }
+    return formatBI(value, decimals, this._options);
   }
 }
 
@@ -456,7 +478,9 @@ export abstract class CommonFormatter extends BaseFormatter {
    * console.log(updatedFormatter.of(1234.567)); // Output: "1234.57"
    */
   digits(_d: number | undefined | null) {
-    if (_d == null) return this;
+    if (_d == null) {
+      return this;
+    }
     const newOptions = { ...this._options, digits: _d };
 
     return this._clone(newOptions);
@@ -523,7 +547,9 @@ export abstract class CommonFormatter extends BaseFormatter {
    * console.log(updatedFormatter.of(5)); // Output: "< 10"
    */
   min(_m: number | undefined | null) {
-    if (_m == null) return this;
+    if (_m == null) {
+      return this;
+    }
     const newOptions = { ...this._options, min: _m };
 
     return this._clone(newOptions);
@@ -547,7 +573,9 @@ export abstract class CommonFormatter extends BaseFormatter {
    * console.log(updatedFormatter.of(150)); // Output: "> 100"
    */
   max(_m: number | undefined | null) {
-    if (_m == null) return this;
+    if (_m == null) {
+      return this;
+    }
     const newOptions = { ...this._options, max: _m };
 
     return this._clone(newOptions);
@@ -596,7 +624,9 @@ export abstract class CommonFormatter extends BaseFormatter {
    * console.log(percentFormatter.of(50)); // Output: "50 UNIT"
    */
   unit(_u: string | undefined | null) {
-    if (_u == null) return this;
+    if (_u == null) {
+      return this;
+    }
 
     const newOptions = { ...this._options, unit: _u };
 
@@ -624,7 +654,9 @@ export abstract class CommonFormatter extends BaseFormatter {
    * console.log(usFormatter.of(1234.56)); // Output: "1,234.56" (US locale)
    */
   locale(_l: string | undefined | null) {
-    if (_l == null) return this;
+    if (_l == null) {
+      return this;
+    }
     const newOptions = { ...this._options, locale: _l };
 
     return this._clone(newOptions);

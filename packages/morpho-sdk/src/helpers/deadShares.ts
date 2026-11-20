@@ -46,15 +46,17 @@ export function validateBlueMarketDeadShares(
   path: DeadSharesPath = [],
 ): void {
   const entity = [...path, market.id];
-  if (market.deadSupplyShares == null)
+  if (market.deadSupplyShares == null) {
     throw new MissingDeadSharesDataError({ entity, field: "deadSupplyShares" });
-  if (market.deadSupplyShares < MIN_DEAD_SHARES)
+  }
+  if (market.deadSupplyShares < MIN_DEAD_SHARES) {
     throw new InsufficientDeadSharesError({
       entity,
       reason: "deadShares",
       observed: market.deadSupplyShares,
       required: MIN_DEAD_SHARES,
     });
+  }
 }
 
 /**
@@ -87,22 +89,25 @@ export function validateVaultV1DeadShares(
   path: DeadSharesPath = [],
 ): void {
   const entity = [...path, vault.address];
-  if (vault.deadShares == null)
+  if (vault.deadShares == null) {
     throw new MissingDeadSharesDataError({ entity, field: "deadShares" });
-  if (vault.deadShares < MIN_DEAD_SHARES)
+  }
+  if (vault.deadShares < MIN_DEAD_SHARES) {
     throw new InsufficientDeadSharesError({
       entity,
       reason: "deadShares",
       observed: vault.deadShares,
       required: MIN_DEAD_SHARES,
     });
+  }
   for (const marketId of vault.withdrawQueue) {
     const allocation = vault.allocations.get(marketId);
-    if (allocation == null)
+    if (allocation == null) {
       throw new MissingDeadSharesDataError({
         entity: [...entity, marketId],
         field: "allocation",
       });
+    }
     validateBlueMarketDeadShares(allocation.position.market, entity);
   }
 }
@@ -140,75 +145,46 @@ export function validateVaultV2DeadShares(
 ): void {
   const entity = [...path, vault.address];
   const { deadShares, deadAssets, absoluteCaps } = vault;
-  if (deadShares == null)
+  if (deadShares == null) {
     throw new MissingDeadSharesDataError({ entity, field: "deadShares" });
-  if (deadAssets == null)
+  }
+  if (deadAssets == null) {
     throw new MissingDeadSharesDataError({ entity, field: "deadAssets" });
-  if (absoluteCaps == null)
+  }
+  if (absoluteCaps == null) {
     throw new MissingDeadSharesDataError({ entity, field: "absoluteCaps" });
-  if (deadShares < MIN_DEAD_SHARES)
+  }
+  if (deadShares < MIN_DEAD_SHARES) {
     throw new InsufficientDeadSharesError({
       entity,
       reason: "deadShares",
       observed: deadShares,
       required: MIN_DEAD_SHARES,
     });
-  if (deadAssets < MIN_VAULT_V2_DEAD_ASSETS)
+  }
+  if (deadAssets < MIN_VAULT_V2_DEAD_ASSETS) {
     throw new InsufficientDeadSharesError({
       entity,
       reason: "deadAssets",
       observed: deadAssets,
       required: MIN_VAULT_V2_DEAD_ASSETS,
     });
+  }
   // Share price (totalAssets + 1) / (totalSupply + virtualShares) must exceed 1 / (10 * virtualShares).
   const priceNumerator = (vault._totalAssets + 1n) * 10n * vault.virtualShares;
   const priceDenominator = vault.totalSupply + vault.virtualShares;
-  if (priceNumerator <= priceDenominator)
+  if (priceNumerator <= priceDenominator) {
     throw new InsufficientDeadSharesError({
       entity,
       reason: "sharePrice",
       observed: priceNumerator,
       required: priceDenominator + 1n,
     });
+  }
 
-  const capOf = (id: Hash, adapter: Address) => {
-    const cap = absoluteCaps[id];
-    if (cap == null)
-      throw new MissingDeadSharesDataError({
-        entity: [...entity, adapter],
-        field: "absoluteCaps",
-      });
-    return cap;
-  };
   for (const adapter of vault.accrualAdapters) {
-    if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
-      const id = VaultV2MorphoVaultV1Adapter.adapterCapId(adapter.address);
-      if (capOf(id, adapter.address) > 0n)
-        validateVaultV1DeadShares(adapter.accrualVaultV1, entity);
-    } else if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
-      for (const { market } of adapter.positions) {
-        const id = VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
-          adapter.address,
-          market.params,
-        );
-        if (capOf(id, adapter.address) > 0n)
-          validateBlueMarketDeadShares(market, entity);
-      }
-    } else if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
-      for (const market of adapter.markets) {
-        const id = VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
-          adapter.address,
-          market.params,
-        );
-        if (capOf(id, adapter.address) > 0n)
-          validateBlueMarketDeadShares(market, entity);
-      }
-    } else {
-      throw new MissingDeadSharesDataError({
-        entity: [...entity, adapter.address],
-        field: "adapter",
-      });
-    }
+    // Reject incomplete or underfunded adapter snapshots before checking liquidity.
+    assertAdapterDeadShares(adapter, { absoluteCaps, entity });
   }
 
   // Deposits are allocated to the liquidity market, so the snapshot must hold it even when it
@@ -220,16 +196,107 @@ export function validateVaultV2DeadShares(
       liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter ||
       liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
     )
-  )
+  ) {
     return;
+  }
   const liquidityMarketId = MarketParams.fromHex(vault.liquidityData).id;
   const markets =
     liquidityAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter
       ? liquidityAdapter.positions.map(({ market }) => market)
       : liquidityAdapter.markets;
-  if (!markets.some(({ id }) => id === liquidityMarketId))
+  if (!markets.some(({ id }) => id === liquidityMarketId)) {
     throw new MissingDeadSharesDataError({
       entity: [...entity, liquidityAdapter.address, liquidityMarketId],
       field: "liquidityMarket",
     });
+  }
+}
+
+/** Reads a fetched adapter cap before applying the dead-share rule. @internal */
+function getDeadSharesAbsoluteCap(
+  id: Hash,
+  {
+    absoluteCaps,
+    entity,
+    adapter,
+  }: {
+    readonly absoluteCaps: NonNullable<AccrualVaultV2["absoluteCaps"]>;
+    readonly entity: DeadSharesPath;
+    readonly adapter: Address;
+  },
+) {
+  const cap = absoluteCaps[id];
+  if (cap == null) {
+    throw new MissingDeadSharesDataError({
+      entity: [...entity, adapter],
+      field: "absoluteCaps",
+    });
+  }
+  return cap;
+}
+
+/** Checks the currently allocated positions of one supported adapter. @internal */
+function assertAdapterDeadShares(
+  adapter: AccrualVaultV2["accrualAdapters"][number],
+  {
+    absoluteCaps,
+    entity,
+  }: {
+    readonly absoluteCaps: NonNullable<AccrualVaultV2["absoluteCaps"]>;
+    readonly entity: DeadSharesPath;
+  },
+): void {
+  if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
+    const id = VaultV2MorphoVaultV1Adapter.adapterCapId(adapter.address);
+    if (
+      getDeadSharesAbsoluteCap(id, {
+        absoluteCaps,
+        entity,
+        adapter: adapter.address,
+      }) > 0n
+    ) {
+      validateVaultV1DeadShares(adapter.accrualVaultV1, entity);
+    }
+    return;
+  }
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+    for (const { market } of adapter.positions) {
+      const id = VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+        adapter.address,
+        market.params,
+      );
+      if (
+        getDeadSharesAbsoluteCap(id, {
+          absoluteCaps,
+          entity,
+          adapter: adapter.address,
+        }) > 0n
+      ) {
+        validateBlueMarketDeadShares(market, entity);
+      }
+    }
+    return;
+  }
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+    for (const market of adapter.markets) {
+      const id = VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+        adapter.address,
+        market.params,
+      );
+      if (
+        getDeadSharesAbsoluteCap(id, {
+          absoluteCaps,
+          entity,
+          adapter: adapter.address,
+        }) > 0n
+      ) {
+        validateBlueMarketDeadShares(market, entity);
+      }
+    }
+    return;
+  }
+  throw new MissingDeadSharesDataError({
+    entity: [...entity, adapter.address],
+    field: "adapter",
+  });
 }

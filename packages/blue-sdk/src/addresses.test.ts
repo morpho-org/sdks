@@ -365,7 +365,7 @@ describe("addresses helpers", () => {
         addresses: {
           [chainId]: {
             wNative: address,
-          },
+          } as ChainAddresses,
         },
       }),
     ).not.toThrow();
@@ -375,7 +375,7 @@ describe("addresses helpers", () => {
         addresses: {
           [chainId]: {
             wNative: randomAddress(),
-          },
+          } as ChainAddresses,
         },
       }),
     ).toThrow();
@@ -390,11 +390,13 @@ describe("addresses helpers", () => {
     } satisfies ChainAddresses;
 
     expect(() => {
-      addresses[ChainId.EthMainnet] = chainAddresses;
+      (addresses as Record<number, ChainAddresses>)[ChainId.EthMainnet] =
+        chainAddresses;
     }).toThrow();
 
     expect(() => {
-      addresses[ChainId.EthMainnet]!.blue = chainAddresses.blue;
+      (addresses[ChainId.EthMainnet] as { blue: string }).blue =
+        chainAddresses.blue;
     }).toThrow();
   });
 });

@@ -95,7 +95,9 @@ export const validateBlueBundlesV1NativeFunding = (params: {
   if (nativeAmount < 0n) {
     throw new NegativeInputError("nativeAmount", nativeAmount);
   }
-  if (nativeAmount === 0n) return 0n;
+  if (nativeAmount === 0n) {
+    return 0n;
+  }
 
   validateNativeAsset(params.chainId, params.token);
   if (nativeAmount !== params.fundedAmount) {
@@ -136,7 +138,9 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
   authorizationSignature?: AuthorizationRequirementSignature;
 }): BlueBundlesV1SignedAuthorization => {
   const { authorizationSignature } = params;
-  if (authorizationSignature == null) return EMPTY_SIGNED_AUTHORIZATION;
+  if (authorizationSignature == null) {
+    return EMPTY_SIGNED_AUTHORIZATION;
+  }
 
   const authorized = getChainAddress(params.chainId, "bundles.blueBundlesV1");
   if (!isAddressEqual(authorizationSignature.args.owner, params.userAddress)) {

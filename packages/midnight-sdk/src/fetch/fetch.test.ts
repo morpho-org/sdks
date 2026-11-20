@@ -5,9 +5,8 @@ import {
   mockRead,
 } from "@morpho-org/test/mock";
 import {
-  type Abi,
   type Address,
-  type ContractFunctionName,
+  type ContractFunctionReturnType,
   createClient,
   custom,
   encodeFunctionResult,
@@ -38,22 +37,15 @@ const { baseMarketParams, marketId } = createFixtures({
   ecrecoverRatifier,
 });
 
-function mockDeploylessRead<
-  const abi extends Abi,
-  fn extends ContractFunctionName<abi, "view" | "pure">,
->(
+function mockDeploylessPosition(
   handle: MockClientHandle,
-  params: {
-    readonly abi: abi;
-    readonly functionName: fn;
-    readonly result: unknown;
-  },
+  position: ContractFunctionReturnType<typeof getPositionAbi, "view", "query">,
 ) {
   const defaultRequest = handle.request.getMockImplementation();
   const result = encodeFunctionResult({
-    abi: params.abi,
-    functionName: params.functionName,
-    result: params.result,
+    abi: getPositionAbi,
+    functionName: "query",
+    result: position,
   });
 
   handle.request.mockImplementation(async (call) => {
@@ -90,7 +82,6 @@ describe("fetchMarketParams", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
-      args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
 
@@ -111,7 +102,6 @@ describe("fetchMarketParams", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
-      args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
 
@@ -133,14 +123,12 @@ describe("fetchMarket", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
-      args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
       address: midnight,
       abi: midnightAbi,
       functionName: "marketState",
-      args: [marketId],
       result: [1n, 2n, 3n, 4n, 5, 6, 7, 8, 9, 10, 11, 12, 4],
     });
 
@@ -158,20 +146,16 @@ describe("fetchMarket", () => {
 describe("fetchPosition", () => {
   test("default", async () => {
     const handle = createMockClient(base);
-    mockDeploylessRead(handle, {
-      abi: getPositionAbi,
-      functionName: "query",
-      result: {
-        credit: 1n,
-        pendingFee: 2n,
-        lastLossFactor: 3n,
-        lastAccrual: 4n,
-        debt: 5n,
-        collateralBitmap: 6n,
-        collateral: Array.from({ length: 128 }, (_, index) =>
-          index === 0 ? 7n : 0n,
-        ),
-      },
+    mockDeploylessPosition(handle, {
+      credit: 1n,
+      pendingFee: 2n,
+      lastLossFactor: 3n,
+      lastAccrual: 4n,
+      debt: 5n,
+      collateralBitmap: 6n,
+      collateral: Array.from({ length: 128 }, (_, index) =>
+        index === 0 ? 7n : 0n,
+      ),
     });
 
     const position = await fetchPosition(handle.client, {
@@ -194,14 +178,12 @@ describe("fetchPosition", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "position",
-      args: [marketId, addresses.taker],
       result: [1n, 2n, 3n, 4n, 5n, 6n],
     });
     mockRead(handle, {
       address: midnight,
       abi: midnightAbi,
       functionName: "collateral",
-      args: [marketId, addresses.taker, 0n],
       result: 7n,
     });
 
@@ -232,14 +214,12 @@ describe("fetchPosition", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "position",
-      args: [marketId, addresses.taker],
       result: [1n, 2n, 3n, 4n, 5n, 6n],
     });
     mockRead(handle, {
       address: midnight,
       abi: midnightAbi,
       functionName: "collateral",
-      args: [marketId, addresses.taker, 0n],
       result: 7n,
     });
 
@@ -269,31 +249,25 @@ describe("fetchPosition", () => {
 describe("fetchAccrualPosition", () => {
   test("behavior: returns a position that locally matches updatePositionView", async () => {
     const handle = createMockClient(base);
-    mockDeploylessRead(handle, {
-      abi: getPositionAbi,
-      functionName: "query",
-      result: {
-        credit: 1_000n,
-        pendingFee: 100n,
-        lastLossFactor: 0n,
-        lastAccrual: 1_000n,
-        debt: 0n,
-        collateralBitmap: 0n,
-        collateral: Array.from({ length: 128 }, () => 0n),
-      },
+    mockDeploylessPosition(handle, {
+      credit: 1_000n,
+      pendingFee: 100n,
+      lastLossFactor: 0n,
+      lastAccrual: 1_000n,
+      debt: 0n,
+      collateralBitmap: 0n,
+      collateral: Array.from({ length: 128 }, () => 0n),
     });
     mockRead(handle, {
       address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
-      args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
       address: midnight,
       abi: midnightAbi,
       functionName: "marketState",
-      args: [marketId],
       result: [1_000n, 0n, 0n, 0n, 1, 2, 3, 4, 5, 6, 7, 10, 4],
     });
 

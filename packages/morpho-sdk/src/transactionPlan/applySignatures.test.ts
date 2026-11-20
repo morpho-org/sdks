@@ -46,7 +46,7 @@ const typedData = getPermitTypedData(
   1,
 );
 const plan: TransactionPlan = deepFreeze({
-  version: 1,
+  version: 2,
   chainId: 1,
   account: owner.address,
   expiresAt: Number(args.deadline),
@@ -61,7 +61,7 @@ const plan: TransactionPlan = deepFreeze({
           account: owner.address,
           vault: IN_KIND_VAULT,
           asset: IN_KIND_ASSET,
-          amount: args.amount,
+          assets: args.amount,
           deadline: args.deadline,
           maxSharePrice: 10n ** 27n,
           referralFeePct: 0n,

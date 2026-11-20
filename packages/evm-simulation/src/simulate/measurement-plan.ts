@@ -1,10 +1,12 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 import type {
+  BlueMarketOperationType,
   InputOperationLimit,
   OperationLimit,
   OperationType,
   SimulationOperationSubject,
+  VaultOperationType,
 } from "../limits.js";
 
 type AssetMeasurementSource =
@@ -68,6 +70,17 @@ const vault = (address: Address): AssetMeasurementSource => ({
   type: "vault",
   vault: address,
 });
+
+type MidnightMeasuredLimit = Exclude<
+  OperationLimit | InputOperationLimit,
+  {
+    readonly type:
+      | BlueMarketOperationType
+      | VaultOperationType
+      | "blueRefinance"
+      | "vaultV1MigrateToV2";
+  }
+>;
 
 /** Describe each quote field's evidence source with an exhaustive operation switch. @internal */
 export function operationMeasurementPlan(
@@ -176,6 +189,16 @@ export function operationMeasurementPlan(
         sharesMinted: balance(limit.targetVault),
         sharesBurned: balance(limit.sourceVault),
       };
+    default:
+      return midnightMeasurementPlan(limit);
+  }
+}
+
+/** Measurement sources of a Midnight operation. @internal */
+function midnightMeasurementPlan(
+  limit: MidnightMeasuredLimit,
+): OperationMeasurementPlan {
+  switch (limit.type) {
     case "midnightSupplyCollateral":
     case "midnightSupplyCollateralMakeBorrow": {
       const collateral = {
@@ -411,7 +434,7 @@ export function positionBoundsMarketId(
   limit: OperationLimit | InputOperationLimit,
 ): MarketId | undefined {
   const marketField = positionBoundsMarketField(limit.type);
-  if (marketField === "marketId")
+  if (marketField === "marketId") {
     return "marketId" in limit &&
       limit.type !== "midnightSupplyCollateralBatch" &&
       limit.type !== "midnightWithdrawCollateralBatch" &&
@@ -426,7 +449,9 @@ export function positionBoundsMarketId(
       limit.type !== "midnightTakeRepayWithdrawCollateral"
       ? limit.marketId
       : undefined;
-  if (marketField === "targetMarketId")
+  }
+  if (marketField === "targetMarketId") {
     return "targetMarketId" in limit ? limit.targetMarketId : undefined;
+  }
   return undefined;
 }

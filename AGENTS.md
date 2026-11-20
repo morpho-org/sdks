@@ -6,7 +6,9 @@ Where present, `CLAUDE.md` is a symlink to `AGENTS.md` at every level — same c
 
 Every PR is measured against the rules below. A change that violates an architectural principle doesn't land — we question the change before we question the principle.
 
-> **Enforcement note.** Some rules below are enforced by tooling today (Biome formatter, knip, fork harness in `@morpho-org/test`, Changesets generation). Most are **review-time conventions** that humans and reviewing agents apply: JSDoc on every export, the §2 forbidden-patterns list (Biome's `noExplicitAny` is warn-level, and there's no rule banning `as unknown as` / `@ts-ignore` / framework imports / mocked viem clients on RPC paths), changeset-gates-CI, full coverage thresholds. Where a rule isn't backed by an automated check, treat it as binding regardless — wiring CI gates is tracked separately.
+> **Enforcement note.** The Biome formatter, knip, the fork harness in `@morpho-org/test`, and Changesets generation enforce some rules below. Biome's `noExcessiveCognitiveComplexity` (maximum 50), `noExcessiveLinesPerFunction` (maximum 120, skipping blank lines), `noNestedTernary`, `useCollapsedElseIf`, `noNegationElse`, `useBlockStatements`, `noNonNullAssertion`, `noExplicitAny` and `noTsIgnore` are errors in non-test source for `morpho-sdk`, `morpho-ts`, `evm-simulation`, `blue-sdk`, `blue-sdk-viem`, `wdk-protocol-lending-morpho-evm` and `morpho-test`. They warn in other packages' non-test source.
+>
+> Most rules are **review-time conventions**, including JSDoc on every export, §2 patterns not covered by Biome (such as `as unknown as`, framework imports, and mocked viem clients on RPC paths), changeset requirements, and full coverage thresholds. Treat them as binding even when tooling does not enforce them.
 
 > **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked locally by the `/review-pr-{gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
 
@@ -84,7 +86,7 @@ A scannable list of patterns reviewers reject. Reviewers cite this section by nu
 - Every public symbol is re-exported explicitly from `src/index.ts`. Nothing else is public.
 - **`morpho-sdk` is the canonical consumer package.** Any PR that adds or changes a consumer-facing ABI, address, constant, entity, error, fetcher, type, or utility in `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` must audit the matching `morpho-sdk` facade subpath in the same PR. Every established facade category exposes raw dependency names through `/blue/<category>` or `/midnight/<category>`; its unprefixed counterpart uses `Blue`/`Midnight`-qualified names for protocol-specific symbols and leaves genuinely shared symbols unqualified. Deprecate legacy ambiguous names before removal, and do not expand the facade into a new upstream surface solely for parity.
 - **Tree-shakeable.** ESM at source (`"type": "module"`); no top-level side effects. Every package without top-level side effects sets `"sideEffects": false` in `package.json`.
-- **Dual ESM/CJS publish** from `lib/esm` and `lib/cjs`. Recommended build script: `tsc --noEmit && pnpm build:cjs && pnpm build:esm` (test/fixture-only packages may skip the type-check step). `publishConfig.exports` mirrors `types`, `import`, `require`. Subpath exports need both package exports and TS path mapping.
+- **Dual ESM/CJS publish** from `lib/esm` and `lib/cjs`. Recommended build script: `tsc --noEmit && bun run build:cjs && bun run build:esm` (test/fixture-only packages may skip the type-check step). `publishConfig.exports` mirrors `types`, `import`, `require`. Subpath exports need both package exports and TS path mapping.
 - **`viem` is the only peer dep of `morpho-sdk`.** Integrators install `morpho-sdk + viem` and they're done. Other packages in the monorepo declare their own peer deps as needed.
 - **Workspace deps** use workspace ranges (`"@morpho-org/blue-sdk": "workspace:^"`), except internal `peerDependencies`. Internal peers use explicit published semver ranges (`"^6.0.0"`, not `"workspace:^"`) so Changesets does not auto-bump peer dependents. When a package is bumped, the author and reviewer must audit every package that declares it as a peer dependency, decide whether its peer range must be updated, and include explicit changesets for every affected dependent package. Do not rely on Changesets to infer peer-dependent releases.
 - Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
@@ -125,7 +127,7 @@ A scannable list of patterns reviewers reject. Reviewers cite this section by nu
 ## 6. Documentation
 
 - **JSDoc is required on every exported symbol** — class, function, type, constant. Review-only today (Biome doesn't enforce); contributors and reviewing agents apply this. Internal locals and test helpers don't need JSDoc.
-- **Canonical shape and copy-pasteable template:** [`docs/jsdoc-style.md`](./docs/jsdoc-style.md). Coverage burndown: `pnpm jsdoc:coverage`.
+- **Canonical shape and copy-pasteable template:** [`docs/jsdoc-style.md`](./docs/jsdoc-style.md). Coverage burndown: `bun run jsdoc:coverage`.
 - **Required tags** on exported functions and methods:
   - Short description (what it does, what it reads on-chain if anything).
   - `@param` for each parameter.
@@ -144,6 +146,18 @@ A scannable list of patterns reviewers reject. Reviewers cite this section by nu
 
 ## 7. Releases & versioning
 
+For local dependency changes, use `bun run deps:add <package> [--dev]` or
+`bun run deps:update [package] [--latest]` from the root. They resolve with
+`--lockfile-only --ignore-scripts`, validate all locked publication timestamps,
+then install the frozen lockfile. The repository's Bun security scanner also
+checks resolved packages before raw `bun add`, `bun update`, or `bun install`
+can install them. Use `bun run install:checked` for an existing lockfile.
+
+Add `--workspace packages/<name>` to either dependency command to edit an existing
+workspace instead of the root manifest. Outside, nested and symlinked paths are
+rejected; release-age validation and the frozen install always run at root.
+The tooling decision is recorded in [ADR-2026-11-18](./docs/adrs/ADR-2026-11-18-bun-package-management.md).
+
 - **SemVer, strict.** Patch: bug fixes and internal source maintenance changes. Minor: additive surface (including a new `@throws` error class on an existing export, or a different class for an input that already failed), deprecations. Major: removed/renamed/retyped public symbols.
 - **CHANGELOG via Changesets** — every semver-relevant change to published package source ships with a changeset (review-only today). JSDoc-only changes to published package source may also ship a patch changeset when maintainers want them visible in package release notes. Do not generate a changeset for repo metadata, non-API documentation-only, fixture-only, generated-output-only, or tests-only changes; those do not change the published package contract.
 - **Changeset text is public.** Each changeset's summary is copied verbatim into the package's published `CHANGELOG.md`. Write it for integrators: no internal ticket keys, internal links, PR links or author credits. `public-scan` checks pending changeset text with the public tree's rules, which catch internal ticket keys and internal links; PR links and author credits are left to review.
@@ -154,9 +168,10 @@ A scannable list of patterns reviewers reject. Reviewers cite this section by nu
 - **`liquidity-sdk-viem` deprecation window.** Only the three-month source-removal wait is waived; npm deprecation notices and continued availability of published versions remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#liquidity-sdk-deprecation-window)).
 - **Migration guides on every major**, with codemods where mechanical.
 - **Experimental TransactionPlan APIs.** Only the scoped beta exports are exempt from major bumps and deprecation steps; minor changesets and stored-format guards remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#experimental-transactionplan-apis)).
+- **`evm-simulation` 9.0 `simulate` retype.** Only the successor, deprecation and coexistence-minor steps are waived, for `simulate` in `@morpho-org/evm-simulation` 9.0.0: its return type, its client-first signature, and the removal of `params.chainId`, `SimulationConfig`, `ChainSimulationConfig` and `InvalidChainIdError`, plus 8.9.0's `ChainSimulationClientConfig` and `ChainSimulationConfigEntry` and 8.8.0's `findings` and `SimulationRejectedError` name; the major changeset, migration guide and dependent audit remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#evm-simulation-report-returning-simulate)).
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
-- **Respect pnpm minimum release age when bumping releases.** Keep `minimumReleaseAgeStrict` enabled. Dependency bump PRs wait for the configured `minimumReleaseAge` window or pin to the latest eligible version. **Single exception — critical-severity security fixes:** when the only version fixing a *critical* (CVSS ≥ 9.0 / GitHub "critical") vulnerability that is actually resolved in `pnpm-lock.yaml` for a production dependency is younger than the window, the PR may add a temporary `minimumReleaseAgeExclude` entry. The entry must be scoped to that exact `<package>@<version>`, the PR body must state the advisory, severity, publish date and that the gate was bypassed, and a follow-up must remove the entry as soon as the version satisfies the normal window. Any other bypass (high severity and below, non-security) still requires explicit maintainer approval and removal before merge.
+- **Respect Bun minimum release age when bumping releases.** Keep `minimumReleaseAge = 259200` (three days, in seconds) in `bunfig.toml` and strict pre-install validation via `scripts/check-release-age.ts --all` enabled. Prefer waiting for the configured `minimumReleaseAge` window or pinning to the latest eligible version. For `release-age-exceptions.json` and `minimumReleaseAgeExcludes`: A temporary exclusion is at most Medium/warning only when it names an exact `<package>@<version>` that resolves a critical advisory (CVSS ≥ 9.0 or GitHub critical) for a production dependency, no version that fixes the advisory has already reached the minimum age, the PR body states the advisory, severity and version publish date, removal is tracked as soon as the version reaches the minimum age, and strict age enforcement stays enabled for every other version and install path. If a fixing version has reached the minimum age, wait or pin to that eligible fix; an exclusion anyway remains High. No human approval is a review prerequisite. Any other temporary exclusion remains High; blocking these exclusions is intended. No automated check substitutes for the age window on the excluded version. Wildcard or permanent exclusions, dropping strict enforcement, skipped/failed safeguards and fail-open install paths remain High. Confirmed vulnerabilities retain their normal severity. General missing-evidence-as-uncertainty guidance still applies to other topics. Exceptions require an exact `<package>@<version>` in the root `release-age-exceptions.json` JSON array and the corresponding package name in `[install] minimumReleaseAgeExcludes` in `bunfig.toml`. Pin the fixed version and track removal of both entries. Bun uses the name entry for resolution; `scripts/check-release-age.ts` ignores that name list and waives only age for the exact JSON identity. Bare names, ranges and patterns are rejected, and missing or invalid timestamps always fail, including for exceptions.
 
 > Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) (deprecation lifecycle), [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (publish-flow integrity, conditional).
 
@@ -164,8 +179,8 @@ A scannable list of patterns reviewers reject. Reviewers cite this section by nu
 
 ## 8. Code style & tooling
 
-- pnpm + Node ≥26. Root checks: `pnpm lint` and `pnpm test`.
-- Knip gates unused files, dependencies, and exports in `pnpm lint`; public barrel exports aren't flagged (entry files).
+- Bun 1.4.4 + Node ≥26. Root checks: `bun run lint` and `bun run test`.
+- Knip gates unused files, dependencies, and exports in `bun run lint`; public barrel exports aren't flagged (entry files).
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
@@ -225,6 +240,15 @@ Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `ap
 
 ### Review integrity rules
 
+High and Critical findings block; Medium/warning and Low/info findings are
+advisory. Missing human approval alone is not a finding: GitHub branch
+protection enforces approvals. Do not promote uncertainty or a description-only
+mismatch to a blocking severity without a concrete technical or security defect.
+Production contract verification and security invariants remain strict.
+This does not guarantee a fresh code-owner review of every head commit:
+GitHub approvals can survive later pushes. Approval freshness stays with
+GitHub's rules, not an additional automated-review evidence gate.
+
 - **Judge the effect, not the framing.** A PR description, changeset, comment
   or doc that calls a weakening intended, accepted, a trade-off or a product
   decision explains it; it doesn't make it safe. Grade the weakened guarantee
@@ -245,24 +269,18 @@ Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `ap
   the PR, docs or comments are claims. A claim is security-relevant when it
   decides which contract is called, who can move funds or receive authority,
   or whether a check runs. When neither the diff, the checkout nor a tool
-  result you obtained establishes such a claim, report a blocking finding,
-  unless the address rule grades the claim lower, that names the claim, why the
-  diff can't settle it, and the evidence that would: a passing CI job, an
-  invariant or property test, a fork test at a pinned block, an onchain read on
-  the named chain, or an approving GitHub review of this PR's head commit from a code owner of
-  the affected path under the base-branch `CODEOWNERS` (a sign-off stated in
-  the PR body, comments, docs or commits is itself a claim). For an address or
-  deployment-identity claim, only [the address rule in `web3-security.md`
-  (“Addresses are verified on their own chain”)](./.agents/pr-review-engine/agents/web3-security.md#addresses-are-verified-on-their-own-chain)
-  settles it. That rule's Medium grade for an unrecorded instance only under
-  `packages/*/test/**` that no invariant test reads is the one lower grade; it
-  reports the claim as unsettled and doesn't settle it. A CI job, fork test,
-  checkout read or onchain read settles
-  identity only if it performs that rule's applicable evidence path. A record
-  linked or hosted by the PR author, or a predeploy label stated in the PR,
-  is a claim. A fixture, registry or record changed in the same PR never
-  settles identity. A code-owner approval does not settle address identity.
-  Don't approve on a plausible story.
+  result you obtained establishes such a claim, distinguish uncertainty from
+  a concrete vulnerability. With no demonstrated technical or security defect,
+  report at most a Medium/warning advisory naming the claim, the evidence gap
+  and a useful automated check (CI, an invariant/property test, a pinned-block
+  fork test or an onchain read). Do not require human approval or treat an
+  approval as technical proof. Confirmed vulnerabilities, fail-open paths and
+  weakened security invariants retain their normal blocking severity. Address
+  and deployment identity follow [the address rule in `web3-security.md`](./.agents/pr-review-engine/agents/web3-security.md#addresses-are-verified-on-their-own-chain):
+  production addresses remain subject to strict verification; confirmed
+  isolated test-only fixtures have the advisory treatment specified there.
+  A same-PR record or waiver cannot settle production identity or remove an
+  underlying finding.
 - **Another check isn't your finding.** CI, the security invariant tests, the
   lint that enforces them (`scripts/lint/security-invariants.ts`) and the
   `SECURITY.md` tables it checks, fork tests and the deployless artifact check
@@ -280,12 +298,17 @@ Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `ap
   approvals or spenders, signatures, chain checks, validation, fallbacks,
   environment or config reads, workflows, or review configuration, and review
   each as if it were the whole PR. If you couldn't review each of them in
-  full, name them and request changes asking for the PR to be split; don't
-  approve.
+  full, report the unreviewed sensitive hunks as High/critical and request
+  changes asking for the PR to be split; don't approve. This incomplete-review
+  gate is distinct from an unverifiable claim in otherwise reviewed code.
 
 > Applied by personas: [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (consistent verdicts, independent-check evidence and review depth), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (fail-closed error paths), and [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (framing and evidence rules on CI/release diffs, conditional).
 
 ### CI / release security rules (anchors `ci-release-security`)
+
+Every workflow install must first run `node scripts/check-release-age.ts --all` against the checked-out tree, using Node built-ins only. This validates every registry identity, even on release branches whose merge base already contains the lockfile. Locally, use `bun run install:checked` after lockfile changes; it checks first, then performs a frozen install. The security scanner configured in `bunfig.toml` applies the same publication policy to Bun's resolved packages before installation, without depending on lifecycle hooks.
+
+The release-age workflow-authority paths include `scripts/check-release-age.ts`, `scripts/check-release-age.test.ts`, `scripts/release-age-scanner.ts`, `scripts/release-age-scanner.test.ts`, `scripts/update-dependencies.ts`, `scripts/update-dependencies.test.ts`, and `release-age-exceptions.json`.
 
 These are the rules `ci-release-security` enforces. They live here as source of truth; the persona references this section by anchor. When a rule changes here, update the persona body to match.
 
@@ -295,17 +318,18 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **ACL-gated comment triggers.** `issue_comment` / `pull_request_review_comment` workflows must gate on `github.event.comment.author_association` (`OWNER`, `MEMBER`, or `COLLABORATOR`) before acting on comment text.
 - **Action pinning.** Third-party `uses:` lines pin to a full commit SHA with the human-readable tag in a trailing comment: `uses: foo/bar@<40-char-sha>  # v1.2.3`. First-party `actions/*` and `github/*` may use tagged versions because Morpho's shared dependency automations review and bump them; Dependabot version updates are not enabled in this repo. Newly added actions from publishers the org has not used before must surface the publisher name in the review comment so a maintainer can confirm review.
 - **`permissions:` block required** on every workflow. Default `contents: read`. Job-level scopes where they differ. `id-token: write` only on the `publish` job of the public `release.yml`. `secrets: inherit` passed to reusable workflows is forbidden — list secrets explicitly.
+- **Private workflow exceptions.** In the source repository with a separate `public/` export tree, an exact exception in `.github/workflows/AGENTS.md` may allow a reusable call from a private workflow under `.github/workflows/` to use a verified upstream-main commit in place of the release comment and grant the documented job-level identity-token ceiling. Public workflows follow the rules above both under `public/` and after export.
 - **Secret exposure.** Secrets must be `env:`-bound and referenced as `$VAR` inside scripts; never interpolated into the `run:` string directly. Secrets passed to third-party actions require those actions to be SHA-pinned.
 - **Secret scoping & branch-gating.** Each workflow secret's intended reach (repo-level/every-branch vs branch-gated vs OIDC/`environment`-gated) and sensitivity are recorded in [`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md); a new secret name added to a workflow must gain a row there in the same PR. Widening a secret's reachable scope is a finding: removing or loosening the `if: github.ref_name == 'main' || github.ref_name == 'next'` gate on the token jobs in `version-pr.yml` and `next-sync.yml`, consuming `VERSION_APP_*` outside their `version-app` token jobs (limited to `main`/`next`) or adding that environment to any job other than those two token jobs, moving a write/publish/signing secret into the `test` job, or exposing any secret to a fork-accessible trigger is **high** — **critical** for the write-token or publish path. The two gated callers in `push.yml` must forward exactly `VERSION_APP_ID` and `VERSION_APP_PRIVATE_KEY` to the reusable workflows' optional secret declarations, including after repository copies are removed; GitHub gives the token jobs' environment values precedence. Repository copies remain only through the runbook's first successful live run, then an admin removes them and verifies another run without fallback. The low-sensitivity, write-access-only `ERPC_SECRET` remains repo-level, but the `test` jobs in `push.yml` and `nightly.yml` exclude `fork/**` re-pushes. Those heads run the same secret-free unit projects through `fork-unit` (`fork: false`, no secrets), including `INV-01`–`INV-07`. Flag regressions of these gates or the unit coverage, not the repo-level baseline itself.
-- **Publish-flow integrity.** Only the public [`public/.github/workflows/release.yml`](./public/.github/workflows/release.yml) publishes. A workflow under `.github/workflows/` that requests `id-token: write`, runs `npm publish` / `pnpm publish`, or creates package tags or GitHub Releases adds a second publish path — **critical** (see [`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md)). `npm publish` / `pnpm publish` must use `--provenance` (or the Changesets provenance-aware path). Auth via org-scoped `NODE_AUTH_TOKEN`, never a personal access token. Tag-scope changes (e.g. `next` → `latest`) require human sign-off via `environment:` with required reviewers. Removing `--provenance` is a downgrade — flag at minimum **medium**, **high** for runtime/peer-surface packages.
+- **Publish-flow integrity.** Only the public `.github/workflows/release.yml` (authored under `public/` in the source repository) publishes and creates package tags or GitHub Releases. A second publish, tag, or release path, or `id-token: write` outside its `publish` job and an exact private exception under the rule above, is **critical**. `npm publish` / `bun publish` must use `--provenance` (or the Changesets provenance-aware path). Auth via org-scoped `NODE_AUTH_TOKEN`, never a personal access token. Tag-scope changes (e.g. `next` → `latest`) require human review of the release-flow change. The `npm` environment must retain its deployment branch restrictions and disabled administrator bypass; required reviewers are optional for both `main` and `next`. Removing `--provenance` is a downgrade — flag at minimum **medium**, **high** for runtime/peer-surface packages.
 - **Artifact identity: ask the consumer, don't emulate it** (path-injection defense). When a privileged job checks an artifact produced by an unprivileged job (e.g. a `.tgz` from the pack job), the value it validates must be read through the *same code path the consumer will use*. For npm tarballs that means `pacote.manifest("file:<tgz>", { fullMetadata: true, fullReadJson: true })` from the same checksum-pinned npm distribution used by `npm publish` (`scripts/publish/read-tarball-identity.ts`) — the exact call `npm publish` makes — never a literal `tar -x package/package.json` or a `tar -t | grep` pass, and never a hand-rolled tar/PAX/path parser that *predicts* what node-tar will do. Archive entries such as `package/\./package.json`, `./package/package.json`, or a second root (`zzz/package.json`) are normalized differently by GNU tar and node-tar, so any check that reads the archive with a different tool than the consumer can be made to see a benign manifest while npm publishes a malicious one. Cheap structural checks with GNU tar (canonical paths, single `package/` root, regular files only) are fine as defense in depth but never as the identity source of truth. Reviewers flag new archive/path-normalization logic under `scripts/ci/` or `scripts/publish/` as **high**: the fix is to reuse the toolchain's own reader, not to extend the emulation. The one sanctioned normalization is `scripts/publish/verify-tarball-collisions.ts`, which lists entries with npm's bundled node-tar (`strict: true`) and rejects entries a case-insensitive/Windows consumer *filesystem* would fold together (case, `\`, `.` segments, trailing dots/spaces, `~`, non-ASCII, reserved names) — it models the consumer's filesystem, never the archive format. It also models pacote's `.gitignore` → `.npmignore` rename during extraction. The literal `package/package.json` may still be *validated* (e.g. the `publishConfig` allowlist in `scripts/publish/verify-tarball-manifest.ts`) as long as the workflow asserts its `name@version` equals the pacote-resolved identity, which proves the validated manifest is the one npm publishes.
 - **Release-commit signing & write-token hardening.** Release commits and annotated package tags must be created with a valid signed identity — prefer GitHub's `createCommitOnBranch` GraphQL mutation (produces GitHub-signed commits) over local `git commit` + push from a workflow. Write-scoped tokens must only be minted **after** one of these boundaries is in place: (a) same-job hardening that verifies the checksum and `$PATH` of any trusted release helper the post-token step will execute, truncates `$GITHUB_ENV` and `$GITHUB_PATH` so inherited state from earlier steps cannot influence the privileged step, and either confirms `.git/hooks/` contains only `.sample` files or forces hooks off for privileged git invocations (`core.hooksPath=/dev/null`, plus `--no-verify` on pushes); or (b) a split-job boundary where the privileged job fresh-checks out `github.sha`, consumes only a data artifact from the unprivileged job, validates that artifact with trusted code before minting the token, and confirms `.git/hooks/` contains only `.sample` files. Any enabled content under `.git/hooks/` is a hook-poisoning footgun and must be rejected or bypassed by trusted hook-disabling config. For same-job hardening, forcing the trusted `$PATH` and an explicit expected `RELEASE_BRANCH` on the write-token step is required. Loss of the applicable guards on an existing release workflow is **critical**.
-- **Changesets / release-bot wiring.** `.changeset/config.json` changes (fixed, linked, baseBranch, commit) alter what gets shipped — flag for human review on every change. New release workflows or release-bot actions require pinned SHAs and explicit `permissions:`. Removing a previously-required check from a release workflow's `needs:` is **high**.
-- **Lockfile drift.** A `pnpm-lock.yaml` change without a corresponding `package.json` change is acceptable for devDependency-only resolution drift when the existing manifest range already admits the new version. Flag lockfile-only changes that alter direct runtime `dependencies` or `peerDependencies`, move a dev dependency outside its declared range, change install settings, or introduce security-relevant package metadata; runtime/peer dependency changes require a manifest change plus package-version/changeset audit.
+- **Changesets / release-bot wiring.** Review `.changeset/config.json` changes (fixed, linked, baseBranch, commit) for concrete versioning or publishing defects; missing human approval is not a finding. New release workflows or release-bot actions require pinned SHAs and explicit `permissions:`. Removing a previously-required check from a release workflow's `needs:` is **high**.
+- **Lockfile drift.** A `bun.lock` change without a corresponding `package.json` change is acceptable for devDependency-only resolution drift when the existing manifest range already admits the new version. Flag lockfile-only changes that alter direct runtime `dependencies` or `peerDependencies`, move a dev dependency outside its declared range, change install settings, or introduce security-relevant package metadata; runtime/peer dependency changes require a manifest change plus package-version/changeset audit.
 - **Dependency hygiene.** New deps in `dependencies` or `peerDependencies` of a published package default to **high** for review. Flag unpinned semver ranges (`^`/`~`) on runtime deps, names that resemble typosquats of known packages, and deps whose registry metadata declares `postinstall` / `preinstall` / `install` scripts.
-- **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
-- **Workspace install behavior.** Flips of `auto-install-peers` or `strict-peer-dependencies` in `.npmrc` or `pnpm-workspace.yaml` are **medium** — surface the impact on consumer install behavior in the review comment.
-- **pnpm minimum-release-age bypasses.** `minimumReleaseAgeExclude` (or equivalent age-check bypasses) in `.npmrc` or `pnpm-workspace.yaml` are **high** unless either (a) the PR is a critical-severity security fix that follows the §7 exception (exact `<package>@<version>` scope, advisory/severity/publish date stated in the PR body, follow-up removal tracked), or (b) the PR includes explicit maintainer approval, a narrowly-scoped emergency reason, and removal before merge. Removing `minimumReleaseAgeStrict` is always **high**. Other dependency bump PRs wait for the configured `minimumReleaseAge` window or pin to the latest eligible version.
+- **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. For non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines, check scope, transport, credential handling and dependency-confusion or package-substitution risk. A non-default URL alone is not a finding or an approval prerequisite. Unverified trust without a concrete defect is at most Medium/warning.
+- **Workspace install behavior.** Changes to `install.peer` in `bunfig.toml` or equivalent peer-install/validation settings are **medium** — surface the impact on consumer install behavior in the review comment.
+- **Bun minimum-release-age bypasses.** Apply §7 to `release-age-exceptions.json` and `minimumReleaseAgeExcludes` and equivalent bypasses in the root exception list or `bunfig.toml`. A temporary exclusion is at most Medium/warning only when it names an exact `<package>@<version>` that resolves a critical advisory (CVSS ≥ 9.0 or GitHub critical) for a production dependency, no version that fixes the advisory has already reached the minimum age, the PR body states the advisory, severity and version publish date, removal is tracked as soon as the version reaches the minimum age, and strict age enforcement stays enabled for every other version and install path. If a fixing version has reached the minimum age, wait or pin to that eligible fix; an exclusion anyway remains High. No human approval is a review prerequisite. Any other temporary exclusion remains High; blocking these exclusions is intended. No automated check substitutes for the age window on the excluded version. Wildcard or permanent exclusions, dropping strict enforcement, skipped/failed safeguards and fail-open install paths remain High. Confirmed vulnerabilities retain their normal severity. General missing-evidence-as-uncertainty guidance still applies to other topics. The required `public-scan / Generate and scan the public tree` check runs `scripts/check-release-age.ts`; disabling or weakening it or lowering `minimumReleaseAge` remains High.
 
 > Applied by personas: [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (the CI / release security rules above) and [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) (the persona / orchestration inventory invariants in this section).
 
@@ -313,8 +337,8 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 
 ## Details for shared skills
 
-- Test command: `pnpm test run --project <name>` for a single package (project names in `vitest.config.ts`; `pnpm test` runs the full vitest suite). Go through the `test` script, not bare `vitest`: it wraps vitest in `dotenv --`, which fork projects need for `ERPC_SECRET`.
-- Checks: `pnpm lint` (Biome `check` plus jsdoc-coverage, address, security-invariants, script-typecheck and knip gates) and `pnpm build` (recursive `tsc` build of all packages).
+- Test command: `bun run test run --project <name>` for a single package (project names in `vitest.config.ts`; `bun run test` runs the full vitest suite). Go through the `test` script, not bare `vitest`: it wraps vitest in `dotenv --`, which fork projects need for `ERPC_SECRET`.
+- Checks: `bun run lint` (Biome `check` plus jsdoc-coverage, address, security-invariants, script-typecheck and knip gates) and `bun run build` (recursive `tsc` build of all packages).
 - Knowledge homes: [`MISSION.md`](./MISSION.md) for principles, this file for engineering rules, [`docs/EXCEPTIONS.md`](./docs/EXCEPTIONS.md) for scoped or temporary rule waivers, [`docs/adrs/`](./docs/adrs/) for frozen decision records, [`docs/jsdoc-style.md`](./docs/jsdoc-style.md) for JSDoc style, and per-package `AGENTS.md` files for package rules and glossaries.
 - Automated reviewer: [`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md) says which reviewer runs on PRs, how to request a review and how to wait for its verdict; that file is not part of the public snapshot. Locally, `/review-pr-{gh,local}` runs the in-repo review engine.
 - Release policy: Changesets — every semver-relevant change to published package source ships a changeset; merging to `main`/`next` refreshes a release PR. Merging it on `main` syncs a public snapshot to `morpho-org/sdks`, whose `release.yml` publishes to npm (see §7, [`docs/release/public-repo-setup.md`](./docs/release/public-repo-setup.md) and [`docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md`](./docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md)).

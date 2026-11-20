@@ -8,7 +8,7 @@
 //                     instead of the Markdown table. Pairs with --verbose to
 //                     include the per-package undocumented list. Designed for
 //                     the future Phase 5 CI gate.
-//   --self-check    — run a fixed set of EXPORT_RE / hasParams / isFunctionLike
+//   --self-check    — run export analysis and syntax helper
 //                     test cases, print pass/fail, exit 1 on any failure. Cheap
 //                     guard against TypeScript syntax drift breaking the regex
 //                     silently.
@@ -127,11 +127,63 @@ interface FileAnalysis {
   undocumented: UndocumentedEntry[];
 }
 
+function findJSDoc(lines: string[], index: number): string | undefined {
+  let end = index - 1;
+  while (end >= 0) {
+    const line = (lines[end] ?? "").trim();
+    if (line !== "" && !line.startsWith("//")) break;
+    end--;
+  }
+  if (end < 0 || !(lines[end] ?? "").includes("*/")) return undefined;
+
+  let start = end;
+  while (start >= 0 && !(lines[start] ?? "").trimStart().startsWith("/**"))
+    start--;
+  return start < 0 ? "" : lines.slice(start, end + 1).join("\n");
+}
+
+interface ExportEntry {
+  index: number;
+  kind: string;
+  name: string;
+  indent: string;
+}
+
+function groupExports(lines: string[]): ExportEntry[][] {
+  const groups: ExportEntry[][] = [];
+  let previous: ExportEntry | undefined;
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(EXPORT_RE);
+    if (!match) continue;
+    const [, kind = "", name = ""] = match;
+    const entry = { index, kind, name, indent: line.match(/^\s*/)?.[0] ?? "" };
+    const group = groups.at(-1);
+    if (
+      group &&
+      kind === "function" &&
+      previous?.kind === kind &&
+      previous.name === name &&
+      previous.indent === entry.indent
+    )
+      group.push(entry);
+    else groups.push([entry]);
+    previous = entry;
+  }
+  return groups;
+}
+
 function analyzeFile(
   filePath: string,
   { collectUndocumented }: { collectUndocumented: boolean },
 ): FileAnalysis {
   const text = readFileSync(filePath, "utf-8");
+  return analyzeSource(text, { collectUndocumented });
+}
+
+function analyzeSource(
+  text: string,
+  { collectUndocumented }: { collectUndocumented: boolean },
+): FileAnalysis {
   const lines = text.split("\n");
   const undocumented: UndocumentedEntry[] = [];
   let total = 0;
@@ -141,36 +193,20 @@ function analyzeFile(
     if (collectUndocumented) undocumented.push(entry);
   };
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i]?.match(EXPORT_RE);
-    if (!m) continue;
-    const [, kind = "", name = ""] = m;
+  for (const group of groupExports(lines)) {
+    const members = group.map((entry) => ({
+      ...entry,
+      block: findJSDoc(lines, entry.index),
+    }));
+    const member =
+      members.find((entry) => entry.block !== undefined) ?? members[0];
+    if (!member) continue;
+    const { kind, name, block } = member;
     total++;
-
-    // Find closing `*/` immediately above (allow blank lines and single-line `//` directives
-    // such as `// biome-ignore` or `// eslint-disable`).
-    let j = i - 1;
-    while (j >= 0) {
-      const t = (lines[j] ?? "").trim();
-      if (t === "" || t.startsWith("//")) {
-        j--;
-        continue;
-      }
-      break;
-    }
-    if (j < 0 || !(lines[j] ?? "").includes("*/")) {
+    if (block === undefined) {
       recordMissing({ name, kind, reason: "no JSDoc" });
       continue;
     }
-
-    // Walk back to opening `/**`.
-    let k = j;
-    while (k >= 0 && !(lines[k] ?? "").trimStart().startsWith("/**")) k--;
-    if (k < 0) {
-      recordMissing({ name, kind, reason: "malformed JSDoc" });
-      continue;
-    }
-    const block = lines.slice(k, j + 1).join("\n");
 
     // @internal exempts the symbol from coverage entirely (matches typedoc's
     // excludeInternal behavior — these are not on the public docs surface).
@@ -179,49 +215,42 @@ function analyzeFile(
       continue;
     }
 
-    // Description = at least one non-tag prose line.
-    if (!/\n\s*\*\s+[^@\s*]/.test(block) && !/\/\*\*\s+[^@\s*]/.test(block)) {
-      recordMissing({ name, kind, reason: "no description" });
-      continue;
-    }
-
-    // Classes, interfaces, types, enums, namespaces: description suffices per §6.
-    if (
-      kind === "class" ||
-      kind === "interface" ||
-      kind === "type" ||
-      kind === "enum" ||
-      kind === "namespace"
-    ) {
-      documented++;
-      continue;
-    }
-
-    const signature = lines.slice(i, Math.min(i + 8, lines.length)).join(" ");
-    if (!isFunctionLike(kind, signature)) {
-      // Plain constant — description suffices.
-      documented++;
-      continue;
-    }
-
-    const missing: string[] = [];
-    if (hasParams(signature) && !block.includes("@param"))
-      missing.push("@param");
-    if (!block.includes("@returns")) missing.push("@returns");
-    if (!block.includes("@example")) missing.push("@example");
-
-    if (missing.length === 0) {
-      documented++;
-    } else {
-      recordMissing({
-        name,
-        kind,
-        reason: `missing ${missing.join(", ")}`,
+    let reason: string | undefined;
+    for (const entry of members) {
+      if (entry.block === undefined || isInternal(entry.block)) continue;
+      const signature = lines.slice(entry.index, entry.index + 8).join(" ");
+      reason = documentationIssue({
+        kind: entry.kind,
+        signature,
+        block: entry.block,
       });
+      if (reason) break;
     }
+    if (reason) recordMissing({ name, kind, reason });
+    else documented++;
   }
 
   return { total, documented, undocumented };
+}
+
+function documentationIssue({
+  kind,
+  signature,
+  block,
+}: {
+  kind: string;
+  signature: string;
+  block: string;
+}): string | undefined {
+  if (block === "") return "malformed JSDoc";
+  if (!/\n\s*\*\s+[^@\s*]/.test(block) && !/\/\*\*\s+[^@\s*]/.test(block))
+    return "no description";
+  if (!isFunctionLike(kind, signature)) return undefined;
+  const missing: string[] = [];
+  if (hasParams(signature) && !block.includes("@param")) missing.push("@param");
+  if (!block.includes("@returns")) missing.push("@returns");
+  if (!block.includes("@example")) missing.push("@example");
+  return missing.length > 0 ? `missing ${missing.join(", ")}` : undefined;
 }
 
 function pct(part: number, total: number): string {
@@ -389,6 +418,104 @@ function selfCheck(): never {
     }
   }
 
+  const documentedFunction = `/**
+ * Returns the input.
+ * @param value - The input.
+ * @returns The input.
+ * @example identity(1)
+ */`;
+  const overloads = `export function identity(value: string): string;
+export function identity(value: number): number;
+export function identity(value: string | number) { return value; }`;
+  const analysisCases = [
+    {
+      name: "documented overload group",
+      source: `${documentedFunction}\n${overloads}`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    {
+      name: "undocumented overload group",
+      source: overloads,
+      total: 1,
+      documented: 0,
+      missing: 1,
+    },
+    {
+      name: "plain documented function",
+      source: `${documentedFunction}\nexport function identity(value: number) { return value; }`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    { name: "empty source", source: "", total: 0, documented: 0, missing: 0 },
+    {
+      name: "second overload missing example",
+      source: `${documentedFunction}\nexport function identity(value: string): string;\n${documentedFunction.replace(" * @example identity(1)\n", "")}\nexport function identity(value: number): number;\nexport function identity(value: string | number) { return value; }`,
+      total: 1,
+      documented: 0,
+      missing: 1,
+    },
+    {
+      name: "both overloads documented",
+      source: `${documentedFunction}\nexport function identity(value: string): string;\n${documentedFunction}\nexport function identity(value: number): number;\nexport function identity(value: string | number) { return value; }`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    {
+      name: "documentation on implementation",
+      source: `export function identity(value: string): string;\n${documentedFunction}\nexport function identity(value: string) { return value; }`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    {
+      name: "incomplete overload documentation",
+      source: `/** Returns the input. */\n${overloads}`,
+      total: 1,
+      documented: 0,
+      missing: 1,
+    },
+    {
+      name: "internal overload group",
+      source: `/** @internal */\n${overloads}`,
+      total: 0,
+      documented: 0,
+      missing: 0,
+    },
+    {
+      name: "internal later overload",
+      source: `${documentedFunction}\nexport function identity(value: string): string;\n/** @internal */\nexport function identity(value: number): number;\nexport function identity(value: string | number) { return value; }`,
+      total: 1,
+      documented: 1,
+      missing: 0,
+    },
+    {
+      name: "same name in separate namespaces",
+      source: `export namespace A {\n${overloads}\n}\nexport namespace B {\n${overloads}\n}`,
+      total: 4,
+      documented: 0,
+      missing: 4,
+    },
+  ];
+  for (const c of analysisCases) {
+    const got = analyzeSource(c.source, { collectUndocumented: true });
+    if (
+      got.total === c.total &&
+      got.documented === c.documented &&
+      got.undocumented.length === c.missing
+    )
+      pass++;
+    else {
+      fail++;
+      fails.push(
+        `analyzeSource FAIL: ${c.name} → expected total=${c.total} documented=${c.documented} undocumented=${c.missing}, got total=${got.total} documented=${got.documented} undocumented=${got.undocumented.length}`,
+      );
+    }
+  }
+
   for (const f of fails) process.stderr.write(`${f}\n`);
   process.stderr.write(`self-check: ${pass} passed, ${fail} failed\n`);
   process.exit(fail === 0 ? 0 : 1);
@@ -439,7 +566,7 @@ if (json) {
   console.log("# JSDoc coverage burndown");
   console.log("");
   console.log(
-    "Generated by `pnpm jsdoc:coverage`. Tier 1–4 packages only; test helpers and generated code excluded.",
+    "Generated by `bun run jsdoc:coverage`. Tier 1–4 packages only; test helpers and generated code excluded.",
   );
   console.log("");
   console.log("| Tier | Package | Documented | Total | Coverage |");

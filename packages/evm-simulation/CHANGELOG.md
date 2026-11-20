@@ -1,5 +1,80 @@
 # @morpho-org/evm-simulation
 
+## 9.0.0
+
+### Major Changes
+
+- `simulate` now returns a report instead of throwing SDK failures: `{ ok: true, result }` or `{ ok: false, failures }`, typed `SimulationReport` for quote-only params and `SimulationInputReport` for typed-input params (`SimulationFailure` is the shared failure branch). `failures` lists every SDK failure of the run, flat, in check order. A transaction revert is terminal: the failures are the assertion failures evaluated before it, then the revert. A pre-execution failure (invalid request, unsupported chain, RPC failure) is reported alone. With approval limits (any `limits` other than `"none"`), missing transaction logs are reported as `ApprovalCheckUnavailableError` and the slippage checks, which would read incomplete transfers, are skipped; if that transaction also declares `assertLogs`, the report also holds an `InvalidSimulationResponseError` for the log checks that could not run. With `limits: "none"` the approval check does not run, so missing logs are reported only by `assertLogs` or the final-mode signed-authorization use check, and a run with neither can return `ok: true`. An operation whose quote cannot be derived still reports its `position` bound violations. `simulate` rejects only with `UnexpectedSimulationError`, for failures the SDK did not classify. `toSimulationLimits` still throws.
+
+  Migrate `try { const result = await simulate(...) } catch (err) { ... }` to `const report = await simulate(...); if (!report.ok) { ... }`, then read `report.result`. Map each failure with `toSimulationErrorResponse`, which is unchanged and handles one failure. This change keeps the error classes, codes, messages and JSON response; later 9.0.0 entries list the classes and messages that change. A bare `await simulate(...)` that relied on a throw to stop still compiles but now continues after a failed run: find each one and branch on `ok`.
+
+  `findings`, added in 8.8.0, is removed: read `report.failures` instead, which lists every failure in check order, so the error 8.8.0 threw is not necessarily first.
+
+- `simulate(client, params, options?)` takes a viem client you own, with `chain` set, instead of `SimulationConfig`; the simulated chain is `client.chain.id`. Migrating from 8.9.0, pass each `config.chains` entry's `{ client }` as the first argument; for a `simulateV1Url` entry, create a viem client with `chain` set and `http(url)`. The SDK's own client dropped `content-type` from non-2xx replies and yours keeps it, so a non-JSON error body labeled `application/json` is now reported as `InvalidSimulationResponseError` instead of `RpcTransportError`, unless your transport's `fetchFn` drops `content-type` on non-2xx replies. `params.chainId`, `SimulationConfig`, `ChainSimulationConfig`, `ChainSimulationClientConfig`, `ChainSimulationConfigEntry`, `simulateV1Url` and `InvalidChainIdError` are removed. `options` holds `logger`, `timeoutMs`, `blockOverrides`, `callGasLimit` and `parentHashCheck`; `timeoutMs` keeps its whole-simulation deadline (default 5000 ms), which does not abort a request already sent, so set the transport's `timeout` to at most this value. The SDK no longer probes `eth_chainId`; a node rejecting the chain ID reports `RpcTransportError`. `UnsupportedChainError` is now reported only when Morpho's address registry lacks an address the simulation needs, and its message changed (its code did not). Retries and endpoints are your transport's: a single-endpoint `http()` with `retryCount: 0` is recommended, and a `fallback()` or retrying transport is accepted but not enforced against. `simulate` runs every request on its own copy of your client with CCIP-Read off, so `OffchainLookup` reverts cannot trigger URL fetches whatever your client's `ccipRead` setting; your client is not changed, and a client without `ccipRead: false` is no longer rejected.
+
+  `simulate` rejects an unknown `options` key, such as 8.x's `chainId`, with a `SimulationValidationError` before any RPC call, so stale 8.x settings fail instead of being ignored.
+
+- Add a required `severity` (`"fatal"`, `"error"` or `"warn"`, exported as `SimulationErrorSeverity`) to every simulation error and to the failed simulation report. Safety errors are `"fatal"`, execution errors `"warn"` (except `UnusedAuthorizationError`, `"error"`), and invalid-request and infrastructure errors `"error"`. A failed report's `severity` is the highest of its failures' (`fatal` > `error` > `warn`), so `logger[report.severity](...)` logs a run with one call. Severity is for logging only: every failure blocks the bundle, and the JSON error response does not include it. `isSimulationPackageError` now rejects structural objects without a known `severity`, so `toSimulationErrorResponse` maps such an error, for example one from an 8.x copy of the package, to the generic `UNEXPECTED_SIMULATION_ERROR` response instead of keeping its `code` and `message`.
+
+  `SimulationPackageError` defaults `severity` to `"error"`, so an existing direct subclass outside the four groups still compiles and inherits `"error"`.
+
+- Rename the error group `SimulationRejectedError`, added in 8.8.0, to `SimulationExecutionError`, with no alias. The same concrete classes extend it, and their codes, messages and severities are unchanged. Replace `instanceof SimulationRejectedError` with `instanceof SimulationExecutionError` and update imports.
+
+### Minor Changes
+
+- Reject undeclared sender token outflows when operation limits are supplied, including transfers returned later and full balance sweeps. Add the fatal `UnexpectedTokenTransferError` with code `UNEXPECTED_TOKEN_TRANSFER`. Spendable tokens come from declared operation subjects and their resolved tokens, not explicit approvals or unrelated quote-token overrides. This includes Midnight Blue parking's declared `loanToken` and the existing first-market collateral `assetPaid` fallback when no validated market struct is supplied. `limits: "none"` retains its existing behavior for funded bundles and does not protect sender balances.
+
+### Patch Changes
+
+- Add Alpen mainnet (chain 29032) metadata and Morpho Blue, Vault V2, adapter factory, allocator, oracle factory, pre-liquidation and standalone bundle deployments with their creation blocks. Pin an Alpen fork block for registry-driven tests. Midnight, a Vault V1 factory, wrapped-native tokens and Permit2 are not registered on Alpen.
+
+  Patch maintained direct runtime dependents of morpho-ts so their latest releases resolve the new registry entry. Raise blue-sdk's morpho-ts peer floor to 4.5.0 so re-exported registry reads also resolve Alpen.
+
+- Reject withdrawals and repayments that burn more shares than the market holds instead of returning negative share totals.
+
+  Withdrawals above the market's total supply, including through `AccrualPosition.withdraw`, now throw `NegativeValueError` instead of `BlueErrors.InsufficientLiquidity`. Position withdrawals and repayments that burn more than the market's total shares now throw `NegativeValueError` instead of `BlueErrors.InsufficientPosition`.
+
+- Reject supplies and borrows that would push market asset or share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Reduce the operation amount when this error occurs.
+- `toSimulationLimits` rejects a `midnightCancelOffers` action, the direct Midnight cancellation `morpho-sdk` now builds, with `UnsupportedLimitActionError`, as it does for a cancel-only bundle: a cancellation moves no value, so pass `limits: "none"` to simulate it.
+- Clarify control flow with explicit blocks and remove non-null assertions without changing public behavior.
+- Add `prepareVaultV1Redeem` for serializable exact-share redemption plans with required `shareToken: Token`, direct unlimited share approvals or ERC-2612 permits selected by `supportSignature`, without Permit2. No accrual snapshot is required, and the stored vault remains the token address. Omit the ineffective `deployless` option. Reuse the existing VaultBundlesV1 redemption encoder and preserve the lazy handle API. Expose the missing dependency `kind` on `IncompleteTransactionPlanError`.
+
+  New plans use stored format 2.
+  V1 and V2 redemptions share preparation and validation. They and ordinary withdrawals share
+  concurrent authorization reads, with chain validation before allowance/nonce reads.
+  The shared share-spending helper takes `shareToken: Token`. Stable entity flows are unchanged.
+
+- Split large internal simulation functions into smaller helpers without changing simulation results or the public API.
+- Reject interest accrual that would push market asset or supply share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Accrual at or before the market snapshot remains unchanged.
+- Add `prepareVaultV2ForceWithdraw` to prepare serializable forced-exit transaction plans with direct unlimited vault-share approvals or ERC-2612 permits, without Permit2. Preserve VaultExitBundlesV1 routing and snapshot-derived share-price protection.
+
+  The preparer and stored inputs use penalty-inclusive `assets`. Optional `slippageTolerance`
+  derives the stored `minSharePriceE27` bound through shared pure helpers, using the entity's default when omitted.
+  Share approval inputs use `shares`. New plans use stored format 2.
+  Pass the caller-fetched `vault: AccrualVaultV2` snapshot once; the stored vault remains its address.
+  The preparer has no `deployless` option because its requirement reads do not use deployless calls.
+
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0
+  - @morpho-org/blue-sdk@8.4.0
+  - @morpho-org/morpho-sdk@10.0.0
+
+## 8.9.0
+
+### Minor Changes
+
+- Add consumer-owned viem clients and deprecate `simulateV1Url`, which remains supported until the next major. Migrate each chain entry from `{ simulateV1Url: url }` to `{ client: createPublicClient({ ccipRead: false, transport: http(url, { retryCount: 0, timeout: 5000 }) }) }`. Supplying both keys, fallback transports, enabled or unspecified CCIP-Read, nonzero or missing transport retry counts, and mismatched configured client chains are rejected before RPC.
+
+  The deprecated `ChainSimulationConfig` remains an extensible interface with a required string `simulateV1Url`. Use `ChainSimulationClientConfig` for the client form; `SimulationConfig.chains` accepts the `ChainSimulationConfigEntry` union of both interfaces.
+
+  The SDK retains the whole-pipeline `timeoutMs` deadline. It does not abort in-flight consumer transport requests; set the transport timeout at or below `timeoutMs`. For identical HTTP error classification on malformed JSON-typed non-2xx responses, use the recommended `fetchFn` in the README's Client configuration section. The deprecated URL path retains its signal-bound transport and status-preserving `fetchFn`.
+
+### Patch Changes
+
+- Disable CCIP-Read on the internal simulation client so OffchainLookup reverts cannot trigger arbitrary URL fetches. Require viem >=2.9.2 (within v2), the first version that supports the client-level `ccipRead: false` setting; earlier versions ignore it.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@9.9.0
+
 ## 8.8.0
 
 ### Minor Changes

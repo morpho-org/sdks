@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { fc, test } from "@fast-check/vitest";
 import { MathLib } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
@@ -232,6 +233,8 @@ describe("PositionUtils.accrueInterest", () => {
         timestamp: times.timestamp,
       });
 
+      assert(typeof position.credit === "bigint");
+      assert(typeof position.pendingFee === "bigint");
       expect(position.credit - position.pendingFee).toBe(credit - pendingFee);
     },
   );

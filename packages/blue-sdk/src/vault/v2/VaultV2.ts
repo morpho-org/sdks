@@ -148,9 +148,15 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
       performanceFeeRecipientCanReceiveShares;
     this.managementFeeRecipientCanReceiveShares =
       managementFeeRecipientCanReceiveShares;
-    if (deadShares != null) this.deadShares = deadShares;
-    if (deadAssets != null) this.deadAssets = deadAssets;
-    if (absoluteCaps != null) this.absoluteCaps = absoluteCaps;
+    if (deadShares != null) {
+      this.deadShares = deadShares;
+    }
+    if (deadAssets != null) {
+      this.deadAssets = deadAssets;
+    }
+    if (absoluteCaps != null) {
+      this.absoluteCaps = absoluteCaps;
+    }
   }
 
   /**
@@ -295,20 +301,23 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * ```
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
-    if (this.liquidityAdapter === zeroAddress)
+    if (this.liquidityAdapter === zeroAddress) {
       return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
+    }
 
     let liquidityAdapterLimit: CapacityLimit | undefined;
-    if (this.accrualLiquidityAdapter != null)
+    if (this.accrualLiquidityAdapter != null) {
       liquidityAdapterLimit = this.accrualLiquidityAdapter.maxDeposit(
         this.liquidityData,
         assets,
       );
+    }
 
-    if (this.liquidityAllocations == null || liquidityAdapterLimit == null)
+    if (this.liquidityAllocations == null || liquidityAdapterLimit == null) {
       throw new VaultV2Errors.UnsupportedLiquidityAdapter(
         this.liquidityAdapter,
       );
+    }
 
     // At this stage: `liquidityAdapterLimit.value <= assets`
 
@@ -322,8 +331,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         { ...allocation, allocation: allocation.allocation + pending },
         this._totalAssets,
       );
-      if (liquidityAdapterLimit.value > allocationLimit.value)
+      if (liquidityAdapterLimit.value > allocationLimit.value) {
         liquidityAdapterLimit = allocationLimit;
+      }
     }
 
     return liquidityAdapterLimit;
@@ -362,16 +372,18 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     if (
       this.liquidityAdapter !== zeroAddress &&
       this.accrualLiquidityAdapter != null
-    )
+    ) {
       liquidity += this.accrualLiquidityAdapter.maxWithdraw(
         this.liquidityData,
       ).value;
+    }
 
-    if (assets > liquidity)
+    if (assets > liquidity) {
       return {
         value: liquidity,
         limiter: CapacityLimitReason.liquidity,
       };
+    }
 
     return {
       value: assets,
@@ -400,6 +412,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    *   and projected management fee shares.
    * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue references a
    *   market without matching allocation state.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when forward projection of an underlying market with positive
    *   debt requires an unsupported IRM.
    * @example
@@ -494,8 +507,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     );
 
     vault._totalAssets = newTotalAssets;
-    if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
-    if (managementFeeShares) vault.totalSupply += managementFeeShares;
+    if (performanceFeeShares) {
+      vault.totalSupply += performanceFeeShares;
+    }
+    if (managementFeeShares) {
+      vault.totalSupply += managementFeeShares;
+    }
     vault.lastUpdate = timestamp;
 
     return { vault, performanceFeeShares, managementFeeShares };

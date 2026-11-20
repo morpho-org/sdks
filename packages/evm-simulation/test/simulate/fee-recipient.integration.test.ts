@@ -1,5 +1,5 @@
 import { metaMorphoAbi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   decodeFunctionResult,
@@ -10,12 +10,15 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { simulate } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 26_356_434n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 for (const [version, vault, feeRecipient] of [
@@ -52,13 +55,9 @@ for (const [version, vault, feeRecipient] of [
       await client.mine({ blocks: 1 });
       const assets = 100_000_000n;
       const shares = 100_000_000_000_000_000_000n;
-      const result = await simulate(
+      const result = await simulateOrThrow(
+        simulationClientFor(client.transport.url, mainnet),
         {
-          timeoutMs: 30_000,
-          chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-        },
-        {
-          chainId: 1,
           transactions: [
             {
               from: feeRecipient,

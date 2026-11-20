@@ -4,7 +4,11 @@ import {
   blueBundlesV1Abi,
   erc2612Abi,
 } from "@morpho-org/morpho-sdk/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -20,16 +24,19 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import {
-  type BlueAuthorizationSignature,
-  type Erc2612PermitAuthorization,
-  simulate,
+import type {
+  BlueAuthorizationSignature,
+  Erc2612PermitAuthorization,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -47,10 +54,8 @@ const market = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 const amount = 1_000_000n;
-const configFor = (client: AnvilTestClient<typeof mainnet>) => ({
-  timeoutMs: 30_000,
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: AnvilTestClient<typeof mainnet>) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const permitFor = async (
   client: AnvilTestClient<typeof mainnet>,
@@ -140,12 +145,11 @@ for (const invalid of [false, true]) {
       }),
     };
     const request = {
-      chainId: 1,
       mode: "final" as const,
       limits: "none" as const,
       transactions: [transaction],
     };
-    const unchecked = await simulate(configFor(client), request);
+    const unchecked = await simulateOrThrow(configFor(client), request);
     const approvals = parseEventLogs({
       abi: erc20Abi,
       eventName: "Approval",
@@ -160,7 +164,7 @@ for (const invalid of [false, true]) {
           log.args.value === amount,
       ),
     ).toBe(!invalid);
-    const checked = simulate(configFor(client), {
+    const checked = simulateOrThrow(configFor(client), {
       ...request,
       authorizations: [authorization],
     });
@@ -171,7 +175,7 @@ for (const invalid of [false, true]) {
         authorization,
       });
       await expect(
-        simulate(configFor(client), {
+        simulateOrThrow(configFor(client), {
           ...request,
           mode: "preview",
           authorizations: [authorization],
@@ -201,7 +205,6 @@ test("does not use an assertion-call permit event as transaction evidence", asyn
     }),
   );
   const request = {
-    chainId: 1,
     limits: "none" as const,
     transactions: [
       {
@@ -234,9 +237,11 @@ test("does not use an assertion-call permit event as transaction evidence", asyn
       },
     ],
   };
-  await expect(simulate(configFor(client), request)).resolves.toBeDefined();
   await expect(
-    simulate(configFor(client), {
+    simulateOrThrow(configFor(client), request),
+  ).resolves.toBeDefined();
+  await expect(
+    simulateOrThrow(configFor(client), {
       ...request,
       authorizations: [authorization],
     }),
@@ -296,12 +301,13 @@ test("Blue signature requires its signed nonce, not another IncrementNonce event
     },
   ];
   const request = {
-    chainId: 1,
     limits: "none" as const,
     transactions,
     authorizations: [authorization],
   };
-  await expect(simulate(configFor(client), request)).resolves.toMatchObject({
+  await expect(
+    simulateOrThrow(configFor(client), request),
+  ).resolves.toMatchObject({
     verification: { authorizations: [] },
   });
   const wrongNonce = {
@@ -315,7 +321,10 @@ test("Blue signature requires its signed nonce, not another IncrementNonce event
     },
   };
   await expect(
-    simulate(configFor(client), { ...request, authorizations: [wrongNonce] }),
+    simulateOrThrow(configFor(client), {
+      ...request,
+      authorizations: [wrongNonce],
+    }),
   ).rejects.toMatchObject({
     code: "UNUSED_AUTHORIZATION",
     authorizationIndex: 0,
@@ -327,7 +336,7 @@ test("Blue signature requires its signed nonce, not another IncrementNonce event
     }),
   );
   await expect(
-    simulate(configFor(client), {
+    simulateOrThrow(configFor(client), {
       ...request,
       authorizations: [wrongNonce],
       transactions: [

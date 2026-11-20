@@ -687,6 +687,21 @@ export interface MidnightCancelAndMakeAction
   > {}
 
 /**
+ * Metadata for a direct Midnight cancellation of offer groups. One group is a bare
+ * `setConsumed` call; two or more are one Midnight `multicall` of `setConsumed` calls.
+ */
+export interface MidnightCancelOffersAction
+  extends BaseAction<
+    "midnightCancelOffers",
+    {
+      /** Offer groups cancelled in full, in encoded order. */
+      readonly groups: readonly Hex[];
+      /** Maker whose groups are cancelled. */
+      readonly onBehalf: Address;
+    }
+  > {}
+
+/**
  * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
  * consumers can `switch` exhaustively on it.
@@ -727,7 +742,8 @@ export type TransactionAction =
   | MidnightRedeemAction
   | MidnightTakeRepayWithdrawCollateralAction
   | MidnightRepayWithdrawCollateralAction
-  | MidnightCancelAndMakeAction;
+  | MidnightCancelAndMakeAction
+  | MidnightCancelOffersAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:
@@ -991,6 +1007,19 @@ export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 /** Onchain call or signature prerequisite returned by an entity action output. */
 export type ActionRequirement = CallRequirement | SignatureRequirement;
 
+/** Optional reference time for preparing a transaction flow. */
+export interface ReferenceTimestampParams {
+  /**
+   * Reference timestamp in seconds, normally the latest block's `timestamp`
+   * (e.g. `(await client.getBlock()).timestamp`). Omitting it falls back to the
+   * device clock; this fallback is deprecated and `now` becomes required in the
+   * next major. Entity `getRequirements()` calls reuse a supplied `now` rather
+   * than re-reading time. If collecting requirements later, create a new handle
+   * using a newer block's timestamp.
+   */
+  readonly now?: bigint;
+}
+
 /** Optional controls used while resolving action prerequisites. */
 interface ActionRequirementsParams {
   /**
@@ -1010,6 +1039,7 @@ export interface ActionOutput<
   readonly buildTx: (
     signatures?: TSignatures,
   ) => Readonly<Transaction<TAction>>;
+  /** Resolves prerequisites using the flow's {@link ReferenceTimestampParams.now | reference timestamp}. */
   readonly getRequirements: (
     params?: TRequirementsParams,
   ) => Promise<readonly ActionRequirement[]>;
@@ -1113,7 +1143,7 @@ export function isRequirementApproval(
  *   userAddress: zeroAddress,
  *   borrowAssets: 1_000_000n,
  *   positionData,
- *   deadline: Time.timestamp() + 600n,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  *
  * for (const requirement of await handle.getRequirements()) {
@@ -1296,7 +1326,9 @@ export function selectRequirementSignatures(
     readonly authorization?: boolean;
   },
 ): SelectedRequirementSignatures {
-  if (signatures == null) return {};
+  if (signatures == null) {
+    return {};
+  }
 
   const permits = signatures.filter(isPermitSignature);
   const permit2Transfers = signatures.filter(
@@ -1310,27 +1342,34 @@ export function selectRequirementSignatures(
       !isPermit2SignatureTransferSignature(signature) &&
       !isAuthorizationSignature(signature),
   );
-  if (unsupported != null)
+  if (unsupported != null) {
     throw new UnsupportedRequirementSignatureError(unsupported.action.type);
+  }
 
-  if (!accepts.permit && permits.length > 0)
+  if (!accepts.permit && permits.length > 0) {
     throw new UnexpectedRequirementSignatureError("permit");
-  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0)
+  }
+  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0) {
     throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
-  if (!accepts.authorization && authorizations.length > 0)
+  }
+  if (!accepts.authorization && authorizations.length > 0) {
     throw new UnexpectedRequirementSignatureError("authorization");
-  if (permits.length > 1)
+  }
+  if (permits.length > 1) {
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
-  if (permit2Transfers.length > 1)
+  }
+  if (permit2Transfers.length > 1) {
     throw new AmbiguousRequirementSignaturesError(
       "permit2SignatureTransfer",
       permit2Transfers.length,
     );
-  if (authorizations.length > 1)
+  }
+  if (authorizations.length > 1) {
     throw new AmbiguousRequirementSignaturesError(
       "authorization",
       authorizations.length,
     );
+  }
 
   return {
     permit: permits[0],

@@ -95,9 +95,13 @@ test("rejects a permit requirement without a concrete nonce", () => {
   ).toThrow(new UnexpectedRequirementSignatureError("permit"));
 });
 
-test.each([0n, maxUint256])(
-  "converts an approval for %s with prepared context and stable field order",
-  (amount) => {
+test.each(
+  (["assets", "shares"] as const).flatMap((denomination) =>
+    [0n, maxUint256].map((amount) => ({ denomination, amount })),
+  ),
+)(
+  "converts an approval for $amount $denomination with prepared context and stable field order",
+  ({ denomination, amount }) => {
     const requirement = encodeErc20Approval({
       token: usdc,
       spender: params.spender,
@@ -108,6 +112,7 @@ test.each([0n, maxUint256])(
       id: "custom:approval",
       chainId: 1,
       account: IN_KIND_USER,
+      denomination,
     });
     expect(step).toEqual({
       id: "custom:approval",
@@ -116,7 +121,8 @@ test.each([0n, maxUint256])(
         type: "erc20Approval",
         inputs: {
           token: usdc,
-          ...requirement.action.args,
+          spender: requirement.action.args.spender,
+          [denomination]: amount,
           chainId: 1,
           account: IN_KIND_USER,
         },
@@ -125,7 +131,7 @@ test.each([0n, maxUint256])(
     expect(Object.keys(step.action.inputs)).toEqual([
       "token",
       "spender",
-      "amount",
+      denomination,
       "chainId",
       "account",
     ]);

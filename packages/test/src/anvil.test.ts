@@ -1,9 +1,16 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const { spawnMock, isolateCacheMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  isolateCacheMock: vi.fn(),
+}));
+
+vi.mock("./forkCache.js", () => ({ isolateForkCache: isolateCacheMock }));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
@@ -67,6 +74,7 @@ const EGRESS_PROXY_VARIABLES = [
 // spawnAnvil forks directly behind an egress proxy, so a proxied host must not
 // change which branch these tests take.
 beforeEach(() => {
+  isolateCacheMock.mockResolvedValue(undefined);
   for (const name of EGRESS_PROXY_VARIABLES) vi.stubEnv(name, "");
 });
 
@@ -78,7 +86,143 @@ afterEach(() => {
 
 // These tests intentionally share the spawn mock.
 describe.sequential("spawnAnvil", () => {
-  test("serializes fork headers without suppressing the readiness banner", async () => {
+  test.each(["default", "xdg", "explicit"])(
+    "behavior: preserves %s tool-manager paths with an isolated HOME",
+    async (mode) => {
+      for (const name of [
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "ASDF_DATA_DIR",
+        "MISE_DATA_DIR",
+        "MISE_CONFIG_DIR",
+      ])
+        vi.stubEnv(name, undefined);
+      vi.stubEnv(
+        "XDG_CACHE_HOME",
+        mode === "default" ? undefined : "/original/cache",
+      );
+      if (mode !== "default") {
+        vi.stubEnv("XDG_DATA_HOME", "/custom/data");
+        vi.stubEnv("XDG_CONFIG_HOME", "/custom/config");
+      }
+      if (mode === "explicit") {
+        vi.stubEnv("ASDF_DATA_DIR", "/custom/asdf");
+        vi.stubEnv("MISE_DATA_DIR", "/custom/mise-data");
+        vi.stubEnv("MISE_CONFIG_DIR", "/custom/mise-config");
+      }
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
+      isolateCacheMock.mockResolvedValue({
+        home: "/private/anvil-home",
+        close: vi.fn().mockResolvedValue(undefined),
+      });
+      const started = spawnAnvil({
+        chainId: 1,
+        forkUrl: "https://rpc.example",
+      });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      const env = spawnMock.mock.calls[0]?.[2].env;
+      const dataHome =
+        mode !== "default"
+          ? "/custom/data"
+          : process.platform === "win32"
+            ? (process.env.LOCALAPPDATA ?? join(homedir(), "AppData/Local"))
+            : join(homedir(), ".local/share");
+      const configHome =
+        mode === "default" ? join(homedir(), ".config") : "/custom/config";
+      expect(env.HOME).toBe("/private/anvil-home");
+      expect(env.XDG_DATA_HOME).toBe(dataHome);
+      expect(env.XDG_CONFIG_HOME).toBe(configHome);
+      expect(env.XDG_CACHE_HOME).toBe(
+        mode === "default" ? undefined : "/original/cache",
+      );
+      expect(env.ASDF_DATA_DIR).toBe(
+        mode === "explicit" ? "/custom/asdf" : join(homedir(), ".asdf"),
+      );
+      expect(env.MISE_DATA_DIR).toBe(
+        mode === "explicit" ? "/custom/mise-data" : join(dataHome, "mise"),
+      );
+      expect(env.MISE_CONFIG_DIR).toBe(
+        mode === "explicit" ? "/custom/mise-config" : join(configHome, "mise"),
+      );
+      subprocess.stdout.write("Listening on 127.0.0.1:31030\n");
+      await (await started).stopAndWait();
+    },
+  );
+
+  test("behavior: isolates fork cache writes and waits for their merge on shutdown", async () => {
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+    const close = vi.fn().mockResolvedValue(undefined);
+    isolateCacheMock.mockResolvedValue({ home: "/private/anvil-home", close });
+    const started = spawnAnvil({
+      chainId: 1,
+      forkUrl: "https://rpc.example",
+      forkBlockNumber: 123n,
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    expect(spawnMock.mock.calls[0]?.[2].env.HOME).toBe("/private/anvil-home");
+    expect(process.env.HOME).not.toBe("/private/anvil-home");
+    expect(isolateCacheMock).toHaveBeenCalledWith(undefined, 123n);
+    subprocess.stdout.write("Listening on 127.0.0.1:31030\n");
+    const node = await started;
+    expect(close).not.toHaveBeenCalled();
+    await node.stopAndWait();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    { chainId: 1 },
+    { chainId: 1, forkUrl: "global_rpc_alias" },
+    { chainId: 1, forkUrl: "https://rpc.example", noStorageCaching: true },
+    { chainId: 1, forkUrl: "wss://rpc.example", noStorageCaching: true },
+  ])(
+    "behavior: does not isolate caches for $forkUrl with noStorageCaching=$noStorageCaching",
+    async (args) => {
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
+      const started = spawnAnvil(args);
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31030\n");
+      const node = await started;
+      await node.stopAndWait();
+      expect(isolateCacheMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    { forkUrl: "https://rpc.example", noBal: undefined, expected: true },
+    { forkUrl: "https://rpc.example", noBal: false, expected: false },
+    { forkUrl: "https://rpc.example", noBal: true, expected: true },
+    { forkUrl: undefined, noBal: undefined, expected: false },
+    { forkUrl: undefined, noBal: true, expected: true },
+  ])(
+    "maps noBal=$noBal with fork=$forkUrl to flag=$expected",
+    async ({ forkUrl, noBal, expected }) => {
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
+      const started = spawnAnvil({ chainId: 1, forkUrl, noBal });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      const flags = spawnMock.mock.calls[0]?.[1] as string[];
+      subprocess.stdout.write("Listening on 127.0.0.1:31030\n");
+      const node = await started;
+      try {
+        expect(flags.includes("--no-bal")).toBe(expected);
+      } finally {
+        await node.stopAndWait();
+      }
+    },
+  );
+
+  test("behavior: serializes fork headers without suppressing the readiness banner", async () => {
     const subprocess = createFakeAnvilProcess();
     spawnMock.mockReturnValue(
       subprocess as unknown as ChildProcessWithoutNullStreams,
@@ -341,25 +485,35 @@ describe.sequential("spawnAnvil", () => {
     expect(await forkUrlFor("https://rpc.example/v1/b")).not.toBe(first);
   });
 
-  test("behavior: passes a non-http fork URL to Anvil without a proxy", async () => {
-    const subprocess = createFakeAnvilProcess();
-    spawnMock.mockReturnValue(
-      subprocess as unknown as ChildProcessWithoutNullStreams,
-    );
+  test.each(["ws", "wss"])(
+    "behavior: isolates %s fork caches without an HTTP proxy",
+    async (scheme) => {
+      const subprocess = createFakeAnvilProcess();
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
 
-    const spawnedPromise = spawnAnvil({
-      chainId: 1,
-      forkUrl: "wss://rpc.example/v1/key@123",
-    });
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    const spawnedArgs: string[] = spawnMock.mock.calls[0]?.[1];
-    expect(spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1]).toBe(
-      "wss://rpc.example/v1/key@123",
-    );
-    expect(spawnedArgs.join(" ")).not.toContain("127.0.0.1");
-    subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
-    await (await spawnedPromise).stopAndWait();
-  });
+      const close = vi.fn().mockResolvedValue(undefined);
+      isolateCacheMock.mockResolvedValue({
+        home: "/private/anvil-home",
+        close,
+      });
+      const forkUrl = `${scheme}://rpc.example/v1/key@123`;
+      const spawnedPromise = spawnAnvil({
+        chainId: 1,
+        forkUrl,
+      });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      const spawnedArgs: string[] = spawnMock.mock.calls[0]?.[1];
+      expect(spawnedArgs[spawnedArgs.indexOf("--fork-url") + 1]).toBe(forkUrl);
+      expect(isolateCacheMock).toHaveBeenCalledWith(undefined, 123n);
+      expect(spawnMock.mock.calls[0]?.[2].env.HOME).toBe("/private/anvil-home");
+      expect(spawnedArgs.join(" ")).not.toContain("127.0.0.1");
+      subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+      await (await spawnedPromise).stopAndWait();
+      expect(close).toHaveBeenCalledOnce();
+    },
+  );
 
   test.each(EGRESS_PROXY_VARIABLES)(
     "behavior: forks directly when %s is set",
@@ -385,7 +539,7 @@ describe.sequential("spawnAnvil", () => {
           "https://rpc.example/v1/key@123",
         );
         // Not an object match: a failure would print the whole environment.
-        expect(env === process.env).toBe(true);
+        expect(env.HTTP_PROXY === process.env.HTTP_PROXY).toBe(true);
         subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
         await (await spawnedPromise).stopAndWait();
       } finally {
@@ -874,36 +1028,55 @@ describe.sequential("spawnAnvil", () => {
     expect(await cleanup).toBe(true);
   });
 
-  test("error: AnvilCleanupError bounds a missing close event", async () => {
-    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
-    spawnMock.mockReturnValue(
-      subprocess as unknown as ChildProcessWithoutNullStreams,
-    );
+  test.each(["true", "false"])(
+    "error: AnvilCleanupError bounds a missing close event with CI=%s",
+    async (ci) => {
+      vi.stubEnv("CI", ci);
+      const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
 
-    const spawnedPromise = spawnAnvil({ chainId: 1 });
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    subprocess.stdout.write("Listening on 127.0.0.1:31011\n");
-    const spawned = await spawnedPromise;
+      const closeCache = vi.fn().mockResolvedValue(undefined);
+      isolateCacheMock.mockResolvedValue({
+        home: "/private/anvil-home",
+        close: closeCache,
+      });
+      const spawnedPromise = spawnAnvil({
+        chainId: 1,
+        forkUrl: "https://rpc.example",
+      });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31011\n");
+      const spawned = await spawnedPromise;
 
-    vi.useFakeTimers();
-    const processError = new Error("failed to kill Anvil");
-    const cleanup = spawned.stopAndWait();
-    const cleanupError = cleanup.catch((caught: unknown) => caught);
-    subprocess.emit("error", processError);
-    await vi.advanceTimersByTimeAsync(10_000);
-    const error = await cleanupError;
-    expect(error).toBeInstanceOf(AnvilCleanupError);
-    if (!(error instanceof AnvilCleanupError)) throw error;
-    expect(error.cause).toBe(processError);
-    expect(subprocess.kill).toHaveBeenNthCalledWith(1, "SIGINT");
-    expect(subprocess.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
-    expect(subprocess.stdin.destroyed).toBe(true);
-    expect(subprocess.stdout.destroyed).toBe(true);
-    expect(subprocess.stderr.destroyed).toBe(true);
-    expect(subprocess.unref).toHaveBeenCalledOnce();
+      vi.useFakeTimers();
+      const processError = new Error("failed to kill Anvil");
+      const cleanup = spawned.stopAndWait();
+      const cleanupError = cleanup.catch((caught: unknown) => caught);
+      subprocess.emit("error", processError);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const error = await cleanupError;
+      expect(error).toBeInstanceOf(AnvilCleanupError);
+      if (!(error instanceof AnvilCleanupError)) throw error;
+      expect(error.cause).toBeInstanceOf(Error);
+      expect(error.cause).toMatchObject({
+        name: processError.name,
+        message: processError.message,
+      });
+      expect(error.cause === processError).toBe(ci !== "true");
+      expect(subprocess.kill).toHaveBeenNthCalledWith(1, "SIGINT");
+      expect(subprocess.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
+      expect(subprocess.stdin.destroyed).toBe(true);
+      expect(subprocess.stdout.destroyed).toBe(true);
+      expect(subprocess.stderr.destroyed).toBe(true);
+      expect(subprocess.unref).toHaveBeenCalledOnce();
+      expect(closeCache).not.toHaveBeenCalled();
 
-    subprocess.exitCode = 0;
-    subprocess.emit("close", 0, "SIGKILL");
-    await Promise.resolve();
-  });
+      subprocess.exitCode = 0;
+      subprocess.emit("close", 0, "SIGKILL");
+      await Promise.resolve();
+      expect(closeCache).toHaveBeenCalledOnce();
+    },
+  );
 });

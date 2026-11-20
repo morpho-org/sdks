@@ -1,11 +1,19 @@
 import { MarketParams, SharesMath } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { simulate, toSimulationLimits } from "../../src/index.js";
+import { toSimulationLimits } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
 /**
@@ -16,7 +24,7 @@ import { seededMarketData } from "../setup.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -24,9 +32,8 @@ const test = createViemTest(mainnet, {
   },
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const CBBTC: Address = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
@@ -133,8 +140,7 @@ describe.sequential("toSimulationLimits — real builder round-trips", () => {
       deadline,
     });
     const withdrawTx = withdraw.buildTx();
-    const withdrawResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const withdrawResult = await simulateOrThrow(configFor(client), {
       limits: toSimulationLimits(withdrawTx.action, {
         owner: user,
         expected: { sharesBurned: supplyPosition.supplyShares },
@@ -165,8 +171,7 @@ describe.sequential("toSimulationLimits — real builder round-trips", () => {
       deadline,
     });
     const borrowTx = borrow.buildTx();
-    const borrowResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const borrowResult = await simulateOrThrow(configFor(client), {
       limits: toSimulationLimits(borrowTx.action, {
         owner: user,
         expected: {
@@ -200,8 +205,7 @@ describe.sequential("toSimulationLimits — real builder round-trips", () => {
     });
     await executeRequirements(client, repay);
     const repayTx = repay.buildTx();
-    const repayResult = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const repayResult = await simulateOrThrow(configFor(client), {
       limits: toSimulationLimits(repayTx.action, {
         owner: user,
         expected: { assetsReceived: collateralAssets / 4n },

@@ -143,7 +143,7 @@ export const vaultV1MigrateToV2 = (
     throw new AmountAndSharesExclusiveError();
   }
   const selectedAmount = assets ?? shares ?? 0n;
-  const amountField = assets != null ? "assets" : "shares";
+  const amountField = assets == null ? "shares" : "assets";
   // Validation only; rejects non-positive migration amounts.
   validatePositiveInput(amountField, selectedAmount);
   // Validation only; rejects non-positive share-price bounds.

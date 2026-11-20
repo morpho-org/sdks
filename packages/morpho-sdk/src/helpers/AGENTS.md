@@ -24,7 +24,7 @@ Per-function contracts (arguments, return shapes, behavior) live as JSDoc on eac
   `VaultV2BlueReallocationData`, whose outputs are the only reallocation inputs accepted by
   high-level Blue writes. Read-only liquidity metrics live on the Vault V2 reallocation-data
   entity, not in this layer.
-- **Metadata** — `addTransactionMetadata(tx, metadata)` appends hex-encoded analytics bytes to `tx.data`: an optional 4-byte unix timestamp followed by a 4-byte origin (timestamp is omitted when `metadata.timestamp` is falsy). Callers gate on `metadata` being provided; the helper itself is a no-op when `tx.data` is empty.
+- **Metadata** — `addTransactionMetadata(tx, metadata)` appends hex-encoded analytics bytes to `tx.data`: an optional 4-byte unix timestamp followed by a 4-byte origin. For entity flows, configure `metadata.timestamp: true` in `morphoViemExtension` client options and pass a fresh `now` to each flow; `resolveTransactionMetadata` replaces `true` with the flow's reference timestamp. Only the device-clock fallback (`true` without a flow `now`) is deprecated. Direct action or `addTransactionMetadata` callers can pass a bigint per transaction (including `0n`); do not store a per-transaction block timestamp in long-lived client options. The timestamp is omitted when false or unset. Explicit bigint timestamps must be uint32 seconds; invalid values throw typed input errors, even for empty calldata. Callers gate on `metadata` being provided; otherwise the helper is a no-op when `tx.data` is empty.
 
 ## Constants
 

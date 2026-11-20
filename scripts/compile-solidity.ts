@@ -244,7 +244,7 @@ if (unexpectedFiles.length > 0) {
 }
 
 if (writtenFiles.length > 0) {
-  execFileSync("pnpm", ["exec", "biome", "check", "--write", ...writtenFiles], {
+  execFileSync("bun", ["run", "biome", "check", "--write", ...writtenFiles], {
     cwd: workspaceRoot,
     stdio: "inherit",
   });

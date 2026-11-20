@@ -18,7 +18,9 @@ export function validateMidnightCollateralBatch(
   transfers: readonly MidnightCollateralTransfer[],
   emptyError: Error,
 ): void {
-  if (transfers.length === 0) throw emptyError;
+  if (transfers.length === 0) {
+    throw emptyError;
+  }
   const indexes = new Set<bigint>();
   for (const { collateralIndex } of transfers) {
     if (indexes.has(collateralIndex)) {

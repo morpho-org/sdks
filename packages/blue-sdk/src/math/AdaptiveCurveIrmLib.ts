@@ -59,9 +59,13 @@ export namespace AdaptiveCurveIrmLib {
     x = BigInt(x);
 
     // If x < ln(1e-18) then exp(x) < 1e-18 so it is rounded to zero.
-    if (x < LN_WEI_INT) return 0n;
+    if (x < LN_WEI_INT) {
+      return 0n;
+    }
     // `wExp` is clipped to avoid overflowing when multiplied with 1 ether.
-    if (x >= WEXP_UPPER_BOUND) return WEXP_UPPER_VALUE;
+    if (x >= WEXP_UPPER_BOUND) {
+      return WEXP_UPPER_VALUE;
+    }
 
     // Decompose x as x = q * ln(2) + r with q an integer and -ln(2)/2 <= r <= ln(2)/2.
     // q = x / ln(2) rounded half toward zero.
@@ -73,7 +77,9 @@ export namespace AdaptiveCurveIrmLib {
     const expR = MathLib.WAD + r + (r * r) / MathLib.WAD / 2n;
 
     // Return e^x = 2^q * e^r.
-    if (q >= 0n) return expR << q;
+    if (q >= 0n) {
+      return expR << q;
+    }
     return expR >> -q;
   }
 
@@ -219,7 +225,9 @@ export namespace AdaptiveCurveIrmLib {
       const maxBorrowRate = MathLib.wMulDown(rateAtTarget, CURVE_STEEPNESS);
 
       const diffToMaxBorrowRate = maxBorrowRate - rateAtTarget;
-      if (diffToMaxBorrowRate === 0n) return MathLib.WAD;
+      if (diffToMaxBorrowRate === 0n) {
+        return MathLib.WAD;
+      }
 
       return MathLib.min(
         MathLib.WAD,

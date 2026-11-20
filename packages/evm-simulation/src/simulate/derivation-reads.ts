@@ -20,7 +20,17 @@ export function planDerivationReads(
 ): readonly StateRead[] {
   const reads: StateRead[] = [];
   operations.forEach(({ limit, marketParams }, index) => {
-    if (limit.inputs === undefined) return;
+    if (limit.inputs === undefined) {
+      return;
+    }
+    let subject: string;
+    if ("marketId" in limit) {
+      subject = `marketId ${limit.marketId}`;
+    } else if (limit.type === "vaultV1MigrateToV2") {
+      subject = `sourceVault ${limit.sourceVault}, targetVault ${limit.targetVault}`;
+    } else {
+      subject = `vault ${limit.vault}`;
+    }
     const add = (
       name: string,
       { to, data }: { readonly to: Address; readonly data: Hex },
@@ -30,17 +40,12 @@ export function planDerivationReads(
         id: `derive:${index}:${name}`,
         operationIndex: index,
         operationType: limit.type,
-        subject:
-          "marketId" in limit
-            ? `marketId ${limit.marketId}`
-            : limit.type === "vaultV1MigrateToV2"
-              ? `sourceVault ${limit.sourceVault}, targetVault ${limit.targetVault}`
-              : `vault ${limit.vault}`,
+        subject,
         to,
         data,
       });
     if ("marketId" in limit) {
-      if (marketParams === undefined)
+      if (marketParams === undefined) {
         throw new SlippageCheckUnavailableError(
           `Missing market parameters for "${limit.type}".`,
           {
@@ -50,6 +55,7 @@ export function planDerivationReads(
             reason: "missingRead",
           },
         );
+      }
       add("accrue", {
         to: morpho,
         data: encodeFunctionData({
@@ -115,15 +121,12 @@ export function planDerivationReads(
       const assets = deposit
         ? amount - MathLib.wMulDown(amount, limit.referralFee ?? 0n)
         : amount;
+      const withdrawalPreview = redeem ? "previewRedeem" : "previewWithdraw";
       add("preview", {
         to: limit.vault,
         data: encodeFunctionData({
           abi: erc4626Abi,
-          functionName: deposit
-            ? "previewDeposit"
-            : redeem
-              ? "previewRedeem"
-              : "previewWithdraw",
+          functionName: deposit ? "previewDeposit" : withdrawalPreview,
           args: [assets],
         }),
       });

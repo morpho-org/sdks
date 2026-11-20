@@ -1,4 +1,4 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { BASE_FORK_BLOCK, getErpcForkUrl } from "@morpho-org/test";
 import {
   classifyError,
   createFaultProxy,
@@ -17,7 +17,7 @@ import { test as mainnetTest } from "../setup.js";
 
 const baseTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 41_290_768n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });
 

@@ -110,7 +110,9 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    */
   get maxBorrowableAssets() {
     const { maxBorrowAssets } = this;
-    if (maxBorrowAssets == null) return;
+    if (maxBorrowAssets == null) {
+      return;
+    }
 
     return MathLib.zeroFloorSub(maxBorrowAssets, this.borrowAssets);
   }
@@ -145,7 +147,9 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    */
   get isLiquidatable() {
     const isHealthy = this._market.isHealthy(this);
-    if (isHealthy == null) return;
+    if (isHealthy == null) {
+      return;
+    }
 
     return !isHealthy;
   }
@@ -206,6 +210,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * Returns a new position derived from this position, whose interest has been accrued up to the given timestamp.
    * @param timestamp Optional accrual timestamp. Defaults to the market's `lastUpdate`; past or equal timestamps return an unchanged copy without projecting interest or rewinding the market.
    * @returns A new position with its accrued market, unchanged for past or equal timestamps.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    * @example
    * ```ts
@@ -235,6 +240,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, supplied assets, and minted supply shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
+   * @throws {BlueErrors.TotalOverflow} when accrual or the operation exceeds a market uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -280,8 +286,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, withdrawn assets, and burned supply shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
-   * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
+   * @throws {BlueErrors.InsufficientLiquidity} when a withdrawal within total supply exceeds the market's available loan assets.
    * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's supply shares.
+   * @throws {NegativeValueError} when burning shares would make the market's total supply shares negative.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -316,11 +324,12 @@ export class AccrualPosition extends Position implements IAccrualPosition {
 
     position.supplyShares -= shares;
 
-    if (position.supplyShares < 0n)
+    if (position.supplyShares < 0n) {
       throw new BlueErrors.InsufficientPosition(
         position.user,
         position.marketId,
       );
+    }
 
     return { position, assets, shares };
   }
@@ -361,6 +370,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
    * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's collateral.
    * @throws {BlueErrors.InsufficientCollateral} when the projected position would be unhealthy.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -386,24 +396,27 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * ```
    */
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
-    if (this._market.price == null)
+    if (this._market.price == null) {
       throw new BlueErrors.UnknownOraclePrice(this.marketId);
+    }
 
     const position = this.accrueInterest(timestamp);
 
     position.collateral -= assets;
 
-    if (position.collateral < 0n)
+    if (position.collateral < 0n) {
       throw new BlueErrors.InsufficientPosition(
         position.user,
         position.marketId,
       );
+    }
 
-    if (!position.isHealthy!)
+    if (!position.isHealthy) {
       throw new BlueErrors.InsufficientCollateral(
         position.user,
         position.marketId,
       );
+    }
 
     return position;
   }
@@ -415,6 +428,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * @param shares - Minted borrow shares, or `0n` when `assets` specifies the amount.
    * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, borrowed assets, and minted borrow shares after rounding.
+   * @throws {BlueErrors.TotalOverflow} when accrual or the operation exceeds a market uint128 total.
    * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
    * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
@@ -446,8 +460,9 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
-    if (market.price == null)
+    if (market.price == null) {
       throw new BlueErrors.UnknownOraclePrice(market.id);
+    }
 
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
@@ -456,8 +471,9 @@ export class AccrualPosition extends Position implements IAccrualPosition {
 
     position.borrowShares += shares;
 
-    if (!position.isHealthy!)
+    if (!position.isHealthy) {
       throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
+    }
 
     return { position, assets, shares };
   }
@@ -471,6 +487,8 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * @returns The new accrued position, repaid assets, and burned borrow shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
    * @throws {BlueErrors.InsufficientPosition} when the repayment exceeds the position's borrow shares.
+   * @throws {NegativeValueError} when burning shares would make the market's total borrow shares negative.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -505,11 +523,12 @@ export class AccrualPosition extends Position implements IAccrualPosition {
 
     position.borrowShares -= shares;
 
-    if (position.borrowShares < 0n)
+    if (position.borrowShares < 0n) {
       throw new BlueErrors.InsufficientPosition(
         position.user,
         position.marketId,
       );
+    }
 
     return { position, assets, shares };
   }

@@ -140,7 +140,9 @@ export async function fetchVaultV2BluePublicAllocatorData(
   const allocationIds = new Set<Hash>();
 
   for (const adapter of vault.accrualAdapters) {
-    if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) continue;
+    if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+      continue;
+    }
     adapters.add(adapter.address);
 
     const marketParamsList = adapter.markets.map((market) => market.params);
@@ -149,8 +151,9 @@ export async function fetchVaultV2BluePublicAllocatorData(
       !marketParamsList.some(
         (marketParams) => marketParams.id === targetMarketParams.id,
       )
-    )
+    ) {
       marketParamsList.push(targetMarketParams);
+    }
 
     for (const marketParams of marketParamsList) {
       const ids = adapter.ids(marketParams);
@@ -159,7 +162,9 @@ export async function fetchVaultV2BluePublicAllocatorData(
         adapter: adapter.address,
         adapterMarketCapId,
       });
-      for (const id of ids) allocationIds.add(id);
+      for (const id of ids) {
+        allocationIds.add(id);
+      }
     }
   }
 
@@ -168,53 +173,18 @@ export async function fetchVaultV2BluePublicAllocatorData(
 
   if (deployless) {
     try {
-      const result = await readContract(client, {
-        ...parameters,
-        abi,
-        code,
-        functionName: "query",
-        args: [
-          allocator,
-          vault.address,
-          adapterList,
-          marketRequests,
-          allocationIdList,
-        ],
+      return await fetchPublicAllocatorDataWithQuery(client, {
+        address: vault.address,
+        allocator,
+        adapterList,
+        marketRequests,
+        allocationIdList,
+        parameters,
       });
-
-      const marketPublicAllocatorConfigs: Record<
-        Hash,
-        VaultV2BlueMarketPublicAllocatorConfig | undefined
-      > = {};
-      for (const config of result.marketConfigs) {
-        marketPublicAllocatorConfigs[config.adapterMarketCapId] =
-          new VaultV2BlueMarketPublicAllocatorConfig({
-            vault: vault.address,
-            ...config,
-          });
-      }
-
-      const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
-      for (const allocation of result.allocations) {
-        allocations[allocation.id] = allocation;
-      }
-
-      return {
-        publicAllocatorConfig: result.isAllocator
-          ? new VaultV2BluePublicAllocatorConfig({
-              vault: vault.address,
-              canPullFromIdle: result.canPullFromIdle,
-              penalty: result.penalty,
-            })
-          : undefined,
-        activeAdapters: new Set(
-          adapterList.filter((_, index) => result.isActiveAdapters[index]),
-        ),
-        marketPublicAllocatorConfigs,
-        allocations,
-      };
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
       // Fall back to direct reads for non-transport deployless failures.
     }
   }
@@ -304,6 +274,68 @@ export async function fetchVaultV2BluePublicAllocatorData(
     publicAllocatorConfig: isAllocator ? publicAllocatorConfig : undefined,
     activeAdapters: new Set(
       adapterList.filter((_, index) => isActiveAdapters[index]),
+    ),
+    marketPublicAllocatorConfigs,
+    allocations,
+  };
+}
+
+async function fetchPublicAllocatorDataWithQuery(
+  client: Client,
+  {
+    address,
+    allocator,
+    adapterList,
+    marketRequests,
+    allocationIdList,
+    parameters,
+  }: {
+    readonly address: Address;
+    readonly allocator: Address;
+    readonly adapterList: readonly Address[];
+    readonly marketRequests: readonly {
+      readonly adapter: Address;
+      readonly adapterMarketCapId: Hash;
+    }[];
+    readonly allocationIdList: readonly Hash[];
+    readonly parameters: FetchParameters;
+  },
+) {
+  const result = await readContract(client, {
+    ...parameters,
+    abi,
+    code,
+    functionName: "query",
+    args: [allocator, address, adapterList, marketRequests, allocationIdList],
+  });
+
+  const marketPublicAllocatorConfigs: Record<
+    Hash,
+    VaultV2BlueMarketPublicAllocatorConfig | undefined
+  > = {};
+  for (const config of result.marketConfigs) {
+    marketPublicAllocatorConfigs[config.adapterMarketCapId] =
+      new VaultV2BlueMarketPublicAllocatorConfig({
+        vault: address,
+        ...config,
+      });
+  }
+
+  const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
+  for (const allocation of result.allocations) {
+    allocations[allocation.id] = allocation;
+  }
+
+  return {
+    publicAllocatorConfig: result.isAllocator
+      ? new VaultV2BluePublicAllocatorConfig({
+          vault: address,
+          canPullFromIdle: result.canPullFromIdle,
+          penalty: result.penalty,
+        })
+      : undefined,
+    activeAdapters: new Set(
+      adapterList.filter((_, index) => result.isActiveAdapters[index]),
     ),
     marketPublicAllocatorConfigs,
     allocations,

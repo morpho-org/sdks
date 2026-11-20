@@ -1,6 +1,10 @@
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { getChainAddress, getChainAddresses } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { type Address, getAddress, isAddressEqual, parseUnits } from "viem";
@@ -10,8 +14,12 @@ import {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   SimulationValidationError,
-  simulate,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
+import { deployIdleVaultV2 } from "../setup.js";
 
 /**
  * Chaos S8: transactions that target a code-less address. `eth_simulateV1`
@@ -26,7 +34,7 @@ import {
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -35,20 +43,16 @@ const test = createViemTest(mainnet, {
 });
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-const KEYROCK_USDC_VAULT_V2: Address =
-  "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
 const EOA: Address = getAddress("0x00000000000000000000000000000000DeaDBeef");
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 describe.sequential("chaos: S8 missing contract", () => {
   test("error: SimulationValidationError when the calldata target has no code", async ({
     client,
   }) => {
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -74,8 +78,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     client,
   }) => {
     await client.setCode({ address: USDC, bytecode: "0x" });
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -93,8 +96,7 @@ describe.sequential("chaos: S8 missing contract", () => {
   test("default: value-only transfer to an EOA stays allowed", async ({
     client,
   }) => {
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -138,8 +140,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     // Native funding emits no token requirement to satisfy.
     await action.getRequirements();
     const tx = action.buildTx();
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -166,9 +167,10 @@ describe.sequential("chaos: S8 missing contract", () => {
     expect(usdcRuntime).not.toBe("0x");
     await client.setCode({ address: bundler, bytecode: usdcRuntime! });
 
+    const vault = await deployIdleVaultV2(client, USDC);
     const morpho = client
       .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.vaultV2(KEYROCK_USDC_VAULT_V2, mainnet.id);
+      .morpho.vaultV2(vault, mainnet.id);
     const vaultData = await morpho.getData();
     const assets = parseUnits("1", 6);
     const action = morpho.deposit({
@@ -187,13 +189,12 @@ describe.sequential("chaos: S8 missing contract", () => {
     }
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
-    const promise = simulate(configFor(client), {
-      chainId: mainnet.id,
+    const promise = simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
             type: "vaultV2Deposit",
-            vault: KEYROCK_USDC_VAULT_V2,
+            vault,
             account: client.account.address,
             slippageTolerance: 0n,
             quote: { sharesMinted: 1n, assetsPaid: assets },
@@ -224,9 +225,10 @@ describe.sequential("chaos: S8 missing contract", () => {
     expect(usdcRuntime).not.toBe("0x");
     await client.setCode({ address: bundler, bytecode: usdcRuntime! });
 
+    const vault = await deployIdleVaultV2(client, USDC);
     const morpho = client
       .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.vaultV2(KEYROCK_USDC_VAULT_V2, mainnet.id);
+      .morpho.vaultV2(vault, mainnet.id);
     const vaultData = await morpho.getData();
     const assets = parseUnits("1", 6);
     const action = morpho.deposit({
@@ -245,8 +247,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     }
     await client.deal({ erc20: USDC, amount: assets });
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: "none",
       transactions: [
         {
@@ -260,7 +261,7 @@ describe.sequential("chaos: S8 missing contract", () => {
     expect(
       result.transfers.filter(
         (transfer) =>
-          isAddressEqual(transfer.token, KEYROCK_USDC_VAULT_V2) &&
+          isAddressEqual(transfer.token, vault) &&
           isAddressEqual(transfer.to, client.account.address),
       ),
     ).toEqual([]);

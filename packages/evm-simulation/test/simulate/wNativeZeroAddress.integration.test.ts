@@ -22,6 +22,7 @@
  * }
  * ```
  */
+
 import {
   type Address,
   type Hex,
@@ -31,7 +32,10 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { simulate } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { test } from "../setup.js";
 
 const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -51,15 +55,9 @@ describe("simulate — unwrapped WETH sent to zero", () => {
     );
     await client.call({ to: HELPER, data: "0xe8d1eb73" });
 
-    const result = await simulate(
+    const result = await simulateOrThrow(
+      simulationClientFor(client.transport.url, mainnet),
       {
-        timeoutMs: 30_000,
-        chains: new Map([
-          [mainnet.id, { simulateV1Url: client.transport.url! }],
-        ]),
-      },
-      {
-        chainId: mainnet.id,
         limits: "none",
         transactions: [
           {

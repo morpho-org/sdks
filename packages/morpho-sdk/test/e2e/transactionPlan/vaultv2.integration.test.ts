@@ -46,11 +46,10 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
     expect(allowances).toEqual([maxUint256, 0n]);
 
     const plan = await prepareVaultV2Deposit(client, {
-      vault: KeyrockUsdcVaultV2.address,
-      vaultData: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      vault: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
       chainId: client.chain.id,
       account: client.account.address,
-      amount,
+      assets: amount,
       supportSignature: false,
     });
     expect(plan.steps.map(({ id, action }) => [id, action.type])).toEqual([
@@ -62,7 +61,7 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
       inputs: {
         token: KeyrockUsdcVaultV2.asset,
         spender,
-        amount: maxUint256,
+        assets: maxUint256,
         chainId: client.chain.id,
         account: client.account.address,
       },
@@ -87,8 +86,8 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
     // Fetch the snapshot, then prepare: USDC supports ERC-2612, so no approval step is needed.
     let depositPlan = await prepareVaultV2Deposit(client, {
       ...intent,
-      amount,
-      vaultData: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      assets: amount,
+      vault: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
     });
     expect(depositPlan.steps.map(({ id }) => id)).toEqual(["vaultV2Deposit"]);
     expect(
@@ -131,8 +130,8 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
     // Withdrawal preparation derives the share allowance from the snapshot to decide on the share permit.
     let withdrawalPlan = await prepareVaultV2Withdraw(client, {
       ...intent,
-      amount: withdrawal,
-      vaultData: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      assets: withdrawal,
+      vault: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
     });
     expect(withdrawalPlan.steps.map(({ id }) => id)).toEqual([
       "vaultV2Withdraw",
@@ -178,8 +177,8 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
     ).toBe(maxUint256);
     const nextWithdrawal = await prepareVaultV2Withdraw(client, {
       ...intent,
-      amount: parseUnits("1", 6),
-      vaultData: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
+      assets: parseUnits("1", 6),
+      vault: await fetchAccrualVaultV2(KeyrockUsdcVaultV2.address, client),
     });
     expect(nextWithdrawal.signatureRequests).toEqual([]);
     expect(nextWithdrawal.steps.map(({ action }) => action.type)).toEqual([
@@ -198,11 +197,10 @@ describe("TransactionPlan Vault V2 on a pinned mainnet fork", () => {
     client,
   }) => {
     const intent = {
-      vault: Re7UsdtVaultV2.address,
       chainId: client.chain.id,
       account: client.account.address,
-      amount: parseUnits("10", 6),
-      vaultData: await fetchAccrualVaultV2(Re7UsdtVaultV2.address, client),
+      assets: parseUnits("10", 6),
+      vault: await fetchAccrualVaultV2(Re7UsdtVaultV2.address, client),
     } as const;
     const plan = await prepareVaultV2Deposit(client, {
       ...intent,

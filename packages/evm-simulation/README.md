@@ -8,7 +8,7 @@ transfer parsing, and net per-account balance changes.
 ## Installation
 
 ```bash
-pnpm add @morpho-org/evm-simulation
+npm install @morpho-org/evm-simulation
 ```
 
 ## Usage
@@ -16,51 +16,73 @@ pnpm add @morpho-org/evm-simulation
 ```ts
 import {
   simulate,
-  type SimulationConfig,
   SimulationRevertedError
 } from "@morpho-org/evm-simulation";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
 
-const config: SimulationConfig = {
-  chains: new Map([
-    [1, { simulateV1Url: "https://<your-mainnet-rpc>" }],
-  ]),
-  timeoutMs: 5000,
-};
+// You own the client: its transport must support eth_simulateV1, and
+// `chain` must be set; the simulated chain is `client.chain.id`.
+// The SDK turns CCIP-Read off on its own copy of the client.
+const client = createPublicClient({
+  chain: mainnet,
+  transport: http("https://<your-mainnet-rpc>", { timeout: 5_000, retryCount: 0 }),
+});
 
-try {
-  const { simulationTxs, calls, transfers, assetChanges } = await simulate(
-    config,
-    {
-      chainId: 1,
-      // mode: "final" (default) executes the signed calldata against actual
-      // permissions and checks supplied signed authorization descriptors.
-      // mode: "preview" prepares the descriptors as simulated permissions.
-      transactions: [{ from: user, to: vault, data: encodedDeposit }],
-      // limits is required: quote the deposit's pay-in cap and minimum
-      // minted shares. ("none" is reserved for transactions no operation
-      // type covers.)
-      limits: {
-        operations: [
-          {
-            type: "vaultV1Deposit",
-            vault,
-            quote: { assetsPaid: depositAssets, sharesMinted: quotedShares },
-          },
-        ],
-      },
+const report = await simulate(
+  client,
+  {
+    // mode: "final" (default) executes the signed calldata against actual
+    // permissions and checks supplied signed authorization descriptors.
+    // mode: "preview" prepares the descriptors as simulated permissions.
+    transactions: [{ from: user, to: vault, data: encodedDeposit }],
+    // limits is required: quote the deposit's pay-in cap and minimum
+    // minted shares. ("none" is reserved for transactions no operation
+    // type covers.)
+    limits: {
+      operations: [
+        {
+          type: "vaultV1Deposit",
+          vault,
+          quote: { assetsPaid: depositAssets, sharesMinted: quotedShares },
+        },
+      ],
     },
-  );
-} catch (err) {
-  if (err instanceof SimulationRevertedError) {
-    // Display err.message; decode err.revertData with your ABI when needed.
+  },
+);
+if (!report.ok) {
+  // Every failure of the run, in pipeline order; any failure blocks the bundle.
+  for (const failure of report.failures) {
+    if (failure instanceof SimulationRevertedError) {
+      // Display failure.message; decode failure.revertData with your ABI when needed.
+    }
   }
-  throw err;
+} else {
+  const { simulationTxs, calls, transfers, assetChanges } = report.result;
 }
 ```
 
-Every call inside `eth_simulateV1`, including preparation calls, state reads and assertions, carries the request's `chainId` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain with `InvalidChainIdError`.
+`simulate` resolves to a report instead of throwing SDK failures: `{ ok: true, result }`
+or `{ ok: false, failures }`. It rejects only with `UnexpectedSimulationError`, for a
+failure the SDK did not classify (a bug or a foreign error).
 
-Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` on a chain entry to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` on a chain entry to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` on a chain entry to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+Every call inside `eth_simulateV1`, including preparation calls, state reads and assertions, carries `client.chain.id` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain; that rejection is reported as `RpcTransportError`. The SDK sends no `eth_chainId`: pointing the client at the right chain is your obligation.
+
+The client's transport must reach a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` in `options` to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` in `options` to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` in `options` to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. `options.timeoutMs` (default 5000) is one deadline for the whole simulation: after it passes, no further read starts and the report fails with `RpcTransportError`. It cannot abort a request your transport has already sent, so set the transport's `timeout` (viem's default is 10 s) to at most `timeoutMs`. viem reports an HTTP error reply whose body is not JSON but is labeled `application/json` as a status-less parse failure, which the SDK reports as `InvalidSimulationResponseError`; to keep such replies an `RpcTransportError`, pass a `fetchFn` that drops `content-type` from non-2xx responses. RPC failures, timeouts and reverts are reported as typed failures. The optional logger still reports parsing and retention warnings.
+
+Use one trusted RPC backend on the configured chain for the entire simulation.
+A `fallback([...])` transport or a load-balanced URL can route the block
+lookup, code and metadata reads, and `eth_simulateV1` to different nodes.
+Matching block numbers and timestamps do not establish that those nodes read
+the same fork. The parent-hash check only applies to successor-block responses
+and does not verify the earlier reads.
+
+The SDK does not enforce endpoint consistency or set a retry policy. If you
+need failover, use a separate single-backend client for each provider and start
+a fresh simulation on the next provider after a transport failure. Use
+`http(..., { retryCount: 0 })` to avoid per-request retries.
+
+CCIP-Read is always off. viem enables it by default, so an `OffchainLookup` revert would make it fetch whatever gateway URL the contract names. `simulate` runs every request on its own copy of your client with `ccipRead: false` (viem >=2.9.2), whatever your client's setting; your client is not changed, and there is no option to turn CCIP-Read on.
 
 Native-ETH movements are observed through `traceTransfers` logs on the simulated calls. No state overrides or helper contracts are added automatically.
 
@@ -82,8 +104,7 @@ For example, a caller can model a contract sender through an EIP-7702 delegation
 on Monad, whose `validation: true` otherwise rejects contract senders:
 
 ```ts
-await simulate(config, {
-  chainId: 143,
+await simulate(client, {
   transactions,
   limits,
   stateOverrides: {
@@ -121,8 +142,8 @@ Upgrading from v7? See the [v7 → v8 migration guide](../../docs/migrations/evm
 
 All symbols below are re-exported from the package root.
 
-- `simulate(config, params)` — run a bundle through the simulation pipeline.
-- Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
+- `simulate(client, params, options?)` — run a bundle through the simulation pipeline.
+- Client and option types: `SimulationClient`, `SimulationOptions`, `SimulationLogger`.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
@@ -149,10 +170,11 @@ All symbols below are re-exported from the package root.
 
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Input-based limits: `InputOperationLimit`, `OperationInputs`, `AssetsOrShares`, `RepayInputs`, `SimulationInputLimits` and `SimulateInputParams`; checked input outputs use `CheckedInputOperationLimit`, `CheckedSimulationInputLimits`, `SimulationInputVerification` and `VerifiedSimulationInputResult`. `ScalarQuoteField` names the keys of `fieldChecks`; `FeelessInputType` names the input operation types that reject `referralFee`, and `ReallocationPenaltyInputType` names those that accept `reallocationPenalty`. Existing `SimulateParams`, `SimulationLimits`, `CheckedOperationLimit` and quote-only result types remain unchanged; `simulate()` accepts both forms and preserves its quote-only return overload, including wrappers typed with `SimulateParams`.
+- Report types: `SimulationReport` (quote-only `simulate`), `SimulationInputReport` (typed-input `simulate`) and their shared `ok: false` branch `SimulationFailure`, whose `severity` and every error's `severity` are a `SimulationErrorSeverity`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationSafetyError`, `SimulationRejectedError`, `SimulationInvalidRequestError`, `SimulationInfrastructureError`, `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `InvalidChainIdError`, `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `AuthorizationRequestMismatchError`, `UnusedAuthorizationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
-- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard with optional findings; read `error.findings ?? []`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe failure fields for API responses), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy. `ConsumerLimitViolationError` names what failed: `operationIndex`, `operationType`, `field` (`ConsumerLimitField`), `check` (one of `CONSUMER_LIMIT_CHECKS` / `ConsumerLimitCheck`), `expected` and `observed`, plus `tolerance` or `bound` when the check applies one, and `entry` (`ConsumerLimitEntry`: `{ marketId }` for `positions` and `deallocations`, `{ collateralIndex }` for `collateralSupplies`, `collateralWithdrawals` and `position.maxCollateral`, `{ token, account }` for `walletBalance`) naming the failing entry when the quote or bound has several, undefined otherwise; `ConsumerLimitViolation` is that field set. The fields are optional in the 8.x type, and `simulate` always sets them.
-- Slippage-unavailable diagnostics: `SlippageCheckUnavailableError` carries `field` and `reason`, plus `operationIndex` and `operationType` for operation-scoped failures. `SLIPPAGE_CHECK_UNAVAILABLE_REASONS` / `SlippageCheckUnavailableReason` list the documented reasons. The seven reasons describe unavailable evidence. Caller-input conflicts and combined flows that cannot be measured separately throw `SimulationValidationError` with operation-scoped `fieldErrors` instead. These fields remain optional in 8.x for constructor compatibility.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationSafetyError`, `SimulationExecutionError`, `SimulationInvalidRequestError`, `SimulationInfrastructureError`, `SimulationRevertedError`, `SimulationAssertError`, `SimulationLogAssertError`, `BlacklistViolationError`, `RpcTransportError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `AuthorizationRequestMismatchError`, `UnusedAuthorizationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`, and the limit-building errors `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError`.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `isSimulationPackageError` (structural guard for one package error, including its `severity`), `toSimulationErrorResponse(error)` / `SimulationErrorResponse` (JSON-safe fields of one failure for API responses; map it over `report.failures`), `RetainedAsset`. Errors use standard `message` and optional `cause`; `SimulationRevertedError` carries `revertData?: Hex` and `transactionIndex?: number`; `SimulationAssertError` carries `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's `assertion` (`to`, `data`, and `check`), and raw `returnData`; `SimulationLogAssertError` carries `transactionIndex`, `assertionIndex`, a copy of the caller's assertion, and the lowercase log values passed to its check, which receives them in a frozen copy. `ConsumerLimitViolationError` names what failed: `operationIndex`, `operationType`, `field` (`ConsumerLimitField`), `check` (one of `CONSUMER_LIMIT_CHECKS` / `ConsumerLimitCheck`), `expected` and `observed`, plus `tolerance` or `bound` when the check applies one, and `entry` (`ConsumerLimitEntry`: `{ marketId }` for `positions` and `deallocations`, `{ collateralIndex }` for `collateralSupplies`, `collateralWithdrawals` and `position.maxCollateral`, `{ token, account }` for `walletBalance`) naming the failing entry when the quote or bound has several, undefined otherwise; `ConsumerLimitViolation` is that field set. The fields are optional in the type because the constructor accepts a message alone; `simulate` always sets them.
+- Slippage-unavailable diagnostics: `SlippageCheckUnavailableError` carries `field` and `reason`, plus `operationIndex` and `operationType` for operation-scoped failures. `SLIPPAGE_CHECK_UNAVAILABLE_REASONS` / `SlippageCheckUnavailableReason` list the documented reasons. The seven reasons describe unavailable evidence. Caller-input conflicts and combined flows that cannot be measured separately are reported as `SimulationValidationError` with operation-scoped `fieldErrors` instead. These fields are optional in the type because the constructor accepts a message alone; the SDK always sets `field` and `reason`.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject`, `MidnightBuySubject`, `MidnightBlueParkingSubject`, `MidnightCollateralOperationSubject`, `MidnightRedeemSubject`, `MidnightSellSubject`, and `MidnightRepayWithdrawCollateralSubject` (operation groups and the operation-keyed subject union used by verification results).
 
 ### Assertions
@@ -243,19 +265,20 @@ state they write is visible to later calls. Morpho Vault V2's `maxDeposit` is
 `pure` and always returns 0, so
 `min > 0` always fails there; the helper is meaningful for Vault V1/MetaMorpho.
 
-A failed `assertBefore` or `assertAfter` check throws `SimulationAssertError`
+A failed `assertBefore` or `assertAfter` check is reported as `SimulationAssertError`
 (`SIMULATION_ASSERT_FAILED`) with
 `transactionIndex`, `phase`, `assertionIndex`, a copy of the caller's
-`assertion` (`to`, `data`, and `check`), and raw `returnData`. A failing `assertBefore` takes precedence
-over its transaction's own revert. Reverted assertion reads also throw
+`assertion` (`to`, `data`, and `check`), and raw `returnData`. A failing `assertBefore` is listed in `report.failures`
+before its transaction's own revert. Reverted assertion reads are also reported as
 `SimulationAssertError`; the check decides whether empty or malformed return
 data passes. Assertion declarations are omitted from returned `simulationTxs`.
-An `assertLogs` failure throws `SimulationLogAssertError` with the same
+An `assertLogs` failure is reported as `SimulationLogAssertError` with the same
 `SIMULATION_ASSERT_FAILED` code, the transaction and assertion indexes, a copy
 of the log assertion, and the lowercase log values passed to its check, which
 receives them in a frozen copy. A transaction
-revert takes precedence over its log assertions, and a failing log assertion
-takes precedence over its `assertAfter` assertions.
+revert is the last failure of its run, so its log and `assertAfter` assertions are
+not reported; otherwise a failing log assertion is listed before that
+transaction's `assertAfter` failures.
 
 ### Limits
 
@@ -265,7 +288,8 @@ takes precedence over its `assertAfter` assertions.
 and their state reads. Final-mode signed-authorization use checks still run.
 `"none"` is
 reserved for transactions that no operation type covers (Merkl reward claims,
-unsupported Midnight actions and `midnightCancelAndMake` bundles that combine
+unsupported Midnight actions such as direct `midnightCancelOffers`
+cancellations, and `midnightCancelAndMake` bundles that combine
 a Blue supply with collateral supplies, contain unfunded publications, or
 contain cancellations only, and approval/authorization-only bundles), and
 every transaction an operation type covers must pass limits. Missing `limits`
@@ -276,8 +300,7 @@ opt-out is never accepted.
 New integrations should supply `inputs`, independently of the transaction builder:
 
 ```typescript
-const result = await simulate(config, {
-  chainId: 1,
+const report = await simulate(client, {
   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
   limits: {
     operations: [{ type: "vaultV2Deposit", vault, inputs: { assets } }],
@@ -323,6 +346,10 @@ Checked quotes include the derived values. Input-based checked limits also
 report `fieldChecks` per scalar side: `exact` means equality, `minimum` and
 `maximum` are zero-tolerance derived bounds, and `quoted` uses the reported
 `slippageTolerance`. Internal derivation fields are not returned.
+When a derivation read fails, the report carries its
+`SlippageCheckUnavailableError` and skips that operation's quote-dependent
+checks, including the inactive-leg checks of combined Blue operations;
+absolute `position` bounds and unchanged-state guards still run.
 Inactive combined-operation pay-in legs receive automatic `1n` caps. An inactive
 repay leg permits no debt-share growth; an inactive collateral-supply leg permits
 no collateral loss. These subject checks survive explicit quote overrides.
@@ -395,7 +422,7 @@ required-caps lists below — the per-operation table lives in
   proceeds but no quoted collateral is wNative. Native value sent on a chain
   without registered wNative fails closed with `SlippageCheckUnavailableError`;
   otherwise, if the operation has no owner wNative bound, native value is not
-  checked. The combined operation throws
+  checked. The combined operation is reported as
   `SimulationValidationError` when its wallet bounds overlap another
   operation's wallet balance reads or wallet bounds, or when its Midnight
   collateral, credit, or debt reads overlap another operation's Midnight
@@ -435,7 +462,7 @@ is the `Midnight.collateral(marketId, account, collateralIndex)` delta, and
 from `Midnight.toMarket(marketId)` or the supplied market struct at that index.
 Two supplies to the same slot in one bundle are checked against one aggregate
 quote. The chain must have a registered `midnight` address; otherwise
-`UnsupportedChainError` is thrown. A market that does not exist yet at the
+the report fails with `UnsupportedChainError`. A market that does not exist yet at the
 state block has no `toMarket` entry. For a first `midnightTakeLend`,
 `midnightTakeBorrow`,
 `midnightSupplyCollateralTakeBorrow`, `midnightSupplyCollateral`, or
@@ -460,7 +487,7 @@ that minimum but does not widen the exact `assetsPaid` comparison. It uses
 sender and that salt. Combining Blue parking with any collateral supplies is
 unsupported and throws `UnsupportedLimitActionError`.
 On chains with no registered wNative, sending native value with Blue parking
-throws `SlippageCheckUnavailableError`.
+fails with `SlippageCheckUnavailableError`.
 
 `toSimulationLimits` also supports a funded maker publication produced by
 `supplyCollateralMakeBorrow`: `tx.action.type` must be `midnightCancelAndMake`,
@@ -477,17 +504,17 @@ If the maker's supply creates the market, the `toMarket` rule above applies:
 pass the struct via `market` to `toSimulationLimits`, or, when no market is
 passed, set `assetPaid` to `collateralParams[collateralIndex].token` on each
 returned operation.
-Otherwise, `simulate()` throws `SimulationValidationError`.
-Other Midnight actions—including `midnightCancelAndMake` bundles that combine
-Blue parking with collateral supplies, contain unfunded publications, or
-contain cancellations only—remain unsupported; pass `limits: "none"` only
-when no covered operation is present.
+Otherwise, `simulate()` reports `SimulationValidationError`.
+Other Midnight actions—including direct `midnightCancelOffers` cancellations and
+`midnightCancelAndMake` bundles that combine Blue parking with collateral
+supplies, contain unfunded publications, or contain cancellations only—remain
+unsupported; pass `limits: "none"` only when no covered operation is present.
 
 When supplied collateral is wNative, the check counts ETH sent plus the
 sender's net wNative change against `assetsPaid`, so native funding needs no
-quote adjustment. Sending value when no supplied collateral is wNative throws
+quote adjustment. Sending value when no supplied collateral is wNative fails with
 `SimulationValidationError`. Sending value on a chain without registered
-wNative throws `SlippageCheckUnavailableError`.
+wNative fails with `SlippageCheckUnavailableError`.
 For Blue parking, the helper quotes the full amount parked. When the loan token
 is wNative, the check adds the sender's ETH sent to the net wNative change, so
 native funding needs no quote adjustment.
@@ -506,8 +533,7 @@ const output = await client.morpho.midnight(base.id).supplyCollateralMakeBorrow(
   deadline: maxUint256,
 });
 const tx = output.buildTx();
-const result = await simulate(config, {
-  chainId: base.id,
+const report = await simulate(client, {
   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
   limits: toSimulationLimits(tx.action, { owner: user }),
 });
@@ -577,8 +603,7 @@ import { simulate, toSimulationLimits } from "@morpho-org/evm-simulation";
 
 // An authorized operator redeems `units` of `owner`'s credit to `receiver`.
 const tx = midnightRedeem({ chainId, market, units, onBehalf: owner, receiver });
-const result = await simulate(config, {
-  chainId,
+const report = await simulate(client, {
   transactions: [{ from: operator, to: tx.to, data: tx.data, value: tx.value }],
   limits: toSimulationLimits(tx.action, { owner: operator, onBehalf: owner, receiver }),
 });
@@ -595,8 +620,7 @@ const tx = midnightTakeBorrow({
   chainId, market, target, receiver, takeableOffers, deadline,
   referralFeePct, referralFeeRecipient,
 });
-const result = await simulate(config, {
-  chainId,
+const report = await simulate(client, {
   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
   limits: toSimulationLimits(tx.action, {
     owner, receiver, slippageTolerance: 0n,
@@ -621,16 +645,56 @@ checked only when quoted and never zero-rejected.
 
 Preview authorizations, final-mode Blue authorization signatures, and every operation type require a Morpho Blue address
 registered in blue-sdk's `getChainAddresses`; otherwise
-`UnsupportedChainError` is thrown. Blue parking also requires registered
+the report fails with `UnsupportedChainError`. Blue parking also requires registered
 Midnight and `midnightBlueBuyCallbackFactory` addresses.
 `midnightAuthorizationSignature` additionally requires registered Midnight and
 EcrecoverAuthorizer addresses.
-A missing required approval-registry address throws
+A missing required approval-registry address is reported as
 `ApprovalCheckUnavailableError`. Bundler spenders (`vaultBundlesV1`,
 `vaultExitBundlesV1`, `blueBundlesV1`) are allowed only where the registry lists
 them; on other chains, grants to them need a `limits.approvals` entry. Preview authorizations and final-mode Blue signatures with `limits: "none"`
-still require a registered Morpho Blue address and otherwise throw
+still require a registered Morpho Blue address and otherwise report
 `UnsupportedChainError`.
+
+#### Sender outflow check
+
+With `SimulationLimits` or `SimulationInputLimits`, sender outflows are also checked after
+transfer derivation. A token not spendable by the declared operations causes
+`UnexpectedTokenTransferError` (`UNEXPECTED_TOKEN_TRANSFER`, fatal): do not sign the request.
+The check rejects any net sender loss, including burns, and any positive outgoing transfer
+to another non-zero address, even if returned later. Incoming transfers, self-transfers and
+zero amounts do not fail. Native movements come from `traceTransfers`, excluding gas.
+Preparation transfers already fail separately; together these checks cover transactions and
+preparations. Assertion calls are not transfer-checked and [must be view calls](#assertions).
+
+Spendable tokens use the operation subjects and resolved tokens used by the approval allowlist,
+not calldata or unrelated quote overrides. Existing vault and market tokens are resolved at the
+pinned block. Two Midnight declarations also authorize spending: `loanToken` is the explicit
+subject token of `midnightSupplyBlueMakeLend`; for the first `midnightSupplyCollateral` or
+`midnightSupplyCollateralMakeBorrow` into an uncreated market, `assetPaid` is the collateral
+fallback when no validated `market` struct is supplied. That fallback is a caller declaration,
+not independently verified collateral; pass `market` to bind the token to its validated struct.
+Vault exits and migration allow source vault shares even when
+no share approval is needed; Blue borrow and collateral-withdrawal zero-pull approvals do not
+authorize spending. Combined Blue operations permit their pay-in token only with an active
+collateral-supply or repayment leg, not a borrow-only or withdrawal-only placeholder cap.
+Midnight pay-ins use the resolved collateral or loan tokens; a withdrawal-only
+`midnightRepayWithdrawCollateral` does not authorize loan-token spending. A spendable
+registered wrapped-native token also allows native spending only when the same active pay-in
+operation measures sender ETH. An inactive placeholder or a measurement from another operation
+cannot provide that exemption. A Midnight collateral wallet bound permits only the native value it already
+charges: total gross traced sender ETH debits must not exceed that value. Incoming ETH,
+refunds and self-transfers do not increase this budget. Extra internal sends from a delegated
+sender fail with `UNEXPECTED_TOKEN_TRANSFER`.
+Explicit `limits.approvals`
+authorizes permissions only and does not extend the spending set. These checks do not constrain
+recipients or replace amount bounds for declared tokens. Tokens with missing or dishonest
+Transfer logs remain outside this safeguard. These checks cover ERC-20 and native ETH evidence,
+not ERC-721 or ERC-1155 transfers; success provides no NFT-outflow guarantee.
+
+`limits: "none"` still skips this outflow check: existing consumers use it for funded Midnight
+review bundles as well as unsupported actions, claims, and permission-only bundles. Success in
+that mode does not attest that the sender keeps its tokens.
 
 #### Approval allowlist
 
@@ -697,7 +761,7 @@ ERC-777 operator grants (`authorizeOperator`) are not checked.
 `limits: "none"` opts out of this check as
 well as all limit checks.
 
-Unexpected grants throw `UnexpectedTokenApprovalError` with `token`, `owner`,
+Unexpected grants are reported as `UnexpectedTokenApprovalError` with `token`, `owner`,
 `spender`, `source` (`"event"` or `"authorization"`), and `allowlistable`, or
 `UnexpectedMorphoAuthorizationError` with `authorizer`, `authorized`, `source`,
 and `allowlistable`, or `UnexpectedMidnightAuthorizationError` with `onBehalf`,
@@ -706,7 +770,7 @@ sign the request. A Midnight grant, or a token or Morpho grant whose
 `allowlistable` is `true`, can be added to `limits.approvals`; ERC-721 grants,
 Permit2 or Morpho signatures that name another verifying contract, and
 EcrecoverAuthorizer signatures that name another verifying contract are never
-allowlistable. Request mistakes found during approval-token resolution throw
+allowlistable. Request mistakes found during approval-token resolution are reported as
 `SimulationValidationError` with operation-scoped `fieldErrors`: a zero vault
 subject (`vault`, or `sourceVault` for migration), a zero `loanToken` on
 `midnightSupplyBlueMakeLend`, an absent `collateralIndex`
@@ -722,10 +786,15 @@ If a valid request's subject token or
 required chain registry address cannot be resolved, the RPC response omits logs
 for a preparation or user call, or an approval-topic event cannot be decoded,
 `ApprovalCheckUnavailableError` fails the simulation closed.
-A missing or zero `midnightBundlesV2` address throws `ApprovalCheckUnavailableError`, while
-missing Morpho Blue or Midnight addresses still throw `UnsupportedChainError`.
+If a user call with omitted logs also declares `assertLogs`, the report holds an
+`InvalidSimulationResponseError` for those log checks as well.
+Once any of these checks or the final-mode signed-use check reports omitted
+user-call logs, slippage and retention checks are skipped: transfers parsed from
+the remaining logs would report movements that never happened.
+A missing or zero `midnightBundlesV2` address is reported as `ApprovalCheckUnavailableError`, while
+missing Morpho Blue or Midnight addresses are reported as `UnsupportedChainError`.
 Missing `priceRatifierV1` or `rateRatifierV1` addresses required by an operation
-also throw `ApprovalCheckUnavailableError`.
+are also reported as `ApprovalCheckUnavailableError`.
 
 Minimums — `assetsReceived`, supply/vault `sharesMinted`, debt `sharesBurned`,
 `collateralSupplied`, `debtRepaid`, `unitsBought` (net Midnight position units,
@@ -749,8 +818,7 @@ checks and explicit quoted share caps on typed-input limits use this observation
 Quote-only limits, including force and in-kind exits, keep the net balance decrease.
 
 ```ts
-const result = await simulate(config, {
-  chainId: 1,
+const report = await simulate(client, {
   transactions,
   limits: {
     operations: [{
@@ -763,7 +831,7 @@ const result = await simulate(config, {
     }],
   },
 });
-// result.verification.operations[0].checkedLimits contains this quote and tolerance.
+// When report.ok, report.result.verification.operations[0].checkedLimits contains this quote and tolerance.
 ```
 
 Typed-input asset overrides must match the canonical subject token. A native
@@ -773,7 +841,7 @@ pulls or receipts. Quote-only overrides remain trusted as before.
 Typed wNative measurements on the sender also include native ETH whenever the
 request sends native value, even without an explicit native alias.
 Requests that send native value with typed inputs must have that value covered
-by a measured native or wNative side; otherwise simulation throws
+by a measured native or wNative side; otherwise the report fails with
 `SimulationValidationError`.
 For combined operations with the same token and sender/receiver wallet, either
 native alias applies to the shared ETH-plus-wNative net measurement on both sides.
@@ -854,7 +922,7 @@ Vault V2 force exits (`vaultV2ForceWithdraw`, `vaultV2ForceRedeem`) may quote th
 Slippage and the optional `sharePrice`/`position` bounds are checked; refunds are
 not checked.
 `sharesMinted` and `sharesBurned` quotes for `blueSupplyCollateral` and
-`blueWithdrawCollateral` are invalid and throw `SimulationValidationError`
+`blueWithdrawCollateral` are invalid and are reported as `SimulationValidationError`
 during request parsing, as do `collateralSupplied`/`collateralWithdrawn` quotes
 on any other operation. `SlippageCheckUnavailableError` reports runtime
 evidence gaps: a failed state read, native outgoing traces that do not cover
@@ -863,18 +931,18 @@ quoted force exit with no vault `Withdraw` for the account, or a
 `ForceDeallocate` that cannot be paired with a Blue `Withdraw` while
 `deallocations` is quoted (for example a non-Blue adapter), or a
 `ForceDeallocate` that charges a penalty to another account, or native value
-sent without registered wNative. Repay-withdraw checks throw
+sent without registered wNative. Repay-withdraw checks report
 `SimulationValidationError` when a quote returns loan-token collateral to the
 payer, or native value is sent while wNative collateral is delivered to the
 sender. A quoted
-balance/position read whose non-empty return data cannot be decoded throws
+balance/position read whose non-empty return data cannot be decoded is reported as
 `InvalidSimulationResponseError`, as does a matching `ForceDeallocate`/`Withdraw`
 event log that fails to decode. Excessive slippage, a violated
 `sharePrice`/`position` bound, a `midnightTakeWithdraw` bundle that
 changes the sender's Midnight debt, or a `midnightRepayWithdrawCollateral` or
 `midnightTakeRepayWithdrawCollateral` bundle that changes the sender's Midnight credit, increases debt on an
 action without a `debtRepaid` quote, or under-delivers quoted collateral to
-the receiver throws `ConsumerLimitViolationError`.
+the receiver is reported as `ConsumerLimitViolationError`.
 
 Only quoted amounts, `position` bounds and the sender's Midnight debt through
 `debt(id, account)` for `midnightTakeBorrow`, `midnightTakeWithdraw`,
@@ -972,10 +1040,10 @@ inputs; pass the UI's quote through `expected`.
 | `blueWithdrawBuyCallback` (emits `blueWithdraw`) | `sharesBurned`; `account` is the intended callback in `onBehalf`, `receiver` is `owner` | `assetsReceived` | Callback ownership and offer cancellation |
 | `blueBorrow` | `assetsReceived` (`borrowAssets` − penalty − fee) | `sharesMinted` (debt-share cap) | — |
 | `blueSupplyCollateral` | `assetsPaid`, `collateralSupplied` | — | — |
-| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side throws `SimulationValidationError`, while a chain without registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightSupplyCollateral` | `assetsPaid`, `collateralSupplied` (`assets`); `account` is `options.onBehalf ?? owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side fails with `SimulationValidationError`, while a chain without registered `wNative` fails with `SlippageCheckUnavailableError` | — | — |
 | `midnightSupplyCollateralBatch` | exact `collateralSupplies` per index, used as minimum collateral credit and summed wallet pull caps per token; always measures the sender; encoded `args.onBehalf` must equal `owner`, and a non-owner `options.onBehalf` throws `LimitAccountMismatchError`; approval limits target Midnight for each distinct collateral token | — | — |
 | `midnightWithdrawCollateralBatch` | `collateralWithdrawals` per index; always measures the sender; `receiver` is `options.receiver ?? owner` and must match `args.receiver`, including a non-owner receiver; receiver delivery is checked against the sum of withdrawals per token | — | — |
-| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side throws `SimulationValidationError`, while a chain without registered `wNative` throws `SlippageCheckUnavailableError` | — | — |
+| `midnightCancelAndMake` with non-empty `collateralSupplies` and no `blueSupply` | One operation per distinct collateral index; repeated indices are summed in first-seen order; non-zero roots emit `midnightSupplyCollateralMakeBorrow`, zero roots emit `midnightSupplyCollateral`; quote `assetsPaid` and `collateralSupplied`; `account` is `owner`; for `wNative` collateral, `assetsPaid` counts ETH sent plus the sender's net `wNative` change; native funding needs no quote adjustment; sending value without a measured native side fails with `SimulationValidationError`, while a chain without registered `wNative` fails with `SlippageCheckUnavailableError` | — | — |
 | `midnightCancelAndMake` with `blueSupply` and no `collateralSupplies` (emits `midnightSupplyBlueMakeLend`) | exact `assetsPaid` (`blueSupply.assets`): sender debit of the full parked amount; for wNative, counts ETH sent plus net wNative change; combining with collateral supplies is unsupported | `sharesMinted` (the BlueBuyCallback's expected Blue supply-share increase) | Offer fillability |
 | `midnightRedeem` | `assetsReceived`, `creditRedeemed` (`units`); `account` is `options.onBehalf ?? owner`, `receiver` is `options.receiver ?? owner` | — | — |
 | `midnightTakeLend` | `assetsPaid` and `unitsBought`; always measures the sender, rejects any explicit `account` or `receiver`; a non-owner `options.receiver` throws `LimitAccountMismatchError` | — | — |
@@ -1002,8 +1070,9 @@ what to compute. Supported Midnight actions are `midnightSupplyCollateral`,
 `midnightTakeRepayWithdrawCollateral`, and `midnightSupplyCollateralTakeBorrow`, plus
 `midnightCancelAndMake` with either non-empty `collateralSupplies` and no
 `blueSupply`, or a `blueSupply` and no collateral supplies (which emits
-`midnightSupplyBlueMakeLend`). Other Midnight actions and action types without
-a supported operation throw `UnsupportedLimitActionError`.
+`midnightSupplyBlueMakeLend`). Other Midnight actions, including
+`midnightCancelOffers` (a direct offer cancellation moves no value), and action
+types without a supported operation throw `UnsupportedLimitActionError`.
 
 A full repay does not require `expected.debtRepaid`; when supplied, it acts as a
 minimum.
@@ -1057,8 +1126,7 @@ const tx = midnightCancelAndMake({
     blueSupply: { market: blueMarket, assets: supplyAssets, callbackSalt },
   },
 });
-await simulate(config, {
-  chainId: base.id,
+await simulate(client, {
   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
   limits: toSimulationLimits(tx.action, {
     owner: user,
@@ -1076,7 +1144,7 @@ simulated permissions; it does not prove that a future signature is valid.
 `midnightAuthorizationSignature` prepares
 `Midnight.setIsAuthorized(authorized, isAuthorized, sender)` from the sender;
 the signed EcrecoverAuthorizer payload is not submitted in preview.
-Preparation and user-transaction failures still propagate. A preparation that
+Preparation and user-transaction failures are still reported. A preparation that
 emits asset transfers fails closed with `SimulationValidationError`; simulate
 that authorization as a transaction in final mode to check its asset flows.
 This rejects any ERC-20 Transfer or WETH Deposit/Withdrawal event signature,
@@ -1092,7 +1160,7 @@ each Blue signature needs a registered Morpho `IncrementNonce` for its authorize
 and signed nonce; each EcrecoverAuthorizer signature needs a registered
 `SetIsAuthorized` event matching the verifying contract, `authorizer`,
 `authorized`, `isAuthorized`, and signed `nonce`. Its signer field is not
-checked. Missing evidence throws `UnusedAuthorizationError` with the zero-based
+checked. Missing evidence is reported as `UnusedAuthorizationError` with the zero-based
 `authorizationIndex` and request. These checks run even with
 `limits: "none"` and use only user-transaction logs, not reads or preparations.
 Permit2 signature transfers have no use check: invalid signatures revert when
@@ -1149,17 +1217,17 @@ See [AGENTS.md](./AGENTS.md) for pipeline conventions and retention rules.
 ## Error types
 
 ```ts
-try {
-  return await simulate(config, { chainId: 1, transactions, limits });
-} catch (err) {
-  if (err instanceof SimulationSafetyError) {
-    alerts.page(err.code, err.message);
-    throw err;
+const report = await simulate(client, { transactions, limits });
+if (!report.ok) {
+  for (const failure of report.failures) {
+    if (failure instanceof SimulationSafetyError)
+      alerts.page(failure.code, failure.message);
+    else if (failure instanceof SimulationInfrastructureError) retryOrAlert(failure);
+    else ui.showError(failure.message);
   }
-  if (err instanceof SimulationInfrastructureError) return retryOrAlert(err);
-  if (err instanceof SimulationPackageError) ui.showError(err.message);
-  throw err;
+  return;
 }
+return report.result;
 ```
 
 Every concrete error extends exactly one of these exported parent classes:
@@ -1167,38 +1235,55 @@ Every concrete error extends exactly one of these exported parent classes:
 | Parent class | Meaning |
 | --- | --- |
 | `SimulationSafetyError` | Funds or permissions are at risk. |
-| `SimulationRejectedError` | The user or caller acts. |
+| `SimulationExecutionError` | The user or caller acts. |
 | `SimulationInvalidRequestError` | The integrator fixes the request or configuration. |
 | `SimulationInfrastructureError` | The operator investigates the RPC/node or a check that could not run. |
 
 | Group | Classes |
 | --- | --- |
 | `SimulationSafetyError`         | `BlacklistViolationError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`                                                                                         |
-| `SimulationRejectedError`       | `ConsumerLimitViolationError`, `SimulationAssertError`, `SimulationLogAssertError`, `UnusedAuthorizationError`, `SimulationRevertedError`                                                                                       |
+| `SimulationExecutionError`       | `ConsumerLimitViolationError`, `SimulationAssertError`, `SimulationLogAssertError`, `UnusedAuthorizationError`, `SimulationRevertedError`                                                                                       |
 | `SimulationInvalidRequestError` | `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `AuthorizationRequestMismatchError`, `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError` |
-| `SimulationInfrastructureError` | `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `RpcTransportError`, `InvalidSimulationResponseError` (and `InvalidChainIdError` through it), `UnexpectedSimulationError`                                     |
+| `SimulationInfrastructureError` | `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `RpcTransportError`, `InvalidSimulationResponseError`, `UnexpectedSimulationError`                                     |
 
-All four reject; this is not a severity scale.
+All four block the bundle; groups say who acts, not how bad it is.
 
-Every error has a readonly `findings` list of other failure instances from the
-same simulation, in pipeline order. Findings are flat, never include the primary
-error and are additional rejections, never alternatives. The list is frozen and
-empty until collection lands. `isSimulationPackageError` accepts legacy objects
-without findings as well as objects carrying an array of valid package errors.
-The field is optional on the type in 8.x for legacy structural objects, but is
-always set on package instances. It becomes required in 9.0.0. Read
-`e.findings ?? []` after the guard.
+Every error also carries `severity: SimulationErrorSeverity`, a default log
+level named like pino's levels, so it indexes a logger with no mapping:
+
+| Severity | Errors |
+| --- | --- |
+| `"fatal"` | Every `SimulationSafetyError` |
+| `"warn"` | Every `SimulationExecutionError` except `UnusedAuthorizationError` |
+| `"error"` | `UnusedAuthorizationError`, every `SimulationInvalidRequestError` and every `SimulationInfrastructureError` |
+
+`UnusedAuthorizationError` is `"error"` because the signed request stays valid
+and the integrator assembled the bundle wrong. Every severity blocks the bundle:
+a `"warn"` failure returns no result, as a `"fatal"` one does. A failed report's
+`severity` is the highest of its failures' (`"fatal"` > `"error"` > `"warn"`), so it
+levels the run as a whole. Log each failure under pino's `err` key, which keeps its
+`message` and `stack`: `for (const err of report.failures) logger[err.severity]({ err })`. `toSimulationErrorResponse` does not include severity, and
+`isSimulationPackageError` accepts only objects with a known `severity`, so
+`toSimulationErrorResponse` maps a structural error without one, such as an error
+from an 8.x copy of the package, to the generic `UNEXPECTED_SIMULATION_ERROR` response.
+
+`report.failures` lists every failure of the run, flat and in check order; there is
+no primary error. A transaction revert ends verification: the failures are the
+assertion failures evaluated before it, then the revert. A pre-execution failure (invalid request,
+unsupported chain, RPC failure, a preparation revert) ends the run and is the only
+failure. `toSimulationLimits` is not part of a run and still throws its typed errors.
 
 ## Handling failures in an API service
 
-Return a transaction only after `simulate` resolves. Every rejection blocks the
+Return a transaction only from an `ok` report. Every failure blocks the
 transaction response, including RPC outages and timeouts. RPC failures become
 `RpcTransportError` with code `RPC_TRANSPORT_ERROR` and the original viem error
-as `cause`. SDK failures use `SimulationPackageError`. Any other unexpected
-failure, including a local viem error, becomes `UnexpectedSimulationError`, with
-the original value in `cause`.
+as `cause`. SDK failures use `SimulationPackageError` and are returned in the report. Any
+other unexpected failure, including a local viem error, rejects with
+`UnexpectedSimulationError`, with the original value in `cause`.
 
-Use `toSimulationErrorResponse(error)` to select JSON-safe fields: `code`,
+Use `toSimulationErrorResponse(failure)` on each reported failure, or on a caught
+`UnexpectedSimulationError`, to select JSON-safe fields: `code`,
 `message`, and optional `revertData` and `transactionIndex`. It omits stack, cause, and specialized
 fields that may contain bigint values. RPC failures receive a generic message
 with `RPC_TRANSPORT_ERROR`. Unrecognized
@@ -1213,21 +1298,30 @@ import {
   simulate,
   toSimulationErrorResponse,
   type SimulateParams,
-  type SimulationConfig,
+  type SimulationClient,
 } from "@morpho-org/evm-simulation";
 
-declare const config: SimulationConfig;
+declare const client: SimulationClient;
 declare const params: SimulateParams;
 declare const requestId: string;
-declare const logger: { error(fields: { error: unknown; requestId: string }): void };
+type Log = (fields: { err: unknown; requestId: string }) => void;
+declare const logger: { fatal: Log; error: Log; warn: Log };
 
 async function prepareTransactionResponse() {
   try {
-    const result = await simulate(config, params);
-    return { ok: true as const, transactions: result.simulationTxs };
+    const report = await simulate(client, params);
+    if (report.ok)
+      return { ok: true as const, transactions: report.result.simulationTxs };
+    for (const error of report.failures)
+      logger[error.severity]({ err: error, requestId });
+    return {
+      ok: false as const,
+      errors: report.failures.map(toSimulationErrorResponse),
+      requestId,
+    };
   } catch (error) {
-    logger.error({ error, requestId });
-    return { ok: false as const, error: toSimulationErrorResponse(error), requestId };
+    logger.error({ err: error, requestId });
+    return { ok: false as const, errors: [toSimulationErrorResponse(error)], requestId };
   }
 }
 ```
@@ -1236,6 +1330,30 @@ The success response above still contains bigint transaction quantities; apply
 the API's normal transaction encoding before sending JSON. Simulation verifies
 the requested mode and checks at the simulated state; it does not guarantee
 execution against later onchain state.
+
+## Migrating to 9.0
+
+`simulate` no longer throws SDK failures; it returns a report.
+
+| 8.x | 9.0 |
+| --- | --- |
+| `const result = await simulate(...)` inside `try` | `const report = await simulate(...)`, then `if (!report.ok)` before reading `report.result` |
+| `catch (err)` with `instanceof` on the thrown error | `instanceof` on each of `report.failures` |
+| Only the first failure, as the thrown error | `report.failures`, every failure in check order |
+| 8.8.0's `err.findings` | Removed; read `report.failures`, every failure in check order |
+| `toSimulationErrorResponse(err)` | `report.failures.map(toSimulationErrorResponse)` |
+| Any rejection | Only `UnexpectedSimulationError`; keep a `catch` for it |
+| A bare `await simulate(...)` that relies on a throw to stop | Find every one and branch on `report.ok`; it still compiles but no longer stops on a failure |
+| 8.8.0's `SimulationRejectedError` group | `SimulationExecutionError`, the same classes under a new name, with no alias |
+| Your own mapping from error codes to log levels | `report.severity`, or `failure.severity` |
+| `simulate(config, { chainId, ... })` with `config.chains` entries of 8.9.0's `{ client }` (`ChainSimulationClientConfig`) | `simulate(client, params, options?)`: pass that entry's `client` as the first argument; `params.chainId`, `ChainSimulationClientConfig` and `ChainSimulationConfigEntry` are removed |
+| `config.chains` entries with `simulateV1Url` | Create a viem client with `chain` set and `http(url)`, and pass it as the first argument. A non-JSON error body labeled `application/json` is then reported as `InvalidSimulationResponseError` instead of `RpcTransportError`, unless your transport's `fetchFn` drops `content-type` on non-2xx replies |
+| `ChainSimulationConfig` `blockOverrides`, `callGasLimit`, `parentHashCheck`, and `SimulationConfig.logger` | The same fields in `options` |
+| `SimulationConfig.timeoutMs` | `options.timeoutMs`, with the same whole-simulation deadline; set your transport's `timeout` to at most this value |
+| A client rejected for lacking `ccipRead: false` | Accepted; `simulate` turns CCIP-Read off on its own copy |
+| `InvalidChainIdError` | Removed; a node rejecting `client.chain.id` reports `RpcTransportError` |
+
+`toSimulationLimits` is unchanged and still throws.
 
 ## Development
 

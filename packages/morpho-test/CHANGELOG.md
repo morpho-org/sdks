@@ -1,5 +1,23 @@
 # @morpho-org/morpho-test
 
+## 4.4.0
+
+### Minor Changes
+
+- `fundE2eMidnightWallets` now throws `InvalidMarketParameterError` instead of a `TypeError` when collateral funding is requested for a market with no collateral parameters.
+
+### Patch Changes
+
+- Add Alpen mainnet (chain 29032) metadata and Morpho Blue, Vault V2, adapter factory, allocator, oracle factory, pre-liquidation and standalone bundle deployments with their creation blocks. Pin an Alpen fork block for registry-driven tests. Midnight, a Vault V1 factory, wrapped-native tokens and Permit2 are not registered on Alpen.
+
+  Patch maintained direct runtime dependents of morpho-ts so their latest releases resolve the new registry entry. Raise blue-sdk's morpho-ts peer floor to 4.5.0 so re-exported registry reads also resolve Alpen.
+
+- Export shared chain fork-block constants from `@morpho-org/test` and derive the E2E registry's Ethereum, Base, Optimism and Tempo targets from them. Require `@morpho-org/test` 2.14.0 or newer for the constants. Public Vitest and Playwright default fork blocks are unchanged.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0
+  - @morpho-org/blue-sdk@8.4.0
+  - @morpho-org/test@2.14.0
+
 ## 4.3.0
 
 ### Minor Changes

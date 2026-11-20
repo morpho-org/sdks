@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/wdk-protocol-lending-morpho-evm",
-  "version": "4.6.0",
+  "version": "4.6.1",
   "description": "A WDK lending module that lets EVM wallet accounts interact with Morpho vaults and markets through @morpho-org/morpho-sdk.",
   "keywords": [
     "wdk",
@@ -39,11 +39,11 @@
   ],
   "scripts": {
     "check:vault-v2": "node scripts/check-vault-v2-only.js",
-    "prepublish": "pnpm build",
-    "build": "pnpm run check:vault-v2 && tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "prepublish": "bun run build",
+    "build": "bun run check:vault-v2 && tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json --noCheck && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json --noCheck && echo '{\"type\":\"module\"}' > lib/esm/package.json",
-    "pretest": "pnpm run check:vault-v2",
+    "pretest": "bun run check:vault-v2",
     "test": "vitest --root ../.. --project wdk-protocol-lending-morpho-evm --project wdk-protocol-lending-morpho-evm-fork"
   },
   "dependencies": {

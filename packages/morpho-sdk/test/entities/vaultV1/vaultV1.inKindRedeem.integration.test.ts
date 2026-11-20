@@ -1,6 +1,6 @@
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -19,7 +19,7 @@ import { withChainTimestamp } from "../../helpers/time.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_720_868n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 describe("MorphoVaultV1.inKindRedeem integration", () => {

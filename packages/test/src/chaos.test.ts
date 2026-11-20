@@ -1,6 +1,7 @@
 import { AssertionError } from "node:assert";
+import type { Server } from "node:http";
 import { createServer, request as nodeRequest } from "node:http";
-import type { AddressInfo, Server } from "node:net";
+import type { AddressInfo } from "node:net";
 import {
   ContractFunctionRevertedError,
   createPublicClient,

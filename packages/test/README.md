@@ -39,6 +39,11 @@ yarn add @morpho-org/test
 
 ## Usage
 
+Forks disable opportunistic block access list cache prefill by default. This
+requires an Anvil that supports `--no-bal` (CI uses Foundry v1.10.0). Set
+`noBal: false` in the fork arguments to avoid the flag on older Anvil versions
+and retain Foundry's prefill.
+
 ### Vitest (viem)
 
 Export an extended vitest `test`:

@@ -14,6 +14,7 @@ import {
   SimulationRevertedError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
+import { throwRevert } from "../../test-helpers/index.js";
 import {
   assertionPlan,
   balanceAssertion,
@@ -77,13 +78,67 @@ const userRevertError = (
           },
         ];
   try {
-    parse(plan, blocksWithErrorData);
+    parseThrowingRevert(plan, blocksWithErrorData);
   } catch (error) {
     return error;
   }
 };
 
+const parseThrowingRevert = (...args: Parameters<typeof parse>) =>
+  throwRevert(parse(...args));
+
 describe("evaluateCalls", () => {
+  test("error: a revert does not retain an earlier unavailable log check", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertLogs: [{ check: () => "not run" }],
+      },
+      { from: OWNER, to: TARGET, data: "0x12345678" },
+    ]);
+    const first = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 0,
+    );
+    const second = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 1,
+    );
+    const blocks = buildBlocks(plan, { [second]: { status: "failure" } });
+    Reflect.deleteProperty(blocks[0]!.calls[first]!, "logs");
+    const execution = parse(plan, blocks);
+    expect(execution.reverted).toBe(true);
+    expect(execution.failures).toEqual([expect.any(SimulationRevertedError)]);
+  });
+
+  test("error: a later revert retains the earlier assertion and skips later checks", () => {
+    const plan = assertionPlan([
+      {
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+        assertBefore: [balanceAssertion(5n)],
+      },
+      { from: OWNER, to: TARGET, data: "0x12345678" },
+    ]);
+    const assertion = plan.calls.findIndex((call) => call.type === "assertion");
+    const reverted = plan.calls.findIndex(
+      (call) => call.type === "transaction" && call.transactionIndex === 1,
+    );
+    const execution = parse(
+      plan,
+      buildBlocks(plan, {
+        [assertion]: { data: balanceHex(4n) },
+        [reverted]: { status: "failure" },
+      }),
+    );
+    expect(execution.reverted).toBe(true);
+    expect(execution.failures).toEqual([
+      expect.any(SimulationAssertError),
+      expect.any(SimulationRevertedError),
+    ]);
+  });
+
   test("default: state reads grouped by phase, preparations carried", () => {
     const plan = makePlan([
       {
@@ -111,11 +166,14 @@ describe("evaluateCalls", () => {
     const plan = makePlan();
     const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     expect(() =>
-      parse(plan, buildBlocks(plan, { [txIndex]: { status: "failure" } })),
+      parseThrowingRevert(
+        plan,
+        buildBlocks(plan, { [txIndex]: { status: "failure" } }),
+      ),
     ).toThrow(SimulationRevertedError);
   });
 
-  test("error: failing assertBefore takes precedence over its transaction revert", () => {
+  test("error: transaction revert retains its failing assertBefore", () => {
     const plan = assertionPlan([
       {
         from: OWNER,
@@ -130,31 +188,21 @@ describe("evaluateCalls", () => {
     const transactionIndex = plan.calls.findIndex(
       (call) => call.type === "transaction",
     );
-    let error: unknown;
-    try {
-      parse(
-        plan,
-        buildBlocks(plan, {
-          [assertionIndex]: { data: balanceHex(4n) },
-          [transactionIndex]: { status: "failure" },
-        }),
-      );
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toBeInstanceOf(SimulationAssertError);
-    expect(error).not.toBeInstanceOf(SimulationRevertedError);
-    expect(error).toMatchObject({
-      code: "SIMULATION_ASSERT_FAILED",
-      transactionIndex: 0,
-      phase: "before",
-      assertionIndex: 0,
-      assertion: { to: TOKEN },
-      returnData: balanceHex(4n),
-    });
+    const execution = parse(
+      plan,
+      buildBlocks(plan, {
+        [assertionIndex]: { data: balanceHex(4n) },
+        [transactionIndex]: { status: "failure" },
+      }),
+    );
+    expect(execution.reverted).toBe(true);
+    expect(execution.failures).toEqual([
+      expect.any(SimulationAssertError),
+      expect.any(SimulationRevertedError),
+    ]);
   });
 
-  test("error: failing assertBefore prevents log assertions", () => {
+  test("behavior: failing assertBefore does not prevent log assertions", () => {
     let checked = false;
     const plan = assertionPlan([
       {
@@ -177,19 +225,19 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [assertionIndex]: { data: balanceHex(4n) },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(SimulationAssertError);
     expect(error).toMatchObject({ phase: "before" });
-    expect(checked).toBe(false);
+    expect(checked).toBe(true);
   });
 
   test("error: transaction revert takes precedence over a failing assertAfter", () => {
@@ -209,13 +257,13 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [assertionIndex]: { data: balanceHex(4n) },
           [transactionIndex]: { status: "failure" },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -244,7 +292,7 @@ describe("evaluateCalls", () => {
       (call) => call.type === "transaction",
     );
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [transactionIndex]: { status: "failure" },
@@ -272,12 +320,12 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [afterAssertionIndex]: { data: balanceHex(4n) },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -316,7 +364,7 @@ describe("evaluateCalls", () => {
     ]);
     let error: unknown;
     try {
-      parse(plan, buildBlocks(plan));
+      error = parseThrowingRevert(plan, buildBlocks(plan)).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -423,7 +471,7 @@ describe("evaluateCalls", () => {
       (call) => call.type === "transaction",
     );
 
-    parse(
+    parseThrowingRevert(
       plan,
       buildBlocks(plan, {
         [transactionIndex]: { logs: emittedLogs },
@@ -462,12 +510,8 @@ describe("evaluateCalls", () => {
     const blocks = buildBlocks(plan);
     Reflect.deleteProperty(blocks[0]!.calls[transactionIndex]!, "logs");
 
-    expect(() => parse(plan, blocks)).toThrow(
-      expect.objectContaining({
-        name: "InvalidSimulationResponseError",
-        message:
-          "eth_simulateV1 omitted logs for transaction 0. Log assertions cannot be evaluated.",
-      }),
+    expect(parseThrowingRevert(plan, blocks).failures[0]).toBeInstanceOf(
+      InvalidSimulationResponseError,
     );
     expect(checked).toBe(false);
   });
@@ -522,7 +566,7 @@ describe("evaluateCalls", () => {
         [transactionIndex]: { logs: [mixedCaseLog] },
       }),
     );
-    const baseline = parse(
+    const baseline = parseThrowingRevert(
       baselinePlan,
       buildBlocks(baselinePlan, {
         [baselineTransactionIndex]: { logs: [mixedCaseLog] },
@@ -578,12 +622,12 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [transactionIndex]: { logs: [log] },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -611,13 +655,13 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [assertionIndex]: { data: balanceHex(5n) },
           [transactionIndex]: { status: "failure" },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -639,12 +683,12 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [assertionIndex]: { data: balanceHex(4n) },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -683,13 +727,13 @@ describe("evaluateCalls", () => {
 
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [firstAssertionIndex]: { data: balanceHex(10n) },
           [secondAssertionIndex]: { data: balanceHex(4n) },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -724,13 +768,13 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [laterAssertionIndex]: { data: balanceHex(4n) },
           [firstTransactionIndex]: { status: "failure" },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -752,12 +796,12 @@ describe("evaluateCalls", () => {
     );
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [assertionIndex]: { status: "failure" },
         }),
-      );
+      ).failures[0];
     } catch (caught) {
       error = caught;
     }
@@ -803,7 +847,10 @@ describe("evaluateCalls", () => {
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
     const error = (() => {
       try {
-        parse(plan, buildBlocks(plan, { [prepIndex]: { status: "failure" } }));
+        return parseThrowingRevert(
+          plan,
+          buildBlocks(plan, { [prepIndex]: { status: "failure" } }),
+        ).failures[0];
       } catch (caught) {
         return caught;
       }
@@ -826,7 +873,7 @@ describe("evaluateCalls", () => {
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [prepIndex]: { status: "failure", errorData: INVALID_NONCE },
@@ -844,7 +891,7 @@ describe("evaluateCalls", () => {
     const plan = makePlan();
     const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [txIndex]: { status: "failure", data: ALL_CAPS_REACHED },
@@ -862,7 +909,7 @@ describe("evaluateCalls", () => {
     const plan = makePlan();
     const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [txIndex]: {
@@ -892,12 +939,12 @@ describe("evaluateCalls", () => {
       const index = plan.calls.findIndex((call) => call.type === "preparation");
       let error: unknown;
       try {
-        parse(
+        error = parseThrowingRevert(
           plan,
           buildBlocks(plan, {
             [index]: { status: "failure", errorData: data },
           }),
-        );
+        ).failures[0];
       } catch (caught) {
         error = caught;
       }
@@ -915,7 +962,7 @@ describe("evaluateCalls", () => {
     const plan = makePlan();
     const index = plan.calls.findIndex((call) => call.type === "transaction");
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [index]: {
@@ -941,14 +988,16 @@ describe("evaluateCalls", () => {
           calls: [{ from: OWNER, to: TOKEN, data: "0x", value: 0n }],
         },
       ],
-      parseRequest({
-        chainId: 1,
-        limits: "none",
-        transactions: [
-          { from: OWNER, to: TARGET, data: "0x" },
-          { from: OWNER, to: TARGET, data: "0x" },
-        ],
-      }),
+      parseRequest(
+        {
+          limits: "none",
+          transactions: [
+            { from: OWNER, to: TARGET, data: "0x" },
+            { from: OWNER, to: TARGET, data: "0x" },
+          ],
+        },
+        1,
+      ),
     );
     const index = plan.calls.findIndex(
       (call) => call.type === "transaction" && call.transactionIndex === 1,
@@ -959,7 +1008,7 @@ describe("evaluateCalls", () => {
       args: [OWNER, 1283n, 2000n],
     });
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, { [index]: { status: "failure", errorData: data } }),
       ),
@@ -993,7 +1042,7 @@ describe("evaluateCalls", () => {
       });
       let error: unknown;
       try {
-        parse(plan, blocks);
+        error = parseThrowingRevert(plan, blocks).failures[0];
       } catch (caught) {
         error = caught;
       }
@@ -1020,13 +1069,13 @@ describe("evaluateCalls", () => {
     const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     const error = (() => {
       try {
-        parse(
+        return parseThrowingRevert(
           plan,
           buildBlocks(plan, {
             [prepIndex]: { status: "failure" },
             [txIndex]: { status: "failure" },
           }),
-        );
+        ).failures[0];
       } catch (caught) {
         return caught;
       }
@@ -1048,7 +1097,7 @@ describe("evaluateCalls", () => {
       returnData: "0x756688fe",
       error: { message: "execution reverted", data: "execution reverted" },
     });
-    expect(() => parse(plan, blocks)).toThrow(
+    expect(() => parseThrowingRevert(plan, blocks)).toThrow(
       expect.objectContaining({
         name: "SimulationRevertedError",
         revertData: "0x756688fe",
@@ -1065,7 +1114,7 @@ describe("evaluateCalls", () => {
       error: { message: "execution reverted", data: "0x" },
     });
 
-    expect(() => parse(plan, blocks)).toThrow(
+    expect(() => parseThrowingRevert(plan, blocks)).toThrow(
       expect.objectContaining({
         name: "SimulationRevertedError",
         revertData: "0x756688fe",
@@ -1087,7 +1136,7 @@ describe("evaluateCalls", () => {
       error: { message: "execution reverted", data: "0x70f65caa" },
     });
 
-    expect(() => parse(plan, blocks)).toThrow(
+    expect(() => parseThrowingRevert(plan, blocks)).toThrow(
       expect.objectContaining({
         name: "SimulationRevertedError",
         revertData: "0x70f65caa",
@@ -1104,7 +1153,7 @@ describe("evaluateCalls", () => {
       error: { message: "execution reverted", data: "0x70f65caa" },
     });
 
-    expect(() => parse(plan, blocks)).toThrow(
+    expect(() => parseThrowingRevert(plan, blocks)).toThrow(
       expect.objectContaining({
         name: "SimulationRevertedError",
         revertData: "0x70f65caa",
@@ -1121,7 +1170,7 @@ describe("evaluateCalls", () => {
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
     expect(() =>
-      parse(
+      parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [prepIndex]: { status: "failure", data: "0x756688fe" },
@@ -1151,7 +1200,7 @@ describe("evaluateCalls", () => {
     });
     const error = (() => {
       try {
-        parse(plan, blocks);
+        return parseThrowingRevert(plan, blocks).failures[0];
       } catch (caught) {
         return caught;
       }
@@ -1170,12 +1219,12 @@ describe("evaluateCalls", () => {
     const readId = read.read.id;
     const error = (() => {
       try {
-        parse(
+        return parseThrowingRevert(
           plan,
           buildBlocks(plan, {
             [readIndex]: { status: "failure", errorMessage: "node secret" },
           }),
-        );
+        ).failures[0];
       } catch (caught) {
         return caught;
       }
@@ -1208,12 +1257,12 @@ describe("evaluateCalls", () => {
     const readIndex = plan.calls.findIndex((call) => call.type === "stateRead");
     let error: unknown;
     try {
-      parse(
+      error = parseThrowingRevert(
         plan,
         buildBlocks(plan, {
           [readIndex]: { status: "failure", errorMessage: "original revert" },
         }),
-      );
+      ).failures[0];
     } catch (cause) {
       error = cause;
     }
@@ -1231,6 +1280,45 @@ describe("evaluateCalls", () => {
     expect((error as Error).message).not.toContain("Re-submit");
   });
 
+  test("behavior: a state read failing in both phases is reported once", () => {
+    const id = `balance:${TARGET}:${OWNER}`.toLowerCase();
+    const plan = planExecution({
+      request: parsed,
+      owner: OWNER,
+      preparations: [],
+      reads: [
+        {
+          kind: "erc20.balance",
+          id,
+          to: TARGET,
+          token: TARGET,
+          account: OWNER,
+          data: "0x70a08231",
+        },
+      ],
+    });
+    const readIndices = plan.calls.flatMap((call, index) =>
+      call.type === "stateRead" ? [index] : [],
+    );
+    expect(readIndices).toHaveLength(2);
+    const { failures } = parseThrowingRevert(
+      plan,
+      buildBlocks(
+        plan,
+        Object.fromEntries(
+          readIndices.map((index) => [
+            index,
+            { status: "failure", errorMessage: "read reverted" },
+          ]),
+        ),
+      ),
+    );
+    expect(failures).toEqual([
+      expect.objectContaining({ field: id, reason: "missingRead" }),
+    ]);
+    expect(failures[0]).toBeInstanceOf(SlippageCheckUnavailableError);
+  });
+
   test("error: reports a missing transaction result when call counts match", () => {
     const plan = assertionPlan([
       { from: OWNER, to: TARGET, data: "0x12345678" },
@@ -1244,7 +1332,7 @@ describe("evaluateCalls", () => {
     expect(blocks[0]?.calls).toHaveLength(incompletePlan.calls.length);
     let error: unknown;
     try {
-      parse(incompletePlan, blocks);
+      error = parseThrowingRevert(incompletePlan, blocks).failures[0];
     } catch (caught) {
       error = caught;
     }

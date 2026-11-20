@@ -99,8 +99,9 @@ export function findBundlesRetentionFailures(
 
   const restrictedAddresses = new Set<Address>();
   if (addresses.bundles) {
-    for (const addr of Object.values(addresses.bundles).filter(isDefined))
+    for (const addr of Object.values(addresses.bundles).filter(isDefined)) {
       restrictedAddresses.add(getAddress(addr));
+    }
   }
   if (addresses.midnightBundlesV2) {
     restrictedAddresses.add(getAddress(addresses.midnightBundlesV2));
@@ -138,9 +139,13 @@ export function findBundlesRetentionFailures(
   // does not re-add the same native move on `eth_simulateV1`.
   const nativeFromAssetChanges = new Set<string>();
   for (const { account, changes } of assetChanges) {
-    if (!restrictedAddresses.has(account)) continue;
+    if (!restrictedAddresses.has(account)) {
+      continue;
+    }
     for (const change of changes) {
-      if (change.token !== ethAddress) continue;
+      if (change.token !== ethAddress) {
+        continue;
+      }
       recordFlow(account, ethAddress, change.diff);
       nativeFromAssetChanges.add(account.toLowerCase());
     }
@@ -153,10 +158,12 @@ export function findBundlesRetentionFailures(
   const usesAssetChangeNative = (t: Transfer, addr: Address): boolean =>
     t.token === ethAddress && nativeFromAssetChanges.has(addr.toLowerCase());
   for (const t of transfers) {
-    if (restrictedAddresses.has(t.to) && !usesAssetChangeNative(t, t.to))
+    if (restrictedAddresses.has(t.to) && !usesAssetChangeNative(t, t.to)) {
       recordFlow(t.to, t.token, t.amount);
-    if (restrictedAddresses.has(t.from) && !usesAssetChangeNative(t, t.from))
+    }
+    if (restrictedAddresses.has(t.from) && !usesAssetChangeNative(t, t.from)) {
       recordFlow(t.from, t.token, -t.amount);
+    }
   }
 
   const entries = [...flow.values()];
@@ -196,5 +203,7 @@ export function assertNoBundlesRetention(
   params: AssertNoBundlesRetentionParams,
 ): void {
   const [failure] = findBundlesRetentionFailures(params);
-  if (failure !== undefined) throw failure;
+  if (failure !== undefined) {
+    throw failure;
+  }
 }

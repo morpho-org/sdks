@@ -162,7 +162,9 @@ export class Vault extends VaultToken implements IVault {
     this.withdrawQueue = withdrawQueue;
     this.lastTotalAssets = lastTotalAssets;
     this.lostAssets = lostAssets;
-    if (deadShares != null) this.deadShares = deadShares;
+    if (deadShares != null) {
+      this.deadShares = deadShares;
+    }
   }
 
   /**
@@ -303,7 +305,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
       const address = position.market.params.collateralToken;
 
       let exposure = this.collateralAllocations.get(address);
-      if (!exposure)
+      if (!exposure) {
         this.collateralAllocations.set(
           address,
           (exposure = {
@@ -313,6 +315,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
             markets: new Set(),
           }),
         );
+      }
 
       exposure.lltvs.add(position.market.params.lltv);
       exposure.oracles.add(position.market.params.oracle);
@@ -407,7 +410,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * weighted rate is scaled by real assets divided by total assets.
    */
   private _getAvgRate(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalAssets === 0n) return 0n;
+    if (this.totalAssets === 0n) {
+      return 0n;
+    }
 
     return (
       this.allocations.values().reduce((total, { position }) => {
@@ -444,7 +449,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * ```
    */
   public getApy(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalAssets === 0n) return 0;
+    if (this.totalAssets === 0n) {
+      return 0;
+    }
 
     return MarketUtils.rateToApy(this._getAvgRate(timestamp));
   }
@@ -502,10 +509,14 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * ```
    */
   public getAllocationProportion(marketId: MarketId) {
-    if (this.totalAssets === 0n) return 0n;
+    if (this.totalAssets === 0n) {
+      return 0n;
+    }
 
     const allocation = this.allocations.get(marketId);
-    if (!allocation) return 0n;
+    if (!allocation) {
+      return 0n;
+    }
 
     return MathLib.wDivDown(allocation.position.supplyAssets, this.totalAssets);
   }
@@ -547,11 +558,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
         0n,
       );
 
-    if (assets > suppliable)
+    if (assets > suppliable) {
       return {
         value: suppliable,
         limiter: CapacityLimitReason.cap,
       };
+    }
 
     return {
       value: assets,
@@ -582,11 +594,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
     const assets = this.toAssets(shares);
     const { liquidity } = this;
 
-    if (assets > liquidity)
+    if (assets > liquidity) {
       return {
         value: liquidity,
         limiter: CapacityLimitReason.liquidity,
       };
+    }
 
     return {
       value: assets,
@@ -608,6 +621,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    *   projected accounting.
    * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an
    *   allocation.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when forward projection of an allocated market with positive
    *   debt requires an unsupported IRM.
    * @example
@@ -637,8 +651,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
         // reference a market that is no longer allocated) would otherwise
         // crash with an opaque "Cannot destructure property 'config' of
         // 'undefined'" via the non-null assertion below.
-        if (allocation == null)
+        if (allocation == null) {
           throw new UnknownMarketAllocationError(marketId);
+        }
 
         const { config, position } = allocation;
         return {

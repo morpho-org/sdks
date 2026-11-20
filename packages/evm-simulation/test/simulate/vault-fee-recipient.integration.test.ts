@@ -5,7 +5,7 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -23,15 +23,18 @@ import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   type InputOperationLimit,
-  simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 26_355_500n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ VAULT: Address }>({
   VAULT: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -155,7 +158,6 @@ for (const exit of ["redeem", "withdraw"] as const) {
           };
     const tx = action.buildTx();
     const request = {
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner,
@@ -163,11 +165,8 @@ for (const exit of ["redeem", "withdraw"] as const) {
       }),
       transactions: [{ from: owner, to: tx.to, data: tx.data }],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-    };
-    const result = await simulate(config, {
+    const config = simulationClientFor(client.transport.url, mainnet);
+    const result = await simulateOrThrowFirst(config, {
       ...request,
       limits: {
         operations: [operation],
@@ -200,7 +199,7 @@ for (const exit of ["redeem", "withdraw"] as const) {
       sharesBurned: "exact",
     });
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...request,
         limits: {
           operations: [
@@ -310,7 +309,6 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
             };
     const tx = action.buildTx();
     const request = {
-      chainId: mainnet.id,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner,
@@ -318,11 +316,8 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
       }),
       transactions: [{ from: owner, to: tx.to, data: tx.data }],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-    };
-    const result = await simulate(config, {
+    const config = simulationClientFor(client.transport.url, mainnet);
+    const result = await simulateOrThrowFirst(config, {
       ...request,
       limits: { operations: [operation] },
     });
@@ -343,7 +338,10 @@ for (const exit of ["redeem", "withdraw", "migrate"] as const) {
         ? { ...operation, inputs: { assets: 1_000_001n } }
         : { ...operation, inputs: { shares: shares + 1n } };
     await expect(
-      simulate(config, { ...request, limits: { operations: [wrongAmount] } }),
+      simulateOrThrowFirst(config, {
+        ...request,
+        limits: { operations: [wrongAmount] },
+      }),
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   }, 180_000);
 }

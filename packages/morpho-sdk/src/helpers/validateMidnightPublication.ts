@@ -109,7 +109,9 @@ export const validateMidnightPublication = (
     });
   }
   const publication = params.publication;
-  if (publication == null) return;
+  if (publication == null) {
+    return;
+  }
 
   validateHexInput(publication.root, "publication.root", { exactBytes: 32 });
   for (const [index, group] of publication.groups.entries()) {
@@ -140,7 +142,9 @@ export const validateMidnightPublication = (
       },
     );
   }
-  if (publication.payload === "0x") return;
+  if (publication.payload === "0x") {
+    return;
+  }
   validateHexInput(publication.payload, "publication.payload", {
     maxBytes: Payload.MAX_PAYLOAD_BYTES,
   });

@@ -39,9 +39,11 @@ export const expectMalformedMetadataFailure = (
   expect(classifyError(error)).toBe("integrity");
   for (const link of errorChain(error)) {
     expect(isTransportError(link)).toBe(false);
-    if (link instanceof ContractFunctionRevertedError)
+    if (link instanceof ContractFunctionRevertedError) {
       expect(link.data?.errorName).toBe("MalformedReturnData");
+    }
   }
-  if (field != null && error instanceof MalformedTokenMetadataError)
+  if (field != null && error instanceof MalformedTokenMetadataError) {
     expect(error.field).toBe(field);
+  }
 };

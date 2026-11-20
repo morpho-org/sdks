@@ -50,7 +50,8 @@ const emptyMidnightMarket = {
  * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake` for `msg.sender`: cancel previous
  * groups under consumption guards, optionally park loan assets on Morpho Blue for the maker's
  * `BlueBuyCallback` or supply collateral, activate `root`, and publish `payload`.
- * Without `publication`, it only cancels groups (`cancelOffers` uses this).
+ * Without `publication`, it only cancels groups; `client.morpho.midnight(chainId).cancelOffers(...)`
+ * does not use this builder and calls Midnight directly through `midnightCancelOffers`.
  * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  * The builder snapshots every input field once before validation and encoding. It checks root,
  * groups, cancellation groups, Blue callback salt, and root-signature `r`/`s` as 32-byte hex and

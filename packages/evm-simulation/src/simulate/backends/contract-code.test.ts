@@ -5,15 +5,15 @@ import {
   RpcTransportError,
   SimulationValidationError,
 } from "../../errors.js";
+import { simulationClientFor } from "../../test-helpers/index.js";
 import type { ParsedTransaction } from "../request/parse-request.js";
-import { createSimulationClient } from "./client.js";
 import { assertTransactionTargetsHaveCode } from "./contract-code.js";
 
 const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-const client = () => createSimulationClient("https://rpc.example");
+const client = () => simulationClientFor("https://rpc.example", 1);
 
 const FROM = "0x1111111111111111111111111111111111111111" as Address;
 const TARGET = "0x2222222222222222222222222222222222222222" as Address;
@@ -45,6 +45,27 @@ afterEach(() => {
 });
 
 describe.sequential("assertTransactionTargetsHaveCode", () => {
+  test("error: an expired deadline prevents a late delegation read", async () => {
+    const controller = new AbortController();
+    const reached = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<Response>();
+    fetchMock.mockImplementation(() => {
+      reached.resolve();
+      return response.promise;
+    });
+    const pending = assertTransactionTargetsHaveCode({
+      ...baseParams,
+      client: client(),
+      signal: controller.signal,
+      transactions: [tx(TARGET, "0x1234")],
+    });
+    await reached.promise;
+    controller.abort(new DOMException("Deadline exceeded", "TimeoutError"));
+    response.resolve(rpc(`0xef0100${OTHER.slice(2)}`));
+    await expect(pending).rejects.toBeInstanceOf(RpcTransportError);
+    expect(getCodeCalls()).toHaveLength(1);
+  });
+
   test.each(["", "0X"])(
     "rejects an empty-code spelling %j on targets and delegates",
     async (code) => {

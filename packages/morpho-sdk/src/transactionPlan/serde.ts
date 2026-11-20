@@ -1,11 +1,13 @@
 import { type Address, isAddressEqual } from "viem";
 import { validateApprovalPlanAction } from "./approval.js";
+import { validateDepositPlanAction } from "./deposit.js";
 import {
   InvalidTransactionPlanError,
   TransactionPlanSignatureMismatchError,
 } from "./error.js";
 import { validatePermitPlanRequest } from "./permit.js";
 import { getPendingSignatureRequests } from "./plan.js";
+import { validateRedeemPlanAction } from "./redeem.js";
 import type { Action, Step, TransactionPlan } from "./types.js";
 import { validateTransactionPlanActions } from "./validateActions.js";
 import {
@@ -13,20 +15,34 @@ import {
   validatePlanField,
   validatePlanFields,
 } from "./validation.js";
-import { validateDepositPlanAction } from "./vaultv2/deposit.js";
-import { validateWithdrawPlanAction } from "./vaultv2/withdraw.js";
+import { validateInKindRedeemPlanAction as validateVaultV1InKindRedeemPlanAction } from "./vaultv1/inKindRedeem.js";
+import { validateMigrateToV2PlanAction } from "./vaultv1/migrateToV2.js";
+import { validateForceRedeemPlanAction } from "./vaultv2/forceRedeem.js";
+import { validateForceWithdrawPlanAction } from "./vaultv2/forceWithdraw.js";
+import { validateInKindRedeemPlanAction } from "./vaultv2/inKindRedeem.js";
 import { validateTransactionPlanVersion } from "./version.js";
+import { validateWithdrawPlanAction } from "./withdraw.js";
 
 const actionValidators = {
+  vaultV1InKindRedeem: validateVaultV1InKindRedeemPlanAction,
   erc20Approval: validateApprovalPlanAction,
+  vaultV2Redeem: validateRedeemPlanAction,
+  vaultV2ForceWithdraw: validateForceWithdrawPlanAction,
+  vaultV1Deposit: validateDepositPlanAction,
+  vaultV1Redeem: validateRedeemPlanAction,
+  vaultV1MigrateToV2: validateMigrateToV2PlanAction,
   vaultV2Deposit: validateDepositPlanAction,
   vaultV2Withdraw: validateWithdrawPlanAction,
+  vaultV2ForceRedeem: validateForceRedeemPlanAction,
+  vaultV1Withdraw: validateWithdrawPlanAction,
+  vaultV2InKindRedeem: validateInKindRedeemPlanAction,
 } satisfies Record<
   Action["type"],
   (action: Record<string, unknown>, path: string) => void
 >;
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Serializes plan data with a bigint replacer. No validation is performed.
  * @param plan - Plan to save.
  * @returns JSON with `$bigint` tags for bigint quantities.
@@ -35,7 +51,6 @@ const actionValidators = {
  * import { serializeTransactionPlan, type TransactionPlan } from "@morpho-org/morpho-sdk";
  * const save = (plan: TransactionPlan) => serializeTransactionPlan(plan);
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function serializeTransactionPlan(plan: TransactionPlan): string {
   return JSON.stringify(
@@ -49,6 +64,7 @@ export function serializeTransactionPlan(plan: TransactionPlan): string {
 }
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Restores bigint fields and validates version, action/request shapes, uint256 ranges, unique IDs,
  * references, per-action chain/account and permit/action consistency, including signed requests.
  * Extra keys are allowed. No clock or RPC is used: expiry, live state, signature ownership and
@@ -65,7 +81,6 @@ export function serializeTransactionPlan(plan: TransactionPlan): string {
  * import { parseTransactionPlan } from "@morpho-org/morpho-sdk";
  * const restore = (saved: string) => parseTransactionPlan(saved);
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function parseTransactionPlan(json: string): TransactionPlan {
   let restored: unknown;
@@ -98,11 +113,12 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       signatureRequests: "array",
     },
   });
-  if (plan.calldataOrigin !== undefined)
+  if (plan.calldataOrigin !== undefined) {
     validatePlanField(plan.calldataOrigin, {
       path: "$.calldataOrigin",
       type: "hex",
     });
+  }
   const steps = plan.steps as unknown[];
   const requests = plan.signatureRequests as unknown[];
   const stepIds = new Set<string>();
@@ -113,11 +129,12 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       path,
       fields: { id: "string", label: "string" },
     });
-    if (stepIds.has(step.id as string))
+    if (stepIds.has(step.id as string)) {
       throw new InvalidTransactionPlanError({
         path: `${path}.id`,
         reason: "expected a unique step ID",
       });
+    }
     stepIds.add(step.id as string);
     const action = getPlanObject(step.action, `${path}.action`);
     validatePlanField(action.type, {
@@ -136,16 +153,18 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       fields: { chainId: "positive safe integer", account: "address" },
     });
     actionValidators[step.action.type](action, path);
-    if (inputs.chainId !== plan.chainId)
+    if (inputs.chainId !== plan.chainId) {
       throw new InvalidTransactionPlanError({
         path: `${path}.inputs.chainId`,
         reason: "expected the plan chainId",
       });
-    if (!isAddressEqual(inputs.account as Address, plan.account as Address))
+    }
+    if (!isAddressEqual(inputs.account as Address, plan.account as Address)) {
       throw new InvalidTransactionPlanError({
         path: `${path}.inputs.account`,
         reason: "expected the plan account",
       });
+    }
   }
   const requestIds = new Set<string>();
   for (const [index, value] of requests.entries()) {
@@ -155,30 +174,35 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       path,
       fields: { id: "string", kind: "string" },
     });
-    if (requestIds.has(request.id as string))
+    if (requestIds.has(request.id as string)) {
       throw new InvalidTransactionPlanError({
         path: `${path}.id`,
         reason: "expected a unique signature request ID",
       });
+    }
     requestIds.add(request.id as string);
-    if (request.kind !== "permit")
+    if (request.kind !== "permit") {
       throw new InvalidTransactionPlanError({
         path: `${path}.kind`,
         reason: "expected a supported signature request kind (permit)",
       });
+    }
     validatePermitPlanRequest(request, path);
   }
   for (const [index, step] of (steps as readonly Step[]).entries()) {
-    if (!("signatureRequestIds" in step.action)) continue;
+    if (!("signatureRequestIds" in step.action)) {
+      continue;
+    }
     const path = `$.steps[${index}].action.signatureRequestIds`;
     const ids = getPlanObject(step.action.signatureRequestIds, path);
     for (const [role, id] of Object.entries(ids)) {
       validatePlanField(id, { path: `${path}.${role}`, type: "string" });
-      if (!requestIds.has(id as string))
+      if (!requestIds.has(id as string)) {
         throw new InvalidTransactionPlanError({
           path: `${path}.${role}`,
           reason: "expected an existing signature request ID",
         });
+      }
     }
   }
   const result = restored as TransactionPlan;
@@ -196,14 +220,14 @@ export function parseTransactionPlan(json: string): TransactionPlan {
       const index = result.signatureRequests.findIndex(
         (request) => request.id === cause.id,
       );
-      const field =
-        cause.field === "reference"
-          ? "id"
-          : cause.field === "value"
-            ? "args.amount"
-            : cause.field.startsWith("args.")
-              ? cause.field
-              : `typedData.${cause.field}`;
+      let field = `typedData.${cause.field}`;
+      if (cause.field === "reference") {
+        field = "id";
+      } else if (cause.field === "value") {
+        field = "args.amount";
+      } else if (cause.field.startsWith("args.")) {
+        field = cause.field;
+      }
       throw new InvalidTransactionPlanError({
         path: `$.signatureRequests[${index}].${field}`,
         reason: "expected agreement with every referencing action",

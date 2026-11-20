@@ -22,7 +22,7 @@ This module follows Wallet Development Kit lending protocol conventions and acce
 ## Installation
 
 ```bash
-pnpm add @morpho-org/wdk-protocol-lending-morpho-evm viem
+npm install @morpho-org/wdk-protocol-lending-morpho-evm viem
 ```
 
 `viem` is a peer dependency.
@@ -30,8 +30,8 @@ pnpm add @morpho-org/wdk-protocol-lending-morpho-evm viem
 For local development from a checkout of [`morpho-org/sdks`](https://github.com/morpho-org/sdks):
 
 ```bash
-pnpm install
-pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test
+bun run install:checked
+bun run --filter @morpho-org/wdk-protocol-lending-morpho-evm test
 ```
 
 ## Quick Start
@@ -139,7 +139,7 @@ Earn presets target Ethereum mainnet USDT vaults:
 | `sky-money-usdt-savings` | sky.money USDT Savings V2 |
 | `steakhouse-prime-instant` | Steakhouse Prime Instant V2 |
 
-This module only builds Morpho Vault V2 earn flows. `pnpm run check:vault-v2` verifies that code, docs, and tests do not reintroduce Morpho Vault V1 usage or an earn-flow selector.
+This module only builds Morpho Vault V2 earn flows. `bun run check:vault-v2` verifies that code, docs, and tests do not reintroduce Morpho Vault V1 usage or an earn-flow selector.
 
 Borrow presets target Ethereum mainnet USDT loan markets:
 
@@ -233,10 +233,10 @@ See [Migrating to 2.0](./MIGRATION.md) for the complete breaking-change checklis
 
 ## Fork E2E Test
 
-The colocated unit suite runs as part of the workspace's `pnpm test` command. The Anvil-fork integration suite under `test/` uses `*.integration.test.ts` names and is gated on `ERPC_SECRET` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
+The colocated unit suite runs as part of the workspace's `bun run test` command. The Anvil-fork integration suite under `test/` uses `*.integration.test.ts` names and is gated on `ERPC_SECRET` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
 
 ```bash
-ERPC_SECRET=<key> pnpm test --project wdk-protocol-lending-morpho-evm-fork
+ERPC_SECRET=<key> bun run test --project wdk-protocol-lending-morpho-evm-fork
 ```
 
 The fork test impersonates a USDT holder, funds the local test wallet, sends SDK requirements, and executes a Morpho Vault V2 deposit against forked mainnet state.

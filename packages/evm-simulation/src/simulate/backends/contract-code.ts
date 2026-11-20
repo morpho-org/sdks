@@ -21,11 +21,12 @@ import { rpc } from "./eth-simulate-v1.js";
  * the pipeline does not model in-bundle contract creations.
  *
  * @param params - Check parameters.
- * @param params.client - Shared simulation client (created by `createSimulationClient`).
+ * @param params.client - Caller-owned viem client.
  * @param params.transactions - Parsed caller transactions, in execution order.
  * @param params.chainId - Request chain id, named in the validation error.
  * @param params.blockNumber - Pinned state block the `eth_getCode` reads run at.
  * @param params.stateOverrides - Caller code overrides, checked instead of onchain code when present.
+ * @param params.signal - Pipeline deadline; prevents starting reads after expiry.
  * @returns Nothing when every calldata target and its EIP-7702 delegate hold code.
  * @throws {SimulationValidationError} when a transaction with calldata targets
  *   a code-less address or EIP-7702 delegate, in overrides or at the pinned block;
@@ -43,6 +44,7 @@ export async function assertTransactionTargetsHaveCode(params: {
   readonly chainId: number;
   readonly blockNumber: bigint;
   readonly stateOverrides?: SimulationStateOverrides;
+  readonly signal?: AbortSignal;
 }): Promise<void> {
   const { client, transactions, chainId, blockNumber, stateOverrides } = params;
   const overrides = new Map(
@@ -54,32 +56,37 @@ export async function assertTransactionTargetsHaveCode(params: {
   const checked = new Map<Address, Promise<`0x${string}` | undefined>>();
   // Start every distinct target's read up front so the RPCs run concurrently.
   for (const transaction of transactions) {
-    if (transaction.data === "0x" || checked.has(transaction.to)) continue;
+    if (transaction.data === "0x" || checked.has(transaction.to)) {
+      continue;
+    }
     const code = overrides.get(transaction.to.toLowerCase())?.code;
     checked.set(
       transaction.to,
-      (code !== undefined
-        ? Promise.resolve(code)
-        : rpc("eth_getCode", () =>
-            getBytecode(client, {
+      (code === undefined
+        ? rpc("eth_getCode", () => {
+            params.signal?.throwIfAborted();
+            return getBytecode(client, {
               address: transaction.to,
               blockNumber,
-            }),
-          )
+            });
+          })
+        : Promise.resolve(code)
       ).then((resolvedCode) => {
         if (
           resolvedCode === undefined ||
           !/^0xef0100[0-9a-f]{40}$/i.test(resolvedCode)
-        )
+        ) {
           return resolvedCode;
+        }
         // EIP-7702 follows one delegation; a code-less delegate is still a no-op.
         const delegate = getAddress(`0x${resolvedCode.slice(8)}`);
         const delegateCode = overrides.get(delegate.toLowerCase())?.code;
-        return delegateCode !== undefined
-          ? delegateCode
-          : rpc("eth_getCode", () =>
-              getBytecode(client, { address: delegate, blockNumber }),
-            );
+        return delegateCode === undefined
+          ? rpc("eth_getCode", () => {
+              params.signal?.throwIfAborted();
+              return getBytecode(client, { address: delegate, blockNumber });
+            })
+          : delegateCode;
       }),
     );
   }
@@ -93,7 +100,12 @@ export async function assertTransactionTargetsHaveCode(params: {
   {
     const keys = [...checked.keys()];
     const settled = await Promise.allSettled([...checked.values()]);
-    settled.forEach((outcome, index) => outcomes.set(keys[index]!, outcome));
+    for (const [index, key] of keys.entries()) {
+      const outcome = settled[index];
+      if (outcome !== undefined) {
+        outcomes.set(key, outcome);
+      }
+    }
   }
   const fieldErrors: string[] = [];
   let firstRejection:
@@ -102,17 +114,22 @@ export async function assertTransactionTargetsHaveCode(params: {
       })
     | undefined;
   for (const [index, transaction] of transactions.entries()) {
-    if (transaction.data === "0x") continue;
+    if (transaction.data === "0x") {
+      continue;
+    }
     const outcome = outcomes.get(transaction.to);
-    if (outcome === undefined) continue;
+    if (outcome === undefined) {
+      continue;
+    }
     if (outcome.status === "rejected") {
       // A non-RPC failure must not hide behind a sibling's RPC outage.
       if (
         firstRejection === undefined ||
         (firstRejection.reason instanceof RpcTransportError &&
           !(outcome.reason instanceof RpcTransportError))
-      )
+      ) {
         firstRejection = outcome;
+      }
       continue;
     }
     const bytecode = outcome.value;
@@ -123,13 +140,15 @@ export async function assertTransactionTargetsHaveCode(params: {
     }
   }
   // A confirmed empty target wins over a failed read: the deterministic
-  // validation error carries the same wrong-chain signal a probe upgrades,
-  // whereas a flaky getCode would mask it as an external failure.
+  // validation error is the caller's to fix, whereas a flaky getCode would
+  // mask it as an external failure.
   if (fieldErrors.length > 0) {
     throw new SimulationValidationError(
-      `Transaction targets with calldata must hold contract code at the state block: ${fieldErrors.join("; ")}. Check the transaction list and that the endpoint serves chain ${chainId}.`,
+      `Transaction targets with calldata must hold contract code at the state block: ${fieldErrors.join("; ")}. Check the transaction list and that the client's endpoint serves chain ${chainId}.`,
       fieldErrors,
     );
   }
-  if (firstRejection !== undefined) throw firstRejection.reason;
+  if (firstRejection !== undefined) {
+    throw firstRejection.reason;
+  }
 }

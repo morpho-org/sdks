@@ -28,6 +28,11 @@ import {
   MidnightApi,
   type MidnightApiFetch,
 } from "./MidnightApi.js";
+import type {
+  ApiBookMarketResponse,
+  ApiCollateralResponse,
+  ApiTakeableOfferResponse,
+} from "./types.js";
 
 const { baseMarketParamsInput, baseOffer } = createFixtures({
   midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
@@ -94,11 +99,16 @@ const API_MIDNIGHT = "0x0000000000000000000000000000000000001234";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RATIFIER = "0x0000000000000000000000000000000000000002";
 
-const apiCollateral = {
+const apiCollateral: ApiCollateralResponse = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
   liquidation_cursor: "0",
   oracle: ORACLE,
+};
+
+const secondApiCollateral: ApiCollateralResponse = {
+  ...apiCollateral,
+  token: SECOND_LOAN_TOKEN,
 };
 
 const expectedCollateral = {
@@ -128,13 +138,16 @@ const apiBook = {
   liquidator_gate: ZERO_ADDRESS,
   asks: [apiPriceLevel],
   bids: [],
-};
+} satisfies ApiBookMarketResponse;
 
 // A coherent book for a *different* market: foreign loan token, `market_id`
 // recomputed from its own params (so it passes the integrity check but is still
 // outside the requested market).
 const coherentForeignApiBook = (() => {
-  const params = { ...apiBook, loan_token: SECOND_LOAN_TOKEN };
+  const params = {
+    ...apiBook,
+    loan_token: SECOND_LOAN_TOKEN,
+  } satisfies ApiBookMarketResponse;
   return {
     ...params,
     market_id: MarketUtils.toId({
@@ -185,10 +198,7 @@ const expectedBook = {
 const multiCollateralApiBook = (() => {
   const params = {
     ...apiBook,
-    collaterals: [
-      ...apiBook.collaterals,
-      { ...apiCollateral, token: SECOND_LOAN_TOKEN },
-    ],
+    collaterals: [...apiBook.collaterals, secondApiCollateral],
   };
   return {
     ...params,
@@ -210,7 +220,7 @@ const multiCollateralApiBook = (() => {
   };
 })();
 
-const apiOfferMarket = {
+const apiOfferMarket: ApiTakeableOfferResponse["offer"]["market"] = {
   chain_id: 8453,
   midnight: API_MIDNIGHT,
   loan_token: LOAN_TOKEN,
@@ -283,10 +293,7 @@ const apiTakeableOffer = {
 const multiCollateralApiTakeableOffer = (() => {
   const market = {
     ...apiOfferMarket,
-    collaterals: [
-      apiCollateral,
-      { ...apiCollateral, token: SECOND_LOAN_TOKEN },
-    ],
+    collaterals: [apiCollateral, secondApiCollateral],
   };
   return {
     ...apiTakeableOffer,
@@ -956,7 +963,6 @@ describe("MidnightApi.fetchBook", () => {
   });
 
   test("behavior: returns collaterals in canonical collateralIndex order", async () => {
-    const secondApiCollateral = { ...apiCollateral, token: SECOND_LOAN_TOKEN };
     const unsortedBook = {
       ...apiBook,
       collaterals: [apiCollateral, secondApiCollateral],

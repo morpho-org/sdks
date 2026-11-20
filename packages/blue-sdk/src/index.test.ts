@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { expect, test } from "vitest";
+import { assert, expect, test } from "vitest";
 
 test("runtime imports are declared as dependencies or peers", () => {
   const manifest = JSON.parse(
@@ -13,7 +13,10 @@ test("runtime imports are declared as dependencies or peers", () => {
   const sourceRoot = new URL("./", import.meta.url);
   const missing = new Set<string>();
 
-  for (const file of readdirSync(sourceRoot, { recursive: true })) {
+  for (const file of readdirSync(sourceRoot, {
+    recursive: true,
+    encoding: "utf8",
+  })) {
     if (
       !file.endsWith(".ts") ||
       file.endsWith(".test.ts") ||
@@ -30,6 +33,7 @@ test("runtime imports are declared as dependencies or peers", () => {
       /^\s*(?:import|export)\s+(?!type\b)(?:([\w$*{},\s]+?)\s+from\s*)?["']([^"']+)["']/gm,
     );
     for (const [, clause, specifier] of imports) {
+      assert.isDefined(specifier);
       if (
         clause?.trim().startsWith("{") &&
         clause.trim().endsWith("}") &&

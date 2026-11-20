@@ -81,7 +81,9 @@ export const getMidnightAuthorizationRequirement = async (
     args: [params.owner, params.authorized],
   });
 
-  if (isAuthorized) return null;
+  if (isAuthorized) {
+    return null;
+  }
 
   return deepFreeze({
     to: midnight,

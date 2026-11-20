@@ -30,9 +30,9 @@
     "MIGRATION-v1-to-v2.md"
   ],
   "scripts": {
-    "prepublish": "pnpm build",
+    "prepublish": "bun run build",
     "compile": "node ../../scripts/compile-solidity.ts midnight-sdk",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "test": "vitest --root ../.. --project midnight-sdk --project midnight-sdk-fork"

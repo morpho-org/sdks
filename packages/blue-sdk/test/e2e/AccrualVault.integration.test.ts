@@ -5,6 +5,7 @@ import {
 import {
   type AnvilTestClient,
   getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
   testAccount,
 } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -30,7 +31,7 @@ import { adaptiveCurveIrmAbi, blueAbi } from "./abis.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 24_671_815,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 const { blue, adaptiveCurveIrm, metaMorphoFactory, usdc, wNative } =
   addressesRegistry[mainnet.id];

@@ -1,11 +1,11 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
 
 /**
- * This test will run on `mainnet` forked at block `19,530,000`.
+ * This test uses the shared mainnet fork block.
  */
 export const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 19_530_000,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });

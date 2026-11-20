@@ -1,11 +1,18 @@
 import {
   type AddressRegistry,
   addressesRegistry,
+  type ChainAddresses,
   ChainId,
   type DeploymentRegistry,
   deployments,
 } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import {
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+  OPTIMISM_FORK_BLOCK,
+  TEMPO_FORK_BLOCK,
+} from "@morpho-org/test";
 import { describe, expect, test } from "vitest";
 import {
   E2E_FORK_BLOCKS,
@@ -55,9 +62,58 @@ const withArbitrumMidnight = () =>
       midnightBundlesV2: "0x0000000000000000000000000000000000000002",
       setterRatifier: "0x0000000000000000000000000000000000000003",
     },
-  }) as AddressRegistry;
+  }) satisfies Record<number, ChainAddresses> as unknown as AddressRegistry;
+
+describe("E2E_FORK_BLOCKS", () => {
+  test.each([
+    { chainId: ChainId.EthMainnet, block: MAINNET_FORK_BLOCK },
+    { chainId: ChainId.BaseMainnet, block: BASE_FORK_BLOCK },
+    { chainId: ChainId.OptimismMainnet, block: OPTIMISM_FORK_BLOCK },
+    { chainId: ChainId.TempoMainnet, block: TEMPO_FORK_BLOCK },
+  ])("uses the shared target on chain $chainId", ({ chainId, block }) => {
+    expect(E2E_FORK_BLOCKS[chainId]).toBe(block);
+  });
+});
 
 describe("getE2eEligibility", () => {
+  test("behavior: includes Alpen Blue and Vault V2 fork suites without Midnight", () => {
+    const alpenBlueScenario: E2eScenario = {
+      name: "blue",
+      requires: ["blue", "adaptiveCurveIrm", "bundles.blueBundlesV1"],
+    };
+    const alpenVaultV2Scenario: E2eScenario = {
+      name: "vaultV2",
+      requires: [
+        "blue",
+        "adaptiveCurveIrm",
+        "vaultV2Factory",
+        "morphoMarketV1AdapterV2Factory",
+        "bundles.vaultBundlesV1",
+      ],
+    };
+    for (const scenario of [alpenBlueScenario, alpenVaultV2Scenario]) {
+      expect(
+        getE2eEligibility({ scenario, chainId: ChainId.AlpenMainnet }),
+      ).toMatchObject({
+        status: "eligible",
+        target: {
+          chainId: ChainId.AlpenMainnet,
+          forkBlockNumber: 1_585_357n,
+          undatedDeployments: [],
+        },
+      });
+    }
+    expect(
+      getE2eEligibility({
+        scenario: midnightScenario,
+        chainId: ChainId.AlpenMainnet,
+      }),
+    ).toMatchObject({
+      status: "missingDeployments",
+      missing: ["midnight", "midnightBundlesV2", "setterRatifier"],
+    });
+  });
+
   test("behavior: lists every required label missing from the chain", () => {
     expect(
       getE2eEligibility({
@@ -466,7 +522,7 @@ describe("getE2eRuns", () => {
         target: {
           chainId: ChainId.TempoMainnet,
           chainName: "TempoMainnet",
-          forkBlockNumber: 43_016_000n,
+          forkBlockNumber: TEMPO_FORK_BLOCK,
         },
       },
     ]);

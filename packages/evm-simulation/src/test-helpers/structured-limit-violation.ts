@@ -24,8 +24,12 @@ export function missingLimitViolationFields(
   const missing: string[] = REQUIRED_FIELDS.filter(
     (field) => error[field] === undefined,
   );
-  if (error.check !== undefined && !CONSUMER_LIMIT_CHECKS.includes(error.check))
+  if (
+    error.check !== undefined &&
+    !CONSUMER_LIMIT_CHECKS.includes(error.check)
+  ) {
     missing.push("check");
+  }
   return missing;
 }
 
@@ -41,11 +45,16 @@ export function missingSlippageUnavailableFields(
   if (
     error.reason !== undefined &&
     !SLIPPAGE_CHECK_UNAVAILABLE_REASONS.includes(error.reason)
-  )
+  ) {
     missing.push("reason");
+  }
   if (error.operationIndex !== undefined || error.operationType !== undefined) {
-    if (error.operationIndex === undefined) missing.push("operationIndex");
-    if (error.operationType === undefined) missing.push("operationType");
+    if (error.operationIndex === undefined) {
+      missing.push("operationIndex");
+    }
+    if (error.operationType === undefined) {
+      missing.push("operationType");
+    }
   }
   return missing;
 }
@@ -79,10 +88,11 @@ export function installStructuredLimitViolationCheck(): () => void {
               : missingSlippageUnavailableFields(
                   value as SlippageCheckUnavailableError,
                 );
-          if (missing.length > 0)
+          if (missing.length > 0) {
             throw new Error(
               `${this.name} lacks structured fields ${JSON.stringify(missing)}: ${(value as Error).message}`,
             );
+          }
         }
         return matches;
       },

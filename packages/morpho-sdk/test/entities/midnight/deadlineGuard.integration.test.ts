@@ -6,7 +6,11 @@ import {
   Tree,
 } from "@morpho-org/midnight-sdk";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -31,7 +35,7 @@ import {
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });
 
@@ -126,7 +130,7 @@ const countingValidation = () => {
 };
 
 describe("Midnight deadline guard on fork", () => {
-  test("behavior: an expired cancelAndMake deadline reverts DeadlinePassed onchain; cancelOffers rejects it first", async ({
+  test("behavior: an expired cancelAndMake deadline reverts DeadlinePassed onchain", async ({
     client,
   }) => {
     const deadline = await pastDeadline(client);
@@ -139,14 +143,6 @@ describe("Midnight deadline guard on fork", () => {
     await expect(
       client.call({ ...raw, account: client.account.address }),
     ).rejects.toThrow(deadlinePassed);
-
-    expect(() =>
-      midnightEntity(client).cancelOffers({
-        accountAddress: client.account.address,
-        cancellations,
-        deadline,
-      }),
-    ).toThrow(ExpiredDeadlineError);
   });
 
   test("behavior: an expired repayWithdrawCollateral deadline reverts DeadlinePassed onchain; the entity rejects it first", async ({

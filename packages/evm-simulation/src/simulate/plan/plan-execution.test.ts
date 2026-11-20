@@ -18,15 +18,17 @@ const ASSERTIONS = [
 ] as const;
 
 const makeRequest = (count: number) =>
-  parseRequest({
-    limits: "none",
-    chainId: 1,
-    transactions: Array.from({ length: count }, () => ({
-      from: OWNER,
-      to: TARGET,
-      data: "0x12345678",
-    })),
-  });
+  parseRequest(
+    {
+      limits: "none",
+      transactions: Array.from({ length: count }, () => ({
+        from: OWNER,
+        to: TARGET,
+        data: "0x12345678",
+      })),
+    },
+    1,
+  );
 
 const reads = [makeBalanceRead(TOKEN, OWNER)];
 
@@ -124,26 +126,28 @@ describe("planExecution", () => {
   });
 
   test("order: transaction assertions bracket each transaction between reads and preparations", () => {
-    const request = parseRequest({
-      chainId: 1,
-      limits: "none",
-      transactions: [
-        {
-          from: OWNER,
-          to: TARGET,
-          data: "0x12345678",
-          assertBefore: [ASSERTIONS[0]],
-          assertAfter: [ASSERTIONS[1]],
-        },
-        {
-          from: OWNER,
-          to: TARGET,
-          data: "0x12345678",
-          assertBefore: [ASSERTIONS[1]],
-          assertAfter: [ASSERTIONS[0]],
-        },
-      ],
-    });
+    const request = parseRequest(
+      {
+        limits: "none",
+        transactions: [
+          {
+            from: OWNER,
+            to: TARGET,
+            data: "0x12345678",
+            assertBefore: [ASSERTIONS[0]],
+            assertAfter: [ASSERTIONS[1]],
+          },
+          {
+            from: OWNER,
+            to: TARGET,
+            data: "0x12345678",
+            assertBefore: [ASSERTIONS[1]],
+            assertAfter: [ASSERTIONS[0]],
+          },
+        ],
+      },
+      1,
+    );
     const calls = planExecution({
       request,
       owner: OWNER,

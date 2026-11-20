@@ -156,41 +156,18 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
   params: MidnightTakeFeasibilityParams<T>,
 ): readonly T[] => {
   // The raw builder rejects an empty list with `EmptyMidnightTakeableOffersError`.
-  if (params.takeableOffers.length === 0) return params.takeableOffers;
-  const { marketData, now, deadline, referralFeePct, target } = params;
+  if (params.takeableOffers.length === 0) {
+    return params.takeableOffers;
+  }
+  const { marketData, now, deadline } = params;
   // The entity checked the deadline on an earlier clock read; recheck so the fee window is never empty.
-  if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+  if (deadline <= now) {
+    throw new ExpiredDeadlineError(deadline, now);
+  }
   const maturity = marketData.params.maturity;
   const marketFee = BigInt(marketData.continuousFee);
-  if (params.side === "buy") {
-    if (params.maxContinuousFee < marketFee) {
-      throw new MidnightContinuousFeeAboveMaxError({
-        maxContinuousFee: params.maxContinuousFee,
-        continuousFee: marketFee,
-      });
-    }
-    const { debt, target: buyTarget } = params;
-    if (debt !== undefined) {
-      // Reduce-only buys fill at most the debt, and an assets target pays at most one asset per unit.
-      const repay =
-        buyTarget.type === "units"
-          ? buyTarget.units === maxUint256
-            ? undefined
-            : { field: "target.units" as const, value: buyTarget.units }
-          : buyTarget.minUnits > debt
-            ? {
-                field: "target.minUnits" as const,
-                value: buyTarget.minUnits,
-              }
-            : {
-                field: "target.assets" as const,
-                value: netOfReferralFee(buyTarget.assets, referralFeePct),
-              };
-      if (repay && repay.value > debt) {
-        throw new MidnightRepayExceedsDebtError({ ...repay, debt });
-      }
-    }
-  }
+  // Reject buy fee and debt violations before evaluating settlement fees or offers.
+  assertMidnightBuyBounds(params, marketFee);
   const fees = [
     maturity - deadline,
     maturity - now,
@@ -206,64 +183,20 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
   const minFee = MathLib.min(...fees);
   const maxFee = MathLib.max(...fees);
 
-  const dead: MidnightTakeableOffersNotFillableError["offers"][number][] = [];
-  const removed = new Set<number>();
   // Post-maturity sells cannot open debt, so offers only take the credit left after the withdrawal.
   const sellableCredit =
     params.side === "sell" && params.increasesDebt && now > maturity
       ? MathLib.zeroFloorSub(params.credit ?? 0n, params.fallbackUnits)
       : undefined;
-  let liveUnits = 0n;
-  let minBuyerPrice = params.fallbackUnits > 0n ? MathLib.WAD : maxUint256;
-  for (const [index, { units, offer }] of params.takeableOffers.entries()) {
-    const tickInRange = offer.tick >= 0n && offer.tick <= MAX_TICK;
-    const offerPrice = tickInRange ? TickLib.tickToPrice(offer.tick) : 0n;
-    let reason:
-      | MidnightTakeableOffersNotFillableError["offers"][number]["reason"]
-      | undefined;
-    // The bundle converts every buy assets target price outside its per-offer catch,
-    // so a degenerate price aborts the bundle even when the offer is otherwise dead.
-    if (params.side === "buy" && target.type === "assets") {
-      if (!tickInRange) reason = "tickOutOfRange";
-      else if (offerPrice + maxFee === 0n) reason = "zeroBuyerPrice";
-      else if (offerPrice + minFee > MathLib.WAD) reason = "buyerPriceAboveOne";
-      if (reason) removed.add(index);
-    }
-    // Every sell converts a buy offer's price outside the catch too, which underflows below the fee.
-    if (params.side === "sell") {
-      if (!tickInRange) reason = "tickOutOfRange";
-      else if (offerPrice === 0n) reason = "zeroBuyerPrice";
-      // An assets target also divides by the seller price, which is zero at the fee.
-      else if (
-        offerPrice < minFee ||
-        (target.type === "assets" && offerPrice === minFee)
-      )
-        reason = "priceBelowSettlementFee";
-      if (reason) removed.add(index);
-    }
-    if (!reason) {
-      if (units === 0n) reason = "zeroUnits";
-      else if (!tickInRange) reason = "tickOutOfRange";
-      else if (offer.expiry < now) reason = "expired";
-      else if (offer.start > deadline) reason = "notStarted";
-      else if (isAddressEqual(offer.maker, params.accountAddress))
-        reason = "selfTake";
-      else if (offer.continuousFeeCap < marketFee)
-        reason = "continuousFeeCapBelowMarketFee";
-      else if (
-        params.side === "sell" &&
-        !isAddressEqual(offer.receiverIfMakerIsSeller, zeroAddress)
-      )
-        reason = "receiverIfMakerIsSellerNotZero";
-      else if (sellableCredit === 0n) reason = "marketMatured";
-    }
-    if (reason) {
-      dead.push({ index, reason });
-      continue;
-    }
-    liveUnits += units;
-    minBuyerPrice = MathLib.min(minBuyerPrice, offerPrice + minFee);
-  }
+  const { dead, removed, liveUnits, minBuyerPrice } = collectOfferCapacity(
+    params,
+    {
+      minFee,
+      maxFee,
+      marketFee,
+      sellableCredit,
+    },
+  );
 
   if (
     dead.length === params.takeableOffers.length &&
@@ -272,19 +205,7 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
     throw new MidnightTakeableOffersNotFillableError(dead);
   }
 
-  const requiredUnits =
-    params.side === "sell"
-      ? target.type === "units"
-        ? target.units
-        : grossFromNetAssets({ netAssets: target.assets, referralFeePct })
-      : params.target.type === "units"
-        ? params.target.units === maxUint256
-          ? (params.debt ?? 0n)
-          : params.target.units
-        : MathLib.max(
-            netOfReferralFee(params.target.assets, referralFeePct),
-            params.target.minUnits,
-          );
+  const requiredUnits = resolveRequiredUnits(params);
   const fillableUnits =
     (sellableCredit === undefined
       ? liveUnits
@@ -297,6 +218,248 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
     });
   }
 
+  // Capacity errors precede the buyer's maximum-pull bound.
+  assertBuyerAssetCapacity(params, { requiredUnits, minBuyerPrice });
+
+  return removed.size === 0
+    ? params.takeableOffers
+    : params.takeableOffers.filter((_, index) => !removed.has(index));
+};
+
+/** Resolves a reduce-only buy's repay bound without changing target precedence. @internal */
+function resolveRepayTarget(
+  target: MidnightBuyTarget,
+  {
+    debt,
+    referralFeePct,
+  }: {
+    readonly debt: bigint;
+    readonly referralFeePct: bigint;
+  },
+) {
+  if (target.type === "units") {
+    if (target.units === maxUint256) {
+      return undefined;
+    }
+    return { field: "target.units" as const, value: target.units };
+  }
+  if (target.minUnits > debt) {
+    return { field: "target.minUnits" as const, value: target.minUnits };
+  }
+  return {
+    field: "target.assets" as const,
+    value: netOfReferralFee(target.assets, referralFeePct),
+  };
+}
+
+/** Rejects excessive continuous fees and reduce-only buys exceeding debt. @internal */
+function assertMidnightBuyBounds(
+  params: MidnightTakeFeasibilityParams,
+  marketFee: bigint,
+): void {
+  if (params.side !== "buy") {
+    return;
+  }
+  if (params.maxContinuousFee < marketFee) {
+    throw new MidnightContinuousFeeAboveMaxError({
+      maxContinuousFee: params.maxContinuousFee,
+      continuousFee: marketFee,
+    });
+  }
+  const { debt, target: buyTarget } = params;
+  if (debt !== undefined) {
+    // Reduce-only buys fill at most the debt, and an assets target pays at most one asset per unit.
+    const repay = resolveRepayTarget(buyTarget, {
+      debt,
+      referralFeePct: params.referralFeePct,
+    });
+    if (repay && repay.value > debt) {
+      throw new MidnightRepayExceedsDebtError({ ...repay, debt });
+    }
+  }
+}
+
+/** Resolves price failures that abort bundle conversion outside the offer catch. @internal */
+function getOfferPriceReason(
+  params: MidnightTakeFeasibilityParams,
+  {
+    tickInRange,
+    offerPrice,
+    minFee,
+    maxFee,
+  }: {
+    readonly tickInRange: boolean;
+    readonly offerPrice: bigint;
+    readonly minFee: bigint;
+    readonly maxFee: bigint;
+  },
+):
+  | MidnightTakeableOffersNotFillableError["offers"][number]["reason"]
+  | undefined {
+  // The bundle converts every buy assets target price outside its per-offer catch.
+  if (params.side === "buy" && params.target.type === "assets") {
+    if (!tickInRange) {
+      return "tickOutOfRange";
+    }
+    if (offerPrice + maxFee === 0n) {
+      return "zeroBuyerPrice";
+    }
+    if (offerPrice + minFee > MathLib.WAD) {
+      return "buyerPriceAboveOne";
+    }
+    return undefined;
+  }
+  // Every sell converts a buy offer's price outside the catch too.
+  if (params.side !== "sell") {
+    return undefined;
+  }
+  if (!tickInRange) {
+    return "tickOutOfRange";
+  }
+  if (offerPrice === 0n) {
+    return "zeroBuyerPrice";
+  }
+  // An assets target also divides by the seller price, which is zero at the fee.
+  if (
+    offerPrice < minFee ||
+    (params.target.type === "assets" && offerPrice === minFee)
+  ) {
+    return "priceBelowSettlementFee";
+  }
+  return undefined;
+}
+
+/** Finds the first non-price condition preventing an offer from filling. @internal */
+function getOfferDeadReason(
+  { units, offer }: TakeableOfferLike,
+  {
+    params,
+    tickInRange,
+    marketFee,
+    sellableCredit,
+  }: {
+    readonly params: MidnightTakeFeasibilityParams;
+    readonly tickInRange: boolean;
+    readonly marketFee: bigint;
+    readonly sellableCredit: bigint | undefined;
+  },
+):
+  | MidnightTakeableOffersNotFillableError["offers"][number]["reason"]
+  | undefined {
+  if (units === 0n) {
+    return "zeroUnits";
+  }
+  if (!tickInRange) {
+    return "tickOutOfRange";
+  }
+  if (offer.expiry < params.now) {
+    return "expired";
+  }
+  if (offer.start > params.deadline) {
+    return "notStarted";
+  }
+  if (isAddressEqual(offer.maker, params.accountAddress)) {
+    return "selfTake";
+  }
+  if (offer.continuousFeeCap < marketFee) {
+    return "continuousFeeCapBelowMarketFee";
+  }
+  if (
+    params.side === "sell" &&
+    !isAddressEqual(offer.receiverIfMakerIsSeller, zeroAddress)
+  ) {
+    return "receiverIfMakerIsSellerNotZero";
+  }
+  if (sellableCredit === 0n) {
+    return "marketMatured";
+  }
+  return undefined;
+}
+
+/** Accumulates live offer capacity and preserves removal and error order. @internal */
+function collectOfferCapacity(
+  params: MidnightTakeFeasibilityParams,
+  {
+    minFee,
+    maxFee,
+    marketFee,
+    sellableCredit,
+  }: {
+    readonly minFee: bigint;
+    readonly maxFee: bigint;
+    readonly marketFee: bigint;
+    readonly sellableCredit: bigint | undefined;
+  },
+) {
+  const dead: MidnightTakeableOffersNotFillableError["offers"][number][] = [];
+  const removed = new Set<number>();
+  let liveUnits = 0n;
+  let minBuyerPrice = params.fallbackUnits > 0n ? MathLib.WAD : maxUint256;
+  for (const [index, { units, offer }] of params.takeableOffers.entries()) {
+    const tickInRange = offer.tick >= 0n && offer.tick <= MAX_TICK;
+    const offerPrice = tickInRange ? TickLib.tickToPrice(offer.tick) : 0n;
+    const priceReason = getOfferPriceReason(params, {
+      tickInRange,
+      offerPrice,
+      minFee,
+      maxFee,
+    });
+    if (priceReason) {
+      removed.add(index);
+    }
+    const reason =
+      priceReason ??
+      getOfferDeadReason(
+        { units, offer },
+        {
+          params,
+          tickInRange,
+          marketFee,
+          sellableCredit,
+        },
+      );
+    if (reason) {
+      dead.push({ index, reason });
+      continue;
+    }
+    liveUnits += units;
+    minBuyerPrice = MathLib.min(minBuyerPrice, offerPrice + minFee);
+  }
+
+  return { dead, removed, liveUnits, minBuyerPrice };
+}
+
+/** Converts the taker's target into its required gross unit capacity. @internal */
+function resolveRequiredUnits(params: MidnightTakeFeasibilityParams): bigint {
+  const { target, referralFeePct } = params;
+  if (params.side === "sell") {
+    if (target.type === "units") {
+      return target.units;
+    }
+    return grossFromNetAssets({ netAssets: target.assets, referralFeePct });
+  }
+  if (params.target.type === "units") {
+    return params.target.units === maxUint256
+      ? (params.debt ?? 0n)
+      : params.target.units;
+  }
+  return MathLib.max(
+    netOfReferralFee(params.target.assets, referralFeePct),
+    params.target.minUnits,
+  );
+}
+
+/** Rejects a units buy whose cheapest possible asset pull exceeds its cap. @internal */
+function assertBuyerAssetCapacity(
+  params: MidnightTakeFeasibilityParams,
+  {
+    requiredUnits,
+    minBuyerPrice,
+  }: {
+    readonly requiredUnits: bigint;
+    readonly minBuyerPrice: bigint;
+  },
+): void {
   if (params.side === "buy" && params.target.type === "units") {
     // Every unit costs at least the cheapest live price, and the fee is grossed up on top.
     const minCost = MathLib.mulDivDown(
@@ -304,7 +467,10 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
       minBuyerPrice,
       MathLib.WAD,
     );
-    const minPull = grossFromNetAssets({ netAssets: minCost, referralFeePct });
+    const minPull = grossFromNetAssets({
+      netAssets: minCost,
+      referralFeePct: params.referralFeePct,
+    });
     if (params.target.maxBuyerAssets < minPull) {
       throw new MidnightTakeTargetUnreachableError({
         field: "target.maxBuyerAssets",
@@ -313,8 +479,4 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
       });
     }
   }
-
-  return removed.size === 0
-    ? params.takeableOffers
-    : params.takeableOffers.filter((_, index) => !removed.has(index));
-};
+}

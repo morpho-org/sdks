@@ -144,6 +144,15 @@ describe("ChainUtils explorer URL helpers", () => {
         nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
       },
     ],
+    [
+      29_032,
+      {
+        name: "Alpen",
+        explorerUrl: "https://explorer.mainnet.alpen.org",
+        identifier: "alpen",
+        nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 },
+      },
+    ],
   ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],

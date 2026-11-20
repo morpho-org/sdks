@@ -1,5 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -7,7 +15,9 @@ import { afterAll, describe, expect, test } from "vitest";
 import {
   isPrerelease,
   listPublicPackages,
+  packPackage,
   publicIdentity,
+  publishManifest,
   releaseCommit,
   releaseTag,
   tarballName,
@@ -78,11 +88,190 @@ describe("listPublicPackages", () => {
 });
 
 describe("tarballName", () => {
-  test("matches pnpm pack for scoped and unscoped names", () => {
+  test("matches bun pm pack for scoped and unscoped names", () => {
     expect(tarballName({ name: "@morpho-org/a", version: "1.0.0" })).toBe(
       "morpho-org-a-1.0.0.tgz",
     );
     expect(tarballName({ name: "b", version: "2.0.0" })).toBe("b-2.0.0.tgz");
+  });
+});
+
+describe("publishManifest", () => {
+  test.each(listPublicPackages(new URL("../../", import.meta.url).pathname))(
+    "applies $name's real publishConfig without changing its input",
+    ({ dir }) => {
+      const pkg = JSON.parse(
+        readFileSync(
+          new URL(`../../${dir}/package.json`, import.meta.url),
+          "utf8",
+        ),
+      );
+      const before = JSON.stringify(pkg);
+      const result = publishManifest(pkg);
+      for (const [key, value] of Object.entries(pkg.publishConfig)) {
+        if (key === "access" || key === "registry") {
+          expect(result.publishConfig).toHaveProperty(key, value);
+        } else {
+          expect(result[key]).toEqual(value);
+          expect(result.publishConfig ?? {}).not.toHaveProperty(key);
+        }
+      }
+      expect(JSON.stringify(pkg)).toBe(before);
+    },
+  );
+
+  test.each([
+    "name",
+    "bin",
+    "engines",
+    "type",
+    "imports",
+    "main",
+    "module",
+    "typings",
+    "types",
+    "exports",
+    "browser",
+    "esnext",
+    "es2015",
+    "unpkg",
+    "umd:main",
+    "os",
+    "cpu",
+    "libc",
+    "typesVersions",
+  ])("replaces %s using pnpm 11's whitelist", (key) => {
+    const config = Object.freeze({ [key]: { published: true } });
+    const pkg = Object.freeze({ [key]: "development", publishConfig: config });
+    expect(publishManifest(pkg)).toEqual({ [key]: { published: true } });
+  });
+
+  test("preserves npm settings and other non-whitelisted publishConfig keys", () => {
+    const settings = {
+      access: "public",
+      registry: "https://registry.npmjs.org/",
+      tag: "next",
+      provenance: true,
+      directory: "dist",
+      linkDirectory: false,
+      executableFiles: ["cli.js"],
+      custom: "unchanged",
+    };
+    expect(
+      publishManifest({ publishConfig: { main: "lib/index.js", ...settings } }),
+    ).toEqual({ main: "lib/index.js", publishConfig: settings });
+  });
+
+  test.each([{}, { publishConfig: {} }])("handles empty metadata %j", (pkg) => {
+    expect(publishManifest(pkg)).toEqual({});
+  });
+
+  test("normalizes repository strings without changing repository objects", () => {
+    expect(publishManifest({ repository: "github:morpho-org/sdks" })).toEqual({
+      repository: { type: "git", url: "github:morpho-org/sdks" },
+    });
+    const repository = { type: "git", url: "url", directory: "packages/a" };
+    expect(publishManifest({ repository })).toEqual({ repository });
+  });
+});
+
+describe("packPackage", () => {
+  test.each([false, true])(
+    "restores metadata and inherited license after packing (failure=%s)",
+    (fail) => {
+      const root = repoWith({
+        a: {
+          name: "a",
+          version: "1.0.0",
+          main: "src/index.ts",
+          publishConfig: { main: "lib/index.js" },
+        },
+      });
+      const path = join(root, "packages/a/package.json");
+      const original = readFileSync(path);
+      const license = join(root, "packages/a/LICENSE");
+      writeFileSync(join(root, "LICENSE"), "root license");
+      const run = () =>
+        packPackage({
+          root,
+          dir: "packages/a",
+          out: root,
+          run: (cwd, destination) => {
+            expect(cwd).toBe(join(root, "packages/a"));
+            expect(destination).toBe(root);
+            expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+              name: "a",
+              version: "1.0.0",
+              main: "lib/index.js",
+            });
+            expect(readFileSync(license, "utf8")).toBe("root license");
+            if (fail) throw new Error("packer failed");
+          },
+        });
+      if (fail) expect(run).toThrow("packer failed");
+      else run();
+      expect(readFileSync(path)).toEqual(original);
+      expect(existsSync(license)).toBe(false);
+    },
+  );
+
+  test.each(["LICENSE", "LICENCE.txt", "license.md", "LICENSE-MIT"])(
+    "does not overwrite an existing %s",
+    (name) => {
+      const root = repoWith({ a: { name: "a", version: "1.0.0" } });
+      writeFileSync(join(root, "LICENSE"), "root license");
+      const license = join(root, "packages/a", name);
+      writeFileSync(license, "package license");
+      packPackage({
+        root,
+        dir: "packages/a",
+        out: root,
+        run: () => {
+          expect(readFileSync(license, "utf8")).toBe("package license");
+          if (name !== "LICENSE")
+            expect(existsSync(join(root, "packages/a/LICENSE"))).toBe(false);
+        },
+      });
+      expect(readFileSync(license, "utf8")).toBe("package license");
+    },
+  );
+
+  test("preserves a symlinked package license", () => {
+    const root = repoWith({ a: { name: "a", version: "1.0.0" } });
+    writeFileSync(join(root, "LICENSE"), "root license");
+    symlinkSync("../../LICENSE", join(root, "packages/a/LICENSE"));
+    packPackage({ root, dir: "packages/a", out: root, run: () => {} });
+    expect(readFileSync(join(root, "LICENSE"), "utf8")).toBe("root license");
+    expect(existsSync(join(root, "packages/a/LICENSE"))).toBe(true);
+  });
+
+  test("packs without a root license when none is available", () => {
+    const root = repoWith({ a: { name: "a", version: "1.0.0" } });
+    packPackage({
+      root,
+      dir: "packages/a",
+      out: root,
+      run: () => {
+        expect(existsSync(join(root, "packages/a/LICENSE"))).toBe(false);
+      },
+    });
+  });
+
+  test("leaves malformed package metadata untouched", () => {
+    const root = repoWith({ a: {} });
+    const path = join(root, "packages/a/package.json");
+    writeFileSync(path, "{");
+    expect(() =>
+      packPackage({
+        root,
+        dir: "packages/a",
+        out: root,
+        run: () => {
+          throw new Error("must not run");
+        },
+      }),
+    ).toThrow(SyntaxError);
+    expect(readFileSync(path, "utf8")).toBe("{");
   });
 });
 

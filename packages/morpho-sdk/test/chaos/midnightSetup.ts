@@ -19,11 +19,14 @@ import { base } from "viem/chains";
 import { expect } from "vitest";
 import { type MorphoClientType, morphoViemExtension } from "../../src/index.js";
 
+// Historical Midnight maker fault-injection baseline.
+const MIDNIGHT_CHAOS_FORK_BLOCK = 52_252_000n;
+
 /** Base fork fixture for Midnight chaos tests. */
 export const midnightChaosTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: MIDNIGHT_CHAOS_FORK_BLOCK,
   stepsTracing: false,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {

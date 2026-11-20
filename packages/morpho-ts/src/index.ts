@@ -9,6 +9,7 @@ export {
   IncompleteChainRegistryError,
   InvalidAddressError,
   InvalidBitLengthError,
+  MissingLocalePartError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   RetriesExhaustedError,

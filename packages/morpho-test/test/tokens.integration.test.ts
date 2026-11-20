@@ -1,6 +1,10 @@
 import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/morpho-ts/abis";
-import { getErpcForkUrl, testAccount } from "@morpho-org/test";
+import {
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+  testAccount,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   BaseError,
@@ -18,7 +22,7 @@ import { withSimplePermit } from "../src/fixtures/tokens.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 22_000_000,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 const permitAbi = [
   ...erc2612Abi,

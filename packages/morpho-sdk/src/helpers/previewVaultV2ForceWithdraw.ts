@@ -11,6 +11,7 @@ import {
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
+  type VaultV2ForceWithdrawPlan,
 } from "./vaultV2ForceWithdrawPlan.js";
 
 /** Inputs used to preview a Vault V2 force withdrawal. */
@@ -137,10 +138,14 @@ export function previewVaultV2ForceWithdraw(
     referralFeePct = 0n,
     referralFeeRecipient,
   } = params;
-  if (requestedExitAssets <= 0n) return undefined;
+  if (requestedExitAssets <= 0n) {
+    return undefined;
+  }
   // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
   // deliver — above `withdrawnAssets` for a negative fee, non-positive at or beyond WAD.
-  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) return undefined;
+  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) {
+    return undefined;
+  }
   if (
     referralFeePct > 0n &&
     (referralFeeRecipient == null ||
@@ -153,7 +158,9 @@ export function previewVaultV2ForceWithdraw(
     vaultData,
     adapterOverride,
   );
-  if (eligibility.type !== "eligible") return undefined;
+  if (eligibility.type !== "eligible") {
+    return undefined;
+  }
 
   const capacity = computeVaultV2ForceWithdrawPlan({
     vaultData,
@@ -165,7 +172,9 @@ export function previewVaultV2ForceWithdraw(
   const exitAssets = MathLib.min(requestedExitAssets, capacity.maxExitAssets);
   // A vault with no exitable capacity caps `maxExitAssets` to `0`; the planner rejects a
   // non-positive amount, so short-circuit to the "not previewable" verdict before re-planning.
-  if (exitAssets <= 0n) return undefined;
+  if (exitAssets <= 0n) {
+    return undefined;
+  }
   // Re-plan at the capped amount so every returned leg describes the same exit.
   const plan =
     exitAssets === requestedExitAssets
@@ -178,8 +187,66 @@ export function previewVaultV2ForceWithdraw(
           timestamp,
         });
 
-  if (plan.withdrawnAssets <= 0n) return undefined;
+  if (plan.withdrawnAssets <= 0n) {
+    return undefined;
+  }
 
+  const defaultMinSharePriceE27 = computePreviewMinSharePrice(vaultData, {
+    timestamp,
+    feeProjectionTimestamp,
+    userAddress,
+    plan,
+  });
+  if (
+    defaultMinSharePriceE27 == null ||
+    defaultMinSharePriceE27 <= 0n ||
+    defaultMinSharePriceE27 > maxUint256
+  ) {
+    return undefined;
+  }
+
+  const referralFeeAssets = MathLib.mulDivDown(
+    plan.withdrawnAssets,
+    referralFeePct,
+    MathLib.WAD,
+  );
+  const selfPaidReferralFee =
+    userAddress != null &&
+    referralFeeRecipient != null &&
+    isAddressEqual(userAddress, referralFeeRecipient);
+
+  return {
+    maxExitAssets: capacity.maxExitAssets,
+    exitAssets,
+    remainingExitAssets: requestedExitAssets - exitAssets,
+    assetsToWithdraw: plan.assetsToWithdraw,
+    assetsToDeallocate: plan.assetsToDeallocate,
+    // The tight per-leg charge `ceil(assetsToDeallocate × penalty)`, not `plan.penaltyAssets`: that
+    // bound carries a `+ (penaltyLegs - 1)` allowance slack, which would overstate the quote and
+    // break reconciliation with `exitAssets` for a multi-market exit.
+    penaltyAssets: MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
+    referralFeeAssets,
+    netAssets: selfPaidReferralFee
+      ? plan.withdrawnAssets
+      : plan.withdrawnAssets - referralFeeAssets,
+  };
+}
+
+/** Computes the preview's fee-adjusted floor, excluding fee mints that consume the burn. @internal */
+function computePreviewMinSharePrice(
+  vaultData: AccrualVaultV2,
+  {
+    timestamp,
+    feeProjectionTimestamp,
+    userAddress,
+    plan,
+  }: {
+    readonly timestamp: bigint;
+    readonly feeProjectionTimestamp: bigint;
+    readonly userAddress: Address | undefined;
+    readonly plan: VaultV2ForceWithdrawPlan;
+  },
+): bigint | undefined {
   // Mirror the entity's zero-floor guard. `forceWithdraw()` derives its slippage floor from
   // `withdrawnAssets / sharesBurnt` and rejects an exit whose realized share price rounds down to
   // zero (`VaultV2ForceWithdrawZeroSharePriceError`) — a degenerate vault (e.g. `totalSupply`
@@ -249,33 +316,6 @@ export function previewVaultV2ForceWithdraw(
           sharesBurntForFloor,
         )
       : 0n;
-  if (defaultMinSharePriceE27 <= 0n || defaultMinSharePriceE27 > maxUint256) {
-    return undefined;
-  }
 
-  const referralFeeAssets = MathLib.mulDivDown(
-    plan.withdrawnAssets,
-    referralFeePct,
-    MathLib.WAD,
-  );
-  const selfPaidReferralFee =
-    userAddress != null &&
-    referralFeeRecipient != null &&
-    isAddressEqual(userAddress, referralFeeRecipient);
-
-  return {
-    maxExitAssets: capacity.maxExitAssets,
-    exitAssets,
-    remainingExitAssets: requestedExitAssets - exitAssets,
-    assetsToWithdraw: plan.assetsToWithdraw,
-    assetsToDeallocate: plan.assetsToDeallocate,
-    // The tight per-leg charge `ceil(assetsToDeallocate × penalty)`, not `plan.penaltyAssets`: that
-    // bound carries a `+ (penaltyLegs - 1)` allowance slack, which would overstate the quote and
-    // break reconciliation with `exitAssets` for a multi-market exit.
-    penaltyAssets: MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
-    referralFeeAssets,
-    netAssets: selfPaidReferralFee
-      ? plan.withdrawnAssets
-      : plan.withdrawnAssets - referralFeeAssets,
-  };
+  return defaultMinSharePriceE27;
 }

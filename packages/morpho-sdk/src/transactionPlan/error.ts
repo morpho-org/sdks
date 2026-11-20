@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Thrown when an operation's account is the zero address.
  * @example
  * ```ts
@@ -8,7 +9,6 @@ import type { Address } from "viem";
  * import { zeroAddress } from "viem";
  * const error = new ZeroAccountError(zeroAddress);
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export class ZeroAccountError extends Error {
   /** @param account - Rejected account address. */
@@ -21,8 +21,8 @@ export class ZeroAccountError extends Error {
 }
 
 /**
- * A stored plan uses a format version this SDK cannot interpret.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A stored plan uses a format version this SDK cannot interpret.
  */
 export class UnsupportedTransactionPlanVersionError extends Error {
   /**
@@ -43,8 +43,8 @@ export class UnsupportedTransactionPlanVersionError extends Error {
 }
 
 /**
- * A selected plan step names an action this SDK cannot build.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A selected plan step names an action this SDK cannot build.
  */
 export class UnsupportedTransactionPlanActionError extends Error {
   /**
@@ -65,8 +65,8 @@ export class UnsupportedTransactionPlanActionError extends Error {
 }
 
 /**
- * Restored plan data has an invalid shape or inconsistent references.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * Restored plan data has an invalid shape or inconsistent references.
  */
 export class InvalidTransactionPlanError extends Error {
   /** JSON path of the first rejected value. */
@@ -103,10 +103,13 @@ export class InvalidTransactionPlanError extends Error {
 }
 
 /**
- * A step references a signature request that is absent or has no signature yet.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A step references a signature request that is absent or has no signature yet.
  */
 export class IncompleteTransactionPlanError extends Error {
+  /** The missing dependency is a signature request. */
+  public readonly kind = "signature";
+
   /**
    * Identifies the signature request needed to build the transaction.
    * @param id - Plan-local signature request ID.
@@ -125,8 +128,8 @@ export class IncompleteTransactionPlanError extends Error {
 }
 
 /**
- * A plan's signature request disagrees with its referencing action or has no reference.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A plan's signature request disagrees with its referencing action or has no reference.
  */
 export class TransactionPlanSignatureMismatchError extends Error {
   /**
@@ -150,8 +153,8 @@ export class TransactionPlanSignatureMismatchError extends Error {
 }
 
 /**
- * `calldataOrigin` is not a 0x-prefixed hex string holding a whole number of bytes.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * `calldataOrigin` is not a 0x-prefixed hex string holding a whole number of bytes.
  */
 export class InvalidCalldataOriginError extends Error {
   /**
@@ -172,8 +175,8 @@ export class InvalidCalldataOriginError extends Error {
 }
 
 /**
- * A number input that must be an integer is fractional, infinite or not a number.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A number input that must be an integer is fractional, infinite or not a number.
  */
 export class NonIntegerInputError extends Error {
   /**

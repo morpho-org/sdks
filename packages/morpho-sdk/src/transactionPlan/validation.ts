@@ -43,8 +43,9 @@ export function validatePlanField(
       valid = Array.isArray(value);
       break;
   }
-  if (!valid)
+  if (!valid) {
     throw new InvalidTransactionPlanError({ path, reason: `expected ${type}` });
+  }
 }
 
 /** @internal Requires a non-null, non-array JSON object. */
@@ -52,11 +53,12 @@ export function getPlanObject(
   value: unknown,
   path: string,
 ): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value))
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new InvalidTransactionPlanError({
       path,
       reason: "expected an object",
     });
+  }
   return value as Record<string, unknown>;
 }
 
@@ -68,8 +70,9 @@ export function validatePlanFields(
     readonly fields: Readonly<Record<string, PlanFieldType>>;
   },
 ): void {
-  for (const [key, type] of Object.entries(options.fields))
+  for (const [key, type] of Object.entries(options.fields)) {
     validatePlanField(value[key], { path: `${options.path}.${key}`, type });
+  }
 }
 
 /** @internal Validates the shared stored vault-action fields and role map. */

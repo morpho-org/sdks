@@ -37,15 +37,18 @@ export function validateMarketParamsId(
   params: IMarketParams,
 ): void {
   const receivedId = MarketUtils.getMarketId(params);
-  if (receivedId === id.toLowerCase()) return;
+  if (receivedId === id.toLowerCase()) {
+    return;
+  }
 
   if (
     [params.loanToken, params.collateralToken, params.oracle, params.irm].every(
       (address) => isAddressEqual(address, zeroAddress),
     ) &&
     BigInt(params.lltv) === 0n
-  )
+  ) {
     return;
+  }
 
   throw new MarketParamsIdMismatchError(id, receivedId);
 }

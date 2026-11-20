@@ -9,35 +9,38 @@ import { type Address, isAddressEqual, zeroAddress } from "viem";
 import {
   ApprovalCheckUnavailableError,
   InvalidSimulationResponseError,
+  RpcTransportError,
+  SimulationPackageError,
+  SimulationValidationError,
+  SlippageCheckUnavailableError,
   UnsupportedChainError,
 } from "../errors.js";
 import type {
   CheckedInputOperationLimit,
   CheckedOperationLimit,
 } from "../limits.js";
-import type { VerifiedSimulationInputResult } from "../result.js";
-import type { SimulationConfig } from "../types.js";
+import type { SimulationInputReport } from "../result.js";
+import type { SimulationClient, SimulationOptions } from "../types.js";
 import { resolveApprovalLimits } from "./approval-limits.js";
 import {
   assertPendingApprovals,
   findApprovalEventFailures,
 } from "./approvals.js";
 import { groupAssetChanges } from "./asset-changes.js";
-import { createSimulationClient } from "./backends/client.js";
 import { assertTransactionTargetsHaveCode } from "./backends/contract-code.js";
 import { executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
-import { toServedChainError } from "./backends/served-chain.js";
 import type { CheckContext } from "./context.js";
 import {
   decodeDerivationState,
   planDerivationReads,
 } from "./derivation-reads.js";
 import { deriveQuote } from "./derive-quote.js";
+import { toFailureReport } from "./failure-report.js";
 import { parseTransfers } from "./parsing/index.js";
 import { findBundlesRetentionFailures } from "./pipeline/bundles-retention.js";
-import { resolveChain } from "./pipeline/resolve-chain.js";
+import { validateOptions } from "./pipeline/validate-options.js";
 import { planExecution } from "./plan/plan-execution.js";
 import {
   findPreparationTransferFailures,
@@ -45,12 +48,13 @@ import {
 } from "./prepare.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
+import {
+  findUnexpectedSenderTransfers,
+  resolveSenderSpendTokens,
+} from "./sender-transfers.js";
 import { findSignedAuthorizationUseFailures } from "./signed-authorizations.js";
 import { decodeStateRead, planStateReads } from "./state/read-state.js";
-import { verifySlippage } from "./verify-slippage.js";
-
-/** Total execution budget for a single `simulate()` call. */
-const DEFAULT_TIMEOUT_MS = 5000;
+import { findOperationSlippageFailures } from "./verify-slippage.js";
 
 /**
  * Registered wrapped-native wrappers whose recent on-chain
@@ -126,42 +130,93 @@ const PUBLIC_OPERATION_FIELDS = {
   true
 >;
 
+const DEFAULT_TIMEOUT_MS = 5000;
+
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
  * resolve quoted assets → plan quoted observations → execution →
  * slippage comparisons → bundle-retention assertion → result assembly.
  *
- * One `AbortSignal` (the request timeout) covers every RPC step.
+ * Every RPC step runs on the caller's client. `options.timeoutMs` is one deadline
+ * for the whole pipeline: no read starts after it, and a step still pending
+ * fails with `RpcTransportError`; the caller's transport keeps owning retries and
+ * per-request timeouts.
  *
  * @internal
- * @param params - The simulation config and the parsed caller request.
- * @returns The deep-frozen {@link VerifiedSimulationResult}.
+ * @param params - The caller's client and options, and the parsed caller request.
+ * @returns A report holding the deep-frozen {@link VerifiedSimulationInputResult},
+ *   or every post-execution failure in pipeline order.
+ * @throws {SimulationPackageError} For a failure before or during execution, which stops the run.
  */
 export async function runSimulation(params: {
-  readonly config: SimulationConfig;
+  readonly client: SimulationClient;
+  readonly options: SimulationOptions;
   readonly request: ParsedRequest;
-}): Promise<VerifiedSimulationInputResult> {
-  const { config, request } = params;
-  const chain = resolveChain(config, request.chainId);
-  const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const client = createSimulationClient(chain.simulateV1Url, signal);
+}): Promise<SimulationInputReport> {
+  const { options, request } = params;
+  // Called only to reject invalid option values before any RPC call.
+  validateOptions(options);
+  const signal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const withinDeadline = deadlineRunner(signal);
 
-  // An honest endpoint on another chain can fail as an RPC or missing-data error; one
-  // `eth_chainId` probe after such a failure turns it into InvalidChainIdError.
-  const onServedChain = <T>(call: Promise<T>): Promise<T> =>
-    call.catch(async (error: unknown) => {
-      throw await toServedChainError({
-        client,
-        chainId: request.chainId,
-        error,
-      });
-    });
+  const environment = resolveEnvironment(request);
 
+  const prepared = await resolveAndExecute({
+    ...params,
+    signal,
+    withinDeadline,
+    environment,
+  });
+  return verifyExecution({ ...params, environment, ...prepared });
+}
+
+/** Race each pending stage against the single whole-simulation deadline. @internal */
+function deadlineRunner(signal: AbortSignal) {
+  const withinDeadline = async <T>(call: Promise<T>): Promise<T> => {
+    const timeoutError = () =>
+      new RpcTransportError(
+        "Simulation timed out. Increase timeoutMs or check the caller's transport.",
+        { cause: signal.reason },
+      );
+    let onAbort: (() => void) | undefined;
+    try {
+      return await Promise.race([
+        call.catch((error: unknown) => {
+          if (signal.aborted) {
+            throw timeoutError();
+          }
+          throw error;
+        }),
+        new Promise<never>((_, reject) => {
+          onAbort = () => reject(timeoutError());
+          if (signal.aborted) {
+            onAbort();
+          } else {
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }),
+      ]);
+    } finally {
+      if (onAbort) {
+        signal.removeEventListener("abort", onAbort);
+      }
+    }
+  };
+
+  return withinDeadline;
+}
+
+/** Resolve required chain deployments before any RPC call. @internal */
+function resolveEnvironment(request: ParsedRequest) {
   const limits = {
     operations: request.limits === "none" ? [] : request.limits.operations,
   };
   const preview = request.mode === "preview";
-  const owner = request.transactions[0]!.from;
+  const [firstTransaction] = request.transactions;
+  if (firstTransaction === undefined) {
+    throw new SimulationValidationError("Supply at least one transaction.");
+  }
+  const owner = firstTransaction.from;
   const addresses = _try(
     () => getChainAddresses(request.chainId),
     UnsupportedChainIdError,
@@ -181,8 +236,9 @@ export async function runSimulation(params: {
       (authorization) => authorization.type === "blueAuthorizationSignature",
     ) ||
     (preview && request.authorizations.length > 0);
-  if (requiresMorpho && addresses?.blue == null)
+  if (requiresMorpho && addresses?.blue == null) {
     throw new UnsupportedChainError(request.chainId);
+  }
   const morpho = addresses?.blue ?? zeroAddress;
   const requiresBlueBuyCallback = limits.operations.some(
     (operation) => operation.type === "midnightSupplyBlueMakeLend",
@@ -207,42 +263,62 @@ export async function runSimulation(params: {
       (authorization) =>
         authorization.type === "midnightAuthorizationSignature",
     );
-  if (requiresMidnight && addresses?.midnight == null)
+  if (requiresMidnight && addresses?.midnight == null) {
     throw new UnsupportedChainError(request.chainId);
+  }
   const requiresEcrecoverAuthorizer = request.authorizations.some(
     (authorization) => authorization.type === "midnightAuthorizationSignature",
   );
-  if (requiresEcrecoverAuthorizer && addresses?.ecrecoverAuthorizer == null)
+  if (requiresEcrecoverAuthorizer && addresses?.ecrecoverAuthorizer == null) {
     throw new UnsupportedChainError(request.chainId);
+  }
   if (
     requiresBlueBuyCallback &&
     addresses?.midnightBlueBuyCallbackFactory == null
-  )
+  ) {
     throw new UnsupportedChainError(request.chainId);
+  }
   const midnight = addresses?.midnight ?? zeroAddress;
   const ecrecoverAuthorizer = addresses?.ecrecoverAuthorizer ?? zeroAddress;
 
+  return {
+    limits,
+    preview,
+    owner,
+    addresses,
+    wNative,
+    nativeValue,
+    nativeValueSent,
+    morpho,
+    midnight,
+    ecrecoverAuthorizer,
+  };
+}
+
+/** Pin state, resolve subjects, validate pending approvals, plan and execute. @internal */
+async function resolveAndExecute(context: PipelineContext) {
+  const { client, options, request, signal, withinDeadline, environment } =
+    context;
+  const { limits, wNative, morpho, midnight } = environment;
   // Monad nodes reject `validation: false` and charge no gas in the simulated
   // block either way. Its `latest` block is not final: simulating at its number
   // runs on another parent, so default to `finalized`.
   const monad = request.chainId === ChainId.MonadMainnet;
   const pinnedBlock =
     request.block ??
-    (await onServedChain(
+    (await withinDeadline(
       resolvePinnedBlock({
         client,
         blockNumber: request.blockNumber ?? (monad ? "finalized" : undefined),
-        signal,
       }),
     ));
 
   // A code-less `to` with calldata would simulate as a silent success; reject it
-  // before `eth_simulateV1` is sent. A wrong-chain endpoint also
-  // reports no code at every target, so a validation failure probes `eth_chainId`
-  // once — a served chain mismatch outranks MissingCode.
-  await onServedChain(
+  // before `eth_simulateV1` is sent.
+  await withinDeadline(
     assertTransactionTargetsHaveCode({
       client,
+      signal,
       transactions: request.transactions,
       chainId: request.chainId,
       blockNumber: pinnedBlock.number,
@@ -255,9 +331,10 @@ export async function runSimulation(params: {
   // With no calldata decoding, the caller's declared `limits.operations`
   // entries are the operations: subjects for state reads and per-operation
   // checks come straight from the limit list.
-  const resolved = await onServedChain(
+  const resolved = await withinDeadline(
     resolveAssets({
       client,
+      signal,
       morpho,
       midnight,
       wNative,
@@ -265,6 +342,227 @@ export async function runSimulation(params: {
       blockNumber: pinnedBlock.number,
     }),
   );
+  const { approvalLimits, observations, plan } = planResolvedExecution(
+    context,
+    resolved,
+  );
+  const senderSpendTokens =
+    request.limits === "none"
+      ? undefined
+      : resolveSenderSpendTokens({
+          chainId: request.chainId,
+          owner: environment.owner,
+          operations: resolved,
+          wNative,
+          nativeSpendMeasured: new Set(
+            observations.operations.flatMap(({ measurements }, index) =>
+              measurements.some(
+                (measurement) =>
+                  measurement.type === "native" &&
+                  measurement.field === "assetsPaid" &&
+                  isAddressEqual(measurement.account, environment.owner),
+              )
+                ? [index]
+                : [],
+            ),
+          ),
+        });
+  const senderNativeValueBudget =
+    wNative !== undefined &&
+    observations.operations.some(({ walletBounds }) =>
+      walletBounds?.some(
+        (bound) =>
+          isAddressEqual(bound.token, wNative) &&
+          isAddressEqual(bound.account, environment.owner),
+      ),
+    )
+      ? request.transactions.reduce(
+          (value, transaction) =>
+            isAddressEqual(transaction.from, environment.owner) &&
+            !isAddressEqual(transaction.to, environment.owner)
+              ? value + (transaction.value ?? 0n)
+              : value,
+          0n,
+        )
+      : undefined;
+
+  // Execute against the block resolved once above.
+  const execution = await withinDeadline(
+    executePlan({
+      client,
+      plan,
+      stateBlock: pinnedBlock,
+      validation: monad,
+      blockGasLimit: options.blockOverrides?.gasLimit,
+      callGasLimit: options.callGasLimit,
+      parentHashCheck:
+        options.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
+    }),
+  );
+
+  return {
+    execution,
+    observations,
+    approvalLimits,
+    senderSpendTokens,
+    senderNativeValueBudget,
+  };
+}
+
+/** Collect post-execution failures in pipeline order and assemble success. @internal */
+function verifyExecution(context: VerificationContext): SimulationInputReport {
+  const { request, options, environment, execution } = context;
+  const { preview, owner, morpho } = environment;
+  // A revert is terminal: nothing after it is checked.
+  if (execution.reverted) {
+    return toFailureReport(execution.failures);
+  }
+  const userCalls = execution.calls
+    .filter((call) => call.planned.type === "transaction")
+    .map((call) => call.result);
+  if (userCalls.length !== request.transactions.length) {
+    throw new InvalidSimulationResponseError(
+      `Execution returned ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s)`,
+    );
+  }
+
+  const failures: SimulationPackageError[] = [...execution.failures];
+  const reportedMissingReadIds = new Set(
+    failures.flatMap((failure) =>
+      failure instanceof SlippageCheckUnavailableError &&
+      failure.field !== undefined
+        ? [failure.field]
+        : [],
+    ),
+  );
+  const collect = <T>(check: () => T): T | undefined => {
+    try {
+      return check();
+    } catch (error) {
+      if (!(error instanceof SimulationPackageError)) {
+        throw error;
+      }
+      failures.push(error);
+      return undefined;
+    }
+  };
+  const skipTransferChecks = checkEventEvidence({
+    context,
+    userCalls,
+    failures,
+  });
+
+  const {
+    transfers,
+    assetChanges,
+    before,
+    after,
+    derivedOperations,
+    skippedOperationIndices,
+  } = resolveMeasurements({
+    context,
+    userCalls,
+    skipTransferChecks,
+    failures,
+    reportedMissingReadIds,
+    collect,
+  });
+
+  const ctx: CheckContext = {
+    chainId: request.chainId,
+    mode: request.mode,
+    block: execution.block,
+    owner,
+    limits: { operations: derivedOperations.map(({ limit }) => limit) },
+  };
+
+  const authorizations = (preview ? request.authorizations : []).map(
+    (authorization, authorizationIndex) => ({
+      authorizationIndex,
+      authorization,
+      calls: execution.calls.flatMap(({ planned, result }) =>
+        planned.type === "preparation" &&
+        planned.authorizationIndex === authorizationIndex
+          ? [{ transaction: planned.transaction, result }]
+          : [],
+      ),
+    }),
+  );
+
+  const slippage = skipTransferChecks
+    ? undefined
+    : collect(() =>
+        findOperationSlippageFailures({
+          ctx,
+          operations: derivedOperations,
+          before,
+          after,
+          reportedMissingReadIds,
+          skippedOperationIndices,
+          transfers,
+          logs: userCalls.map((call) => call.logs),
+          morpho,
+          requestTransactions: request.transactions,
+        }),
+      );
+  if (slippage !== undefined) {
+    failures.push(...slippage.failures);
+  }
+
+  // Retention reads only user-transaction transfers.
+  if (!skipTransferChecks) {
+    failures.push(
+      ...findBundlesRetentionFailures({
+        chainId: request.chainId,
+        transfers,
+        assetChanges,
+        logger: options.logger,
+      }),
+    );
+  }
+  if (failures.length > 0) {
+    return toFailureReport(failures);
+  }
+  const checked = slippage?.checked ?? [];
+
+  return assembleSuccess({
+    request,
+    ctx,
+    derivedOperations,
+    checked,
+    authorizations,
+    userCalls,
+    transfers,
+    assetChanges,
+  });
+}
+
+/** Inputs shared by pinned execution stages. @internal */
+type PipelineContext = Parameters<typeof runSimulation>[0] & {
+  readonly signal: AbortSignal;
+  readonly withinDeadline: ReturnType<typeof deadlineRunner>;
+  readonly environment: ReturnType<typeof resolveEnvironment>;
+};
+/** Inputs shared by ordered post-execution checks. @internal */
+type VerificationContext = Parameters<typeof runSimulation>[0] & {
+  readonly environment: ReturnType<typeof resolveEnvironment>;
+} & Awaited<ReturnType<typeof resolveAndExecute>>;
+
+/** Check pending approvals and plan ordered state, preparation and transaction calls. @internal */
+function planResolvedExecution(
+  context: PipelineContext,
+  resolved: Awaited<ReturnType<typeof resolveAssets>>,
+) {
+  const { request } = context;
+  const {
+    preview,
+    owner,
+    morpho,
+    midnight,
+    wNative,
+    nativeValue,
+    nativeValueSent,
+  } = context.environment;
   const approvalLimits =
     request.limits === "none"
       ? undefined
@@ -274,12 +572,13 @@ export async function runSimulation(params: {
           operations: resolved,
           explicit: request.limits.approvals,
         });
-  if (preview && approvalLimits !== undefined)
+  if (preview && approvalLimits !== undefined) {
     assertPendingApprovals({
       authorizations: request.authorizations,
       allowed: approvalLimits.approvals,
       addresses: approvalLimits.eventAddresses,
     });
+  }
   const operations = resolved.map((operation) =>
     operation.limit.type === "midnightSupplyBlueMakeLend"
       ? {
@@ -319,86 +618,136 @@ export async function runSimulation(params: {
     derivationReads: planDerivationReads(resolved, { morpho, owner }),
   });
 
-  // Execute against the block resolved once above.
-  const execution = await onServedChain(
-    executePlan({
-      client,
-      plan,
-      stateBlock: pinnedBlock,
-      validation: monad,
-      blockGasLimit: chain.blockOverrides?.gasLimit,
-      callGasLimit: chain.callGasLimit,
-      parentHashCheck:
-        chain.parentHashCheck ?? request.chainId !== ChainId.StableMainnet,
-    }),
-  );
+  return { approvalLimits, observations, plan };
+}
+
+/** Check approval events, preparation transfers and signature use before transfer derivation. @internal */
+function checkEventEvidence({
+  context,
+  userCalls,
+  failures,
+}: {
+  context: VerificationContext;
+  userCalls: Parameters<typeof assembleResult>[0]["userCalls"];
+  failures: SimulationPackageError[];
+}) {
+  const { execution, request, approvalLimits } = context;
+  const { owner, preview, morpho, ecrecoverAuthorizer } = context.environment;
+  let approvalLogsMissing = false;
   if (approvalLimits !== undefined) {
     const missingLogs = execution.calls.find(
-      (
-        call,
-      ): call is (typeof execution.calls)[number] & {
-        planned: Extract<
-          (typeof execution.calls)[number]["planned"],
-          { type: "preparation" | "transaction" }
-        >;
-      } =>
+      (call) =>
         (call.planned.type === "preparation" ||
           call.planned.type === "transaction") &&
         call.logsMissing,
     )?.planned;
-    if (missingLogs !== undefined)
-      throw new ApprovalCheckUnavailableError(
-        `Simulation response omitted logs for ${missingLogs.type === "preparation" ? `authorization ${missingLogs.authorizationIndex}` : `transaction ${missingLogs.transactionIndex}`}; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
+    if (
+      missingLogs?.type === "preparation" ||
+      missingLogs?.type === "transaction"
+    ) {
+      approvalLogsMissing = true;
+      failures.push(
+        new ApprovalCheckUnavailableError(
+          `Simulation response omitted logs for ${missingLogs.type === "preparation" ? `authorization ${missingLogs.authorizationIndex}` : `transaction ${missingLogs.transactionIndex}`}; approval checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.`,
+        ),
       );
-    const [approvalFailure] = findApprovalEventFailures({
-      logs: execution.calls.flatMap(({ result }) => result.logs),
-      owner,
-      allowed: approvalLimits.approvals,
-      addresses: approvalLimits.eventAddresses,
-    });
-    if (approvalFailure !== undefined) throw approvalFailure;
+    } else {
+      failures.push(
+        ...findApprovalEventFailures({
+          logs: execution.calls.flatMap(({ result }) => result.logs),
+          owner,
+          allowed: approvalLimits.approvals,
+          addresses: approvalLimits.eventAddresses,
+        }),
+      );
+    }
   }
 
-  const [preparationFailure] = findPreparationTransferFailures(execution.calls);
-  if (preparationFailure !== undefined) throw preparationFailure;
+  failures.push(...findPreparationTransferFailures(execution.calls));
 
-  const userCalls = execution.calls
-    .filter((call) => call.planned.type === "transaction")
-    .map((call) => call.result);
-  if (userCalls.length !== request.transactions.length)
-    throw new InvalidSimulationResponseError(
-      `Execution returned ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s)`,
-    );
+  // Transfers parsed from partial logs would report slippage that never happened.
+  const transactionLogsMissing = execution.calls.some(
+    (call) => call.planned.type === "transaction" && call.logsMissing,
+  );
+  // An `assertLogs` check already reported the missing logs in `evaluateCalls`.
+  let missingLogsReported =
+    approvalLogsMissing ||
+    (execution.failures.some(
+      (failure) => failure instanceof InvalidSimulationResponseError,
+    ) &&
+      execution.calls.some(
+        (call) =>
+          call.planned.type === "transaction" &&
+          call.logsMissing &&
+          (request.transactions[call.planned.transactionIndex]?.assertLogs
+            ?.length ?? 0) > 0,
+      ));
 
-  // Require final signature-use evidence independently of operation limits.
-  if (!preview) {
-    const [signedUseFailure] = findSignedAuthorizationUseFailures({
+  // Require final signature-use evidence independently of operation limits;
+  // missing logs are already reported once by the approval check.
+  if (!preview && !approvalLogsMissing) {
+    const signedUseFailures = findSignedAuthorizationUseFailures({
       authorizations: request.authorizations,
-      logs: execution.calls.some(
-        (call) => call.planned.type === "transaction" && call.logsMissing,
-      )
+      logs: transactionLogsMissing
         ? undefined
         : userCalls.flatMap((call) => call.logs),
       morpho,
       ecrecoverAuthorizer,
     });
-    if (signedUseFailure !== undefined) throw signedUseFailure;
+    if (
+      signedUseFailures.some(
+        (failure) => failure instanceof ApprovalCheckUnavailableError,
+      )
+    ) {
+      missingLogsReported = true;
+    }
+    failures.push(...signedUseFailures);
   }
+  // Once missing logs are reported, checks on partial transfers add only noise.
+  const skipTransferChecks = transactionLogsMissing && missingLogsReported;
 
-  const decodePhase = (phase: "before" | "after") =>
-    new Map(
-      execution.stateReads
-        .filter(
-          (read) => read.phase === phase && read.read.kind !== "derivation",
-        )
-        .map(
-          (read) =>
-            [
-              read.read.id,
-              decodeStateRead(read.read, read.returnData),
-            ] as const,
-        ),
-    );
+  return skipTransferChecks;
+}
+
+/** Derive transfers, decode both state phases and derive operation expectations. @internal */
+function resolveMeasurements({
+  context,
+  userCalls,
+  skipTransferChecks,
+  failures,
+  reportedMissingReadIds,
+  collect,
+}: {
+  context: VerificationContext;
+  userCalls: Parameters<typeof assembleResult>[0]["userCalls"];
+  skipTransferChecks: boolean;
+  failures: SimulationPackageError[];
+  reportedMissingReadIds: Set<string>;
+  collect: <T>(check: () => T) => T | undefined;
+}) {
+  const { request, options, execution, observations } = context;
+  const { addresses } = context.environment;
+  const decodePhase = (phase: "before" | "after") => {
+    const values = new Map<string, ReturnType<typeof decodeStateRead>>();
+    for (const read of execution.stateReads) {
+      if (read.phase !== phase || read.read.kind === "derivation") {
+        continue;
+      }
+      try {
+        values.set(read.read.id, decodeStateRead(read.read, read.returnData));
+      } catch (error) {
+        if (!(error instanceof SimulationPackageError)) {
+          throw error;
+        }
+        // A read already reported unavailable in the other phase is one cause.
+        if (!reportedMissingReadIds.has(read.read.id)) {
+          failures.push(error);
+        }
+        reportedMissingReadIds.add(read.read.id);
+      }
+    }
+    return values;
+  };
   const verified = NO_WNATIVE_MIRROR_WRAPPERS.get(request.chainId);
   const transfers = parseTransfers(userCalls, {
     wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
@@ -407,7 +756,7 @@ export async function runSimulation(params: {
       addresses?.wNative != null &&
       isAddressEqual(addresses.wNative, verified)
     ),
-    logger: config.logger,
+    logger: options.logger,
   });
 
   const assetChanges = groupAssetChanges(
@@ -417,6 +766,19 @@ export async function runSimulation(params: {
     ]),
   );
 
+  if (!skipTransferChecks && context.senderSpendTokens !== undefined) {
+    failures.push(
+      ...findUnexpectedSenderTransfers({
+        owner: context.environment.owner,
+        transfers,
+        allowed: context.senderSpendTokens,
+        nativeValueBudget: context.senderNativeValueBudget,
+      }),
+    );
+  }
+
+  const before = decodePhase("before");
+  const after = decodePhase("after");
   const derivationData = new Map(
     execution.stateReads
       .filter(
@@ -424,60 +786,66 @@ export async function runSimulation(params: {
       )
       .map((read) => [read.read.id, read.returnData]),
   );
-  const derivedOperations = observations.operations.map((operation, index) => ({
-    ...operation,
-    limit: deriveQuote(operation.limit, {
-      ...decodeDerivationState(
-        { index, operationType: operation.limit.type },
-        derivationData,
-      ),
-      operationIndex: index,
-      netWalletAssets: operation.netWalletAssets,
-    }),
-  }));
-
-  const ctx: CheckContext = {
-    chainId: request.chainId,
-    mode: request.mode,
-    block: execution.block,
-    owner,
-    limits: { operations: derivedOperations.map(({ limit }) => limit) },
-  };
-
-  const authorizations = (preview ? request.authorizations : []).map(
-    (authorization, authorizationIndex) => ({
-      authorizationIndex,
-      authorization,
-      calls: execution.calls.flatMap(({ planned, result }) =>
-        planned.type === "preparation" &&
-        planned.authorizationIndex === authorizationIndex
-          ? [{ transaction: planned.transaction, result }]
-          : [],
-      ),
-    }),
-  );
-
-  // Stop at the first failure before later response-integrity checks run.
-  const checked = verifySlippage({
-    ctx,
-    operations: derivedOperations,
-    before: decodePhase("before"),
-    after: decodePhase("after"),
-    transfers,
-    logs: userCalls.map((call) => call.logs),
-    morpho,
-    requestTransactions: request.transactions,
+  const skippedOperationIndices = new Set<number>();
+  const derivedOperations = observations.operations.map((operation, index) => {
+    const missingDerivation = execution.plan.calls.some(
+      (call) =>
+        call.type === "stateRead" &&
+        call.read.kind === "derivation" &&
+        call.read.operationIndex === index &&
+        reportedMissingReadIds.has(call.read.id),
+    );
+    const limit = missingDerivation
+      ? undefined
+      : collect(() =>
+          deriveQuote(operation.limit, {
+            ...decodeDerivationState(
+              { index, operationType: operation.limit.type },
+              derivationData,
+            ),
+            operationIndex: index,
+            netWalletAssets: operation.netWalletAssets,
+          }),
+        );
+    if (limit === undefined) {
+      skippedOperationIndices.add(index);
+    }
+    return { ...operation, limit: limit ?? operation.limit };
   });
 
-  const [retentionFailure] = findBundlesRetentionFailures({
-    chainId: request.chainId,
+  return {
     transfers,
     assetChanges,
-    logger: config.logger,
-  });
-  if (retentionFailure !== undefined) throw retentionFailure;
+    before,
+    after,
+    derivedOperations,
+    skippedOperationIndices,
+  };
+}
 
-  return assembleResult({
+/** Strip internal limit fields when assembling the frozen success report. @internal */
+function assembleSuccess({
+  request,
+  ctx,
+  derivedOperations,
+  checked,
+  authorizations,
+  userCalls,
+  transfers,
+  assetChanges,
+}: {
+  request: ParsedRequest;
+  ctx: CheckContext;
+  derivedOperations: ReturnType<
+    typeof resolveMeasurements
+  >["derivedOperations"];
+  checked: ReturnType<typeof findOperationSlippageFailures>["checked"];
+  authorizations: Parameters<typeof assembleResult>[0]["authorizations"];
+  userCalls: Parameters<typeof assembleResult>[0]["userCalls"];
+  transfers: ReturnType<typeof parseTransfers>;
+  assetChanges: ReturnType<typeof groupAssetChanges>;
+}): SimulationInputReport {
+  const assembled = assembleResult({
     ctx: {
       ...ctx,
       limits: {
@@ -488,11 +856,18 @@ export async function runSimulation(params: {
           ): CheckedInputOperationLimit | CheckedOperationLimit => {
             const publicLimit = { ...limit };
             for (const field of Object.keys(publicLimit)) {
-              if (!Object.hasOwn(PUBLIC_OPERATION_FIELDS, field))
+              if (!Object.hasOwn(PUBLIC_OPERATION_FIELDS, field)) {
                 Reflect.deleteProperty(publicLimit, field);
+              }
+            }
+            const checkedOperation = checked[index];
+            if (checkedOperation === undefined) {
+              throw new SimulationValidationError(
+                "Missing checked operation limits.",
+              );
             }
             const { quote, slippageTolerance, fieldChecks } =
-              checked[index]!.checkedLimits;
+              checkedOperation.checkedLimits;
             return {
               ...publicLimit,
               quote,
@@ -510,4 +885,5 @@ export async function runSimulation(params: {
     transfers,
     assetChanges,
   });
+  return Object.freeze({ ok: true, result: assembled });
 }

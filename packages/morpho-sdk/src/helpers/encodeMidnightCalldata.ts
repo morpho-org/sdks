@@ -36,7 +36,9 @@ export function encodeMidnightCalldata<
   try {
     return encodeFunctionData(parameters);
   } catch (error) {
-    if (!(error instanceof BaseError)) throw error;
+    if (!(error instanceof BaseError)) {
+      throw error;
+    }
     throw new MidnightCalldataEncodingError(
       String(parameters.functionName),
       error,
@@ -61,7 +63,9 @@ export function wrapMidnightEncoding<T>(name: string, encode: () => T): T {
   try {
     return encode();
   } catch (error) {
-    if (!(error instanceof BaseError)) throw error;
+    if (!(error instanceof BaseError)) {
+      throw error;
+    }
     throw new MidnightCalldataEncodingError(name, error);
   }
 }

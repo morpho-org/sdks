@@ -53,5 +53,247 @@
         "useExhaustiveSwitchCases": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/*/src/**", "!**/*.test.ts", "!**/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": {
+              "level": "warn",
+              "options": {
+                "maxLines": 120,
+                "skipBlankLines": true,
+                "skipIifes": false
+              }
+            },
+            "noExcessiveCognitiveComplexity": {
+              "level": "warn",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            }
+          },
+          "style": {
+            "noNestedTernary": "warn",
+            "useCollapsedElseIf": "warn",
+            "noNegationElse": "warn",
+            "useBlockStatements": "warn",
+            "noNonNullAssertion": "warn"
+          },
+          "suspicious": { "noExplicitAny": "warn", "noTsIgnore": "warn" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/wdk-protocol-lending-morpho-evm/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 50 }
+            },
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": { "maxLines": 120, "skipBlankLines": true }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "noNonNullAssertion": "error",
+            "noNegationElse": "error",
+            "useBlockStatements": "error",
+            "useCollapsedElseIf": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/morpho-sdk/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": {
+                "maxLines": 120,
+                "skipBlankLines": true,
+                "skipIifes": false
+              }
+            },
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "useCollapsedElseIf": "error",
+            "noNegationElse": "error",
+            "useBlockStatements": "error",
+            "noNonNullAssertion": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": ["packages/morpho-ts/src/**", "!**/*.test.ts", "!**/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": { "maxLines": 120, "skipBlankLines": true }
+            },
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 50 }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "noNonNullAssertion": "error",
+            "useBlockStatements": "error",
+            "noNegationElse": "error",
+            "useCollapsedElseIf": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/evm-simulation/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 50 }
+            },
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": { "maxLines": 120, "skipBlankLines": true }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "useCollapsedElseIf": "error",
+            "noNegationElse": "error",
+            "useBlockStatements": "error",
+            "noNonNullAssertion": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": ["packages/blue-sdk/src/**", "!**/*.test.ts", "!**/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            },
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": { "maxLines": 120, "skipBlankLines": true }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "useCollapsedElseIf": "error",
+            "noNegationElse": "error",
+            "useBlockStatements": "error",
+            "noNonNullAssertion": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/blue-sdk-viem/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 50
+              }
+            },
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": {
+                "maxLines": 120,
+                "skipBlankLines": true,
+                "skipIifes": false
+              }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "useCollapsedElseIf": "error",
+            "noNegationElse": "error",
+            "useBlockStatements": "error",
+            "noNonNullAssertion": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/morpho-test/src/**",
+        "!**/*.test.ts",
+        "!**/test/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 50 }
+            },
+            "noExcessiveLinesPerFunction": {
+              "level": "error",
+              "options": { "maxLines": 120, "skipBlankLines": true }
+            }
+          },
+          "style": {
+            "noNestedTernary": "error",
+            "noNonNullAssertion": "error",
+            "useBlockStatements": "error",
+            "noNegationElse": "error",
+            "useCollapsedElseIf": "error"
+          },
+          "suspicious": { "noExplicitAny": "error", "noTsIgnore": "error" }
+        }
+      }
+    }
+  ]
 }

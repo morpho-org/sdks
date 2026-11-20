@@ -516,8 +516,7 @@ describe("PreLiquidationPosition.seizableCollateral", () => {
     },
   );
 
-  // The SDK does not cap repayable shares to the borrower's shares above a 100% close factor.
-  test.fails.prop([preLiquidationPositionCase(5n * WAD)], {
+  test.prop([preLiquidationPositionCase(5n * WAD)], {
     numRuns: 1000,
     examples: [[sdk1397ShrunkCase], [sdk1397RealisticCase]],
   })(
@@ -533,8 +532,7 @@ describe("PreLiquidationPosition.seizableCollateral", () => {
     },
   );
 
-  // The SDK quotes seizures that revert in withdrawCollateral when market-oracle post-repay health fails.
-  test.fails.prop([preLiquidationPositionCase(WAD)], {
+  test.prop([preLiquidationPositionCase(WAD)], {
     numRuns: 1000,
     examples: [[postRepayHealthShrunkCase], [postRepayHealthRealisticCase]],
   })(

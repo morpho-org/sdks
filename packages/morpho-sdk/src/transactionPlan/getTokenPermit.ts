@@ -29,6 +29,8 @@ export async function getTokenPermit(
   },
 ): Promise<Requirement<Erc2612RequirementSignature> | undefined> {
   const { dai } = getChainAddresses(params.chainId);
-  if (isDefined(dai) && isAddressEqual(params.token, dai)) return undefined;
+  if (isDefined(dai) && isAddressEqual(params.token, dai)) {
+    return undefined;
+  }
   return getErc2612Permit(client, params);
 }

@@ -14,20 +14,22 @@ import {
   validateChainId,
   validateRequirementSpender,
 } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   type BundlesTokenSignatureRequirement,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InputExceedsMaxError,
   NegativeInputError,
-  NonPositiveInputError,
+  type ReferenceTimestampParams,
   type Transaction,
 } from "../../types/index.js";
 
 import { getErc2612Permit } from "./getErc2612Permit.js";
 
 /** Parameters for {@link getBundlesTokenRequirements}. */
-export interface GetBundlesTokenRequirementsParams {
+export interface GetBundlesTokenRequirementsParams
+  extends ReferenceTimestampParams {
   /** ERC-20 token funded by the operation. */
   readonly token: Address;
   /** Registered fixed bundles contract that pulls the token. */
@@ -48,8 +50,6 @@ export interface GetBundlesTokenRequirementsParams {
   readonly useSimplePermit?: boolean;
   /** @deprecated Ignored. The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals. */
   readonly permit2Nonce?: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  readonly now?: bigint;
 }
 
 /**
@@ -67,7 +67,7 @@ export interface GetBundlesTokenRequirementsParams {
  * @param params.owner - Account funding the operation.
  * @param params.chainId - Target chain id; must match the client chain.
  * @param params.deadline - Final-call and signature deadline.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @param params.supportSignature - Whether ERC-2612 signatures may be requested.
  * @param params.supportDeployless - Whether ERC-2612 metadata reads may use deployless calls.
  * @param params.useSimplePermit - Defaults to true when signatures are supported. Prefer ERC-2612 when `nonces()` succeeds and the token's
@@ -146,16 +146,8 @@ export const getBundlesTokenRequirements = async (
       max: maxUint256,
     });
   }
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  if (params.deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: params.deadline,
-      max: maxUint256,
-    });
-  }
+  // Reject deadlines outside the positive uint256 range before reading state.
+  validateDeadline(params.deadline);
   // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
   // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
   // this too, but the exported resolver must guard its own callers.
@@ -163,7 +155,9 @@ export const getBundlesTokenRequirements = async (
   if (params.deadline <= timestamp) {
     throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
-  if (params.amount === 0n) return [];
+  if (params.amount === 0n) {
+    return [];
+  }
   await validateClientChainId(viemClient, params.chainId);
 
   const allowance = await readContract(viemClient, {
@@ -172,24 +166,29 @@ export const getBundlesTokenRequirements = async (
     functionName: "allowance",
     args: [params.owner, params.spender],
   });
-  if (allowance >= params.amount) return [];
+  if (allowance >= params.amount) {
+    return [];
+  }
 
   const { dai } = getChainAddresses(params.chainId);
 
-  if (params.supportSignature) {
-    const isDai = isDefined(dai) && isAddressEqual(params.token, dai);
-    if ((params.useSimplePermit ?? true) && !isDai) {
-      const permit = await getErc2612Permit(viemClient, {
-        token: params.token,
-        owner: params.owner,
-        spender: params.spender,
-        amount: params.amount,
-        chainId: params.chainId,
-        deadline: params.deadline,
-        now: timestamp,
-        supportDeployless: params.supportDeployless,
-      });
-      if (isDefined(permit)) return [permit];
+  const isDai =
+    params.supportSignature &&
+    isDefined(dai) &&
+    isAddressEqual(params.token, dai);
+  if (params.supportSignature && (params.useSimplePermit ?? true) && !isDai) {
+    const permit = await getErc2612Permit(viemClient, {
+      token: params.token,
+      owner: params.owner,
+      spender: params.spender,
+      amount: params.amount,
+      chainId: params.chainId,
+      deadline: params.deadline,
+      now: timestamp,
+      supportDeployless: params.supportDeployless,
+    });
+    if (isDefined(permit)) {
+      return [permit];
     }
   }
 

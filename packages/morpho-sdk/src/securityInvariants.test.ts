@@ -1,6 +1,6 @@
 /**
  * Executable checks for the "Security invariants" table in the repository's SECURITY.md.
- * Each `describe` is tagged with the invariant ID it covers; `pnpm lint:security-invariants`
+ * Each `describe` is tagged with the invariant ID it covers; `bun run lint:security-invariants`
  * fails when an ID in SECURITY.md has no tagged test here (or anywhere under `packages/`).
  */
 import {

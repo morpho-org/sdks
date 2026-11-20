@@ -61,6 +61,379 @@ type DerivedLimit = {
   }[];
   readonly collateralSupplies?: readonly MidnightCollateralAmount[];
 };
+const deriveVaultDepositQuote = (
+  action: Extract<
+    TransactionAction,
+    { type: "vaultV1Deposit" | "vaultV2Deposit" }
+  >,
+  nativeAssetPaid: Address | undefined,
+): DerivedLimit => {
+  const { amount, netAssets, maxSharePrice } = action.args;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    assetPaid: nativeAssetPaid,
+    quote: {
+      assetsPaid: amount,
+      sharesMinted:
+        isPositive(netAssets) && isPositive(maxSharePrice)
+          ? MathLib.mulDivDown(netAssets, MathLib.RAY, maxSharePrice)
+          : undefined,
+    },
+  };
+};
+
+const deriveVaultForcedWithdrawalQuote = (
+  action: Extract<TransactionAction, { type: "vaultV2ForceWithdraw" }>,
+): DerivedLimit => {
+  const { exitAssets, minSharePriceE27 } = action.args;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote: {
+      // The contract requires withdrawn * 1e27 / sharesBurnt >= minSharePriceE27,
+      // so the burn is capped at ceil(exitAssets * RAY / minSharePriceE27).
+      sharesBurned: isPositive(minSharePriceE27)
+        ? MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27)
+        : undefined,
+    },
+  };
+};
+
+const deriveVaultMigrationQuote = (
+  action: Extract<TransactionAction, { type: "vaultV1MigrateToV2" }>,
+): DerivedLimit => {
+  const { shares, netAssets, maxSharePriceVaultV2 } = action.args;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote: {
+      sharesBurned: shares,
+      sharesMinted:
+        isPositive(netAssets) && isPositive(maxSharePriceVaultV2)
+          ? MathLib.mulDivDown(netAssets, MathLib.RAY, maxSharePriceVaultV2)
+          : undefined,
+    },
+  };
+};
+
+const deriveBlueWithdrawalQuote = (
+  action: Extract<TransactionAction, { type: "blueWithdraw" }>,
+): DerivedLimit => {
+  const {
+    withdrawAssets,
+    withdrawShares,
+    reallocationPenaltyAssets,
+    referralFeeAssets,
+  } = action.args;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote: {
+      sharesBurned: isPositive(withdrawShares) ? withdrawShares : undefined,
+      assetsReceived: isPositive(withdrawAssets)
+        ? withdrawAssets - reallocationPenaltyAssets - (referralFeeAssets ?? 0n)
+        : undefined,
+    },
+  };
+};
+
+const deriveBlueBorrowQuote = (
+  action: Extract<
+    TransactionAction,
+    {
+      type:
+        | "blueSupplyCollateral"
+        | "blueBorrow"
+        | "blueSupplyCollateralBorrow";
+    }
+  >,
+  nativeAssetPaid: Address | undefined,
+): DerivedLimit => {
+  const {
+    collateralAssets,
+    borrowAssets,
+    reallocationPenaltyAssets,
+    referralFeeAssets,
+  } = action.args;
+  const received = isPositive(borrowAssets)
+    ? borrowAssets - reallocationPenaltyAssets - (referralFeeAssets ?? 0n)
+    : undefined;
+  // Both legs active: on a same-token market the borrow payout nets
+  // against the collateral pay-in in the wallet, so the args cannot quote
+  // the net wallet gain — `expected.assetsReceived` must carry it.
+  const bothLegsActive =
+    action.type === "blueSupplyCollateralBorrow" &&
+    isPositive(collateralAssets) &&
+    isPositive(borrowAssets);
+  const inactiveCollateralCap =
+    action.type === "blueSupplyCollateralBorrow" ? INACTIVE_LEG_CAP : undefined;
+  return {
+    type: action.type,
+    requiredExpected: bothLegsActive ? ["assetsReceived"] : [],
+    assetPaid: nativeAssetPaid,
+    quote: {
+      // On a combined use without a collateral leg the required pay-in cap
+      // cannot be zero, so the helper emits the minimal positive cap.
+      assetsPaid: isPositive(collateralAssets)
+        ? collateralAssets
+        : inactiveCollateralCap,
+      collateralSupplied: collateralAssets,
+      assetsReceived:
+        !bothLegsActive && isPositive(received) ? received : undefined,
+      // On a collateral-only combined use the required debt-share cap cannot
+      // be zero, so the helper emits the minimal positive cap instead.
+      ...(action.type === "blueSupplyCollateralBorrow"
+        ? {
+            sharesMinted: isPositive(borrowAssets)
+              ? undefined
+              : INACTIVE_LEG_CAP,
+          }
+        : {}),
+    },
+  };
+};
+
+const deriveBlueRepayQuote = (
+  action: Extract<
+    TransactionAction,
+    {
+      type:
+        | "blueRepay"
+        | "blueWithdrawCollateral"
+        | "blueRepayWithdrawCollateral";
+    }
+  >,
+  nativeAssetPaid: Address | undefined,
+): DerivedLimit => {
+  const {
+    repayAssets,
+    repayShares,
+    maxRepayAssets,
+    collateralAssets,
+    referralFeeAssets,
+  } = action.args;
+  const byShares = isPositive(repayShares);
+  // The full-repay sentinel (`maxUint256`) resolves to the position's live
+  // borrow shares at execution, so `sharesBurned` is not derivable from it
+  // — `expected.sharesBurned` must carry the quote.
+  const derivableShares =
+    byShares && repayShares !== maxUint256 ? repayShares : undefined;
+  const withCollateral = action.type !== "blueRepay";
+  const inactiveCollateralCap =
+    action.type === "blueRepayWithdrawCollateral"
+      ? INACTIVE_LEG_CAP
+      : undefined;
+  const bothLegsActive =
+    action.type === "blueRepayWithdrawCollateral" &&
+    (isPositive(repayAssets) || isPositive(repayShares)) &&
+    isPositive(collateralAssets);
+  const assetsPaid = byShares
+    ? maxRepayAssets
+    : repayAssets + (referralFeeAssets ?? 0n);
+  // BlueBundlesV1 repays before refunding: the native surplus
+  // (`maxRepayAssets - repayAssets - fee`) is reimbursed in ETH through the
+  // bundle's native unwrap path (BlueBundlesV1.sol `pullOrWrapNative` /
+  // remainder reimbursement), so the `repayAssets + referralFeeAssets` cap
+  // is not understated by a native assets-mode repay.
+  return {
+    type: action.type,
+    requiredExpected: [
+      ...(action.type === "blueRepayWithdrawCollateral" &&
+      (repayShares === maxUint256 || isPositive(repayAssets))
+        ? (["sharesBurned"] as const)
+        : []),
+      ...(bothLegsActive ? (["assetsReceived"] as const) : []),
+    ],
+    assetPaid: nativeAssetPaid,
+    quote: {
+      // By assets, the user pays exactly repayAssets plus the on-top referral
+      // fee; by shares, the funding cap is `maxRepayAssets`. On a
+      // withdraw-only combined use the required pay-in cap cannot be zero,
+      // so the helper emits the minimal positive cap.
+      assetsPaid:
+        isPositive(assetsPaid) || action.type !== "blueRepayWithdrawCollateral"
+          ? assetsPaid
+          : INACTIVE_LEG_CAP,
+      sharesBurned: derivableShares,
+      ...(withCollateral
+        ? {
+            // On a repay-only combined use the required collateral cap cannot
+            // be zero, so the helper emits the minimal positive cap instead.
+            collateralWithdrawn: isPositive(collateralAssets)
+              ? collateralAssets
+              : inactiveCollateralCap,
+            // Both legs active: on a same-token market the collateral
+            // payout nets against the repay pay-in in the wallet, so the
+            // args cannot quote the net wallet gain —
+            // `expected.assetsReceived` must carry it.
+            assetsReceived:
+              !bothLegsActive && isPositive(collateralAssets)
+                ? collateralAssets
+                : undefined,
+          }
+        : {}),
+    },
+  };
+};
+
+const deriveMidnightBuyQuote = (
+  action: Extract<TransactionAction, { type: "midnightTakeLend" }>,
+): DerivedLimit => {
+  const { target } = action.args;
+  const cap = target.type === "assets" ? target.assets : target.maxBuyerAssets;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote: {
+      assetsPaid: cap,
+      unitsBought: target.type === "assets" ? target.minUnits : target.units,
+    },
+  };
+};
+
+const deriveMidnightSellQuote = (
+  action: Extract<
+    TransactionAction,
+    { type: "midnightTakeBorrow" | "midnightTakeWithdraw" }
+  >,
+): DerivedLimit => {
+  const { target } = action.args;
+  const positionAmount =
+    target.type === "assets" ? target.maxUnits : target.units;
+  const assetsReceived =
+    target.type === "assets" ? target.assets : target.minSellerAssets;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote: {
+      // Both target bounds already express receiver proceeds after fees.
+      assetsReceived,
+      ...(action.type === "midnightTakeBorrow"
+        ? { unitsSold: positionAmount }
+        : { creditRedeemed: positionAmount }),
+    },
+  };
+};
+
+const deriveMidnightSupplyAndBorrowQuote = (
+  action: Extract<
+    TransactionAction,
+    { type: "midnightSupplyCollateralTakeBorrow" }
+  >,
+): DerivedLimit => {
+  const supplied = new Map<bigint, bigint>();
+  for (const { collateralIndex, assets } of action.args.collateralSupplies) {
+    supplied.set(
+      collateralIndex,
+      (supplied.get(collateralIndex) ?? 0n) + assets,
+    );
+  }
+  const { target } = action.args;
+  return {
+    type: action.type,
+    requiredExpected: [],
+    collateralSupplies: [...supplied].map(([collateralIndex, assets]) => ({
+      collateralIndex,
+      assets,
+    })),
+    quote: {
+      assetsReceived:
+        target.type === "assets" ? target.assets : target.minSellerAssets,
+      unitsSold: target.type === "assets" ? target.maxUnits : target.units,
+    },
+  };
+};
+
+const deriveMidnightRepayQuote = (
+  action: Extract<
+    TransactionAction,
+    {
+      type:
+        | "midnightRepayWithdrawCollateral"
+        | "midnightTakeRepayWithdrawCollateral";
+    }
+  >,
+): DerivedLimit => {
+  // A take repay buys back debt units through offers and, when
+  // `repayEnabled`, repays the rest directly; either way the bundle pays
+  // at most the target's fee-inclusive assets and repays at least its units.
+  let repay:
+    | Extract<
+        TransactionAction,
+        { type: "midnightRepayWithdrawCollateral" }
+      >["args"]["repay"]
+    | {
+        readonly type: "assets";
+        readonly assets: bigint;
+        readonly units: bigint;
+      };
+  if (action.type === "midnightRepayWithdrawCollateral") {
+    repay = action.args.repay;
+  } else if (action.args.target.type === "assets") {
+    repay = {
+      type: "assets",
+      assets: action.args.target.assets,
+      units: action.args.target.minUnits,
+    };
+  } else if (action.args.target.units === maxUint256) {
+    repay = {
+      type: "full",
+      maxBuyerAssets: action.args.target.maxBuyerAssets,
+    };
+  } else {
+    repay = {
+      type: "assets",
+      assets: action.args.target.maxBuyerAssets,
+      units: action.args.target.units,
+    };
+  }
+  const repaymentQuote =
+    repay.type === "full" ? { assetsPaid: repay.maxBuyerAssets } : {};
+  const finite = new Map<bigint, bigint>();
+  const all = new Set<bigint>();
+  const unlimited = new Set<bigint>();
+  for (const { collateralIndex, assets } of action.args.collateralWithdrawals) {
+    all.add(collateralIndex);
+    if (assets === maxUint256) {
+      unlimited.add(collateralIndex);
+    } else {
+      finite.set(collateralIndex, (finite.get(collateralIndex) ?? 0n) + assets);
+    }
+  }
+  return {
+    type: action.type,
+    requiredExpected: [],
+    quote:
+      repay.type === "assets" && repay.assets > 0n
+        ? {
+            assetsPaid: repay.assets,
+            debtRepaid: "units" in repay ? repay.units : repay.assets,
+          }
+        : repaymentQuote,
+    ...(repay.type === "full" || unlimited.size > 0
+      ? {
+          position: {
+            ...(repay.type === "full" ? { maxDebt: 0n } : {}),
+            ...(unlimited.size === 0
+              ? {}
+              : {
+                  maxCollateral: [...unlimited].map((collateralIndex) => ({
+                    collateralIndex,
+                    assets: 0n,
+                  })),
+                }),
+          },
+        }
+      : {}),
+    collateralWithdrawals: [...all].map((collateralIndex) => ({
+      collateralIndex,
+      ...(unlimited.has(collateralIndex)
+        ? {}
+        : { assets: finite.get(collateralIndex) ?? 0n }),
+    })),
+  };
+};
 
 /**
  * Derives the quote fields an action's args fix, before `expected` overrides.
@@ -75,21 +448,8 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
       : undefined;
   switch (action.type) {
     case "vaultV1Deposit":
-    case "vaultV2Deposit": {
-      const { amount, netAssets, maxSharePrice } = action.args;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        assetPaid: nativeAssetPaid,
-        quote: {
-          assetsPaid: amount,
-          sharesMinted:
-            isPositive(netAssets) && isPositive(maxSharePrice)
-              ? MathLib.mulDivDown(netAssets, MathLib.RAY, maxSharePrice)
-              : undefined,
-        },
-      };
-    }
+    case "vaultV2Deposit":
+      return deriveVaultDepositQuote(action, nativeAssetPaid);
     case "vaultV1Withdraw":
     case "vaultV2Withdraw":
       return {
@@ -104,20 +464,8 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
         requiredExpected: [],
         quote: { sharesBurned: action.args.shares },
       };
-    case "vaultV2ForceWithdraw": {
-      const { exitAssets, minSharePriceE27 } = action.args;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote: {
-          // The contract requires withdrawn * 1e27 / sharesBurnt >= minSharePriceE27,
-          // so the burn is capped at ceil(exitAssets * RAY / minSharePriceE27).
-          sharesBurned: isPositive(minSharePriceE27)
-            ? MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27)
-            : undefined,
-        },
-      };
-    }
+    case "vaultV2ForceWithdraw":
+      return deriveVaultForcedWithdrawalQuote(action);
     case "vaultV2ForceRedeem":
       // `forceDeallocate` burns penalty shares from `onBehalf` on top of the
       // redeemed shares, so the total burn is not derivable from `redeem.shares`
@@ -130,20 +478,8 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
       // `expected.positions` or `expected.assetsReceived` must be supplied —
       // `toSimulationLimits` enforces this below.
       return { type: action.type, requiredExpected: [], quote: {} };
-    case "vaultV1MigrateToV2": {
-      const { shares, netAssets, maxSharePriceVaultV2 } = action.args;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote: {
-          sharesBurned: shares,
-          sharesMinted:
-            isPositive(netAssets) && isPositive(maxSharePriceVaultV2)
-              ? MathLib.mulDivDown(netAssets, MathLib.RAY, maxSharePriceVaultV2)
-              : undefined,
-        },
-      };
-    }
+    case "vaultV1MigrateToV2":
+      return deriveVaultMigrationQuote(action);
     case "blueSupply":
       // `assets` is the gross funded amount; the referral fee is deducted inside
       // it, so the user's payment is `assets` in full.
@@ -159,148 +495,16 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
         requiredExpected: [],
         quote: { sharesBurned: action.args.shares },
       };
-    case "blueWithdraw": {
-      const {
-        withdrawAssets,
-        withdrawShares,
-        reallocationPenaltyAssets,
-        referralFeeAssets,
-      } = action.args;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote: {
-          sharesBurned: isPositive(withdrawShares) ? withdrawShares : undefined,
-          assetsReceived: isPositive(withdrawAssets)
-            ? withdrawAssets -
-              reallocationPenaltyAssets -
-              (referralFeeAssets ?? 0n)
-            : undefined,
-        },
-      };
-    }
+    case "blueWithdraw":
+      return deriveBlueWithdrawalQuote(action);
     case "blueSupplyCollateral":
     case "blueBorrow":
-    case "blueSupplyCollateralBorrow": {
-      const {
-        collateralAssets,
-        borrowAssets,
-        reallocationPenaltyAssets,
-        referralFeeAssets,
-      } = action.args;
-      const received = isPositive(borrowAssets)
-        ? borrowAssets - reallocationPenaltyAssets - (referralFeeAssets ?? 0n)
-        : undefined;
-      // Both legs active: on a same-token market the borrow payout nets
-      // against the collateral pay-in in the wallet, so the args cannot quote
-      // the net wallet gain — `expected.assetsReceived` must carry it.
-      const bothLegsActive =
-        action.type === "blueSupplyCollateralBorrow" &&
-        isPositive(collateralAssets) &&
-        isPositive(borrowAssets);
-      return {
-        type: action.type,
-        requiredExpected: bothLegsActive ? ["assetsReceived"] : [],
-        assetPaid: nativeAssetPaid,
-        quote: {
-          // On a combined use without a collateral leg the required pay-in cap
-          // cannot be zero, so the helper emits the minimal positive cap.
-          assetsPaid: isPositive(collateralAssets)
-            ? collateralAssets
-            : action.type === "blueSupplyCollateralBorrow"
-              ? INACTIVE_LEG_CAP
-              : undefined,
-          collateralSupplied: collateralAssets,
-          assetsReceived: bothLegsActive
-            ? undefined
-            : isPositive(received)
-              ? received
-              : undefined,
-          // On a collateral-only combined use the required debt-share cap cannot
-          // be zero, so the helper emits the minimal positive cap instead.
-          ...(action.type === "blueSupplyCollateralBorrow"
-            ? {
-                sharesMinted: isPositive(borrowAssets)
-                  ? undefined
-                  : INACTIVE_LEG_CAP,
-              }
-            : {}),
-        },
-      };
-    }
+    case "blueSupplyCollateralBorrow":
+      return deriveBlueBorrowQuote(action, nativeAssetPaid);
     case "blueRepay":
     case "blueWithdrawCollateral":
-    case "blueRepayWithdrawCollateral": {
-      const {
-        repayAssets,
-        repayShares,
-        maxRepayAssets,
-        collateralAssets,
-        referralFeeAssets,
-      } = action.args;
-      const byShares = isPositive(repayShares);
-      // The full-repay sentinel (`maxUint256`) resolves to the position's live
-      // borrow shares at execution, so `sharesBurned` is not derivable from it
-      // — `expected.sharesBurned` must carry the quote.
-      const derivableShares =
-        byShares && repayShares !== maxUint256 ? repayShares : undefined;
-      const withCollateral = action.type !== "blueRepay";
-      const bothLegsActive =
-        action.type === "blueRepayWithdrawCollateral" &&
-        (isPositive(repayAssets) || isPositive(repayShares)) &&
-        isPositive(collateralAssets);
-      const assetsPaid = byShares
-        ? maxRepayAssets
-        : repayAssets + (referralFeeAssets ?? 0n);
-      // BlueBundlesV1 repays before refunding: the native surplus
-      // (`maxRepayAssets - repayAssets - fee`) is reimbursed in ETH through the
-      // bundle's native unwrap path (BlueBundlesV1.sol `pullOrWrapNative` /
-      // remainder reimbursement), so the `repayAssets + referralFeeAssets` cap
-      // is not understated by a native assets-mode repay.
-      return {
-        type: action.type,
-        requiredExpected: [
-          ...(action.type === "blueRepayWithdrawCollateral" &&
-          (repayShares === maxUint256 || isPositive(repayAssets))
-            ? (["sharesBurned"] as const)
-            : []),
-          ...(bothLegsActive ? (["assetsReceived"] as const) : []),
-        ],
-        assetPaid: nativeAssetPaid,
-        quote: {
-          // By assets, the user pays exactly repayAssets plus the on-top referral
-          // fee; by shares, the funding cap is `maxRepayAssets`. On a
-          // withdraw-only combined use the required pay-in cap cannot be zero,
-          // so the helper emits the minimal positive cap.
-          assetsPaid:
-            isPositive(assetsPaid) ||
-            action.type !== "blueRepayWithdrawCollateral"
-              ? assetsPaid
-              : INACTIVE_LEG_CAP,
-          sharesBurned: derivableShares,
-          ...(withCollateral
-            ? {
-                // On a repay-only combined use the required collateral cap cannot
-                // be zero, so the helper emits the minimal positive cap instead.
-                collateralWithdrawn: isPositive(collateralAssets)
-                  ? collateralAssets
-                  : action.type === "blueRepayWithdrawCollateral"
-                    ? INACTIVE_LEG_CAP
-                    : undefined,
-                // Both legs active: on a same-token market the collateral
-                // payout nets against the repay pay-in in the wallet, so the
-                // args cannot quote the net wallet gain —
-                // `expected.assetsReceived` must carry it.
-                assetsReceived: bothLegsActive
-                  ? undefined
-                  : isPositive(collateralAssets)
-                    ? collateralAssets
-                    : undefined,
-              }
-            : {}),
-        },
-      };
-    }
+    case "blueRepayWithdrawCollateral":
+      return deriveBlueRepayQuote(action, nativeAssetPaid);
     case "midnightSupplyCollateral":
       // Midnight pulls exactly `assets` from msg.sender and credits them to
       // `onBehalf`'s collateral at `collateralIndex`.
@@ -328,15 +532,21 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
       };
     case "midnightCancelAndMake": {
       const blueSupply = action.args.blueSupply;
-      if (blueSupply === undefined) return undefined;
-      if (action.args.collateralSupplies.length > 0)
+      if (blueSupply === undefined) {
+        return undefined;
+      }
+      if (action.args.collateralSupplies.length > 0) {
         throw new UnsupportedLimitActionError(action.type);
+      }
       return {
         type: "midnightSupplyBlueMakeLend",
         requiredExpected: ["sharesMinted"],
         quote: { assetsPaid: blueSupply.assets },
       };
     }
+    case "midnightCancelOffers":
+      // A direct offer cancellation moves no value, so there is no operation limit to verify.
+      return undefined;
     case "midnightRedeem":
       // Midnight removes exactly `units` of `onBehalf`'s accrued credit and
       // transfers exactly `units` loan tokens to `receiver`.
@@ -348,133 +558,16 @@ const deriveQuote = (action: TransactionAction): DerivedLimit | undefined => {
           creditRedeemed: action.args.units,
         },
       };
-    case "midnightTakeLend": {
-      const { target } = action.args;
-      const cap =
-        target.type === "assets" ? target.assets : target.maxBuyerAssets;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote: {
-          assetsPaid: cap,
-          unitsBought:
-            target.type === "assets" ? target.minUnits : target.units,
-        },
-      };
-    }
+    case "midnightTakeLend":
+      return deriveMidnightBuyQuote(action);
     case "midnightTakeBorrow":
-    case "midnightTakeWithdraw": {
-      const { target } = action.args;
-      const positionAmount =
-        target.type === "assets" ? target.maxUnits : target.units;
-      const assetsReceived =
-        target.type === "assets" ? target.assets : target.minSellerAssets;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote: {
-          // Both target bounds already express receiver proceeds after fees.
-          assetsReceived,
-          ...(action.type === "midnightTakeBorrow"
-            ? { unitsSold: positionAmount }
-            : { creditRedeemed: positionAmount }),
-        },
-      };
-    }
-    case "midnightSupplyCollateralTakeBorrow": {
-      const supplied = new Map<bigint, bigint>();
-      for (const { collateralIndex, assets } of action.args.collateralSupplies)
-        supplied.set(
-          collateralIndex,
-          (supplied.get(collateralIndex) ?? 0n) + assets,
-        );
-      const { target } = action.args;
-      return {
-        type: action.type,
-        requiredExpected: [],
-        collateralSupplies: [...supplied].map(([collateralIndex, assets]) => ({
-          collateralIndex,
-          assets,
-        })),
-        quote: {
-          assetsReceived:
-            target.type === "assets" ? target.assets : target.minSellerAssets,
-          unitsSold: target.type === "assets" ? target.maxUnits : target.units,
-        },
-      };
-    }
+    case "midnightTakeWithdraw":
+      return deriveMidnightSellQuote(action);
+    case "midnightSupplyCollateralTakeBorrow":
+      return deriveMidnightSupplyAndBorrowQuote(action);
     case "midnightRepayWithdrawCollateral":
-    case "midnightTakeRepayWithdrawCollateral": {
-      // A take repay buys back debt units through offers and, when
-      // `repayEnabled`, repays the rest directly; either way the bundle pays
-      // at most the target's fee-inclusive assets and repays at least its units.
-      const repay =
-        action.type === "midnightRepayWithdrawCollateral"
-          ? action.args.repay
-          : action.args.target.type === "assets"
-            ? {
-                type: "assets" as const,
-                assets: action.args.target.assets,
-                units: action.args.target.minUnits,
-              }
-            : action.args.target.units === maxUint256
-              ? {
-                  type: "full" as const,
-                  maxBuyerAssets: action.args.target.maxBuyerAssets,
-                }
-              : {
-                  type: "assets" as const,
-                  assets: action.args.target.maxBuyerAssets,
-                  units: action.args.target.units,
-                };
-      const finite = new Map<bigint, bigint>();
-      const all = new Set<bigint>();
-      const unlimited = new Set<bigint>();
-      for (const { collateralIndex, assets } of action.args
-        .collateralWithdrawals) {
-        all.add(collateralIndex);
-        if (assets === maxUint256) unlimited.add(collateralIndex);
-        else
-          finite.set(
-            collateralIndex,
-            (finite.get(collateralIndex) ?? 0n) + assets,
-          );
-      }
-      return {
-        type: action.type,
-        requiredExpected: [],
-        quote:
-          repay.type === "assets" && repay.assets > 0n
-            ? {
-                assetsPaid: repay.assets,
-                debtRepaid: "units" in repay ? repay.units : repay.assets,
-              }
-            : repay.type === "full"
-              ? { assetsPaid: repay.maxBuyerAssets }
-              : {},
-        ...(repay.type === "full" || unlimited.size > 0
-          ? {
-              position: {
-                ...(repay.type === "full" ? { maxDebt: 0n } : {}),
-                ...(unlimited.size === 0
-                  ? {}
-                  : {
-                      maxCollateral: [...unlimited].map((collateralIndex) => ({
-                        collateralIndex,
-                        assets: 0n,
-                      })),
-                    }),
-              },
-            }
-          : {}),
-        collateralWithdrawals: [...all].map((collateralIndex) => ({
-          collateralIndex,
-          ...(unlimited.has(collateralIndex)
-            ? {}
-            : { assets: finite.get(collateralIndex) ?? 0n }),
-        })),
-      };
-    }
+    case "midnightTakeRepayWithdrawCollateral":
+      return deriveMidnightRepayQuote(action);
     case "blueRefinance":
       // No side is derivable: the debt moved, the source penalty and the
       // destination fee are all execution-resolved. Every quoted side comes
@@ -703,16 +796,20 @@ const missingQuote = (
  * @throws {SimulationValidationError} when `expected.collateralSupplies` is
  *   supplied, expected collateral withdrawals are invalid, or a supplied
  *   Midnight market struct cannot be converted.
- * @throws {UnsupportedLimitActionError} when the action type has no operation limit, or
- *   `midnightCancelAndMake` has no `blueSupply` and no collateral supplies, or combines Blue
- *   parking with collateral supplies.
+ * @throws {UnsupportedLimitActionError} when the action type has no operation limit (including
+ *   `midnightCancelOffers`, a direct offer cancellation), or `midnightCancelAndMake` has no
+ *   `blueSupply` and no collateral supplies, or combines Blue parking with collateral supplies.
  * @example
  * ```ts
  * import { MarketParams } from "@morpho-org/blue-sdk";
  * import { blueSupply, midnightCancelAndMake } from "@morpho-org/morpho-sdk";
- * import { simulate, toSimulationLimits } from "@morpho-org/evm-simulation";
+ * import {
+ *   type SimulationClient,
+ *   simulate,
+ *   toSimulationLimits,
+ * } from "@morpho-org/evm-simulation";
  * import type { Address, Hex } from "viem";
- * import { maxUint256, zeroHash } from "viem";
+ * import { createPublicClient, http, maxUint256, zeroHash } from "viem";
  * import { base, mainnet } from "viem/chains";
  *
  * declare const user: Address;
@@ -721,12 +818,8 @@ const missingQuote = (
  * declare const deadline: bigint;
  * declare const quotedShares: bigint;
  * declare const quotedCallbackShares: bigint;
- * const config = {
- *   chains: new Map([
- *     [1, { simulateV1Url: "https://rpc.example" }],
- *     [base.id, { simulateV1Url: "https://base-rpc.example" }],
- *   ]),
- * };
+ * declare const mainnetClient: SimulationClient;
+ * declare const baseClient: SimulationClient;
  * declare const rateRatifierV1: Address;
  * declare const root: Hex;
  * declare const groups: readonly Hex[];
@@ -741,8 +834,7 @@ const missingQuote = (
  *     deadline,
  *   },
  * });
- * const result = await simulate(config, {
- *   chainId: 1,
+ * const result = await simulate(mainnetClient, {
  *   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner: user,
@@ -770,8 +862,7 @@ const missingQuote = (
  *     },
  *   },
  * });
- * await simulate(config, {
- *   chainId: base.id,
+ * await simulate(baseClient, {
  *   transactions: [{
  *     from: user,
  *     to: midnightTx.to,
@@ -795,14 +886,16 @@ const missingQuote = (
  * import { createPublicClient, type Address, http, maxUint256 } from "viem";
  * import { base } from "viem/chains";
  *
- * const client = createPublicClient({ chain: base, transport: http() }).extend(
+ * const client = createPublicClient({
+ *   chain: base,
+ *   transport: http(),
+ * }).extend(
  *   morphoViemExtension(),
  * );
  * declare const user: Address;
  * declare const market: MarketParams;
  * declare const offers: Tree<"rateV1">;
  * declare const collateralAssets: bigint;
- * declare const config: Parameters<typeof simulate>[0];
  *
  * const output = await client.morpho.midnight(base.id).supplyCollateralMakeBorrow({
  *   accountAddress: user,
@@ -814,8 +907,7 @@ const missingQuote = (
  *   deadline: maxUint256,
  * });
  * const tx = output.buildTx();
- * const result = await simulate(config, {
- *   chainId: base.id,
+ * const result = await simulate(client, {
  *   transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, { owner: user }),
  * });
@@ -834,8 +926,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -859,8 +950,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, { owner }),
  * });
@@ -880,8 +970,7 @@ const missingQuote = (
  *   referralFeePct,
  *   referralFeeRecipient,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -894,10 +983,10 @@ const missingQuote = (
  * import { maxUint256, type Address } from "viem";
  * import { midnightRepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
  * import type { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
- * import { simulate, toSimulationLimits, type SimulationConfig } from "@morpho-org/evm-simulation";
+ * import { simulate, toSimulationLimits, type SimulationClient } from "@morpho-org/evm-simulation";
  *
  * declare const chainId: 8453;
- * declare const config: SimulationConfig;
+ * declare const client: SimulationClient;
  * declare const owner: Address;
  * declare const market: MarketParams;
  * declare const deadline: bigint;
@@ -909,8 +998,7 @@ const missingQuote = (
  *   collateralReceiver: owner,
  *   deadline,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   limits: toSimulationLimits(tx.action, {
  *     owner,
@@ -926,10 +1014,10 @@ const missingQuote = (
  *   type MidnightTakeableOffer,
  * } from "@morpho-org/morpho-sdk";
  * import type { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
- * import { simulate, toSimulationLimits, type SimulationConfig } from "@morpho-org/evm-simulation";
+ * import { simulate, toSimulationLimits, type SimulationClient } from "@morpho-org/evm-simulation";
  *
  * declare const chainId: 8453;
- * declare const config: SimulationConfig;
+ * declare const client: SimulationClient;
  * declare const owner: Address;
  * declare const market: MarketParams;
  * declare const takeableOffers: readonly MidnightTakeableOffer[];
@@ -946,8 +1034,7 @@ const missingQuote = (
  *   collateralReceiver: owner,
  *   deadline,
  * });
- * const result = await simulate(config, {
- *   chainId,
+ * const result = await simulate(client, {
  *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
  *   // Derives assetsPaid: 1_000n and position.maxDebt: 0n.
  *   limits: toSimulationLimits(tx.action, { owner, slippageTolerance: 0n }),
@@ -1002,41 +1089,13 @@ export const toSimulationLimits = (
     options.expected !== undefined &&
     "collateralSupplies" in options.expected &&
     options.expected.collateralSupplies !== undefined
-  )
+  ) {
     throw new SimulationValidationError(
       "expected.collateralSupplies cannot override the exact supplies encoded in the action. Omit it; the action's collateralSupplies set both the credit minimum and the pull cap.",
     );
+  }
 
-  const limitActions: readonly TransactionAction[] =
-    action.type === "midnightCancelAndMake" &&
-    (action.args.collateralSupplies?.length ?? 0) > 0 &&
-    action.args.blueSupply === undefined
-      ? (() => {
-          const suppliesByIndex = new Map<bigint, bigint>();
-          for (const { collateralIndex, assets } of action.args
-            .collateralSupplies) {
-            suppliesByIndex.set(
-              collateralIndex,
-              (suppliesByIndex.get(collateralIndex) ?? 0n) + assets,
-            );
-          }
-          return Array.from(
-            suppliesByIndex,
-            ([collateralIndex, assets]) =>
-              ({
-                type: "midnightSupplyCollateral",
-                args: {
-                  market: action.args.market,
-                  collateralIndex,
-                  assets,
-                  onBehalf: owner,
-                },
-              }) satisfies TransactionAction,
-          );
-        })()
-      : [action];
-
-  const derivedLimits = limitActions.map((limitAction) => {
+  const derivedLimits = expandLimitActions(action, owner).map((limitAction) => {
     const derived = deriveQuote(limitAction);
     if (derived === undefined) {
       throw new UnsupportedLimitActionError(action.type);
@@ -1060,6 +1119,104 @@ export const toSimulationLimits = (
       action.type === "midnightRepayWithdrawCollateral" ||
       action.type === "midnightTakeRepayWithdrawCollateral") &&
     action.args.collateralWithdrawals.length > 0;
+  const receiver = resolveLimitReceiver(derivedLimits, {
+    options,
+    owner,
+    hasCollateralWithdrawals,
+  });
+  const account = resolveLimitAccount(action, { options, owner });
+  // Reject a receiver that disagrees with the action's encoded recipient.
+  assertEncodedReceiver(action, {
+    receiver,
+    collateralAction: hasCollateralWithdrawals ? action : undefined,
+  });
+
+  const operations = derivedLimits.map(({ action: limitAction, derived }) => {
+    const quote = mergeExpectedQuote(action, {
+      limitAction,
+      expected,
+      derived,
+    });
+    // Fail before assembly if neither the action nor the caller quotes a required side.
+    assertRequiredQuote(limitAction, { derived, quote });
+    const subject = limitSubject(action, { limitAction, derived });
+    return assembleOperationLimit(subject, {
+      limitAction,
+      derived,
+      quote,
+      options,
+      market,
+      receiver,
+      account,
+      hasCollateralWithdrawals,
+    });
+  });
+
+  return deepFreeze({ operations });
+};
+
+type LimitOptions = Parameters<typeof toSimulationLimits>[1];
+type ExpectedQuote = NonNullable<LimitOptions["expected"]>;
+type DerivedAction = {
+  readonly action: TransactionAction;
+  readonly derived: DerivedLimit;
+};
+type MutableQuote = { -readonly [K in keyof SlippageQuote]?: SlippageQuote[K] };
+type CollateralWithdrawalAction = Extract<
+  TransactionAction,
+  {
+    type:
+      | "midnightWithdrawCollateralBatch"
+      | "midnightRepayWithdrawCollateral"
+      | "midnightTakeRepayWithdrawCollateral";
+  }
+>;
+
+const expandLimitActions = (
+  action: TransactionAction,
+  owner: Address,
+): readonly TransactionAction[] => {
+  return action.type === "midnightCancelAndMake" &&
+    (action.args.collateralSupplies?.length ?? 0) > 0 &&
+    action.args.blueSupply === undefined
+    ? (() => {
+        const suppliesByIndex = new Map<bigint, bigint>();
+        for (const { collateralIndex, assets } of action.args
+          .collateralSupplies) {
+          suppliesByIndex.set(
+            collateralIndex,
+            (suppliesByIndex.get(collateralIndex) ?? 0n) + assets,
+          );
+        }
+        return Array.from(
+          suppliesByIndex,
+          ([collateralIndex, assets]) =>
+            ({
+              type: "midnightSupplyCollateral",
+              args: {
+                market: action.args.market,
+                collateralIndex,
+                assets,
+                onBehalf: owner,
+              },
+            }) satisfies TransactionAction,
+        );
+      })()
+    : [action];
+};
+
+const resolveLimitReceiver = (
+  derivedLimits: readonly DerivedAction[],
+  {
+    options,
+    owner,
+    hasCollateralWithdrawals,
+  }: {
+    readonly options: LimitOptions;
+    readonly owner: Address;
+    readonly hasCollateralWithdrawals: boolean;
+  },
+): Address => {
   // Bundles pay `msg.sender`, except for the external collateral receiver.
   if (
     !derivedLimits.every(
@@ -1083,8 +1240,16 @@ export const toSimulationLimits = (
       actual: options.receiver,
     });
   }
-  const receiver = options.receiver ?? owner;
+  return options.receiver ?? owner;
+};
 
+const resolveLimitAccount = (
+  action: TransactionAction,
+  {
+    options,
+    owner,
+  }: { readonly options: LimitOptions; readonly owner: Address },
+): Address => {
   // Direct callback withdrawals and Midnight calls can act for another account;
   // bundles act for `owner`.
   if (
@@ -1118,6 +1283,19 @@ export const toSimulationLimits = (
       actual: action.args.onBehalf,
     });
   }
+  return account;
+};
+
+const assertEncodedReceiver = (
+  action: TransactionAction,
+  {
+    receiver,
+    collateralAction,
+  }: {
+    readonly receiver: Address;
+    readonly collateralAction: CollateralWithdrawalAction | undefined;
+  },
+): void => {
   if (
     action.type === "vaultV2ForceRedeem" &&
     !isAddressEqual(action.args.redeem.recipient, receiver)
@@ -1154,320 +1332,384 @@ export const toSimulationLimits = (
     });
   }
   if (
-    hasCollateralWithdrawals &&
+    collateralAction !== undefined &&
     !isAddressEqual(
-      action.type === "midnightWithdrawCollateralBatch"
-        ? action.args.receiver
-        : action.args.collateralReceiver,
+      collateralAction.type === "midnightWithdrawCollateralBatch"
+        ? collateralAction.args.receiver
+        : collateralAction.args.collateralReceiver,
       receiver,
     )
   ) {
     throw new LimitAccountMismatchError({
       field:
-        action.type === "midnightWithdrawCollateralBatch"
+        collateralAction.type === "midnightWithdrawCollateralBatch"
           ? "args.receiver"
           : "args.collateralReceiver",
       expected: receiver,
       actual:
-        action.type === "midnightWithdrawCollateralBatch"
-          ? action.args.receiver
-          : action.args.collateralReceiver,
+        collateralAction.type === "midnightWithdrawCollateralBatch"
+          ? collateralAction.args.receiver
+          : collateralAction.args.collateralReceiver,
     });
   }
+};
 
-  const operations = derivedLimits.map(({ action: limitAction, derived }) => {
-    const quote: {
-      -readonly [K in keyof SlippageQuote]?: SlippageQuote[K];
-    } = {};
-    for (const field of QUOTE_FIELDS) {
-      const amount = expected[field] ?? derived.quote[field];
-      if (amount === undefined) continue;
-      // A derived zero means the side is not moved; an explicit expected zero is
-      // kept so `simulate()` rejects it at parse time.
-      if (amount > 0n || expected[field] !== undefined) quote[field] = amount;
+const mergeExpectedQuote = (
+  action: TransactionAction,
+  {
+    limitAction,
+    expected,
+    derived,
+  }: {
+    readonly limitAction: TransactionAction;
+    readonly expected: ExpectedQuote;
+    readonly derived: DerivedLimit;
+  },
+): MutableQuote => {
+  const quote: MutableQuote = {};
+  for (const field of QUOTE_FIELDS) {
+    const amount = expected[field] ?? derived.quote[field];
+    if (amount === undefined) {
+      continue;
     }
-    // Structured quote fields are never derived; an explicit `expected` value
-    // passes through (an explicit `undefined` never erases).
-    if (expected.penalty !== undefined) quote.penalty = expected.penalty;
-    if (expected.positions !== undefined)
-      quote.positions = expected.positions.map((position) => ({ ...position }));
-    if (expected.deallocations !== undefined)
-      quote.deallocations = expected.deallocations.map((deallocation) => ({
-        ...deallocation,
-      }));
-    if (derived.collateralSupplies !== undefined) {
-      quote.collateralSupplies = derived.collateralSupplies;
+    // A derived zero means the side is not moved; an explicit expected zero is
+    // kept so `simulate()` rejects it at parse time.
+    if (amount > 0n || expected[field] !== undefined) {
+      quote[field] = amount;
     }
+  }
+  // Structured quote fields are never derived; an explicit `expected` value
+  // passes through (an explicit `undefined` never erases).
+  if (expected.penalty !== undefined) {
+    quote.penalty = expected.penalty;
+  }
+  if (expected.positions !== undefined) {
+    quote.positions = expected.positions.map((position) => ({ ...position }));
+  }
+  if (expected.deallocations !== undefined) {
+    quote.deallocations = expected.deallocations.map((deallocation) => ({
+      ...deallocation,
+    }));
+  }
+  if (derived.collateralSupplies !== undefined) {
+    quote.collateralSupplies = derived.collateralSupplies;
+  }
 
-    if (
-      expected.collateralWithdrawals !== undefined &&
-      expected.collateralWithdrawals.length > 0 &&
-      derived.collateralWithdrawals === undefined
-    )
-      throw new SimulationValidationError(
-        `expected.collateralWithdrawals: action "${action.type}" withdraws no collateral`,
-      );
+  if (
+    expected.collateralWithdrawals !== undefined &&
+    expected.collateralWithdrawals.length > 0 &&
+    derived.collateralWithdrawals === undefined
+  ) {
+    throw new SimulationValidationError(
+      `expected.collateralWithdrawals: action "${action.type}" withdraws no collateral`,
+    );
+  }
 
-    if (derived.collateralWithdrawals !== undefined) {
-      const expectedIndexes = new Set<bigint>();
-      for (const { collateralIndex } of expected.collateralWithdrawals ?? []) {
-        if (expectedIndexes.has(collateralIndex))
-          throw new SimulationValidationError(
-            `expected.collateralWithdrawals: duplicate collateral index "${collateralIndex}"`,
-          );
-        expectedIndexes.add(collateralIndex);
+  if (derived.collateralWithdrawals !== undefined) {
+    const expectedIndexes = new Set<bigint>();
+    for (const { collateralIndex } of expected.collateralWithdrawals ?? []) {
+      if (expectedIndexes.has(collateralIndex)) {
+        throw new SimulationValidationError(
+          `expected.collateralWithdrawals: duplicate collateral index "${collateralIndex}"`,
+        );
       }
-      const withdrawn = new Set(
-        derived.collateralWithdrawals.map(
-          ({ collateralIndex }) => collateralIndex,
-        ),
-      );
-      for (const { collateralIndex } of expected.collateralWithdrawals ?? []) {
-        if (!withdrawn.has(collateralIndex))
-          throw new SimulationValidationError(
-            `expected.collateralWithdrawals: collateral index "${collateralIndex}" is not withdrawn by the action`,
-          );
-      }
-      const collateralQuote = derived.collateralWithdrawals.map(
-        ({ collateralIndex, assets }) => {
-          const expectedEntry = expected.collateralWithdrawals?.find(
-            (entry) => entry.collateralIndex === collateralIndex,
-          );
-          if (expectedEntry !== undefined)
-            return { collateralIndex, assets: expectedEntry.assets };
-          if (assets === undefined)
-            throw missingQuote(limitAction.type, "collateralWithdrawals");
-          return { collateralIndex, assets };
-        },
-      );
-      if (collateralQuote.length > 0)
-        quote.collateralWithdrawals = collateralQuote;
+      expectedIndexes.add(collateralIndex);
     }
-
-    for (const fields of requiredQuoteGroups(derived.type)) {
-      const missing =
-        fields.length === 1
-          ? quote[fields[0]!] === undefined
-          : !fields.some((field) => quote[field] !== undefined);
-      if (missing) {
-        throw missingQuote(limitAction.type, fields[0]!);
+    const withdrawn = new Set(
+      derived.collateralWithdrawals.map(
+        ({ collateralIndex }) => collateralIndex,
+      ),
+    );
+    for (const { collateralIndex } of expected.collateralWithdrawals ?? []) {
+      if (!withdrawn.has(collateralIndex)) {
+        throw new SimulationValidationError(
+          `expected.collateralWithdrawals: collateral index "${collateralIndex}" is not withdrawn by the action`,
+        );
       }
     }
+    const collateralQuote = derived.collateralWithdrawals.map(
+      ({ collateralIndex, assets }) => {
+        const expectedEntry = expected.collateralWithdrawals?.find(
+          (entry) => entry.collateralIndex === collateralIndex,
+        );
+        if (expectedEntry !== undefined) {
+          return { collateralIndex, assets: expectedEntry.assets };
+        }
+        if (assets === undefined) {
+          throw missingQuote(limitAction.type, "collateralWithdrawals");
+        }
+        return { collateralIndex, assets };
+      },
+    );
+    if (collateralQuote.length > 0) {
+      quote.collateralWithdrawals = collateralQuote;
+    }
+  }
 
-    for (const { field } of conditionalQuoteViolations(derived.type, quote)) {
+  return quote;
+};
+
+const assertRequiredQuote = (
+  limitAction: TransactionAction,
+  {
+    derived,
+    quote,
+  }: { readonly derived: DerivedLimit; readonly quote: MutableQuote },
+): void => {
+  for (const fields of requiredQuoteGroups(derived.type)) {
+    const [firstField] = fields;
+    if (firstField === undefined) {
+      continue;
+    }
+    if (!fields.some((field) => quote[field] !== undefined)) {
+      throw missingQuote(limitAction.type, firstField);
+    }
+  }
+
+  for (const { field } of conditionalQuoteViolations(derived.type, quote)) {
+    throw missingQuote(limitAction.type, field);
+  }
+  // `deriveQuote` flags the fields `expected` must carry (`sharesBurned` for an
+  // assets-mode or maxUint256-sentinel repay, `assetsReceived` on a both-legs
+  // combined use) — anything still missing after the merge is a caller error.
+  for (const field of derived.requiredExpected) {
+    if (quote[field] === undefined) {
       throw missingQuote(limitAction.type, field);
     }
-    // `deriveQuote` flags the fields `expected` must carry (`sharesBurned` for an
-    // assets-mode or maxUint256-sentinel repay, `assetsReceived` on a both-legs
-    // combined use) — anything still missing after the merge is a caller error.
-    for (const field of derived.requiredExpected) {
-      if (quote[field] === undefined)
-        throw missingQuote(limitAction.type, field);
-    }
-    if (missingInKindProceeds(derived.type, quote))
-      // In-kind proceeds land on Blue supply positions or the wallet, neither of
-      // which the action args can quote — `expected.positions` or
-      // `expected.assetsReceived` must carry them.
-      throw missingQuote(limitAction.type, "positions");
-    const subject = (() => {
-      switch (limitAction.type) {
-        case "vaultV1MigrateToV2":
-          return {
-            type: limitAction.type,
-            sourceVault: limitAction.args.sourceVault,
-            targetVault: limitAction.args.targetVault,
-          };
-        case "blueRefinance":
-          return {
-            type: limitAction.type,
-            sourceMarketId: limitAction.args.sourceMarket as MarketId,
-            targetMarketId: limitAction.args.destinationMarket as MarketId,
-          };
-        case "blueSupply":
-        case "blueWithdraw":
-        case "blueSupplyCollateral":
-        case "blueBorrow":
-        case "blueSupplyCollateralBorrow":
-        case "blueRepay":
-        case "blueWithdrawCollateral":
-        case "blueRepayWithdrawCollateral":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market as MarketId,
-          };
-        case "blueWithdrawBuyCallback":
-          return {
-            type: "blueWithdraw" as const,
-            marketId: limitAction.args.market as MarketId,
-          };
-        case "midnightSupplyCollateral":
-          return {
-            type:
-              action.type === "midnightCancelAndMake" &&
-              action.args.root !== zeroHash
-                ? ("midnightSupplyCollateralMakeBorrow" as const)
-                : limitAction.type,
-            marketId: limitAction.args.market,
-            collateralIndex: limitAction.args.collateralIndex,
-          };
-        case "midnightCancelAndMake":
-          if (limitAction.args.blueSupply === undefined)
-            throw new UnsupportedLimitActionError(limitAction.type);
-          return {
-            type: "midnightSupplyBlueMakeLend" as const,
-            loanToken: limitAction.args.blueSupply.market.loanToken,
-            marketId: MarketUtils.getMarketId(
-              limitAction.args.blueSupply.market,
-            ),
-            callbackSalt: limitAction.args.blueSupply.callbackSalt,
-          };
-        case "midnightSupplyCollateralBatch":
-          return {
-            type: "midnightSupplyCollateralBatch" as const,
-            marketId: limitAction.args.market,
-          };
-        case "midnightWithdrawCollateralBatch":
-          return {
-            type: "midnightWithdrawCollateralBatch" as const,
-            marketId: limitAction.args.market,
-          };
-        case "midnightRedeem":
-          return { type: limitAction.type, marketId: limitAction.args.market };
-        case "midnightTakeLend":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-          };
-        case "midnightTakeBorrow":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-          };
-        case "midnightTakeWithdraw":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-          };
-        case "midnightRepayWithdrawCollateral":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-            ...(derived.position === undefined
-              ? {}
-              : { position: derived.position }),
-          };
-        case "midnightTakeRepayWithdrawCollateral":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-            ...(derived.position === undefined
-              ? {}
-              : { position: derived.position }),
-          };
-        case "midnightSupplyCollateralTakeBorrow":
-          return {
-            type: limitAction.type,
-            marketId: limitAction.args.market,
-          };
-        case "vaultV1Deposit":
-        case "vaultV1Withdraw":
-        case "vaultV1Redeem":
-        case "vaultV1InKindRedeem":
-        case "vaultV2Deposit":
-        case "vaultV2Withdraw":
-        case "vaultV2Redeem":
-        case "vaultV2InKindRedeem":
-        case "vaultV2ForceWithdraw":
-        case "vaultV2ForceRedeem":
-          return { type: limitAction.type, vault: limitAction.args.vault };
-        default:
-          // Unreachable: `deriveQuote` already threw for unsupported types.
-          throw new UnsupportedLimitActionError(action.type);
-      }
-    })();
+  }
+  if (missingInKindProceeds(derived.type, quote)) {
+    // In-kind proceeds land on Blue supply positions or the wallet, neither of
+    // which the action args can quote — `expected.positions` or
+    // `expected.assetsReceived` must carry them.
+    throw missingQuote(limitAction.type, "positions");
+  }
+};
 
-    const assetPaid =
-      limitAction.type === "midnightRepayWithdrawCollateral" ||
-      limitAction.type === "midnightTakeRepayWithdrawCollateral"
-        ? {}
-        : derived.assetPaid !== undefined
-          ? { assetPaid: derived.assetPaid }
-          : {};
-    const sharedLimitFields = {
-      ...(quote.assetsReceived !== undefined || hasCollateralWithdrawals
-        ? { receiver }
-        : {}),
-      quote,
-      ...(options.slippageTolerance !== undefined
-        ? { slippageTolerance: options.slippageTolerance }
-        : {}),
-    };
-    if (
-      subject.type === "midnightWithdrawCollateralBatch" ||
-      subject.type === "midnightRepayWithdrawCollateral" ||
-      subject.type === "midnightTakeRepayWithdrawCollateral"
-    ) {
-      return { ...subject, ...sharedLimitFields } satisfies OperationLimit;
-    }
-    if (subject.type === "midnightSupplyCollateralBatch") {
+const limitSubject = (
+  action: TransactionAction,
+  {
+    limitAction,
+    derived,
+  }: {
+    readonly limitAction: TransactionAction;
+    readonly derived: DerivedLimit;
+  },
+) => {
+  switch (limitAction.type) {
+    case "vaultV1MigrateToV2":
       return {
-        ...subject,
-        ...(market === undefined ? {} : { market }),
-        quote,
-        ...(options.slippageTolerance === undefined
+        type: limitAction.type,
+        sourceVault: limitAction.args.sourceVault,
+        targetVault: limitAction.args.targetVault,
+      };
+    case "blueRefinance":
+      return {
+        type: limitAction.type,
+        sourceMarketId: limitAction.args.sourceMarket as MarketId,
+        targetMarketId: limitAction.args.destinationMarket as MarketId,
+      };
+    case "blueSupply":
+    case "blueWithdraw":
+    case "blueSupplyCollateral":
+    case "blueBorrow":
+    case "blueSupplyCollateralBorrow":
+    case "blueRepay":
+    case "blueWithdrawCollateral":
+    case "blueRepayWithdrawCollateral":
+      return {
+        type: limitAction.type,
+        marketId: limitAction.args.market as MarketId,
+      };
+    case "blueWithdrawBuyCallback":
+      return {
+        type: "blueWithdraw" as const,
+        marketId: limitAction.args.market as MarketId,
+      };
+    case "midnightSupplyCollateral":
+      return {
+        type:
+          action.type === "midnightCancelAndMake" &&
+          action.args.root !== zeroHash
+            ? ("midnightSupplyCollateralMakeBorrow" as const)
+            : limitAction.type,
+        marketId: limitAction.args.market,
+        collateralIndex: limitAction.args.collateralIndex,
+      };
+    case "midnightCancelAndMake":
+      if (limitAction.args.blueSupply === undefined) {
+        throw new UnsupportedLimitActionError(limitAction.type);
+      }
+      return {
+        type: "midnightSupplyBlueMakeLend" as const,
+        loanToken: limitAction.args.blueSupply.market.loanToken,
+        marketId: MarketUtils.getMarketId(limitAction.args.blueSupply.market),
+        callbackSalt: limitAction.args.blueSupply.callbackSalt,
+      };
+    case "midnightSupplyCollateralBatch":
+      return {
+        type: "midnightSupplyCollateralBatch" as const,
+        marketId: limitAction.args.market,
+      };
+    case "midnightWithdrawCollateralBatch":
+      return {
+        type: "midnightWithdrawCollateralBatch" as const,
+        marketId: limitAction.args.market,
+      };
+    case "midnightRedeem":
+      return { type: limitAction.type, marketId: limitAction.args.market };
+    case "midnightTakeLend":
+      return {
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+      };
+    case "midnightTakeBorrow":
+      return {
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+      };
+    case "midnightTakeWithdraw":
+      return {
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+      };
+    case "midnightRepayWithdrawCollateral":
+      return {
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+        ...(derived.position === undefined
           ? {}
-          : { slippageTolerance: options.slippageTolerance }),
-      } satisfies OperationLimit;
-    }
-    if (subject.type === "midnightSupplyCollateralTakeBorrow") {
+          : { position: derived.position }),
+      };
+    case "midnightTakeRepayWithdrawCollateral":
       return {
-        ...subject,
-        ...(market === undefined ? {} : { market }),
-        ...sharedLimitFields,
-      } satisfies OperationLimit;
-    }
-    if (subject.type === "midnightTakeLend") {
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+        ...(derived.position === undefined
+          ? {}
+          : { position: derived.position }),
+      };
+    case "midnightSupplyCollateralTakeBorrow":
       return {
-        ...subject,
-        ...(market === undefined ? {} : { market }),
-        quote,
-        ...(options.slippageTolerance !== undefined
-          ? { slippageTolerance: options.slippageTolerance }
-          : {}),
-      } satisfies OperationLimit;
-    }
-    if (subject.type === "midnightSupplyBlueMakeLend") {
-      return {
-        ...subject,
-        account,
-        ...sharedLimitFields,
-      } satisfies OperationLimit;
-    }
-    if (
-      subject.type === "midnightTakeBorrow" ||
-      subject.type === "midnightTakeWithdraw"
-    ) {
-      return {
-        ...subject,
-        ...(subject.type === "midnightTakeBorrow" && market !== undefined
-          ? { market }
-          : {}),
-        ...sharedLimitFields,
-        ...assetPaid,
-      } satisfies OperationLimit;
-    }
+        type: limitAction.type,
+        marketId: limitAction.args.market,
+      };
+    case "vaultV1Deposit":
+    case "vaultV1Withdraw":
+    case "vaultV1Redeem":
+    case "vaultV1InKindRedeem":
+    case "vaultV2Deposit":
+    case "vaultV2Withdraw":
+    case "vaultV2Redeem":
+    case "vaultV2InKindRedeem":
+    case "vaultV2ForceWithdraw":
+    case "vaultV2ForceRedeem":
+      return { type: limitAction.type, vault: limitAction.args.vault };
+    default:
+      // Unreachable: `deriveQuote` already threw for unsupported types.
+      throw new UnsupportedLimitActionError(action.type);
+  }
+};
+
+const assembleOperationLimit = (
+  subject: ReturnType<typeof limitSubject>,
+  {
+    limitAction,
+    derived,
+    quote,
+    options,
+    market,
+    receiver,
+    account,
+    hasCollateralWithdrawals,
+  }: {
+    readonly limitAction: TransactionAction;
+    readonly derived: DerivedLimit;
+    readonly quote: MutableQuote;
+    readonly options: LimitOptions;
+    readonly market: MidnightMarketStruct | undefined;
+    readonly receiver: Address;
+    readonly account: Address;
+    readonly hasCollateralWithdrawals: boolean;
+  },
+): OperationLimit => {
+  const assetPaid =
+    limitAction.type !== "midnightRepayWithdrawCollateral" &&
+    limitAction.type !== "midnightTakeRepayWithdrawCollateral" &&
+    derived.assetPaid !== undefined
+      ? { assetPaid: derived.assetPaid }
+      : {};
+  const sharedLimitFields = {
+    ...(quote.assetsReceived !== undefined || hasCollateralWithdrawals
+      ? { receiver }
+      : {}),
+    quote,
+    ...(options.slippageTolerance === undefined
+      ? {}
+      : { slippageTolerance: options.slippageTolerance }),
+  };
+  if (
+    subject.type === "midnightWithdrawCollateralBatch" ||
+    subject.type === "midnightRepayWithdrawCollateral" ||
+    subject.type === "midnightTakeRepayWithdrawCollateral"
+  ) {
+    return { ...subject, ...sharedLimitFields } satisfies OperationLimit;
+  }
+  if (subject.type === "midnightSupplyCollateralBatch") {
     return {
       ...subject,
-      ...((subject.type === "midnightSupplyCollateral" ||
-        subject.type === "midnightSupplyCollateralMakeBorrow") &&
-      market !== undefined
+      ...(market === undefined ? {} : { market }),
+      quote,
+      ...(options.slippageTolerance === undefined
+        ? {}
+        : { slippageTolerance: options.slippageTolerance }),
+    } satisfies OperationLimit;
+  }
+  if (subject.type === "midnightSupplyCollateralTakeBorrow") {
+    return {
+      ...subject,
+      ...(market === undefined ? {} : { market }),
+      ...sharedLimitFields,
+    } satisfies OperationLimit;
+  }
+  if (subject.type === "midnightTakeLend") {
+    return {
+      ...subject,
+      ...(market === undefined ? {} : { market }),
+      quote,
+      ...(options.slippageTolerance === undefined
+        ? {}
+        : { slippageTolerance: options.slippageTolerance }),
+    } satisfies OperationLimit;
+  }
+  if (subject.type === "midnightSupplyBlueMakeLend") {
+    return {
+      ...subject,
+      account,
+      ...sharedLimitFields,
+    } satisfies OperationLimit;
+  }
+  if (
+    subject.type === "midnightTakeBorrow" ||
+    subject.type === "midnightTakeWithdraw"
+  ) {
+    return {
+      ...subject,
+      ...(subject.type === "midnightTakeBorrow" && market !== undefined
         ? { market }
         : {}),
-      account,
       ...sharedLimitFields,
       ...assetPaid,
     } satisfies OperationLimit;
-  });
-
-  return deepFreeze({ operations });
+  }
+  return {
+    ...subject,
+    ...((subject.type === "midnightSupplyCollateral" ||
+      subject.type === "midnightSupplyCollateralMakeBorrow") &&
+    market !== undefined
+      ? { market }
+      : {}),
+    account,
+    ...sharedLimitFields,
+    ...assetPaid,
+  } satisfies OperationLimit;
 };

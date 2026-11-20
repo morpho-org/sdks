@@ -23,6 +23,7 @@ import type {
   MidnightGroupCancellation,
   MidnightRepay,
   MidnightSellTarget,
+  ReferenceTimestampParams,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -65,7 +66,7 @@ export interface OffersData {
 }
 
 /** Parameters shared by Midnight maker flows. */
-export interface MakeOffersParams {
+export interface MakeOffersParams extends ReferenceTimestampParams {
   /** Maker expected on every offer. Must send the transaction: V2 acts on `msg.sender`. */
   readonly accountAddress: Address;
   readonly offers: MidnightMakerTreeInput;
@@ -189,7 +190,7 @@ export interface MakeOffersOutput
 }
 
 /** Parameters shared by Midnight market action flows. */
-export interface MarketActionParams {
+export interface MarketActionParams extends ReferenceTimestampParams {
   readonly accountAddress: Address;
   readonly marketData: Market;
 }
@@ -328,7 +329,7 @@ export interface WithdrawCollateralBatchParams
 }
 
 /** Parameters for the Midnight redeem flow. */
-export interface RedeemParams {
+export interface RedeemParams extends ReferenceTimestampParams {
   readonly accountAddress: Address;
   /** Owner-bound snapshot returned by `getPositionData`; manually constructed ownerless snapshots are rejected. */
   readonly positionData: AccrualPosition;

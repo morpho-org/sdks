@@ -1,5 +1,26 @@
 # @morpho-org/test
 
+## 2.14.0
+
+### Minor Changes
+
+- Export shared chain fork-block constants from `@morpho-org/test` and derive the E2E registry's Ethereum, Base, Optimism and Tempo targets from them. Require `@morpho-org/test` 2.14.0 or newer for the constants. Public Vitest and Playwright default fork blocks are unchanged.
+- Disable opportunistic block access list cache prefill by default for Anvil forks. Pass `noBal: false` to retain Foundry's prefill; BAL RPC methods and local execution remain available.
+
+  The default requires an Anvil that supports `--no-bal` (CI uses Foundry v1.10.0). Set `noBal: false` to avoid the flag on older Anvil versions.
+
+### Patch Changes
+
+- Preserve compatible Foundry RPC cache slots across parallel Anvil instances by isolating their writes and merging snapshots after shutdown.
+
+  HTTP(S) and WebSocket forks use a private HOME while preserving standard mise data/configuration and asdf data paths. Other HOME-relative settings, including global tool-version files and Foundry configuration, are not carried over. Use an absolute `binary` path for unsupported shims, or `noStorageCaching` to retain the original HOME.
+
+## 2.13.1
+
+### Patch Changes
+
+- `createMockClient` no longer retries failed RPC calls. Its transport now uses `retryCount: 0`, so a mocked error surfaces immediately instead of after viem's default three retries with backoff (about 1 second per failing call), and `request` is called once per RPC call.
+
 ## 2.13.0
 
 ### Minor Changes

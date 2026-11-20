@@ -6,7 +6,6 @@ import {
   BlacklistViolationError,
   CONSUMER_LIMIT_CHECKS,
   ConsumerLimitViolationError,
-  InvalidChainIdError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   LimitAccountMismatchError,
@@ -15,11 +14,12 @@ import {
   SIMULATION_ERROR_CODES,
   SimulationAssertError,
   type SimulationErrorCode,
+  type SimulationErrorSeverity,
+  SimulationExecutionError,
   SimulationInfrastructureError,
   SimulationInvalidRequestError,
   SimulationLogAssertError,
   SimulationPackageError,
-  SimulationRejectedError,
   SimulationRevertedError,
   SimulationSafetyError,
   SimulationValidationError,
@@ -29,11 +29,13 @@ import {
   UnexpectedMorphoAuthorizationError,
   UnexpectedSimulationError,
   UnexpectedTokenApprovalError,
+  UnexpectedTokenTransferError,
   UnsupportedChainError,
   UnsupportedLimitActionError,
   UnsupportedOperationError,
   UnusedAuthorizationError,
 } from "./errors.js";
+import * as entryPoint from "./index.js";
 import {
   AmbiguousExpectedQuoteError as EntryAmbiguousExpectedQuoteError,
   LimitAccountMismatchError as EntryLimitAccountMismatchError,
@@ -45,19 +47,20 @@ import {
 
 const ERROR_GROUPS = [
   SimulationSafetyError,
-  SimulationRejectedError,
+  SimulationExecutionError,
   SimulationInvalidRequestError,
   SimulationInfrastructureError,
 ] as const;
 const ERROR_GROUP_BY_CODE = {
   BLACKLIST_ERROR: SimulationSafetyError,
   UNEXPECTED_TOKEN_APPROVAL: SimulationSafetyError,
+  UNEXPECTED_TOKEN_TRANSFER: SimulationSafetyError,
   UNEXPECTED_MORPHO_AUTHORIZATION: SimulationSafetyError,
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: SimulationSafetyError,
-  CONSUMER_LIMIT_VIOLATION: SimulationRejectedError,
-  SIMULATION_ASSERT_FAILED: SimulationRejectedError,
-  UNUSED_AUTHORIZATION: SimulationRejectedError,
-  SIMULATION_REVERTED: SimulationRejectedError,
+  CONSUMER_LIMIT_VIOLATION: SimulationExecutionError,
+  SIMULATION_ASSERT_FAILED: SimulationExecutionError,
+  UNUSED_AUTHORIZATION: SimulationExecutionError,
+  SIMULATION_REVERTED: SimulationExecutionError,
   VALIDATION_ERROR: SimulationInvalidRequestError,
   UNSUPPORTED_CHAIN: SimulationInvalidRequestError,
   UNSUPPORTED_OPERATION: SimulationInvalidRequestError,
@@ -72,6 +75,32 @@ const ERROR_GROUP_BY_CODE = {
   INVALID_SIMULATION_RESPONSE: SimulationInfrastructureError,
   UNEXPECTED_SIMULATION_ERROR: SimulationInfrastructureError,
 } satisfies Record<SimulationErrorCode, (typeof ERROR_GROUPS)[number]>;
+
+const SEVERITY_BY_CLASS = {
+  BlacklistViolationError: "fatal",
+  UnexpectedTokenApprovalError: "fatal",
+  UnexpectedTokenTransferError: "fatal",
+  UnexpectedMorphoAuthorizationError: "fatal",
+  UnexpectedMidnightAuthorizationError: "fatal",
+  ConsumerLimitViolationError: "warn",
+  SimulationRevertedError: "warn",
+  SimulationAssertError: "warn",
+  SimulationLogAssertError: "warn",
+  UnusedAuthorizationError: "error",
+  SimulationValidationError: "error",
+  UnsupportedChainError: "error",
+  UnsupportedOperationError: "error",
+  AuthorizationRequestMismatchError: "error",
+  LimitAccountMismatchError: "error",
+  MissingExpectedQuoteError: "error",
+  AmbiguousExpectedQuoteError: "error",
+  UnsupportedLimitActionError: "error",
+  RpcTransportError: "error",
+  InvalidSimulationResponseError: "error",
+  SlippageCheckUnavailableError: "error",
+  ApprovalCheckUnavailableError: "error",
+  UnexpectedSimulationError: "error",
+} as const satisfies Record<string, SimulationErrorSeverity>;
 
 const A = "0x0000000000000000000000000000000000000001";
 const ASSERTION_FAILURE = {
@@ -121,7 +150,6 @@ const errors = [
   new RpcTransportError("unavailable"),
   new UnsupportedOperationError("unsupported"),
   new InvalidSimulationResponseError("malformed"),
-  new InvalidChainIdError("wrong chain"),
   new SlippageCheckUnavailableError("missing"),
   new ApprovalCheckUnavailableError("unavailable"),
   new UnexpectedMorphoAuthorizationError({
@@ -153,6 +181,7 @@ const errors = [
     operations: 2,
   }),
   new UnsupportedLimitActionError("unknownAction"),
+  new UnexpectedTokenTransferError({ token: A, sender: A, recipients: [A] }),
 ];
 
 describe("SlippageCheckUnavailableError", () => {
@@ -273,6 +302,7 @@ describe("SimulationPackageError", () => {
         "AMBIGUOUS_EXPECTED_QUOTE",
         "UNSUPPORTED_LIMIT_ACTION",
         "UNEXPECTED_TOKEN_APPROVAL",
+        "UNEXPECTED_TOKEN_TRANSFER",
         "UNEXPECTED_MORPHO_AUTHORIZATION",
         "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
         "APPROVAL_CHECK_UNAVAILABLE",
@@ -298,8 +328,6 @@ describe("SimulationPackageError", () => {
         ERROR_GROUP_BY_CODE[error.code],
       ]);
       expect(error).not.toHaveProperty("type");
-      expect(error.findings).toEqual([]);
-      expect(Object.isFrozen(error.findings)).toBe(true);
     },
   );
 
@@ -319,6 +347,12 @@ describe("SimulationPackageError", () => {
       ),
     ).toMatchInlineSnapshot(`
       {
+        "SimulationExecutionError": [
+          "CONSUMER_LIMIT_VIOLATION",
+          "SIMULATION_ASSERT_FAILED",
+          "SIMULATION_REVERTED",
+          "UNUSED_AUTHORIZATION",
+        ],
         "SimulationInfrastructureError": [
           "APPROVAL_CHECK_UNAVAILABLE",
           "INVALID_SIMULATION_RESPONSE",
@@ -336,17 +370,12 @@ describe("SimulationPackageError", () => {
           "UNSUPPORTED_OPERATION",
           "VALIDATION_ERROR",
         ],
-        "SimulationRejectedError": [
-          "CONSUMER_LIMIT_VIOLATION",
-          "SIMULATION_ASSERT_FAILED",
-          "SIMULATION_REVERTED",
-          "UNUSED_AUTHORIZATION",
-        ],
         "SimulationSafetyError": [
           "BLACKLIST_ERROR",
           "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
           "UNEXPECTED_MORPHO_AUTHORIZATION",
           "UNEXPECTED_TOKEN_APPROVAL",
+          "UNEXPECTED_TOKEN_TRANSFER",
         ],
       }
     `);
@@ -371,7 +400,6 @@ describe("SimulationPackageError", () => {
         RpcTransportError,
         UnsupportedOperationError,
         InvalidSimulationResponseError,
-        InvalidChainIdError,
         SlippageCheckUnavailableError,
         ApprovalCheckUnavailableError,
         AuthorizationRequestMismatchError,
@@ -500,26 +528,82 @@ describe("SimulationPackageError", () => {
       }).message,
     ).toContain("SetIsAuthorized");
   });
+});
 
-  test("behavior: wrong-chain errors retain their non-bypassable identity", () => {
-    const error = new InvalidChainIdError("wrong chain");
-    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
-    expect(isSimulationPackageError(error)).toBe(true);
+describe("severity", () => {
+  test("behavior: every exported concrete error class has a pinned severity", () => {
+    const abstractClasses = new Set<unknown>([
+      SimulationPackageError,
+      ...ERROR_GROUPS,
+    ]);
+    const exportedClasses = Object.entries(entryPoint)
+      .filter(
+        ([, value]) =>
+          typeof value === "function" &&
+          value.prototype instanceof SimulationPackageError &&
+          !abstractClasses.has(value),
+      )
+      .map(([name]) => name)
+      .sort();
+    expect(exportedClasses).toEqual(Object.keys(SEVERITY_BY_CLASS).sort());
     expect(
-      isSimulationPackageError({
-        name: error.name,
-        code: error.code,
-        message: error.message,
-        findings: error.findings,
-      }),
-    ).toBe(true);
-    expect(
-      isSimulationPackageError({
-        name: error.name,
-        code: error.code,
-        message: error.message,
-      }),
-    ).toBe(true);
+      [...new Set(errors.map((error) => error.constructor.name))].sort(),
+    ).toEqual(exportedClasses);
+    for (const error of errors)
+      expect([error.constructor.name, error.severity]).toEqual([
+        error.constructor.name,
+        SEVERITY_BY_CLASS[
+          error.constructor.name as keyof typeof SEVERITY_BY_CLASS
+        ],
+      ]);
+    const severities: SimulationErrorSeverity[] =
+      Object.values(SEVERITY_BY_CLASS);
+    const count = (level: SimulationErrorSeverity) =>
+      severities.filter((severity) => severity === level).length;
+    expect([count("fatal"), count("error"), count("warn")]).toEqual([5, 14, 4]);
+  });
+
+  test("behavior: groups set the default and only UnusedAuthorizationError overrides it", () => {
+    const defaults = new Map<unknown, SimulationErrorSeverity>([
+      [SimulationSafetyError, "fatal"],
+      [SimulationExecutionError, "warn"],
+      [SimulationInvalidRequestError, "error"],
+      [SimulationInfrastructureError, "error"],
+    ]);
+    const overrides = errors
+      .filter((error) => {
+        const group = ERROR_GROUPS.find((parent) => error instanceof parent);
+        return error.severity !== defaults.get(group);
+      })
+      .map((error) => error.constructor.name);
+    expect([...new Set(overrides)]).toEqual(["UnusedAuthorizationError"]);
+  });
+
+  test("behavior: severity is required on the base type, the groups and the failed report", () => {
+    expectTypeOf<
+      entryPoint.SimulationPackageError["severity"]
+    >().toEqualTypeOf<entryPoint.SimulationErrorSeverity>();
+    expectTypeOf<
+      entryPoint.SimulationFailure["severity"]
+    >().toEqualTypeOf<entryPoint.SimulationErrorSeverity>();
+    expectTypeOf<entryPoint.SimulationErrorSeverity>().toEqualTypeOf<
+      "fatal" | "error" | "warn"
+    >();
+    expectTypeOf<
+      entryPoint.SimulationSafetyError["severity"]
+    >().toEqualTypeOf<SimulationErrorSeverity>();
+    expectTypeOf<
+      entryPoint.SimulationExecutionError["severity"]
+    >().toEqualTypeOf<SimulationErrorSeverity>();
+    expectTypeOf<
+      entryPoint.SimulationInvalidRequestError["severity"]
+    >().toEqualTypeOf<SimulationErrorSeverity>();
+    expectTypeOf<
+      entryPoint.SimulationInfrastructureError["severity"]
+    >().toEqualTypeOf<SimulationErrorSeverity>();
+    expectTypeOf<
+      entryPoint.UnusedAuthorizationError["severity"]
+    >().toEqualTypeOf<SimulationErrorSeverity>();
   });
 });
 
@@ -629,34 +713,26 @@ describe("SimulationRevertedError", () => {
 });
 
 describe("isSimulationPackageError", () => {
-  test("behavior: rejects cyclic findings without throwing", () => {
-    const value = {
-      name: "SimulationRevertedError",
-      code: "SIMULATION_REVERTED",
-      message: "reverted",
-      findings: [] as unknown[],
-    };
-    value.findings.push(value);
-    expect(isSimulationPackageError(value)).toBe(false);
-  });
-
-  test("behavior: rejects findings entries with non-empty findings", () => {
-    const entry = {
-      name: "SimulationRevertedError",
-      code: "SIMULATION_REVERTED",
-      message: "reverted",
-      findings: [new SimulationRevertedError("nested")],
-    };
-    expect(isSimulationPackageError({ ...entry, findings: [entry] })).toBe(
-      false,
-    );
-  });
+  test.each([undefined, "info", 1])(
+    "behavior: rejects a structural error with severity %s",
+    (severity) => {
+      expect(
+        isSimulationPackageError({
+          name: "SimulationRevertedError",
+          code: "SIMULATION_REVERTED",
+          message: "reverted",
+          severity,
+        }),
+      ).toBe(false);
+    },
+  );
 
   test("behavior: narrows legacy objects to assignable package errors", () => {
     const value: unknown = {
       name: "SimulationRevertedError",
       code: "SIMULATION_REVERTED",
       message: "reverted",
+      severity: "warn",
     };
     expect(isSimulationPackageError(value)).toBe(true);
     if (isSimulationPackageError(value)) {
@@ -664,69 +740,8 @@ describe("isSimulationPackageError", () => {
       const packageErrors: SimulationPackageError[] = [];
       packageErrors.push(value);
       expect(packageErrors).toEqual([value]);
-      expectTypeOf(value.findings).toEqualTypeOf<
-        readonly SimulationPackageError[] | undefined
-      >();
-      expect(value.findings ?? []).toEqual([]);
     }
   });
-
-  test.each([
-    { findings: [] },
-    { findings: [new SimulationRevertedError("reverted")] },
-    {
-      findings: [
-        {
-          name: "SimulationRevertedError",
-          code: "SIMULATION_REVERTED",
-          message: "reverted",
-        },
-      ],
-    },
-  ])("behavior: accepts array findings %s", ({ findings }) => {
-    expect(
-      isSimulationPackageError({
-        name: "SimulationRevertedError",
-        code: "SIMULATION_REVERTED",
-        message: "reverted",
-        findings,
-      }),
-    ).toBe(true);
-  });
-
-  test.each([{ findings: [null] }, { findings: [{}] }])(
-    "behavior: rejects malformed findings entries %s",
-    ({ findings }) => {
-      expect(
-        isSimulationPackageError({
-          name: "SimulationRevertedError",
-          code: "SIMULATION_REVERTED",
-          message: "reverted",
-          findings,
-        }),
-      ).toBe(false);
-      const error = new SimulationRevertedError("reverted");
-      Object.defineProperty(error, "findings", { value: findings });
-      expect(isSimulationPackageError(error)).toBe(false);
-    },
-  );
-
-  test.each([undefined, null, {}, "failure", 0])(
-    "behavior: rejects present non-array findings %s",
-    (findings) => {
-      expect(
-        isSimulationPackageError({
-          name: "SimulationRevertedError",
-          code: "SIMULATION_REVERTED",
-          message: "reverted",
-          findings,
-        }),
-      ).toBe(false);
-      const error = new SimulationRevertedError("reverted");
-      Object.defineProperty(error, "findings", { value: findings });
-      expect(isSimulationPackageError(error)).toBe(false);
-    },
-  );
 
   test("behavior: unused authorization identity survives a renamed constructor", () => {
     class Renamed extends UnusedAuthorizationError {}
@@ -740,6 +755,7 @@ describe("isSimulationPackageError", () => {
         name: error.name,
         code: error.code,
         message: error.message,
+        severity: error.severity,
       }),
     ).toBe(true);
   });
@@ -751,6 +767,7 @@ describe("isSimulationPackageError", () => {
         name: error.name,
         code: error.code,
         message: error.message,
+        severity: error.severity,
       }),
     ).toBe(true);
     expect(
@@ -758,6 +775,7 @@ describe("isSimulationPackageError", () => {
         name: "ForeignError",
         code: error.code,
         message: error.message,
+        severity: error.severity,
       }),
     ).toBe(false);
   });
@@ -771,16 +789,25 @@ describe("isSimulationPackageError", () => {
     new Error("failure"),
     {},
     { name: "SimulationRevertedError", code: "SIMULATION_REVERTED" },
-    { name: "SimulationRevertedError", code: "UNKNOWN", message: "failure" },
+    {
+      name: "SimulationRevertedError",
+      code: "UNKNOWN",
+      message: "failure",
+      severity: "warn",
+    },
     {
       name: "SimulationLogAssertError",
       code: "SIMULATION_REVERTED",
       message: "failure",
+
+      severity: "warn",
     },
     {
       name: "RpcTransportError",
       code: "SIMULATION_REVERTED",
       message: "failure",
+
+      severity: "warn",
     },
     { code: "SIMULATION_REVERTED", message: "failure" },
   ])("behavior: rejects unrelated or malformed values", (value) => {

@@ -144,7 +144,7 @@ export interface MidnightTakeRepayWithdrawCollateralParams
  *   collateralWithdrawals: [{ collateralIndex: 0n, assets: maxUint256 }],
  *   collateralReceiver: borrower,
  *   maxContinuousFee: maxUint256,
- *   deadline: Time.timestamp() + 600n,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  * ```
  */
@@ -217,11 +217,12 @@ export const midnightTakeRepayWithdrawCollateral = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined)
+  if (params.referralFeeRecipient !== undefined) {
     validateMidnightAddress(
       "referralFeeRecipient",
       params.referralFeeRecipient,
     );
+  }
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   if (referralFeePct > 0n) {

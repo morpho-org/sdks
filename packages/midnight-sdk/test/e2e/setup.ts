@@ -1,9 +1,9 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { BASE_FORK_BLOCK, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { base } from "viem/chains";
 
 export const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 53_550_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });

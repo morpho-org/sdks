@@ -81,7 +81,7 @@ config.collateralToken; // e.g. 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0.
 
 ### Fetch data of a specific market
 
-Leverage the [`Market`](./src/market/Market.ts) class to fetch information on a specific market:
+Leverage the [`Market`](../blue-sdk/src/market/Market.ts) class to fetch information on a specific market:
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
@@ -100,13 +100,13 @@ market.liquidity; // e.g. 23_000000n (in loan assets).
 const accruedMarket = market.accrueInterest(Time.timestamp()); // Accrue interest to the latest's timestamp.
 
 accruedMarket.toSupplyAssets(shares); // Convert supply shares to assets.
-accruedMarket.apyAtTarget; // e.g. 3% (scaled by WAD).
-accruedMarket.borrowApy; // e.g. 8% (scaled by WAD).
+accruedMarket.apyAtTarget; // e.g. 0.03 (3%, as a number).
+accruedMarket.borrowApy; // e.g. 0.08 (8%, as a number).
 ```
 
 ### Fetch data on the position of a specific user on a specific market
 
-Leverage the [`Position`](./src/position/Position.ts) class to fetch the position of a user on a given market:
+Leverage the [`Position`](../blue-sdk/src/position/Position.ts) class to fetch the position of a user on a given market:
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";

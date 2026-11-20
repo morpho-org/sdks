@@ -97,6 +97,18 @@ export class UnsupportedVaultV2AdapterError extends Error {
 
 /** Morpho Blue protocol simulation errors. */
 export namespace BlueErrors {
+  /** Error thrown when an operation would exceed a market total's uint128 limit. */
+  export class TotalOverflow extends Error {
+    constructor(
+      public readonly total: string,
+      public readonly value: bigint,
+    ) {
+      super(
+        `Market total "${total}" would be "${value}", exceeding uint128. Reduce the operation amount, or project to an earlier timestamp when interest accrual alone overflows.`,
+      );
+    }
+  }
+
   /** Error thrown when a value that must be set once is already set. */
   export class AlreadySet extends Error {
     constructor(

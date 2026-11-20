@@ -13,7 +13,11 @@ import {
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -39,12 +43,16 @@ import {
   simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -123,7 +131,6 @@ async function check(
 ) {
   const tx = action.buildTx();
   const params = {
-    chainId: 1,
     mode: "preview" as const,
     authorizations: toSimulationAuthorizations({
       owner: client.account.address,
@@ -138,11 +145,8 @@ async function check(
       },
     ],
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
-  const result = await simulate(config, {
+  const config = simulationClientFor(client.transport.url, mainnet);
+  const result = await simulateOrThrowFirst(config, {
     ...params,
     limits: { operations: [operation] },
   });
@@ -161,7 +165,10 @@ async function check(
     expect(reported.operations[0]).not.toHaveProperty("inactiveFields");
   }
   await expect(
-    simulate(config, { ...params, limits: { operations: [wrongAmount] } }),
+    simulateOrThrowFirst(config, {
+      ...params,
+      limits: { operations: [wrongAmount] },
+    }),
   ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   const wrongSubject =
     "marketId" in operation
@@ -187,16 +194,24 @@ async function check(
           },
         ]
       : [];
-  await expect(
-    simulate(config, {
+  const wrongSubjectReport = await simulate(
+    config,
+    {
       ...params,
       limits: { operations: [wrongSubject], approvals },
-    }),
-  ).rejects.toBeInstanceOf(
-    operation.type === "vaultV1MigrateToV2"
-      ? SlippageCheckUnavailableError
-      : ConsumerLimitViolationError,
+    },
+    { timeoutMs: 30_000 },
   );
+  expect(wrongSubjectReport).toMatchObject({
+    ok: false,
+    failures: expect.arrayContaining([
+      expect.any(
+        operation.type === "vaultV1MigrateToV2"
+          ? SlippageCheckUnavailableError
+          : ConsumerLimitViolationError,
+      ),
+    ]),
+  });
   if (
     operation.type === "vaultV1Withdraw" ||
     operation.type === "vaultV2Withdraw" ||
@@ -212,24 +227,32 @@ async function check(
         ? { collateralWithdrawn: checkedQuote.collateralWithdrawn }
         : checkedQuote;
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...params,
         limits: { operations: [{ ...operation, quote }] },
       }),
     ).resolves.toBeDefined();
-    await expect(
-      simulate(config, {
+    const wrongQuotedSubjectReport = await simulate(
+      config,
+      {
         ...params,
         limits: { operations: [{ ...wrongSubject, quote }], approvals },
-      }),
-    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(wrongQuotedSubjectReport).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.any(ConsumerLimitViolationError),
+      ]),
+    });
   }
   if (
     operation.type === "vaultV1Redeem" ||
     operation.type === "vaultV2Redeem"
   ) {
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...params,
         limits: {
           operations: [
@@ -342,13 +365,9 @@ test("same-token combined Blue operations derive net wallets, including on-behal
       args: [params, 25_000_000n, 0n, account, userAddress],
     }),
   ].map((data) => ({ from: userAddress, to: blue, data }));
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   await expect(
-    simulate(config, {
-      chainId: 1,
+    simulateOrThrowFirst(config, {
       transactions: onBehalfBorrow,
       limits: {
         operations: [
@@ -380,8 +399,7 @@ test("same-token combined Blue operations derive net wallets, including on-behal
     }),
   ].map((data) => ({ from: userAddress, to: blue, data }));
   await expect(
-    simulate(config, {
-      chainId: 1,
+    simulateOrThrowFirst(config, {
       transactions: onBehalfRepay,
       limits: {
         operations: [
@@ -442,7 +460,6 @@ test("full and share-mode Blue repayments derive from live debt", async ({
     });
     const combinedTx = combined.buildTx();
     const combinedParams = {
-      chainId: 1,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner: userAddress,
@@ -457,23 +474,20 @@ test("full and share-mode Blue repayments derive from live debt", async ({
         },
       ],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-    };
+    const config = simulationClientFor(client.transport.url, mainnet);
     const operation: InputOperationLimit = {
       type: "blueRepayWithdrawCollateral",
       marketId: marketParams.id,
       inputs: { repay: fullRepay ? "full" : { shares }, collateralAssets: 1n },
     };
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...combinedParams,
         limits: { operations: [operation] },
       }),
     ).resolves.toBeDefined();
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...combinedParams,
         limits: {
           operations: [
@@ -507,13 +521,9 @@ test("full and share-mode Blue repayments derive from live debt", async ({
     repayShares: maxUint256,
   });
   const tx = full.buildTx();
-  const result = await simulate(
+  const result = await simulateOrThrowFirst(
+    simulationClientFor(client.transport.url, mainnet),
     {
-      timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-    },
-    {
-      chainId: 1,
       mode: "preview",
       authorizations: toSimulationAuthorizations({
         owner: userAddress,
@@ -665,7 +675,6 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   const withdrawal = cases[3]![0];
   const withdrawalTx = withdrawal.buildTx();
   const params = {
-    chainId: 1,
     mode: "preview" as const,
     authorizations: toSimulationAuthorizations({
       owner: userAddress,
@@ -689,15 +698,15 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
       },
     ],
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   await expect(
-    simulate(config, { ...params, limits: { operations: [cases[3]![1]] } }),
+    simulateOrThrowFirst(config, {
+      ...params,
+      limits: { operations: [cases[3]![1]] },
+    }),
   ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   await expect(
-    simulate(config, {
+    simulateOrThrowFirst(config, {
       ...params,
       limits: {
         operations: [
@@ -713,7 +722,7 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   const supplyWithdrawal = cases[1]![0];
   const supplyWithdrawalTx = supplyWithdrawal.buildTx();
   await expect(
-    simulate(config, {
+    simulateOrThrowFirst(config, {
       ...params,
       authorizations: toSimulationAuthorizations({
         owner: userAddress,
@@ -742,7 +751,7 @@ test("all Blue input-derived operations round-trip; amount and subject mismatche
   for (const [action, limit] of cases.slice(6)) {
     const tx = action.buildTx();
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...params,
         authorizations: toSimulationAuthorizations({
           owner: userAddress,
@@ -790,12 +799,8 @@ test("native input aliases verify real SDK wrapping and reject mismatched amount
       deadline: maxUint256,
     });
   const tx = action.buildTx();
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const params = {
-    chainId: 1,
     mode: "preview" as const,
     authorizations: toSimulationAuthorizations({
       owner: userAddress,
@@ -812,10 +817,13 @@ test("native input aliases verify real SDK wrapping and reject mismatched amount
     assetPaid: ethAddress,
   };
   await expect(
-    simulate(config, { ...params, limits: { operations: [limit] } }),
+    simulateOrThrowFirst(config, {
+      ...params,
+      limits: { operations: [limit] },
+    }),
   ).resolves.toBeDefined();
   await expect(
-    simulate(config, {
+    simulateOrThrowFirst(config, {
       ...params,
       limits: { operations: [{ ...limit, inputs: { assets: assets - 1n } }] },
     }),
@@ -826,11 +834,14 @@ test("native input aliases verify real SDK wrapping and reject mismatched amount
     inputs: { assets },
   };
   await expect(
-    simulate(config, { ...params, limits: { operations: [implicitLimit] } }),
+    simulateOrThrowFirst(config, {
+      ...params,
+      limits: { operations: [implicitLimit] },
+    }),
   ).resolves.toBeDefined();
   await client.setBalance({ address: userAddress, value: assets + 1n });
   await expect(
-    simulate(config, {
+    simulateOrThrowFirst(config, {
       ...params,
       transactions: [
         ...params.transactions,
@@ -958,13 +969,9 @@ test("borrows and withdrawals split across same-token markets fail while honest 
       const requirements = (
         await Promise.all(actions.map((action) => action.getRequirements()))
       ).flat();
-      const result = simulate(
+      const result = simulateOrThrowFirst(
+        simulationClientFor(client.transport.url, mainnet),
         {
-          timeoutMs: 30_000,
-          chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-        },
-        {
-          chainId: 1,
           mode: "preview",
           authorizations: toSimulationAuthorizations({
             owner: userAddress,
@@ -1092,7 +1099,6 @@ test("assets-mode migration rejects a different V1 source vault", async ({
   });
   const tx = action.buildTx();
   const params = {
-    chainId: 1,
     mode: "preview" as const,
     authorizations: toSimulationAuthorizations({
       owner: userAddress,
@@ -1102,10 +1108,7 @@ test("assets-mode migration rejects a different V1 source vault", async ({
       { from: userAddress, to: tx.to, data: tx.data, value: tx.value },
     ],
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const operation: InputOperationLimit = {
     type: "vaultV1MigrateToV2",
     sourceVault: actualSource,
@@ -1113,13 +1116,14 @@ test("assets-mode migration rejects a different V1 source vault", async ({
     inputs: { assets: 1_000_000n },
   };
   await expect(
-    simulate(config, {
+    simulateOrThrowFirst(config, {
       ...params,
       limits: { operations: [operation] },
     }),
   ).resolves.toBeDefined();
-  await expect(
-    simulate(config, {
+  const report = await simulate(
+    config,
+    {
       ...params,
       limits: {
         operations: [{ ...operation, sourceVault: V1 }],
@@ -1132,8 +1136,13 @@ test("assets-mode migration rejects a different V1 source vault", async ({
           },
         ],
       },
-    }),
-  ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+    },
+    { timeoutMs: 30_000 },
+  );
+  expect(report).toMatchObject({
+    ok: false,
+    failures: expect.arrayContaining([expect.any(ConsumerLimitViolationError)]),
+  });
 }, 180_000);
 
 test("migration derives both assets and shares modes, net of referral fee", async ({
@@ -1326,7 +1335,6 @@ test("migration into a target holding the source fails closed on any adverse con
     blockNumber: block.number,
   });
   const params = {
-    chainId: 1,
     mode: "preview" as const,
     blockNumber: block.number,
     authorizations,
@@ -1334,17 +1342,14 @@ test("migration into a target holding the source fails closed on any adverse con
       { from: userAddress, to: tx.to, data: tx.data, value: tx.value },
     ],
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const operation: InputOperationLimit = {
     type: "vaultV1MigrateToV2",
     sourceVault: V1,
     targetVault,
     inputs: { assets },
   };
-  const quoted = await simulate(config, {
+  const quoted = await simulateOrThrowFirst(config, {
     ...params,
     limits: { operations: [{ ...operation, quote: { sharesMinted: 1n } }] },
   });
@@ -1355,11 +1360,17 @@ test("migration into a target holding the source fails closed on any adverse con
   console.info("migration target rounding", { expected, actual });
   if (actual! < expected)
     await expect(
-      simulate(config, { ...params, limits: { operations: [operation] } }),
+      simulateOrThrowFirst(config, {
+        ...params,
+        limits: { operations: [operation] },
+      }),
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   else
     await expect(
-      simulate(config, { ...params, limits: { operations: [operation] } }),
+      simulateOrThrowFirst(config, {
+        ...params,
+        limits: { operations: [operation] },
+      }),
     ).resolves.toBeDefined();
 }, 180_000);
 
@@ -1540,7 +1551,6 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
     });
     const tx = action.buildTx();
     const params = {
-      chainId: 1,
       mode: "preview" as const,
       authorizations: toSimulationAuthorizations({
         owner: userAddress,
@@ -1550,10 +1560,7 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
         { from: userAddress, to: tx.to, data: tx.data, value: tx.value },
       ],
     };
-    const config = {
-      timeoutMs: 30_000,
-      chains: new Map([[1, { simulateV1Url: client.transport.url! }]]),
-    };
+    const config = simulationClientFor(client.transport.url, mainnet);
     const operation: InputOperationLimit = {
       type: "blueBorrow",
       marketId: marketParams.id,
@@ -1561,7 +1568,7 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
       reallocationPenalty,
       referralFee,
     };
-    const result = await simulate(config, {
+    const result = await simulateOrThrowFirst(config, {
       ...params,
       limits: { operations: [operation] },
     });
@@ -1582,14 +1589,14 @@ test("allocator penalties precede referral fees; undeclared charges fail", async
           ?.changes.find(({ token }) => isAddressEqual(token, USDC))?.diff,
       ).toBe(feeAssets);
       await expect(
-        simulate(config, {
+        simulateOrThrowFirst(config, {
           ...params,
           limits: { operations: [{ ...operation, referralFee: undefined }] },
         }),
       ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
     }
     await expect(
-      simulate(config, {
+      simulateOrThrowFirst(config, {
         ...params,
         limits: {
           operations: [{ ...operation, reallocationPenalty: undefined }],

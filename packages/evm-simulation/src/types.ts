@@ -1,12 +1,27 @@
-import type { Address, Hex } from "viem";
+import type { Address, Chain, Client, Hex, Transport } from "viem";
 
-// ─── Config ────────────────────────────────────────────────────────────────────
-// Shapes the caller constructs once and passes into `simulate()`.
+// ─── Client and options ──────────────────────────────────────────────────────
+// What the caller passes into `simulate()` besides the request.
 
-/** Per-chain endpoint for the sole supported simulation method, `eth_simulateV1`. */
-export interface ChainSimulationConfig {
-  /** JSON-RPC URL supporting `eth_simulateV1`. Required for every configured chain. */
-  readonly simulateV1Url: string;
+/**
+ * A viem client the caller owns, with `chain` set. Its transport must support
+ * `eth_simulateV1`; the simulated chain is `client.chain.id`. The SDK sets no
+ * retry policy or per-request timeout; `options.timeoutMs` bounds the whole
+ * simulation.
+ */
+export type SimulationClient = Client<Transport, Chain>;
+
+/** Optional settings for one `simulate()` call. */
+export interface SimulationOptions {
+  /** Receives the SDK's diagnostic logs. */
+  readonly logger?: SimulationLogger;
+  /**
+   * Whole-simulation deadline in milliseconds (default 5000). After it passes,
+   * no further read starts and the report fails with `RpcTransportError`. It
+   * does not abort a request already sent by the caller's transport, so set the
+   * transport's own `timeout` to at most this value.
+   */
+  readonly timeoutMs?: number;
   /**
    * Block overrides forwarded to `eth_simulateV1` as the simulated block's
    * `blockOverrides`. Omitted fields leave the node's defaults untouched.
@@ -35,21 +50,6 @@ export interface ChainSimulationConfig {
    * `parentHash` that never matches the pinned block.
    */
   readonly parentHashCheck?: boolean;
-}
-
-/**
- * Top-level configuration for `simulate`.
- *
- * Every chain entry must supply an `eth_simulateV1` endpoint. An absent chain
- * or missing endpoint throws `UnsupportedChainError`; execution never selects
- * another provider after a failure.
- */
-export interface SimulationConfig {
-  /** Per-chain simulation endpoints. */
-  chains: Map<number, ChainSimulationConfig>;
-  logger?: SimulationLogger;
-  /** Overall execution timeout budget in ms (default 5000). */
-  timeoutMs?: number;
 }
 
 // ─── Call-site data ────────────────────────────────────────────────────────────
@@ -176,7 +176,8 @@ export interface Transfer {
 }
 
 /**
- * Happy-path return of `simulate`. All failures throw typed errors.
+ * Successful simulation data. Check `report.ok` before reading `report.result`.
+ * On failure, the report contains `failures` instead of a result.
  *
  * - `simulationTxs` contain the caller's ordered `from`/`to`/`data`/`value`
  *   fields, normalized (checksummed addresses, `value` defaulted to `0n`);

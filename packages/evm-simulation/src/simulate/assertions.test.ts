@@ -145,7 +145,7 @@ describe("evaluateAssertion", () => {
     assertionIndex: 1,
   };
 
-  test("throws a SimulationAssertError with the assertion and return data", () => {
+  test("returns a SimulationAssertError with the assertion and return data", () => {
     const assertion: Assertion = {
       to: TOKEN,
       data: "0x1234",
@@ -154,7 +154,7 @@ describe("evaluateAssertion", () => {
     const returnData = "0xabcdef";
     let error: unknown;
     try {
-      evaluateAssertion({
+      error = evaluateAssertion({
         ...coordinates,
         assertion,
         returnData,
@@ -194,7 +194,7 @@ describe("evaluateAssertion", () => {
     const cause = new Error("node call error");
     let error: unknown;
     try {
-      evaluateAssertion({
+      error = evaluateAssertion({
         ...coordinates,
         assertion: { to: TOKEN, data: "0x1234", check: () => undefined },
         returnData: "0x",
@@ -229,7 +229,7 @@ describe("evaluateAssertion", () => {
     };
     let error: unknown;
     try {
-      evaluateAssertion({
+      error = evaluateAssertion({
         ...coordinates,
         assertion,
         returnData: "0xabcd",
@@ -261,13 +261,13 @@ describe("evaluateLogAssertion", () => {
     ).not.toThrow();
   });
 
-  test("throws SimulationLogAssertError with coordinates, assertion, and logs", () => {
+  test("returns SimulationLogAssertError with coordinates, assertion, and logs", () => {
     const assertion: LogAssertion = {
       check: () => "Approval event is missing.",
     };
     let error: unknown;
     try {
-      evaluateLogAssertion({ ...coordinates, assertion, logs });
+      error = evaluateLogAssertion({ ...coordinates, assertion, logs });
     } catch (caught) {
       error = caught;
     }
@@ -291,7 +291,7 @@ describe("evaluateLogAssertion", () => {
     };
     let error: unknown;
     try {
-      evaluateLogAssertion({ ...coordinates, assertion, logs });
+      error = evaluateLogAssertion({ ...coordinates, assertion, logs });
     } catch (caught) {
       error = caught;
     }

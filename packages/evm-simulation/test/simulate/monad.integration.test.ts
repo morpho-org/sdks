@@ -1,25 +1,18 @@
 import { createPublicClient, encodeFunctionData, erc20Abi, http } from "viem";
 import { monad } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { RpcTransportError, simulate } from "../../src/index.js";
+import { RpcTransportError } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const MONAD_RPC = "https://rpc.monad.xyz";
 
 const paramsFor = (callGasLimit?: bigint) => ({
-  config: {
-    timeoutMs: 30_000,
-    chains: new Map([
-      [
-        143,
-        {
-          simulateV1Url: MONAD_RPC,
-          ...(callGasLimit !== undefined && { callGasLimit }),
-        },
-      ],
-    ]),
-  },
+  client: simulationClientFor(MONAD_RPC, monad),
+  options: callGasLimit !== undefined ? { callGasLimit } : {},
   params: {
-    chainId: 143,
     limits: "none" as const,
     transactions: Array.from(
       { length: 11 },
@@ -59,9 +52,8 @@ describe.skipIf(!process.env.MONAD_LIVE_RPC)("Monad per-call gas limit", () => {
       args: [sender],
       blockNumber: block.number,
     });
-    const { config } = paramsFor(30_000_000n);
+    const { client: simulationClient, options } = paramsFor(30_000_000n);
     const request = {
-      chainId: monad.id,
       block: {
         number: block.number,
         hash: block.hash,
@@ -80,9 +72,11 @@ describe.skipIf(!process.env.MONAD_LIVE_RPC)("Monad per-call gas limit", () => {
         },
       ],
     };
-    const error = await simulate(config, request).catch(
-      (cause: unknown) => cause,
-    );
+    const error = await simulateOrThrow(
+      simulationClient,
+      request,
+      options,
+    ).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(RpcTransportError);
     let message = "";
     for (
@@ -92,21 +86,25 @@ describe.skipIf(!process.env.MONAD_LIVE_RPC)("Monad per-call gas limit", () => {
     )
       message += cause.message;
     expect(message).toContain("sender not eoa");
-    const result = await simulate(config, {
-      ...request,
-      stateOverrides: {
-        [sender]: { code: `0xef0100${scratch.slice(2)}` },
-        [scratch]: { code: code! },
+    const result = await simulateOrThrow(
+      simulationClient,
+      {
+        ...request,
+        stateOverrides: {
+          [sender]: { code: `0xef0100${scratch.slice(2)}` },
+          [scratch]: { code: code! },
+        },
       },
-    });
+      options,
+    );
     expect(BigInt(result.calls[0]!.returnData)).toBe(balance);
   }, 60_000);
 
   test("without callGasLimit, Monad rejects 11 calls", async () => {
     // Monad reserves 150M gas per call when `gas` is omitted;
     // 11 calls exceed its 1.6B simulation cap.
-    const { config, params } = paramsFor();
-    const error = await simulate(config, params).catch(
+    const { client, options, params } = paramsFor();
+    const error = await simulateOrThrow(client, params, options).catch(
       (cause: unknown) => cause,
     );
     expect(error).toBeInstanceOf(RpcTransportError);
@@ -123,8 +121,8 @@ describe.skipIf(!process.env.MONAD_LIVE_RPC)("Monad per-call gas limit", () => {
   }, 60_000);
 
   test("with callGasLimit 30_000_000n, the same 11 transactions succeed", async () => {
-    const { config, params } = paramsFor(30_000_000n);
-    const result = await simulate(config, params);
+    const { client, options, params } = paramsFor(30_000_000n);
+    const result = await simulateOrThrow(client, params, options);
     expect(result.simulationTxs).toHaveLength(11);
   }, 60_000);
 });

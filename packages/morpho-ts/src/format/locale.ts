@@ -1,3 +1,5 @@
+import { MissingLocalePartError } from "../errors.js";
+
 type LocaleSymbols = {
   decimalSymbol: string;
   groupSymbol: string;
@@ -26,6 +28,7 @@ const _convertEnNumStrToLocale = (
  *
  * @param locale - Locale identifier to inspect, falling back to `en-US` when invalid.
  * @returns The decimal symbol, grouping symbol, and requested locale string.
+ * @throws {MissingLocalePartError} when the number formatter omits a required separator.
  * @example
  * ```ts
  * import { getLocaleSymbols } from "@morpho-org/morpho-ts";
@@ -50,8 +53,14 @@ export const getLocaleSymbols = (locale: string): LocaleSymbols => {
 
   const parts = formatter.formatToParts(12345.6);
 
-  const decimalSymbol = parts.find((part) => part.type === "decimal")!.value;
-  const groupSymbol = parts.find((part) => part.type === "group")!.value;
+  const decimalSymbol = parts.find((part) => part.type === "decimal")?.value;
+  const groupSymbol = parts.find((part) => part.type === "group")?.value;
+  if (decimalSymbol === undefined) {
+    throw new MissingLocalePartError(locale, "decimal");
+  }
+  if (groupSymbol === undefined) {
+    throw new MissingLocalePartError(locale, "group");
+  }
 
   return { decimalSymbol, groupSymbol, locale };
 };
@@ -89,6 +98,7 @@ export const getEffectiveLocale = () => {
  * @param from - Locale that `numStr` currently uses.
  * @param to - Locale to convert separators to.
  * @returns The numeric string with separators from the `to` locale.
+ * @throws {MissingLocalePartError} when the number formatter omits a required separator.
  * @example
  * ```ts
  * import { convertNumStrToLocal } from "@morpho-org/morpho-ts";
@@ -119,6 +129,7 @@ export const convertNumStrToLocal = (
  * @param numStr - Number string formatted in the effective browser locale.
  * @param to - Locale to convert separators to.
  * @returns The numeric string with separators from the `to` locale.
+ * @throws {MissingLocalePartError} when the number formatter omits a required separator.
  * @example
  * ```ts
  * import { convertNumStrFromEffectiveTo } from "@morpho-org/morpho-ts";
@@ -138,6 +149,7 @@ export const convertNumStrFromEffectiveTo = (numStr: string, to: string) => {
  * @param numStr - Number string formatted with `en-US` separators.
  * @param locale - Optional locale to convert to. Uses the effective browser locale when omitted.
  * @returns The localized value with the symbols and locale used for conversion.
+ * @throws {MissingLocalePartError} when the number formatter omits a required separator.
  * @example
  * ```ts
  * import { getEnUSNumberToLocalParts } from "@morpho-org/morpho-ts";

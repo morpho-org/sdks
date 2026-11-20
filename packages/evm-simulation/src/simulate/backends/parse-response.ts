@@ -1,5 +1,8 @@
 import { type Hex, isAddress, isHex } from "viem";
-import { InvalidSimulationResponseError } from "../../errors.js";
+import {
+  InvalidSimulationResponseError,
+  type SimulationPackageError,
+} from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
@@ -38,6 +41,10 @@ export interface ExecutedStateRead {
 export interface SimulationExecution {
   readonly plan: ExecutionPlan;
   readonly block: ExecutionBlock;
+  /** A transaction reverted; nothing after the revert may be checked. */
+  readonly reverted: boolean;
+  /** Post-execution failures, in call-outcome order. */
+  readonly failures: readonly SimulationPackageError[];
   readonly calls: readonly ExecutedCall[];
   /** Successful state reads, in plan order, tagged by phase. */
   readonly stateReads: readonly ExecutedStateRead[];
@@ -177,7 +184,12 @@ export function parseSimulationResponse(params: {
   }
 
   const calls = block.calls.map((call, index): ParsedCall => {
-    const planned = plan.calls[index]!;
+    const planned = plan.calls[index];
+    if (planned === undefined) {
+      throw new InvalidSimulationResponseError(
+        `eth_simulateV1 returned an unplanned call result at position ${index}.`,
+      );
+    }
     let result: SimulationCall;
     try {
       if (
@@ -186,10 +198,11 @@ export function parseSimulationResponse(params: {
         !isHex(call.returnData) ||
         !isQuantity(call.gasUsed) ||
         (call.logs != null && !Array.isArray(call.logs))
-      )
+      ) {
         throw new InvalidSimulationResponseError(
           `eth_simulateV1 returned a malformed call result at position ${index}.`,
         );
+      }
       result = {
         logs:
           call.logs == null
@@ -202,10 +215,11 @@ export function parseSimulationResponse(params: {
                     (topic: unknown) => !isHex(topic) || topic.length !== 66,
                   ) ||
                   (log.data !== undefined && !isHex(log.data))
-                )
+                ) {
                   throw new InvalidSimulationResponseError(
                     `eth_simulateV1 returned a malformed log at call position ${index}.`,
                   );
+                }
                 return {
                   address: log.address,
                   topics: log.topics,
@@ -217,7 +231,9 @@ export function parseSimulationResponse(params: {
         gasUsed: BigInt(call.gasUsed),
       };
     } catch (cause) {
-      if (cause instanceof InvalidSimulationResponseError) throw cause;
+      if (cause instanceof InvalidSimulationResponseError) {
+        throw cause;
+      }
       throw new InvalidSimulationResponseError(
         `eth_simulateV1 returned a malformed call result at position ${index}.`,
         { cause },

@@ -81,7 +81,7 @@ const signTree = async (
   tree: Tree,
   account = privateKeyToAccount(privateKey),
 ) =>
-  account.signTypedData(
+  account.signTypedData<Record<string, unknown>, "OfferTree">(
     EcrecoverRatifierUtils.typedData({ tree, chainId: BigInt(base.id) }),
   );
 
@@ -330,7 +330,10 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     const client = createWalletClient({
       chain: base,
       transport: custom({
-        request: async () => wrongAccount.signTypedData(typedData),
+        request: async () =>
+          wrongAccount.signTypedData<Record<string, unknown>, "OfferTree">(
+            typedData,
+          ),
       }),
     });
 
@@ -422,7 +425,9 @@ describe("EcrecoverRatifierUtils.digest", () => {
 
     expect(tree.height).toBe(height);
     expect(EcrecoverRatifierUtils.digest(params)).toBe(
-      hashTypedData(EcrecoverRatifierUtils.typedData(params)),
+      hashTypedData<Record<string, unknown>, "OfferTree">(
+        EcrecoverRatifierUtils.typedData(params),
+      ),
     );
   });
 

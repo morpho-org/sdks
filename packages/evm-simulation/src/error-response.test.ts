@@ -8,20 +8,36 @@ import {
   SimulationLogAssertError,
   SimulationRevertedError,
   UnexpectedSimulationError,
+  UnexpectedTokenTransferError,
 } from "./errors.js";
 
 describe("toSimulationErrorResponse", () => {
-  test("behavior: returns a generic response for cyclic findings", () => {
+  test("behavior: serializes undeclared transfer failures without diagnostics", () => {
+    const address = "0x0000000000000000000000000000000000000001";
+    const error = new UnexpectedTokenTransferError({
+      token: address,
+      sender: address,
+      recipients: [address],
+    });
+    expect(
+      JSON.parse(JSON.stringify(toSimulationErrorResponse(error))),
+    ).toEqual({
+      code: "UNEXPECTED_TOKEN_TRANSFER",
+      message: error.message,
+    });
+    expect(error.message).toContain("Do not sign");
+    expect(error.message).toContain(address);
+  });
+  test("behavior: maps a structural package error from another copy", () => {
     const value = {
       name: "SimulationRevertedError",
       code: "SIMULATION_REVERTED",
       message: "reverted",
-      findings: [] as unknown[],
+      severity: "warn",
     };
-    value.findings.push(value);
     expect(toSimulationErrorResponse(value)).toEqual({
-      code: "UNEXPECTED_SIMULATION_ERROR",
-      message: "Simulation failed unexpectedly.",
+      code: "SIMULATION_REVERTED",
+      message: "reverted",
     });
   });
 
@@ -145,16 +161,30 @@ describe("toSimulationErrorResponse", () => {
   test.each([-1, 0.5, NaN, Infinity, "0", null, Number.MAX_SAFE_INTEGER + 1])(
     "behavior: omits invalid indexes on cross-bundle errors",
     (transactionIndex) => {
-      expect(
-        toSimulationErrorResponse({
-          name: "SimulationRevertedError",
-          code: "SIMULATION_REVERTED",
-          message: "reverted",
-          transactionIndex,
-        }),
-      ).not.toHaveProperty("transactionIndex");
+      const response = toSimulationErrorResponse({
+        name: "SimulationRevertedError",
+        code: "SIMULATION_REVERTED",
+        message: "reverted",
+        severity: "warn",
+        transactionIndex,
+      });
+      expect(response.code).toBe("SIMULATION_REVERTED");
+      expect(response).not.toHaveProperty("transactionIndex");
     },
   );
+
+  test("behavior: maps a structural error without a severity to the generic response", () => {
+    expect(
+      toSimulationErrorResponse({
+        name: "SimulationRevertedError",
+        code: "SIMULATION_REVERTED",
+        message: "reverted",
+      }),
+    ).toEqual({
+      code: "UNEXPECTED_SIMULATION_ERROR",
+      message: "Simulation failed unexpectedly.",
+    });
+  });
 
   test.each(["0xdeadbeef", 123, "private data"])(
     "behavior: validates revert data on errors from another bundle",
@@ -163,6 +193,7 @@ describe("toSimulationErrorResponse", () => {
         name: "SimulationRevertedError",
         code: "SIMULATION_REVERTED",
         message: "Reverted",
+        severity: "warn",
         revertData,
         cause: "private diagnostic",
       });

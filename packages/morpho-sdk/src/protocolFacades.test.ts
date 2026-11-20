@@ -101,6 +101,7 @@ import {
   MalformedTokenMetadataError,
   MidnightRateRatifierV1BoundOverflowError,
   MidnightRatifierV1TakerNotAllowedError,
+  MissingLocalePartError,
   MissingPermitDomainNameError,
   NegativeValueError,
   NonTupleReturnValueError,
@@ -206,6 +207,7 @@ import {
   validateClientChainId,
 } from "@morpho-org/morpho-sdk/utils";
 import {
+  MissingLocalePartError as RawMissingLocalePartError,
   NegativeValueError as RawNegativeValueError,
   RetriesExhaustedError as RawRetriesExhaustedError,
   RetryStoppedError as RawRetryStoppedError,
@@ -238,6 +240,7 @@ describe("protocol facades", () => {
     [DivisionByZeroError, RawBlueDivisionByZeroError],
     [InvalidAddressError, RawBlueInvalidAddressError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
+    [MissingLocalePartError, RawMissingLocalePartError],
     [InvalidNumberError, RawBlueInvalidNumberError],
     [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],
     [

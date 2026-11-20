@@ -1,6 +1,6 @@
 import { DivisionByZeroError } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { ORACLE_PRICE_SCALE, SECONDS_PER_YEAR } from "../constants.js";
 import { MathLib } from "../math/MathLib.js";
 import { SharesMath } from "../math/SharesMath.js";
@@ -533,6 +533,7 @@ describe("MarketUtils position risk helpers", () => {
     );
 
     expect(result).toBe(57n);
+    assert.isDefined(result);
     const shares = MarketUtils.toBorrowShares(result, position, "Up");
     expect(
       MarketUtils.isHealthy(

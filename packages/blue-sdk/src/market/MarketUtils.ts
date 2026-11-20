@@ -103,7 +103,9 @@ export namespace MarketUtils {
     totalBorrowAssets = BigInt(totalBorrowAssets);
 
     if (totalSupplyAssets === 0n) {
-      if (totalBorrowAssets > 0n) return MathLib.MAX_UINT_256;
+      if (totalBorrowAssets > 0n) {
+        return MathLib.MAX_UINT_256;
+      }
 
       return 0n;
     }
@@ -217,7 +219,9 @@ export namespace MarketUtils {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     utilization = BigInt(utilization);
     if (utilization === 0n) {
-      if (getUtilization(market) === 0n) return 0n;
+      if (getUtilization(market) === 0n) {
+        return 0n;
+      }
 
       return MathLib.MAX_UINT_256;
     }
@@ -259,7 +263,9 @@ export namespace MarketUtils {
     totalSupplyAssets = BigInt(totalSupplyAssets);
     totalBorrowAssets = BigInt(totalBorrowAssets);
     if (utilization === 0n) {
-      if (totalBorrowAssets === 0n) return totalSupplyAssets;
+      if (totalBorrowAssets === 0n) {
+        return totalSupplyAssets;
+      }
 
       return 0n;
     }
@@ -374,7 +380,9 @@ export namespace MarketUtils {
     collateral: BigIntish,
     { price }: { price?: BigIntish },
   ) {
-    if (price == null) return;
+    if (price == null) {
+      return;
+    }
 
     return MathLib.mulDivDown(collateral, price, ORACLE_PRICE_SCALE);
   }
@@ -407,7 +415,9 @@ export namespace MarketUtils {
     { lltv }: { lltv: BigIntish },
   ) {
     const collateralValue = getCollateralValue(collateral, market);
-    if (collateralValue == null) return;
+    if (collateralValue == null) {
+      return;
+    }
 
     return MathLib.wMulDown(collateralValue, lltv);
   }
@@ -453,7 +463,9 @@ export namespace MarketUtils {
       market,
       marketParams,
     );
-    if (maxBorrowAssets == null) return;
+    if (maxBorrowAssets == null) {
+      return;
+    }
 
     const totalBorrowAssets = BigInt(market.totalBorrowAssets);
     const totalBorrowShares = BigInt(market.totalBorrowShares);
@@ -475,14 +487,19 @@ export namespace MarketUtils {
         ) <= maxBorrowAssets
       );
     };
-    if (!isHealthyAfterBorrow(0n)) return 0n;
+    if (!isHealthyAfterBorrow(0n)) {
+      return 0n;
+    }
 
     let low = 0n;
     let high = upperBound + 1n;
     while (low + 1n < high) {
       const middle = (low + high) / 2n;
-      if (isHealthyAfterBorrow(middle)) low = middle;
-      else high = middle;
+      if (isHealthyAfterBorrow(middle)) {
+        low = middle;
+      } else {
+        high = middle;
+      }
     }
 
     return low;
@@ -520,10 +537,14 @@ export namespace MarketUtils {
     },
     config: { lltv: BigIntish },
   ) {
-    if (market.price == null) return;
+    if (market.price == null) {
+      return;
+    }
 
     const price = BigInt(market.price);
-    if (price === 0n) return 0n;
+    if (price === 0n) {
+      return 0n;
+    }
 
     return MathLib.mulDivDown(
       MathLib.wMulDown(
@@ -567,7 +588,9 @@ export namespace MarketUtils {
     },
     config: { lltv: BigIntish },
   ) {
-    if (market.price == null) return;
+    if (market.price == null) {
+      return;
+    }
 
     return toBorrowShares(
       MathLib.wDivUp(
@@ -612,15 +635,24 @@ export namespace MarketUtils {
     },
     config: { lltv: BigIntish },
   ) {
-    if (market.price == null) return; // Must be checked before calling `isHealthy`.
+    if (market.price == null) {
+      return; // Must be checked before calling `isHealthy`.
+    }
 
     const price = BigInt(market.price);
-    if (price === 0n || isHealthy(position, market, config)) return 0n;
+    if (price === 0n || isHealthy(position, market, config)) {
+      return 0n;
+    }
 
-    return MathLib.min(
-      position.collateral,
-      getLiquidationSeizedAssets(position.borrowShares, market, config)!,
+    const seizedAssets = getLiquidationSeizedAssets(
+      position.borrowShares,
+      market,
+      config,
     );
+    if (seizedAssets == null) {
+      return;
+    }
+    return MathLib.min(position.collateral, seizedAssets);
   }
 
   /**
@@ -659,10 +691,14 @@ export namespace MarketUtils {
     },
     { lltv }: { lltv: BigIntish },
   ) {
-    if (market.price == null) return;
+    if (market.price == null) {
+      return;
+    }
 
     const price = BigInt(market.price);
-    if (price === 0n) return 0n;
+    if (price === 0n) {
+      return 0n;
+    }
 
     return MathLib.zeroFloorSub(
       collateral,
@@ -711,7 +747,9 @@ export namespace MarketUtils {
       market,
       marketParams,
     );
-    if (maxBorrowAssets == null) return;
+    if (maxBorrowAssets == null) {
+      return;
+    }
 
     return maxBorrowAssets >= toBorrowAssets(borrowShares, market);
   }
@@ -753,11 +791,15 @@ export namespace MarketUtils {
   ) {
     borrowShares = BigInt(borrowShares);
     const totalBorrowShares = BigInt(market.totalBorrowShares);
-    if (borrowShares === 0n || totalBorrowShares === 0n) return null;
+    if (borrowShares === 0n || totalBorrowShares === 0n) {
+      return null;
+    }
 
     const collateralAmount = BigInt(collateral);
     const lltv = BigInt(marketParams.lltv);
-    if (collateralAmount === 0n || lltv === 0n) return MathLib.MAX_UINT_256;
+    if (collateralAmount === 0n || lltv === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     const borrowAssets = toBorrowAssets(borrowShares, market);
     const minCollateralValue = MathLib.wDivUp(borrowAssets, lltv);
@@ -801,17 +843,23 @@ export namespace MarketUtils {
     },
     marketParams: { lltv: BigIntish },
   ) {
-    if (market.price == null) return;
+    if (market.price == null) {
+      return;
+    }
 
     const price = BigInt(market.price);
-    if (price === 0n) return null;
+    if (price === 0n) {
+      return null;
+    }
 
     const liquidationPrice = getLiquidationPrice(
       position,
       market,
       marketParams,
     );
-    if (liquidationPrice == null) return null;
+    if (liquidationPrice == null) {
+      return null;
+    }
 
     return MathLib.wDivUp(liquidationPrice, price) - MathLib.WAD;
   }
@@ -854,14 +902,18 @@ export namespace MarketUtils {
     marketParams: { lltv: BigIntish },
   ) {
     const borrowAssets = toBorrowAssets(borrowShares, market);
-    if (borrowAssets === 0n) return MathLib.MAX_UINT_256;
+    if (borrowAssets === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     const maxBorrowAssets = getMaxBorrowAssets(
       collateral,
       market,
       marketParams,
     );
-    if (maxBorrowAssets == null) return;
+    if (maxBorrowAssets == null) {
+      return;
+    }
 
     return MathLib.wDivDown(maxBorrowAssets, borrowAssets);
   }
@@ -901,11 +953,17 @@ export namespace MarketUtils {
   ) {
     borrowShares = BigInt(borrowShares);
     const totalBorrowShares = BigInt(market.totalBorrowShares);
-    if (borrowShares === 0n || totalBorrowShares === 0n) return null;
+    if (borrowShares === 0n || totalBorrowShares === 0n) {
+      return null;
+    }
 
     const collateralValue = getCollateralValue(collateral, market);
-    if (collateralValue == null) return;
-    if (collateralValue === 0n) return MathLib.MAX_UINT_256;
+    if (collateralValue == null) {
+      return;
+    }
+    if (collateralValue === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     return MathLib.wDivUp(
       toBorrowAssets(borrowShares, market),
@@ -944,8 +1002,12 @@ export namespace MarketUtils {
     marketParams: { lltv: BigIntish },
   ) {
     const hf = getHealthFactor(position, market, marketParams);
-    if (hf === undefined) return;
-    if (hf === 0n) return MathLib.MAX_UINT_256;
+    if (hf === undefined) {
+      return;
+    }
+    if (hf === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     return MathLib.wDivUp(MathLib.WAD, hf);
   }

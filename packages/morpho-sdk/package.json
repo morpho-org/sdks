@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "9.8.0",
+  "version": "10.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -91,11 +91,12 @@
     "MIGRATION-v6-to-v7.md",
     "MIGRATION-v7-to-v8.md",
     "MIGRATION-v8-to-v9.md",
+    "MIGRATION-v9-to-v10.md",
     "DEAD-SHARE-PROTECTION.md"
   ],
   "scripts": {
-    "prepublish": "pnpm build",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "prepublish": "bun run build",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "test": "vitest --root ../.. --project morpho-sdk --project morpho-sdk-fork"

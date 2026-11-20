@@ -119,9 +119,12 @@ at the SDK level. The differences are at the protocol layer:
 - **Taker routing**: Fixed-rate takes, including `takeRepayWithdrawCollateral`, call the
   `MidnightBundlesV2` buy/sell entrypoints with an assets or units target;
   `repayWithdrawCollateral` encodes a reduce-only V2 buy with no offer fills; collateral supply and
-  credit redemption call Midnight directly. Batch `cancelOffers` encodes one
-  `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared
-  `midnightCancelAndMake` builder.
+  credit redemption call Midnight directly.
+- **Cancel routing**: `cancelOffers` calls Midnight directly through the `midnightCancelOffers`
+  builder on every chain with a Midnight deployment, never `MidnightBundlesV2`. One group encodes a
+  bare `setConsumed(group, maxUint128, account)`; two or more encode one Midnight `multicall` of
+  those calls. It needs no authorization, approval or deadline, and only the single-group call is
+  matchable by a wallet policy that allows `setConsumed` by method name.
 - **Maker routing**: `makeLend`, `makeBorrow`, and
   `supplyCollateralMakeBorrow` validate a PriceRatifierV1 or RateRatifierV1 offer tree, then encode
   one `midnightBundlesV2CancelAndMake` call that cancels replaced groups, activates the root and

@@ -11,7 +11,11 @@ import {
   Tree,
 } from "@morpho-org/morpho-sdk/midnight/entities";
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -30,14 +34,17 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -97,9 +104,8 @@ const twoCollateralMarket = new MarketParams({
   enterGate: zeroAddress,
   liquidatorGate: zeroAddress,
 });
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 const validation = {
   apiUrl: "https://api.example/base/",
   fetch: async () =>
@@ -294,8 +300,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
       }),
     ).resolves.toBe(0n);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -333,8 +338,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     const tx = output.buildTx();
 
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [
           {
             from: user,
@@ -371,8 +375,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     const tx = output.buildTx();
 
     for (const extra of [0n, parseEther("0.1")]) {
-      await simulate(configFor(client), {
-        chainId: base.id,
+      await simulateOrThrow(configFor(client), {
         transactions: [
           {
             from: user,
@@ -404,8 +407,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     const tx = output.buildTx();
     expect(tx.value).toBe(assetsPerSupply);
 
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -447,8 +449,7 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     });
     await fulfilRequirements(client, output);
     const tx = output.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [{ from: user, to: tx.to, data: tx.data, value: tx.value }],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -503,15 +504,13 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
       { from: user, to: tx.to, data: tx.data, value: tx.value },
     ];
 
-    const successful = await simulate(configFor(client), {
-      chainId: base.id,
+    const successful = await simulateOrThrow(configFor(client), {
       transactions,
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
     expect(successful.calls[0]?.status).toBe(true);
 
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions,
       limits: toSimulationLimits(intended.buildTx().action, { owner: user }),
     }).catch((caught: unknown) => caught);
@@ -553,15 +552,13 @@ describe.sequential("supplyCollateralMakeBorrow limits — Base fork", () => {
     const transactions = [
       { from: user, to: tx.to, data: tx.data, value: tx.value },
     ];
-    const successful = await simulate(configFor(client), {
-      chainId: base.id,
+    const successful = await simulateOrThrow(configFor(client), {
       transactions,
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
     expect(successful.calls[0]?.status).toBe(true);
 
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions,
       limits: toSimulationLimits(intended.buildTx().action, { owner: user }),
     }).catch((caught: unknown) => caught);

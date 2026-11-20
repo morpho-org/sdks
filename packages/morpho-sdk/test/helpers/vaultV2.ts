@@ -280,7 +280,8 @@ export const setUpSingleAdapterVaultV2 = async (
       });
     }
     // Leave the account holding only what the exit pays out.
-    await client.deal({ erc20: params.asset, amount: 0n });
+    if ((await client.balanceOf({ erc20: params.asset })) !== 0n)
+      await client.deal({ erc20: params.asset, amount: 0n });
   };
 
   return { vault, adapter, depositAndAllocate };

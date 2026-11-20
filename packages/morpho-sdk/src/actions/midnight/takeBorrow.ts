@@ -110,7 +110,7 @@ export interface MidnightTakeBorrowParams extends MidnightReferralFeeParams {
  *   target: { type: "assets", assets: 1_000_000n, maxUnits: 1_100_000n },
  *   receiver: borrower,
  *   takeableOffers: quote.data.takeableOffers,
- *   deadline: Time.timestamp() + 600n,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  * ```
  */
@@ -168,11 +168,12 @@ export const midnightTakeBorrow = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined)
+  if (params.referralFeeRecipient !== undefined) {
     validateMidnightAddress(
       "referralFeeRecipient",
       params.referralFeeRecipient,
     );
+  }
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });

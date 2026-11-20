@@ -5,11 +5,11 @@ import {
 import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, type Chain, ethAddress, isAddressEqual } from "viem";
 import { expect } from "vitest";
+import { type SimulationResult, toSimulationLimits } from "../../src/index.js";
 import {
-  type SimulationResult,
-  simulate,
-  toSimulationLimits,
-} from "../../src/index.js";
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 /** A tracked balance delta that differs from simulation, or has no measurement. */
 export interface E2eMidnightMismatch {
@@ -140,15 +140,9 @@ export const sendE2eMidnightSimulated = async (
     value,
   }));
   expect(client.transport.url).toBeDefined();
-  const result = await simulate(
+  const result = await simulateOrThrow(
+    simulationClientFor(client.transport.url, client.chain),
     {
-      timeoutMs: 30_000,
-      chains: new Map([
-        [params.chainId, { simulateV1Url: client.transport.url! }],
-      ]),
-    },
-    {
-      chainId: params.chainId,
       blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
       transactions,
       limits: toSimulationLimits(tx.action, {

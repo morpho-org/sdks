@@ -2,7 +2,11 @@ import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { markets } from "@morpho-org/morpho-test";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -17,16 +21,19 @@ import {
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
-  simulate,
   toSimulationAuthorizations,
   UnexpectedMorphoAuthorizationError,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -47,9 +54,8 @@ const CbbtcUsdcBlue = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, mainnet);
 
 const expectTokenApprovalFailure = async (
   simulation: Promise<unknown>,
@@ -110,8 +116,7 @@ describe.sequential("simulate approval allowlist", () => {
     };
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -178,8 +183,7 @@ describe.sequential("simulate approval allowlist", () => {
     };
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         limits: {
           operations: [
             {
@@ -233,8 +237,7 @@ describe.sequential("simulate approval allowlist", () => {
     });
     const addresses = getChainAddresses(mainnet.id)!;
     const tx = action.buildTx();
-    const error = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const error = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -336,8 +339,7 @@ describe.sequential("simulate approval allowlist", () => {
       requirements,
     });
     const tx = action.buildTx();
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       mode: "preview",
       authorizations,
       limits: {
@@ -416,8 +418,7 @@ describe.sequential("simulate approval allowlist", () => {
     }
     const transaction = deposit.buildTx();
     const addresses = getChainAddresses(mainnet.id)!;
-    const result = await simulate(configFor(client), {
-      chainId: mainnet.id,
+    const result = await simulateOrThrow(configFor(client), {
       limits: {
         operations: [
           {
@@ -467,8 +468,7 @@ describe.sequential("simulate approval allowlist", () => {
     });
     const transaction = deposit.buildTx();
     await expectTokenApprovalFailure(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
+      simulateOrThrow(configFor(client), {
         mode: "preview",
         authorizations: [
           {

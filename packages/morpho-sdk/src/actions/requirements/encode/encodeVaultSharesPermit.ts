@@ -12,11 +12,13 @@ import {
   type Erc2612RequirementSignature,
   ExpiredDeadlineError,
   type PermitRequirementSignature,
+  type ReferenceTimestampParams,
   type Requirement,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeVaultSharesPermit}. */
-export interface EncodeVaultSharesPermitParams {
+export interface EncodeVaultSharesPermitParams
+  extends ReferenceTimestampParams {
   /** Vault share token, including V1 permit-domain metadata when available. */
   readonly vault: Token;
   /** Vault generation, which selects the standard V1 or two-field V2 domain. */
@@ -31,8 +33,6 @@ export interface EncodeVaultSharesPermitParams {
   readonly nonce: bigint;
   /** Shared permit and bundle deadline. */
   readonly deadline: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  readonly now?: bigint;
 }
 
 /**
@@ -49,7 +49,7 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.chainId - Chain on which the vault and spender are deployed.
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.deadline - Shared permit and bundle deadline.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
  *   can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
@@ -98,32 +98,33 @@ export const encodeVaultSharesPermit = (
     deadline,
   } = params;
   const inputDomain = inputVault.eip5267Domain;
+  let eip5267Domain: Eip5267Domain | undefined;
+  if (version === "vaultV2") {
+    eip5267Domain = new Eip5267Domain({
+      // Only the bitmap-selected fields enter Vault V2's domain separator.
+      fields: "0x0c",
+      name: "",
+      version: "",
+      chainId: BigInt(chainId),
+      verifyingContract: inputVault.address,
+      salt: zeroHash,
+      extensions: [],
+    });
+  } else if (inputDomain != null) {
+    eip5267Domain = new Eip5267Domain({
+      fields: inputDomain.fields,
+      name: inputDomain.name,
+      version: inputDomain.version,
+      chainId: inputDomain.chainId,
+      verifyingContract: inputDomain.verifyingContract,
+      salt: inputDomain.salt,
+      extensions: [...inputDomain.extensions],
+    });
+  }
   const vault = new Token({
     address: inputVault.address,
     name: inputVault.name,
-    eip5267Domain:
-      version === "vaultV2"
-        ? new Eip5267Domain({
-            // Only the bitmap-selected fields enter Vault V2's domain separator.
-            fields: "0x0c",
-            name: "",
-            version: "",
-            chainId: BigInt(chainId),
-            verifyingContract: inputVault.address,
-            salt: zeroHash,
-            extensions: [],
-          })
-        : inputDomain == null
-          ? undefined
-          : new Eip5267Domain({
-              fields: inputDomain.fields,
-              name: inputDomain.name,
-              version: inputDomain.version,
-              chainId: inputDomain.chainId,
-              verifyingContract: inputDomain.verifyingContract,
-              salt: inputDomain.salt,
-              extensions: [...inputDomain.extensions],
-            }),
+    eip5267Domain,
   });
 
   // Bind the permit to one of the registered fixed vault bundles deployments.

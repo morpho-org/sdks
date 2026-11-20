@@ -2742,6 +2742,17 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     ).toStrictEqual([]);
   });
 
+  test("behavior: rejects target market with no supply share headroom", () => {
+    const { data } = makeFixture({
+      targetSupply: MathLib.MAX_UINT_128 / 2n,
+      targetTotalSupplyShares: MathLib.MAX_UINT_128,
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
+  });
+
   test("behavior: caps target market supply shares at uint128", () => {
     const { data } = makeFixture({
       targetSupply: MathLib.MAX_UINT_128 / 2n,

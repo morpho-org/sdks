@@ -1,5 +1,6 @@
 export * from "./authorization.js";
 export * from "./cancelAndMake.js";
+export * from "./cancelOffers.js";
 export * from "./redeem.js";
 export * from "./repayWithdrawCollateral.js";
 export * from "./supplyCollateral.js";

@@ -8,21 +8,28 @@ import {
   midnightBlueBuyCallbackFactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { type Address, maxUint256, parseUnits, zeroHash } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
   ConsumerLimitViolationError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -78,15 +85,12 @@ test("verifies callback burns and owner proceeds independently on a real Blue wi
     onBehalf: callback,
     expected: { assetsReceived: positionData.supplyAssets },
   });
-  const config = {
-    chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const run = (
     transaction: { to: Address; data: `0x${string}`; value: bigint },
     selectedLimits = limits,
   ) =>
-    simulate(config, {
-      chainId: mainnet.id,
+    simulateOrThrow(config, {
       mode: "final",
       transactions: [
         {

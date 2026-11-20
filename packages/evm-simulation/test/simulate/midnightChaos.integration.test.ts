@@ -17,7 +17,11 @@ import {
   SetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import {
   createFaultProxy,
   expectFailClosed,
@@ -40,14 +44,17 @@ import {
   RpcTransportError,
   type SimulateParams,
   SlippageCheckUnavailableError,
-  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -81,10 +88,7 @@ const market = new MarketParams({
   enterGate: zeroAddress,
   liquidatorGate: zeroAddress,
 });
-const configFor = (url: string) => ({
-  chains: new Map([[base.id, { simulateV1Url: url }]]),
-  timeoutMs: 30_000,
-});
+const configFor = (url: string) => simulationClientFor(url, base);
 
 async function buildMidnight(
   client: AnvilTestClient<typeof base>,
@@ -224,7 +228,6 @@ async function buildMidnight(
     tx = output.buildTx();
   }
   const params = {
-    chainId: base.id,
     transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
     limits: toSimulationLimits(tx.action, { owner }),
   } satisfies SimulateParams;
@@ -256,7 +259,7 @@ for (const kind of ["takeLend", "supplyCollateralMakeBorrow"] as const) {
     }, async ({ client }) => {
       const { params } = await buildMidnight(client, kind);
       await withProxy({ client, faults: [] }, async (proxy) => {
-        const result = await simulate(configFor(proxy.url), params);
+        const result = await simulateOrThrow(configFor(proxy.url), params);
         expect(result.simulationTxs).toHaveLength(1);
         expect(result.verification.operations[0]?.operation).toBe(
           kind === "takeLend"
@@ -282,7 +285,7 @@ for (const kind of ["takeLend", "supplyCollateralMakeBorrow"] as const) {
         },
         async (proxy) => {
           const error = await expectFailClosed(
-            simulate(configFor(proxy.url), params),
+            simulateOrThrow(configFor(proxy.url), params),
             "infra",
           );
           expect(error).toBeInstanceOf(RpcTransportError);
@@ -331,7 +334,7 @@ for (const kind of ["takeLend", "supplyCollateralMakeBorrow"] as const) {
           { client, faults: [{ method: "eth_simulateV1", fault: rule }] },
           async (proxy) => {
             const error = await expectFailClosed(
-              simulate(configFor(proxy.url), params),
+              simulateOrThrow(configFor(proxy.url), params),
               category,
             );
             expect(error).toBeInstanceOf(errorClass);
@@ -363,7 +366,7 @@ for (const kind of ["takeLend", "supplyCollateralMakeBorrow"] as const) {
         });
         await withProxy({ client, faults: [] }, async (proxy) => {
           const error = await expectFailClosed(
-            simulate(configFor(proxy.url), {
+            simulateOrThrow(configFor(proxy.url), {
               ...params,
               limits: {
                 ...params.limits,

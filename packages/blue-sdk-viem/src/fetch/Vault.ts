@@ -14,7 +14,7 @@ import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, metaMorphoFactoryAbi } from "../abis.js";
 import { abi, code } from "../queries/GetVault.js";
-import type { DeploylessFetchParameters } from "../types.js";
+import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { catchRevertOnly, isTransportError } from "../utils.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
@@ -77,61 +77,15 @@ export async function fetchVault(
 
   if (deployless) {
     try {
-      // The RPC is trusted: queue, allocation and accounting data are not cross-checked. See THREAT_MODEL.md, RPC.
-      const {
-        config,
-        owner,
-        curator,
-        guardian,
-        timelock,
-        pendingTimelock,
-        pendingGuardian,
-        pendingOwner,
-        fee,
-        feeRecipient,
-        skimRecipient,
-        totalSupply,
-        totalAssets,
-        lastTotalAssets,
-        hasLostAssets,
-        lostAssets,
-        supplyQueue,
-        withdrawQueue,
-        deadShares,
-      } = await readContract(client, {
-        ...parameters,
-        abi,
-        code,
-        functionName: "query",
-        args: [address, metaMorphoFactory],
-      });
-
-      return new Vault({
-        ...new VaultConfig({
-          ...config,
-          eip5267Domain: new Eip5267Domain(config.eip5267Domain),
-          address,
-        }),
-        owner,
-        curator,
-        guardian,
-        feeRecipient,
-        skimRecipient,
-        timelock,
-        fee,
-        pendingOwner,
-        pendingGuardian,
-        pendingTimelock,
-        supplyQueue: supplyQueue as MarketId[],
-        withdrawQueue: withdrawQueue as MarketId[],
-        totalSupply,
-        totalAssets,
-        lastTotalAssets,
-        lostAssets: hasLostAssets ? lostAssets : undefined,
-        deadShares,
+      return await fetchVaultWithQuery(client, {
+        address,
+        metaMorphoFactory,
+        parameters,
       });
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -156,7 +110,164 @@ export async function fetchVault(
     withdrawQueueSize,
     isMetaMorphoV1_1,
     deadShares,
-  ] = await Promise.all([
+  ] = await fetchVaultState(client, {
+    address,
+    metaMorphoFactory,
+    deployless,
+    parameters,
+  });
+
+  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+  const isMetaMorphoV1_0Promise =
+    !isMetaMorphoV1_1 && (chainId === 1 || chainId === 8453)
+      ? readContract(client, {
+          ...parameters,
+          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+          abi: metaMorphoFactoryAbi,
+          functionName: "isMetaMorpho",
+          args: [address],
+        })
+      : Promise.resolve(false);
+
+  const [supplyQueue, withdrawQueue, isMetaMorphoV1_0] = await Promise.all([
+    Promise.all(
+      Array.from(
+        { length: Number(supplyQueueSize) },
+        (_, i) =>
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: metaMorphoAbi,
+            functionName: "supplyQueue",
+            args: [BigInt(i)],
+          }) as Promise<MarketId>,
+      ),
+    ),
+    Promise.all(
+      Array.from(
+        { length: Number(withdrawQueueSize) },
+        (_, i) =>
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: metaMorphoAbi,
+            functionName: "withdrawQueue",
+            args: [BigInt(i)],
+          }) as Promise<MarketId>,
+      ),
+    ),
+    isMetaMorphoV1_0Promise,
+  ]);
+
+  const isMetaMorpho = isMetaMorphoV1_1 || isMetaMorphoV1_0;
+  if (!isMetaMorpho) {
+    throw new UnknownOfFactory(metaMorphoFactory, address);
+  }
+
+  return new Vault({
+    ...config,
+    owner,
+    curator,
+    guardian,
+    feeRecipient,
+    skimRecipient,
+    timelock,
+    fee,
+    pendingOwner,
+    pendingGuardian,
+    pendingTimelock,
+    supplyQueue,
+    withdrawQueue,
+    totalSupply,
+    totalAssets,
+    lastTotalAssets,
+    lostAssets,
+    deadShares,
+  });
+}
+
+async function fetchVaultWithQuery(
+  client: Client,
+  {
+    address,
+    metaMorphoFactory,
+    parameters,
+  }: {
+    readonly address: Address;
+    readonly metaMorphoFactory: Address;
+    readonly parameters: FetchParameters;
+  },
+) {
+  // The RPC is trusted: queue, allocation and accounting data are not cross-checked. See THREAT_MODEL.md, RPC.
+  const {
+    config,
+    owner,
+    curator,
+    guardian,
+    timelock,
+    pendingTimelock,
+    pendingGuardian,
+    pendingOwner,
+    fee,
+    feeRecipient,
+    skimRecipient,
+    totalSupply,
+    totalAssets,
+    lastTotalAssets,
+    hasLostAssets,
+    lostAssets,
+    supplyQueue,
+    withdrawQueue,
+    deadShares,
+  } = await readContract(client, {
+    ...parameters,
+    abi,
+    code,
+    functionName: "query",
+    args: [address, metaMorphoFactory],
+  });
+
+  return new Vault({
+    ...new VaultConfig({
+      ...config,
+      eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+      address,
+    }),
+    owner,
+    curator,
+    guardian,
+    feeRecipient,
+    skimRecipient,
+    timelock,
+    fee,
+    pendingOwner,
+    pendingGuardian,
+    pendingTimelock,
+    supplyQueue: supplyQueue as MarketId[],
+    withdrawQueue: withdrawQueue as MarketId[],
+    totalSupply,
+    totalAssets,
+    lastTotalAssets,
+    lostAssets: hasLostAssets ? lostAssets : undefined,
+    deadShares,
+  });
+}
+
+function fetchVaultState(
+  client: Client,
+  {
+    address,
+    metaMorphoFactory,
+    deployless,
+    parameters,
+  }: {
+    readonly address: Address;
+    readonly metaMorphoFactory: Address;
+    readonly deployless: NonNullable<DeploylessFetchParameters["deployless"]>;
+    readonly parameters: FetchParameters;
+  },
+) {
+  return Promise.all([
     fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
       ...parameters,
@@ -269,74 +380,6 @@ export async function fetchVault(
       args: [DEAD_ADDRESS],
     }),
   ]);
-
-  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
-  const isMetaMorphoV1_0Promise =
-    !isMetaMorphoV1_1 && (chainId === 1 || chainId === 8453)
-      ? readContract(client, {
-          ...parameters,
-          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
-          abi: metaMorphoFactoryAbi,
-          functionName: "isMetaMorpho",
-          args: [address],
-        })
-      : Promise.resolve(false);
-
-  const [supplyQueue, withdrawQueue, isMetaMorphoV1_0] = await Promise.all([
-    Promise.all(
-      Array.from(
-        { length: Number(supplyQueueSize) },
-        (_, i) =>
-          readContract(client, {
-            ...parameters,
-            address,
-            abi: metaMorphoAbi,
-            functionName: "supplyQueue",
-            args: [BigInt(i)],
-          }) as Promise<MarketId>,
-      ),
-    ),
-    Promise.all(
-      Array.from(
-        { length: Number(withdrawQueueSize) },
-        (_, i) =>
-          readContract(client, {
-            ...parameters,
-            address,
-            abi: metaMorphoAbi,
-            functionName: "withdrawQueue",
-            args: [BigInt(i)],
-          }) as Promise<MarketId>,
-      ),
-    ),
-    isMetaMorphoV1_0Promise,
-  ]);
-
-  const isMetaMorpho = isMetaMorphoV1_1 || isMetaMorphoV1_0;
-  if (!isMetaMorpho) {
-    throw new UnknownOfFactory(metaMorphoFactory, address);
-  }
-
-  return new Vault({
-    ...config,
-    owner,
-    curator,
-    guardian,
-    feeRecipient,
-    skimRecipient,
-    timelock,
-    fee,
-    pendingOwner,
-    pendingGuardian,
-    pendingTimelock,
-    supplyQueue,
-    withdrawQueue,
-    totalSupply,
-    totalAssets,
-    lastTotalAssets,
-    lostAssets,
-    deadShares,
-  });
 }
 
 /**

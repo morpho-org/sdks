@@ -32,11 +32,13 @@ const state = {
 };
 
 const parse = (operation: InputOperationLimit, data: Hex = "0x12345678") => {
-  const request = parseRequest({
-    chainId: 1,
-    transactions: [{ from: owner, to: vault, data }],
-    limits: { operations: [operation] },
-  });
+  const request = parseRequest(
+    {
+      transactions: [{ from: owner, to: vault, data }],
+      limits: { operations: [operation] },
+    },
+    1,
+  );
   if (request.limits === "none") throw new TypeError("Missing limits");
   return request.limits.operations[0]!;
 };
@@ -508,21 +510,23 @@ describe("input-derived quotes", () => {
     },
   );
   test("missing derived sides identify the operation index", () => {
-    const request = parseRequest({
-      chainId: 1,
-      transactions: [{ from: owner, to: vault, data: "0x12345678" }],
-      limits: {
-        operations: [
-          { type: "vaultV2Deposit", vault, inputs: { assets: 100n } },
-          {
-            type: "blueSupplyCollateralBorrow",
-            marketId,
-            inputs: { collateralAssets: 100n },
-            quote: { sharesMinted: 100n },
-          },
-        ],
+    const request = parseRequest(
+      {
+        transactions: [{ from: owner, to: vault, data: "0x12345678" }],
+        limits: {
+          operations: [
+            { type: "vaultV2Deposit", vault, inputs: { assets: 100n } },
+            {
+              type: "blueSupplyCollateralBorrow",
+              marketId,
+              inputs: { collateralAssets: 100n },
+              quote: { sharesMinted: 100n },
+            },
+          ],
+        },
       },
-    });
+      1,
+    );
     if (request.limits === "none") throw new TypeError("Missing limits");
     const limit = request.limits.operations[1]!;
     expect(() =>
@@ -1053,20 +1057,22 @@ describe("input-derived quotes", () => {
     "rejects malformed input declarations through parseRequest %#",
     (overrides) => {
       expect(() =>
-        parseRequest({
-          chainId: 1,
-          transactions: [{ from: owner, to: vault, data: "0x12345678" }],
-          limits: {
-            operations: [
-              {
-                type: "blueBorrow",
-                marketId,
-                inputs: { assets: 100n },
-                ...overrides,
-              } as InputOperationLimit,
-            ],
+        parseRequest(
+          {
+            transactions: [{ from: owner, to: vault, data: "0x12345678" }],
+            limits: {
+              operations: [
+                {
+                  type: "blueBorrow",
+                  marketId,
+                  inputs: { assets: 100n },
+                  ...overrides,
+                } as InputOperationLimit,
+              ],
+            },
           },
-        }),
+          1,
+        ),
       ).toThrow(SimulationValidationError);
     },
   );

@@ -83,9 +83,15 @@ export function previewVaultV2InKindRedeem(
         .toSupplyAssets(adapter.supplyShares[market.id] ?? 0n),
     }))
     .filter(({ allocationAssets }) => allocationAssets > 0n)
-    .toSorted(({ allocationAssets: a }, { allocationAssets: b }) =>
-      a === b ? 0 : a > b ? -1 : 1,
-    );
+    .toSorted(({ allocationAssets: a }, { allocationAssets: b }) => {
+      if (a === b) {
+        return 0;
+      }
+      if (a > b) {
+        return -1;
+      }
+      return 1;
+    });
 
   return allocations.flatMap(({ market, allocationAssets }) => {
     const maxExitAssets =
@@ -97,7 +103,9 @@ export function previewVaultV2InKindRedeem(
     const inKindExitAssets = exitAssets - idleAssets;
     const netAssets = MathLib.wDivDown(inKindExitAssets, MathLib.WAD + penalty);
 
-    if (idleAssets === 0n && netAssets === 0n) return [];
+    if (idleAssets === 0n && netAssets === 0n) {
+      return [];
+    }
 
     return [
       {

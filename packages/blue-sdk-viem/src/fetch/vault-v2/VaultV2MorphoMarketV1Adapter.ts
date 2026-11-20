@@ -89,8 +89,12 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
         address,
       });
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
-      if (isUnknownOfFactoryError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
+      if (isUnknownOfFactoryError(error)) {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }

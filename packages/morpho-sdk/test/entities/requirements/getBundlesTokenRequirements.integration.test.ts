@@ -1,7 +1,7 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, maxUint256, parseSignature } from "viem";
 import { mainnet } from "viem/chains";
@@ -14,7 +14,7 @@ import {
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
   stepsTracing: false,
 });
 const { usdc, dai } = addressesRegistry[mainnet.id];

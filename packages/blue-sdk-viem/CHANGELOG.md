@@ -1,5 +1,14 @@
 # @morpho-org/blue-sdk-viem
 
+## 7.5.1
+
+### Patch Changes
+
+- Enforce source lint rules and split long fetchers into smaller helpers without changing their public types or behavior.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0
+  - @morpho-org/blue-sdk@8.4.0
+
 ## 7.5.0
 
 ### Minor Changes

@@ -19,6 +19,11 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `midnightSupplyCollateralBatch` and `midnightWithdrawCollateralBatch` take one entry per
   collateral index and reject duplicates (`DuplicateMidnightCollateralIndexError`), unlike the
   bundle flows, which sum them. They always encode a Midnight core `multicall`, even for one entry.
+  `midnightCancelOffers` (behind `cancelOffers`) is also a direct Midnight call and never targets
+  MidnightBundlesV2: one group encodes a bare `setConsumed(group, maxUint128, onBehalf)` and must
+  not be wrapped, because only the bare call is matchable by a wallet method-name policy; two or
+  more groups encode one Midnight core `multicall` of those calls. Decision record:
+  [`ADR-2026-11-17-midnight-direct-offer-cancellation`](../../../../docs/adrs/ADR-2026-11-17-midnight-direct-offer-cancellation.md).
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, ERC-2612 permit signature requests, Morpho authorization, and Midnight authorization.
 
 ## Common builder pattern
@@ -30,8 +35,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
    direct Morpho Blue `withdraw` for a BlueBuyCallback's owner. **Midnight bundle paths** encode one
    `MidnightBundlesV2` entrypoint call directly (see
    [MidnightBundlesV2](#midnightbundlesv2-canonical-statement)). Other **direct calls** (Midnight
-   collateral supply / withdrawCollateral / redeem) encode their target contract call directly;
-   the Midnight collateral batches wrap those direct calls in one Midnight core `multicall`. Vault `inKindRedeem` and
+   collateral supply / withdrawCollateral / redeem / single-group offer cancellation) encode their
+   target contract call directly; the Midnight collateral batches and multi-group offer
+   cancellations wrap those direct calls in one Midnight core `multicall`. Vault `inKindRedeem` and
    `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
@@ -50,6 +56,8 @@ position and takes no native funding.
 ## MidnightBundlesV2 (canonical statement)
 
 Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../docs/adrs/ADR-2026-10-02-midnight-bundles-v2-sdk-actions.md).
+Its cancel route is superseded: `cancelOffers` no longer uses MidnightBundlesV2 (see `midnight/`
+above). The cancellation lists below are those of `midnightCancelAndMake` and the maker flows.
 
 - **One action per intent, not per entrypoint.** V2 has one maker entrypoint
   (`midnightBundlesV2CancelAndMake`) and four taker entrypoints; the arguments select the intent
@@ -88,7 +96,7 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   `tx.value` with the chain's registered wNative as `wrappedNative`. It cannot exceed the call's
   total wNative pull, and the wNative approval to `midnightBundlesV2` still covers the full pull.
   An omitted or zero amount encodes `value = 0` and `wrappedNative = zeroAddress`, as do flows that
-  pull nothing, such as `midnightCancelAndMake` / `cancelOffers`.
+  pull nothing, such as a cancel-only `midnightCancelAndMake`.
 
 ## Shared liquidity / reallocations (canonical statement)
 

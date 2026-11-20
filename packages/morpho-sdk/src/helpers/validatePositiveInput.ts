@@ -10,5 +10,7 @@ import { NonPositiveInputError } from "../types/error.js";
  * @internal
  */
 export const validatePositiveInput = (field: string, value: bigint): void => {
-  if (value <= 0n) throw new NonPositiveInputError(field, value);
+  if (value <= 0n) {
+    throw new NonPositiveInputError(field, value);
+  }
 };

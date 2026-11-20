@@ -1,15 +1,17 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { maxUint256, type WalletClient } from "viem";
+import type { WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import { validateUint256Field } from "../../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateUint256Field,
+} from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ExpiredDeadlineError,
-  InputExceedsMaxError,
-  NonPositiveInputError,
   type Permit2SignatureTransferRequirementSignature,
+  type ReferenceTimestampParams,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -17,7 +19,8 @@ import {
  * Parameters for {@link encodeErc20Permit2SignatureTransfer}.
  * @deprecated The SDK no longer requests Permit2 funding; use ERC-2612 permits or ERC-20 approvals.
  */
-export interface EncodeErc20Permit2SignatureTransferParams {
+export interface EncodeErc20Permit2SignatureTransferParams
+  extends ReferenceTimestampParams {
   /** ERC-20 token pulled through Permit2. */
   readonly token: Address;
   /** Registered fixed bundles deployment receiving permission to pull the token. */
@@ -30,8 +33,6 @@ export interface EncodeErc20Permit2SignatureTransferParams {
   readonly nonce: bigint;
   /** Signature expiration timestamp in seconds. */
   readonly deadline: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  readonly now?: bigint;
 }
 
 /**
@@ -48,7 +49,7 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @param params.chainId - Target chain id.
  * @param params.nonce - Unused Permit2 unordered nonce.
  * @param params.deadline - Signature expiration timestamp in seconds.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` returns a deep-frozen signature result.
  * @throws {NegativeInputError} when `amount` or `nonce` is negative.
@@ -76,7 +77,8 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  *   amount: 1_000_000n,
  *   chainId: mainnet.id,
  *   nonce: 0n,
- *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
+ *   now: (await client.getBlock()).timestamp,
+ *   deadline: (await client.getBlock()).timestamp + 3_600n,
  * });
  * // requirement satisfies Requirement<Permit2SignatureTransferRequirementSignature>
  * ```
@@ -92,16 +94,8 @@ export const encodeErc20Permit2SignatureTransfer = (
   // this public encoder must reject the same out-of-range inputs itself.
   validateUint256Field("amount", amount);
   validateUint256Field("nonce", nonce);
-  if (deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", deadline);
-  }
-  if (deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: deadline,
-      max: maxUint256,
-    });
-  }
+  // Reject deadlines outside the positive uint256 range before signing.
+  validateDeadline(deadline);
   // Reject an already-expired deadline before signing so a direct caller is never walked through a
   // wallet EIP-712 prompt for a SignatureTransfer that Permit2 would revert with `SignatureExpired`.
   // The sibling encodeErc20Permit and the token-requirement resolver enforce the same guard.

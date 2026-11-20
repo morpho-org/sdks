@@ -1,5 +1,156 @@
 # @morpho-org/morpho-sdk
 
+## 10.0.0
+
+### Major Changes
+
+- `client.morpho.midnight(chainId).cancelOffers` now cancels offer groups with a direct call to Midnight instead of MidnightBundlesV2, so a wallet policy can approve a cancellation by method name. One group builds a bare `Midnight.setConsumed(group, maxUint128, accountAddress)`; two or more groups build one `Midnight.multicall` of those calls, which cancels every group or none. Only the single-group transaction is matchable by a `setConsumed` method-name policy, so cancel one group per transaction in MPC wallet flows.
+
+  Breaking migration: `cancelOffers` takes `{ accountAddress, groups }`. `cancellations`, `maxConsumed` and `deadline` are removed, and `getRequirements()` always resolves to an empty list: the Midnight authorization of MidnightBundlesV2 is no longer needed to cancel. Cancellation is always full. The transaction's action is `{ type: "midnightCancelOffers", args: { groups, onBehalf } }` and its target is Midnight, on every chain with a Midnight deployment.
+
+  ```ts
+  // Before
+  midnight.cancelOffers({
+    accountAddress: maker,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+
+  // After
+  midnight.cancelOffers({ accountAddress: maker, groups: [group] });
+  ```
+
+  The maker or an operator it authorized on Midnight can send the transaction. A transaction sent from any other account now reverts instead of cancelling the sender's own groups. See `MIGRATION-v9-to-v10.md`.
+
+  Add the pure `midnightCancelOffers` action and the `MidnightCancelOffersParams` and `MidnightCancelOffersAction` types. `midnightCancelAndMake` and the maker flows are unchanged and still cancel replaced groups inside the MidnightBundlesV2 call.
+
+  Maintained dependents are updated for the new `morpho-sdk` major.
+
+### Minor Changes
+
+- Reject withdrawals and repayments that burn more shares than the market holds instead of returning negative share totals.
+
+  Withdrawals above the market's total supply, including through `AccrualPosition.withdraw`, now throw `NegativeValueError` instead of `BlueErrors.InsufficientLiquidity`. Position withdrawals and repayments that burn more than the market's total shares now throw `NegativeValueError` instead of `BlueErrors.InsufficientPosition`.
+
+- Reject supplies and borrows that would push market asset or share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Reduce the operation amount when this error occurs.
+- Deprecate `CryptoUnavailableError`, which is never thrown by the SDK and will be removed in the next major version.
+- Break the Vault V2 TransactionPlan amount fields to make their denomination explicit.
+  SDK 9.7.0 shipped deposit and withdrawal preparation. Their preparers now take `assets`, and
+  callers replace `vault` plus `vaultData` with a single `vault: AccrualVaultV2` snapshot.
+  Withdrawals no longer accept the unused `deployless` option; deposits retain it for token
+  metadata reads. Stored format-2 `inputs.vault` remains an address. Stored deposit inputs use
+  `assets` or `nativeAssets` instead of `amount` or `nativeAmount`, withdrawal inputs use `assets`,
+  underlying-token approval inputs use `assets`, and withdrawal vault-share approval inputs use
+  `shares`.
+
+  Vault V2 redemption preparation, new in this release, takes `shares` and a required `shareToken: Token` as its initial inputs; an
+  address-only `new Token({ address })` is sufficient, without an accrual snapshot. Stored
+  redemption inputs and vault-share approval inputs use `shares`.
+
+  Preparers now emit stored format `version: 2`. Version 1 plans, including plans saved with SDK
+  9.7.0, are rejected with `UnsupportedTransactionPlanVersionError` before interpreting their fields.
+  There is no legacy parser. Update preparation calls and migrate trusted stored plans to the new
+  field names and version before restoring them with this release.
+  ERC-2612 request arguments and typed data, encoded calldata, and stable entity APIs are unchanged.
+  This breaking change ships as a minor release under the TransactionPlan exception in
+  `docs/EXCEPTIONS.md`.
+
+- `getLocaleSymbols` and the locale helpers that call it now throw `MissingLocalePartError` when Intl omits the decimal or group separator, where before they threw a `TypeError`. Re-export `MissingLocalePartError` from `@morpho-org/morpho-sdk/errors`.
+- Add serializable Vault V1 withdrawal plans with unlimited share approvals or optional ERC-2612 permits, self-contained actions, and signature verification through the TransactionPlan API.
+
+  The preparer takes one caller-fetched `vault: AccrualVault` snapshot and gross `assets`, storing
+  the vault address and asset quantity. Share approval inputs use `shares`. It has no `deployless`
+  option because the authorization reads do not use deployless calls. New plans use stored format 2. V1 and V2 withdrawals share
+  preparation and validation, preserving snapshot-based allowance quotes and V1 permit metadata.
+
+- Add `prepareVaultV1Redeem` for serializable exact-share redemption plans with required `shareToken: Token`, direct unlimited share approvals or ERC-2612 permits selected by `supportSignature`, without Permit2. No accrual snapshot is required, and the stored vault remains the token address. Omit the ineffective `deployless` option. Reuse the existing VaultBundlesV1 redemption encoder and preserve the lazy handle API. Expose the missing dependency `kind` on `IncompleteTransactionPlanError`.
+
+  New plans use stored format 2.
+  V1 and V2 redemptions share preparation and validation. They and ordinary withdrawals share
+  concurrent authorization reads, with chain validation before allowance/nonce reads.
+  The shared share-spending helper takes `shareToken: Token`. Stable entity flows are unchanged.
+
+- Add experimental `prepareVaultV1InKindRedeem` plans with fixed market inputs, unlimited direct share approvals or ERC-2612 permits, and offline transaction building through VaultExitBundlesV1. Plans never use Permit2.
+
+  Preparation accepts one caller-fetched `vault: AccrualVault` snapshot and derives its stored
+  address. It accepts no ineffective `deployless` option and introduces no redundant
+  address/snapshot mismatch check.
+
+  New plans use stored format 2. Prepare and stored quantities use `assets`.
+  Stable entity and ABI arguments remain `amount`. The asset-denominated exit has no on-chain
+  share-price or maximum-shares bound.
+
+- Add prepareVaultV2ForceRedeem to create static TransactionPlans using the vault's native force-redeem multicall with caller-supplied deallocations and no approval or signature requirements.
+
+  The preparer takes `vaultAddress`, top-level `shares`, and ordered deallocations whose quantities
+  are named `assets`. It accepts neither `supportSignature` nor `deployless`, since neither affects
+  this flow. Stored format-2 inputs retain `vault` and `redeem.shares` alongside those deallocations.
+  Stable entity and low-level action deallocations still use `amount`.
+
+- Reject interest accrual that would push market asset or supply share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Accrual at or before the market snapshot remains unchanged.
+- Add experimental `prepareVaultV2InKindRedeem` plans for Vault V2 exits into idle assets and Blue supply positions through VaultExitBundlesV1. Plans preserve ordered market routing across serialization, use direct approvals or ERC-2612 share permits without Permit2, and build without RPC.
+
+  Preparation takes one caller-fetched `vault: AccrualVaultV2` snapshot, deriving the stored vault
+  address from it. It accepts no ineffective `deployless` option and introduces no redundant
+  address/snapshot mismatch check.
+
+  New plans use stored format 2. Prepare and stored in-kind quantities use `assets`.
+  Stable entity and ABI arguments retain `amount`. The exit is asset-denominated and has no
+  on-chain share-price or maximum-shares bound.
+
+- Add prepareVaultV1MigrateToV2 for serializable, snapshot-quoted TransactionPlan migrations. Default to unlimited direct source-share approvals, or opt into unlimited ERC-2612 share permits with supportSignature. Migration requests support synchronous signature verification and attachment with applySignatures, and build plain SDK transactions without fetch requests or Permit2.
+
+  New migration plans use stored format 2 with a `maxSharePrice` bound and `vault` equal to `sourceVault`.
+  Migration takes caller-fetched `sourceVault: AccrualVault` and `targetVault: AccrualVaultV2`
+  snapshots once each and uses their addresses in stored inputs. It validates matching assets and
+  distinct vault addresses, then resolves concurrent share-spending requirements after fixing its quote.
+
+- Use `assets` for V1 deposit preparation and stored ERC-20 funding, or `nativeAssets` for stored
+  native funding. New plans use stored format 2. V1 and V2 deposits share preparation and validation.
+  `VaultAddressMismatchError` exposes readonly `expected` (targeted vault) and `actual` (snapshot vault)
+  fields without changing its constructor order or message format.
+
+  Add `prepareVaultV1Deposit(client, params)`, which prepares a Vault V1 (MetaMorpho) deposit through VaultBundlesV1 as a `TransactionPlan`. It takes a caller-fetched `vault: AccrualVault` snapshot once, alongside intent fields including the effective `deployless` metadata-read option. It fixes the asset and the deadline-accrued `maxSharePrice` on a `vaultV1Deposit` step at preparation, stores the vault address, and builds the same calldata as the existing `vaultV1(...).deposit(...)` handle. With `supportSignature: true`, an ERC-2612 token gets an exact-amount permit; any other token gets a direct approval. The plan helpers accept the `vaultV1Deposit` action type.
+
+- Add `prepareVaultV2ForceWithdraw` to prepare serializable forced-exit transaction plans with direct unlimited vault-share approvals or ERC-2612 permits, without Permit2. Preserve VaultExitBundlesV1 routing and snapshot-derived share-price protection.
+
+  The preparer and stored inputs use penalty-inclusive `assets`. Optional `slippageTolerance`
+  derives the stored `minSharePriceE27` bound through shared pure helpers, using the entity's default when omitted.
+  Share approval inputs use `shares`. New plans use stored format 2.
+  Pass the caller-fetched `vault: AccrualVaultV2` snapshot once; the stored vault remains its address.
+  The preparer has no `deployless` option because its requirement reads do not use deployless calls.
+
+- Add `prepareVaultV2Redeem` for serializable exact-share redemption plans with direct share approvals or ERC-2612 permits, without Permit2.
+
+### Patch Changes
+
+- Add Alpen mainnet (chain 29032) metadata and Morpho Blue, Vault V2, adapter factory, allocator, oracle factory, pre-liquidation and standalone bundle deployments with their creation blocks. Pin an Alpen fork block for registry-driven tests. Midnight, a Vault V1 factory, wrapped-native tokens and Permit2 are not registered on Alpen.
+
+  Patch maintained direct runtime dependents of morpho-ts so their latest releases resolve the new registry entry. Raise blue-sdk's morpho-ts peer floor to 4.5.0 so re-exported registry reads also resolve Alpen.
+
+- Refactor internal Midnight publication reads, Vault V2 force-withdraw quoting, and Blue reallocation planning into smaller helpers without changing behavior.
+- Replace negated ternary conditions with positive conditions without changing transactions, error messages, or public types. Enforce the negated-if-else lint rule in morpho-sdk source and warn in other packages' source, excluding tests.
+- Harden the internal vault-share requirement resolver by validating deadline range before reading state, including when the existing allowance is sufficient. Token requirement resolution and Permit2 signature-transfer encoding reuse `validateDeadline`. Public error behavior is unchanged.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0
+  - @morpho-org/blue-sdk@8.4.0
+  - @morpho-org/blue-sdk-viem@7.5.1
+
+## 9.9.0
+
+### Minor Changes
+
+- Accept an optional `now` reference timestamp on transaction flows, including the Vault V2 deposit and withdrawal TransactionPlan builders, so deadlines, funding quotes, accrual and permit validation can use the latest chain block's timestamp instead of the device clock. Pass `(await client.getBlock()).timestamp` as `now` when preparing transactions. Omitting it retains the existing device-clock behavior; this fallback is deprecated and `now` will be required in the next major.
+
+  For entity transaction metadata, configure `metadata.timestamp: true` in `morphoViemExtension` client options and pass a fresh `now` to each flow: the metadata records that flow's reference timestamp. Only the device-clock fallback (`timestamp: true` without a flow `now`) is deprecated. Callers using actions or `addTransactionMetadata` directly can instead pass an explicit bigint timestamp per transaction; do not store a per-transaction block timestamp in long-lived client options. Bigint timestamps must be uint32 seconds (0 through 2^32 - 1, inclusive); out-of-range values fail with typed input errors.
+
+### Patch Changes
+
+- Replace nested ternaries with explicit branches without changing transactions, error messages, or public types. Enforce the nested-ternary lint rule in morpho-sdk source and warn in other packages' source, excluding tests.
+- Simplify internal entity validation and amount calculations; no behavior change.
+- Simplify internal Vault V2 reallocation planning and validation helpers; no behavior change.
+- Replace non-null assertions in Midnight maker publication and Vault V2 reallocation code with narrowed values and existing named errors.
+
 ## 9.8.0
 
 ### Minor Changes

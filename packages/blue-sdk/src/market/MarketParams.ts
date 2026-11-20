@@ -39,7 +39,9 @@ export class MarketParams implements IMarketParams {
   static get(id: MarketId) {
     const marketParams = MarketParams._CACHE[id];
 
-    if (!marketParams) throw new UnknownMarketParamsError(id);
+    if (!marketParams) {
+      throw new UnknownMarketParamsError(id);
+    }
 
     return marketParams;
   }

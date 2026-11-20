@@ -9,6 +9,7 @@ import {
   InputExceedsMaxError,
   NegativeInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
+  type ReferenceTimestampParams,
   type Transaction,
 } from "../../types/index.js";
 import { encodeErc20Permit2SignatureTransfer } from "../requirements/encode/index.js";
@@ -48,7 +49,7 @@ export type BundlesTokenRequirementsState =
  * @param params.amount - Exact pull amount in the token's smallest unit; zero returns no requirements.
  * @param params.deadline - Signature expiration as a Unix timestamp in seconds; in the
  *   SignatureTransfer branch it must be positive, within uint256, and in the future.
- * @param params.now - Timestamp the SignatureTransfer deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
  * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
  * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
@@ -84,16 +85,17 @@ export type BundlesTokenRequirementsState =
  * // requirements is empty because the allowance already covers the amount.
  * ```
  */
-export const resolveBundlesTokenRequirements = (params: {
-  readonly token: Address;
-  readonly spender: Address;
-  readonly owner: Address;
-  readonly chainId: number;
-  readonly amount: bigint;
-  readonly deadline: bigint;
-  readonly now?: bigint;
-  readonly state: BundlesTokenRequirementsState;
-}): readonly (
+export const resolveBundlesTokenRequirements = (
+  params: {
+    readonly token: Address;
+    readonly spender: Address;
+    readonly owner: Address;
+    readonly chainId: number;
+    readonly amount: bigint;
+    readonly deadline: bigint;
+    readonly state: BundlesTokenRequirementsState;
+  } & ReferenceTimestampParams,
+): readonly (
   | Readonly<Transaction<ERC20ApprovalAction>>
   | BundlesTokenSignatureRequirement
 )[] => {
@@ -104,7 +106,9 @@ export const resolveBundlesTokenRequirements = (params: {
   });
   // Reject invalid pulls before an approval encoder can cap the requested amount.
   validateUint256Field("amount", params.amount);
-  if (params.amount === 0n) return [];
+  if (params.amount === 0n) {
+    return [];
+  }
 
   if (params.state.type === "approval") {
     return getRequirementsApproval({

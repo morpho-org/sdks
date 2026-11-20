@@ -1054,7 +1054,10 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
-/** Thrown when a runtime crypto API is required but unavailable. */
+/**
+ * Thrown when a runtime crypto API is required but unavailable.
+ * @deprecated This error is never thrown by the SDK and will be removed in the next major version.
+ */
 export class CryptoUnavailableError extends Error {
   constructor(feature: string) {
     super(`Crypto API is required for ${feature} but is unavailable.`);
@@ -1197,11 +1200,17 @@ export class ChainWNativeMissingError extends Error {
 
 /** Thrown when a vault entity's address does not match the vault address embedded in the call's args. */
 export class VaultAddressMismatchError extends Error {
+  /** Vault targeted by the caller. */
+  readonly expected: Address;
+  /** Vault address found in the supplied snapshot. */
+  readonly actual: Address;
   constructor(vaultAddress: Address, argsVaultAddress: Address) {
     super(
       `Vault address mismatch between vault: ${vaultAddress} and args: ${argsVaultAddress}`,
     );
     this.name = "VaultAddressMismatchError";
+    this.expected = vaultAddress;
+    this.actual = argsVaultAddress;
   }
 }
 
@@ -1333,13 +1342,15 @@ export class InvalidReallocationSourceTypeError extends Error {
     public readonly sourceType: string | undefined,
     public readonly missingField?: "adapter" | "marketParams",
   ) {
-    super(
-      missingField == null
-        ? sourceType === undefined
-          ? 'Reallocation source must specify type "market" or "idle".'
-          : `Reallocation source type must be "market" or "idle", got "${sourceType}".`
-        : `Reallocation market source must include a valid "${missingField}".`,
-    );
+    let message: string;
+    if (missingField != null) {
+      message = `Reallocation market source must include a valid "${missingField}".`;
+    } else if (sourceType === undefined) {
+      message = 'Reallocation source must specify type "market" or "idle".';
+    } else {
+      message = `Reallocation source type must be "market" or "idle", got "${sourceType}".`;
+    }
+    super(message);
     this.name = "InvalidReallocationSourceTypeError";
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
   "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
-  "version": "7.5.0",
+  "version": "7.5.1",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -41,9 +41,9 @@
     "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
-    "prepublish": "pnpm build",
+    "prepublish": "bun run build",
     "compile": "node ../../scripts/compile-solidity.ts blue-sdk-viem",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },

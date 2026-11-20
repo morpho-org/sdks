@@ -38,7 +38,9 @@ export class VaultMarketAllocation implements IVaultMarketAllocation {
   }
 
   get utilization() {
-    if (this.config.cap === 0n) return MathLib.MAX_UINT_256;
+    if (this.config.cap === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     return MathLib.wDivDown(this.position.supplyAssets, this.config.cap);
   }

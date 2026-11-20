@@ -63,8 +63,12 @@ const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   const normalizedIdA = idA.toLowerCase();
   const normalizedIdB = idB.toLowerCase();
 
-  if (normalizedIdA > normalizedIdB) return 1;
-  if (normalizedIdA < normalizedIdB) return -1;
+  if (normalizedIdA > normalizedIdB) {
+    return 1;
+  }
+  if (normalizedIdA < normalizedIdB) {
+    return -1;
+  }
   return 0;
 };
 
@@ -81,7 +85,9 @@ const compareMarketIds = (idA: MarketId, idB: MarketId) => {
  * @internal
  */
 export const validateUint256Field = (field: string, value: bigint): void => {
-  if (value < 0n) throw new NegativeInputError(field, value);
+  if (value < 0n) {
+    throw new NegativeInputError(field, value);
+  }
   if (value > maxUint256) {
     throw new InputExceedsMaxError({ field, value, max: maxUint256 });
   }
@@ -115,7 +121,9 @@ export const validateMarketParamsId = (marketParams: MarketParams): void => {
  * @internal
  */
 export const validateDeadline = (deadline: bigint): void => {
-  if (deadline <= 0n) throw new NonPositiveInputError("deadline", deadline);
+  if (deadline <= 0n) {
+    throw new NonPositiveInputError("deadline", deadline);
+  }
   validateUint256Field("deadline", deadline);
 };
 
@@ -331,7 +339,9 @@ export const getMidnightMaxSafeDebt = (params: {
   let maxSafeDebt = 0n;
   for (let index = 0; index < params.collateral.length; index += 1) {
     const amount = params.collateral[index] ?? 0n;
-    if (amount === 0n) continue;
+    if (amount === 0n) {
+      continue;
+    }
 
     const collateral = MidnightMarketUtils.getCollateralByIndex(
       params.market.params,
@@ -547,7 +557,9 @@ export const validateMidnightNativeAmount = (params: {
     throw new ChainWNativeMissingError(chainId);
   }
   // Reject a malformed address before viem compares it with wNative.
-  for (const pull of pulls) validateMidnightAddress("token", pull.token);
+  for (const pull of pulls) {
+    validateMidnightAddress("token", pull.token);
+  }
 
   const wNativePulled = pulls.reduce(
     (total, pull) =>
@@ -756,82 +768,11 @@ export const validateVaultV2BlueReallocations = (
   const penaltyByVault = new Map<string, bigint>();
 
   for (const reallocation of reallocations) {
-    // Reject non-object entries and Vault V1-shaped entries (which carry
-    // `withdrawals`/`fee`) with a typed, instructive error instead of a raw
-    // TypeError or a misleading `to.adapter` address error.
-    if (
-      typeof reallocation !== "object" ||
-      reallocation === null ||
-      "withdrawals" in reallocation ||
-      "fee" in reallocation
-    ) {
-      throw new InvalidVaultV2BlueReallocationShapeError();
-    }
-    if (
-      typeof reallocation.vault !== "string" ||
-      !isAddress(reallocation.vault)
-    ) {
-      throw new InvalidReallocationAddressError("vault");
-    }
-    if (
-      reallocation.to == null ||
-      typeof reallocation.to.adapter !== "string" ||
-      !isAddress(reallocation.to.adapter)
-    ) {
-      throw new InvalidReallocationAddressError("to.adapter");
-    }
-
-    const source = reallocation.from;
-    if (source == null) {
-      throw new InvalidReallocationSourceTypeError(undefined);
-    }
-    const sourceType: string | undefined = source.type;
-    if (sourceType !== "market" && sourceType !== "idle") {
-      throw new InvalidReallocationSourceTypeError(sourceType);
-    }
-    let sourceMarketId: MarketId | undefined;
-    if (source.type === "market") {
-      if (typeof source.adapter !== "string" || !isAddress(source.adapter)) {
-        throw new InvalidReallocationAddressError("from.adapter");
-      }
-      if (
-        source.marketParams == null ||
-        !isAddress(source.marketParams.loanToken) ||
-        !isAddress(source.marketParams.collateralToken) ||
-        !isAddress(source.marketParams.oracle) ||
-        !isAddress(source.marketParams.irm) ||
-        typeof source.marketParams.lltv !== "bigint"
-      ) {
-        throw new InvalidReallocationSourceTypeError("market", "marketParams");
-      }
-      sourceMarketId = MarketUtils.getMarketId(source.marketParams);
-    }
-    if (reallocation.penalty < 0n) {
-      throw new NegativeInputError(
-        "reallocation.penalty",
-        reallocation.penalty,
-      );
-    }
-    if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
-      throw new InputExceedsMaxError({
-        field: "reallocation.penalty",
-        value: reallocation.penalty,
-        max: MAX_REALLOCATION_PENALTY,
-      });
-    }
-    if (reallocation.assets <= 0n) {
-      throw new NonPositiveInputError(
-        "reallocation.assets",
-        reallocation.assets,
-      );
-    }
-    if (reallocation.assets > maxUint128) {
-      throw new InputExceedsMaxError({
-        field: "reallocation.assets",
-        value: reallocation.assets,
-        max: maxUint128,
-      });
-    }
+    // Validate shape before source and amounts so malformed entries keep their original error.
+    assertReallocationShape(reallocation);
+    const sourceMarketId = resolveReallocationSourceMarketId(reallocation);
+    // Reject out-of-range amounts before comparing penalties across vault legs.
+    assertReallocationAmounts(reallocation);
 
     const penaltyKey = reallocation.vault.toLowerCase();
     const expectedPenalty = penaltyByVault.get(penaltyKey);
@@ -962,3 +903,90 @@ export const validateWithdrawShares = (params: {
     });
   }
 };
+
+/** Rejects malformed reallocation entries before reading source or amount fields. @internal */
+function assertReallocationShape(reallocation: VaultV2BlueReallocation): void {
+  // Reject non-object entries and Vault V1-shaped entries (which carry
+  // `withdrawals`/`fee`) with a typed, instructive error instead of a raw
+  // TypeError or a misleading `to.adapter` address error.
+  if (
+    typeof reallocation !== "object" ||
+    reallocation === null ||
+    "withdrawals" in reallocation ||
+    "fee" in reallocation
+  ) {
+    throw new InvalidVaultV2BlueReallocationShapeError();
+  }
+  if (
+    typeof reallocation.vault !== "string" ||
+    !isAddress(reallocation.vault)
+  ) {
+    throw new InvalidReallocationAddressError("vault");
+  }
+  if (
+    reallocation.to == null ||
+    typeof reallocation.to.adapter !== "string" ||
+    !isAddress(reallocation.to.adapter)
+  ) {
+    throw new InvalidReallocationAddressError("to.adapter");
+  }
+}
+
+/** Validates the reallocation source and resolves its market identifier. @internal */
+function resolveReallocationSourceMarketId(
+  reallocation: VaultV2BlueReallocation,
+): MarketId | undefined {
+  const source = reallocation.from;
+  if (source == null) {
+    throw new InvalidReallocationSourceTypeError(undefined);
+  }
+  const sourceType: string | undefined = source.type;
+  if (sourceType !== "market" && sourceType !== "idle") {
+    throw new InvalidReallocationSourceTypeError(sourceType);
+  }
+  let sourceMarketId: MarketId | undefined;
+  if (source.type === "market") {
+    if (typeof source.adapter !== "string" || !isAddress(source.adapter)) {
+      throw new InvalidReallocationAddressError("from.adapter");
+    }
+    if (
+      source.marketParams == null ||
+      !isAddress(source.marketParams.loanToken) ||
+      !isAddress(source.marketParams.collateralToken) ||
+      !isAddress(source.marketParams.oracle) ||
+      !isAddress(source.marketParams.irm) ||
+      typeof source.marketParams.lltv !== "bigint"
+    ) {
+      throw new InvalidReallocationSourceTypeError("market", "marketParams");
+    }
+    sourceMarketId = MarketUtils.getMarketId(source.marketParams);
+  }
+
+  return sourceMarketId;
+}
+
+/** Checks penalty and asset amounts against the allocator's ABI bounds. @internal */
+function assertReallocationAmounts(
+  reallocation: VaultV2BlueReallocation,
+): void {
+  if (reallocation.penalty < 0n) {
+    throw new NegativeInputError("reallocation.penalty", reallocation.penalty);
+  }
+  if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
+    throw new InputExceedsMaxError({
+      field: "reallocation.penalty",
+      value: reallocation.penalty,
+      max: MAX_REALLOCATION_PENALTY,
+    });
+  }
+  if (reallocation.assets <= 0n) {
+    throw new NonPositiveInputError("reallocation.assets", reallocation.assets);
+  }
+  if (reallocation.assets > maxUint128) {
+    throw new InputExceedsMaxError({
+      field: "reallocation.assets",
+      value: reallocation.assets,
+      max: maxUint128,
+    });
+  }
+}

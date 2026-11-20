@@ -36,7 +36,10 @@ export function normalizeAssetToken(address: Hex): Address {
 const compareAddress = (a: Address, b: Address) => {
   const al = a.toLowerCase();
   const bl = b.toLowerCase();
-  return al < bl ? -1 : al > bl ? 1 : 0;
+  if (al < bl) {
+    return -1;
+  }
+  return al > bl ? 1 : 0;
 };
 
 /**
@@ -52,12 +55,16 @@ export function groupAssetChanges(
 ): AccountAssetChanges[] {
   const byAccount = new Map<Address, Map<Address, AssetChange>>();
   for (const entry of entries) {
-    if (entry.diff === 0n) continue;
+    if (entry.diff === 0n) {
+      continue;
+    }
     const account = getAddress(entry.account);
     // `token` is normalized by callers (checksummed contract or `ethAddress`).
     const token = entry.token;
     let tokens = byAccount.get(account);
-    if (!tokens) byAccount.set(account, (tokens = new Map()));
+    if (!tokens) {
+      byAccount.set(account, (tokens = new Map()));
+    }
     const prev = tokens.get(token);
     tokens.set(token, {
       token,

@@ -98,12 +98,11 @@ export const getPermit2PermitTypedData = (
       details: {
         token: args.erc20,
         amount: MathLib.min(args.allowance, MathLib.MAX_UINT_160),
+        // An unlimited expiration most closely mimics a standard approval.
         expiration:
-          args.expiration != null
-            ? BigInt(args.expiration)
-            : // Use an unlimited expiration because it most
-              // closely mimics how a standard approval works.
-              MathLib.MAX_UINT_48,
+          args.expiration == null
+            ? MathLib.MAX_UINT_48
+            : BigInt(args.expiration),
         nonce: args.nonce,
       },
       spender: args.spender,

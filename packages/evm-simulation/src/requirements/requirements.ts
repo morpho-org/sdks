@@ -139,7 +139,10 @@ const toBlueAuthorization = (
  * import { mainnet } from "viem/chains";
  *
  * async function prepare(userAddress: Address) {
- *   const client = createPublicClient({ chain: mainnet, transport: http() })
+ *   const client = createPublicClient({
+ *     chain: mainnet,
+ *     transport: http(undefined, { retryCount: 0, timeout: 5000 }),
+ *   })
  *     .extend(morphoViemExtension());
  *   const vault = client.morpho.vaultV1(
  *     vaults[mainnet.id].steakUsdc.address,

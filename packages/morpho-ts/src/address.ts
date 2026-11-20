@@ -41,21 +41,29 @@ export const isAddress = (value: string): value is `0x${string}` =>
  * ```
  */
 export function getChecksumAddress(address: string): `0x${string}` {
-  if (!isAddress(address)) throw new InvalidAddressError(address);
+  if (!isAddress(address)) {
+    throw new InvalidAddressError(address);
+  }
 
   const lowerHex = address.slice(2).toLowerCase();
   const hash = keccak_256(utf8ToBytes(lowerHex));
   let checksum = "0x";
 
   for (let i = 0; i < 40; i++) {
-    const char = lowerHex[i]!;
-    const nibble = (hash[i >> 1]! >> (i % 2 === 0 ? 4 : 0)) & 0x0f;
+    const char = lowerHex.charAt(i);
+    const byte = hash.at(i >> 1);
+    /* v8 ignore next -- keccak_256 returns 32 bytes; this loop only reads the first 20. */
+    if (byte === undefined) {
+      throw new InvalidAddressError(address);
+    }
+    const nibble = (byte >> (i % 2 === 0 ? 4 : 0)) & 0x0f;
     checksum += nibble >= 8 ? char.toUpperCase() : char;
   }
 
   const hex = address.slice(2);
-  if (/[a-f]/.test(hex) && /[A-F]/.test(hex) && address !== checksum)
+  if (/[a-f]/.test(hex) && /[A-F]/.test(hex) && address !== checksum) {
     throw new InvalidAddressError(address);
+  }
 
   return checksum as `0x${string}`;
 }

@@ -19,12 +19,13 @@ import type { Action, SignatureRequest, Step } from "./types.js";
  * @throws {UnexpectedRequirementSignatureError} If the permit requirement has no nonce.
  */
 export function buildPermitSignatureRequest(
-  requirement: Requirement<Erc2612RequirementSignature>,
+  requirement: Pick<Requirement<Erc2612RequirementSignature>, "action">,
   id: string,
 ): SignatureRequest {
   const { nonce, ...args } = requirement.action.args;
-  if (nonce === undefined)
+  if (nonce === undefined) {
     throw new UnexpectedRequirementSignatureError(requirement.action.type);
+  }
   return {
     id,
     kind: "permit",
@@ -36,7 +37,7 @@ export function buildPermitSignatureRequest(
 /**
  * @internal Converts an approval transaction into a step with prepared chain/account inputs.
  * @param requirement - Direct token approval prerequisite.
- * @param params - Step ID, chain and account selected by the preparer.
+ * @param params - Step ID, chain, account and token denomination selected by the preparer.
  * @returns The approval recipe labeled for token spending.
  */
 export function buildApprovalStep(
@@ -45,10 +46,12 @@ export function buildApprovalStep(
     id,
     chainId,
     account,
+    denomination,
   }: {
     readonly id: string;
     readonly chainId: number;
     readonly account: Address;
+    readonly denomination: "assets" | "shares";
   },
 ): Step<Extract<Action, { type: "erc20Approval" }>> {
   return {
@@ -58,7 +61,10 @@ export function buildApprovalStep(
       type: "erc20Approval",
       inputs: {
         token: requirement.to,
-        ...requirement.action.args,
+        spender: requirement.action.args.spender,
+        ...(denomination === "assets"
+          ? { assets: requirement.action.args.amount }
+          : { shares: requirement.action.args.amount }),
         chainId,
         account,
       },
@@ -99,13 +105,17 @@ export async function getTokenRequirements(
     functionName: "allowance",
     args: [params.owner, params.spender],
   });
-  if (allowance >= params.amount) return [];
+  if (allowance >= params.amount) {
+    return [];
+  }
   if (params.supportSignature) {
     const permit = await getTokenPermit(client, {
       ...params,
       supportDeployless: params.deployless,
     });
-    if (permit !== undefined) return [permit];
+    if (permit !== undefined) {
+      return [permit];
+    }
   }
   return getRequirementsApproval({
     address: params.token,

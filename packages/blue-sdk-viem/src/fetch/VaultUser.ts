@@ -77,7 +77,9 @@ export async function fetchVaultUser(
         allowance,
       });
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }

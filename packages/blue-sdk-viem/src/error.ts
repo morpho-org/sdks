@@ -160,7 +160,9 @@ export class NonTupleReturnValueError extends Error {
  * ```
  */
 export function isUnknownOfFactoryError(error: unknown): boolean {
-  if (!(error instanceof BaseError)) return false;
+  if (!(error instanceof BaseError)) {
+    return false;
+  }
 
   const revertError = error.walk(
     (err) => err instanceof ContractFunctionRevertedError,
@@ -190,7 +192,9 @@ export function isUnknownOfFactoryError(error: unknown): boolean {
  * ```
  */
 export function getUnsupportedVaultV2Adapter(error: unknown): Address | null {
-  if (!(error instanceof BaseError)) return null;
+  if (!(error instanceof BaseError)) {
+    return null;
+  }
 
   const revertError = error.walk(
     (err) => err instanceof ContractFunctionRevertedError,
@@ -199,8 +203,9 @@ export function getUnsupportedVaultV2Adapter(error: unknown): Address | null {
   if (
     !(revertError instanceof ContractFunctionRevertedError) ||
     revertError.data?.errorName !== "UnsupportedVaultV2Adapter"
-  )
+  ) {
     return null;
+  }
 
   const [adapter] = revertError.data.args ?? [];
   return typeof adapter === "string" ? (adapter as Address) : null;

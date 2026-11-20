@@ -1,5 +1,5 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { type Address, maxUint256 } from "viem";
 import type { Erc2612RequirementSignature } from "../types/index.js";
 import {
   IncompleteTransactionPlanError,
@@ -37,17 +37,20 @@ export function validatePermitPlanRequest(
     path: `${path}.typedData.domain`,
     fields: { chainId: "positive safe integer", verifyingContract: "address" },
   });
-  for (const field of ["name", "version"])
-    if (domain[field] !== undefined)
+  for (const field of ["name", "version"]) {
+    if (domain[field] !== undefined) {
       validatePlanField(domain[field], {
         path: `${path}.typedData.domain.${field}`,
         type: "string",
       });
-  if (domain.salt !== undefined)
+    }
+  }
+  if (domain.salt !== undefined) {
     validatePlanField(domain.salt, {
       path: `${path}.typedData.domain.salt`,
       type: "hex",
     });
+  }
   const types = getPlanObject(typedData.types, `${path}.typedData.types`);
   validatePlanField(types[typedData.primaryType as string], {
     path: `${path}.typedData.types.${typedData.primaryType}`,
@@ -75,11 +78,12 @@ export function validatePermitPlanRequest(
       deadline: "uint256 bigint",
     },
   });
-  if (request.signature !== undefined)
+  if (request.signature !== undefined) {
     validatePlanField(request.signature, {
       path: `${path}.signature`,
       type: "hex",
     });
+  }
 }
 
 /** @internal Checks a permit's signing payload against its referencing action and encoding arguments. */
@@ -87,18 +91,78 @@ export function validateSignatureRequest(
   request: SignatureRequest,
   action: Action,
 ): void {
-  if (
-    action.type === "erc20Approval" ||
-    action.signatureRequestIds.tokenPermit !== request.id
-  )
-    throw new TransactionPlanSignatureMismatchError(request.id, "reference");
   const { chainId, account } = action.inputs;
   const { domain, message, primaryType } = request.typedData;
-  const spender = getChainAddress(chainId, "bundles.vaultBundlesV1");
-  const asset =
-    action.type === "vaultV2Deposit"
-      ? action.inputs.asset
-      : action.inputs.vault;
+  let spenderKey: "bundles.vaultBundlesV1" | "bundles.vaultExitBundlesV1";
+  let asset: Address;
+  let amountMatches: boolean;
+  switch (action.type) {
+    case "vaultV2ForceRedeem":
+      throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+    case "erc20Approval":
+      throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+    case "vaultV2Deposit":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.asset;
+      amountMatches = request.args.amount === action.inputs.assets;
+      break;
+    case "vaultV1Deposit":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.asset;
+      amountMatches = request.args.amount === action.inputs.assets;
+      break;
+    case "vaultV1Withdraw":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches =
+        request.args.amount >= action.inputs.requiredShareAllowance;
+      break;
+    case "vaultV2Withdraw":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches =
+        request.args.amount >= action.inputs.requiredShareAllowance;
+      break;
+    case "vaultV2Redeem":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches = request.args.amount >= action.inputs.shares;
+      break;
+    case "vaultV1Redeem":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches = request.args.amount >= action.inputs.shares;
+      break;
+    case "vaultV2ForceWithdraw":
+      spenderKey = "bundles.vaultExitBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches = request.args.amount === maxUint256;
+      break;
+    case "vaultV1MigrateToV2":
+      spenderKey = "bundles.vaultBundlesV1";
+      asset = action.inputs.sourceVault;
+      amountMatches =
+        request.args.amount >= action.inputs.requiredShareAllowance;
+      break;
+    case "vaultV2InKindRedeem":
+      spenderKey = "bundles.vaultExitBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches = request.args.amount === maxUint256;
+      break;
+    case "vaultV1InKindRedeem":
+      spenderKey = "bundles.vaultExitBundlesV1";
+      asset = action.inputs.vault;
+      amountMatches = request.args.amount === maxUint256;
+      break;
+    default: {
+      const _exhaustive: never = action;
+      throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+    }
+  }
+  if (action.signatureRequestIds.tokenPermit !== request.id) {
+    throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+  }
+  const spender = getChainAddress(chainId, spenderKey);
   const checks: readonly (readonly [string, boolean])[] = [
     ["domain.chainId", domain?.chainId === chainId],
     [
@@ -122,19 +186,15 @@ export function validateSignatureRequest(
         request.args.spender.toLowerCase() === spender.toLowerCase(),
     ],
     ["message.value", message?.value === request.args.amount],
-    [
-      "value",
-      action.type === "vaultV2Deposit"
-        ? request.args.amount === action.inputs.amount
-        : request.args.amount >= action.inputs.requiredShareAllowance,
-    ],
+    ["value", amountMatches],
     ["message.nonce", message?.nonce === request.args.nonce],
     ["message.deadline", message?.deadline === request.args.deadline],
     ["primaryType", primaryType === "Permit"],
   ];
   const mismatch = checks.find(([, matches]) => !matches);
-  if (mismatch)
+  if (mismatch) {
     throw new TransactionPlanSignatureMismatchError(request.id, mismatch[0]);
+  }
 }
 
 /** @internal Rebuilds a token permit from the action's account/asset and its resolved signature requests. */
@@ -150,10 +210,13 @@ export function getVaultPermit(
     readonly owner: Address;
   },
 ): Erc2612RequirementSignature | undefined {
-  if (id === undefined) return undefined;
+  if (id === undefined) {
+    return undefined;
+  }
   const request = requests.find((candidate) => candidate.id === id);
-  if (request?.signature === undefined)
+  if (request?.signature === undefined) {
     throw new IncompleteTransactionPlanError(id);
+  }
   return {
     action: {
       type: request.kind,

@@ -11,12 +11,14 @@ import {
   type AuthorizationRequirementSignature,
   ChainIdMismatchError,
   ExpiredDeadlineError,
+  type ReferenceTimestampParams,
   type Requirement,
   UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeBlueSignatureAuthorization}. */
-interface EncodeBlueSignatureAuthorizationParams {
+interface EncodeBlueSignatureAuthorizationParams
+  extends ReferenceTimestampParams {
   /** Account granting the authorization and signing it (the Morpho `authorizer`). */
   owner: Address;
   /** BlueBundlesV1 operator to authorize on Morpho; must be the chain's registered deployment. */
@@ -29,8 +31,6 @@ interface EncodeBlueSignatureAuthorizationParams {
   isAuthorized?: boolean;
   /** Signature deadline in seconds. Defaults to two hours from now. */
   deadline?: bigint;
-  /** Timestamp the deadline is validated against; defaults to the current time. */
-  now?: bigint;
 }
 
 /**
@@ -41,7 +41,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * typed data, verifies it against the connected account, and returns a deep-frozen
  * `RequirementSignature` the selected transaction route consumes. The requirement's
  * `action.typedData` holds that EIP-712 payload so it can be inspected or displayed before signing.
- * Deadline defaults to two hours from `Time.timestamp()`.
+ * Deadline defaults to two hours from `params.now` (the deprecated fallback uses the device clock).
  * The operator pin applies to grants and revocations alike: revoking a previously registered
  * operator is outside this helper's scope.
  *
@@ -55,7 +55,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * @param params.nonce - The owner's current Morpho authorization nonce.
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
  * @param params.deadline - Optional signature deadline in seconds.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
  *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
@@ -120,7 +120,8 @@ export const encodeBlueSignatureAuthorization = async (
     }
   }
 
-  const deadline = params.deadline ?? Time.timestamp() + Time.s.from.h(2n);
+  const deadline =
+    params.deadline ?? (params.now ?? Time.timestamp()) + Time.s.from.h(2n);
 
   const typedData = deepFreeze(
     getAuthorizationTypedData(

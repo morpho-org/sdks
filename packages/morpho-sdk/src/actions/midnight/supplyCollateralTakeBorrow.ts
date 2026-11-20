@@ -117,7 +117,7 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  *   receiver: borrower,
  *   collateralSupplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
  *   takeableOffers: quote.data.takeableOffers,
- *   deadline: Time.timestamp() + 600n,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  * ```
  */
@@ -184,11 +184,12 @@ export const midnightSupplyCollateralTakeBorrow = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined)
+  if (params.referralFeeRecipient !== undefined) {
     validateMidnightAddress(
       "referralFeeRecipient",
       params.referralFeeRecipient,
     );
+  }
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });

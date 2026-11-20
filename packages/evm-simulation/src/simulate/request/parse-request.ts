@@ -235,22 +235,153 @@ const createChecks = (): FieldChecks => {
   const check: FieldChecks = {
     errors,
 
+    ...createScalarChecks(errors),
+
+    assertion: (value, path) => {
+      if (!isRecord(value)) {
+        errors.push(`${path}: must be an object`);
+        return undefined;
+      }
+      check.keys(value, { allow: ["to", "data", "check"], path });
+      const rawTo = readField(value, "to");
+      const to = check.address(rawTo, `${path}.to`);
+      const data = check.hex(readField(value, "data"), `${path}.data`);
+      const assertionCheck = readField(value, "check");
+      if (typeof assertionCheck !== "function") {
+        errors.push(`${path}.check: must be a function`);
+      }
+      return to === undefined ||
+        data === undefined ||
+        typeof assertionCheck !== "function"
+        ? undefined
+        : {
+            to: rawTo as Address,
+            data,
+            check: assertionCheck as Assertion["check"],
+          };
+    },
+
+    assertions: (value, path) => {
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: must be an array`);
+        return undefined;
+      }
+      if (value.length === 0) {
+        return undefined;
+      }
+      return value
+        .map((assertion, index) =>
+          check.assertion(assertion, `${path}[${index}]`),
+        )
+        .filter((assertion): assertion is Assertion => assertion !== undefined);
+    },
+
+    logAssertion: (value, path) => {
+      if (!isRecord(value)) {
+        errors.push(`${path}: must be an object`);
+        return undefined;
+      }
+      check.keys(value, { allow: ["check"], path });
+      const assertionCheck = readField(value, "check");
+      if (typeof assertionCheck !== "function") {
+        errors.push(`${path}.check: must be a function`);
+      }
+      return typeof assertionCheck === "function"
+        ? { check: assertionCheck as LogAssertion["check"] }
+        : undefined;
+    },
+
+    logAssertions: (value, path) => {
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: must be an array`);
+        return undefined;
+      }
+      if (value.length === 0) {
+        return undefined;
+      }
+      return value
+        .map((assertion, index) =>
+          check.logAssertion(assertion, `${path}[${index}]`),
+        )
+        .filter(
+          (assertion): assertion is LogAssertion => assertion !== undefined,
+        );
+    },
+
+    domain: (value, path) => parseDomain(check, { domain: value, path }),
+
+    fields: ({ actual, expected, path }) => {
+      const fields = actual as readonly Eip712Field[] | undefined;
+      const equal =
+        Array.isArray(fields) &&
+        fields.length === expected.length &&
+        expected.every(
+          (field, i) =>
+            fields[i]?.name === field.name && fields[i]?.type === field.type,
+        );
+      if (!equal) {
+        errors.push(
+          `${path}: must list exactly ${expected.map((f) => `${f.name}: ${f.type}`).join(", ")}`,
+        );
+        return undefined;
+      }
+      return fields;
+    },
+
+    authorization: (value, path) =>
+      parseAuthorization(check, { authorization: value, path }),
+    approvalLimit: (value, path) =>
+      parseApprovalLimit(check, { approval: value, path }),
+    operation: (value, path) =>
+      parseOperationLimit(check, { operation: value, path }),
+  };
+  return check;
+};
+
+function createScalarChecks(
+  errors: string[],
+): Pick<
+  FieldChecks,
+  | "address"
+  | "hex"
+  | "bytes32"
+  | "marketId"
+  | "uint256"
+  | "bool"
+  | "nonNegInt"
+  | "keys"
+> {
+  const check: Pick<
+    FieldChecks,
+    | "address"
+    | "hex"
+    | "bytes32"
+    | "marketId"
+    | "uint256"
+    | "bool"
+    | "nonNegInt"
+    | "keys"
+  > = {
     address: (value, path) => {
-      if (typeof value === "string" && isAddress(value))
+      if (typeof value === "string" && isAddress(value)) {
         return getAddress(value);
+      }
       errors.push(`${path}: must be a valid address`);
       return undefined;
     },
 
     hex: (value, path) => {
-      if (isHex(value)) return value;
+      if (isHex(value)) {
+        return value;
+      }
       errors.push(`${path}: must be a hex data`);
       return undefined;
     },
 
     bytes32: (value, path) => {
-      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value))
+      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) {
         return value as Hex;
+      }
       errors.push(`${path}: must be 32-byte hex`);
       return undefined;
     },
@@ -277,7 +408,9 @@ const createChecks = (): FieldChecks => {
     },
 
     bool: (value, path) => {
-      if (typeof value === "boolean") return value;
+      if (typeof value === "boolean") {
+        return value;
+      }
       errors.push(`${path}: must be a boolean`);
       return undefined;
     },
@@ -288,1215 +421,1518 @@ const createChecks = (): FieldChecks => {
         Number.isInteger(value) &&
         Number.isSafeInteger(value) &&
         value >= 0
-      )
+      ) {
         return value;
+      }
       errors.push(`${path}: must be a non-negative integer`);
       return undefined;
     },
 
     keys: (value, { allow, path }) => {
-      if (!isRecord(value)) return;
+      if (!isRecord(value)) {
+        return;
+      }
       for (const key of Object.keys(value)) {
-        if (!allow.includes(key)) errors.push(`${path}.${key}: unknown field`);
-      }
-    },
-
-    assertion: (value, path) => {
-      if (!isRecord(value)) {
-        errors.push(`${path}: must be an object`);
-        return undefined;
-      }
-      check.keys(value, { allow: ["to", "data", "check"], path });
-      const rawTo = readField(value, "to");
-      const to = check.address(rawTo, `${path}.to`);
-      const data = check.hex(readField(value, "data"), `${path}.data`);
-      const assertionCheck = readField(value, "check");
-      if (typeof assertionCheck !== "function")
-        errors.push(`${path}.check: must be a function`);
-      return to === undefined ||
-        data === undefined ||
-        typeof assertionCheck !== "function"
-        ? undefined
-        : {
-            to: rawTo as Address,
-            data,
-            check: assertionCheck as Assertion["check"],
-          };
-    },
-
-    assertions: (value, path) => {
-      if (!Array.isArray(value)) {
-        errors.push(`${path}: must be an array`);
-        return undefined;
-      }
-      if (value.length === 0) return undefined;
-      return value
-        .map((assertion, index) =>
-          check.assertion(assertion, `${path}[${index}]`),
-        )
-        .filter((assertion): assertion is Assertion => assertion !== undefined);
-    },
-
-    logAssertion: (value, path) => {
-      if (!isRecord(value)) {
-        errors.push(`${path}: must be an object`);
-        return undefined;
-      }
-      check.keys(value, { allow: ["check"], path });
-      const assertionCheck = readField(value, "check");
-      if (typeof assertionCheck !== "function")
-        errors.push(`${path}.check: must be a function`);
-      return typeof assertionCheck === "function"
-        ? { check: assertionCheck as LogAssertion["check"] }
-        : undefined;
-    },
-
-    logAssertions: (value, path) => {
-      if (!Array.isArray(value)) {
-        errors.push(`${path}: must be an array`);
-        return undefined;
-      }
-      if (value.length === 0) return undefined;
-      return value
-        .map((assertion, index) =>
-          check.logAssertion(assertion, `${path}[${index}]`),
-        )
-        .filter(
-          (assertion): assertion is LogAssertion => assertion !== undefined,
-        );
-    },
-
-    domain: (domain, path) => {
-      if (!isRecord(domain)) {
-        errors.push(`${path}: must be an object`);
-        return undefined;
-      }
-      check.keys(domain, {
-        allow: DOMAIN_KEYS,
-        path,
-      });
-      const name = readField(domain, "name");
-      if (name !== undefined && typeof name !== "string")
-        errors.push(`${path}.name: must be a string`);
-      const version = readField(domain, "version");
-      if (version !== undefined && typeof version !== "string")
-        errors.push(`${path}.version: must be a string`);
-      const chainId = readField(domain, "chainId");
-      const validChainId =
-        (typeof chainId === "number" &&
-          Number.isInteger(chainId) &&
-          chainId > 0) ||
-        (typeof chainId === "bigint" && chainId >= 0n && chainId <= maxUint256);
-      if (!validChainId)
-        errors.push(`${path}.chainId: must be a positive integer or uint256`);
-      const verifyingContract = check.address(
-        readField(domain, "verifyingContract"),
-        `${path}.verifyingContract`,
-      );
-      const rawSalt = readField(domain, "salt");
-      const salt =
-        rawSalt !== undefined
-          ? check.bytes32(rawSalt, `${path}.salt`)
-          : undefined;
-      if (!validChainId || verifyingContract === undefined) return undefined;
-      return {
-        ...(typeof name === "string" ? { name } : {}),
-        ...(typeof version === "string" ? { version } : {}),
-        chainId: chainId as number | bigint,
-        verifyingContract,
-        ...(salt !== undefined ? { salt } : {}),
-      };
-    },
-
-    fields: ({ actual, expected, path }) => {
-      const fields = actual as readonly Eip712Field[] | undefined;
-      const equal =
-        Array.isArray(fields) &&
-        fields.length === expected.length &&
-        expected.every(
-          (field, i) =>
-            fields[i]?.name === field.name && fields[i]?.type === field.type,
-        );
-      if (!equal) {
-        errors.push(
-          `${path}: must list exactly ${expected.map((f) => `${f.name}: ${f.type}`).join(", ")}`,
-        );
-        return undefined;
-      }
-      return fields;
-    },
-
-    authorization: (authorization, path) => {
-      const type = isRecord(authorization)
-        ? readField(authorization, "type")
-        : undefined;
-      if (!isRecord(authorization) || typeof type !== "string") {
-        errors.push(`${path}.type: must name an authorization type`);
-        return undefined;
-      }
-      if (!Object.hasOwn(AUTHORIZATION_KEYS, type)) {
-        errors.push(`${path}.type: unsupported authorization type "${type}"`);
-        return undefined;
-      }
-      check.keys(authorization, { allow: AUTHORIZATION_KEYS[type]!, path });
-      const errorsBefore = errors.length;
-      switch (type) {
-        case "erc20Approval": {
-          const token = check.address(
-            readField(authorization, "token"),
-            `${path}.token`,
-          );
-          const owner = check.address(
-            readField(authorization, "owner"),
-            `${path}.owner`,
-          );
-          const spender = check.address(
-            readField(authorization, "spender"),
-            `${path}.spender`,
-          );
-          const amount = check.uint256(
-            readField(authorization, "amount"),
-            `${path}.amount`,
-          );
-          if (
-            token === undefined ||
-            owner === undefined ||
-            spender === undefined ||
-            amount === undefined
-          )
-            return undefined;
-          return { type: "erc20Approval", token, owner, spender, amount };
-        }
-        case "erc2612Permit": {
-          const envelope = typedDataEnvelope({
-            value: readField(authorization, "typedData"),
-            path,
-            primaryType: "Permit",
-            fields: ERC2612_PERMIT_FIELDS,
-          });
-          if (envelope === undefined) return undefined;
-          const { domain, message, fields: permitFields } = envelope;
-          const messagePath = `${path}.typedData.message`;
-          check.keys(message, {
-            allow: ERC2612_MESSAGE_KEYS,
-            path: messagePath,
-          });
-          const owner = check.address(
-            readField(message, "owner"),
-            `${messagePath}.owner`,
-          );
-          const spender = check.address(
-            readField(message, "spender"),
-            `${messagePath}.spender`,
-          );
-          const value = check.uint256(
-            readField(message, "value"),
-            `${messagePath}.value`,
-          );
-          const nonce = check.uint256(
-            readField(message, "nonce"),
-            `${messagePath}.nonce`,
-          );
-          const deadline = check.uint256(
-            readField(message, "deadline"),
-            `${messagePath}.deadline`,
-          );
-          if (
-            errors.length !== errorsBefore ||
-            domain === undefined ||
-            owner === undefined ||
-            spender === undefined ||
-            value === undefined ||
-            nonce === undefined ||
-            deadline === undefined ||
-            permitFields === undefined
-          )
-            return undefined;
-          return {
-            type: "erc2612Permit",
-            typedData: {
-              domain,
-              primaryType: "Permit",
-              types: {
-                Permit: copyFields(permitFields),
-              },
-              message: { owner, spender, value, nonce, deadline },
-            },
-          };
-        }
-        case "permit2SignatureTransfer": {
-          const owner = check.address(
-            readField(authorization, "owner"),
-            `${path}.owner`,
-          );
-          const envelope = typedDataEnvelope({
-            value: readField(authorization, "typedData"),
-            path,
-            primaryType: "PermitTransferFrom",
-            fields: PERMIT2_TRANSFER_FIELDS,
-            messageError: "must carry permitted token and amount",
-          });
-          if (envelope === undefined) return undefined;
-          const { domain, message, fields: transferFields } = envelope;
-          const rawTypedData = readField(authorization, "typedData");
-          const types = isRecord(rawTypedData)
-            ? readField(rawTypedData, "types")
-            : undefined;
-          const permissionFields = isRecord(types)
-            ? readField(types, "TokenPermissions")
-            : undefined;
-          const checkedPermissionFields = check.fields({
-            actual: permissionFields,
-            expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
-            path: `${path}.typedData.types.TokenPermissions`,
-          });
-          const permitted = readField(message, "permitted");
-          if (!isRecord(permitted)) {
-            errors.push(
-              `${path}.typedData.message: must carry permitted token and amount`,
-            );
-            return undefined;
-          }
-          const messagePath = `${path}.typedData.message`;
-          check.keys(message, {
-            allow: PERMIT2_MESSAGE_KEYS,
-            path: messagePath,
-          });
-          check.keys(permitted, {
-            allow: PERMIT2_PERMITTED_KEYS,
-            path: `${messagePath}.permitted`,
-          });
-          const permittedToken = check.address(
-            readField(permitted, "token"),
-            `${messagePath}.permitted.token`,
-          );
-          const permittedAmount = check.uint256(
-            readField(permitted, "amount"),
-            `${messagePath}.permitted.amount`,
-          );
-          const spender = check.address(
-            readField(message, "spender"),
-            `${messagePath}.spender`,
-          );
-          const nonce = check.uint256(
-            readField(message, "nonce"),
-            `${messagePath}.nonce`,
-          );
-          const deadline = check.uint256(
-            readField(message, "deadline"),
-            `${messagePath}.deadline`,
-          );
-          if (
-            errors.length !== errorsBefore ||
-            domain === undefined ||
-            owner === undefined ||
-            permittedToken === undefined ||
-            permittedAmount === undefined ||
-            spender === undefined ||
-            nonce === undefined ||
-            deadline === undefined ||
-            transferFields === undefined ||
-            checkedPermissionFields === undefined
-          )
-            return undefined;
-          return {
-            type: "permit2SignatureTransfer",
-            owner,
-            typedData: {
-              domain,
-              primaryType: "PermitTransferFrom",
-              types: {
-                PermitTransferFrom: copyFields(transferFields),
-                TokenPermissions: copyFields(checkedPermissionFields),
-              },
-              message: {
-                permitted: {
-                  token: permittedToken,
-                  amount: permittedAmount,
-                },
-                spender,
-                nonce,
-                deadline,
-              },
-            },
-          };
-        }
-        case "blueAuthorization": {
-          const authorizer = check.address(
-            readField(authorization, "authorizer"),
-            `${path}.authorizer`,
-          );
-          const authorized = check.address(
-            readField(authorization, "authorized"),
-            `${path}.authorized`,
-          );
-          const isAuthorized = check.bool(
-            readField(authorization, "isAuthorized"),
-            `${path}.isAuthorized`,
-          );
-          if (
-            authorizer === undefined ||
-            authorized === undefined ||
-            isAuthorized === undefined
-          )
-            return undefined;
-          return {
-            type: "blueAuthorization",
-            authorizer,
-            authorized,
-            isAuthorized,
-          };
-        }
-        case "blueAuthorizationSignature":
-        case "midnightAuthorizationSignature": {
-          const envelope = typedDataEnvelope({
-            value: readField(authorization, "typedData"),
-            path,
-            primaryType: "Authorization",
-            fields: BLUE_AUTHORIZATION_FIELDS,
-          });
-          if (envelope === undefined) return undefined;
-          const { domain, message, fields: authorizationFields } = envelope;
-          const messagePath = `${path}.typedData.message`;
-          check.keys(message, {
-            allow: BLUE_AUTHORIZATION_MESSAGE_KEYS,
-            path: messagePath,
-          });
-          const authorizer = check.address(
-            readField(message, "authorizer"),
-            `${messagePath}.authorizer`,
-          );
-          const authorized = check.address(
-            readField(message, "authorized"),
-            `${messagePath}.authorized`,
-          );
-          const isAuthorized = check.bool(
-            readField(message, "isAuthorized"),
-            `${messagePath}.isAuthorized`,
-          );
-          const nonce = check.uint256(
-            readField(message, "nonce"),
-            `${messagePath}.nonce`,
-          );
-          const deadline = check.uint256(
-            readField(message, "deadline"),
-            `${messagePath}.deadline`,
-          );
-          if (
-            errors.length !== errorsBefore ||
-            domain === undefined ||
-            authorizer === undefined ||
-            authorized === undefined ||
-            isAuthorized === undefined ||
-            nonce === undefined ||
-            deadline === undefined ||
-            authorizationFields === undefined
-          )
-            return undefined;
-          return {
-            type:
-              type === "midnightAuthorizationSignature"
-                ? "midnightAuthorizationSignature"
-                : "blueAuthorizationSignature",
-            typedData: {
-              domain,
-              primaryType: "Authorization",
-              types: {
-                Authorization: copyFields(authorizationFields),
-              },
-              message: {
-                authorizer,
-                authorized,
-                isAuthorized,
-                nonce,
-                deadline,
-              },
-            },
-          };
-        }
-        default:
-          errors.push(`${path}.type: unsupported authorization type "${type}"`);
-          return undefined;
-      }
-    },
-
-    approvalLimit: (approval, path) => {
-      const type = isRecord(approval) ? readField(approval, "type") : undefined;
-      if (!isRecord(approval) || typeof type !== "string") {
-        errors.push(`${path}.type: must name an approval limit type`);
-        return undefined;
-      }
-      if (type === "token") {
-        check.keys(approval, {
-          allow: ["type", "token", "owner", "spender"],
-          path,
-        });
-        const token = check.address(
-          readField(approval, "token"),
-          `${path}.token`,
-        );
-        const owner = check.address(
-          readField(approval, "owner"),
-          `${path}.owner`,
-        );
-        const spender = check.address(
-          readField(approval, "spender"),
-          `${path}.spender`,
-        );
-        if (token === undefined || owner === undefined || spender === undefined)
-          return undefined;
-        return { type, token, owner, spender };
-      }
-      if (type === "morphoAuthorization") {
-        check.keys(approval, {
-          allow: ["type", "authorizer", "authorized"],
-          path,
-        });
-        const authorizer = check.address(
-          readField(approval, "authorizer"),
-          `${path}.authorizer`,
-        );
-        const authorized = check.address(
-          readField(approval, "authorized"),
-          `${path}.authorized`,
-        );
-        if (authorizer === undefined || authorized === undefined)
-          return undefined;
-        return { type, authorizer, authorized };
-      }
-      if (type === "midnightAuthorization") {
-        check.keys(approval, {
-          allow: ["type", "onBehalf", "authorized"],
-          path,
-        });
-        const onBehalf = check.address(
-          readField(approval, "onBehalf"),
-          `${path}.onBehalf`,
-        );
-        const authorized = check.address(
-          readField(approval, "authorized"),
-          `${path}.authorized`,
-        );
-        if (onBehalf === undefined || authorized === undefined)
-          return undefined;
-        return { type, onBehalf, authorized };
-      }
-      errors.push(`${path}.type: unsupported approval limit type "${type}"`);
-      return undefined;
-    },
-
-    operation: (operation, path) => {
-      const type = isRecord(operation)
-        ? readField(operation, "type")
-        : undefined;
-      if (
-        !isRecord(operation) ||
-        typeof type !== "string" ||
-        !Object.hasOwn(OPERATION_SPECS, type)
-      ) {
-        errors.push(
-          `${path}.type: unsupported operation type "${String(type)}"`,
-        );
-        return undefined;
-      }
-      const spec = OPERATION_SPECS[type as OperationType];
-      const requiredAddresses = new Set(spec.requiredAddresses);
-      const acceptsMarket = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
-        (acceptedType) => acceptedType === type,
-      );
-      check.keys(operation, {
-        allow: [
-          "type",
-          ...spec.markets,
-          ...spec.addresses,
-          ...(acceptsMarket ? ["market"] : []),
-          ...(type === "midnightSupplyCollateral" ||
-          type === "midnightSupplyCollateralMakeBorrow"
-            ? ["collateralIndex"]
-            : []),
-          ...(type === "midnightSupplyBlueMakeLend" ? ["callbackSalt"] : []),
-          "quote",
-          "slippageTolerance",
-          "sharePrice",
-          "position",
-          "inputs",
-          "referralFee",
-          "reallocationPenalty",
-        ],
-        path,
-      });
-      const errorsBefore = errors.length;
-      const out = { type } as ParsedOperationLimit;
-      let collateralWithdrawals: MidnightCollateralAmount[] | undefined;
-      let collateralSupplies: MidnightCollateralAmount[] | undefined;
-      for (const field of spec.markets) {
-        const value = check.marketId(
-          readField(operation, field),
-          `${path}.${field}`,
-        );
-        if (value !== undefined) Reflect.set(out, field, value);
-      }
-      const rawMarket = readField(operation, "market");
-      if (acceptsMarket && rawMarket !== undefined) {
-        const invalidMarket = `${path}.market: must be a valid Midnight market struct; pass the struct used to build the operation.`;
-        if (!isRecord(rawMarket)) {
-          errors.push(invalidMarket);
-        } else {
-          try {
-            const market = rawMarket as MidnightMarketStruct;
-            const resolvedMarketId = MidnightMarketUtils.toId(market);
-            const operationMarketId = readField(operation, "marketId");
-            if (
-              typeof operationMarketId === "string" &&
-              resolvedMarketId.toLowerCase() !== operationMarketId.toLowerCase()
-            ) {
-              errors.push(
-                `${path}.market: must identify the same Midnight market as marketId; pass the struct used to build the operation.`,
-              );
-            } else {
-              Reflect.set(out, "market", MidnightMarketUtils.toStruct(market));
-            }
-          } catch {
-            errors.push(invalidMarket);
-          }
+        if (!allow.includes(key)) {
+          errors.push(`${path}.${key}: unknown field`);
         }
       }
-      for (const field of spec.addresses) {
-        const raw = readField(operation, field);
-        if (raw === undefined && !requiredAddresses.has(field)) continue;
-        const value = check.address(raw, `${path}.${field}`);
-        if (value !== undefined) Reflect.set(out, field, value);
-      }
-      if (type === "midnightSupplyBlueMakeLend") {
-        const callbackSalt = check.bytes32(
-          readField(operation, "callbackSalt"),
-          `${path}.callbackSalt`,
-        );
-        if (callbackSalt !== undefined)
-          Reflect.set(out, "callbackSalt", callbackSalt);
-      }
-      if (
-        type === "midnightSupplyCollateral" ||
-        type === "midnightSupplyCollateralMakeBorrow"
-      ) {
-        const collateralIndex = check.uint256(
-          readField(operation, "collateralIndex"),
-          `${path}.collateralIndex`,
-        );
-        if (collateralIndex !== undefined)
-          Reflect.set(out, "collateralIndex", collateralIndex);
-      }
-      const rawTolerance = readField(operation, "slippageTolerance");
-      if (rawTolerance === undefined) {
-        Reflect.set(out, "slippageTolerance", DEFAULT_SLIPPAGE_TOLERANCE);
-      } else {
-        const tolerance = check.uint256(
-          rawTolerance,
-          `${path}.slippageTolerance`,
-        );
-        if (tolerance !== undefined) {
-          if (tolerance >= MathLib.WAD)
-            errors.push(`${path}.slippageTolerance: must be below 100% (1e18)`);
-          Reflect.set(out, "slippageTolerance", tolerance);
-        }
-      }
-      const inputs = readField(operation, "inputs");
-      const referralFee = readField(operation, "referralFee");
-      const reallocationPenalty = readField(operation, "reallocationPenalty");
-      const suppliedQuote = readField(operation, "quote");
-      let quote = suppliedQuote;
-      if (inputs !== undefined) {
-        // Validate amounts before scheduling internal before-state reads.
-        validateOperationInputs({
-          type: type as OperationType,
-          inputs,
-          fee: referralFee,
-          penalty: reallocationPenalty,
-          errors,
-          path,
-        });
-        const repay = isRecord(inputs) ? readField(inputs, "repay") : undefined;
-        Reflect.set(
-          out,
-          "inputs",
-          isRecord(inputs)
-            ? { ...inputs, ...(isRecord(repay) ? { repay: { ...repay } } : {}) }
-            : inputs,
-        );
-        if (referralFee !== undefined)
-          Reflect.set(out, "referralFee", referralFee);
-        if (reallocationPenalty !== undefined)
-          Reflect.set(out, "reallocationPenalty", reallocationPenalty);
-        if (Object.hasOwn(INPUT_FIELDS, type)) {
-          const fields = INPUT_FIELDS[type as keyof typeof INPUT_FIELDS];
-          const derivedFields = fields.filter(
-            (field) =>
-              !isRecord(suppliedQuote ?? {}) ||
-              readField(suppliedQuote ?? {}, field) === undefined,
-          );
-          Reflect.set(out, "derivedFields", derivedFields);
-          // Combined-collateral checks treat these placeholders as inactive legs.
-          quote = {
-            ...Object.fromEntries(
-              fields.map((field) => [field, INACTIVE_LEG_CAP]),
-            ),
-            ...(isRecord(suppliedQuote)
-              ? Object.fromEntries(
-                  Object.entries(suppliedQuote).filter(
-                    ([, value]) => value !== undefined,
-                  ),
-                )
-              : {}),
-          };
-          if (suppliedQuote !== undefined && !isRecord(suppliedQuote))
-            errors.push(`${path}.quote: must be an object`);
-        }
-      } else {
-        if (referralFee !== undefined)
-          errors.push(`${path}.referralFee: requires inputs`);
-        if (reallocationPenalty !== undefined)
-          errors.push(`${path}.reallocationPenalty: requires inputs`);
-      }
-      let normalizedQuote: Record<string, bigint> | undefined;
-      if (!isRecord(quote)) {
-        errors.push(
-          `${path}.quote: must be an object containing at least one quoted amount`,
-        );
-      } else {
-        check.keys(quote, {
-          allow:
-            type === "midnightSupplyBlueMakeLend"
-              ? ["assetsPaid", "sharesMinted"]
-              : [
-                  ...QUOTE_FIELDS,
-                  "positions",
-                  "deallocations",
-                  "collateralWithdrawals",
-                  "collateralSupplies",
-                ],
-          path: `${path}.quote`,
-        });
-        normalizedQuote = {};
-        for (const field of QUOTE_FIELDS) {
-          const raw = readField(quote, field);
-          if (raw === undefined) continue;
-          const value = check.uint256(raw, `${path}.quote.${field}`);
-          if (value === undefined) continue;
-          if (value === 0n && field !== "penalty")
-            errors.push(
-              `${path}.quote.${field}: must be positive (got "${raw}")`,
-            );
-          normalizedQuote[field] = value;
-        }
-        const rawPositions = readField(quote, "positions");
-        let positions: InKindPositionQuote[] | undefined;
-        if (rawPositions !== undefined) {
-          if (type !== "vaultV1InKindRedeem" && type !== "vaultV2InKindRedeem")
-            errors.push(
-              `${path}.quote.positions: cannot be measured for "${type}"`,
-            );
-          else if (!Array.isArray(rawPositions))
-            errors.push(
-              `${path}.quote.positions: must be an array of { marketId, supplyShares }`,
-            );
-          else {
-            positions = [];
-            if (rawPositions.length === 0)
-              errors.push(`${path}.quote.positions: must be a non-empty array`);
-            const seen = new Set<string>();
-            for (const [i, entry] of rawPositions.entries()) {
-              const entryPath = `${path}.quote.positions[${i}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: ["marketId", "supplyShares"],
-                path: entryPath,
-              });
-              const entryMarketId = check.marketId(
-                readField(entry, "marketId"),
-                `${entryPath}.marketId`,
-              );
-              const rawSupplyShares = readField(entry, "supplyShares");
-              const supplyShares = check.uint256(
-                rawSupplyShares,
-                `${entryPath}.supplyShares`,
-              );
-              if (supplyShares === 0n)
-                errors.push(
-                  `${entryPath}.supplyShares: must be positive (got "${rawSupplyShares}")`,
-                );
-              if (entryMarketId !== undefined) {
-                const key = entryMarketId.toLowerCase();
-                if (seen.has(key))
-                  errors.push(
-                    `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
-                  );
-                else seen.add(key);
-              }
-              if (entryMarketId !== undefined && supplyShares !== undefined)
-                positions.push({ marketId: entryMarketId, supplyShares });
-            }
-          }
-        }
-        if (
-          (type === "vaultV1InKindRedeem" || type === "vaultV2InKindRedeem") &&
-          missingInKindProceeds(type, {
-            positions,
-            assetsReceived: normalizedQuote.assetsReceived,
-          })
-        )
-          errors.push(
-            `${path}.quote: "positions" or "assetsReceived" required for "${type}"`,
-          );
-        if (
-          normalizedQuote.penalty !== undefined &&
-          type !== "vaultV2ForceWithdraw" &&
-          type !== "vaultV2ForceRedeem"
-        )
-          errors.push(
-            `${path}.quote.penalty: cannot be measured for "${type}"`,
-          );
-        const rawDeallocations = readField(quote, "deallocations");
-        let deallocations: ForceExitDeallocationQuote[] | undefined;
-        if (rawDeallocations !== undefined) {
-          if (type !== "vaultV2ForceWithdraw" && type !== "vaultV2ForceRedeem")
-            errors.push(
-              `${path}.quote.deallocations: cannot be measured for "${type}"`,
-            );
-          else if (!Array.isArray(rawDeallocations))
-            errors.push(
-              `${path}.quote.deallocations: must be an array of { marketId, assets }`,
-            );
-          else {
-            deallocations = [];
-            if (rawDeallocations.length === 0)
-              errors.push(
-                `${path}.quote.deallocations: must be a non-empty array`,
-              );
-            const seen = new Set<string>();
-            for (const [i, entry] of rawDeallocations.entries()) {
-              const entryPath = `${path}.quote.deallocations[${i}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: ["marketId", "assets"],
-                path: entryPath,
-              });
-              const entryMarketId = check.marketId(
-                readField(entry, "marketId"),
-                `${entryPath}.marketId`,
-              );
-              const assets = check.uint256(
-                readField(entry, "assets"),
-                `${entryPath}.assets`,
-              );
-              if (entryMarketId !== undefined) {
-                const key = entryMarketId.toLowerCase();
-                if (seen.has(key))
-                  errors.push(
-                    `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
-                  );
-                else seen.add(key);
-              }
-              if (entryMarketId !== undefined && assets !== undefined)
-                deallocations.push({ marketId: entryMarketId, assets });
-            }
-          }
-        }
-        const rawCollateralWithdrawals = readField(
-          quote,
-          "collateralWithdrawals",
-        );
-        if (
-          rawCollateralWithdrawals !== undefined ||
-          type === "midnightWithdrawCollateralBatch"
-        ) {
-          if (
-            type !== "midnightWithdrawCollateralBatch" &&
-            type !== "midnightRepayWithdrawCollateral" &&
-            type !== "midnightTakeRepayWithdrawCollateral"
-          ) {
-            errors.push(
-              `${path}.quote.collateralWithdrawals: cannot be measured for "${type}"`,
-            );
-          } else if (!Array.isArray(rawCollateralWithdrawals)) {
-            errors.push(
-              `${path}.quote.collateralWithdrawals: must be an array of { collateralIndex, assets }`,
-            );
-          } else {
-            if (rawCollateralWithdrawals.length === 0)
-              errors.push(
-                `${path}.quote.collateralWithdrawals: must be a non-empty array`,
-              );
-            collateralWithdrawals = [];
-            const seen = new Set<bigint>();
-            for (const [i, entry] of rawCollateralWithdrawals.entries()) {
-              const entryPath = `${path}.quote.collateralWithdrawals[${i}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: ["collateralIndex", "assets"],
-                path: entryPath,
-              });
-              const collateralIndex = check.uint256(
-                readField(entry, "collateralIndex"),
-                `${entryPath}.collateralIndex`,
-              );
-              const rawAssets = readField(entry, "assets");
-              const assets = check.uint256(rawAssets, `${entryPath}.assets`);
-              if (assets === 0n)
-                errors.push(
-                  `${entryPath}.assets: must be positive (got "${rawAssets}")`,
-                );
-              if (collateralIndex !== undefined) {
-                if (seen.has(collateralIndex))
-                  errors.push(
-                    `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
-                  );
-                else seen.add(collateralIndex);
-              }
-              if (collateralIndex !== undefined && assets !== undefined)
-                collateralWithdrawals.push({ collateralIndex, assets });
-            }
-          }
-        }
-        const rawCollateralSupplies = readField(quote, "collateralSupplies");
-        if (
-          rawCollateralSupplies !== undefined ||
-          type === "midnightSupplyCollateralTakeBorrow" ||
-          type === "midnightSupplyCollateralBatch"
-        ) {
-          if (
-            type !== "midnightSupplyCollateralTakeBorrow" &&
-            type !== "midnightSupplyCollateralBatch"
-          ) {
-            errors.push(
-              `${path}.quote.collateralSupplies: cannot be measured for "${type}"`,
-            );
-          } else if (!Array.isArray(rawCollateralSupplies)) {
-            errors.push(
-              `${path}.quote.collateralSupplies: must be an array of { collateralIndex, assets }`,
-            );
-          } else {
-            if (rawCollateralSupplies.length === 0)
-              errors.push(
-                `${path}.quote.collateralSupplies: must be a non-empty array`,
-              );
-            collateralSupplies = [];
-            const seen = new Set<bigint>();
-            for (const [i, entry] of rawCollateralSupplies.entries()) {
-              const entryPath = `${path}.quote.collateralSupplies[${i}]`;
-              if (!isRecord(entry)) {
-                errors.push(`${entryPath}: must be an object`);
-                continue;
-              }
-              check.keys(entry, {
-                allow: ["collateralIndex", "assets"],
-                path: entryPath,
-              });
-              const collateralIndex = check.uint256(
-                readField(entry, "collateralIndex"),
-                `${entryPath}.collateralIndex`,
-              );
-              const rawAssets = readField(entry, "assets");
-              const assets = check.uint256(rawAssets, `${entryPath}.assets`);
-              if (assets === 0n)
-                errors.push(
-                  `${entryPath}.assets: must be positive (got "${rawAssets}")`,
-                );
-              if (collateralIndex !== undefined) {
-                if (seen.has(collateralIndex))
-                  errors.push(
-                    `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
-                  );
-                else seen.add(collateralIndex);
-              }
-              if (collateralIndex !== undefined && assets !== undefined)
-                collateralSupplies.push({ collateralIndex, assets });
-            }
-          }
-        }
-        const quoteRecord = normalizedQuote;
-        // Every operation type has required sides, so an empty quote is
-        // rejected by the required-quotes loop below.
-        const measurement = operationMeasurementPlan(out);
-        for (const field of Object.keys(
-          QUOTE_FIELD_DIRECTION,
-        ) as (keyof typeof QUOTE_FIELD_DIRECTION)[]) {
-          if (
-            quoteRecord[field] !== undefined &&
-            measurement[field] === undefined
-          )
-            errors.push(
-              `${path}.quote.${field}: cannot be measured for "${type}"`,
-            );
-        }
-        errors.push(
-          ...requiredQuoteErrors({
-            type: type as OperationType,
-            quote: quoteRecord as SlippageQuote,
-            path,
-          }),
-        );
-        Reflect.set(out, "quote", {
-          ...quoteRecord,
-          ...(positions === undefined ? {} : { positions }),
-          ...(deallocations === undefined ? {} : { deallocations }),
-          ...(collateralWithdrawals === undefined
-            ? {}
-            : { collateralWithdrawals }),
-          ...(collateralSupplies === undefined ? {} : { collateralSupplies }),
-        });
-      }
-      const rawSharePrice = readField(operation, "sharePrice");
-      if (rawSharePrice !== undefined) {
-        if (!isRecord(rawSharePrice)) {
-          errors.push(`${path}.sharePrice: must be an object`);
-        } else {
-          check.keys(rawSharePrice, {
-            allow: ["expected", "tolerance"],
-            path: `${path}.sharePrice`,
-          });
-          const expected = check.uint256(
-            readField(rawSharePrice, "expected"),
-            `${path}.sharePrice.expected`,
-          );
-          const priceTolerance = check.uint256(
-            readField(rawSharePrice, "tolerance"),
-            `${path}.sharePrice.tolerance`,
-          );
-          if (expected !== undefined && expected <= 0n)
-            errors.push(`${path}.sharePrice.expected: must be positive`);
-          if (priceTolerance !== undefined && priceTolerance > MathLib.WAD)
-            errors.push(
-              `${path}.sharePrice.tolerance: must not exceed 100% (1e18)`,
-            );
-          const pair = sharePriceMeasurement(type as OperationType);
-          if (pair === undefined) {
-            errors.push(`${path}.sharePrice: cannot be measured for "${type}"`);
-          } else {
-            for (const field of [pair.assets, pair.shares] as const) {
-              if (normalizedQuote?.[field] === undefined)
-                errors.push(`${path}.sharePrice: requires quote.${field}`);
-            }
-          }
-          if (expected !== undefined && priceTolerance !== undefined)
-            Reflect.set(out, "sharePrice", {
-              expected,
-              tolerance: priceTolerance,
-            });
-        }
-      }
-      const rawPosition = readField(operation, "position");
-      if (rawPosition !== undefined) {
-        if (!isRecord(rawPosition)) {
-          errors.push(`${path}.position: must be an object`);
-        } else {
-          const positionFields =
-            type === "midnightRedeem"
-              ? MIDNIGHT_POSITION_BOUNDS_FIELDS
-              : type === "midnightRepayWithdrawCollateral" ||
-                  type === "midnightTakeRepayWithdrawCollateral"
-                ? MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS
-                : type === "midnightTakeBorrow" ||
-                    type === "midnightTakeWithdraw" ||
-                    type === "midnightSupplyCollateralTakeBorrow" ||
-                    type === "midnightSupplyCollateralBatch" ||
-                    type === "midnightWithdrawCollateralBatch"
-                  ? []
-                  : POSITION_BOUNDS_FIELDS;
-          check.keys(rawPosition, {
-            allow: positionFields,
-            path: `${path}.position`,
-          });
-          const bounds: Record<string, bigint> = {};
-          let maxCollateral: MidnightCollateralAmount[] | undefined;
-          let hasPositionBound = false;
-          for (const field of positionFields) {
-            const raw = readField(rawPosition, field);
-            if (raw === undefined) continue;
-            hasPositionBound = true;
-            if (field === "maxCollateral") {
-              if (!Array.isArray(raw)) {
-                errors.push(
-                  `${path}.position.maxCollateral: must be an array of { collateralIndex, assets }`,
-                );
-                continue;
-              }
-              if (raw.length === 0)
-                errors.push(
-                  `${path}.position.maxCollateral: must be a non-empty array`,
-                );
-              maxCollateral = [];
-              const seen = new Set<bigint>();
-              for (const [i, entry] of raw.entries()) {
-                const entryPath = `${path}.position.maxCollateral[${i}]`;
-                if (!isRecord(entry)) {
-                  errors.push(`${entryPath}: must be an object`);
-                  continue;
-                }
-                check.keys(entry, {
-                  allow: ["collateralIndex", "assets"],
-                  path: entryPath,
-                });
-                const collateralIndex = check.uint256(
-                  readField(entry, "collateralIndex"),
-                  `${entryPath}.collateralIndex`,
-                );
-                const assets = check.uint256(
-                  readField(entry, "assets"),
-                  `${entryPath}.assets`,
-                );
-                if (collateralIndex !== undefined) {
-                  if (seen.has(collateralIndex))
-                    errors.push(
-                      `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
-                    );
-                  else seen.add(collateralIndex);
-                }
-                if (collateralIndex !== undefined && assets !== undefined)
-                  maxCollateral.push({ collateralIndex, assets });
-              }
-              continue;
-            }
-            const value = check.uint256(raw, `${path}.position.${field}`);
-            if (value !== undefined) bounds[field] = value;
-          }
-          if (
-            type !== "midnightRedeem" &&
-            type !== "midnightRepayWithdrawCollateral" &&
-            type !== "midnightTakeRepayWithdrawCollateral" &&
-            positionBoundsMarketField(type as OperationType) === undefined
-          )
-            errors.push(`${path}.position: cannot be measured for "${type}"`);
-          if (!hasPositionBound)
-            errors.push(`${path}.position: supply at least one bound`);
-          if (Object.keys(bounds).length > 0 || maxCollateral !== undefined)
-            Reflect.set(out, "position", {
-              ...bounds,
-              ...(maxCollateral === undefined ? {} : { maxCollateral }),
-            });
-        }
-      }
-      if (
-        type === "midnightRepayWithdrawCollateral" ||
-        type === "midnightTakeRepayWithdrawCollateral"
-      ) {
-        const position = readField(out, "position");
-        const maxCollateral = isRecord(position)
-          ? readField(position, "maxCollateral")
-          : undefined;
-        if (Array.isArray(maxCollateral)) {
-          const quotedIndexes = new Set(
-            (collateralWithdrawals ?? []).map(
-              ({ collateralIndex }) => collateralIndex,
-            ),
-          );
-          for (const [i, bound] of maxCollateral.entries()) {
-            const collateralIndex = isRecord(bound)
-              ? readField(bound, "collateralIndex")
-              : undefined;
-            if (
-              typeof collateralIndex === "bigint" &&
-              !quotedIndexes.has(collateralIndex)
-            )
-              errors.push(
-                `${path}.position.maxCollateral[${i}].collateralIndex: requires a matching quote.collateralWithdrawals entry`,
-              );
-          }
-        }
-        const maxDebt =
-          isRecord(position) &&
-          typeof readField(position, "maxDebt") === "bigint"
-            ? readField(position, "maxDebt")
-            : undefined;
-        const hasRepayLeg =
-          normalizedQuote?.debtRepaid !== undefined || maxDebt !== undefined;
-        const hasWithdrawLeg = (collateralWithdrawals?.length ?? 0) > 0;
-        if (type === "midnightTakeRepayWithdrawCollateral" && !hasRepayLeg)
-          errors.push(
-            `${path}: quote.debtRepaid or position.maxDebt is required for "${type}"`,
-          );
-        else if (!hasRepayLeg && !hasWithdrawLeg)
-          errors.push(
-            `${path}: quote.debtRepaid, position.maxDebt, or a non-empty quote.collateralWithdrawals is required`,
-          );
-        if (hasRepayLeg && normalizedQuote?.assetsPaid === undefined)
-          errors.push(
-            `${path}.quote.assetsPaid: required when the repayment leg is active`,
-          );
-        if (!hasRepayLeg && normalizedQuote?.assetsPaid !== undefined)
-          errors.push(
-            `${path}.quote.assetsPaid: cannot be measured without an active repayment leg`,
-          );
-      } else if (normalizedQuote?.debtRepaid !== undefined) {
-        errors.push(
-          `${path}.quote.debtRepaid: cannot be measured for "${type}"`,
-        );
-      }
-      return errors.length === errorsBefore ? out : undefined;
     },
   };
-  const copyFields = (fields: readonly Eip712Field[]): Eip712Field[] =>
-    fields.map(({ name, type: fieldType }) => ({ name, type: fieldType }));
+  return check;
+}
 
-  /** Shared typed-data envelope guard: domain, primaryType, primary field list
-   * and message record; message-specific checks stay in each branch. */
-  const typedDataEnvelope = (options: {
+function parseDomain(
+  check: FieldChecks,
+  { domain, path }: { readonly domain: unknown; readonly path: string },
+): Eip712Domain | undefined {
+  const { errors } = check;
+  if (!isRecord(domain)) {
+    errors.push(`${path}: must be an object`);
+    return undefined;
+  }
+  check.keys(domain, {
+    allow: DOMAIN_KEYS,
+    path,
+  });
+  const name = readField(domain, "name");
+  if (name !== undefined && typeof name !== "string") {
+    errors.push(`${path}.name: must be a string`);
+  }
+  const version = readField(domain, "version");
+  if (version !== undefined && typeof version !== "string") {
+    errors.push(`${path}.version: must be a string`);
+  }
+  const chainId = readField(domain, "chainId");
+  const validChainId =
+    (typeof chainId === "number" && Number.isInteger(chainId) && chainId > 0) ||
+    (typeof chainId === "bigint" && chainId >= 0n && chainId <= maxUint256);
+  if (!validChainId) {
+    errors.push(`${path}.chainId: must be a positive integer or uint256`);
+  }
+  const verifyingContract = check.address(
+    readField(domain, "verifyingContract"),
+    `${path}.verifyingContract`,
+  );
+  const rawSalt = readField(domain, "salt");
+  const salt =
+    rawSalt === undefined ? undefined : check.bytes32(rawSalt, `${path}.salt`);
+  if (!validChainId || verifyingContract === undefined) {
+    return undefined;
+  }
+  return {
+    ...(typeof name === "string" ? { name } : {}),
+    ...(typeof version === "string" ? { version } : {}),
+    chainId: chainId as number | bigint,
+    verifyingContract,
+    ...(salt === undefined ? {} : { salt }),
+  };
+}
+
+const copyFields = (fields: readonly Eip712Field[]): Eip712Field[] =>
+  fields.map(({ name, type: fieldType }) => ({ name, type: fieldType }));
+
+/** Shared typed-data envelope guard: domain, primaryType, primary field list
+ * and message record; message-specific checks stay in each branch. */
+const typedDataEnvelope = (
+  check: FieldChecks,
+  options: {
     value: unknown;
     path: string;
     primaryType: string;
     fields: readonly Eip712Field[];
     messageError?: string;
-  }):
-    | {
-        domain: Eip712Domain | undefined;
-        message: object;
-        fields: readonly Eip712Field[] | undefined;
-      }
-    | undefined => {
-    const typedDataPath = `${options.path}.typedData`;
-    const value = options.value;
-    if (!isRecord(value)) {
-      errors.push(`${typedDataPath}: must be an object`);
-      return undefined;
+  },
+):
+  | {
+      domain: Eip712Domain | undefined;
+      message: object;
+      fields: readonly Eip712Field[] | undefined;
     }
-    check.keys(value, { allow: TYPED_DATA_KEYS, path: typedDataPath });
-    const domain = check.domain(
-      readField(value, "domain"),
-      `${typedDataPath}.domain`,
+  | undefined => {
+  const { errors } = check;
+  const typedDataPath = `${options.path}.typedData`;
+  const value = options.value;
+  if (!isRecord(value)) {
+    errors.push(`${typedDataPath}: must be an object`);
+    return undefined;
+  }
+  check.keys(value, { allow: TYPED_DATA_KEYS, path: typedDataPath });
+  const domain = check.domain(
+    readField(value, "domain"),
+    `${typedDataPath}.domain`,
+  );
+  if (readField(value, "primaryType") !== options.primaryType) {
+    errors.push(
+      `${typedDataPath}.primaryType: must be "${options.primaryType}" (got ${String(readField(value, "primaryType"))})`,
     );
-    if (readField(value, "primaryType") !== options.primaryType)
-      errors.push(
-        `${typedDataPath}.primaryType: must be "${options.primaryType}" (got ${String(readField(value, "primaryType"))})`,
-      );
-    const types = readField(value, "types");
-    const fields = isRecord(types)
-      ? readField(types, options.primaryType)
-      : undefined;
-    const checkedFields = check.fields({
-      actual: fields,
-      expected: options.fields,
-      path: `${typedDataPath}.types.${options.primaryType}`,
+  }
+  const types = readField(value, "types");
+  const fields = isRecord(types)
+    ? readField(types, options.primaryType)
+    : undefined;
+  const checkedFields = check.fields({
+    actual: fields,
+    expected: options.fields,
+    path: `${typedDataPath}.types.${options.primaryType}`,
+  });
+  const message = readField(value, "message");
+  if (!isRecord(message)) {
+    errors.push(
+      `${typedDataPath}.message: ${options.messageError ?? "must be an object"}`,
+    );
+    return undefined;
+  }
+  return { domain, message, fields: checkedFields };
+};
+
+function parseAuthorization(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+  }: { readonly authorization: unknown; readonly path: string },
+): SimulationAuthorization | undefined {
+  const { errors } = check;
+  const type = isRecord(authorization)
+    ? readField(authorization, "type")
+    : undefined;
+  if (!isRecord(authorization) || typeof type !== "string") {
+    errors.push(`${path}.type: must name an authorization type`);
+    return undefined;
+  }
+  const allowedKeys = Object.hasOwn(AUTHORIZATION_KEYS, type)
+    ? AUTHORIZATION_KEYS[type]
+    : undefined;
+  if (allowedKeys === undefined) {
+    errors.push(`${path}.type: unsupported authorization type "${type}"`);
+    return undefined;
+  }
+  check.keys(authorization, { allow: allowedKeys, path });
+  const errorsBefore = errors.length;
+  switch (type) {
+    case "erc20Approval":
+      return parseErc20Approval(check, { authorization, path });
+    case "erc2612Permit":
+      return parseErc2612Permit(check, { authorization, path, errorsBefore });
+    case "permit2SignatureTransfer":
+      return parsePermit2Authorization(check, {
+        authorization,
+        path,
+        errorsBefore,
+      });
+    case "blueAuthorization":
+      return parseBlueAuthorization(check, { authorization, path });
+    case "blueAuthorizationSignature":
+    case "midnightAuthorizationSignature":
+      return parseAuthorizationSignature(check, {
+        authorization,
+        path,
+        errorsBefore,
+        type,
+      });
+    default:
+      return undefined;
+  }
+}
+
+function parseErc20Approval(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+  }: {
+    readonly authorization: object;
+    readonly path: string;
+  },
+): SimulationAuthorization | undefined {
+  const token = check.address(
+    readField(authorization, "token"),
+    `${path}.token`,
+  );
+  const owner = check.address(
+    readField(authorization, "owner"),
+    `${path}.owner`,
+  );
+  const spender = check.address(
+    readField(authorization, "spender"),
+    `${path}.spender`,
+  );
+  const amount = check.uint256(
+    readField(authorization, "amount"),
+    `${path}.amount`,
+  );
+  if (
+    token === undefined ||
+    owner === undefined ||
+    spender === undefined ||
+    amount === undefined
+  ) {
+    return undefined;
+  }
+  return { type: "erc20Approval", token, owner, spender, amount };
+}
+
+function parseErc2612Permit(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+    errorsBefore,
+  }: {
+    readonly authorization: object;
+    readonly path: string;
+    readonly errorsBefore: number;
+  },
+): SimulationAuthorization | undefined {
+  const { errors } = check;
+  const envelope = typedDataEnvelope(check, {
+    value: readField(authorization, "typedData"),
+    path,
+    primaryType: "Permit",
+    fields: ERC2612_PERMIT_FIELDS,
+  });
+  if (envelope === undefined) {
+    return undefined;
+  }
+  const { domain, message, fields: permitFields } = envelope;
+  const messagePath = `${path}.typedData.message`;
+  check.keys(message, {
+    allow: ERC2612_MESSAGE_KEYS,
+    path: messagePath,
+  });
+  const owner = check.address(
+    readField(message, "owner"),
+    `${messagePath}.owner`,
+  );
+  const spender = check.address(
+    readField(message, "spender"),
+    `${messagePath}.spender`,
+  );
+  const value = check.uint256(
+    readField(message, "value"),
+    `${messagePath}.value`,
+  );
+  const nonce = check.uint256(
+    readField(message, "nonce"),
+    `${messagePath}.nonce`,
+  );
+  const deadline = check.uint256(
+    readField(message, "deadline"),
+    `${messagePath}.deadline`,
+  );
+  if (
+    errors.length !== errorsBefore ||
+    domain === undefined ||
+    owner === undefined ||
+    spender === undefined ||
+    value === undefined ||
+    nonce === undefined ||
+    deadline === undefined ||
+    permitFields === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    type: "erc2612Permit",
+    typedData: {
+      domain,
+      primaryType: "Permit",
+      types: {
+        Permit: copyFields(permitFields),
+      },
+      message: { owner, spender, value, nonce, deadline },
+    },
+  };
+}
+
+function parsePermit2Authorization(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+    errorsBefore,
+  }: {
+    readonly authorization: object;
+    readonly path: string;
+    readonly errorsBefore: number;
+  },
+): SimulationAuthorization | undefined {
+  const { errors } = check;
+  const owner = check.address(
+    readField(authorization, "owner"),
+    `${path}.owner`,
+  );
+  const envelope = typedDataEnvelope(check, {
+    value: readField(authorization, "typedData"),
+    path,
+    primaryType: "PermitTransferFrom",
+    fields: PERMIT2_TRANSFER_FIELDS,
+    messageError: "must carry permitted token and amount",
+  });
+  if (envelope === undefined) {
+    return undefined;
+  }
+  const { domain, message, fields: transferFields } = envelope;
+  const rawTypedData = readField(authorization, "typedData");
+  const types = isRecord(rawTypedData)
+    ? readField(rawTypedData, "types")
+    : undefined;
+  const permissionFields = isRecord(types)
+    ? readField(types, "TokenPermissions")
+    : undefined;
+  const checkedPermissionFields = check.fields({
+    actual: permissionFields,
+    expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
+    path: `${path}.typedData.types.TokenPermissions`,
+  });
+  const permitted = readField(message, "permitted");
+  if (!isRecord(permitted)) {
+    errors.push(
+      `${path}.typedData.message: must carry permitted token and amount`,
+    );
+    return undefined;
+  }
+  const messagePath = `${path}.typedData.message`;
+  check.keys(message, {
+    allow: PERMIT2_MESSAGE_KEYS,
+    path: messagePath,
+  });
+  check.keys(permitted, {
+    allow: PERMIT2_PERMITTED_KEYS,
+    path: `${messagePath}.permitted`,
+  });
+  const permittedToken = check.address(
+    readField(permitted, "token"),
+    `${messagePath}.permitted.token`,
+  );
+  const permittedAmount = check.uint256(
+    readField(permitted, "amount"),
+    `${messagePath}.permitted.amount`,
+  );
+  const spender = check.address(
+    readField(message, "spender"),
+    `${messagePath}.spender`,
+  );
+  const nonce = check.uint256(
+    readField(message, "nonce"),
+    `${messagePath}.nonce`,
+  );
+  const deadline = check.uint256(
+    readField(message, "deadline"),
+    `${messagePath}.deadline`,
+  );
+  if (
+    errors.length !== errorsBefore ||
+    domain === undefined ||
+    owner === undefined ||
+    permittedToken === undefined ||
+    permittedAmount === undefined ||
+    spender === undefined ||
+    nonce === undefined ||
+    deadline === undefined ||
+    transferFields === undefined ||
+    checkedPermissionFields === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    type: "permit2SignatureTransfer",
+    owner,
+    typedData: {
+      domain,
+      primaryType: "PermitTransferFrom",
+      types: {
+        PermitTransferFrom: copyFields(transferFields),
+        TokenPermissions: copyFields(checkedPermissionFields),
+      },
+      message: {
+        permitted: {
+          token: permittedToken,
+          amount: permittedAmount,
+        },
+        spender,
+        nonce,
+        deadline,
+      },
+    },
+  };
+}
+
+function parseBlueAuthorization(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+  }: {
+    readonly authorization: object;
+    readonly path: string;
+  },
+): SimulationAuthorization | undefined {
+  const authorizer = check.address(
+    readField(authorization, "authorizer"),
+    `${path}.authorizer`,
+  );
+  const authorized = check.address(
+    readField(authorization, "authorized"),
+    `${path}.authorized`,
+  );
+  const isAuthorized = check.bool(
+    readField(authorization, "isAuthorized"),
+    `${path}.isAuthorized`,
+  );
+  if (
+    authorizer === undefined ||
+    authorized === undefined ||
+    isAuthorized === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    type: "blueAuthorization",
+    authorizer,
+    authorized,
+    isAuthorized,
+  };
+}
+
+function parseAuthorizationSignature(
+  check: FieldChecks,
+  {
+    authorization,
+    path,
+    errorsBefore,
+    type,
+  }: {
+    readonly authorization: object;
+    readonly path: string;
+    readonly errorsBefore: number;
+    readonly type:
+      | "blueAuthorizationSignature"
+      | "midnightAuthorizationSignature";
+  },
+): SimulationAuthorization | undefined {
+  const { errors } = check;
+  const envelope = typedDataEnvelope(check, {
+    value: readField(authorization, "typedData"),
+    path,
+    primaryType: "Authorization",
+    fields: BLUE_AUTHORIZATION_FIELDS,
+  });
+  if (envelope === undefined) {
+    return undefined;
+  }
+  const { domain, message, fields: authorizationFields } = envelope;
+  const messagePath = `${path}.typedData.message`;
+  check.keys(message, {
+    allow: BLUE_AUTHORIZATION_MESSAGE_KEYS,
+    path: messagePath,
+  });
+  const authorizer = check.address(
+    readField(message, "authorizer"),
+    `${messagePath}.authorizer`,
+  );
+  const authorized = check.address(
+    readField(message, "authorized"),
+    `${messagePath}.authorized`,
+  );
+  const isAuthorized = check.bool(
+    readField(message, "isAuthorized"),
+    `${messagePath}.isAuthorized`,
+  );
+  const nonce = check.uint256(
+    readField(message, "nonce"),
+    `${messagePath}.nonce`,
+  );
+  const deadline = check.uint256(
+    readField(message, "deadline"),
+    `${messagePath}.deadline`,
+  );
+  if (
+    errors.length !== errorsBefore ||
+    domain === undefined ||
+    authorizer === undefined ||
+    authorized === undefined ||
+    isAuthorized === undefined ||
+    nonce === undefined ||
+    deadline === undefined ||
+    authorizationFields === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    type:
+      type === "midnightAuthorizationSignature"
+        ? "midnightAuthorizationSignature"
+        : "blueAuthorizationSignature",
+    typedData: {
+      domain,
+      primaryType: "Authorization",
+      types: {
+        Authorization: copyFields(authorizationFields),
+      },
+      message: {
+        authorizer,
+        authorized,
+        isAuthorized,
+        nonce,
+        deadline,
+      },
+    },
+  };
+}
+
+function parseApprovalLimit(
+  check: FieldChecks,
+  { approval, path }: { readonly approval: unknown; readonly path: string },
+): ApprovalLimit | undefined {
+  const { errors } = check;
+  const type = isRecord(approval) ? readField(approval, "type") : undefined;
+  if (!isRecord(approval) || typeof type !== "string") {
+    errors.push(`${path}.type: must name an approval limit type`);
+    return undefined;
+  }
+  if (type === "token") {
+    check.keys(approval, {
+      allow: ["type", "token", "owner", "spender"],
+      path,
     });
-    const message = readField(value, "message");
-    if (!isRecord(message)) {
-      errors.push(
-        `${typedDataPath}.message: ${options.messageError ?? "must be an object"}`,
-      );
+    const token = check.address(readField(approval, "token"), `${path}.token`);
+    const owner = check.address(readField(approval, "owner"), `${path}.owner`);
+    const spender = check.address(
+      readField(approval, "spender"),
+      `${path}.spender`,
+    );
+    if (token === undefined || owner === undefined || spender === undefined) {
       return undefined;
     }
-    return { domain, message, fields: checkedFields };
-  };
+    return { type, token, owner, spender };
+  }
+  if (type === "morphoAuthorization") {
+    check.keys(approval, {
+      allow: ["type", "authorizer", "authorized"],
+      path,
+    });
+    const authorizer = check.address(
+      readField(approval, "authorizer"),
+      `${path}.authorizer`,
+    );
+    const authorized = check.address(
+      readField(approval, "authorized"),
+      `${path}.authorized`,
+    );
+    if (authorizer === undefined || authorized === undefined) {
+      return undefined;
+    }
+    return { type, authorizer, authorized };
+  }
+  if (type === "midnightAuthorization") {
+    check.keys(approval, {
+      allow: ["type", "onBehalf", "authorized"],
+      path,
+    });
+    const onBehalf = check.address(
+      readField(approval, "onBehalf"),
+      `${path}.onBehalf`,
+    );
+    const authorized = check.address(
+      readField(approval, "authorized"),
+      `${path}.authorized`,
+    );
+    if (onBehalf === undefined || authorized === undefined) {
+      return undefined;
+    }
+    return { type, onBehalf, authorized };
+  }
+  errors.push(`${path}.type: unsupported approval limit type "${type}"`);
+  return undefined;
+}
 
-  return check;
-};
+function parseOperationLimit(
+  check: FieldChecks,
+  { operation, path }: { readonly operation: unknown; readonly path: string },
+): ParsedOperationLimit | undefined {
+  const { errors } = check;
+  const type = isRecord(operation) ? readField(operation, "type") : undefined;
+  if (
+    !isRecord(operation) ||
+    typeof type !== "string" ||
+    !Object.hasOwn(OPERATION_SPECS, type)
+  ) {
+    errors.push(`${path}.type: unsupported operation type "${String(type)}"`);
+    return undefined;
+  }
+  const spec = OPERATION_SPECS[type as OperationType];
+  const requiredAddresses = new Set(spec.requiredAddresses);
+  const acceptsMarket = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
+    (acceptedType) => acceptedType === type,
+  );
+  check.keys(operation, {
+    allow: [
+      "type",
+      ...spec.markets,
+      ...spec.addresses,
+      ...(acceptsMarket ? ["market"] : []),
+      ...(type === "midnightSupplyCollateral" ||
+      type === "midnightSupplyCollateralMakeBorrow"
+        ? ["collateralIndex"]
+        : []),
+      ...(type === "midnightSupplyBlueMakeLend" ? ["callbackSalt"] : []),
+      "quote",
+      "slippageTolerance",
+      "sharePrice",
+      "position",
+      "inputs",
+      "referralFee",
+      "reallocationPenalty",
+    ],
+    path,
+  });
+  const errorsBefore = errors.length;
+  const out = { type } as ParsedOperationLimit;
+  // Populate the operation subject and collect field errors.
+  checkOperationSubject(check, {
+    operation,
+    path,
+    out,
+    spec,
+    acceptsMarket,
+    requiredAddresses,
+  });
+  const quote = checkOperationInputQuote(check, { operation, path, out });
+  const { normalizedQuote, collateralWithdrawals } = parseOperationQuote(
+    check,
+    { quote, path, out },
+  );
+  // Fill optional bounds and append any remaining field errors in order.
+  checkOperationSharePrice(check, { operation, path, out, normalizedQuote });
+  checkOperationPosition(check, { operation, path, out });
+  checkRepaymentLegs(check, {
+    out,
+    normalizedQuote,
+    collateralWithdrawals,
+    path,
+  });
+  return errors.length === errorsBefore ? out : undefined;
+}
+
+function checkOperationSubject(
+  check: FieldChecks,
+  {
+    operation,
+    path,
+    out,
+    spec,
+    acceptsMarket,
+    requiredAddresses,
+  }: {
+    readonly operation: object;
+    readonly path: string;
+    readonly out: ParsedOperationLimit;
+    readonly spec: (typeof OPERATION_SPECS)[OperationType];
+    readonly acceptsMarket: boolean;
+    readonly requiredAddresses: ReadonlySet<string>;
+  },
+): void {
+  const { errors } = check;
+  const { type } = out;
+  for (const field of spec.markets) {
+    const value = check.marketId(
+      readField(operation, field),
+      `${path}.${field}`,
+    );
+    if (value !== undefined) {
+      Reflect.set(out, field, value);
+    }
+  }
+  const rawMarket = readField(operation, "market");
+  if (acceptsMarket && rawMarket !== undefined) {
+    const invalidMarket = `${path}.market: must be a valid Midnight market struct; pass the struct used to build the operation.`;
+    if (isRecord(rawMarket)) {
+      try {
+        const market = rawMarket as MidnightMarketStruct;
+        const resolvedMarketId = MidnightMarketUtils.toId(market);
+        const operationMarketId = readField(operation, "marketId");
+        if (
+          typeof operationMarketId === "string" &&
+          resolvedMarketId.toLowerCase() !== operationMarketId.toLowerCase()
+        ) {
+          errors.push(
+            `${path}.market: must identify the same Midnight market as marketId; pass the struct used to build the operation.`,
+          );
+        } else {
+          Reflect.set(out, "market", MidnightMarketUtils.toStruct(market));
+        }
+      } catch {
+        errors.push(invalidMarket);
+      }
+    } else {
+      errors.push(invalidMarket);
+    }
+  }
+  for (const field of spec.addresses) {
+    const raw = readField(operation, field);
+    if (raw === undefined && !requiredAddresses.has(field)) {
+      continue;
+    }
+    const value = check.address(raw, `${path}.${field}`);
+    if (value !== undefined) {
+      Reflect.set(out, field, value);
+    }
+  }
+  if (type === "midnightSupplyBlueMakeLend") {
+    const callbackSalt = check.bytes32(
+      readField(operation, "callbackSalt"),
+      `${path}.callbackSalt`,
+    );
+    if (callbackSalt !== undefined) {
+      Reflect.set(out, "callbackSalt", callbackSalt);
+    }
+  }
+  if (
+    type === "midnightSupplyCollateral" ||
+    type === "midnightSupplyCollateralMakeBorrow"
+  ) {
+    const collateralIndex = check.uint256(
+      readField(operation, "collateralIndex"),
+      `${path}.collateralIndex`,
+    );
+    if (collateralIndex !== undefined) {
+      Reflect.set(out, "collateralIndex", collateralIndex);
+    }
+  }
+  const rawTolerance = readField(operation, "slippageTolerance");
+  if (rawTolerance === undefined) {
+    Reflect.set(out, "slippageTolerance", DEFAULT_SLIPPAGE_TOLERANCE);
+  } else {
+    const tolerance = check.uint256(rawTolerance, `${path}.slippageTolerance`);
+    if (tolerance !== undefined) {
+      if (tolerance >= MathLib.WAD) {
+        errors.push(`${path}.slippageTolerance: must be below 100% (1e18)`);
+      }
+      Reflect.set(out, "slippageTolerance", tolerance);
+    }
+  }
+}
+
+function checkOperationInputQuote(
+  check: FieldChecks,
+  {
+    operation,
+    path,
+    out,
+  }: {
+    readonly operation: object;
+    readonly path: string;
+    readonly out: ParsedOperationLimit;
+  },
+): unknown {
+  const { errors } = check;
+  const { type } = out;
+  const inputs = readField(operation, "inputs");
+  const referralFee = readField(operation, "referralFee");
+  const reallocationPenalty = readField(operation, "reallocationPenalty");
+  const suppliedQuote = readField(operation, "quote");
+  let quote = suppliedQuote;
+  if (inputs === undefined) {
+    if (referralFee !== undefined) {
+      errors.push(`${path}.referralFee: requires inputs`);
+    }
+    if (reallocationPenalty !== undefined) {
+      errors.push(`${path}.reallocationPenalty: requires inputs`);
+    }
+  } else {
+    // Validate amounts before scheduling internal before-state reads.
+    validateOperationInputs({
+      type: type as OperationType,
+      inputs,
+      fee: referralFee,
+      penalty: reallocationPenalty,
+      errors,
+      path,
+    });
+    const repay = isRecord(inputs) ? readField(inputs, "repay") : undefined;
+    Reflect.set(
+      out,
+      "inputs",
+      isRecord(inputs)
+        ? { ...inputs, ...(isRecord(repay) ? { repay: { ...repay } } : {}) }
+        : inputs,
+    );
+    if (referralFee !== undefined) {
+      Reflect.set(out, "referralFee", referralFee);
+    }
+    if (reallocationPenalty !== undefined) {
+      Reflect.set(out, "reallocationPenalty", reallocationPenalty);
+    }
+    if (Object.hasOwn(INPUT_FIELDS, type)) {
+      const fields = INPUT_FIELDS[type as keyof typeof INPUT_FIELDS];
+      const derivedFields = fields.filter(
+        (field) =>
+          !isRecord(suppliedQuote ?? {}) ||
+          readField(suppliedQuote ?? {}, field) === undefined,
+      );
+      Reflect.set(out, "derivedFields", derivedFields);
+      // Combined-collateral checks treat these placeholders as inactive legs.
+      quote = {
+        ...Object.fromEntries(fields.map((field) => [field, INACTIVE_LEG_CAP])),
+        ...(isRecord(suppliedQuote)
+          ? Object.fromEntries(
+              Object.entries(suppliedQuote).filter(
+                ([, value]) => value !== undefined,
+              ),
+            )
+          : {}),
+      };
+      if (suppliedQuote !== undefined && !isRecord(suppliedQuote)) {
+        errors.push(`${path}.quote: must be an object`);
+      }
+    }
+  }
+  return quote;
+}
+
+function parseOperationQuote(
+  check: FieldChecks,
+  {
+    quote,
+    path,
+    out,
+  }: {
+    readonly quote: unknown;
+    readonly path: string;
+    readonly out: ParsedOperationLimit;
+  },
+): {
+  normalizedQuote?: Record<string, bigint>;
+  collateralWithdrawals?: MidnightCollateralAmount[];
+} {
+  const { errors } = check;
+  const { type } = out;
+  if (!isRecord(quote)) {
+    errors.push(
+      `${path}.quote: must be an object containing at least one quoted amount`,
+    );
+    return {};
+  }
+  check.keys(quote, {
+    allow:
+      type === "midnightSupplyBlueMakeLend"
+        ? ["assetsPaid", "sharesMinted"]
+        : [
+            ...QUOTE_FIELDS,
+            "positions",
+            "deallocations",
+            "collateralWithdrawals",
+            "collateralSupplies",
+          ],
+    path: `${path}.quote`,
+  });
+  const normalizedQuote: Record<string, bigint> = {};
+  for (const field of QUOTE_FIELDS) {
+    const raw = readField(quote, field);
+    if (raw === undefined) {
+      continue;
+    }
+    const value = check.uint256(raw, `${path}.quote.${field}`);
+    if (value === undefined) {
+      continue;
+    }
+    if (value === 0n && field !== "penalty") {
+      errors.push(`${path}.quote.${field}: must be positive (got "${raw}")`);
+    }
+    normalizedQuote[field] = value;
+  }
+  const positions = parseInKindQuotePositions(check, {
+    quote,
+    type,
+    path,
+    normalizedQuote,
+  });
+  const deallocations = parseForceExitDeallocations(check, {
+    quote,
+    type,
+    path,
+    normalizedQuote,
+  });
+  const collateralWithdrawals = parseCollateralWithdrawalQuote(check, {
+    quote,
+    type,
+    path,
+  });
+  const collateralSupplies = parseCollateralSupplyQuote(check, {
+    quote,
+    type,
+    path,
+  });
+  const quoteRecord = normalizedQuote;
+  // Every operation type has required sides, so an empty quote is
+  // rejected by the required-quotes loop below.
+  const measurement = operationMeasurementPlan(out);
+  for (const field of Object.keys(
+    QUOTE_FIELD_DIRECTION,
+  ) as (keyof typeof QUOTE_FIELD_DIRECTION)[]) {
+    if (quoteRecord[field] !== undefined && measurement[field] === undefined) {
+      errors.push(`${path}.quote.${field}: cannot be measured for "${type}"`);
+    }
+  }
+  errors.push(
+    ...requiredQuoteErrors({
+      type: type as OperationType,
+      quote: quoteRecord as SlippageQuote,
+      path,
+    }),
+  );
+  Reflect.set(out, "quote", {
+    ...quoteRecord,
+    ...(positions === undefined ? {} : { positions }),
+    ...(deallocations === undefined ? {} : { deallocations }),
+    ...(collateralWithdrawals === undefined ? {} : { collateralWithdrawals }),
+    ...(collateralSupplies === undefined ? {} : { collateralSupplies }),
+  });
+  return { normalizedQuote, collateralWithdrawals };
+}
+
+function parseInKindQuotePositions(
+  check: FieldChecks,
+  {
+    quote,
+    type,
+    path,
+    normalizedQuote,
+  }: {
+    readonly quote: object;
+    readonly type: OperationType;
+    readonly path: string;
+    readonly normalizedQuote: Record<string, bigint>;
+  },
+): InKindPositionQuote[] | undefined {
+  const { errors } = check;
+  const rawPositions = readField(quote, "positions");
+  let positions: InKindPositionQuote[] | undefined;
+  if (rawPositions !== undefined) {
+    if (type !== "vaultV1InKindRedeem" && type !== "vaultV2InKindRedeem") {
+      errors.push(`${path}.quote.positions: cannot be measured for "${type}"`);
+    } else if (Array.isArray(rawPositions)) {
+      positions = [];
+      if (rawPositions.length === 0) {
+        errors.push(`${path}.quote.positions: must be a non-empty array`);
+      }
+      const seen = new Set<string>();
+      for (const [i, entry] of rawPositions.entries()) {
+        const entryPath = `${path}.quote.positions[${i}]`;
+        if (!isRecord(entry)) {
+          errors.push(`${entryPath}: must be an object`);
+          continue;
+        }
+        check.keys(entry, {
+          allow: ["marketId", "supplyShares"],
+          path: entryPath,
+        });
+        const entryMarketId = check.marketId(
+          readField(entry, "marketId"),
+          `${entryPath}.marketId`,
+        );
+        const rawSupplyShares = readField(entry, "supplyShares");
+        const supplyShares = check.uint256(
+          rawSupplyShares,
+          `${entryPath}.supplyShares`,
+        );
+        if (supplyShares === 0n) {
+          errors.push(
+            `${entryPath}.supplyShares: must be positive (got "${rawSupplyShares}")`,
+          );
+        }
+        if (entryMarketId !== undefined) {
+          const key = entryMarketId.toLowerCase();
+          if (seen.has(key)) {
+            errors.push(
+              `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
+            );
+          } else {
+            seen.add(key);
+          }
+        }
+        if (entryMarketId !== undefined && supplyShares !== undefined) {
+          positions.push({ marketId: entryMarketId, supplyShares });
+        }
+      }
+    } else {
+      errors.push(
+        `${path}.quote.positions: must be an array of { marketId, supplyShares }`,
+      );
+    }
+  }
+  if (
+    (type === "vaultV1InKindRedeem" || type === "vaultV2InKindRedeem") &&
+    missingInKindProceeds(type, {
+      positions,
+      assetsReceived: normalizedQuote.assetsReceived,
+    })
+  ) {
+    errors.push(
+      `${path}.quote: "positions" or "assetsReceived" required for "${type}"`,
+    );
+  }
+  return positions;
+}
+
+function parseForceExitDeallocations(
+  check: FieldChecks,
+  {
+    quote,
+    type,
+    path,
+    normalizedQuote,
+  }: {
+    readonly quote: object;
+    readonly type: OperationType;
+    readonly path: string;
+    readonly normalizedQuote: Record<string, bigint>;
+  },
+): ForceExitDeallocationQuote[] | undefined {
+  const { errors } = check;
+  if (
+    normalizedQuote.penalty !== undefined &&
+    type !== "vaultV2ForceWithdraw" &&
+    type !== "vaultV2ForceRedeem"
+  ) {
+    errors.push(`${path}.quote.penalty: cannot be measured for "${type}"`);
+  }
+  const rawDeallocations = readField(quote, "deallocations");
+  let deallocations: ForceExitDeallocationQuote[] | undefined;
+  if (rawDeallocations !== undefined) {
+    if (type !== "vaultV2ForceWithdraw" && type !== "vaultV2ForceRedeem") {
+      errors.push(
+        `${path}.quote.deallocations: cannot be measured for "${type}"`,
+      );
+    } else if (Array.isArray(rawDeallocations)) {
+      deallocations = [];
+      if (rawDeallocations.length === 0) {
+        errors.push(`${path}.quote.deallocations: must be a non-empty array`);
+      }
+      const seen = new Set<string>();
+      for (const [i, entry] of rawDeallocations.entries()) {
+        const entryPath = `${path}.quote.deallocations[${i}]`;
+        if (!isRecord(entry)) {
+          errors.push(`${entryPath}: must be an object`);
+          continue;
+        }
+        check.keys(entry, {
+          allow: ["marketId", "assets"],
+          path: entryPath,
+        });
+        const entryMarketId = check.marketId(
+          readField(entry, "marketId"),
+          `${entryPath}.marketId`,
+        );
+        const assets = check.uint256(
+          readField(entry, "assets"),
+          `${entryPath}.assets`,
+        );
+        if (entryMarketId !== undefined) {
+          const key = entryMarketId.toLowerCase();
+          if (seen.has(key)) {
+            errors.push(
+              `${entryPath}.marketId: duplicate market "${entryMarketId}"`,
+            );
+          } else {
+            seen.add(key);
+          }
+        }
+        if (entryMarketId !== undefined && assets !== undefined) {
+          deallocations.push({ marketId: entryMarketId, assets });
+        }
+      }
+    } else {
+      errors.push(
+        `${path}.quote.deallocations: must be an array of { marketId, assets }`,
+      );
+    }
+  }
+  return deallocations;
+}
+
+function parseCollateralWithdrawalQuote(
+  check: FieldChecks,
+  {
+    quote,
+    type,
+    path,
+  }: {
+    readonly quote: object;
+    readonly type: OperationType;
+    readonly path: string;
+  },
+): MidnightCollateralAmount[] | undefined {
+  const { errors } = check;
+  let collateralWithdrawals: MidnightCollateralAmount[] | undefined;
+  const rawCollateralWithdrawals = readField(quote, "collateralWithdrawals");
+  if (
+    rawCollateralWithdrawals !== undefined ||
+    type === "midnightWithdrawCollateralBatch"
+  ) {
+    if (
+      type !== "midnightWithdrawCollateralBatch" &&
+      type !== "midnightRepayWithdrawCollateral" &&
+      type !== "midnightTakeRepayWithdrawCollateral"
+    ) {
+      errors.push(
+        `${path}.quote.collateralWithdrawals: cannot be measured for "${type}"`,
+      );
+    } else if (Array.isArray(rawCollateralWithdrawals)) {
+      if (rawCollateralWithdrawals.length === 0) {
+        errors.push(
+          `${path}.quote.collateralWithdrawals: must be a non-empty array`,
+        );
+      }
+      collateralWithdrawals = [];
+      const seen = new Set<bigint>();
+      for (const [i, entry] of rawCollateralWithdrawals.entries()) {
+        const entryPath = `${path}.quote.collateralWithdrawals[${i}]`;
+        if (!isRecord(entry)) {
+          errors.push(`${entryPath}: must be an object`);
+          continue;
+        }
+        check.keys(entry, {
+          allow: ["collateralIndex", "assets"],
+          path: entryPath,
+        });
+        const collateralIndex = check.uint256(
+          readField(entry, "collateralIndex"),
+          `${entryPath}.collateralIndex`,
+        );
+        const rawAssets = readField(entry, "assets");
+        const assets = check.uint256(rawAssets, `${entryPath}.assets`);
+        if (assets === 0n) {
+          errors.push(
+            `${entryPath}.assets: must be positive (got "${rawAssets}")`,
+          );
+        }
+        if (collateralIndex !== undefined) {
+          if (seen.has(collateralIndex)) {
+            errors.push(
+              `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+            );
+          } else {
+            seen.add(collateralIndex);
+          }
+        }
+        if (collateralIndex !== undefined && assets !== undefined) {
+          collateralWithdrawals.push({ collateralIndex, assets });
+        }
+      }
+    } else {
+      errors.push(
+        `${path}.quote.collateralWithdrawals: must be an array of { collateralIndex, assets }`,
+      );
+    }
+  }
+  return collateralWithdrawals;
+}
+
+function parseCollateralSupplyQuote(
+  check: FieldChecks,
+  {
+    quote,
+    type,
+    path,
+  }: {
+    readonly quote: object;
+    readonly type: OperationType;
+    readonly path: string;
+  },
+): MidnightCollateralAmount[] | undefined {
+  const { errors } = check;
+  let collateralSupplies: MidnightCollateralAmount[] | undefined;
+  const rawCollateralSupplies = readField(quote, "collateralSupplies");
+  if (
+    rawCollateralSupplies !== undefined ||
+    type === "midnightSupplyCollateralTakeBorrow" ||
+    type === "midnightSupplyCollateralBatch"
+  ) {
+    if (
+      type !== "midnightSupplyCollateralTakeBorrow" &&
+      type !== "midnightSupplyCollateralBatch"
+    ) {
+      errors.push(
+        `${path}.quote.collateralSupplies: cannot be measured for "${type}"`,
+      );
+    } else if (Array.isArray(rawCollateralSupplies)) {
+      if (rawCollateralSupplies.length === 0) {
+        errors.push(
+          `${path}.quote.collateralSupplies: must be a non-empty array`,
+        );
+      }
+      collateralSupplies = [];
+      const seen = new Set<bigint>();
+      for (const [i, entry] of rawCollateralSupplies.entries()) {
+        const entryPath = `${path}.quote.collateralSupplies[${i}]`;
+        if (!isRecord(entry)) {
+          errors.push(`${entryPath}: must be an object`);
+          continue;
+        }
+        check.keys(entry, {
+          allow: ["collateralIndex", "assets"],
+          path: entryPath,
+        });
+        const collateralIndex = check.uint256(
+          readField(entry, "collateralIndex"),
+          `${entryPath}.collateralIndex`,
+        );
+        const rawAssets = readField(entry, "assets");
+        const assets = check.uint256(rawAssets, `${entryPath}.assets`);
+        if (assets === 0n) {
+          errors.push(
+            `${entryPath}.assets: must be positive (got "${rawAssets}")`,
+          );
+        }
+        if (collateralIndex !== undefined) {
+          if (seen.has(collateralIndex)) {
+            errors.push(
+              `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+            );
+          } else {
+            seen.add(collateralIndex);
+          }
+        }
+        if (collateralIndex !== undefined && assets !== undefined) {
+          collateralSupplies.push({ collateralIndex, assets });
+        }
+      }
+    } else {
+      errors.push(
+        `${path}.quote.collateralSupplies: must be an array of { collateralIndex, assets }`,
+      );
+    }
+  }
+  return collateralSupplies;
+}
+
+function checkOperationSharePrice(
+  check: FieldChecks,
+  {
+    operation,
+    path,
+    out,
+    normalizedQuote,
+  }: {
+    readonly operation: object;
+    readonly path: string;
+    readonly out: ParsedOperationLimit;
+    readonly normalizedQuote: Record<string, bigint> | undefined;
+  },
+): void {
+  const { errors } = check;
+  const { type } = out;
+  const rawSharePrice = readField(operation, "sharePrice");
+  if (rawSharePrice !== undefined) {
+    if (isRecord(rawSharePrice)) {
+      check.keys(rawSharePrice, {
+        allow: ["expected", "tolerance"],
+        path: `${path}.sharePrice`,
+      });
+      const expected = check.uint256(
+        readField(rawSharePrice, "expected"),
+        `${path}.sharePrice.expected`,
+      );
+      const priceTolerance = check.uint256(
+        readField(rawSharePrice, "tolerance"),
+        `${path}.sharePrice.tolerance`,
+      );
+      if (expected !== undefined && expected <= 0n) {
+        errors.push(`${path}.sharePrice.expected: must be positive`);
+      }
+      if (priceTolerance !== undefined && priceTolerance > MathLib.WAD) {
+        errors.push(
+          `${path}.sharePrice.tolerance: must not exceed 100% (1e18)`,
+        );
+      }
+      const pair = sharePriceMeasurement(type as OperationType);
+      if (pair === undefined) {
+        errors.push(`${path}.sharePrice: cannot be measured for "${type}"`);
+      } else {
+        for (const field of [pair.assets, pair.shares] as const) {
+          if (normalizedQuote?.[field] === undefined) {
+            errors.push(`${path}.sharePrice: requires quote.${field}`);
+          }
+        }
+      }
+      if (expected !== undefined && priceTolerance !== undefined) {
+        Reflect.set(out, "sharePrice", {
+          expected,
+          tolerance: priceTolerance,
+        });
+      }
+    } else {
+      errors.push(`${path}.sharePrice: must be an object`);
+    }
+  }
+}
+
+function checkOperationPosition(
+  check: FieldChecks,
+  {
+    operation,
+    path,
+    out,
+  }: {
+    readonly operation: object;
+    readonly path: string;
+    readonly out: ParsedOperationLimit;
+  },
+): void {
+  const { errors } = check;
+  const { type } = out;
+  const rawPosition = readField(operation, "position");
+  if (rawPosition !== undefined) {
+    if (isRecord(rawPosition)) {
+      let positionFields: readonly string[] = POSITION_BOUNDS_FIELDS;
+      if (type === "midnightRedeem") {
+        positionFields = MIDNIGHT_POSITION_BOUNDS_FIELDS;
+      } else if (
+        type === "midnightRepayWithdrawCollateral" ||
+        type === "midnightTakeRepayWithdrawCollateral"
+      ) {
+        positionFields = MIDNIGHT_DEBT_POSITION_BOUNDS_FIELDS;
+      } else if (
+        type === "midnightTakeBorrow" ||
+        type === "midnightTakeWithdraw" ||
+        type === "midnightSupplyCollateralTakeBorrow" ||
+        type === "midnightSupplyCollateralBatch" ||
+        type === "midnightWithdrawCollateralBatch"
+      ) {
+        positionFields = [];
+      }
+      check.keys(rawPosition, {
+        allow: positionFields,
+        path: `${path}.position`,
+      });
+      const bounds: Record<string, bigint> = {};
+      let maxCollateral: MidnightCollateralAmount[] | undefined;
+      let hasPositionBound = false;
+      for (const field of positionFields) {
+        const raw = readField(rawPosition, field);
+        if (raw === undefined) {
+          continue;
+        }
+        hasPositionBound = true;
+        if (field === "maxCollateral") {
+          maxCollateral = parseMaxCollateralBound(check, { raw, path });
+          continue;
+        }
+        const value = check.uint256(raw, `${path}.position.${field}`);
+        if (value !== undefined) {
+          bounds[field] = value;
+        }
+      }
+      if (
+        type !== "midnightRedeem" &&
+        type !== "midnightRepayWithdrawCollateral" &&
+        type !== "midnightTakeRepayWithdrawCollateral" &&
+        positionBoundsMarketField(type as OperationType) === undefined
+      ) {
+        errors.push(`${path}.position: cannot be measured for "${type}"`);
+      }
+      if (!hasPositionBound) {
+        errors.push(`${path}.position: supply at least one bound`);
+      }
+      if (Object.keys(bounds).length > 0 || maxCollateral !== undefined) {
+        Reflect.set(out, "position", {
+          ...bounds,
+          ...(maxCollateral === undefined ? {} : { maxCollateral }),
+        });
+      }
+    } else {
+      errors.push(`${path}.position: must be an object`);
+    }
+  }
+}
+
+function parseMaxCollateralBound(
+  check: FieldChecks,
+  { raw, path }: { readonly raw: unknown; readonly path: string },
+): MidnightCollateralAmount[] | undefined {
+  const { errors } = check;
+  if (!Array.isArray(raw)) {
+    errors.push(
+      `${path}.position.maxCollateral: must be an array of { collateralIndex, assets }`,
+    );
+    return undefined;
+  }
+  if (raw.length === 0) {
+    errors.push(`${path}.position.maxCollateral: must be a non-empty array`);
+  }
+  const maxCollateral: MidnightCollateralAmount[] = [];
+  const seen = new Set<bigint>();
+  for (const [i, entry] of raw.entries()) {
+    const entryPath = `${path}.position.maxCollateral[${i}]`;
+    if (!isRecord(entry)) {
+      errors.push(`${entryPath}: must be an object`);
+      continue;
+    }
+    check.keys(entry, {
+      allow: ["collateralIndex", "assets"],
+      path: entryPath,
+    });
+    const collateralIndex = check.uint256(
+      readField(entry, "collateralIndex"),
+      `${entryPath}.collateralIndex`,
+    );
+    const assets = check.uint256(
+      readField(entry, "assets"),
+      `${entryPath}.assets`,
+    );
+    if (collateralIndex !== undefined) {
+      if (seen.has(collateralIndex)) {
+        errors.push(
+          `${entryPath}.collateralIndex: duplicate index "${collateralIndex}"`,
+        );
+      } else {
+        seen.add(collateralIndex);
+      }
+    }
+    if (collateralIndex !== undefined && assets !== undefined) {
+      maxCollateral.push({ collateralIndex, assets });
+    }
+  }
+  return maxCollateral;
+}
+
+function checkRepaymentLegs(
+  check: FieldChecks,
+  {
+    out,
+    normalizedQuote,
+    collateralWithdrawals,
+    path,
+  }: {
+    readonly out: ParsedOperationLimit;
+    readonly normalizedQuote: Record<string, bigint> | undefined;
+    readonly collateralWithdrawals: MidnightCollateralAmount[] | undefined;
+    readonly path: string;
+  },
+): void {
+  const { errors } = check;
+  const { type } = out;
+  if (
+    type === "midnightRepayWithdrawCollateral" ||
+    type === "midnightTakeRepayWithdrawCollateral"
+  ) {
+    const position = readField(out, "position");
+    const maxCollateral = isRecord(position)
+      ? readField(position, "maxCollateral")
+      : undefined;
+    if (Array.isArray(maxCollateral)) {
+      const quotedIndexes = new Set(
+        (collateralWithdrawals ?? []).map(
+          ({ collateralIndex }) => collateralIndex,
+        ),
+      );
+      for (const [i, bound] of maxCollateral.entries()) {
+        const collateralIndex = isRecord(bound)
+          ? readField(bound, "collateralIndex")
+          : undefined;
+        if (
+          typeof collateralIndex === "bigint" &&
+          !quotedIndexes.has(collateralIndex)
+        ) {
+          errors.push(
+            `${path}.position.maxCollateral[${i}].collateralIndex: requires a matching quote.collateralWithdrawals entry`,
+          );
+        }
+      }
+    }
+    const maxDebt =
+      isRecord(position) && typeof readField(position, "maxDebt") === "bigint"
+        ? readField(position, "maxDebt")
+        : undefined;
+    const hasRepayLeg =
+      normalizedQuote?.debtRepaid !== undefined || maxDebt !== undefined;
+    const hasWithdrawLeg = (collateralWithdrawals?.length ?? 0) > 0;
+    if (type === "midnightTakeRepayWithdrawCollateral" && !hasRepayLeg) {
+      errors.push(
+        `${path}: quote.debtRepaid or position.maxDebt is required for "${type}"`,
+      );
+    } else if (!hasRepayLeg && !hasWithdrawLeg) {
+      errors.push(
+        `${path}: quote.debtRepaid, position.maxDebt, or a non-empty quote.collateralWithdrawals is required`,
+      );
+    }
+    if (hasRepayLeg && normalizedQuote?.assetsPaid === undefined) {
+      errors.push(
+        `${path}.quote.assetsPaid: required when the repayment leg is active`,
+      );
+    }
+    if (!hasRepayLeg && normalizedQuote?.assetsPaid !== undefined) {
+      errors.push(
+        `${path}.quote.assetsPaid: cannot be measured without an active repayment leg`,
+      );
+    }
+  } else if (normalizedQuote?.debtRepaid !== undefined) {
+    errors.push(`${path}.quote.debtRepaid: cannot be measured for "${type}"`);
+  }
+}
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
 
@@ -1691,37 +2127,41 @@ export const conditionalQuoteViolations = (
     if (
       (quote.sharesMinted ?? 0n) > INACTIVE_LEG_CAP &&
       quote.assetsReceived === undefined
-    )
+    ) {
       violations.push({
         field: "assetsReceived",
         reason: 'the borrow leg is active ("sharesMinted" above 1n)',
       });
+    }
     if (
       (quote.assetsPaid ?? 0n) > INACTIVE_LEG_CAP &&
       (quote.collateralSupplied ?? 0n) === 0n
-    )
+    ) {
       violations.push({
         field: "collateralSupplied",
         reason: 'the supply leg is active ("assetsPaid" above 1n)',
       });
+    }
   }
   if (type === "blueRepayWithdrawCollateral") {
     if (
       (quote.collateralWithdrawn ?? 0n) > INACTIVE_LEG_CAP &&
       quote.assetsReceived === undefined
-    )
+    ) {
       violations.push({
         field: "assetsReceived",
         reason: 'the collateral leg is active ("collateralWithdrawn" above 1n)',
       });
+    }
     if (
       (quote.assetsPaid ?? 0n) > INACTIVE_LEG_CAP &&
       quote.sharesBurned === undefined
-    )
+    ) {
       violations.push({
         field: "sharesBurned",
         reason: 'the repay leg is active ("assetsPaid" above 1n)',
       });
+    }
   }
   return violations;
 };
@@ -1746,17 +2186,20 @@ export function requiredQuoteErrors({
 }): string[] {
   const errors: string[] = [];
   for (const required of requiredQuoteGroups(type)) {
-    if (required.some((field) => quote[field] !== undefined)) continue;
+    if (required.some((field) => quote[field] !== undefined)) {
+      continue;
+    }
     errors.push(
       required.length === 1
         ? `${path}.quote.${required[0]}: required for "${type}"`
         : `${path}.quote: supply at least one of ${required.map((field) => `"${field}"`).join(", ")} for "${type}"`,
     );
   }
-  for (const { field, reason } of conditionalQuoteViolations(type, quote))
+  for (const { field, reason } of conditionalQuoteViolations(type, quote)) {
     errors.push(
       `${path}.quote.${field}: required for "${type}" when ${reason}`,
     );
+  }
   return errors;
 }
 
@@ -1769,17 +2212,21 @@ export function requiredQuoteErrors({
  * `PermitSingle` payloads rather than silently reinterpreting them. Cross-field
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
- * must bind to `chainId`. Final-mode signed requests are retained for use-event checks.
+ * must bind to the client's chain. Final-mode signed requests are retained for use-event checks.
  * Caller `stateOverrides` are copied without validation or normalization.
  *
  * @param input - Caller input (`SimulateInputParams`-shaped, including quote-only requests).
+ * @param chainId - `client.chain.id` of the caller's client; validated as a positive safe integer.
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
  * @throws {SimulationValidationError} On any unknown key, value or cross-field
  *   violation.
  * @internal
  */
-export function parseRequest(input: SimulateInputParams): ParsedRequest {
+export function parseRequest(
+  input: SimulateInputParams,
+  chainId: unknown,
+): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 
@@ -1790,7 +2237,6 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
   }
   check.keys(input, {
     allow: [
-      "chainId",
       "transactions",
       "blockNumber",
       "block",
@@ -1804,19 +2250,68 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
 
   const stateOverrides = structuredClone(input.stateOverrides);
 
-  // chainId
-  const chainId = input.chainId;
   if (
     typeof chainId !== "number" ||
     !Number.isInteger(chainId) ||
     !Number.isSafeInteger(chainId) ||
     chainId <= 0
   ) {
-    fieldErrors.push("chainId: must be a positive safe integer");
+    fieldErrors.push("client.chain.id: must be a positive safe integer");
+  }
+  const { transactions, transactionIndices } = parseTransactions(
+    check,
+    input.transactions,
+  );
+
+  // mode
+  const rawMode = input.mode;
+  let mode: SimulationMode = "final";
+  if (rawMode !== undefined) {
+    const found = SIMULATION_MODES.find((m) => m === rawMode);
+    if (found === undefined) {
+      fieldErrors.push(
+        `mode: must be one of ${SIMULATION_MODES.map((m) => `"${m}"`).join(", ")} (got ${String(rawMode)})`,
+      );
+    } else {
+      mode = found;
+    }
   }
 
-  // transactions
-  const rawTransactions = input.transactions;
+  const { blockNumber, block } = parseBlockSelection(check, input);
+  const authorizations = parseAuthorizations(check, input.authorizations);
+  const normalizedLimits = parseLimits(check, input.limits);
+  // Append cross-field errors after the per-field errors.
+  checkBundleIdentity(fieldErrors, {
+    transactions,
+    transactionIndices,
+    authorizations,
+    chainId,
+  });
+
+  if (fieldErrors.length > 0) {
+    throw new SimulationValidationError(
+      "Invalid simulation input",
+      fieldErrors,
+    );
+  }
+
+  return deepFreeze<ParsedRequest>({
+    chainId: chainId as number,
+    mode,
+    transactions,
+    authorizations,
+    ...(blockNumber === undefined ? {} : { blockNumber }),
+    ...(block === undefined ? {} : { block }),
+    ...(stateOverrides === undefined ? {} : { stateOverrides }),
+    limits: normalizedLimits,
+  });
+}
+
+function parseTransactions(
+  check: FieldChecks,
+  rawTransactions: unknown,
+): { transactions: ParsedTransaction[]; transactionIndices: number[] } {
+  const fieldErrors = check.errors;
   const transactions: ParsedTransaction[] = [];
   // Raw index of each accepted transaction, so cross-field errors name the
   // caller's index rather than the filtered position.
@@ -1867,30 +2362,22 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
           to,
           data,
           value: value ?? 0n,
-          ...(assertBefore !== undefined ? { assertBefore } : {}),
-          ...(assertAfter !== undefined ? { assertAfter } : {}),
-          ...(assertLogs !== undefined ? { assertLogs } : {}),
+          ...(assertBefore === undefined ? {} : { assertBefore }),
+          ...(assertAfter === undefined ? {} : { assertAfter }),
+          ...(assertLogs === undefined ? {} : { assertLogs }),
         });
         transactionIndices.push(i);
       }
     }
   }
+  return { transactions, transactionIndices };
+}
 
-  // mode
-  const rawMode = input.mode;
-  let mode: SimulationMode = "final";
-  if (rawMode !== undefined) {
-    const found = SIMULATION_MODES.find((m) => m === rawMode);
-    if (found !== undefined) {
-      mode = found;
-    } else {
-      fieldErrors.push(
-        `mode: must be one of ${SIMULATION_MODES.map((m) => `"${m}"`).join(", ")} (got ${String(rawMode)})`,
-      );
-    }
-  }
-
-  // blockNumber
+function parseBlockSelection(
+  check: FieldChecks,
+  input: SimulateInputParams,
+): { blockNumber?: ParsedRequest["blockNumber"]; block?: StateBlock } {
+  const fieldErrors = check.errors;
   const rawBlockNumber = input.blockNumber;
   let blockNumber: bigint | Exclude<BlockTag, "pending"> | undefined;
   if (rawBlockNumber !== undefined) {
@@ -1901,12 +2388,12 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
         typeof rawBlockNumber === "string"
           ? BLOCK_TAGS.find((t) => t === rawBlockNumber)
           : undefined;
-      if (tag !== undefined) {
-        blockNumber = tag;
-      } else {
+      if (tag === undefined) {
         fieldErrors.push(
           `blockNumber: must be a non-negative bigint or one of ${BLOCK_TAGS.map((t) => `"${t}"`).join(", ")}`,
         );
+      } else {
+        blockNumber = tag;
       }
     }
   }
@@ -1915,9 +2402,7 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
   const rawBlock = input.block;
   let block: StateBlock | undefined;
   if (rawBlock !== undefined) {
-    if (!isRecord(rawBlock)) {
-      fieldErrors.push("block: must be an object");
-    } else {
+    if (isRecord(rawBlock)) {
       check.keys(rawBlock, { allow: BLOCK_KEYS, path: "block" });
       const number = check.uint256(
         readField(rawBlock, "number"),
@@ -1928,45 +2413,58 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
         readField(rawBlock, "timestamp"),
         "block.timestamp",
       );
-      if (number !== undefined && hash !== undefined && timestamp !== undefined)
+      if (
+        number !== undefined &&
+        hash !== undefined &&
+        timestamp !== undefined
+      ) {
         block = { number, hash: hash.toLowerCase() as Hex, timestamp };
+      }
+    } else {
+      fieldErrors.push("block: must be an object");
     }
-    if (rawBlockNumber !== undefined)
+    if (rawBlockNumber !== undefined) {
       fieldErrors.push("block: cannot be combined with blockNumber");
+    }
   }
+  return { blockNumber, block };
+}
 
-  // authorizations
-  const rawAuthorizations = input.authorizations;
+function parseAuthorizations(
+  check: FieldChecks,
+  rawAuthorizations: unknown,
+): SimulationAuthorization[] {
+  const fieldErrors = check.errors;
   const authorizations: SimulationAuthorization[] = [];
   if (rawAuthorizations !== undefined) {
-    if (!Array.isArray(rawAuthorizations)) {
-      fieldErrors.push("authorizations: must be an array");
-    } else {
+    if (Array.isArray(rawAuthorizations)) {
       for (const [i, authorization] of rawAuthorizations.entries()) {
         const parsed = check.authorization(
           authorization,
           `authorizations[${i}]`,
         );
-        if (parsed !== undefined) authorizations.push(parsed);
+        if (parsed !== undefined) {
+          authorizations.push(parsed);
+        }
       }
+    } else {
+      fieldErrors.push("authorizations: must be an array");
     }
   }
+  return authorizations;
+}
 
-  // limits — required: an object with non-empty `operations`, or "none".
-  const limits = input.limits;
+function parseLimits(
+  check: FieldChecks,
+  limits: unknown,
+): ParsedRequest["limits"] {
+  const fieldErrors = check.errors;
   const operations: ParsedOperationLimit[] = [];
   // Assigned on every branch: never defaulting to the opt-out.
   let normalizedLimits: ParsedRequest["limits"];
   if (limits === "none") {
     normalizedLimits = "none";
-  } else if (!isRecord(limits)) {
-    normalizedLimits = "none";
-    fieldErrors.push(
-      limits === undefined
-        ? 'limits: is required; pass limits or "none"'
-        : 'limits: must be "none" or an object with "operations"',
-    );
-  } else {
+  } else if (isRecord(limits)) {
     check.keys(limits, { allow: LIMITS_KEYS, path: "limits" });
     const rawOperations = readField(limits, "operations");
     if (!Array.isArray(rawOperations) || rawOperations.length === 0) {
@@ -1979,33 +2477,58 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
           operation,
           `limits.operations[${i}]`,
         );
-        if (parsedOperation !== undefined) operations.push(parsedOperation);
+        if (parsedOperation !== undefined) {
+          operations.push(parsedOperation);
+        }
       }
     }
     const rawApprovals = readField(limits, "approvals");
     let approvals: ApprovalLimit[] | undefined;
     if (rawApprovals !== undefined) {
-      if (!Array.isArray(rawApprovals)) {
-        fieldErrors.push("limits.approvals: must be an array");
-      } else {
+      if (Array.isArray(rawApprovals)) {
         approvals = [];
         for (const [i, approval] of rawApprovals.entries()) {
           const parsedApproval = check.approvalLimit(
             approval,
             `limits.approvals[${i}]`,
           );
-          if (parsedApproval !== undefined) approvals.push(parsedApproval);
+          if (parsedApproval !== undefined) {
+            approvals.push(parsedApproval);
+          }
         }
+      } else {
+        fieldErrors.push("limits.approvals: must be an array");
       }
     }
     normalizedLimits = {
       operations,
-      ...(approvals !== undefined ? { approvals } : {}),
+      ...(approvals === undefined ? {} : { approvals }),
     };
+  } else {
+    normalizedLimits = "none";
+    fieldErrors.push(
+      limits === undefined
+        ? 'limits: is required; pass limits or "none"'
+        : 'limits: must be "none" or an object with "operations"',
+    );
   }
+  return normalizedLimits;
+}
 
-  // ─── Cross-field rules ──────────────────────────────────────────────────
-
+function checkBundleIdentity(
+  fieldErrors: string[],
+  {
+    transactions,
+    transactionIndices,
+    authorizations,
+    chainId,
+  }: {
+    readonly transactions: readonly ParsedTransaction[];
+    readonly transactionIndices: readonly number[];
+    readonly authorizations: readonly SimulationAuthorization[];
+    readonly chainId: unknown;
+  },
+): void {
   const owner = transactions[0]?.from;
   if (owner !== undefined) {
     for (const [i, tx] of transactions.entries()) {
@@ -2060,26 +2583,8 @@ export function parseRequest(input: SimulateInputParams): ParsedRequest {
       BigInt(domainChainId) !== BigInt(chainId)
     ) {
       fieldErrors.push(
-        `authorizations[${i}].typedData.domain.chainId: must equal the request chainId ${chainId} (got ${domainChainId})`,
+        `authorizations[${i}].typedData.domain.chainId: must equal the client chain ${chainId} (got ${domainChainId})`,
       );
     }
   }
-
-  if (fieldErrors.length > 0) {
-    throw new SimulationValidationError(
-      "Invalid simulation input",
-      fieldErrors,
-    );
-  }
-
-  return deepFreeze<ParsedRequest>({
-    chainId: chainId as number,
-    mode,
-    transactions,
-    authorizations,
-    ...(blockNumber !== undefined ? { blockNumber } : {}),
-    ...(block !== undefined ? { block } : {}),
-    ...(stateOverrides !== undefined ? { stateOverrides } : {}),
-    limits: normalizedLimits,
-  });
 }

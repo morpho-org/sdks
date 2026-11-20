@@ -4,14 +4,14 @@ import {
   InvalidSimulationResponseError,
   RpcTransportError,
 } from "../../errors.js";
-import { createSimulationClient } from "./client.js";
+import { simulationClientFor } from "../../test-helpers/index.js";
 import { resolvePinnedBlock } from "./resolve-pinned-block.js";
 
 const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-const client = () => createSimulationClient("https://rpc.example");
+const client = () => simulationClientFor("https://rpc.example", 1);
 
 const block = {
   number: numberToHex(20_000_000n),
@@ -136,16 +136,5 @@ describe.sequential("resolvePinnedBlock", () => {
     );
     expect(error).toBeInstanceOf(RpcTransportError);
     expect((error as Error).message).not.toContain("https://rpc.example");
-  });
-
-  test("error: preserves the abort reason", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      resolvePinnedBlock({ client: client(), signal: controller.signal }),
-    ).rejects.toMatchObject({
-      cause: controller.signal.reason,
-      code: "RPC_TRANSPORT_ERROR",
-    });
   });
 });

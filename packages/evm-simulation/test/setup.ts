@@ -8,7 +8,7 @@ import {
   InsufficientDeadSharesError,
   validateVaultV2DeadShares,
 } from "@morpho-org/morpho-sdk";
-import { blueAbi } from "@morpho-org/morpho-sdk/abis";
+import { blueAbi, vaultV2FactoryAbi } from "@morpho-org/morpho-sdk/abis";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import {
   DEAD_ADDRESS,
@@ -19,9 +19,21 @@ import {
   fetchBlueMarket,
   fetchBlueMarketParams,
 } from "@morpho-org/morpho-sdk/fetch";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
-import { erc4626Abi, isAddress, maxUint128, maxUint256 } from "viem";
+import {
+  type Address,
+  erc4626Abi,
+  isAddress,
+  maxUint128,
+  maxUint256,
+  parseEventLogs,
+  zeroHash,
+} from "viem";
 import { mainnet } from "viem/chains";
 
 /**
@@ -34,7 +46,7 @@ import { mainnet } from "viem/chains";
 export const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 24_593_903n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     // The test account carries EIP-7702 delegation code at this block; wipe it
@@ -73,6 +85,49 @@ export async function seededMarketData(
   });
   await client.deal({ erc20: marketParams.loanToken, amount: balance });
   return fetchBlueMarket(marketParams.id, client);
+}
+
+/**
+ * Deploys a Vault V2 with no adapters and the dead deposit required by SDK
+ * builders. Use it when a test only needs idle vault assets and shares.
+ */
+export async function deployIdleVaultV2(
+  client: AnvilTestClient,
+  asset: Address,
+): Promise<Address> {
+  const { vaultV2Factory } = getChainAddresses(client.chain.id);
+  if (!vaultV2Factory) throw new Error("Missing Vault V2 factory");
+  const hash = await client.writeContract({
+    address: vaultV2Factory,
+    abi: vaultV2FactoryAbi,
+    functionName: "createVaultV2",
+    args: [client.account.address, asset, zeroHash],
+  });
+  const { logs } = await client.waitForTransactionReceipt({ hash });
+  const [created] = parseEventLogs({
+    abi: vaultV2FactoryAbi,
+    eventName: "CreateVaultV2",
+    logs,
+  });
+  if (!created) throw new Error("Missing CreateVaultV2 event");
+  const vault = created.args.newVaultV2;
+
+  const balance = await client.balanceOf({ erc20: asset });
+  await client.deal({
+    erc20: asset,
+    amount: balance + MIN_VAULT_V2_DEAD_ASSETS,
+  });
+  await client.approve({
+    address: asset,
+    args: [vault, MIN_VAULT_V2_DEAD_ASSETS],
+  });
+  await client.writeContract({
+    address: vault,
+    abi: erc4626Abi,
+    functionName: "deposit",
+    args: [MIN_VAULT_V2_DEAD_ASSETS, DEAD_ADDRESS],
+  });
+  return vault;
 }
 
 /**

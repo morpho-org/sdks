@@ -26,10 +26,13 @@ import { describe, expect } from "vitest";
 import {
   type SimulationResult,
   SimulationRevertedError,
-  simulate,
   toSimulationAuthorizations,
   type VerifiedSimulationResult,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData, seededVaultData } from "../setup.js";
 import {
   createE2eMarket,
@@ -59,11 +62,9 @@ const assets = parseEther("1");
 // The fresh market is empty, so the supply mints exactly this many shares.
 const sharesMinted = SharesMath.toShares(assets, 0n, 0n, "Down");
 
-const configFor = (client: AnvilTestClient<Chain>, chainId: number) => ({
-  // Cold fork reads may exceed the production default while fetching upstream state.
-  timeoutMs: 30_000,
-  chains: new Map([[chainId, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: AnvilTestClient<Chain>) =>
+  // Cold fork reads may exceed viem's default timeout while fetching upstream state.
+  simulationClientFor(client.transport.url, client.chain);
 
 const diffOf = (
   result: SimulationResult,
@@ -197,8 +198,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
     const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
 
-    const result = await simulate(configFor(client, chainId), {
-      chainId,
+    const result = await simulateOrThrow(configFor(client), {
       blockNumber,
       mode: "preview",
       authorizations: toSimulationAuthorizations({
@@ -276,8 +276,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
         value: assets + parseEther("1"),
       });
 
-      const result = await simulate(configFor(client, chainId), {
-        chainId,
+      const result = await simulateOrThrow(configFor(client), {
         // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
         blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
         limits: {
@@ -356,8 +355,7 @@ describeActors(blueSupplyScenario, (test, chainId) => {
     const transaction = toTransaction(client, tx);
 
     await expect(
-      simulate(configFor(client, chainId), {
-        chainId,
+      simulateOrThrow(configFor(client), {
         limits: "none",
         // Pin the fork head: Monad otherwise defaults to "finalized", before the fixture setup.
         blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
@@ -418,8 +416,7 @@ describeActors(vaultV2Scenario, (test, chainId) => {
     });
     expect(authorizations.at(-1)?.type).toBe("erc20Approval");
     const depositQuote = { assetsPaid: assets, sharesMinted: shares };
-    const depositResult = await simulate(configFor(client, chainId), {
-      chainId,
+    const depositResult = await simulateOrThrow(configFor(client), {
       blockNumber,
       mode: "preview",
       authorizations,
@@ -474,8 +471,7 @@ describeActors(vaultV2Scenario, (test, chainId) => {
       redeem.buildTx(await fulfil(client, redeemRequirements)),
     );
     const redeemQuote = { sharesBurned: shares, assetsReceived: redeemed };
-    const redeemResult = await simulate(configFor(client, chainId), {
-      chainId,
+    const redeemResult = await simulateOrThrow(configFor(client), {
       blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
       limits: {
         operations: [
@@ -571,8 +567,7 @@ describeActors(blueBorrowScenario, (test, chainId) => {
       assetsPaid: collateralAssets,
       assetsReceived: borrowAssets,
     };
-    const borrowResult = await simulate(configFor(client, chainId), {
-      chainId,
+    const borrowResult = await simulateOrThrow(configFor(client), {
       blockNumber,
       mode: "preview",
       authorizations,
@@ -631,8 +626,7 @@ describeActors(blueBorrowScenario, (test, chainId) => {
       collateralWithdrawn: collateralAssets,
       assetsReceived: collateralAssets,
     };
-    const repayResult = await simulate(configFor(client, chainId), {
-      chainId,
+    const repayResult = await simulateOrThrow(configFor(client), {
       blockNumber: await client.getBlockNumber({ cacheTime: 0 }),
       limits: {
         operations: [

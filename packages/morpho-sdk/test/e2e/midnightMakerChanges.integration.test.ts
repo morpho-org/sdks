@@ -248,23 +248,13 @@ describeE2e(scenario, (test, { chainId }) => {
     ).resolves.toBe(UNITS);
 
     const group = takeableOffers[0]!.offer.group;
-    // `maxConsumed` guards the cancellation: it must cover what takers already filled.
-    const maxConsumed = await client.readContract({
-      address: midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [maker, group],
-    });
+    // A direct cancellation is unconditional: it holds whatever takers already filled.
     await sendE2eTake(client, {
       account: maker,
       take: client
         .extend(morphoViemExtension())
         .morpho.midnight(chainId)
-        .cancelOffers({
-          accountAddress: maker,
-          cancellations: [{ group, maxConsumed }],
-          deadline: Time.timestamp() + 600n,
-        }),
+        .cancelOffers({ accountAddress: maker, groups: [group] }),
     });
     await expect(
       client.readContract({
@@ -337,23 +327,13 @@ describeE2e(scenario, (test, { chainId }) => {
       }),
     ]);
     const group = oldOffers[0]!.offer.group;
-    // `maxConsumed` guards the cancellation: it must cover what takers already filled.
-    const maxConsumed = await client.readContract({
-      address: midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [maker, group],
-    });
+    // A direct cancellation is unconditional: it holds whatever takers already filled.
     await sendE2eTake(client, {
       account: maker,
       take: client
         .extend(morphoViemExtension())
         .morpho.midnight(chainId)
-        .cancelOffers({
-          accountAddress: maker,
-          cancellations: [{ group, maxConsumed }],
-          deadline: Time.timestamp() + 600n,
-        }),
+        .cancelOffers({ accountAddress: maker, groups: [group] }),
     });
     await expect(
       client.readContract({

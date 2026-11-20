@@ -32,9 +32,12 @@ export async function getErc2612Permit(
     functionName: "nonces",
     args: [params.owner],
   }).catch((error: unknown) => {
-    if (isTransportError(error)) throw error;
-    if (isContractRevertError(error) || isUndecodableResultError(error))
+    if (isTransportError(error)) {
+      throw error;
+    }
+    if (isContractRevertError(error) || isUndecodableResultError(error)) {
       return undefined;
+    }
     throw error;
   });
   if (isDefined(nonce)) {
@@ -62,9 +65,12 @@ export async function getErc2612Permit(
         address: params.token,
         functionName: "DOMAIN_SEPARATOR",
       }).catch((error: unknown) => {
-        if (isTransportError(error)) throw error;
-        if (isContractRevertError(error) || isUndecodableResultError(error))
+        if (isTransportError(error)) {
+          throw error;
+        }
+        if (isContractRevertError(error) || isUndecodableResultError(error)) {
           return undefined;
+        }
         throw error;
       });
       const domain = permit.action.typedData.domain ?? {};
@@ -74,8 +80,9 @@ export async function getErc2612Permit(
           domain,
           types: { EIP712Domain: getTypesForEIP712Domain({ domain }) },
         }).toLowerCase()
-      )
+      ) {
         return permit;
+      }
     }
   }
   return undefined;

@@ -1,7 +1,11 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import solc from "solc";
 import {
@@ -15,7 +19,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { simulate, toSimulationAuthorizations } from "../../src/index.js";
+import { toSimulationAuthorizations } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const source = `
 pragma solidity ^0.8.20;
@@ -90,7 +98,7 @@ const artifacts = compiled.contracts["Token.sol"];
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -251,15 +259,9 @@ describe.each([
                     collateralWithdrawn: amount,
                   },
                 };
-        const result = await simulate(
+        const result = await simulateOrThrow(
+          simulationClientFor(client.transport.url, mainnet),
           {
-            chains: new Map([
-              [mainnet.id, { simulateV1Url: client.transport.url! }],
-            ]),
-            timeoutMs: 30_000,
-          },
-          {
-            chainId: mainnet.id,
             mode: "preview",
             authorizations,
             limits: { operations: [{ ...limit, slippageTolerance: 0n }] },

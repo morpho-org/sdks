@@ -26,11 +26,21 @@ import type {
   TransactionPlan,
 } from "./types.js";
 import { validateTransactionPlanActions } from "./validateActions.js";
+import { buildVaultV1Deposit } from "./vaultv1/deposit.js";
+import { buildVaultV1InKindRedeem } from "./vaultv1/inKindRedeem.js";
+import { buildVaultV1MigrateToV2 } from "./vaultv1/migrateToV2.js";
+import { buildVaultV1Redeem } from "./vaultv1/redeem.js";
+import { buildVaultV1Withdraw } from "./vaultv1/withdraw.js";
 import { buildVaultV2Deposit } from "./vaultv2/deposit.js";
+import { buildVaultV2ForceRedeem } from "./vaultv2/forceRedeem.js";
+import { buildVaultV2ForceWithdraw } from "./vaultv2/forceWithdraw.js";
+import { buildVaultV2InKindRedeem } from "./vaultv2/inKindRedeem.js";
+import { buildVaultV2Redeem } from "./vaultv2/redeem.js";
 import { buildVaultV2Withdraw } from "./vaultv2/withdraw.js";
 import { validateTransactionPlanVersion } from "./version.js";
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Validates every request against its actions, verifies supplied ECDSA signatures synchronously,
  * and attaches serialized signatures by request ID. No client or RPC is used; the EIP-712 domain
  * binds the signature to its chain. Only low-s compact or serialized ECDSA permits are supported.
@@ -53,7 +63,6 @@ import { validateTransactionPlanVersion } from "./version.js";
  * const complete = (plan: TransactionPlan, signature: Hex) =>
  *   applySignatures(plan, [{ id: "vaultV2Deposit:tokenPermit", signature }]);
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function applySignatures(
   plan: TransactionPlan,
@@ -75,15 +84,22 @@ export function applySignatures(
   });
   const updates = new Map<string, Hex>();
   for (const { id, signature } of signatures) {
-    if (!requests.some((request) => request.id === id))
+    if (!requests.some((request) => request.id === id)) {
       throw new TransactionPlanSignatureMismatchError(id, "reference");
-    if (updates.has(id))
+    }
+    if (updates.has(id)) {
       throw new TransactionPlanSignatureMismatchError(id, "duplicate");
+    }
     updates.set(id, signature);
   }
-  if (updates.size === 0) return plan;
+  if (updates.size === 0) {
+    return plan;
+  }
   for (const [id, signature] of updates) {
-    const request = requests.find((candidate) => candidate.id === id)!;
+    const request = requests.find((candidate) => candidate.id === id);
+    if (request === undefined) {
+      throw new TransactionPlanSignatureMismatchError(id, "reference");
+    }
     const normalized = normalizeBundlesSignature(signature);
     let recovered: Address;
     try {
@@ -91,7 +107,9 @@ export function applySignatures(
         BigInt(normalized.r),
         BigInt(normalized.s),
       );
-      if (ecdsa.hasHighS()) throw new InvalidSignatureError();
+      if (ecdsa.hasHighS()) {
+        throw new InvalidSignatureError();
+      }
       const publicKey = ecdsa
         .addRecoveryBit(normalized.v - 27)
         .recoverPublicKey(hashTypedData(request.typedData).slice(2));
@@ -99,8 +117,11 @@ export function applySignatures(
     } catch {
       throw new InvalidSignatureError();
     }
-    if (!isAddressEqual(recovered, request.typedData.message.owner as Address))
+    if (
+      !isAddressEqual(recovered, request.typedData.message.owner as Address)
+    ) {
       throw new InvalidSignatureError();
+    }
     updates.set(
       id,
       serializeSignature({ ...normalized, v: BigInt(normalized.v) }),
@@ -108,24 +129,26 @@ export function applySignatures(
   }
   return {
     ...plan,
-    signatureRequests: plan.signatureRequests.map((request) =>
-      updates.has(request.id)
-        ? { ...request, signature: updates.get(request.id)! }
-        : request,
-    ),
+    signatureRequests: plan.signatureRequests.map((request) => {
+      const signature = updates.get(request.id);
+      return signature === undefined ? request : { ...request, signature };
+    }),
   };
 }
 
 /** @internal Lists the signature request IDs a step's action names, in role order. */
 function getStepSignatureRequestIds(step: Step): readonly string[] {
   const { action } = step;
-  if (!("signatureRequestIds" in action)) return [];
+  if (!("signatureRequestIds" in action)) {
+    return [];
+  }
   return Object.values(action.signatureRequestIds).filter(
     (id): id is string => id !== undefined,
   );
 }
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Lists pending signature requests once per request ID after checking each against every referencing action.
  * Sign each request's typed data with your wallet stack, then verify and attach the results with
  * {@link applySignatures}.
@@ -140,7 +163,6 @@ function getStepSignatureRequestIds(step: Step): readonly string[] {
  * const prompts = (plan: TransactionPlan) =>
  *   getPendingSignatureRequests(plan).map(({ id, kind, typedData }) => ({ id, kind, typedData }));
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function getPendingSignatureRequests(
   plan: TransactionPlan,
@@ -157,19 +179,21 @@ export function getPendingSignatureRequests(
   }
   for (const request of plan.signatureRequests) {
     const actions = referenced.get(request.id);
-    if (actions === undefined)
+    if (actions === undefined) {
       throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+    }
     if (request.signature === undefined) {
       for (const action of actions) {
         validateSignatureRequest(request, action);
         if (
-          action.type !== "erc20Approval" &&
+          "signatureRequestIds" in action &&
           request.args.deadline !== action.inputs.deadline
-        )
+        ) {
           throw new TransactionPlanSignatureMismatchError(
             request.id,
             "args.deadline",
           );
+        }
       }
     }
   }
@@ -183,16 +207,38 @@ export function getPendingSignatureRequests(
 
 function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
   switch (action.type) {
+    case "vaultV2ForceRedeem":
+      return buildVaultV2ForceRedeem(action);
+    case "vaultV1MigrateToV2":
+      return buildVaultV1MigrateToV2(action, requests);
+    case "vaultV1InKindRedeem":
+      return buildVaultV1InKindRedeem(action, requests);
     case "erc20Approval":
-      return encodeErc20Approval(action.inputs);
+      return encodeErc20Approval({
+        ...action.inputs,
+        amount: action.inputs.assets ?? action.inputs.shares,
+      });
+    case "vaultV1Deposit":
+      return buildVaultV1Deposit(action, requests);
     case "vaultV2Deposit":
       return buildVaultV2Deposit(action, requests);
     case "vaultV2Withdraw":
       return buildVaultV2Withdraw(action, requests);
+    case "vaultV2Redeem":
+      return buildVaultV2Redeem(action, requests);
+    case "vaultV2ForceWithdraw":
+      return buildVaultV2ForceWithdraw(action, requests);
+    case "vaultV1Withdraw":
+      return buildVaultV1Withdraw(action, requests);
+    case "vaultV1Redeem":
+      return buildVaultV1Redeem(action, requests);
+    case "vaultV2InKindRedeem":
+      return buildVaultV2InKindRedeem(action, requests);
   }
 }
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Builds one transaction from a step, its fixed inputs and the signatures its action names.
  * Plans are trusted as given, whether restored or supplied directly. Signature checks establish
  * only request/action consistency; they do not validate stored fees, recipients, share-price bounds,
@@ -204,11 +250,16 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step or the selected step names an unsupported action type.
  * @throws {UnsupportedErc20ApprovalSpenderError} If an approval names an unregistered spender.
- * @throws {NonPositiveInputError} If a deposit or withdrawal amount, deposit share-price bound or deadline is not positive.
+ * @throws {SameVaultMigrationError} If a migration's source and destination vaults are identical.
+ * @throws {AmountAndSharesExclusiveError} If a migration supplies both `assets` and `shares`, or neither.
+ * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a deadline, force-redeem shares or deallocation amount is not positive.
+ * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
+ * @throws {EmptyMarketParamsListError} If a Vault V1 in-kind redemption step has no markets.
  * @throws {ReferralFeePctExceededError} If the action's referral fee is at least WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no nonzero recipient.
  * @throws {IncompleteTransactionPlanError} If a referenced signature request or its signature is missing.
  * @throws {TransactionPlanSignatureMismatchError} If a referenced permit disagrees with the step's action or its encoding arguments.
+ * @throws {BundlesPermitMismatchError} If a signed permit's spender, amount or deadline doesn't match the step.
  * @example
  * ```ts
  * import { buildTransaction, parseTransactionPlan } from "@morpho-org/morpho-sdk";
@@ -217,7 +268,6 @@ function encodeStep(action: Action, requests: readonly SignatureRequest[]) {
  *   return plan.steps.map((step) => buildTransaction(plan, step));
  * };
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function buildTransaction(
   plan: TransactionPlan,
@@ -231,7 +281,9 @@ export function buildTransaction(
     const request = plan.signatureRequests.find(
       (candidate) => candidate.id === id,
     );
-    if (request === undefined) throw new IncompleteTransactionPlanError(id);
+    if (request === undefined) {
+      throw new IncompleteTransactionPlanError(id);
+    }
     validateSignatureRequest(request, step.action);
     return request;
   });
@@ -248,24 +300,29 @@ export function buildTransaction(
 }
 
 /**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Builds every step of the plan in order.
  * @param plan - Plan whose referenced signature requests all carry a signature.
  * @returns Frozen SDK transactions in step order; discriminate on `action.type` for per-step handling.
  * @throws {UnsupportedTransactionPlanVersionError} If the plan version is unsupported, including empty plans.
  * @throws {UnsupportedTransactionPlanActionError} If any plan step names an unsupported action type, before reading requests.
  * @throws {UnsupportedErc20ApprovalSpenderError} If an approval names an unregistered spender.
- * @throws {NonPositiveInputError} If a deposit or withdrawal amount, deposit share-price bound or deadline is not positive.
+ * @throws {SameVaultMigrationError} If a migration's source and destination vaults are identical.
+ * @throws {AmountAndSharesExclusiveError} If a migration supplies both `assets` and `shares`, or neither.
+ * @throws {NonPositiveInputError} If a deposit, withdrawal or migration amount, a deposit or migration destination share-price bound, a deadline, force-redeem shares or deallocation amount is not positive.
+ * @throws {EmptyDeallocationsError} If a force-redeem step has no deallocations.
+ * @throws {EmptyMarketParamsListError} If a Vault V1 in-kind redemption step has no markets.
  * @throws {ReferralFeePctExceededError} If an action's referral fee is at least WAD.
  * @throws {ReferralFeeRecipientMissingError} If a positive referral fee has no nonzero recipient.
  * @throws {IncompleteTransactionPlanError} If any step references a signature request or signature that is missing.
  * @throws {TransactionPlanSignatureMismatchError} If a referenced permit disagrees with its action or encoding arguments.
+ * @throws {BundlesPermitMismatchError} If a signed permit's spender, amount or deadline doesn't match the step.
  * @example
  * ```ts
  * import { buildTransactions, type TransactionPlan } from "@morpho-org/morpho-sdk";
  * const submit = (plan: TransactionPlan) => buildTransactions(plan);
  * // Simulate and send in order from plan.account on plan.chainId.
  * ```
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export function buildTransactions(
   plan: TransactionPlan,

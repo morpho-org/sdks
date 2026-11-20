@@ -69,6 +69,7 @@ export {
   DivisionByZeroError,
   InvalidAddressError,
   InvalidBitLengthError,
+  MissingLocalePartError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   RetriesExhaustedError,

@@ -41,7 +41,7 @@ export function accruedInterestRef({
 
 // morpho-blue src/Morpho.sol _accrueInterest; MathLib.wTaylorCompounded/mulDivDown; UtilsLib.toUint128
 /** @internal */
-export function blueAccrualRevertsRef({
+export function blueAccrualUint256RevertsRef({
   borrowRate,
   state,
   elapsed,
@@ -50,43 +50,78 @@ export function blueAccrualRevertsRef({
   state: AccruedInterestState;
   elapsed: bigint;
 }): boolean {
-  if (elapsed === 0n) return false;
+  if (elapsed === 0n) {
+    return false;
+  }
 
   const first = borrowRate * elapsed;
-  if (first > MAX_UINT_256) return true;
+  if (first > MAX_UINT_256) {
+    return true;
+  }
 
   const firstSquared = first * first;
-  if (firstSquared > MAX_UINT_256) return true;
+  if (firstSquared > MAX_UINT_256) {
+    return true;
+  }
   const second = firstSquared / (2n * WAD);
 
   const secondTimesFirst = second * first;
-  if (secondTimesFirst > MAX_UINT_256) return true;
+  if (secondTimesFirst > MAX_UINT_256) {
+    return true;
+  }
   const third = secondTimesFirst / (3n * WAD);
 
   const growth = first + second + third;
-  if (growth > MAX_UINT_256) return true;
+  if (growth > MAX_UINT_256) {
+    return true;
+  }
 
   const interestProduct = state.totalBorrowAssets * growth;
-  if (interestProduct > MAX_UINT_256) return true;
+  if (interestProduct > MAX_UINT_256) {
+    return true;
+  }
   const interest = interestProduct / WAD;
-  if (interest > MAX_UINT_128) return true;
-  if (state.totalBorrowAssets + interest > MAX_UINT_128) return true;
-  if (state.totalSupplyAssets + interest > MAX_UINT_128) return true;
 
-  if (state.fee === 0n) return false;
+  if (state.fee === 0n) {
+    return false;
+  }
 
   const feeProduct = interest * state.fee;
-  if (feeProduct > MAX_UINT_256) return true;
+  if (feeProduct > MAX_UINT_256) {
+    return true;
+  }
   const feeAmount = feeProduct / WAD;
 
   const feeSharesProduct =
     feeAmount * (state.totalSupplyShares + VIRTUAL_SHARES);
-  if (feeSharesProduct > MAX_UINT_256) return true;
-  const feeShares =
-    feeSharesProduct /
-    (state.totalSupplyAssets + interest - feeAmount + VIRTUAL_ASSETS);
-  if (feeShares > MAX_UINT_128) return true;
-  if (state.totalSupplyShares + feeShares > MAX_UINT_128) return true;
-
+  if (feeSharesProduct > MAX_UINT_256) {
+    return true;
+  }
   return false;
+}
+
+/** @internal */
+export function blueAccrualUint128RevertsRef(
+  args: Parameters<typeof accruedInterestRef>[0],
+): boolean {
+  if (args.elapsed === 0n) {
+    return false;
+  }
+  const { interest, feeShares } = accruedInterestRef(args);
+  return (
+    interest > MAX_UINT_128 ||
+    args.state.totalBorrowAssets + interest > MAX_UINT_128 ||
+    args.state.totalSupplyAssets + interest > MAX_UINT_128 ||
+    feeShares > MAX_UINT_128 ||
+    args.state.totalSupplyShares + feeShares > MAX_UINT_128
+  );
+}
+
+/** @internal */
+export function blueAccrualRevertsRef(
+  args: Parameters<typeof accruedInterestRef>[0],
+): boolean {
+  return (
+    blueAccrualUint256RevertsRef(args) || blueAccrualUint128RevertsRef(args)
+  );
 }

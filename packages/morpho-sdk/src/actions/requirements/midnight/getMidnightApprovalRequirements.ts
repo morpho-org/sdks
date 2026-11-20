@@ -90,7 +90,9 @@ export const getMidnightApprovalRequirements = async (
     spender: params.spender,
     allowed: ["midnight", "midnightBundlesV2"],
   });
-  if (params.amount === 0n) return [];
+  if (params.amount === 0n) {
+    return [];
+  }
   await validateClientChainId(params.viemClient, params.chainId);
 
   const allowance = await readContract(params.viemClient, {

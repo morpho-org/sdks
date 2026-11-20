@@ -10,10 +10,12 @@ import {
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   type PermitRequirementSignature,
+  type ReferenceTimestampParams,
   type Requirement,
   type Transaction,
 } from "../../types/index.js";
@@ -28,11 +30,13 @@ import {
  *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, minimum allowance, and deadline values.
- * @param params.now - Timestamp the deadline is validated against; defaults to the current time.
+ * @param params.now - See {@link ReferenceTimestampParams.now}.
  * @returns No requirement when the allowance is sufficient, otherwise one approval or permit.
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
+ * @throws {NonPositiveInputError} when the deadline is not positive.
+ * @throws {InputExceedsMaxError} when the deadline exceeds `maxUint256`.
  * @throws {viem.BaseError} when an allowance, permit nonce, or `eth_chainId` read fails.
  */
 export const getVaultBundlesSharesRequirements = async (
@@ -45,8 +49,7 @@ export const getVaultBundlesSharesRequirements = async (
     readonly requiredShareAllowance: bigint;
     readonly deadline: bigint;
     readonly supportSignature: boolean;
-    readonly now?: bigint;
-  },
+  } & ReferenceTimestampParams,
 ): Promise<
   readonly (
     | Readonly<Transaction<ERC20ApprovalAction>>
@@ -54,6 +57,8 @@ export const getVaultBundlesSharesRequirements = async (
   )[]
 > => {
   validateChainId(viemClient.chain?.id, params.chainId);
+  // Reject deadlines outside the positive uint256 range before reading state.
+  validateDeadline(params.deadline);
   const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {
     throw new ExpiredDeadlineError(params.deadline, now);
@@ -67,7 +72,9 @@ export const getVaultBundlesSharesRequirements = async (
     functionName: "allowance",
     args: [params.owner, spender],
   });
-  if (allowance >= params.requiredShareAllowance) return [];
+  if (allowance >= params.requiredShareAllowance) {
+    return [];
+  }
   if (params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,

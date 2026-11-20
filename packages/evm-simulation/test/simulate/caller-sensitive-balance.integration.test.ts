@@ -1,6 +1,10 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { vaultV2FactoryAbi } from "@morpho-org/morpho-sdk/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import solc from "solc";
 import {
@@ -14,12 +18,16 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { ConsumerLimitViolationError, simulate } from "../../src/index.js";
+import { ConsumerLimitViolationError } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -118,12 +126,8 @@ test("error: owner observations reject an understated quote for a caller-sensiti
       args: [amount, owner],
     }),
   };
-  const config = {
-    timeoutMs: 30_000,
-    chains: new Map([[mainnet.id, { simulateV1Url: client.transport.url! }]]),
-  };
+  const config = simulationClientFor(client.transport.url, mainnet);
   const request = (assetsPaid: bigint) => ({
-    chainId: mainnet.id,
     transactions: [transaction],
     limits: {
       operations: [
@@ -136,10 +140,10 @@ test("error: owner observations reject an understated quote for a caller-sensiti
       ],
     },
   });
-  await expect(simulate(config, request(amount - 1n))).rejects.toThrow(
+  await expect(simulateOrThrow(config, request(amount - 1n))).rejects.toThrow(
     ConsumerLimitViolationError,
   );
-  await expect(simulate(config, request(amount))).resolves.toBeDefined();
+  await expect(simulateOrThrow(config, request(amount))).resolves.toBeDefined();
   const balance = () =>
     client.readContract({
       address: token,

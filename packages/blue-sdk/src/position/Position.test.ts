@@ -1,3 +1,4 @@
+import { NegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import {
   accrualPosition,
@@ -111,6 +112,14 @@ describe("AccrualPosition state transitions", () => {
     );
   });
 
+  test("withdraw rejects burns exceeding the market's total supply shares", () => {
+    const position = accrualPosition();
+
+    expect(() =>
+      position.withdraw(0n, position.market.totalSupplyShares + 1n),
+    ).toThrow(NegativeValueError);
+  });
+
   test("supplyCollateral increases collateral and returns a fresh position", () => {
     const position = accrualPosition();
     const result = position.supplyCollateral(10n);
@@ -144,6 +153,14 @@ describe("AccrualPosition state transitions", () => {
     const result = accrualPosition().borrow(10n, 0n);
     expect(result.position.borrowShares).toBe(60n);
     expect(result.assets).toBe(10n);
+  });
+
+  test("repay rejects burns exceeding the market's total borrow shares", () => {
+    const position = accrualPosition();
+
+    expect(() =>
+      position.repay(0n, position.market.totalBorrowShares + 1n),
+    ).toThrow(NegativeValueError);
   });
 
   test("repay decreases borrow shares and rejects over-repay", () => {

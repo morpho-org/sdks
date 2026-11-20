@@ -35,7 +35,9 @@ export function countPrecedingBlueSupplies(params: {
   let supplies = 0n;
   for (const callLogs of params.logs) {
     for (const log of callLogs) {
-      if (!isAddressEqual(log.address, params.morpho)) continue;
+      if (!isAddressEqual(log.address, params.morpho)) {
+        continue;
+      }
       const topic0 = log.topics[0]?.toLowerCase();
       const topics = [topic0, ...log.topics.slice(1)] as [
         `0x${string}`,
@@ -52,8 +54,9 @@ export function countPrecedingBlueSupplies(params: {
           if (
             event.args.id.toLowerCase() === params.marketId.toLowerCase() &&
             isAddressEqual(event.args.onBehalf, params.account)
-          )
+          ) {
             return supplies;
+          }
         } else if (topic0 === BLUE_SUPPLY) {
           const event = decodeEventLog({
             abi: blueAbi,
@@ -61,8 +64,9 @@ export function countPrecedingBlueSupplies(params: {
             data: log.data,
             topics,
           });
-          if (event.args.id.toLowerCase() === params.marketId.toLowerCase())
+          if (event.args.id.toLowerCase() === params.marketId.toLowerCase()) {
             supplies += 1n;
+          }
         }
       } catch (cause) {
         throw new InvalidSimulationResponseError(

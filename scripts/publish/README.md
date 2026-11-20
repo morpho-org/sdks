@@ -60,7 +60,8 @@ same newly configured npm installation.
 For every package, the trusted publisher for `morpho-org/sdks`, `release.yml`,
 environment `npm`, must permit **Allow npm dist-tag** as well as direct
 publishing. Tag access is separately opt-in; existing publishers do not gain it
-automatically. Keep the environment's required reviewers and branch restrictions.
+automatically. Keep the environment's branch restrictions and disabled administrator bypass;
+required reviewers are optional for both `main` and `next`.
 Do not introduce a stored npm token.
 
 The workflow writes two plans only after the full release set passes:

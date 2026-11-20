@@ -26,8 +26,12 @@ export const WEXP_UPPER_VALUE =
 
 /** @internal */
 export function wExpRef(x: bigint) {
-  if (x < LN_WEI_INT) return 0n;
-  if (x >= WEXP_UPPER_BOUND) return WEXP_UPPER_VALUE;
+  if (x < LN_WEI_INT) {
+    return 0n;
+  }
+  if (x >= WEXP_UPPER_BOUND) {
+    return WEXP_UPPER_VALUE;
+  }
 
   const adjustment = x < 0n ? -(LN_2_INT / 2n) : LN_2_INT / 2n;
   const q = (x + adjustment) / LN_2_INT;
@@ -66,20 +70,20 @@ export function borrowRateRef({
       endRateAtTarget = startRateAtTarget;
     } else {
       const endRate = (startRateAtTarget * wExpRef(linearAdaptation)) / WAD;
-      endRateAtTarget =
-        endRate < MIN_RATE_AT_TARGET
-          ? MIN_RATE_AT_TARGET
-          : endRate > MAX_RATE_AT_TARGET
-            ? MAX_RATE_AT_TARGET
-            : endRate;
+      endRateAtTarget = endRate;
+      if (endRate < MIN_RATE_AT_TARGET) {
+        endRateAtTarget = MIN_RATE_AT_TARGET;
+      } else if (endRate > MAX_RATE_AT_TARGET) {
+        endRateAtTarget = MAX_RATE_AT_TARGET;
+      }
       const halfRate =
         (startRateAtTarget * wExpRef(linearAdaptation / 2n)) / WAD;
-      const averageHalfRate =
-        halfRate < MIN_RATE_AT_TARGET
-          ? MIN_RATE_AT_TARGET
-          : halfRate > MAX_RATE_AT_TARGET
-            ? MAX_RATE_AT_TARGET
-            : halfRate;
+      let averageHalfRate = halfRate;
+      if (halfRate < MIN_RATE_AT_TARGET) {
+        averageHalfRate = MIN_RATE_AT_TARGET;
+      } else if (halfRate > MAX_RATE_AT_TARGET) {
+        averageHalfRate = MAX_RATE_AT_TARGET;
+      }
       averageRateAtTarget =
         (startRateAtTarget + endRateAtTarget + 2n * averageHalfRate) / 4n;
     }

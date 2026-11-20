@@ -3,7 +3,11 @@ import { midnightAbi } from "@morpho-org/morpho-sdk/abis";
 import { MarketParams } from "@morpho-org/morpho-sdk/midnight/entities";
 import { MarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -21,16 +25,19 @@ import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationValidationError,
-  simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
+import {
+  simulateOrThrow,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 
 /** Pinned after the Base Midnight deployment, matching morpho-sdk's Midnight fork tests. */
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -61,9 +68,8 @@ const market = new MarketParams({
   enterGate: zeroAddress,
   liquidatorGate: zeroAddress,
 });
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 
 const supply = (assets: bigint, onBehalf: Address) =>
   midnightSupplyCollateral({ chainId: base.id, market, assets, onBehalf });
@@ -128,8 +134,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
   }) => {
     const user = await setUp(client);
     const tx = supply(parseEther("1"), user);
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user }),
     });
@@ -167,15 +172,13 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
     });
     const limits = toSimulationLimits(tx.action, { owner: user });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [approve(midnight), asTransaction(user, tx)],
         limits,
       }),
     ).resolves.toBeDefined();
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [approve(OTHER), asTransaction(user, tx)],
         limits,
       }),
@@ -192,8 +195,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
       assetsPaid: parseEther("3"),
       collateralSupplied: parseEther("3"),
     };
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, first), asTransaction(user, second)],
       limits: toSimulationLimits(first.action, {
         owner: user,
@@ -206,8 +208,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
 
     // Only the first supply is quoted per-action: the bundle pays more than it.
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrow(configFor(client), {
         transactions: [asTransaction(user, first), asTransaction(user, second)],
         limits: toSimulationLimits(first.action, { owner: user }),
       }),
@@ -220,8 +221,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
     const user = await setUp(client);
     await authorizeSender(client);
     const tx = supply(parseEther("1"), OTHER);
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, { owner: user, onBehalf: OTHER }),
     });
@@ -238,10 +238,9 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
     const tx = supply(parseEther("1"), user);
     const limits = toSimulationLimits(tx.action, { owner: user });
     const request = {
-      chainId: base.id,
       transactions: [asTransaction(user, tx)],
     };
-    const error = await simulate(configFor(client), {
+    const error = await simulateOrThrow(configFor(client), {
       ...request,
       limits,
     }).catch((caught: unknown) => caught);
@@ -258,7 +257,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
       "set assetPaid to exactly collateralParams[collateralIndex].token",
     );
 
-    const result = await simulate(configFor(client), {
+    const result = await simulateOrThrow(configFor(client), {
       ...request,
       limits: {
         operations: limits.operations.map((operation) =>
@@ -280,8 +279,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
     const user = await setUp(client, false);
     const tx = supply(parseEther("1"), user);
     const options = { owner: user, market: MarketUtils.toStruct(market) };
-    const result = await simulate(configFor(client), {
-      chainId: base.id,
+    const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, tx)],
       limits: toSimulationLimits(tx.action, options),
     });
@@ -298,8 +296,7 @@ describe.sequential("midnightSupplyCollateral limits — Base fork", () => {
     await authorizeSender(client);
     const intended = supply(parseEther("1"), user);
     const delivered = supply(parseEther("1"), OTHER);
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, delivered)],
       limits: toSimulationLimits(intended.action, { owner: user }),
     }).catch((caught: unknown) => caught);

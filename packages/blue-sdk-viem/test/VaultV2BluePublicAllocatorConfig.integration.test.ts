@@ -13,9 +13,12 @@ import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../src/abis.js";
 import { fetchAccrualVaultV2 } from "../src/fetch/vault-v2/VaultV2.js";
 import { fetchVaultV2BluePublicAllocatorData } from "../src/fetch/vault-v2/VaultV2BluePublicAllocatorConfig.js";
 
+// BluePublicAllocator's deployment-time allocator authorization.
+const BLUE_PUBLIC_ALLOCATOR_FORK_BLOCK = 50_063_965n;
+
 const vaultV2BluePublicAllocatorTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 50_063_965, // BluePublicAllocator deployment block.
+  forkBlockNumber: BLUE_PUBLIC_ALLOCATOR_FORK_BLOCK,
   stepsTracing: false,
 });
 

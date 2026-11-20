@@ -9,6 +9,8 @@ import { describe, expect, test } from "vitest";
 import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { getVaultBundlesSharesRequirements } from "./getVaultBundlesSharesRequirements.js";
 
@@ -54,6 +56,32 @@ const resolve = (
   });
 
 describe("getVaultBundlesSharesRequirements", () => {
+  test.each([
+    { deadline: maxUint256 + 1n, error: InputExceedsMaxError },
+    { deadline: 0n, error: NonPositiveInputError },
+    { deadline: -1n, error: NonPositiveInputError },
+  ])(
+    "error: rejects out-of-range deadline $deadline before RPC",
+    async ({ deadline, error }) => {
+      const handle = createMockClient(mainnet);
+      mockAllowance(handle, requiredShareAllowance);
+
+      await expect(
+        getVaultBundlesSharesRequirements(handle.client, {
+          vaultData,
+          version: "vaultV1",
+          owner,
+          chainId: mainnet.id,
+          requiredShareAllowance,
+          deadline,
+          now: 1n,
+          supportSignature: false,
+        }),
+      ).rejects.toBeInstanceOf(error);
+      expect(handle.request).not.toHaveBeenCalled();
+    },
+  );
+
   test("default: no requirement when the allowance meets the required amount", async () => {
     const handle = createMockClient(mainnet);
     mockAllowance(handle, requiredShareAllowance);

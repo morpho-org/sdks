@@ -655,15 +655,17 @@ describeE2e(scenario, (test, { chainId }) => {
 
     const cancellation = midnightEntity.cancelOffers({
       accountAddress: maker,
-      cancellations: [{ group: offerGroup, maxConsumed: 0n }],
-      deadline: Time.timestamp() + 600n,
+      groups: [offerGroup],
     });
-    await sendRequirements(client, {
-      account: maker,
-      requirements: await cancellation.getRequirements(),
-    });
+    await expect(cancellation.getRequirements()).resolves.toEqual([]);
     const cancelTx = cancellation.buildTx();
-    expect(cancelTx.to).toBe(midnightBundlesV2);
+    expect(cancelTx.to).toBe(midnight);
+    expect(
+      decodeFunctionData({ abi: midnightAbi, data: cancelTx.data }),
+    ).toEqual({
+      functionName: "setConsumed",
+      args: [offerGroup, maxUint128, maker],
+    });
     await client.sendTransaction({
       ...cancelTx,
       account: maker,

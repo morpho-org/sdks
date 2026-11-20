@@ -114,7 +114,7 @@ If you are unsure whether an activity is covered, ask security@morpho.org first.
 
 ### Trust boundaries in short
 
-The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id. They also trust the build dependencies locked in `pnpm-lock.yaml`.
+The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulation backends, ERC-4337 bundler and paymaster) and the inputs the integrator passes in. They check what they can against data the endpoint cannot forge, for example that fetched market params hash to the requested market id. They also trust the build dependencies locked in `bun.lock`.
 
 ## Security invariants
 
@@ -129,13 +129,15 @@ These are the guarantees the codebase commits to. A change that weakens one is a
 | INV-05 | `chainId` validation | Entity reads and RPC-backed requirement resolvers check the client's declared chain and `eth_chainId`; synchronous `buildTx` builders check only the declared chain. A provider can still lie about `eth_chainId`; see `THREAT_MODEL.md` (RPC). | `validateClientChainId` enforces entity reads and RPC-backed requirement resolvers; `validateChainId` remains for synchronous `buildTx` builders. `validateMidnightMarketChainId` is exported for integrators but not called by the SDK itself. |
 | INV-06 | Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
 | INV-07 | Accounting | Morpho Blue withdrawals and repayments never exceed the position they act on, and Midnight `redeem` never exceeds the user's credit after realized losses and accrued fees. Vault V1/V2 `withdraw`/`redeem` and Midnight `repayWithdrawCollateral` are bounded only on-chain. Amounts fit in `uint256`; deadlines are positive. | `validateWithdrawAmount`, `validateWithdrawShares`, `validateRepayAmount`, `validateRepayShares` (Blue entity), `MidnightRedeemExceedsCreditError`, `validateUint256Field`, `validateDeadline`. |
+| INV-08 | Simulation failure report | Any SDK failure from a run makes `simulate()` return `ok: false` with every failure, in pipeline order, and no `result`; the SDK sends no `eth_chainId` probe, so a wrong-chain endpoint is reported through the run's own failures. | EVM simulation failure report. |
+| INV-09 | Simulation CCIP-Read guard | `simulate()` runs every request on its own copy of the caller's client with `ccipRead: false`, whatever the caller's setting, so an `OffchainLookup` revert cannot make viem fetch a gateway URL. | `withCcipReadDisabled` in `@morpho-org/evm-simulation`. |
 
-Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR.
+Each invariant has tests tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`), mainly in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts) and also in the entity and requirement tests that exercise the call sites. A tag counts only in a `packages/**/*.test.ts` file that a [`vitest.config.ts`](./vitest.config.ts) project runs, and only on a test that always runs; a tagged test fails if the guard it covers is removed. `bun run lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test, a test tags an ID missing from this table, or a tag sits on a block that may not run (`skip`, `todo`, `fails`, `skipIf`, `runIf`, a test with no function) or in a file no Vitest project runs. To add an invariant, add a row with the next ID and a tagged test in the same PR.
 
 Two architectural rules also carry security weight:
 
 - **Action-layer purity.** Transaction builders do no network reads, clocks, randomness or signing, and every returned `Transaction` is deep-frozen. What `buildTx` returns depends only on its arguments.
-- **Typed failures.** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. Some older code in `blue-sdk-viem` and `wdk-protocol-lending-morpho-evm` still throws bare `Error`s.
+- **Typed failures.** SDK source must not throw a bare `Error`: each failure mode should be a named, exported class so integrators can handle it explicitly. The one remaining exception is `morpho-sdk`'s `addTransactionMetadata`, which throws bare `Error`s for an invalid calldata origin but catches them itself and logs a warning, so none reaches integrators.
 
 ## Supported versions
 
@@ -168,7 +170,7 @@ Packages are developed in a private repository. Each release is published to thi
 
 Every version published by this pipeline carries an SLSA provenance attestation signed through Sigstore, tying it to the commit and workflow that built it.
 
-`npm audit signatures` checks registry signatures, and provenance attestations where they exist, for an npm-installed `node_modules` tree. It does not fail on a version that has no provenance and does not show which repository built it. pnpm and Yarn have no equivalent command.
+`npm audit signatures` checks registry signatures, and provenance attestations where they exist, for an npm-installed `node_modules` tree. It does not fail on a version that has no provenance and does not show which repository built it. Bun and Yarn have no equivalent command.
 
 To check where a version was built, read the subject of its provenance attestation. Set `VERSION` to the version you want to check:
 
@@ -183,9 +185,10 @@ For a version published by this pipeline, the output should show `"repository": 
 
 ## Dependency policy
 
-- **Lockfile.** `pnpm-lock.yaml` is committed and CI installs with `pnpm install --frozen-lockfile`.
-- **Lifecycle scripts.** pnpm allows dependency lifecycle scripts only for packages listed under `allowBuilds` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml).
-- **Minimum release age.** pnpm refuses dependency versions published less than 3 days ago (`minimumReleaseAge: 4320`, `minimumReleaseAgeStrict: true` in [`pnpm-workspace.yaml`](./pnpm-workspace.yaml)). The only exception is a critical-severity security fix.
+- **Lockfile.** `bun.lock` is committed and CI installs with `bun install --frozen-lockfile`.
+- **Lifecycle scripts.** Bun allows dependency lifecycle scripts only for packages listed under `trustedDependencies` in [`package.json`](./package.json).
+- **Pre-install validation.** The Bun security scanner in [`bunfig.toml`](./bunfig.toml) rejects resolved packages with missing or invalid npm publication timestamps before Bun installs them, including for raw `bun add`, `bun update`, and `bun install`.
+- **Minimum release age.** Bun filters dependency versions published less than 3 days ago (`minimumReleaseAge = 259200`, in seconds, in [`bunfig.toml`](./bunfig.toml)). The required development `public-scan / Generate and scan the public tree` check runs `scripts/check-release-age.ts` as the strict replacement: it compares registry `name@version` additions against the merge base (including the pre-migration lockfile) and fetches npm publication timestamps. For a critical-security exception, both a reviewed exact `<package>@<version>` entry in the development repository's root `release-age-exceptions.json` JSON array and its package name in `[install] minimumReleaseAgeExcludes` are required. Bun uses the name exclusion to resolve the fix; the script ignores that list and waives only age for the exact JSON identity, rejecting bare names, ranges and patterns. Pin the fixed version, document the advisory/severity/publish date and bypass, and track removal of both entries once the window is satisfied. Missing or invalid timestamps always fail, including for exceptions.
 - **Peer dependencies.** `viem` is a peer dependency, so integrators control its version. Several packages also take sibling `@morpho-org/*` packages as peers; the exact ranges are in each `package.json`.
 - **Caret ranges.** Runtime dependencies, including `@morpho-org/*` ones, may use caret ranges so coordinated patch and minor releases reach consumers without a release per upstream patch. Cantina flagged this in 2025 ([audit](#audits-and-assurance), finding 3.1.1); we accepted it and rely on consumer lockfiles, release age and provenance instead.
 - **New dependencies.** A new runtime dependency needs a written justification in its PR and is reviewed as high risk.
@@ -193,7 +196,7 @@ For a version published by this pipeline, the output should show `"repository": 
 
 ### Recommendations for consumers
 
-- Commit your lockfile and install with `npm ci` or `pnpm install --frozen-lockfile` in CI.
+- Commit your lockfile and install with `npm ci` in CI (recommended with `npm audit signatures` below), or `bun install --frozen-lockfile` when using Bun.
 - Run `npm audit signatures` after installing with npm, and check provenance of new `@morpho-org/*` versions as described in [Verifying a release](#verifying-a-release).
 - Pin `@morpho-org/*` to exact versions, or use `overrides` / `resolutions` for transitive ones, if you need stricter control.
 - Watch this repository's [releases](https://github.com/morpho-org/sdks/releases) and [security advisories](https://github.com/morpho-org/sdks/security/advisories) to learn about fixes.

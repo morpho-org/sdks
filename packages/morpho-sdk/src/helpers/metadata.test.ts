@@ -1,8 +1,82 @@
 import type { Address, Hex } from "viem";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { addTransactionMetadata } from "./metadata.js";
+import { InputExceedsMaxError, NegativeInputError } from "../types/error.js";
+import {
+  addTransactionMetadata,
+  resolveTransactionMetadata,
+} from "./metadata.js";
 
 const TO: Address = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
+
+describe("resolveTransactionMetadata", () => {
+  test.each([-1n, 1n << 32n])(
+    "rejects out-of-range timestamp %s",
+    (timestamp) => {
+      const error =
+        timestamp < 0n
+          ? new NegativeInputError("metadata.timestamp", timestamp)
+          : new InputExceedsMaxError({
+              field: "metadata.timestamp",
+              value: timestamp,
+              max: (1n << 32n) - 1n,
+            });
+      expect(() =>
+        resolveTransactionMetadata({ origin: "cafe", timestamp }),
+      ).toThrowError(
+        timestamp < 0n ? NegativeInputError : InputExceedsMaxError,
+      );
+      expect(() =>
+        resolveTransactionMetadata({ origin: "cafe", timestamp }),
+      ).toThrowError(error);
+      expect(() =>
+        resolveTransactionMetadata(
+          { origin: "cafe", timestamp: true },
+          timestamp,
+        ),
+      ).toThrowError(error);
+    },
+  );
+
+  test("accepts the uint32 upper boundary", () => {
+    const timestamp = (1n << 32n) - 1n;
+    const metadata = { origin: "cafe", timestamp };
+    expect(resolveTransactionMetadata(metadata)).toBe(metadata);
+    expect(
+      resolveTransactionMetadata(
+        { origin: "cafe", timestamp: true },
+        timestamp,
+      ),
+    ).toEqual(metadata);
+  });
+  test.each([0n, 1_800_000_000n])(
+    "uses reference time %s without mutating metadata",
+    (now) => {
+      const metadata = Object.freeze({ origin: "cafe", timestamp: true });
+      expect(resolveTransactionMetadata(metadata, now)).toEqual({
+        origin: "cafe",
+        timestamp: now,
+      });
+      expect(metadata.timestamp).toBe(true);
+    },
+  );
+
+  test("preserves missing metadata", () => {
+    expect(resolveTransactionMetadata(undefined, 1n)).toBeUndefined();
+  });
+
+  test("preserves the device-clock option when reference time is omitted", () => {
+    const metadata = { origin: "cafe", timestamp: true };
+    expect(resolveTransactionMetadata(metadata)).toBe(metadata);
+  });
+
+  test.each([undefined, false, 0n, 1_800_000_000n])(
+    "preserves timestamp option %s",
+    (timestamp) => {
+      const metadata = { origin: "cafe", timestamp };
+      expect(resolveTransactionMetadata(metadata, 2n)).toBe(metadata);
+    },
+  );
+});
 
 // `describe.sequential` is required because three tests below install
 // `vi.spyOn(console, "warn", …)` and rely on the per-test local `warn`
@@ -12,6 +86,51 @@ const TO: Address = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
 // while another concurrent test is mid-assertion. Serializing the file
 // eliminates the race.
 describe.sequential("addTransactionMetadata", () => {
+  test.each([-1n, 1n << 32n])(
+    "rejects out-of-range timestamp %s even for empty calldata",
+    (timestamp) => {
+      const error =
+        timestamp < 0n
+          ? new NegativeInputError("metadata.timestamp", timestamp)
+          : new InputExceedsMaxError({
+              field: "metadata.timestamp",
+              value: timestamp,
+              max: (1n << 32n) - 1n,
+            });
+      for (const data of ["0x", "0x1234"] as const) {
+        expect(() =>
+          addTransactionMetadata(
+            { to: TO, value: 0n, data },
+            { origin: "cafe", timestamp },
+          ),
+        ).toThrowError(
+          timestamp < 0n ? NegativeInputError : InputExceedsMaxError,
+        );
+        expect(() =>
+          addTransactionMetadata(
+            { to: TO, value: 0n, data },
+            { origin: "cafe", timestamp },
+          ),
+        ).toThrowError(error);
+      }
+    },
+  );
+  test.each([0n, 1_800_000_000n, (1n << 32n) - 1n])(
+    "appends explicit timestamp %s without reading the clock",
+    (timestamp) => {
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => {
+        throw new Error("device clock read");
+      });
+      try {
+        const tx = { to: TO, value: 0n, data: "0x1234" as Hex };
+        expect(
+          addTransactionMetadata(tx, { origin: "cafe", timestamp }).data,
+        ).toBe(`0x1234${timestamp.toString(16).padStart(8, "0")}cafe`);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
   afterEach(() => {
     vi.restoreAllMocks();
   });

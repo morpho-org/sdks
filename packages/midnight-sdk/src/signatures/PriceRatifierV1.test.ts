@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import {
   type Address,
@@ -20,7 +21,7 @@ import {
   InvalidTreeError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
@@ -306,11 +307,11 @@ describe("PriceRatifierV1.buildDescriptor", () => {
     const descriptor = PriceRatifierV1.buildDescriptor([{ offer: input }]);
 
     expect(Object.isFrozen(input)).toBe(false);
-    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
+    const [resolved] = descriptor.offers;
+    assert(resolved instanceof Offer);
+    expect(Object.isFrozen(resolved)).toBe(false);
     expect(input.hash).toBe(OfferUtils.hash(input));
-    expect(descriptor.offers[0]!.hash).toBe(
-      OfferUtils.hash(descriptor.offers[0]!),
-    );
+    expect(resolved.hash).toBe(OfferUtils.hash(resolved));
   });
 
   test("behavior: defaults group to the price-aware singleton id", () => {
@@ -390,8 +391,9 @@ describe("PriceRatifierV1.buildDescriptor", () => {
       { offer: { ...offer(), group } },
     ]).offers;
 
-    expect(resolved!.group).toBe(group);
-    expect(resolved!.hasExplicitGroup).toBe(true);
+    assert(resolved instanceof Offer);
+    expect(resolved.group).toBe(group);
+    expect(resolved.hasExplicitGroup).toBe(true);
   });
 
   test("behavior: groupId is order-independent across leaves", () => {

@@ -9,7 +9,6 @@ import {
   UnknownRpcError,
 } from "viem";
 import {
-  InvalidChainIdError,
   InvalidSimulationResponseError,
   RpcTransportError,
   SimulationPackageError,
@@ -57,7 +56,9 @@ const toBoundaryError = (
   label: RpcLabel,
   error: unknown,
 ): SimulationPackageError => {
-  if (error instanceof SimulationPackageError) return error;
+  if (error instanceof SimulationPackageError) {
+    return error;
+  }
   // Only the structured signal (viem's class or the simulate code) selects the
   // funding message; "insufficient funds" message text alone keeps the generic one.
   const insufficientFunds =
@@ -95,34 +96,21 @@ const toBoundaryError = (
         : "Revert reason unavailable");
     return new SimulationRevertedError(message, revertData, { cause: error });
   }
-  // A wrong-chain endpoint is misconfiguration, not an outage: callers must
-  // not bypass it. Each node words the per-call
-  // `chainId` rejection differently: geth "chainId does not match node's",
-  // Anvil "invalid chain id for signer", Monad "Invalid chain ID: expected …".
-  if (
-    label === "eth_simulateV1" &&
-    error instanceof Error &&
-    /chainId does not match node's|invalid chain id/i.test(error.message)
-  ) {
-    return new InvalidChainIdError(
-      "eth_simulateV1 endpoint rejected the request chainId. Point SimulationConfig.chains at an RPC URL for this chain.",
-      { cause: error },
-    );
-  }
-  // A node that answered 2xx with a body that is not JSON or not a JSON-RPC
-  // object returned something, not nothing: an integrity failure the caller
-  // must not bypass as an outage. The simulation client keeps the status on
-  // every error status, so a status-less parse failure is a 2xx reply.
+  // A body that is not JSON or not a JSON-RPC object, with no HTTP status, is
+  // treated as an integrity failure the caller must not bypass as an outage.
+  // viem drops the status when an error reply is labelled JSON, so with the
+  // caller's transport this can also be an HTTP error reply (see README).
   if (
     (error instanceof HttpRequestError &&
       error.status === undefined &&
       error.cause instanceof SyntaxError) ||
     (error instanceof UnknownRpcError && error.cause instanceof TypeError)
-  )
+  ) {
     return new InvalidSimulationResponseError(
       `${label} returned a body that is not a valid JSON-RPC response. Check that the RPC URL points at a JSON-RPC endpoint.`,
       { cause: error },
     );
+  }
 
   return new RpcTransportError(
     "RPC request failed. Check the endpoint and try again.",
@@ -172,31 +160,23 @@ export const rpc = async <T>(
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - Shared simulation client, execution plan (its request
+ * @param params - Caller-owned viem client, execution plan (its request
  *   `chainId` is sent on every call), state block, the `validation` flag to
  *   send, the optional simulated block gas limit and per-call gas limit, and
  *   whether to check the successor `parentHash`.
- * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
- *   results and the resolved {@link ExecutionBlock}.
+ * @returns Frozen {@link SimulationExecution} data — per-transaction call
+ *   results, collected assertion and state-read failures, and the resolved {@link ExecutionBlock}.
  * @throws {RpcTransportError} For transport failures, timeouts, HTTP error
- *   statuses and JSON-RPC errors that are not a node-level revert or chain-ID
- *   rejection.
+ *   statuses and JSON-RPC errors that are not a node-level revert, including
+ *   a node's rejection of the request's chain ID.
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (a 2xx body that is not JSON or not a JSON-RPC object (e.g. a bare `null`), bad shape, call-count mismatch, block other than the state block
  *   or its successor, a block timestamp earlier than the state block's, or a
  *   per-call result that fails normalization).
- * @throws {InvalidChainIdError} When the node rejects the request `chainId`
- *   because it serves another chain (a subclass of
- *   `InvalidSimulationResponseError` sharing its `name`/`code`;
- *   `instanceof InvalidChainIdError` tells them apart).
- * @throws {SlippageCheckUnavailableError} When a planned state read fails.
- * @throws {SimulationAssertError} When an assertion fails, its read reverts,
- *   or its check throws (the thrown error is preserved as `cause`).
- * @throws {SimulationLogAssertError} When an `assertLogs` check returns a
- *   failure message or throws; a thrown check error is kept as `cause`.
- * @throws {SimulationRevertedError} When a preparation or user transaction
- *   reverts or the node reports a bundle-level revert (code 3, an
+ * @throws {SimulationRevertedError} When a preparation reverts or the node
+ *   reports a bundle-level revert (code 3, an
  *   `execution reverted` / `VM execution error` message, or insufficient funds).
+ *   A user-transaction revert is returned as `reverted` with its failures.
  * @internal
  */
 export async function executePlan(params: {

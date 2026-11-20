@@ -19,7 +19,11 @@ import {
   Tree,
 } from "@morpho-org/morpho-sdk/midnight/entities";
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -41,12 +45,16 @@ import {
   simulate,
   toSimulationLimits,
 } from "../../src/index.js";
+import {
+  simulateOrThrowFirst,
+  simulationClientFor,
+} from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
@@ -272,9 +280,8 @@ const asTransaction = (from: Address, tx: ParkingTransaction) => ({
   value: tx.value,
 });
 
-const configFor = (client: { transport: { url?: string } }) => ({
-  chains: new Map([[base.id, { simulateV1Url: client.transport.url! }]]),
-});
+const configFor = (client: { transport: { url?: string } }) =>
+  simulationClientFor(client.transport.url, base);
 
 const measureSupplySharesDeltas = async (
   client: AnvilTestClient<typeof base>,
@@ -327,8 +334,7 @@ const verify = async (
     accounts: [params.tx.callback],
     transactions: [params.tx],
   });
-  return simulate(configFor(client), {
-    chainId: base.id,
+  return simulateOrThrowFirst(configFor(client), {
     transactions: [asTransaction(params.user, params.tx)],
     limits: toSimulationLimits(params.tx.action, {
       owner: params.user,
@@ -433,8 +439,7 @@ describe.sequential("midnightSupplyBlueMakeLend limits — Base fork", () => {
       transactions: [tx],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [
           asTransaction(user, tx),
           {
@@ -479,13 +484,22 @@ describe.sequential("midnightSupplyBlueMakeLend limits — Base fork", () => {
     const operation = limits.operations[0];
     if (operation?.type !== "midnightSupplyBlueMakeLend")
       throw new Error("expected a Midnight Blue parking limit");
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
-      transactions: [asTransaction(user, tx)],
-      limits: {
-        operations: [{ ...operation, loanToken: wNative }],
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [asTransaction(user, tx)],
+        limits: {
+          operations: [{ ...operation, loanToken: wNative }],
+        },
       },
-    }).catch((caught: unknown) => caught);
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    const error = report.ok
+      ? undefined
+      : report.failures.find(
+          (failure) => failure instanceof ConsumerLimitViolationError,
+        );
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain("midnightSupplyBlueMakeLend");
     expect((error as Error).message).toContain("assetsPaid");
@@ -578,8 +592,7 @@ describe.sequential("midnightSupplyBlueMakeLend limits — Base fork", () => {
         transactions: [tx, blueSupply],
       });
     expect(userDelta).toBeGreaterThan(callbackDelta);
-    const error = await simulate(configFor(client), {
-      chainId: base.id,
+    const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, tx), blueSupply],
       limits: toSimulationLimits(tx.action, {
         owner: user,
@@ -642,8 +655,7 @@ describe.sequential("midnightSupplyBlueMakeLend limits — Base fork", () => {
       args: [midnightBundlesV2, assetsToPark * 2n],
     });
     await expect(
-      simulate(configFor(client), {
-        chainId: base.id,
+      simulateOrThrowFirst(configFor(client), {
         transactions: [asTransaction(user, first), asTransaction(user, second)],
         limits: toSimulationLimits(first.action, {
           owner: user,

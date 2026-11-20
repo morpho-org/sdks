@@ -1,5 +1,6 @@
 // biome-ignore-all lint/complexity/useMaxParams: property callbacks mirror arbitrary tuples.
 import { fc, test } from "@fast-check/vitest";
+import { NegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect } from "vitest";
 import {
   amount,
@@ -27,6 +28,79 @@ const positiveAmount = edgeBiased(1n, MAX_UINT_128);
 const positiveTotal = edgeBiased(1n, MAX_TOTAL);
 const min = (...values: bigint[]) =>
   values.reduce((smallest, value) => (value < smallest ? value : smallest));
+
+describe.each(["supply", "borrow"] as const)(
+  "%s uint128 limits",
+  (operation) => {
+    test("error: asset total overflow takes precedence over liquidity", () => {
+      const market = new Market(
+        marketInput({
+          totalSupplyAssets: MAX_UINT_128,
+          totalSupplyShares: 0n,
+          totalBorrowAssets: operation === "borrow" ? MAX_UINT_128 : 0n,
+          totalBorrowShares: 0n,
+        }),
+      );
+      const before = { ...market };
+
+      expect(() => market[operation](1n, 0n)).toThrow(BlueErrors.TotalOverflow);
+      expect(market).toEqual(before);
+    });
+
+    test("behavior: asset total may equal uint128 maximum", () => {
+      const market = new Market(
+        marketInput({
+          totalSupplyAssets:
+            operation === "supply" ? MAX_UINT_128 - 1n : MAX_UINT_128,
+          totalSupplyShares: 0n,
+          totalBorrowAssets: operation === "borrow" ? MAX_UINT_128 - 1n : 0n,
+          totalBorrowShares: 0n,
+        }),
+      );
+      const { market: result } = market[operation](1n, 0n);
+
+      expect(
+        operation === "supply"
+          ? result.totalSupplyAssets
+          : result.totalBorrowAssets,
+      ).toBe(MAX_UINT_128);
+    });
+
+    test("error: asset input overflows converted share total", () => {
+      const market = new Market(
+        marketInput({
+          totalSupplyAssets: operation === "supply" ? 0n : MAX_UINT_128,
+          totalSupplyShares: 0n,
+          totalBorrowAssets: 0n,
+          totalBorrowShares: 0n,
+        }),
+      );
+
+      expect(() => market[operation](MAX_UINT_128, 0n)).toThrow(
+        BlueErrors.TotalOverflow,
+      );
+    });
+
+    test("behavior: share total may equal uint128 maximum", () => {
+      const market = new Market(
+        marketInput({
+          totalSupplyAssets: operation === "supply" ? 0n : MAX_UINT_128,
+          totalSupplyShares: MAX_UINT_128 - 1n,
+          totalBorrowAssets: 0n,
+          totalBorrowShares: MAX_UINT_128 - 1n,
+        }),
+      );
+      const { market: result } = market[operation](0n, 1n);
+
+      expect(
+        operation === "supply"
+          ? result.totalSupplyShares
+          : result.totalBorrowShares,
+      ).toBe(MAX_UINT_128);
+    });
+  },
+);
+
 const marketState = fc
   .record({
     totalSupplyAssets: total,
@@ -279,8 +353,7 @@ describe.sequential("supply", () => {
     },
   );
 
-  // Solidity reverts on uint128 overflow; the SDK does not. Flip to test.prop once the SDK matches.
-  test.fails.prop([supplyOverflowInput], {
+  test.prop([supplyOverflowInput], {
     examples: [
       [
         {
@@ -297,12 +370,12 @@ describe.sequential("supply", () => {
     numRuns: 1_000,
   })("error: totals past uint128 throw", ({ state, shares }) => {
     const market = new Market(marketInput(state));
-    expect(() => market.supply(0n, shares, market.lastUpdate)).toThrow();
+    expect(() => market.supply(0n, shares, market.lastUpdate)).toThrow(
+      BlueErrors.TotalOverflow,
+    );
   });
 
-  // Confirms this expected failure is the tracked divergence; flip it together
-  // with the fails.prop.
-  test("behavior: pinned supply overflow returns total shares past uint128", () => {
+  test("error: pinned supply overflow throws TotalOverflow", () => {
     const market = new Market(
       marketInput({
         totalSupplyAssets: 0n,
@@ -311,9 +384,9 @@ describe.sequential("supply", () => {
         totalBorrowShares: 0n,
       }),
     );
-    const result = market.supply(0n, 1n, market.lastUpdate);
-
-    expect(result.market.totalSupplyShares).toBe(MAX_UINT_128 + 1n);
+    expect(() => market.supply(0n, 1n, market.lastUpdate)).toThrow(
+      BlueErrors.TotalOverflow,
+    );
   });
 });
 
@@ -372,8 +445,7 @@ describe.sequential("withdraw", () => {
     },
   );
 
-  // SDK returns negative totals for Solidity share underflow. Flip to test.prop once the SDK matches.
-  test.fails.prop([withdrawUnderflowInput], {
+  test.prop([withdrawUnderflowInput], {
     examples: [
       [
         {
@@ -396,13 +468,11 @@ describe.sequential("withdraw", () => {
       const market = new Market(marketInput(state));
       expect(() =>
         market.withdraw(0n, state.totalSupplyShares + extra, market.lastUpdate),
-      ).toThrow();
+      ).toThrow(NegativeValueError);
     },
   );
 
-  // Confirms this expected failure is the tracked divergence; flip it together
-  // with the fails.prop.
-  test("behavior: pinned withdraw underflow returns negative supply shares", () => {
+  test("error: pinned withdraw underflow throws NegativeValueError", () => {
     const market = new Market(
       marketInput({
         totalSupplyAssets: 0n,
@@ -411,10 +481,10 @@ describe.sequential("withdraw", () => {
         totalBorrowShares: 0n,
       }),
     );
-    const result = market.withdraw(0n, 999_999n, market.lastUpdate);
-
-    expect(result.shares).toBe(999_999n);
-    expect(result.market.totalSupplyShares).toBe(-999_999n);
+    expect(() => market.withdraw(0n, 999_999n, market.lastUpdate)).toThrow(
+      NegativeValueError,
+    );
+    expect(market.totalSupplyShares).toBe(0n);
   });
 });
 
@@ -450,8 +520,7 @@ describe.sequential("borrow", () => {
     },
   );
 
-  // Solidity reverts on uint128 overflow; the SDK does not. Flip to test.prop once the SDK matches.
-  test.fails.prop([borrowOverflowInput], {
+  test.prop([borrowOverflowInput], {
     examples: [
       [
         {
@@ -468,12 +537,12 @@ describe.sequential("borrow", () => {
     numRuns: 1_000,
   })("error: totals past uint128 throw", ({ state, shares }) => {
     const market = new Market(marketInput(state));
-    expect(() => market.borrow(0n, shares, market.lastUpdate)).toThrow();
+    expect(() => market.borrow(0n, shares, market.lastUpdate)).toThrow(
+      BlueErrors.TotalOverflow,
+    );
   });
 
-  // Confirms this expected failure is the tracked divergence; flip it together
-  // with the fails.prop.
-  test("behavior: pinned borrow overflow returns total shares past uint128", () => {
+  test("error: pinned borrow overflow throws TotalOverflow", () => {
     const market = new Market(
       marketInput({
         totalSupplyAssets: MAX_TOTAL,
@@ -482,9 +551,9 @@ describe.sequential("borrow", () => {
         totalBorrowShares: MAX_UINT_128,
       }),
     );
-    const result = market.borrow(0n, 1n, market.lastUpdate);
-
-    expect(result.market.totalBorrowShares).toBe(MAX_UINT_128 + 1n);
+    expect(() => market.borrow(0n, 1n, market.lastUpdate)).toThrow(
+      BlueErrors.TotalOverflow,
+    );
   });
 
   test.prop([borrowLiquidityInput], { numRuns: 1_000 })(
@@ -564,8 +633,7 @@ describe.sequential("repay", () => {
     },
   );
 
-  // SDK returns negative totals for Solidity share underflow. Flip to test.prop once the SDK matches.
-  test.fails.prop([marketState, positiveTotal], {
+  test.prop([marketState, positiveTotal], {
     examples: [
       [
         {
@@ -584,13 +652,11 @@ describe.sequential("repay", () => {
       const market = new Market(marketInput(state));
       expect(() =>
         market.repay(0n, state.totalBorrowShares + extra, market.lastUpdate),
-      ).toThrow();
+      ).toThrow(NegativeValueError);
     },
   );
 
-  // Confirms this expected failure is the tracked divergence; flip it together
-  // with the fails.prop.
-  test("behavior: pinned repay underflow returns negative borrow shares", () => {
+  test("error: pinned repay underflow throws NegativeValueError", () => {
     const market = new Market(
       marketInput({
         totalSupplyAssets: 4_000_000n,
@@ -599,14 +665,49 @@ describe.sequential("repay", () => {
         totalBorrowShares: 1_000_001n,
       }),
     );
-    const result = market.repay(0n, 1_000_002n, market.lastUpdate);
-
-    expect(result.assets).toBe(1_000_002n);
-    expect(result.shares).toBe(1_000_002n);
-    expect(result.market.totalBorrowAssets).toBe(999_998n);
-    expect(result.market.totalBorrowShares).toBe(-1n);
+    expect(() => market.repay(0n, 1_000_002n, market.lastUpdate)).toThrow(
+      NegativeValueError,
+    );
+    expect(market.totalBorrowAssets).toBe(2_000_000n);
+    expect(market.totalBorrowShares).toBe(1_000_001n);
   });
 });
+
+describe.each(["withdraw", "repay"] as const)(
+  "%s share bounds",
+  (operation) => {
+    const createShareBoundsMarket = () =>
+      new Market(
+        marketInput({
+          totalSupplyAssets: 1n,
+          totalSupplyShares: VIRTUAL_SHARES,
+          totalBorrowAssets: 0n,
+          totalBorrowShares: 0n,
+        }),
+      );
+
+    test("behavior: burning exactly all shares leaves zero shares", () => {
+      const market = createShareBoundsMarket();
+      if (operation === "repay") {
+        market.totalBorrowAssets = 1n;
+        market.totalBorrowShares = VIRTUAL_SHARES;
+      }
+      const result = market[operation](0n, VIRTUAL_SHARES, market.lastUpdate);
+      expect(
+        operation === "withdraw"
+          ? result.market.totalSupplyShares
+          : result.market.totalBorrowShares,
+      ).toBe(0n);
+    });
+
+    test("error: asset-denominated share underflow throws NegativeValueError", () => {
+      const market = createShareBoundsMarket();
+      expect(() => market[operation](2n, 0n, market.lastUpdate)).toThrow(
+        NegativeValueError,
+      );
+    });
+  },
+);
 
 // morpho-blue/src/libraries/SharesMathLib.sol conversions delegated by Market.ts.
 describe.sequential("Market conversion methods", () => {

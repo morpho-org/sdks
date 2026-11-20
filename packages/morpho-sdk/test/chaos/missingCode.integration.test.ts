@@ -11,7 +11,11 @@ import {
   RegistryValueAlreadyRegisteredError,
   registerCustomAddresses,
 } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { expectFailClosed } from "@morpho-org/test/chaos";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -45,25 +49,7 @@ import { setUpSingleAdapterVaultV2 } from "../helpers/vaultV2.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 24_593_903n,
-}).extend<{ client: AnvilTestClient<typeof mainnet> }>({
-  client: async ({ client }, use) => {
-    await client.setCode({
-      address: client.account.address,
-      bytecode: "0x",
-    });
-    await use(client);
-  },
-});
-
-// The bundles periphery (BlueBundlesV1, VaultBundlesV1, VaultExitBundlesV1) and
-// the adapter factory are deployed at this later pin, matching
-// vaultV2.forceWithdraw.integration.test.ts. Flow tests that wipe a single role
-// need the other roles deployed so the guard reports the intended target.
-const exitBundlesTest = createViemTest(mainnet, {
-  forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  chainId: mainnet.id,
-  forkBlockNumber: 26_150_000n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({
@@ -103,31 +89,28 @@ const expectMissingCode = async (
 };
 
 describe("chaos: S8 missing contract", () => {
-  exitBundlesTest(
-    "Blue funding does not require Permit2 code",
-    async ({ client }) => {
-      await wipeCode(client, getChainAddresses(mainnet.id).permit2!);
-      const action = morphoOf(client)
-        .blue(CbbtcUsdcBlue, mainnet.id)
-        .supply({
-          userAddress: client.account.address,
-          marketData: deadSeededMarketData(CbbtcUsdcBlue),
-          assets: parseUnits("1", 6),
-          deadline: maxUint256,
-        });
-      const requirements = await action.getRequirements();
-      expect(requirements).toHaveLength(1);
-      expect(requirements[0]?.action).toMatchObject({
-        type: "permit",
-        args: { spender: roleAddress("bundles.blueBundlesV1") },
+  test("Blue funding does not require Permit2 code", async ({ client }) => {
+    await wipeCode(client, getChainAddresses(mainnet.id).permit2!);
+    const action = morphoOf(client)
+      .blue(CbbtcUsdcBlue, mainnet.id)
+      .supply({
+        userAddress: client.account.address,
+        marketData: deadSeededMarketData(CbbtcUsdcBlue),
+        assets: parseUnits("1", 6),
+        deadline: maxUint256,
       });
-    },
-  );
+    const requirements = await action.getRequirements();
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action).toMatchObject({
+      type: "permit",
+      args: { spender: roleAddress("bundles.blueBundlesV1") },
+    });
+  });
 
   describe.each(["bundles.blueBundlesV1", "blue"] as const)(
     "Blue supply: MissingContractCodeError when %s has no code",
     (role) => {
-      exitBundlesTest("rejects at getRequirements", async ({ client }) => {
+      test("rejects at getRequirements", async ({ client }) => {
         await wipeCode(client, roleAddress(role));
         const market = morphoOf(client).blue(CbbtcUsdcBlue, mainnet.id);
         const action = market.supply({
@@ -147,7 +130,7 @@ describe("chaos: S8 missing contract", () => {
   describe.each(["bundles.vaultBundlesV1"] as const)(
     "deposit ERC-20: MissingContractCodeError when %s has no code",
     (role) => {
-      exitBundlesTest("VaultV1", async ({ client }) => {
+      test("VaultV1", async ({ client }) => {
         const vault = morphoOf(client).vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -166,7 +149,7 @@ describe("chaos: S8 missing contract", () => {
         );
       });
 
-      exitBundlesTest("VaultV2", async ({ client }) => {
+      test("VaultV2", async ({ client }) => {
         const vault = morphoOf(client).vaultV2(
           KeyrockUsdcVaultV2.address,
           mainnet.id,
@@ -187,87 +170,81 @@ describe("chaos: S8 missing contract", () => {
     },
   );
 
-  exitBundlesTest(
-    "VaultV2 native deposit: the funding.value > 0n branch still checks",
-    async ({ client }) => {
-      const role = "bundles.vaultBundlesV1";
-      const vault = morphoOf(client).vaultV2(
-        KpkWETHVaultV2.address,
-        mainnet.id,
-      );
-      const vaultData = await vault.getData();
-      await wipeCode(client, roleAddress(role));
-      await expectMissingCode(
-        vault
-          .deposit({
-            nativeAmount: parseUnits("0.001", 18),
-            userAddress: client.account.address,
-            vaultData,
-          })
-          .getRequirements(),
-        role,
-      );
-    },
-  );
+  test("VaultV2 native deposit: the funding.value > 0n branch still checks", async ({
+    client,
+  }) => {
+    const role = "bundles.vaultBundlesV1";
+    const vault = morphoOf(client).vaultV2(KpkWETHVaultV2.address, mainnet.id);
+    const vaultData = await vault.getData();
+    await wipeCode(client, roleAddress(role));
+    await expectMissingCode(
+      vault
+        .deposit({
+          nativeAmount: parseUnits("0.001", 18),
+          userAddress: client.account.address,
+          vaultData,
+        })
+        .getRequirements(),
+      role,
+    );
+  });
 });
 
-exitBundlesTest.describe("chaos: S8 missing contract", () => {
-  exitBundlesTest(
-    "VaultV2 forceWithdraw: MissingContractCodeError when vaultExitBundlesV1 has no code",
-    async ({ client }) => {
-      const role = "bundles.vaultExitBundlesV1";
+test.describe("chaos: S8 missing contract", () => {
+  test("VaultV2 forceWithdraw: MissingContractCodeError when vaultExitBundlesV1 has no code", async ({
+    client,
+  }) => {
+    const role = "bundles.vaultExitBundlesV1";
 
-      const { vault: vaultAddress, depositAndAllocate } =
-        await setUpSingleAdapterVaultV2(client, {
-          asset: CbbtcUsdcBlue.loanToken,
-          markets: [CbbtcUsdcBlue, WbtcUsdcSourceMarket],
-          liquidityMarket: CbbtcUsdcBlue,
-        });
-      await depositAndAllocate({
-        assets: parseUnits("100", 6),
-        perMarket: [{ market: CbbtcUsdcBlue, assets: parseUnits("60", 6) }],
+    const { vault: vaultAddress, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: CbbtcUsdcBlue.loanToken,
+        markets: [CbbtcUsdcBlue, WbtcUsdcSourceMarket],
+        liquidityMarket: CbbtcUsdcBlue,
       });
-      const vault = morphoOf(client).vaultV2(vaultAddress, mainnet.id);
-      const vaultData = await vault.getData();
+    await depositAndAllocate({
+      assets: parseUnits("100", 6),
+      perMarket: [{ market: CbbtcUsdcBlue, assets: parseUnits("60", 6) }],
+    });
+    const vault = morphoOf(client).vaultV2(vaultAddress, mainnet.id);
+    const vaultData = await vault.getData();
 
-      await wipeCode(client, roleAddress(role));
-      await expectMissingCode(
-        vault
-          .forceWithdraw({
-            exitAssets: parseUnits("90", 6),
-            vaultData,
-            userAddress: client.account.address,
-          })
-          .getRequirements(),
-        role,
-      );
-    },
-  );
+    await wipeCode(client, roleAddress(role));
+    await expectMissingCode(
+      vault
+        .forceWithdraw({
+          exitAssets: parseUnits("90", 6),
+          vaultData,
+          userAddress: client.account.address,
+        })
+        .getRequirements(),
+      role,
+    );
+  });
 
-  exitBundlesTest(
-    "unexpected contract: a non-adapter contract at the vault's adapter rejects the read",
-    async ({ client }) => {
-      const { vault: vaultAddress, adapter } = await setUpSingleAdapterVaultV2(
-        client,
-        {
-          asset: CbbtcUsdcBlue.loanToken,
-          markets: [CbbtcUsdcBlue, WbtcUsdcSourceMarket],
-          liquidityMarket: CbbtcUsdcBlue,
-        },
-      );
-      const usdcRuntime = await client.getCode({
-        address: CbbtcUsdcBlue.loanToken,
-      });
-      expect(usdcRuntime).not.toBe("0x");
-      await client.setCode({ address: adapter, bytecode: usdcRuntime! });
+  test("unexpected contract: a non-adapter contract at the vault's adapter rejects the read", async ({
+    client,
+  }) => {
+    const { vault: vaultAddress, adapter } = await setUpSingleAdapterVaultV2(
+      client,
+      {
+        asset: CbbtcUsdcBlue.loanToken,
+        markets: [CbbtcUsdcBlue, WbtcUsdcSourceMarket],
+        liquidityMarket: CbbtcUsdcBlue,
+      },
+    );
+    const usdcRuntime = await client.getCode({
+      address: CbbtcUsdcBlue.loanToken,
+    });
+    expect(usdcRuntime).not.toBe("0x");
+    await client.setCode({ address: adapter, bytecode: usdcRuntime! });
 
-      const vault = morphoOf(client).vaultV2(vaultAddress, mainnet.id);
-      const promise = vault.getData();
-      await expect(promise).rejects.toBeInstanceOf(
-        ContractFunctionExecutionError,
-      );
-    },
-  );
+    const vault = morphoOf(client).vaultV2(vaultAddress, mainnet.id);
+    const promise = vault.getData();
+    await expect(promise).rejects.toBeInstanceOf(
+      ContractFunctionExecutionError,
+    );
+  });
 });
 
 describe("chaos: S8 reads on code-less contracts", () => {

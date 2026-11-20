@@ -112,8 +112,9 @@ export const getDefaultPreLiquidationParams = (lltv: BigIntish) => {
 
   const defaultParams = defaultPreLiquidationParamsRegistry.get(lltv);
 
-  if (defaultParams == null)
+  if (defaultParams == null) {
     throw new UnsupportedPreLiquidationParamsError(lltv);
+  }
 
   return defaultParams;
 };

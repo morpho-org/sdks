@@ -26,12 +26,13 @@ export const installE2eAsset = async (
     address,
     bytecode: E2E_ASSET_BYTECODE,
   });
-  for (const { slot, value } of E2E_ASSET_STORAGE)
+  for (const { slot, value } of E2E_ASSET_STORAGE) {
     await client.setStorageAt({
       address,
       index: slot,
       value,
     });
+  }
 };
 
 /**
@@ -90,13 +91,14 @@ export const wrapE2eNative = async (
     if (
       isAddressEqual(params.wNative, getE2eAsset(client.chain.id).address) &&
       (await client.getCode({ address: params.wNative })) === E2E_ASSET_BYTECODE
-    )
+    ) {
       await client.setBalance({
         address: params.wNative,
         value:
           (await client.getBalance({ address: params.wNative })) +
           params.amount,
       });
+    }
     return;
   }
 

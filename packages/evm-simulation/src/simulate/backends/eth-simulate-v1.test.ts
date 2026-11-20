@@ -10,19 +10,23 @@ import {
 } from "viem";
 import { vi } from "vitest";
 import {
-  InvalidChainIdError,
   InvalidSimulationResponseError,
   RpcTransportError,
   SimulationRevertedError,
   SlippageCheckUnavailableError,
 } from "../../errors.js";
-import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
+import {
+  encodeUint256,
+  keepErrorStatus,
+  makeTransferLog,
+  simulationClientFor,
+  throwRevert,
+} from "../../test-helpers/index.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
-import { createSimulationClient } from "./client.js";
 import { rpc as callRpc, executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -35,15 +39,17 @@ const fetchMock = vi.fn<typeof fetch>();
 let params!: Parameters<typeof executePlan>[0];
 
 function makePlan(transactions = 1): ExecutionPlan {
-  const request = parseRequest({
-    limits: "none",
-    chainId: 1,
-    transactions: Array.from({ length: transactions }, () => ({
-      from: OWNER,
-      to: VAULT,
-      data: "0x12",
-    })),
-  });
+  const request = parseRequest(
+    {
+      limits: "none",
+      transactions: Array.from({ length: transactions }, () => ({
+        from: OWNER,
+        to: VAULT,
+        data: "0x12",
+      })),
+    },
+    1,
+  );
   return planExecution({
     request,
     owner: OWNER,
@@ -94,7 +100,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   params = {
-    client: createSimulationClient(RPC_URL),
+    client: simulationClientFor(RPC_URL, 1),
     plan: makePlan(),
     stateBlock: {
       number: STATE_BLOCK,
@@ -125,12 +131,14 @@ describe.sequential("executePlan", () => {
       [VAULT]: { state: {} },
     };
     params.plan = planExecution({
-      request: parseRequest({
-        chainId: 1,
-        transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
-        limits: "none",
-        stateOverrides,
-      }),
+      request: parseRequest(
+        {
+          transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+          limits: "none",
+          stateOverrides,
+        },
+        1,
+      ),
       owner: OWNER,
       preparations: [],
       reads: [],
@@ -385,9 +393,9 @@ describe.sequential("executePlan", () => {
     const calls = okCalls(3);
     calls[0] = { status: "0x0", gasUsed: "0x0", returnData: "0x" };
     fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      SlippageCheckUnavailableError,
-    );
+    const execution = await executePlan(params);
+    expect(execution.failures).toHaveLength(1);
+    expect(execution.failures[0]).toBeInstanceOf(SlippageCheckUnavailableError);
   });
 
   test.each([
@@ -437,9 +445,9 @@ describe.sequential("executePlan", () => {
         error: { code: 3, message: "execution reverted", data },
       };
       fetchMock.mockResolvedValueOnce(rpc(simulateResult(calls)));
-      const error = await executePlan(params).catch(
-        (caught: unknown) => caught,
-      );
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect(error).toMatchObject({ message, revertData: data });
       for (const field of ["reason", "reasonCode", "details", "context"])
@@ -463,9 +471,9 @@ describe.sequential("executePlan", () => {
           },
         }),
       );
-      const error = await executePlan(params).catch(
-        (caught: unknown) => caught,
-      );
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect(error).toMatchObject({
         message,
@@ -483,7 +491,9 @@ describe.sequential("executePlan", () => {
         error: { code: -38014, message: "unrelated node text" },
       }),
     );
-    const error = await executePlan(params).catch((caught: unknown) => caught);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect((error as Error).message).toBe(FUNDING_MESSAGE);
     expect((error as Error).cause).toBeInstanceOf(Error);
@@ -506,7 +516,9 @@ describe.sequential("executePlan", () => {
         error: { code: 3, message: "execution reverted", data },
       }),
     );
-    const error = await executePlan(params).catch((caught: unknown) => caught);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect(error).toMatchObject({ revertData: data, cause: expect.any(Error) });
     if (data.length > 10)
@@ -580,9 +592,9 @@ describe.sequential("executePlan", () => {
       fetchMock.mockResolvedValueOnce(
         Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
       );
-      const error = await executePlan(params).catch(
-        (caught: unknown) => caught,
-      );
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect((error as Error).message).toBe("Revert reason unavailable");
     },
@@ -601,23 +613,24 @@ describe.sequential("executePlan", () => {
       message: "Invalid chain ID: expected 143, got 1",
     },
   ])(
-    "error: InvalidChainIdError when the node rejects the chainId ($node)",
+    "error: RpcTransportError when the node rejects the chainId ($node)",
     async ({ code, message }) => {
       fetchMock.mockResolvedValueOnce(
         Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
       );
-      const error = await executePlan(params).catch((value: unknown) => value);
-      expect(error).toBeInstanceOf(InvalidChainIdError);
-      expect((error as InvalidChainIdError).message).toBe(
-        "eth_simulateV1 endpoint rejected the request chainId. Point SimulationConfig.chains at an RPC URL for this chain.",
-      );
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(RpcTransportError);
     },
   );
 
   test("error: preserves the original abort from fetch", async () => {
     const cause = Object.assign(new Error("aborted"), { name: "AbortError" });
     fetchMock.mockRejectedValueOnce(cause);
-    const error = await executePlan(params).catch((value: unknown) => value);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((value: unknown) => value);
     expect(error).toBeInstanceOf(RpcTransportError);
     expect((error as RpcTransportError).cause).toBe(cause);
   });
@@ -684,7 +697,9 @@ describe.sequential("chaos: S4 node-level revert classification", () => {
       fetchMock.mockResolvedValueOnce(
         Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect(error).not.toBeInstanceOf(RpcTransportError);
       expect((error as SimulationRevertedError).message).toBe(
@@ -719,7 +734,9 @@ describe.sequential("chaos: S4 node-level revert classification", () => {
           error: { code: 3, message: "execution reverted", data },
         }),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect(error).toMatchObject({ message, revertData: data });
     },
@@ -734,7 +751,9 @@ describe.sequential("chaos: S4 node-level revert classification", () => {
       fetchMock.mockResolvedValueOnce(
         Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(RpcTransportError);
       expect(error).not.toBeInstanceOf(SimulationRevertedError);
     },
@@ -744,7 +763,9 @@ describe.sequential("chaos: S4 node-level revert classification", () => {
 describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
   test("error: InvalidSimulationResponseError for a non-JSON 200 body", async () => {
     fetchMock.mockResolvedValueOnce(new Response("<html>ok</html>"));
-    const error = await executePlan(params).catch((e: unknown) => e);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(InvalidSimulationResponseError);
     expect(error).not.toBeInstanceOf(RpcTransportError);
   });
@@ -757,7 +778,9 @@ describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
           headers: { "Content-Type": "application/json" },
         }),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(InvalidSimulationResponseError);
       expect(error).not.toBeInstanceOf(RpcTransportError);
     },
@@ -779,7 +802,9 @@ describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
     fetchMock.mockResolvedValueOnce(
       new Response("<html>unavailable</html>", { status: 503 }),
     );
-    const error = await executePlan(params).catch((e: unknown) => e);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RpcTransportError);
     expect(error).not.toBeInstanceOf(InvalidSimulationResponseError);
   });
@@ -791,7 +816,9 @@ describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
     "error: RpcTransportError for a plain-text $status body that reads like a revert",
     async ({ status, body }) => {
       fetchMock.mockResolvedValueOnce(new Response(body, { status }));
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(RpcTransportError);
       expect(error).not.toBeInstanceOf(SimulationRevertedError);
     },
@@ -804,26 +831,30 @@ describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
     "error: InvalidSimulationResponseError for a plain-text 200 body %j",
     async (body) => {
       fetchMock.mockResolvedValueOnce(new Response(body));
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(InvalidSimulationResponseError);
       expect(error).not.toBeInstanceOf(SimulationRevertedError);
-      expect(error).not.toBeInstanceOf(InvalidChainIdError);
     },
   );
 
   test.each([200, 400])(
-    "error: InvalidChainIdError for a plain-text %i body that reads like a chain-ID rejection",
+    "error: a plain-text %i body that reads like a chain-ID rejection is not reclassified",
     async (status) => {
       fetchMock.mockResolvedValueOnce(
         new Response("invalid chain id", { status }),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(InvalidChainIdError);
-      expect(error).not.toBeInstanceOf(RpcTransportError);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(
+        status === 200 ? InvalidSimulationResponseError : RpcTransportError,
+      );
     },
   );
 
-  test("error: InvalidChainIdError for a JSON-RPC chain-ID rejection with status 400", async () => {
+  test("error: RpcTransportError for a JSON-RPC chain-ID rejection with status 400", async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json(
         {
@@ -834,21 +865,36 @@ describe.sequential("chaos: S3 malformed JSON-RPC body", () => {
         { status: 400 },
       ),
     );
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidChainIdError,
-    );
+    await expect(executePlan(params)).rejects.toBeInstanceOf(RpcTransportError);
   });
 
-  test("error: RpcTransportError for a JSON-typed 503 with an empty body", async () => {
+  test("error: InvalidSimulationResponseError for a JSON-typed 503 with an empty body", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response("", {
         status: 503,
         headers: { "Content-Type": "application/json" },
       }),
     );
-    const error = await executePlan(params).catch((e: unknown) => e);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+  });
+
+  test("behavior: RpcTransportError for a JSON-typed 503 with an empty body when fetchFn keeps the status", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response("", {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const error = await executePlan({
+      ...params,
+      client: simulationClientFor(RPC_URL, 1, undefined, keepErrorStatus),
+    })
+      .then(throwRevert)
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RpcTransportError);
-    expect(error).not.toBeInstanceOf(InvalidSimulationResponseError);
     expect((error as RpcTransportError).cause).toMatchObject({
       status: 503,
     });
@@ -871,7 +917,9 @@ describe.sequential("chaos: S3 JSON-RPC error body under an HTTP status", () => 
           { status },
         ),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(SimulationRevertedError);
       expect(error).not.toBeInstanceOf(RpcTransportError);
     },
@@ -891,7 +939,9 @@ describe.sequential("chaos: S3 JSON-RPC error body under an HTTP status", () => 
           { status },
         ),
       );
-      const error = await executePlan(params).catch((e: unknown) => e);
+      const error = await executePlan(params)
+        .then(throwRevert)
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(RpcTransportError);
       expect(error).not.toBeInstanceOf(SimulationRevertedError);
       expect(error).not.toBeInstanceOf(InvalidSimulationResponseError);
@@ -902,7 +952,9 @@ describe.sequential("chaos: S3 JSON-RPC error body under an HTTP status", () => 
 describe.sequential("chaos: S9 transport failure", () => {
   test("error: RpcTransportError keeps the cause, one attempt", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
-    const error = await executePlan(params).catch((e: unknown) => e);
+    const error = await executePlan(params)
+      .then(throwRevert)
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RpcTransportError);
     expect((error as RpcTransportError).cause).toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);

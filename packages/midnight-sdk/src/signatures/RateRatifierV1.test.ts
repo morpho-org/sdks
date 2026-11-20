@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { MathLib } from "@morpho-org/morpho-ts";
 import * as fc from "fast-check";
 import {
@@ -163,14 +164,14 @@ describe("RateRatifierV1.hashLeaf", () => {
   });
 
   test("behavior: rate changes the leaf hash", () => {
-    const offer = leaf().offer;
+    const offer = OfferUtils.toStruct({ offer: leaf().offer });
     const zero = RateRatifierV1.hashLeaf({
-      offer: { ...offer, group: offer.group },
+      offer,
       rate: 0n,
       allowedTaker: zeroAddress,
     });
     const nonZero = RateRatifierV1.hashLeaf({
-      offer: { ...offer, group: offer.group },
+      offer,
       rate: 1n,
       allowedTaker: zeroAddress,
     });
@@ -385,11 +386,11 @@ describe("RateRatifierV1.buildDescriptor", () => {
     const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
 
     expect(Object.isFrozen(offer)).toBe(false);
-    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
+    const [resolved] = descriptor.offers;
+    assert(resolved instanceof Offer);
+    expect(Object.isFrozen(resolved)).toBe(false);
     expect(offer.hash).toBe(OfferUtils.hash(offer));
-    expect(descriptor.offers[0]!.hash).toBe(
-      OfferUtils.hash(descriptor.offers[0]!),
-    );
+    expect(resolved.hash).toBe(OfferUtils.hash(resolved));
   });
 
   test("behavior: defaults group to the rate-aware singleton id", () => {
@@ -491,8 +492,9 @@ describe("RateRatifierV1.buildDescriptor", () => {
     const l = { ...leaf(), offer: { ...leaf().offer, group } };
     const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
 
-    expect(offer!.group).toBe(group);
-    expect(offer!.hasExplicitGroup).toBe(true);
+    assert(offer instanceof Offer);
+    expect(offer.group).toBe(group);
+    expect(offer.hasExplicitGroup).toBe(true);
   });
 
   test("behavior: groupId is order-independent across leaves", () => {

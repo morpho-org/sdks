@@ -32,6 +32,21 @@ import {
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
 
 describe("encodeErc20Permit", () => {
+  test("default permit deadline uses the supplied reference time", async ({
+    client,
+  }) => {
+    const now = 1_000n;
+    const permit = await encodeErc20Permit(client, {
+      token: usdc,
+      owner: client.account.address,
+      spender: blueBundlesV1,
+      amount: mockAmount,
+      chainId: mainnet.id,
+      nonce: mockNonce,
+      now,
+    });
+    expect(permit.action.args.deadline).toBe(now + 7_200n);
+  });
   const { usdc } = addressesRegistry[mainnet.id];
   const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
   if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");

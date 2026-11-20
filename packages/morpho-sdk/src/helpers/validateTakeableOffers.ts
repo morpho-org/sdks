@@ -50,7 +50,9 @@ export const validateTakeableOffers = (params: {
         actualMarket: actualMarketId,
       });
     }
-    if (take.offer.buy) continue;
+    if (take.offer.buy) {
+      continue;
+    }
     // Reject a malformed address before viem compares it.
     validateMidnightAddress(
       `takeableOffers[${index}].offer.receiverIfMakerIsSeller`,

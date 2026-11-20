@@ -100,11 +100,12 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined)
+  if (params.referralFeeRecipient !== undefined) {
     validateMidnightAddress(
       "referralFeeRecipient",
       params.referralFeeRecipient,
     );
+  }
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });
@@ -178,7 +179,7 @@ const validateParams = (params: MidnightTakeWithdrawParams) => {
  *   target: { type: "units", units: credit, minSellerAssets: 990_000n },
  *   receiver: lender,
  *   takeableOffers: quote.data.takeableOffers,
- *   deadline: Time.timestamp() + 600n,
+ *   deadline: (await client.getBlock()).timestamp + 600n,
  * });
  * ```
  */

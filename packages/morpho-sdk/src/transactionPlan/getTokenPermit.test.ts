@@ -157,11 +157,10 @@ test.each(["wrong chain", "wrong token", "extensions", "mismatch"])(
       {},
     );
     const plan = await prepareVaultV2Deposit(handle.client, {
-      vault: data.address,
-      vaultData,
+      vault: vaultData,
       chainId: 1,
       account: IN_KIND_USER,
-      amount: 100n,
+      assets: 100n,
       supportSignature: true,
       deployless: false,
     });
@@ -171,7 +170,7 @@ test.each(["wrong chain", "wrong token", "extensions", "mismatch"])(
       "vaultV2Deposit",
     ]);
     expect(plan.steps[0]?.action).toMatchObject({
-      inputs: { token, amount: maxUint256 },
+      inputs: { token, assets: maxUint256 },
     });
   },
 );
