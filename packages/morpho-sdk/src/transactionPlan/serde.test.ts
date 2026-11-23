@@ -12,19 +12,22 @@ import {
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
-  serializeSignature,
   type TypedData,
   toHex,
   zeroAddress,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_ASSET,
-  IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV2Data,
 } from "../../test/fixtures/inKindRedeem.js";
+import {
+  BundlesPermitMismatchError,
+  InvalidSignatureError,
+} from "../types/error.js";
 import {
   InvalidTransactionPlanError,
   UnsupportedTransactionPlanActionError,
@@ -36,6 +39,7 @@ import type { SignatureRequest, Step, TransactionPlan } from "./types.js";
 import { prepareVaultV2Deposit } from "./vaultv2/deposit.js";
 import { prepareVaultV2Withdraw } from "./vaultv2/withdraw.js";
 
+const IN_KIND_USER = privateKeyToAccount(toHex(1n, { size: 32 })).address;
 const spender = getChainAddress(1, "bundles.vaultBundlesV1");
 const inputs = {
   chainId: 1,
@@ -43,14 +47,14 @@ const inputs = {
   vault: IN_KIND_VAULT,
   asset: IN_KIND_ASSET,
   maxSharePrice: 10n ** 27n,
-  amount: 100n,
+  assets: 100n,
   deadline: 2_000_000_000n,
   referralFeePct: 0n,
   referralFeeRecipient: zeroAddress,
 };
 const permitArgs = {
   spender,
-  amount: inputs.amount,
+  amount: inputs.assets,
   deadline: inputs.deadline,
   nonce: 0n,
 };
@@ -63,17 +67,17 @@ const typedData = getPermitTypedData(
   },
   1,
 );
-const permitRequest = (id: string): SignatureRequest => ({
+const permitRequest = (
+  id: string,
+): Extract<SignatureRequest, { kind: "permit" }> => ({
   id,
   kind: "permit",
   typedData,
   args: permitArgs,
 });
-const signature = serializeSignature({
-  r: toHex(1n, { size: 32 }),
-  s: toHex(2n, { size: 32 }),
-  yParity: 0,
-});
+const signature = await privateKeyToAccount(
+  toHex(1n, { size: 32 }),
+).signTypedData(typedData);
 const approveStep = {
   id: "approval",
   label: "Approve",
@@ -82,7 +86,7 @@ const approveStep = {
     inputs: {
       token: IN_KIND_ASSET,
       spender,
-      amount: inputs.amount,
+      assets: inputs.assets,
       chainId: 1,
       account: IN_KIND_USER,
     },
@@ -98,7 +102,7 @@ const depositStep = {
   },
 } as const satisfies Step;
 const pendingPlan: TransactionPlan = {
-  version: 1,
+  version: 2,
   chainId: 1,
   account: IN_KIND_USER,
   expiresAt: Number(inputs.deadline),
@@ -110,9 +114,146 @@ const completePlan: TransactionPlan = {
   signatureRequests: [{ ...permitRequest("tokenPermit"), signature }],
 };
 describe("serializeTransactionPlan and parseTransactionPlan", () => {
-  test("stored version-1 deposit with a permit builds unchanged", () => {
+  test("stored version-2 Morpho authorization builds unchanged", () => {
     const fixture =
-      '{"version":1,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV2Deposit","label":"Deposit into vault","action":{"type":"vaultV2Deposit","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","amount":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","asset":"0x0000000000000000000000000000000000001003","maxSharePrice":{"$bigint":"1000000000000000000000000000"}},"signatureRequestIds":{"tokenPermit":"vaultV2Deposit:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV2Deposit:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Asset","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001003"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"100"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0x078f6df4a0b9d71420081948c52c91b9d3842248521c3a5048d69741e6195a1020945a0fbf591161c1ff9583d61d00afc6ecc91f7ad7a2586159276708460e241b"}]}';
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"morphoAuthorization","label":"Authorize BlueBundlesV1","action":{"type":"morphoAuthorization","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        data: "0xeecea00000000000000000000000000038b0c12ab81976e9417d4ebfe2a34db6df22e6ad0000000000000000000000000000000000000000000000000000000000000001",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("rejects a 9.7.0-shaped saved plan before interpreting legacy amount fields", () => {
+    const legacyVersion = 1;
+    const { assets, ...legacyInputs } = inputs;
+    const saved = serializeTransactionPlan({
+      ...pendingPlan,
+      version: legacyVersion,
+      steps: [
+        {
+          ...depositStep,
+          action: {
+            ...depositStep.action,
+            inputs: { ...legacyInputs, amount: assets },
+            signatureRequestIds: {},
+          },
+        },
+      ],
+      signatureRequests: [],
+    } as unknown as TransactionPlan);
+    expect(() => parseTransactionPlan(saved)).toThrow(
+      new UnsupportedTransactionPlanVersionError(legacyVersion),
+    );
+  });
+
+  test("stored version-2 force withdrawal with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x0000000000000000000000000000000000001004","expiresAt":2000000000,"steps":[{"id":"approval","label":"Approve","action":{"type":"erc20Approval","inputs":{"token":"0x0000000000000000000000000000000000001001","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"chainId":1,"account":"0x0000000000000000000000000000000000001004"}}},{"id":"vaultV2ForceWithdraw","label":"Force withdraw from vault","action":{"type":"vaultV2ForceWithdraw","inputs":{"chainId":1,"account":"0x0000000000000000000000000000000000001004","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"1000000000000000"},"referralFeeRecipient":"0x0000000000000000000000000000000000001003","adapter":"0x0000000000000000000000000000000000001002","assets":{"$bigint":"100"},"minSharePriceE27":{"$bigint":"980000000000000000000000000"}},"signatureRequestIds":{}}}],"signatureRequests":[],"calldataOrigin":"0xcafe"}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b3000000000000000000000000af85af286637a033be7d59ed8cc566afa3309b02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcafe",
+        value: 0n,
+      },
+      {
+        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+        data: "0x902118db0000000000000000000000000000000000000000000000000000000000001001000000000000000000000000000000000000000000000000000000000000100200000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000032aa31273a87dac5400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007735940000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000077359400cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 force withdrawal rejects a forged permit", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x0000000000000000000000000000000000001004","expiresAt":2000000000,"steps":[{"id":"vaultV2ForceWithdraw","label":"Force withdraw from vault","action":{"type":"vaultV2ForceWithdraw","inputs":{"chainId":1,"account":"0x0000000000000000000000000000000000001004","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"1000000000000000"},"referralFeeRecipient":"0x0000000000000000000000000000000000001003","adapter":"0x0000000000000000000000000000000000001002","assets":{"$bigint":"100"},"minSharePriceE27":{"$bigint":"980000000000000000000000000"}},"signatureRequestIds":{"tokenPermit":"tokenPermit"}}}],"signatureRequests":[{"id":"tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x0000000000000000000000000000000000001004","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"0"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"0"}},"signature":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000021b"}],"calldataOrigin":"0xcafe"}';
+    expect(() => parseTransactionPlan(fixture)).toThrow(
+      InvalidTransactionPlanError,
+    );
+    expect(() => parseTransactionPlan(fixture)).toThrow(
+      expect.objectContaining({
+        path: "$.signatureRequests[0].signature",
+        reason: "expected a valid low-s signature from the request owner",
+        cause: expect.any(InvalidSignatureError),
+      }),
+    );
+  });
+  test.each(["encoding", "owner"] as const)(
+    "reports the failing stored signature after a valid request: %s",
+    async (problem) => {
+      const badSignature =
+        problem === "encoding"
+          ? "0x"
+          : await privateKeyToAccount(toHex(2n, { size: 32 })).signTypedData(
+              typedData,
+            );
+      const saved: TransactionPlan = {
+        ...completePlan,
+        steps: [
+          ...completePlan.steps,
+          {
+            ...depositStep,
+            id: "secondDeposit",
+            action: {
+              ...depositStep.action,
+              signatureRequestIds: { tokenPermit: "secondPermit" },
+            },
+          },
+        ],
+        signatureRequests: [
+          ...completePlan.signatureRequests,
+          { ...permitRequest("secondPermit"), signature: badSignature },
+        ],
+      };
+      const errorClass =
+        problem === "encoding"
+          ? BundlesPermitMismatchError
+          : InvalidSignatureError;
+      expect(() => getPendingSignatureRequests(saved)).toThrow(errorClass);
+      expect(() => buildTransactions(saved)).toThrow(errorClass);
+      expect(() =>
+        parseTransactionPlan(serializeTransactionPlan(saved)),
+      ).toThrow(
+        expect.objectContaining({
+          path: "$.signatureRequests[1].signature",
+          reason:
+            problem === "encoding"
+              ? "expected a compact or serialized ECDSA signature"
+              : "expected a valid low-s signature from the request owner",
+          cause: expect.any(errorClass),
+        }),
+      );
+    },
+  );
+  test("stored version-2 force redemption with both adapter shapes builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV2ForceRedeem","label":"Force redeem from vault","action":{"type":"vaultV2ForceRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","redeem":{"shares":{"$bigint":"100"}},"deallocations":[{"adapter":"0x0000000000000000000000000000000000001010","assets":{"$bigint":"60"},"marketParams":{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001004","oracle":"0x0000000000000000000000000000000000001005","irm":"0x0000000000000000000000000000000000001006","lltv":{"$bigint":"800000000000000000"}}},{"adapter":"0x0000000000000000000000000000000000001020","assets":{"$bigint":"40"}}]}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0xac9650d800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000002c00000000000000000000000000000000000000000000000000000000000000144e4d38cd800000000000000000000000000000000000000000000000000000000000010100000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000003c0000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001004000000000000000000000000000000000000000000000000000000000000100500000000000000000000000000000000000000000000000000000000000010060000000000000000000000000000000000000000000000000b1a2bc2ec5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a4e4d38cd80000000000000000000000000000000000000000000000000000000000001020000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000280000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064ba08765200000000000000000000000000000000000000000000000000000000000000640000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf0000000000000000000000007e5f4552091a69125d5dfcb7b8c2659029395bdf00000000000000000000000000000000000000000000000000000000",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 deposit with a permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV2Deposit","label":"Deposit into vault","action":{"type":"vaultV2Deposit","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","assets":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","asset":"0x0000000000000000000000000000000000001003","maxSharePrice":{"$bigint":"1000000000000000000000000000"}},"signatureRequestIds":{"tokenPermit":"vaultV2Deposit:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV2Deposit:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Asset","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001003"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"100"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0x078f6df4a0b9d71420081948c52c91b9d3842248521c3a5048d69741e6195a1020945a0fbf591161c1ff9583d61d00afc6ecc91f7ad7a2586159276708460e241b"}]}';
     expect(
       buildTransactions(parseTransactionPlan(fixture)).map(
         ({ to, data, value }) => ({ to, data, value }),
@@ -126,9 +267,9 @@ describe("serializeTransactionPlan and parseTransactionPlan", () => {
     ]);
   });
 
-  test("stored version-1 withdrawal with a direct approval builds unchanged", () => {
+  test("stored version-2 withdrawal with a direct approval builds unchanged", () => {
     const fixture =
-      '{"version":1,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV2Withdraw:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV2Withdraw","label":"Withdraw from vault","action":{"type":"vaultV2Withdraw","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","amount":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","requiredShareAllowance":{"$bigint":"120"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV2Withdraw:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV2Withdraw","label":"Withdraw from vault","action":{"type":"vaultV2Withdraw","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","assets":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","requiredShareAllowance":{"$bigint":"120"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
     expect(
       buildTransactions(parseTransactionPlan(fixture)).map(
         ({ to, data, value }) => ({ to, data, value }),
@@ -142,6 +283,244 @@ describe("serializeTransactionPlan and parseTransactionPlan", () => {
       {
         to: "0x02912516d49dE997db75B9D7858faAE59209650B",
         data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 redemption with a share permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV2Redeem","label":"Redeem vault shares","action":{"type":"vaultV2Redeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","shares":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000"},"signatureRequestIds":{"tokenPermit":"vaultV2Redeem:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV2Redeem:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0xff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc1b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000070000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001bff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 redemption with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV2Redeem:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV2Redeem","label":"Redeem vault shares","action":{"type":"vaultV2Redeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","shares":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000"},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b300000000000000000000000002912516d49de997db75b9d7858faae59209650bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        value: 0n,
+      },
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V1 deposit with a permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV1Deposit","label":"Deposit into vault","action":{"type":"vaultV1Deposit","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","asset":"0x0000000000000000000000000000000000001003","maxSharePrice":{"$bigint":"1000000000000000000000000000"},"assets":{"$bigint":"100"}},"signatureRequestIds":{"tokenPermit":"vaultV1Deposit:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV1Deposit:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Asset","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001003"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"100"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0x078f6df4a0b9d71420081948c52c91b9d3842248521c3a5048d69741e6195a1020945a0fbf591161c1ff9583d61d00afc6ecc91f7ad7a2586159276708460e241b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x6bbba4e0000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000033b2e3c9fd0803ce800000000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000773594000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001b078f6df4a0b9d71420081948c52c91b9d3842248521c3a5048d69741e6195a1020945a0fbf591161c1ff9583d61d00afc6ecc91f7ad7a2586159276708460e24cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 native Vault V1 deposit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV1Deposit","label":"Deposit into vault","action":{"type":"vaultV1Deposit","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","asset":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","maxSharePrice":{"$bigint":"1000000000000000000000000000"},"nativeAssets":{"$bigint":"100"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x6bbba4e0000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000033b2e3c9fd0803ce800000000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000",
+        value: 100n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V1 withdrawal with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV1Withdraw:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV1Withdraw","label":"Withdraw from vault","action":{"type":"vaultV1Withdraw","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000","requiredShareAllowance":{"$bigint":"120"},"assets":{"$bigint":"100"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b300000000000000000000000002912516d49de997db75b9d7858faae59209650bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        value: 0n,
+      },
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 V1 redemption with a share permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV1Redeem","label":"Redeem vault shares","action":{"type":"vaultV1Redeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","shares":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000"},"signatureRequestIds":{"tokenPermit":"vaultV1Redeem:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV1Redeem:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0xff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc1b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000070000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001bff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 V1 redemption with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV1Redeem:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV1Redeem","label":"Redeem vault shares","action":{"type":"vaultV1Redeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","shares":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"0"},"referralFeeRecipient":"0x0000000000000000000000000000000000000000"},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b300000000000000000000000002912516d49de997db75b9d7858faae59209650bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        value: 0n,
+      },
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x932084a8000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 migration with a signed share permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV1MigrateToV2","label":"Migrate to Vault V2","action":{"type":"vaultV1MigrateToV2","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","sourceVault":"0x0000000000000000000000000000000000001001","targetVault":"0x0000000000000000000000000000000000001002","asset":"0x0000000000000000000000000000000000001003","shares":{"$bigint":"100"},"requiredShareAllowance":{"$bigint":"100"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"10000000000000000"},"referralFeeRecipient":"0x0000000000000000000000000000000000001004","vault":"0x0000000000000000000000000000000000001001","maxSharePrice":{"$bigint":"1000000000000000000000000000"}},"signatureRequestIds":{"tokenPermit":"vaultV1MigrateToV2:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV1MigrateToV2:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0x02912516d49dE997db75B9D7858faAE59209650B","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0xff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc1b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x8355f77600000000000000000000000000000000000000000000000000000000000010010000000000000000000000000000000000000000000000000000000000001002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000033b2e3c9fd0803ce8000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000070000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001bff8b8e9cc17d5eb23eb0cb225229a16ea855065e7e2722546859dc7ece978474314c1f7798c3453d483b81d31e051d43f97d08c9d8f470e29612aaae446e0ddc000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000010040000000000000000000000000000000000000000000000000000000077359400cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 migration with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV1MigrateToV2:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0x02912516d49dE997db75B9D7858faAE59209650B","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV1MigrateToV2","label":"Migrate to Vault V2","action":{"type":"vaultV1MigrateToV2","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","sourceVault":"0x0000000000000000000000000000000000001001","targetVault":"0x0000000000000000000000000000000000001002","asset":"0x0000000000000000000000000000000000001003","assets":{"$bigint":"100"},"requiredShareAllowance":{"$bigint":"120"},"deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"10000000000000000"},"referralFeeRecipient":"0x0000000000000000000000000000000000001004","vault":"0x0000000000000000000000000000000000001001","maxSharePrice":{"$bigint":"1000000000000000000000000000"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b300000000000000000000000002912516d49de997db75b9d7858faae59209650bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        value: 0n,
+      },
+      {
+        to: "0x02912516d49dE997db75B9D7858faAE59209650B",
+        data: "0x8355f77600000000000000000000000000000000000000000000000000000000000010010000000000000000000000000000000000000000000000000000000000001002000000000000000000000000000000000000000000000000000000000000006400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033b2e3c9fd0803ce8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000010040000000000000000000000000000000000000000000000000000000077359400",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V2 in-kind redemption with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV2InKindRedeem:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV2InKindRedeem","label":"Redeem vault shares in kind","action":{"type":"vaultV2InKindRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","adapter":"0x0000000000000000000000000000000000001002","marketParamsList":[{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001009","oracle":"0x0000000000000000000000000000000000001010","irm":"0x0000000000000000000000000000000000001011","lltv":{"$bigint":"860000000000000000"}},{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001006","oracle":"0x0000000000000000000000000000000000001007","irm":"0x0000000000000000000000000000000000001008","lltv":{"$bigint":"800000000000000000"}}],"deadline":{"$bigint":"2000000000"},"assets":{"$bigint":"100"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b3000000000000000000000000af85af286637a033be7d59ed8cc566afa3309b02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcafe",
+        value: 0n,
+      },
+      {
+        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+        data: "0x3debf2f000000000000000000000000000000000000000000000000000000000000010010000000000000000000000000000000000000000000000000000000000001002000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000773594000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001009000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000010110000000000000000000000000000000000000000000000000bef55718ad6000000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001006000000000000000000000000000000000000000000000000000000000000100700000000000000000000000000000000000000000000000000000000000010080000000000000000000000000000000000000000000000000b1a2bc2ec500000cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V2 in-kind redemption with a signed share permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV2InKindRedeem","label":"Redeem vault shares in kind","action":{"type":"vaultV2InKindRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","adapter":"0x0000000000000000000000000000000000001002","marketParamsList":[{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001009","oracle":"0x0000000000000000000000000000000000001010","irm":"0x0000000000000000000000000000000000001011","lltv":{"$bigint":"860000000000000000"}},{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001006","oracle":"0x0000000000000000000000000000000000001007","irm":"0x0000000000000000000000000000000000001008","lltv":{"$bigint":"800000000000000000"}}],"deadline":{"$bigint":"2000000000"},"assets":{"$bigint":"100"}},"signatureRequestIds":{"tokenPermit":"vaultV2InKindRedeem:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV2InKindRedeem:tokenPermit","kind":"permit","typedData":{"domain":{"chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"primaryType":"Permit","message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}}},"args":{"spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0xbbaf0f180f54125714ee56839037fbcfce2279ea2a14d93a07b9333157ca4ecb055ab92bbbe3b2ebcb86b0a017717740e8a3d6de9114e854a941cc68d443a70a1b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+        data: "0x3debf2f00000000000000000000000000000000000000000000000000000000000001001000000000000000000000000000000000000000000000000000000000000100200000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000064ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000070000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001bbbaf0f180f54125714ee56839037fbcfce2279ea2a14d93a07b9333157ca4ecb055ab92bbbe3b2ebcb86b0a017717740e8a3d6de9114e854a941cc68d443a70a0000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001009000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000010110000000000000000000000000000000000000000000000000bef55718ad6000000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001006000000000000000000000000000000000000000000000000000000000000100700000000000000000000000000000000000000000000000000000000000010080000000000000000000000000000000000000000000000000b1a2bc2ec500000cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V1 in-kind redemption with a direct approval builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV1InKindRedeem:approval","label":"Approve token spending","action":{"type":"erc20Approval","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","token":"0x0000000000000000000000000000000000001001","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","shares":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}}}},{"id":"vaultV1InKindRedeem","label":"Redeem vault shares in kind","action":{"type":"vaultV1InKindRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","marketParamsList":[{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001009","oracle":"0x0000000000000000000000000000000000001010","irm":"0x0000000000000000000000000000000000001011","lltv":{"$bigint":"860000000000000000"}},{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001006","oracle":"0x0000000000000000000000000000000000001007","irm":"0x0000000000000000000000000000000000001008","lltv":{"$bigint":"800000000000000000"}}],"deadline":{"$bigint":"2000000000"},"assets":{"$bigint":"100"}},"signatureRequestIds":{}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0x0000000000000000000000000000000000001001",
+        data: "0x095ea7b3000000000000000000000000af85af286637a033be7d59ed8cc566afa3309b02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcafe",
+        value: 0n,
+      },
+      {
+        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+        data: "0xac581a830000000000000000000000000000000000000000000000000000000000001001000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000773594000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001009000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000010110000000000000000000000000000000000000000000000000bef55718ad6000000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001006000000000000000000000000000000000000000000000000000000000000100700000000000000000000000000000000000000000000000000000000000010080000000000000000000000000000000000000000000000000b1a2bc2ec500000cafe",
+        value: 0n,
+      },
+    ]);
+  });
+
+  test("stored version-2 Vault V1 in-kind redemption with a signed share permit builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"calldataOrigin":"0xcafe","steps":[{"id":"vaultV1InKindRedeem","label":"Redeem vault shares in kind","action":{"type":"vaultV1InKindRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","marketParamsList":[{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001009","oracle":"0x0000000000000000000000000000000000001010","irm":"0x0000000000000000000000000000000000001011","lltv":{"$bigint":"860000000000000000"}},{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001006","oracle":"0x0000000000000000000000000000000000001007","irm":"0x0000000000000000000000000000000000001008","lltv":{"$bigint":"800000000000000000"}}],"deadline":{"$bigint":"2000000000"},"assets":{"$bigint":"100"}},"signatureRequestIds":{"tokenPermit":"vaultV1InKindRedeem:tokenPermit"}}}],"signatureRequests":[{"id":"vaultV1InKindRedeem:tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"primaryType":"Permit","message":{"owner":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"7"},"deadline":{"$bigint":"2000000000"}}},"args":{"spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"7"}},"signature":"0xf9c65b18d9efb75fccd814a6b5ab8019d683b6c56ccaccfa7f59ad7e67bdbf001cfd221d5f01893869b7cc21f77a3abef45834ca4a76b9296127693226d494171b"}]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+        data: "0xac581a83000000000000000000000000000000000000000000000000000000000000100100000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000064ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000070000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001bf9c65b18d9efb75fccd814a6b5ab8019d683b6c56ccaccfa7f59ad7e67bdbf001cfd221d5f01893869b7cc21f77a3abef45834ca4a76b9296127693226d494170000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001009000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000010110000000000000000000000000000000000000000000000000bef55718ad6000000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000000001006000000000000000000000000000000000000000000000000000000000000100700000000000000000000000000000000000000000000000000000000000010080000000000000000000000000000000000000000000000000b1a2bc2ec500000cafe",
         value: 0n,
       },
     ]);
@@ -179,8 +558,8 @@ describe("serializeTransactionPlan and parseTransactionPlan", () => {
 });
 
 const uint256Fields = [
-  "steps[0].action.inputs.amount",
-  "steps[1].action.inputs.amount",
+  "steps[0].action.inputs.assets",
+  "steps[1].action.inputs.assets",
   "steps[1].action.inputs.maxSharePrice",
   "steps[1].action.inputs.deadline",
   "steps[1].action.inputs.referralFeePct",
@@ -207,6 +586,93 @@ const addressFields = [
 ];
 
 describe("restored plan validation", () => {
+  const { assets, ...withoutAssets } = inputs;
+  test.each([
+    {
+      field: "assets",
+      legacy: "amount",
+      action: { type: "vaultV2Deposit", inputs, signatureRequestIds: {} },
+    },
+    {
+      field: "nativeAssets",
+      legacy: "nativeAmount",
+      action: {
+        type: "vaultV2Deposit",
+        inputs: { ...withoutAssets, nativeAssets: assets },
+        signatureRequestIds: {},
+      },
+    },
+    {
+      field: "assets",
+      legacy: "amount",
+      action: {
+        type: "vaultV2Withdraw",
+        inputs: { ...inputs, requiredShareAllowance: 100n },
+        signatureRequestIds: {},
+      },
+    },
+    {
+      field: "shares",
+      legacy: "amount",
+      action: {
+        type: "vaultV2Redeem",
+        inputs: { ...withoutAssets, shares: assets },
+        signatureRequestIds: {},
+      },
+    },
+  ] as const)(
+    "requires $action.type inputs.$field instead of legacy $legacy",
+    ({ action, field, legacy }) => {
+      const saved = serializeTransactionPlan({
+        ...pendingPlan,
+        steps: [
+          {
+            id: action.type,
+            label: action.type,
+            action,
+          },
+        ],
+        signatureRequests: [],
+      });
+      expect(parseTransactionPlan(saved).steps[0]?.action.inputs).toEqual(
+        action.inputs,
+      );
+      const legacyPlan = saved.replace(`"${field}":`, `"${legacy}":`);
+      expect(() => parseTransactionPlan(legacyPlan)).toThrow(
+        InvalidTransactionPlanError,
+      );
+    },
+  );
+
+  test.each([
+    {},
+    { amount: 100n },
+    { assets: 100n, shares: 100n },
+    { shares: -1n },
+    { shares: maxUint256 + 1n },
+    { shares: "100" },
+  ])("rejects invalid approval denomination fields %s", (quantity) => {
+    const approval = pendingPlan.steps[0]!;
+    const { assets: _assets, ...approvalInputs } = approval.action
+      .inputs as Extract<Step["action"], { type: "erc20Approval" }>["inputs"];
+    const saved = serializeTransactionPlan({
+      ...pendingPlan,
+      steps: [
+        {
+          ...approval,
+          action: {
+            type: "erc20Approval",
+            inputs: { ...approvalInputs, ...quantity },
+          },
+        },
+      ],
+      signatureRequests: [],
+    } as TransactionPlan);
+    expect(() => parseTransactionPlan(saved)).toThrow(
+      InvalidTransactionPlanError,
+    );
+  });
+
   test.each(["null", "[]", '"plan"', "1", "true"])(
     "rejects non-object root %s",
     (json) => {
@@ -296,14 +762,15 @@ describe("restored plan validation", () => {
     >;
     const keys = path.replaceAll(/\[(\d+)\]/g, ".$1").split(".");
     let target = saved;
-    for (const key of keys.slice(0, -1))
+    for (const key of keys.slice(0, -1)) {
       target = target[key] as Record<string, unknown>;
+    }
     target[keys.at(-1)!] = value;
     const parse = () => parseTransactionPlan(JSON.stringify(saved));
     expect(parse).toThrow(InvalidTransactionPlanError);
     const errorPath =
-      path === "steps[1].action.inputs.amount" && value === undefined
-        ? "steps[1].action.inputs"
+      path.endsWith(".inputs.assets") && value === undefined
+        ? path.slice(0, -".assets".length)
         : path;
     expect(parse).toThrow(
       expect.objectContaining({
@@ -313,16 +780,19 @@ describe("restored plan validation", () => {
     );
   });
 
-  test.each([2, -1])("preserves the typed version error for %s", (version) => {
-    expect(() =>
-      parseTransactionPlan(
-        serializeTransactionPlan({
-          ...pendingPlan,
-          version,
-        } as unknown as TransactionPlan),
-      ),
-    ).toThrow(new UnsupportedTransactionPlanVersionError(version));
-  });
+  test.each([1, 0, 3, -1])(
+    "preserves the typed version error for %s",
+    (version) => {
+      expect(() =>
+        parseTransactionPlan(
+          serializeTransactionPlan({
+            ...pendingPlan,
+            version,
+          } as unknown as TransactionPlan),
+        ),
+      ).toThrow(new UnsupportedTransactionPlanVersionError(version));
+    },
+  );
 
   test.each([
     "futureAction",
@@ -501,14 +971,14 @@ describe("restored plan validation", () => {
 
   test("requires exclusive deposit funding and validates native uint256", () => {
     for (const [fields, path] of [
-      [{ amount: 1n, nativeAmount: 1n }, "$.steps[0].action.inputs"],
+      [{ assets: 1n, nativeAssets: 1n }, "$.steps[0].action.inputs"],
       [
-        { amount: undefined, nativeAmount: undefined },
+        { assets: undefined, nativeAssets: undefined },
         "$.steps[0].action.inputs",
       ],
       [
-        { amount: undefined, nativeAmount: -1n },
-        "$.steps[0].action.inputs.nativeAmount",
+        { assets: undefined, nativeAssets: -1n },
+        "$.steps[0].action.inputs.nativeAssets",
       ],
     ] as const) {
       const saved = serializeTransactionPlan({
@@ -535,7 +1005,7 @@ describe("restored plan validation", () => {
           ...depositStep,
           action: {
             ...depositStep.action,
-            inputs: { ...inputs, amount: undefined, nativeAmount: maxUint256 },
+            inputs: { ...inputs, assets: undefined, nativeAssets: maxUint256 },
             signatureRequestIds: {},
           },
         },
@@ -547,7 +1017,7 @@ describe("restored plan validation", () => {
     );
   });
 
-  test.each(["amount", "requiredShareAllowance", "deadline", "referralFeePct"])(
+  test.each(["assets", "requiredShareAllowance", "deadline", "referralFeePct"])(
     "validates withdrawal uint256 %s",
     (field) => {
       for (const value of [1, undefined, -1n, maxUint256 + 1n]) {
@@ -581,7 +1051,7 @@ describe("restored plan validation", () => {
     },
   );
 
-  test("allows extra keys, expired plans, unverified signatures and well-formed tampering", () => {
+  test("allows extra keys, expired plans and changes to unsigned fields", () => {
     const changed = structuredClone(completePlan);
     Object.assign(changed, {
       expiresAt: -1,
@@ -592,11 +1062,12 @@ describe("restored plan validation", () => {
       Object.assign(step, { extra: true });
       Object.assign(step.action, { extra: true });
       Object.assign(step.action.inputs, { extra: 1 });
-      if (step.action.type === "vaultV2Deposit")
+      if (step.action.type === "vaultV2Deposit") {
         Object.assign(step.action.inputs, { maxSharePrice: maxUint256 });
+      }
     }
     for (const request of changed.signatureRequests) {
-      Object.assign(request, { extra: true, signature: "0x1234" });
+      Object.assign(request, { extra: true });
       Object.assign(request.args, { extra: true });
       Object.assign(request.typedData, { extra: true });
       Object.assign(request.typedData.domain!, { extra: true });
@@ -690,11 +1161,10 @@ propertyTest.prop([
     }
     const prepare = withdraw ? prepareVaultV2Withdraw : prepareVaultV2Deposit;
     const plan = await prepare(handle.client, {
-      vault: vaultData.address,
-      vaultData,
+      vault: vaultData,
       chainId: 1,
       account: IN_KIND_USER,
-      amount,
+      assets: amount,
       expiresAt: Number(Time.timestamp() + 3600n),
       supportSignature,
       deployless: false,

@@ -1,5 +1,12 @@
-import { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, isHex, parseUnits } from "viem";
+import { MarketParams, marketParamsAbi } from "@morpho-org/blue-sdk";
+import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeFunctionData,
+  isHex,
+  parseUnits,
+} from "viem";
 import { describe, expect } from "vitest";
 import { test } from "../../../test/unit.js";
 import {
@@ -59,6 +66,65 @@ describe("forceRedeemVaultV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
+  test("behavior: freezes only the transaction descriptor without changing calldata", ({
+    client,
+  }) => {
+    const marketParams = new MarketParams(mockMarketParams);
+    const deallocation = {
+      adapter: mockAdapterAddress,
+      marketParams,
+      amount: 2n,
+    };
+    const deallocations = [deallocation];
+    const account = client.account.address;
+    const tx = vaultV2ForceRedeem({
+      vault: { address: mockVaultAddress },
+      args: {
+        deallocations,
+        redeem: { shares: 1n, recipient: account },
+        onBehalf: account,
+      },
+    });
+
+    const [snapshot] = tx.action.args.deallocations;
+    expect(snapshot).toStrictEqual({
+      ...deallocation,
+      marketParams: { ...marketParams },
+    });
+    expect(snapshot?.marketParams).not.toBe(marketParams);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot?.marketParams)).toBe(true);
+    expect(Object.isFrozen(deallocations)).toBe(false);
+    expect(Object.isFrozen(deallocation)).toBe(false);
+    expect(Object.isFrozen(marketParams)).toBe(false);
+    expect(MarketParams.get(marketParams.id)).toBe(marketParams);
+    expect(tx.data).toBe(
+      encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "multicall",
+        args: [
+          [
+            encodeFunctionData({
+              abi: vaultV2Abi,
+              functionName: "forceDeallocate",
+              args: [
+                mockAdapterAddress,
+                encodeAbiParameters([marketParamsAbi], [marketParams]),
+                2n,
+                account,
+              ],
+            }),
+            encodeFunctionData({
+              abi: vaultV2Abi,
+              functionName: "redeem",
+              args: [1n, account, account],
+            }),
+          ],
+        ],
+      }),
+    );
+  });
+
   test("should create force redeem tx with a single deallocation (without marketParams)", ({
     client,
   }) => {
@@ -77,7 +143,9 @@ describe("forceRedeemVaultV2 unit tests", () => {
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV2ForceRedeem");
     expect(tx.action.args.deallocations).toHaveLength(1);
-    expect(tx.action.args.deallocations[0]?.marketParams).toBeUndefined();
+    expect(tx.action.args.deallocations).toStrictEqual([
+      { adapter: mockAdapterAddress, amount: assets },
+    ]);
     expect(tx.action.args.redeem.shares).toBe(shares);
     expect(tx.to).toBe(mockVaultAddress);
     expect(isHex(tx.data)).toBe(true);

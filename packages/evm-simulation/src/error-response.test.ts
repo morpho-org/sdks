@@ -8,9 +8,26 @@ import {
   SimulationLogAssertError,
   SimulationRevertedError,
   UnexpectedSimulationError,
+  UnexpectedTokenTransferError,
 } from "./errors.js";
 
 describe("toSimulationErrorResponse", () => {
+  test("behavior: serializes undeclared transfer failures without diagnostics", () => {
+    const address = "0x0000000000000000000000000000000000000001";
+    const error = new UnexpectedTokenTransferError({
+      token: address,
+      sender: address,
+      recipients: [address],
+    });
+    expect(
+      JSON.parse(JSON.stringify(toSimulationErrorResponse(error))),
+    ).toEqual({
+      code: "UNEXPECTED_TOKEN_TRANSFER",
+      message: error.message,
+    });
+    expect(error.message).toContain("Do not sign");
+    expect(error.message).toContain(address);
+  });
   test("behavior: maps a structural package error from another copy", () => {
     const value = {
       name: "SimulationRevertedError",

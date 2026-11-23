@@ -90,30 +90,36 @@ export namespace MidnightPositionLib {
         lastLossFactor,
       );
     }
-    if (credit < 0n)
+    if (credit < 0n) {
       throw new InvalidPositionAccrualStateError(
         `Credit "${credit}" must be non-negative.`,
       );
-    if (pendingFee < 0n)
+    }
+    if (pendingFee < 0n) {
       throw new InvalidPositionAccrualStateError(
         `Pending fee "${pendingFee}" must be non-negative.`,
       );
-    if (lastLossFactor < 0n)
+    }
+    if (lastLossFactor < 0n) {
       throw new InvalidPositionAccrualStateError(
         `Last loss factor "${lastLossFactor}" must be non-negative.`,
       );
-    if (lastAccrual < 0n)
+    }
+    if (lastAccrual < 0n) {
       throw new InvalidPositionAccrualStateError(
         `Last accrual "${lastAccrual}" must be non-negative.`,
       );
-    if (maturity < 0n)
+    }
+    if (maturity < 0n) {
       throw new InvalidPositionAccrualStateError(
         `Maturity "${maturity}" must be non-negative.`,
       );
-    if (marketLossFactor > MathLib.MAX_UINT_128)
+    }
+    if (marketLossFactor > MathLib.MAX_UINT_128) {
       throw new InvalidPositionAccrualStateError(
         `Market loss factor "${marketLossFactor}" must not exceed MAX_UINT_128 "${MathLib.MAX_UINT_128}".`,
       );
+    }
     if (pendingFee > credit) {
       throw new InvalidPositionAccrualStateError(
         "Pending fee must be less than or equal to credit.",

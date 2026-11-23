@@ -81,8 +81,12 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 
       return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
-      if (isUnknownOfFactoryError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
+      if (isUnknownOfFactoryError(error)) {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }

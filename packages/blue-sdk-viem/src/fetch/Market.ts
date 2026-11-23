@@ -111,8 +111,9 @@ export async function fetchMarket(
         deployless === "force" ||
         isTransportError(error) ||
         error instanceof MarketParamsIdMismatchError
-      )
+      ) {
         throw error;
+      }
       // Non-transport deployless failures other than an ID mismatch fall back to multicall.
     }
   }
@@ -146,14 +147,14 @@ export async function fetchMarket(
   validateMarketParamsId(id, params);
 
   const [price, rateAtTarget] = await Promise.all([
-    params.oracle !== zeroAddress
-      ? readContract(client, {
+    params.oracle === zeroAddress
+      ? undefined
+      : readContract(client, {
           ...parameters,
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
-        }).catch(catchRevertOnly(undefined))
-      : undefined,
+        }).catch(catchRevertOnly(undefined)),
     isAddressEqual(params.irm, adaptiveCurveIrm)
       ? readContract(client, {
           ...parameters,

@@ -24,7 +24,11 @@ describe("AccrualVaultV2MorphoVaultV1Adapter.pendingAllocationIncrease", () => {
       ],
     );
     const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
-      { ...vaultV2AdapterInput(), morphoVaultV1: RECIPIENT },
+      {
+        ...vaultV2AdapterInput(),
+        type: "VaultV2MorphoVaultV1Adapter",
+        morphoVaultV1: RECIPIENT,
+      },
       nested,
       100n,
     );

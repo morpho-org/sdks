@@ -193,7 +193,7 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
       "0xaBCdEf0000000000000000000000000000000001",
     );
     expect(checksummed.startsWith("0xa")).toBe(true);
-    const badChecksum = `0xA${checksummed.slice(3)}`;
+    const badChecksum = `0xA${checksummed.slice(3)}` as const;
     expect(isAddress(badChecksum, { strict: true })).toBe(false);
 
     expect(() =>
@@ -201,11 +201,36 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
         collateralParams: [],
         rcfThreshold: 0n,
         liquidatorGate: "0x1234",
+        enterGate: ADDRESS,
       }),
     ).toThrow(InvalidAddressError);
     expect(() =>
       VaultV2MidnightAdapterUtils.durationCapId(badChecksum, 1n),
     ).toThrow(InvalidAddressError);
+    expect(() =>
+      VaultV2MidnightAdapterUtils.familyCapId({
+        collateralParams: [],
+        rcfThreshold: 0n,
+        liquidatorGate: OTHER,
+        enterGate: badChecksum,
+      }),
+    ).toThrow(InvalidAddressError);
+  });
+
+  test("behavior: empty-collateral families distinguish enter gates", () => {
+    const market = {
+      collateralParams: [],
+      rcfThreshold: 0n,
+      liquidatorGate: OTHER,
+    };
+    expect(
+      VaultV2MidnightAdapterUtils.familyCapId({
+        ...market,
+        enterGate: ADDRESS,
+      }),
+    ).not.toBe(
+      VaultV2MidnightAdapterUtils.familyCapId({ ...market, enterGate: OTHER }),
+    );
   });
 
   test("error: rejects integers outside uint256", () => {
@@ -214,6 +239,7 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
         collateralParams: [],
         rcfThreshold: -1n,
         liquidatorGate: OTHER,
+        enterGate: ADDRESS,
       }),
     ).toThrow(IntegerOutOfRangeError);
     expect(() =>
@@ -231,16 +257,15 @@ describe("VaultV2MidnightAdapterUtils cap ids", () => {
         ],
         rcfThreshold: 0n,
         liquidatorGate: OTHER,
+        enterGate: ADDRESS,
       }),
     ).toThrow(IntegerOutOfRangeError);
   });
 });
 
-// Expected ids come from `adapterId()` and `ids(Market)` on a frozen
-// (vault-v2@e7821fd) MidnightAdapter, created by a locally deployed
-// MidnightAdapterFactory on an Anvil Base fork at block 52513513. The duration id
-// has no onchain view, so it is pinned from
-// `keccak256(abi.encode("this/duration", adapter, 2592000))` computed with cast.
+// Fixed-address encoding vectors for vault-v2@de2b5116eba5c03fb8e8ecfa9708569bc25c5ce1.
+// The family vector is computed with `cast abi-encode` and `cast keccak`;
+// deployed-adapter parity is covered by the Midnight fork tests.
 describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
   const adapter = "0x56D7EDbA8bEF0AcB4b3c7D8cEb808d166c92309c" as const;
   const market = {
@@ -267,7 +292,7 @@ describe("VaultV2MidnightAdapterUtils pinned cap ids", () => {
     "0x6fa08db8133b8ef0976386b0ef2ba7d54955ee25b7e37342088a9ed4d3effc0c";
   const onchainIds = [
     adapterId,
-    "0xe043e960861ca6fcc17e297ee01c73803e45ae0ad81d9e9fdf5eaf67fe53e970",
+    "0xadea0e0a74b9871026c634fee2dfe9d7338e32f7cc2e6390c493ed90b6b089e2",
     "0x207cf9968961dcdfb8e4007f249958d856244d4356441a5379d11c267f651be4",
     "0x13ff47043c4f28ff9eb52ff2a760b64b77707c842acabb83558f6415c9cb4797",
   ];

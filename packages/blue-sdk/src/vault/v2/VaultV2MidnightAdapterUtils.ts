@@ -34,7 +34,7 @@ export interface IVaultV2MidnightAdapterCollateralParams {
 }
 
 /**
- * Midnight `Market` fields read by the adapter's `ids()`, plus `maturity` and `enterGate` (not used by cap ids).
+ * Midnight `Market` fields read by the adapter's `ids()`, plus `maturity` (not used by cap ids).
  * Structurally compatible with midnight-sdk's `IMarketParams` (pass `market.params`).
  */
 export interface IVaultV2MidnightAdapterMarket {
@@ -44,7 +44,7 @@ export interface IVaultV2MidnightAdapterMarket {
   readonly maturity: BigIntish;
   /** Recovery close factor threshold in loan-token units, part of the family cap id: the RCF is deactivated when a liquidation could leave collateral worth less than this amount. */
   readonly rcfThreshold: BigIntish;
-  /** Entry gate address (zero address when ungated); not used by cap ids. */
+  /** Entry gate address (zero address when ungated), part of the family cap id. */
   readonly enterGate: Address;
   /** Liquidator gate address (zero address when ungated), part of the family cap id. */
   readonly liquidatorGate: Address;
@@ -304,8 +304,11 @@ export namespace VaultV2MidnightAdapterUtils {
 
     return adapter.marketIds.reduce((total, id) => {
       // validateMarkets guarantees a position and market data for every held id.
-      const market = marketsById.get(id)!;
-      const marketData = adapter.marketData[id]!;
+      const market = marketsById.get(id);
+      const marketData = adapter.marketData[id];
+      if (market === undefined || marketData === undefined) {
+        throw new InvalidVaultV2MidnightAdapterMarketsError(id);
+      }
       const netCredit =
         BigInt(market.market.lossFactor) === 0n
           ? BigInt(marketData.netCredit)
@@ -391,7 +394,10 @@ export namespace VaultV2MidnightAdapterUtils {
 
     return markets.map((market) => {
       // validateMarkets guarantees market data for every position id.
-      const marketData = adapter.marketData[market.id]!;
+      const marketData = adapter.marketData[market.id];
+      if (marketData === undefined) {
+        throw new InvalidVaultV2MidnightAdapterMarketsError(market.id);
+      }
       const lastAccrual = BigInt(market.position.lastAccrual);
       const lossFactor = BigInt(market.market.lossFactor);
       const accrualTimestamp = MathLib.max(requested, lastAccrual);
@@ -507,11 +513,17 @@ export namespace VaultV2MidnightAdapterUtils {
       // Onchain `abi.decode` reverts on malformed data.
       return 0n;
     }
-    if (!isAddressEqual(market.loanToken, adapter.asset)) return 0n;
+    if (!isAddressEqual(market.loanToken, adapter.asset)) {
+      return 0n;
+    }
     const id = marketId(market);
-    if (adapter.marketData[id]?.forceRemoved !== false) return 0n;
+    if (adapter.marketData[id]?.forceRemoved !== false) {
+      return 0n;
+    }
     const held = adapter.markets.find((entry) => entry.id === id);
-    if (held === undefined) return 0n;
+    if (held === undefined) {
+      return 0n;
+    }
     // Midnight.withdraw runs `_updatePosition` first, so cap by credit net of continuous fees accrued since `lastAccrual`.
     const { credit } = MidnightPositionLib.accrue({
       ...held.position,
@@ -546,12 +558,12 @@ export namespace VaultV2MidnightAdapterUtils {
 
   /**
    * Returns the market-family allocation-cap id: the market configuration
-   * without its maturity and enter gate, so markets differing only by those
+   * without its maturity, so markets differing only by maturity
    * share caps.
    *
    * @param market - Midnight market fields used by the family id.
-   * @returns The family allocation-cap id, `keccak256(abi.encode("family", collateralParams, rcfThreshold, liquidatorGate))`.
-   * @throws {viem.InvalidAddressError} when a token, oracle, or the liquidator gate is not a valid address.
+   * @returns The family allocation-cap id, `keccak256(abi.encode("collateralParams/rcfThreshold/liquidatorGate/enterGate", collateralParams, rcfThreshold, liquidatorGate, enterGate))`.
+   * @throws {viem.InvalidAddressError} when a token, oracle, or either gate is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
@@ -568,23 +580,25 @@ export namespace VaultV2MidnightAdapterUtils {
    *   ],
    *   rcfThreshold: 0n,
    *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   enterGate: "0x0000000000000000000000000000000000000000",
    * });
    * ```
    */
   export function familyCapId(
     market: Pick<
       IVaultV2MidnightAdapterMarket,
-      "collateralParams" | "rcfThreshold" | "liquidatorGate"
+      "collateralParams" | "rcfThreshold" | "liquidatorGate" | "enterGate"
     >,
   ): Hash {
     return VaultV2Utils.capId({
-      tag: "family",
+      tag: "collateralParams/rcfThreshold/liquidatorGate/enterGate",
       params: [
         {
           type: "tuple[]",
           components: midnightCollateralParamsAbi.components,
         },
         { type: "uint256" },
+        { type: "address" },
         { type: "address" },
       ],
       values: [
@@ -596,6 +610,7 @@ export namespace VaultV2MidnightAdapterUtils {
         })),
         BigInt(market.rcfThreshold),
         market.liquidatorGate,
+        market.enterGate,
       ],
     });
   }
@@ -629,12 +644,12 @@ export namespace VaultV2MidnightAdapterUtils {
   /**
    * Returns the allocation-cap ids of a Midnight market, in contract order:
    * adapter id, family id, then the collateral-token id of each collateral.
-   * Maturity and enter gate are not part of any id.
+   * Maturity is not part of any id; the family id includes the enter gate.
    *
    * @param params.adapterId - Adapter allocation-cap id.
    * @param params.market - Midnight market fields used by the adapter.
    * @returns The market's `2 + collateralParams.length` allocation-cap ids.
-   * @throws {viem.InvalidAddressError} when the liquidator gate, a token, or an oracle is not a valid address.
+   * @throws {viem.InvalidAddressError} when either gate, a token, or an oracle is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
@@ -714,11 +729,12 @@ export namespace VaultV2MidnightAdapterUtils {
     readonly length: number;
     readonly timestamp: BigIntish;
   }): bigint[] {
-    if (!Number.isInteger(length) || length < 0 || length > durations.length)
+    if (!Number.isInteger(length) || length < 0 || length > durations.length) {
       throw new VaultV2Errors.InvalidMidnightDurationsLength(
         length,
         durations.length,
       );
+    }
 
     const allocations = Array.from({ length }, () => 0n);
     const thresholds = durations.slice(0, length).map(BigInt);
@@ -726,10 +742,11 @@ export namespace VaultV2MidnightAdapterUtils {
 
     for (const data of Object.values(marketData)) {
       const ttm = MathLib.zeroFloorSub(BigInt(data.maturity), now);
-      for (let i = 0; i < thresholds.length; i++) {
-        if (thresholds[i]! <= ttm)
-          allocations[i] = allocations[i]! + BigInt(data.netCredit);
-      }
+      thresholds.forEach((threshold, i) => {
+        if (threshold <= ttm) {
+          allocations[i] = (allocations[i] ?? 0n) + BigInt(data.netCredit);
+        }
+      });
     }
 
     return allocations;

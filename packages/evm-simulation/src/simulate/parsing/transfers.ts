@@ -7,12 +7,8 @@ import {
   zeroHash,
 } from "viem";
 
-import type {
-  RawCall,
-  RawLog,
-  SimulationLogger,
-  Transfer,
-} from "../../types.js";
+import type { RawCall, RawLog, Transfer } from "../../types.js";
+import { freezeWarning, type SimulationWarning } from "../../warnings.js";
 import { normalizeAssetToken } from "../asset-changes.js";
 
 /** `keccak256("Transfer(address,address,uint256)")` — ERC-20 Transfer event topic. @internal */
@@ -27,6 +23,9 @@ export const DEPOSIT_TOPIC =
 
 const TOPIC_HEX_LENGTH = 66; // "0x" + 32 bytes
 const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
+
+/** Marks logs whose data was omitted before RPC normalization. @internal */
+export const MISSING_LOG_DATA = Symbol("missingLogData");
 
 /**
  * Parse raw EVM logs into individual Transfer events.
@@ -62,24 +61,25 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * no matching same-tx `Deposit`/`Withdrawal` at all; a surplus equal-value
  * transfer after one-to-one pairing is kept silently. With
  * `wNativeEmitsTransfer: false`, a kept transfer matching a same-call event is
- * logged at `warn`.
+ * reported as `WRAPPED_NATIVE_MIRROR_DETECTED`.
  *
  * **Hex casing.** JSON-RPC `DATA` is case-insensitive, so `topics` and `data`
  * are lowercased before signature dispatch and pair matching; a backend that
  * echoes mixed-case hex cannot drop a transfer from the parsed output.
  *
- * **Failure mode:** on a per-log parse failure (malformed topic length,
- * non-hex data), the log is skipped and a `warn` is emitted via the logger.
+ * **Failure mode:** on a per-log parse failure (invalid Transfer topic/data shape,
+ * malformed topic length,
+ * non-hex data), the log is skipped with a `MALFORMED_TRANSFER_LOG` warning.
  *
  * Output is sorted canonically by token, from, to, amount for determinism.
  * `txIdx` is attached but does not influence sort order.
  *
  * @param calls - Per-transaction call results to parse.
- * @param options - Wrapped-native metadata and optional logger. Pass `null` for
+ * @param options - Chain ID and wrapped-native metadata. Pass `null` for
  *   a known chain without a wrapped-native token; omit it for legacy parsing on
  *   an unknown chain. `wNativeEmitsTransfer` defaults to `true` and controls
  *   pairing for a registered wrapped-native token.
- * @returns Canonically sorted transfers with their originating transaction index.
+ * @returns Canonically sorted transfers and frozen structured warnings in log order.
  * @internal
  */
 export function parseTransfers(
@@ -87,19 +87,21 @@ export function parseTransfers(
   options: {
     readonly wNative?: Address | null;
     readonly wNativeEmitsTransfer?: boolean;
-    readonly logger?: SimulationLogger;
-  } = {},
-): Transfer[] {
+    readonly chainId: number;
+  },
+): { transfers: Transfer[]; warnings: readonly SimulationWarning[] } {
   const transfers: Transfer[] = [];
-  const { logger, wNative, wNativeEmitsTransfer = true } = options;
+  const warnings: SimulationWarning[] = [];
+  const { chainId, wNative, wNativeEmitsTransfer = true } = options;
   const shouldPairWnative = wNativeEmitsTransfer || wNative === undefined;
   // Lowercase `topics`/`data` so signature dispatch and pair matching are case-insensitive.
   const normalizedCalls = calls.map((call) =>
     call.logs.map(
       (log): RawLog => ({
         ...log,
+        ...(log.data === undefined ? { [MISSING_LOG_DATA]: true } : {}),
         topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
-        data: log.data.toLowerCase() as Hex,
+        data: (log.data ?? "0x").toLowerCase() as Hex,
       }),
     ),
   );
@@ -108,136 +110,80 @@ export function parseTransfers(
     wNative === undefined ||
     (wNative !== null && isAddressEqual(address, wNative));
 
-  for (let txIdx = 0; txIdx < normalizedCalls.length; txIdx++) {
-    const logs = normalizedCalls[txIdx]!;
+  const shouldWarnOnUnmatchedWnative = (address: Address): boolean =>
+    wNative !== undefined || wnativeShapedTokens.has(address.toLowerCase());
+
+  for (const [txIdx, logs] of normalizedCalls.entries()) {
     const consumedWnativeEventLogs = new Set<number>();
     for (const log of logs) {
       try {
         const topic0 = log.topics[0];
-        if (topic0 === undefined) continue;
+        if (topic0 === undefined) {
+          continue;
+        }
 
         switch (topic0) {
-          case WITHDRAWAL_TOPIC: {
-            if (!acceptsWnativeEvent(log.address)) continue;
-            const fromTopic = log.topics[1];
-            if (!isTopicHex(fromTopic) || !isUint256Hex(log.data)) {
-              warnMalformed(
-                logger,
-                log,
-                "WETH9 Withdrawal: bad topic[1] or data length",
-              );
-              continue;
-            }
-            transfers.push({
-              token: getAddress(log.address),
-              from: getAddress(`0x${fromTopic.slice(26)}`),
-              to: zeroAddress,
-              amount: BigInt(log.data),
-              txIdx,
-            });
-            continue;
-          }
-
+          case WITHDRAWAL_TOPIC:
           case DEPOSIT_TOPIC: {
-            if (!acceptsWnativeEvent(log.address)) continue;
-            const toTopic = log.topics[1];
-            if (!isTopicHex(toTopic) || !isUint256Hex(log.data)) {
-              warnMalformed(
-                logger,
-                log,
-                "WETH9 Deposit: bad topic[1] or data length",
-              );
+            if (!acceptsWnativeEvent(log.address)) {
               continue;
             }
-            transfers.push({
-              token: getAddress(log.address),
-              from: zeroAddress,
-              to: getAddress(`0x${toTopic.slice(26)}`),
-              amount: BigInt(log.data),
+            const transfer = parseWnativeTransfer(log, {
+              kind: topic0 === WITHDRAWAL_TOPIC ? "burn" : "mint",
               txIdx,
+              warnings,
+              chainId,
             });
+            if (transfer !== undefined) {
+              transfers.push(transfer);
+            }
             continue;
           }
 
           case TRANSFER_TOPIC: {
             // ERC-20 Transfer has 3 topics; ERC-721 Transfer has 4 (tokenId indexed).
             // ERC-721 flows are out of scope.
-            if (log.topics.length !== 3) continue;
+            if (isErc721Transfer(log)) {
+              continue;
+            }
 
-            const fromTopic = log.topics[1]!;
-            const toTopic = log.topics[2]!;
+            const fromTopic = log.topics[1];
+            const toTopic = log.topics[2];
 
             if (
+              log.topics.length !== 3 ||
               !isTopicHex(fromTopic) ||
               !isTopicHex(toTopic) ||
               !isUint256Hex(log.data)
             ) {
               warnMalformed(
-                logger,
+                warnings,
                 log,
                 "ERC20 Transfer: bad topic/data length",
+                { chainId, txIdx },
               );
               continue;
             }
 
-            const sides = [
-              ...(toTopic === zeroHash
-                ? [{ kind: "burn" as const, accountTopic: fromTopic }]
-                : []),
-              ...(fromTopic === zeroHash
-                ? [{ kind: "mint" as const, accountTopic: toTopic }]
-                : []),
-            ];
-            if (sides.length > 0 && acceptsWnativeEvent(log.address)) {
-              let paired = false;
-              for (const { kind, accountTopic } of sides) {
-                const matches = logs.flatMap((other, otherIndex) =>
-                  other.topics[0] ===
-                    (kind === "burn" ? WITHDRAWAL_TOPIC : DEPOSIT_TOPIC) &&
-                  isAddressEqual(other.address, log.address) &&
-                  other.data === log.data &&
-                  other.topics.length === 2 &&
-                  other.topics[1] === accountTopic
-                    ? [otherIndex]
-                    : [],
-                );
-
-                if (matches.length === 0) {
-                  if (
-                    shouldPairWnative &&
-                    (wNative !== undefined ||
-                      wnativeShapedTokens.has(log.address.toLowerCase()))
-                  ) {
-                    warnNonCanonicalWnative(logger, log, kind, txIdx);
-                  }
-                  continue;
-                }
-
-                if (!shouldPairWnative) {
-                  const token = log.address;
-                  const data = log.data;
-                  logger?.warn(
-                    "kept zero-address wNative Transfer matching a same-call Deposit/Withdrawal; chain is listed as non-mirroring — if this repeats for every wrap/unwrap the wrapper now mirrors and must be removed from the list",
-                    {
-                      token,
-                      kind,
-                      txIdx,
-                      data,
-                    },
-                  );
-                  continue;
-                }
-
-                const pairedIndex = matches.find(
-                  (otherIndex) => !consumedWnativeEventLogs.has(otherIndex),
-                );
-                if (pairedIndex !== undefined) {
-                  consumedWnativeEventLogs.add(pairedIndex);
-                  paired = true;
-                  break;
-                }
+            if (
+              (toTopic === zeroHash || fromTopic === zeroHash) &&
+              acceptsWnativeEvent(log.address)
+            ) {
+              const pairedIndex = findMirroredWnativeLog(log, {
+                fromTopic,
+                toTopic,
+                logs,
+                consumedWnativeEventLogs,
+                shouldPairWnative,
+                shouldWarnOnUnmatchedWnative,
+                txIdx,
+                warnings,
+                chainId,
+              });
+              if (pairedIndex !== undefined) {
+                consumedWnativeEventLogs.add(pairedIndex);
+                continue;
               }
-              if (paired) continue;
             }
 
             transfers.push({
@@ -254,20 +200,145 @@ export function parseTransfers(
         // Safety net for anything that slips past the length checks above
         // (e.g., viem checksum throws on non-hex input). Loud enough to diagnose.
         warnMalformed(
-          logger,
+          warnings,
           log,
           /* v8 ignore next: parser paths throw Error instances for valid RawLog shapes. */
           error instanceof Error ? error.message : String(error),
+          { chainId, txIdx },
         );
       }
     }
   }
 
-  return sortTransfers(transfers);
+  return {
+    transfers: sortTransfers(transfers),
+    warnings: Object.freeze(warnings),
+  };
+}
+
+function parseWnativeTransfer(
+  log: RawLog,
+  {
+    kind,
+    txIdx,
+    warnings,
+    chainId,
+  }: {
+    kind: "burn" | "mint";
+    txIdx: number;
+    warnings: SimulationWarning[];
+    chainId: number;
+  },
+): Transfer | undefined {
+  const accountTopic = log.topics[1];
+  if (!isTopicHex(accountTopic) || !isUint256Hex(log.data)) {
+    const event = kind === "burn" ? "Withdrawal" : "Deposit";
+    warnMalformed(
+      warnings,
+      log,
+      `WETH9 ${event}: bad topic[1] or data length`,
+      { chainId, txIdx },
+    );
+    return;
+  }
+  const token = getAddress(log.address);
+  const account = getAddress(`0x${accountTopic.slice(26)}`);
+  return {
+    token,
+    from: kind === "burn" ? account : zeroAddress,
+    to: kind === "mint" ? account : zeroAddress,
+    amount: BigInt(log.data),
+    txIdx,
+  };
+}
+
+function findMirroredWnativeLog(
+  log: RawLog,
+  {
+    fromTopic,
+    toTopic,
+    logs,
+    consumedWnativeEventLogs,
+    shouldPairWnative,
+    shouldWarnOnUnmatchedWnative,
+    txIdx,
+    warnings,
+    chainId,
+  }: {
+    fromTopic: Hex;
+    toTopic: Hex;
+    logs: readonly RawLog[];
+    consumedWnativeEventLogs: ReadonlySet<number>;
+    shouldPairWnative: boolean;
+    shouldWarnOnUnmatchedWnative: (address: Address) => boolean;
+    txIdx: number;
+    warnings: SimulationWarning[];
+    chainId: number;
+  },
+): number | undefined {
+  const sides = [
+    ...(toTopic === zeroHash
+      ? [{ kind: "burn" as const, accountTopic: fromTopic }]
+      : []),
+    ...(fromTopic === zeroHash
+      ? [{ kind: "mint" as const, accountTopic: toTopic }]
+      : []),
+  ];
+  for (const { kind, accountTopic } of sides) {
+    const matches = logs.flatMap((other, otherIndex) =>
+      other.topics[0] ===
+        (kind === "burn" ? WITHDRAWAL_TOPIC : DEPOSIT_TOPIC) &&
+      isAddressEqual(other.address, log.address) &&
+      other.data === log.data &&
+      other.topics.length === 2 &&
+      other.topics[1] === accountTopic
+        ? [otherIndex]
+        : [],
+    );
+
+    if (matches.length === 0) {
+      if (shouldPairWnative && shouldWarnOnUnmatchedWnative(log.address)) {
+        warnNonCanonicalWnative(warnings, log, kind, { chainId, txIdx });
+      }
+      continue;
+    }
+
+    if (!shouldPairWnative) {
+      const token = log.address;
+      const data = log.data;
+      warnings.push(
+        freezeWarning({
+          code: "WRAPPED_NATIVE_MIRROR_DETECTED",
+          severity: "warn",
+          chainId,
+          message:
+            "kept zero-address wNative Transfer matching a same-call Deposit/Withdrawal; chain is listed as non-mirroring — if this repeats for every wrap/unwrap the wrapper now mirrors and must be removed from the list",
+          token,
+          kind,
+          txIdx,
+          data,
+        }),
+      );
+      continue;
+    }
+
+    const pairedIndex = matches.find(
+      (otherIndex) => !consumedWnativeEventLogs.has(otherIndex),
+    );
+    if (pairedIndex !== undefined) {
+      return pairedIndex;
+    }
+  }
 }
 
 function isTopicHex(value: Hex | undefined): value is Hex {
   return typeof value === "string" && value.length === TOPIC_HEX_LENGTH;
+}
+
+function isErc721Transfer(log: RawLog): boolean {
+  return (
+    log.topics.length === 4 && log.data === "0x" && !(MISSING_LOG_DATA in log)
+  );
 }
 
 function isUint256Hex(value: Hex | undefined): value is Hex {
@@ -276,15 +347,24 @@ function isUint256Hex(value: Hex | undefined): value is Hex {
 
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 function warnMalformed(
-  logger: SimulationLogger | undefined,
+  warnings: SimulationWarning[],
   log: RawLog,
   reason: string,
+  { chainId, txIdx }: { chainId: number; txIdx: number },
 ): void {
-  logger?.warn("Skipping malformed log during transfer parsing", {
-    address: log.address,
-    topics: log.topics,
-    reason,
-  });
+  warnings.push(
+    freezeWarning({
+      code: "MALFORMED_TRANSFER_LOG",
+      severity: "warn",
+      chainId,
+      txIdx,
+      message: "Skipping malformed log during transfer parsing",
+      address: log.address,
+      topics: log.topics,
+      data: log.data,
+      reason,
+    }),
+  );
 }
 
 /** Collect contracts that emit WETH9-shaped events anywhere in the bundle. */
@@ -305,19 +385,23 @@ function collectWnativeShapedTokens(
 
 // biome-ignore lint/complexity/useMaxParams: structured warn with full context
 function warnNonCanonicalWnative(
-  logger: SimulationLogger | undefined,
+  warnings: SimulationWarning[],
   log: RawLog,
   kind: "mint" | "burn",
-  txIdx: number,
+  { chainId, txIdx }: { chainId: number; txIdx: number },
 ): void {
-  logger?.warn(
-    "WETH9 dedup miss: zero-address Transfer on wnative-shaped token without paired same-tx Deposit/Withdrawal — possible non-canonical wrapped-native, may cause bundler retention false positive",
-    {
+  warnings.push(
+    freezeWarning({
+      code: "WRAPPED_NATIVE_DEDUP_MISS",
+      severity: "warn",
+      chainId,
+      message:
+        "WETH9 dedup miss: zero-address Transfer on wnative-shaped token without paired same-tx Deposit/Withdrawal — possible non-canonical wrapped-native, may cause bundler retention false positive",
       token: log.address,
       kind,
       txIdx,
       data: log.data,
-    },
+    }),
   );
 }
 
@@ -333,10 +417,19 @@ function sortTransfers(transfers: Transfer[]): Transfer[] {
     toLc: t.to.toLowerCase(),
   }));
   decorated.sort((a, b) => {
-    if (a.tokenLc !== b.tokenLc) return a.tokenLc < b.tokenLc ? -1 : 1;
-    if (a.fromLc !== b.fromLc) return a.fromLc < b.fromLc ? -1 : 1;
-    if (a.toLc !== b.toLc) return a.toLc < b.toLc ? -1 : 1;
-    return a.t.amount < b.t.amount ? -1 : a.t.amount > b.t.amount ? 1 : 0;
+    if (a.tokenLc !== b.tokenLc) {
+      return a.tokenLc < b.tokenLc ? -1 : 1;
+    }
+    if (a.fromLc !== b.fromLc) {
+      return a.fromLc < b.fromLc ? -1 : 1;
+    }
+    if (a.toLc !== b.toLc) {
+      return a.toLc < b.toLc ? -1 : 1;
+    }
+    if (a.t.amount < b.t.amount) {
+      return -1;
+    }
+    return a.t.amount > b.t.amount ? 1 : 0;
   });
   return decorated.map((d) => d.t);
 }

@@ -72,7 +72,7 @@ function pacoteReader() {
 }
 
 describe("readTarballIdentity", () => {
-  test("behavior: reads a pnpm pack-shaped package manifest", async () => {
+  test("behavior: reads a bun pm pack-shaped package manifest", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
         entries: ["package/package.json", "package/README.md"],

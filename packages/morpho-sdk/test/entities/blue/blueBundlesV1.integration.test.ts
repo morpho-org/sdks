@@ -11,7 +11,11 @@ import {
   vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   encodeAbiParameters,
@@ -96,7 +100,7 @@ const migrationDestination = new MarketParams({
 
 const baseTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 50_438_617n, // BlueBundlesV1 deployment block.
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });
 

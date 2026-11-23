@@ -52,15 +52,18 @@ const boundedUintAssertion = (params: {
     if (
       (params.min === undefined || observed >= params.min) &&
       (params.max === undefined || observed <= params.max)
-    )
+    ) {
       return undefined;
+    }
 
-    const expected =
-      params.min !== undefined && params.max !== undefined
-        ? `between "${params.min}" and "${params.max}"`
-        : params.min !== undefined
-          ? `at least "${params.min}"`
-          : `at most "${params.max}"`;
+    let expected: string;
+    if (params.min === undefined) {
+      expected = `at most "${params.max}"`;
+    } else if (params.max === undefined) {
+      expected = `at least "${params.min}"`;
+    } else {
+      expected = `between "${params.min}" and "${params.max}"`;
+    }
     return `${params.description} is "${observed}", expected ${expected}. ${params.remedy}`;
   },
 });
@@ -306,7 +309,9 @@ export function evaluateAssertion(params: {
       { cause: error },
     );
   }
-  if (failure === undefined) return;
+  if (failure === undefined) {
+    return;
+  }
   return new SimulationAssertError(
     `${assertionLocation} failed ${phase} execution: ${failure}`,
     {
@@ -353,7 +358,9 @@ export function evaluateLogAssertion(params: {
       { cause: error },
     );
   }
-  if (failure === undefined) return;
+  if (failure === undefined) {
+    return;
+  }
   return new SimulationLogAssertError(
     `${assertionLocation} failed: ${failure}`,
     {

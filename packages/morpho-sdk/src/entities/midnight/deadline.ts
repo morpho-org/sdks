@@ -19,5 +19,7 @@ export const validateMidnightDeadline = (
   deadline: bigint,
   now: bigint = Time.timestamp(),
 ): void => {
-  if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+  if (deadline <= now) {
+    throw new ExpiredDeadlineError(deadline, now);
+  }
 };

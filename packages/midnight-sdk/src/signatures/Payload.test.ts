@@ -94,7 +94,7 @@ async function encodeUncheckedPayload(offer: OfferStruct): Promise<Hex> {
   );
   const stream = new ReadableStream<BufferSource>({
     start(controller) {
-      controller.enqueue(itemBytes);
+      controller.enqueue(new Uint8Array(itemBytes));
       controller.close();
     },
   }).pipeThrough(new CompressionStream("gzip"));

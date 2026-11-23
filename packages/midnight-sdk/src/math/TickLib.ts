@@ -99,8 +99,9 @@ export namespace TickLib {
   export const assertTickInRange = (tick: BigIntish) => {
     const tickValue = BigInt(tick);
     assertNonNegative("tick", tickValue);
-    if (tickValue > MAX_TICK)
+    if (tickValue > MAX_TICK) {
       throw new TickOutOfRangeError(tickValue, MAX_TICK);
+    }
 
     return tickValue;
   };
@@ -119,7 +120,9 @@ export namespace TickLib {
    * ```
    */
   export const wExp = (x: bigint): bigint => {
-    if (x < 0n) return 1_000000000000000000000000000000000000n / wExp(-x);
+    if (x < 0n) {
+      return 1_000000000000000000000000000000000000n / wExp(-x);
+    }
 
     const q = (x + EXP_OFFSET) / LN_2;
     const r = x - q * LN_2;
@@ -184,8 +187,9 @@ export namespace TickLib {
     const spacingValue = BigInt(spacing);
 
     assertNonNegative("price", priceValue);
-    if (priceValue > MathLib.WAD)
+    if (priceValue > MathLib.WAD) {
       throw new PriceGreaterThanOneError(priceValue);
+    }
     if (spacingValue <= 0n || MAX_TICK % spacingValue !== 0n) {
       throw new InvalidTickSpacingError(spacingValue);
     }
@@ -194,8 +198,11 @@ export namespace TickLib {
     let high = MAX_TICK;
     while (low !== high) {
       const mid = (low + high) / 2n;
-      if (tickToPrice(mid) < priceValue) low = mid + 1n;
-      else high = mid;
+      if (tickToPrice(mid) < priceValue) {
+        low = mid + 1n;
+      } else {
+        high = mid;
+      }
     }
 
     return ((low + spacingValue - 1n) / spacingValue) * spacingValue;
@@ -275,7 +282,9 @@ export namespace TickLib {
    */
   export function tickToRate(tick: BigIntish) {
     const price = tickToPrice(tick);
-    if (price === 0n) throw new DivisionByZeroError("price");
+    if (price === 0n) {
+      throw new DivisionByZeroError("price");
+    }
 
     return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, price, "Up") - MathLib.WAD;
   }

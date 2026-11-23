@@ -45,7 +45,7 @@ type Collateral = IVaultV2MidnightAdapterMarket["collateralParams"][number];
 const familyId = (
   input: Pick<
     IVaultV2MidnightAdapterMarket,
-    "collateralParams" | "rcfThreshold" | "liquidatorGate"
+    "collateralParams" | "rcfThreshold" | "liquidatorGate" | "enterGate"
   >,
 ) =>
   keccak256(
@@ -55,9 +55,10 @@ const familyId = (
         { type: "tuple[]", components: collateralParamsAbi.components },
         { type: "uint256" },
         { type: "address" },
+        { type: "address" },
       ],
       [
-        "family",
+        "collateralParams/rcfThreshold/liquidatorGate/enterGate",
         input.collateralParams.map((params: Collateral) => ({
           token: params.token,
           lltv: BigInt(params.lltv),
@@ -66,6 +67,7 @@ const familyId = (
         })),
         BigInt(input.rcfThreshold),
         input.liquidatorGate,
+        input.enterGate,
       ],
     ),
   );

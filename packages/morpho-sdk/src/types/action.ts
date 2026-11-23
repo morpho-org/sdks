@@ -1326,7 +1326,9 @@ export function selectRequirementSignatures(
     readonly authorization?: boolean;
   },
 ): SelectedRequirementSignatures {
-  if (signatures == null) return {};
+  if (signatures == null) {
+    return {};
+  }
 
   const permits = signatures.filter(isPermitSignature);
   const permit2Transfers = signatures.filter(
@@ -1340,27 +1342,34 @@ export function selectRequirementSignatures(
       !isPermit2SignatureTransferSignature(signature) &&
       !isAuthorizationSignature(signature),
   );
-  if (unsupported != null)
+  if (unsupported != null) {
     throw new UnsupportedRequirementSignatureError(unsupported.action.type);
+  }
 
-  if (!accepts.permit && permits.length > 0)
+  if (!accepts.permit && permits.length > 0) {
     throw new UnexpectedRequirementSignatureError("permit");
-  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0)
+  }
+  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0) {
     throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
-  if (!accepts.authorization && authorizations.length > 0)
+  }
+  if (!accepts.authorization && authorizations.length > 0) {
     throw new UnexpectedRequirementSignatureError("authorization");
-  if (permits.length > 1)
+  }
+  if (permits.length > 1) {
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
-  if (permit2Transfers.length > 1)
+  }
+  if (permit2Transfers.length > 1) {
     throw new AmbiguousRequirementSignaturesError(
       "permit2SignatureTransfer",
       permit2Transfers.length,
     );
-  if (authorizations.length > 1)
+  }
+  if (authorizations.length > 1) {
     throw new AmbiguousRequirementSignaturesError(
       "authorization",
       authorizations.length,
     );
+  }
 
   return {
     permit: permits[0],

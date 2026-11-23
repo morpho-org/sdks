@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import {
   ChainId,
   DivisionByZeroError,
@@ -346,9 +347,10 @@ describe("OfferUtils.onchainHash", () => {
       ratifier: getChainAddress(ChainId.BaseMainnet, "rateRatifierV1"),
     });
     const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
-    const publishedOffer = descriptor.offers[0]!;
+    const [publishedOffer] = descriptor.offers;
 
     expect(offer.hasExplicitGroup).toBe(false);
+    assert(publishedOffer instanceof Offer);
     expect(publishedOffer.onchainHash).not.toBe(offer.onchainHash);
     expect(publishedOffer.onchainHash).toBe(
       OfferUtils.onchainHashStruct(
@@ -374,7 +376,9 @@ describe("OfferUtils.onchainHash", () => {
     );
 
     groupedOffers.forEach((offer, index) => {
-      expect(descriptor.offers[index]!.onchainHash).not.toBe(offer.onchainHash);
+      const publishedOffer = descriptor.offers[index];
+      assert(publishedOffer instanceof Offer);
+      expect(publishedOffer.onchainHash).not.toBe(offer.onchainHash);
     });
   });
 
@@ -402,10 +406,13 @@ describe("OfferUtils.onchainHash", () => {
       const items = await Payload.decode(payload);
 
       expect(
-        items.map(({ offer }) => ({
-          structHash: OfferUtils.hash(offer),
-          onchainHash: OfferUtils.onchainHash(offer),
-        })),
+        items.map(({ offer }) => {
+          assert(offer instanceof Offer);
+          return {
+            structHash: OfferUtils.hash(offer),
+            onchainHash: OfferUtils.onchainHash(offer),
+          };
+        }),
       ).toEqual(fixture.offers);
     },
   );

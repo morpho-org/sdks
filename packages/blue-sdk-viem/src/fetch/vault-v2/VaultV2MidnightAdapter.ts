@@ -20,7 +20,10 @@ import {
   abi as queryAbi,
   code as queryCode,
 } from "../../queries/vault-v2/GetVaultV2MidnightAdapter.js";
-import type { DeploylessFetchParameters } from "../../types.js";
+import type {
+  DeploylessFetchParameters,
+  FetchParameters,
+} from "../../types.js";
 import {
   catchRevertOnly,
   isTransportError,
@@ -161,7 +164,8 @@ export function toAccrualVaultV2MidnightAdapter(
  * declare const midnightAdapter: Address;
  * const adapter = await fetchVaultV2MidnightAdapter(midnightAdapter, client);
  * ```
- * @remarks At 250 markets, deployless query gas is estimated at ~30.4M (frozen vault-v2@e7821fd
+ * @remarks A historical 250-market deployless query estimate was ~30.4M (vault-v2@e7821fd;
+ *   not rebenchmarked for vault-v2@de2b5116eba5c03fb8e8ecfa9708569bc25c5ce1
  *   adapter, Base fork block 52,513,513), so RPCs capping `eth_call` gas at 30M reject a full
  *   250-market query: with `deployless: "force"` it errors; by default it falls back to direct reads.
  *   With `deployless: "force"`, deployless query errors propagate unmapped.
@@ -174,7 +178,9 @@ export async function fetchVaultV2MidnightAdapter(
 ) {
   const chainId = await getChainId(client);
   const { midnightAdapterFactory } = getChainAddresses(chainId);
-  if (!midnightAdapterFactory) throw new UnknownFactory();
+  if (!midnightAdapterFactory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
@@ -188,20 +194,24 @@ export async function fetchVaultV2MidnightAdapter(
 
       return toVaultV2MidnightAdapter(address, response);
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
-      if (isUnknownOfFactoryError(error))
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
+      if (isUnknownOfFactoryError(error)) {
         throw new UnknownOfFactory(midnightAdapterFactory, address);
+      }
     }
   }
 
   const { blockTag, ...readParameters } = parameters;
   const block =
-    parameters.blockNumber != null
-      ? undefined
-      : await getBlock(client, blockTag != null ? { blockTag } : {});
+    parameters.blockNumber == null
+      ? await getBlock(client, blockTag == null ? {} : { blockTag })
+      : undefined;
   const blockNumber = parameters.blockNumber ?? block?.number;
-  if (blockNumber == null)
+  if (blockNumber == null) {
     throw new UnresolvedBlockNumberError(blockTag ?? "latest");
+  }
   const blockParameters = { ...readParameters, blockNumber };
 
   const [
@@ -217,84 +227,15 @@ export async function fetchVaultV2MidnightAdapter(
     shortfallAllowance,
     durations,
     marketIdsLength,
-  ] = await Promise.all([
-    readContract(client, {
-      ...blockParameters,
-      address: midnightAdapterFactory,
-      abi: midnightAdapterFactoryAbi,
-      functionName: "isCreated",
-      args: [address],
-    }).catch(catchRevertOnly(false)),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "parentVault",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "asset",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "skimRecipient",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "midnight",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "enterGateFactory",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "maxTtm",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "minNetBuyRate",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "maxNetSellRate",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "shortfallAllowance",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "durations",
-    }),
-    readContract(client, {
-      ...blockParameters,
-      address,
-      abi: midnightAdapterAbi,
-      functionName: "marketIdsLength",
-    }),
-  ]);
+  ] = await fetchMidnightAdapterState(client, {
+    address,
+    midnightAdapterFactory,
+    blockParameters,
+  });
 
-  if (!isMidnightAdapter)
+  if (!isMidnightAdapter) {
     throw new UnknownOfFactory(midnightAdapterFactory, address);
+  }
 
   const [durationAllocations, marketIds] = await Promise.all([
     readContract(client, {
@@ -396,7 +337,9 @@ export async function fetchAccrualVaultV2MidnightAdapter(
 ) {
   const chainId = await getChainId(client);
   const { midnightAdapterFactory } = getChainAddresses(chainId);
-  if (!midnightAdapterFactory) throw new UnknownFactory();
+  if (!midnightAdapterFactory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
@@ -416,9 +359,12 @@ export async function fetchAccrualVaultV2MidnightAdapter(
         },
       );
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
-      if (isUnknownOfFactoryError(error))
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
+      if (isUnknownOfFactoryError(error)) {
         throw new UnknownOfFactory(midnightAdapterFactory, address);
+      }
     }
   }
 
@@ -427,16 +373,16 @@ export async function fetchAccrualVaultV2MidnightAdapter(
     blockTag,
     ...readParameters
   } = parameters;
+  const requestedTag = blockTag == null ? {} : { blockTag };
   const block = await getBlock(
     client,
-    requestedBlockNumber != null
-      ? { blockNumber: requestedBlockNumber }
-      : blockTag != null
-        ? { blockTag }
-        : {},
+    requestedBlockNumber == null
+      ? requestedTag
+      : { blockNumber: requestedBlockNumber },
   );
-  if (block.number == null)
+  if (block.number == null) {
     throw new UnresolvedBlockNumberError(blockTag ?? "latest");
+  }
   const blockParameters = { ...readParameters, blockNumber: block.number };
   const adapter = await fetchVaultV2MidnightAdapter(address, client, {
     ...blockParameters,
@@ -473,4 +419,94 @@ export async function fetchAccrualVaultV2MidnightAdapter(
     markets,
     lastUpdate: block.timestamp,
   });
+}
+
+/** Read adapter configuration and factory membership at one pinned block. @internal */
+function fetchMidnightAdapterState(
+  client: Client,
+  {
+    address,
+    midnightAdapterFactory,
+    blockParameters,
+  }: {
+    readonly address: Address;
+    readonly midnightAdapterFactory: Address;
+    readonly blockParameters: FetchParameters;
+  },
+) {
+  return Promise.all([
+    readContract(client, {
+      ...blockParameters,
+      address: midnightAdapterFactory,
+      abi: midnightAdapterFactoryAbi,
+      functionName: "isCreated",
+      args: [address],
+    }).catch(catchRevertOnly(false)),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "parentVault",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "asset",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "skimRecipient",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "midnight",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "enterGateFactory",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "maxTtm",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "minNetBuyRate",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "maxNetSellRate",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "shortfallAllowance",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "durations",
+    }),
+    readContract(client, {
+      ...blockParameters,
+      address,
+      abi: midnightAdapterAbi,
+      functionName: "marketIdsLength",
+    }),
+  ]);
 }

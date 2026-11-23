@@ -66,7 +66,9 @@ export class Token implements IToken {
     this.decimals = Number(decimals);
     this.eip5267Domain = eip5267Domain;
 
-    if (price != null) this.price = BigInt(price);
+    if (price != null) {
+      this.price = BigInt(price);
+    }
   }
 
   /**
@@ -75,7 +77,9 @@ export class Token implements IToken {
    * @param amount The amount of USD to quote.
    */
   fromUsd(amount: bigint, rounding: RoundingDirection = "Down") {
-    if (this.price == null) return;
+    if (this.price == null) {
+      return;
+    }
 
     return MathLib.mulDiv(
       amount,
@@ -91,7 +95,9 @@ export class Token implements IToken {
    * @param amount The amount of tokens to quote.
    */
   toUsd(amount: bigint, rounding: RoundingDirection = "Down") {
-    if (this.price == null) return;
+    if (this.price == null) {
+      return;
+    }
 
     return MathLib.mulDiv(
       amount,

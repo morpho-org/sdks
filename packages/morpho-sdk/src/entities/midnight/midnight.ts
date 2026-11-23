@@ -236,18 +236,24 @@ export type MidnightActions = Pick<
 >;
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
-  if (amount < 0n) throw new NegativeInputError(label, amount);
+  if (amount < 0n) {
+    throw new NegativeInputError(label, amount);
+  }
 };
 
 const assertPositiveAmount = (label: string, amount: bigint) => {
-  if (amount <= 0n) throw new NonPositiveInputError(label, amount);
+  if (amount <= 0n) {
+    throw new NonPositiveInputError(label, amount);
+  }
 };
 
 const rejectReduceOnlyOffers = (
   offers: readonly { readonly reduceOnly: boolean }[],
 ) => {
   offers.forEach((offer, index) => {
-    if (offer.reduceOnly) throw new MidnightOfferReduceOnlyError({ index });
+    if (offer.reduceOnly) {
+      throw new MidnightOfferReduceOnlyError({ index });
+    }
   });
 };
 
@@ -2401,8 +2407,9 @@ export class MorphoMidnight {
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, false);
     for (const [index, offer] of tree.offers.entries()) {
-      if (!offer.reduceOnly)
+      if (!offer.reduceOnly) {
         throw new MidnightOfferNotReduceOnlyError({ index });
+      }
     }
     return this.prepareBorrowOffers({ ...params, offers: tree });
   }
@@ -2493,8 +2500,9 @@ export class MorphoMidnight {
     // Reject the wrong exit intent before calling the mempool validation API.
     validateOfferSides(tree.offers, true);
     for (const [index, offer] of tree.offers.entries()) {
-      if (!offer.reduceOnly)
+      if (!offer.reduceOnly) {
         throw new MidnightOfferNotReduceOnlyError({ index });
+      }
     }
     return this.prepareLendOffers({ ...params, offers: tree });
   }
@@ -2737,8 +2745,9 @@ export class MorphoMidnight {
     if (!params.positionData) {
       throw new MissingAccrualPositionError();
     }
-    if (params.positionData.user != null)
+    if (params.positionData.user != null) {
       validateMidnightAddress("positionData.user", params.positionData.user);
+    }
     if (
       params.positionData.user == null ||
       !isAddressEqual(params.positionData.user, params.accountAddress)
@@ -2761,7 +2770,9 @@ export class MorphoMidnight {
     if (params.units !== undefined && units <= 0n) {
       throw new NonPositiveInputError("units", units);
     }
-    if (units <= 0n) throw new NoMidnightCreditToRedeemError(market.id);
+    if (units <= 0n) {
+      throw new NoMidnightCreditToRedeemError(market.id);
+    }
     validateMidnightUint128Field("units", units);
     if (accrued.credit < units) {
       throw new MidnightRedeemExceedsCreditError({

@@ -24,7 +24,7 @@ Anything this file does not list as trusted or as an accepted gap is in scope. E
 | AG-BLUE-AUTH | The standing Morpho Blue authorization of `BlueBundlesV1` | [Morpho Blue authorization for BlueBundlesV1](#morpho-blue-authorization-for-bluebundlesv1) |
 | AG-PREVIEW | `evm-simulation` preview mode grants every supplied authorization before the first transaction | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
 | AG-RAW-BUILDERS | Raw action builders check the shape of their inputs only; checks that need state or a clock (credit, position health, dead shares, expiry) run in entity flows | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry), [`AGENTS.md`](./AGENTS.md) |
-| TB-TRANSACTION-PLAN | Parsing validates TransactionPlan shape and internal consistency, not authenticity, intent, expiry or restored signatures; `applySignatures` verifies supplied ECDSA signatures but does not establish the integrator's intent | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
+| TB-TRANSACTION-PLAN | Parsing validates shape and consistency and rechecks attached permit and Morpho authorization signatures offline; it does not establish the plan's authenticity, expiry, or integrator intent | [Integrator inputs and the address registry](#integrator-inputs-and-the-address-registry) |
 | AG-MAKER-BUFFER | Midnight maker flows and raw Midnight builders apply no LLTV buffer | [`SECURITY.md`](./SECURITY.md#security-invariants) INV-03 |
 | AG-ONCHAIN-BOUNDS | Vault V1/V2 `withdraw`/`redeem` and Midnight `repayWithdrawCollateral` are bounded only onchain | [`SECURITY.md`](./SECURITY.md#security-invariants) INV-07 |
 
@@ -181,7 +181,9 @@ The sole simulation backend. The SDK never falls back to another backend or retr
   Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`, and a per-call value that fails normalization (a non-quantity `gasUsed`, a present but non-array `logs`, or a log whose `topics` (each must be 32 bytes), `address` or `data` are malformed) is rejected the same way; other per-call fields are trusted: a malformed value from a non-compliant node may be read as a revert (any `status` other than `"0x1"`) or pass through unchecked. An absent or `null` per-call `logs` is treated as no transfers, so a node that drops `logs` hides retained tokens; when operation limits are present, missing call logs throw `ApprovalCheckUnavailableError` instead.
 - Calls run with `validation: false` (gas is not charged; Monad requires `true`) and `traceTransfers: true` so native-ETH moves appear as transfer logs. No state overrides are injected automatically. Caller-supplied `stateOverrides` are trusted hypothetical inputs, forwarded without runtime validation or normalization; consumers validate their contents. They apply once before all simulated calls, including checks; they can change balances, nonces, code and storage and make a transaction appear safe or funded when it is not at broadcast. Calldata-target code checks honor explicit code overrides; metadata reads outside `eth_simulateV1` still use pinned onchain state. Integrators must not accept overrides from untrusted users as evidence that an unmodified transaction is safe.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
-- Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.
+- A `MALFORMED_TRANSFER_LOG` warning means the parser discarded transfer evidence. Both success and failure reports omit `verification` in that case, while retaining warnings and blocking findings from the remaining evidence.
+- Incomplete or forged ERC-20 logs hide retained tokens and undeclared sender outflows; a node that ignores `traceTransfers` hides native transfers. With operation limits, net sender losses and positive non-burn outgoing transfers of tokens outside the operation-derived spending set produce non-blocking `UnexpectedTokenTransferError` / `UNEXPECTED_TOKEN_TRANSFER` warnings, including out-and-back transfers. These findings never enter `failures`; a report with only these findings has `ok: true`. A frozen `warnings: readonly SimulationWarning[]` array is always present on success and failure reports, even when empty. Warnings are recursively frozen plain data, not Error instances, with severity `"warn"`, typed code and chain-specific context. The SDK never logs or invokes logging callbacks. Deprecated `options.logger` and `SimulationLogger` remain accepted/exported but ignored through at least one coexistence minor before removal in a future major; consumers must migrate to report warnings. Integrators gating signing must inspect `report.warnings`, even when `ok` is true. `report.verification.retention` records `"checked"` or `"skipped-unsupported-chain"` on successes and failures that reached retention with complete user-transaction logs; omitted user logs (unlike explicit empty `logs: []`), early failures, reverts and unusable transfer evidence omit `verification`. Skips also produce `RETENTION_CHECK_SKIPPED`; malformed transfer logs, wrapped-native mismatches and pre-existing-balance sweeps produce typed warnings. All other failures remain blocking. Every transfer from a listed paired emitter is ignored when its primary token is spendable on that chain, without requiring primary transfer evidence or matching transactions, participants, amounts or event counts; ignored paired emitters produce no warning. Existing vault and market tokens are resolved at the pinned block, with two caller-declared Midnight exceptions: `midnightSupplyBlueMakeLend.loanToken` is its subject token, and first-market `midnightSupplyCollateral` or `midnightSupplyCollateralMakeBorrow` uses `assetPaid` as collateral when no validated `market` struct is provided. The latter is not independently verified collateral; supply `market` to bind it to its validated struct. Explicit approvals do not authorize spending; registered wrapped-native spend tokens allow native funding only when that same active pay-in operation measures sender ETH (with wallet-bound native funding limited to gross traced sender ETH debits up to the native value already charged to the bound; incoming ETH and refunds do not offset extra debits), and vault exits allow source shares. Withdrawal-only `midnightRepayWithdrawCollateral` does not authorize the loan token. Preparations reject transfer events separately. Assertion calls are not transfer-checked and must be view calls. `limits: "none"` skips the outflow check for compatibility with funded review bundles and offers no sender-balance protection.
+- Combined Blue operations authorize pay-in token spending only when collateral supply or repayment is active. Borrow-only `blueSupplyCollateralBorrow` and withdrawal-only `blueRepayWithdrawCollateral` keep their approvals and placeholder caps but report undeclared round-trip outflows of the inactive pay-in token as non-blocking warnings.
 - A forged `status`/`returnData` shapes the reported outcome; no check can tell it from a real one.
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
 - A truncated result (fewer calls than planned) is a non-bypassable `InvalidSimulationResponseError`.
@@ -208,7 +210,7 @@ Protocol-math properties the SDK must preserve when it computes an amount, bound
 | ID | Invariant | Status |
 | --- | --- | --- |
 | FI-DEAD-DEPOSIT | A supply or deposit into a near-empty Blue market or vault is rejected. | Opt-in. Entity flows and builders do not enforce it; integrators call the exported `validateBlueMarketDeadShares`, `validateVaultV1DeadShares` or `validateVaultV2DeadShares` on their snapshot before building ([`deadShares.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/deadShares.ts), [`deadShares.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/helpers/deadShares.test.ts)); see [Dead-deposit protection](#dead-deposit-protection). The snapshot-free Blue `supply` overload is AG-DEAD-DEPOSIT. |
-| FI-ZERO-ELAPSED-LOSS | Vault V2 accrual applies losses its adapters realize, even when no time has elapsed since `lastUpdate`. | Known gap. `VaultV2.accrueInterest` returns before reading its adapters when the elapsed time is zero, so a loss realized in the same block is not applied ([`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts)); a `test.fails` case in [`VaultV2.accrueInterest.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.accrueInterest.property.test.ts) pins the divergence. |
+| FI-ZERO-ELAPSED-LOSS | Vault V2 accrual applies losses its adapters realize, even when no time has elapsed since `lastUpdate`. | Enforced. At `lastUpdate`, `AccrualVaultV2.accrueInterest` still reads its adapters' real assets, so a loss realized in the same block lowers total assets, as the vault contract does ([`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts)); the property `behavior: elapsed 0 with a loss matches accrueInterestView` in [`VaultV2.accrueInterest.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.accrueInterest.property.test.ts) checks it against a reference model of the contract's `accrueInterestView` defined in that test file. |
 | FI-MAX-CAPS | A `MAX` deposit amount respects the vault's absolute and relative caps, counting interest pending on the liquidity adapter's allocation. | Enforced. Vault V2 `maxDeposit` adds the liquidity adapter's pending allocation increase to each of its cap allocations before applying the caps ([`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts), [`VaultV2.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.test.ts)). It reads the snapshot as given, so the snapshot must be accrued to the inclusion time. |
 | FI-ACCRUED-CREDIT | A Midnight redemption is checked against the position's credit after accruing fees and realized losses. | Enforced in the entity redemption flow ([`midnight.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/entities/midnight/midnight.ts), [`midnight.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/morpho-sdk/src/entities/midnight/midnight.test.ts)). The raw `midnightRedeem` action encodes the units it is given and leaves the credit check to the contract (AG-RAW-BUILDERS). |
 | FI-ROUNDING | Share and asset conversions round in the protocol's favour, as the contracts do: fewer shares minted or more assets paid on supply, more shares burned or fewer assets received on withdrawal. | Enforced in Blue market and Vault V2 conversions ([`Market.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/market/Market.ts), [`VaultV2.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.ts)), with property tests in [`Market.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/market/Market.property.test.ts) and [`VaultV2.property.test.ts`](https://github.com/morpho-org/sdks/blob/main/packages/blue-sdk/src/vault/v2/VaultV2.property.test.ts). |
@@ -288,9 +290,28 @@ dependencies in another unprivileged job and reproducing the same bytes.
 
 The controls on that precondition are the frozen-lockfile install in `pack`
 ([`release.yml`](https://github.com/morpho-org/sdks/blob/main/.github/workflows/release.yml)),
-the three-day minimum release age (`minimumReleaseAge: 4320`, `minimumReleaseAgeStrict: true`),
-and the dependency lifecycle-script allowlist (`allowBuilds`), both in
-[`pnpm-workspace.yaml`](./pnpm-workspace.yaml). See also the
+the three-day minimum release age (`minimumReleaseAge = 259200`, in seconds) in
+[`bunfig.toml`](./bunfig.toml), and the dependency lifecycle-script allowlist
+(`trustedDependencies`) in [`package.json`](./package.json). Bun has no strict
+missing-timestamp switch; in the development repository, the required
+`public-scan / Generate and scan the public tree` check runs
+`scripts/check-release-age.ts` to validate npm publication timestamps for registry
+identities added since the merge base.
+Non-workspace entries must use the default npm registry source; tarball URLs and Git sources are rejected.
+Missing or invalid timestamps fail the check, including for release-age exceptions.
+Every workflow install also runs `node scripts/check-release-age.ts --all` first,
+validating the entire lockfile before dependency code can execute, including in
+the public release pipeline. Locally, `bun run install:checked` performs that
+validation before a frozen install. `bun run deps:add` and `bun run deps:update`
+resolve with `--lockfile-only --ignore-scripts`, validate, then install frozen.
+Their optional `--workspace packages/<name>` selects an existing workspace for
+resolution only; validation and installation remain at root, and outside, nested
+or symlinked directory paths are rejected.
+The checked-in Bun configuration runs the release-age security scanner even on
+raw `bun add`, `bun update`, and `bun install`. The scanner aborts installation
+if the source or publication timestamp of a resolved package cannot be verified.
+Bun runs it before installing dependencies, not as a lifecycle hook.
+See also the
 [dependency policy](./SECURITY.md#dependency-policy).
 
 ### Deployless artifact verification and Git index flags
@@ -317,7 +338,7 @@ runs earlier, in the private release pipeline, before the sync App pushes a rele
   (issue keys, internal links, hosts and repository names) and credential formats (private keys,
   mnemonics and API tokens).
 - It installs, builds and packs a clean copy of that tree with the commands the `pack` job of
-  `release.yml` runs (frozen-lockfile install, `pnpm build:ci`, `scripts/publish/pack.ts`), then
+  `release.yml` runs (frozen-lockfile install, `bun run build:ci`, `scripts/publish/pack.ts`), then
   scans every file inside the resulting tarballs in a separate job that installs nothing. A finding
   in a tarball always blocks: the scan's exception list applies only to tree files.
 - The release is pushed only when both scans pass, and the sync refuses to push a commit whose tree
@@ -344,22 +365,24 @@ is in scope.
   `parseTransactionPlan` passes structural and internal-consistency checks: supported versions and
   actions, field types and uint256 ranges, unique IDs, references, per-action chain/account agreement
   and permit/action consistency, including already-signed requests. Extra keys are allowed. Parsing
-  checks neither expiry, live state, signature ownership nor action-layer business constraints, and
-  establishes no authenticity. Tampered but well-formed, internally consistent plans pass. Plans
+  rechecks attached ERC-2612 permit and Morpho authorization signatures against their expected
+  signers. It does not check whether the plan has expired, live state, or action-layer business
+  constraints, and does not establish the plan's authenticity. Tampered unsigned fields can pass. Plans
   supplied directly can bypass parsing entirely. `getPendingSignatureRequests`
   and `buildTransaction` check signature requests for consistency with their referencing actions and encoding arguments:
-  chain, token or vault, owner, registered spender, amount, nonce, deadline and primary type.
+  chain, token or vault, owner, registered spender, amount, nonce, deadline and typed-data schema.
+  They recheck attached signatures offline: `getPendingSignatureRequests` checks all of them;
+  `buildTransaction` checks only the signatures referenced by the selected step.
   Those checks do not validate the stored action inputs, such as the referral fee and recipient,
   `maxSharePrice`, vault or amount, against the integrator's intended operation. Integrators must
   protect stored plans from tampering; parsing and building are not a substitute for that protection.
-  `applySignatures` validates all requests against their actions, rejects unknown or duplicate input
-  IDs, then synchronously verifies each supplied signature against its typed data and permit owner
-  before attaching it. It uses local ECDSA recovery with no client or RPC; the EIP-712 domain binds
+  `applySignatures` validates all requests against their actions, rechecks attached signatures
+  that are not being replaced (including when given no updates), and rejects unknown or duplicate
+  input IDs. It verifies each supplied signature against its typed data and expected signer before
+  attaching it. Verification uses local ECDSA recovery with no client or RPC; the EIP-712 domain binds
   the signature to the action's chain. Only low-s compact or serialized ECDSA signatures accepted by
   the bundle's permit parser are supported. Contract wallets should use `supportSignature: false` (direct approvals),
   because deployed bundles consume `v/r/s`, not arbitrary ERC-1271 or ERC-6492 signatures.
-  Builders do not reverify restored signatures, and verification does not protect a plan changed
-  afterwards. Empty input validates requests without rechecking existing signatures.
 - **Client and chain pairing.** Entities and actions check that the viem client declares the chain
   they were asked to build for (`ChainIdMismatchError`). Entity reads and requirement resolvers also
   ask the transport for `eth_chainId`, so a client whose honest transport points at another network

@@ -89,7 +89,9 @@ export async function fetchPosition(
         collateral: collateral.map((assets) => BigInt(assets)),
       });
     } catch (error) {
-      if (params.deployless === "force") throw error;
+      if (params.deployless === "force") {
+        throw error;
+      }
       // Fallback to direct reads if deployless execution is unavailable.
     }
   }

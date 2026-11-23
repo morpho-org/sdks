@@ -1,5 +1,57 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 4.6.1
+
+### Patch Changes
+
+- Reject withdrawals and repayments that burn more shares than the market holds instead of returning negative share totals.
+
+  Withdrawals above the market's total supply, including through `AccrualPosition.withdraw`, now throw `NegativeValueError` instead of `BlueErrors.InsufficientLiquidity`. Position withdrawals and repayments that burn more than the market's total shares now throw `NegativeValueError` instead of `BlueErrors.InsufficientPosition`.
+
+- Reject supplies and borrows that would push market asset or share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Reduce the operation amount when this error occurs.
+- `client.morpho.midnight(chainId).cancelOffers` now cancels offer groups with a direct call to Midnight instead of MidnightBundlesV2, so a wallet policy can approve a cancellation by method name. One group builds a bare `Midnight.setConsumed(group, maxUint128, accountAddress)`; two or more groups build one `Midnight.multicall` of those calls, which cancels every group or none. Only the single-group transaction is matchable by a `setConsumed` method-name policy, so cancel one group per transaction in MPC wallet flows.
+
+  Breaking migration: `cancelOffers` takes `{ accountAddress, groups }`. `cancellations`, `maxConsumed` and `deadline` are removed, and `getRequirements()` always resolves to an empty list: the Midnight authorization of MidnightBundlesV2 is no longer needed to cancel. Cancellation is always full. The transaction's action is `{ type: "midnightCancelOffers", args: { groups, onBehalf } }` and its target is Midnight, on every chain with a Midnight deployment.
+
+  ```ts
+  // Before
+  midnight.cancelOffers({
+    accountAddress: maker,
+    cancellations: [{ group, maxConsumed: maxUint128 }],
+    deadline,
+  });
+
+  // After
+  midnight.cancelOffers({ accountAddress: maker, groups: [group] });
+  ```
+
+  The maker or an operator it authorized on Midnight can send the transaction. A transaction sent from any other account now reverts instead of cancelling the sender's own groups. See `MIGRATION-v9-to-v10.md`.
+
+  Add the pure `midnightCancelOffers` action and the `MidnightCancelOffersParams` and `MidnightCancelOffersAction` types. `midnightCancelAndMake` and the maker flows are unchanged and still cancel replaced groups inside the MidnightBundlesV2 call.
+
+  Maintained dependents are updated for the new `morpho-sdk` major.
+
+- Add `prepareVaultV1Redeem` for serializable exact-share redemption plans with required `shareToken: Token`, direct unlimited share approvals or ERC-2612 permits selected by `supportSignature`, without Permit2. No accrual snapshot is required, and the stored vault remains the token address. Omit the ineffective `deployless` option. Reuse the existing VaultBundlesV1 redemption encoder and preserve the lazy handle API. Expose the missing dependency `kind` on `IncompleteTransactionPlanError`.
+
+  New plans use stored format 2.
+  V1 and V2 redemptions share preparation and validation. They and ordinary withdrawals share
+  concurrent authorization reads, with chain validation before allowance/nonce reads.
+  The shared share-spending helper takes `shareToken: Token`. Stable entity flows are unchanged.
+
+- Reject interest accrual that would push market asset or supply share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Accrual at or before the market snapshot remains unchanged.
+- Add `prepareVaultV2ForceWithdraw` to prepare serializable forced-exit transaction plans with direct unlimited vault-share approvals or ERC-2612 permits, without Permit2. Preserve VaultExitBundlesV1 routing and snapshot-derived share-price protection.
+
+  The preparer and stored inputs use penalty-inclusive `assets`. Optional `slippageTolerance`
+  derives the stored `minSharePriceE27` bound through shared pure helpers, using the entity's default when omitted.
+  Share approval inputs use `shares`. New plans use stored format 2.
+  Pass the caller-fetched `vault: AccrualVaultV2` snapshot once; the stored vault remains its address.
+  The preparer has no `deployless` option because its requirement reads do not use deployless calls.
+
+- Updated dependencies
+  - @morpho-org/blue-sdk@8.4.0
+  - @morpho-org/morpho-sdk@10.0.0
+  - @morpho-org/blue-sdk-viem@7.5.1
+
 ## 4.6.1-next.1
 
 ### Patch Changes

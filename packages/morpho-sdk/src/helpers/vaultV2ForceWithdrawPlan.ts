@@ -271,8 +271,9 @@ export function computeVaultV2ForceWithdrawPlan(params: {
   // Guard the exported planner: a non-positive `exitAssets` would flow a negative through
   // `min(exitAssets, withdrawable)` and return a plan with negative amounts. The entity and preview
   // reject it upstream; this protects direct importers of the advertised helper.
-  if (exitAssets <= 0n)
+  if (exitAssets <= 0n) {
     throw new NonPositiveInputError("exitAssets", exitAssets);
+  }
 
   const penalty = vaultData.forceDeallocatePenalties[adapter.address] ?? 0n;
   const idleAssets = vaultData.assetBalance;
@@ -337,11 +338,17 @@ export function computeVaultV2ForceWithdrawPlan(params: {
   let penaltyLegs = 0;
   let remaining = assetsToDeallocate;
   for (const available of nonEmpty.toSorted((a, b) => {
-    if (a === b) return 0;
-    if (a > b) return 1;
+    if (a === b) {
+      return 0;
+    }
+    if (a > b) {
+      return 1;
+    }
     return -1;
   })) {
-    if (remaining <= 0n) break;
+    if (remaining <= 0n) {
+      break;
+    }
     penaltyLegs += 1;
     remaining -= MathLib.min(available, remaining);
   }
@@ -578,7 +585,9 @@ function summarizeMarketCoverage(
   let coveredAssets = 0n;
   const nonEmpty: bigint[] = [];
   for (const available of availableByMarket.values()) {
-    if (available <= 0n) continue;
+    if (available <= 0n) {
+      continue;
+    }
     coveredAssets += available;
     nonEmpty.push(available);
   }
@@ -589,8 +598,12 @@ function summarizeMarketCoverage(
   // ceiling for callers using it to cap an input.
   let saturatedCoveredAssets = 0n;
   for (const [marketId, available] of availableByMarket) {
-    if (marketId === liquidityMarketId) continue;
-    if (available > 0n) saturatedCoveredAssets += available;
+    if (marketId === liquidityMarketId) {
+      continue;
+    }
+    if (available > 0n) {
+      saturatedCoveredAssets += available;
+    }
   }
 
   return { coveredAssets, nonEmpty, saturatedCoveredAssets };

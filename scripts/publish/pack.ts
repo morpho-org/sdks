@@ -3,10 +3,12 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
@@ -196,13 +198,111 @@ export function releaseCommit(root: string, pkg: PublicPackage): string {
 }
 
 /**
- * Formats the file name `pnpm pack` gives a package's tarball.
+ * Formats the file name `bun pm pack` gives a package's tarball.
  *
  * @param pkg - The package.
  * @returns `<scope>-<name>-<version>.tgz`, without the `@`.
  */
 export function tarballName(pkg: Pick<PublicPackage, "name" | "version">) {
   return `${pkg.name.replace(/^@/, "").replace("/", "-")}-${pkg.version}.tgz`;
+}
+
+/**
+ * Applies pnpm 11's publishConfig whitelist and repository normalization.
+ *
+ * @param pkg - The source package manifest.
+ * @returns The normalized publish manifest.
+ * @example publishManifest({ name: "@morpho-org/example" });
+ */
+export function publishManifest(pkg: Readonly<Record<string, unknown>>) {
+  const manifest = { ...pkg };
+  if (pkg.publishConfig) {
+    const config = { ...(pkg.publishConfig as Record<string, unknown>) };
+    for (const key of [
+      "name",
+      "bin",
+      "engines",
+      "type",
+      "imports",
+      "main",
+      "module",
+      "typings",
+      "types",
+      "exports",
+      "browser",
+      "esnext",
+      "es2015",
+      "unpkg",
+      "umd:main",
+      "os",
+      "cpu",
+      "libc",
+      "typesVersions",
+    ]) {
+      if (!(key in config)) continue;
+      manifest[key] = config[key];
+      delete config[key];
+    }
+    if (Object.keys(config).length) manifest.publishConfig = config;
+    else delete manifest.publishConfig;
+  }
+  if (typeof manifest.repository === "string")
+    manifest.repository = { type: "git", url: manifest.repository };
+  return manifest;
+}
+
+/**
+ * Packs a package with pnpm-compatible metadata, restoring temporary files.
+ *
+ * @param options - Package paths and an optional pack runner.
+ * @returns Nothing; writes the tarball to the output directory.
+ * @example packPackage({ dir: "packages/morpho-ts", out: "tarballs" });
+ */
+export function packPackage({
+  root = ".",
+  dir,
+  out,
+  run = (cwd, destination) => {
+    execFileSync("bun", ["pm", "pack", "--destination", destination], {
+      cwd,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  },
+}: {
+  readonly root?: string;
+  readonly dir: string;
+  readonly out: string;
+  readonly run?: (cwd: string, destination: string) => void;
+}): void {
+  const directory = join(root, dir);
+  const path = join(directory, "package.json");
+  const original = readFileSync(path);
+  const license = join(directory, "LICENSE");
+  const inheritLicense =
+    !readdirSync(directory, { withFileTypes: true }).some(
+      (entry) =>
+        (entry.isFile() || entry.isSymbolicLink()) &&
+        /^LICEN[CS]E/i.test(entry.name),
+    ) && existsSync(join(root, "LICENSE"));
+  let copiedLicense = false;
+  try {
+    // bun pm pack does not apply the publishConfig overrides pnpm pack applied.
+    writeFileSync(
+      path,
+      `${JSON.stringify(publishManifest(JSON.parse(original.toString())), null, 2)}\n`,
+    );
+    if (inheritLicense) {
+      copyFileSync(join(root, "LICENSE"), license);
+      copiedLicense = true;
+    }
+    run(directory, resolve(out));
+  } finally {
+    try {
+      writeFileSync(path, original);
+    } finally {
+      if (copiedLicense) unlinkSync(license);
+    }
+  }
 }
 
 /**
@@ -229,14 +329,11 @@ function main(argv: readonly string[] = process.argv.slice(2)): void {
     }
   } else if (values.out) {
     const out = values.out;
-    // No package defines a prepack or prepare hook, so `pnpm pack` ships the built
+    // No package defines a prepack or prepare hook, so `bun pm pack` ships the built
     // `lib/` and replaces `workspace:` ranges with real versions.
     mkdirSync(out, { recursive: true });
     for (const { dir } of listPublicPackages(".")) {
-      execFileSync("pnpm", ["pack", "--pack-destination", resolve(out)], {
-        cwd: dir,
-        stdio: ["ignore", "inherit", "inherit"],
-      });
+      packPackage({ dir, out });
     }
     const sums = readdirSync(out)
       .filter((name) => name.endsWith(".tgz"))

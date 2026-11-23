@@ -93,7 +93,9 @@ export namespace MarketUtils {
   ) {
     const tokenA = a.token.toLowerCase();
     const tokenB = b.token.toLowerCase();
-    if (tokenA === tokenB) return 0;
+    if (tokenA === tokenB) {
+      return 0;
+    }
     return tokenA < tokenB ? -1 : 1;
   }
 
@@ -306,26 +308,24 @@ export namespace MarketUtils {
     const timeToMaturity = BigInt(params.timeToMaturity);
     assertNonNegative("timeToMaturity", timeToMaturity);
 
-    const lastIndex = SETTLEMENT_FEE_BREAKPOINTS.length - 1;
-    const lastBreakpoint = SETTLEMENT_FEE_BREAKPOINTS[lastIndex]!;
-    if (timeToMaturity >= lastBreakpoint) {
-      return BigInt(params.settlementFeeCbps[lastIndex]!) * CBP;
+    const upperBucketIndices = [1, 2, 3, 4, 5, 6] as const;
+    let lowerIndex: 0 | (typeof upperBucketIndices)[number] = 0;
+    for (const upperIndex of upperBucketIndices) {
+      const end = SETTLEMENT_FEE_BREAKPOINTS[upperIndex];
+      if (timeToMaturity < end) {
+        const start = SETTLEMENT_FEE_BREAKPOINTS[lowerIndex];
+        const feeLower = BigInt(params.settlementFeeCbps[lowerIndex]) * CBP;
+        const feeUpper = BigInt(params.settlementFeeCbps[upperIndex]) * CBP;
+        return (
+          (feeLower * (end - timeToMaturity) +
+            feeUpper * (timeToMaturity - start)) /
+          (end - start)
+        );
+      }
+      lowerIndex = upperIndex;
     }
 
-    const upperIndex = SETTLEMENT_FEE_BREAKPOINTS.findIndex(
-      (breakpoint) => timeToMaturity < breakpoint,
-    );
-    const lowerIndex = upperIndex - 1;
-    const start = SETTLEMENT_FEE_BREAKPOINTS[lowerIndex]!;
-    const end = SETTLEMENT_FEE_BREAKPOINTS[upperIndex]!;
-    const feeLower = BigInt(params.settlementFeeCbps[lowerIndex]!) * CBP;
-    const feeUpper = BigInt(params.settlementFeeCbps[upperIndex]!) * CBP;
-
-    return (
-      (feeLower * (end - timeToMaturity) +
-        feeUpper * (timeToMaturity - start)) /
-      (end - start)
-    );
+    return BigInt(params.settlementFeeCbps[lowerIndex]) * CBP;
   }
 
   /**

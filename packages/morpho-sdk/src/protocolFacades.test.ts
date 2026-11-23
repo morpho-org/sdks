@@ -152,6 +152,7 @@ import {
   MalformedTokenMetadataError,
   MidnightRateRatifierV1BoundOverflowError,
   MidnightRatifierV1TakerNotAllowedError,
+  MissingLocalePartError,
   MissingPermitDomainNameError,
   NegativeValueError,
   NonTupleReturnValueError,
@@ -267,6 +268,7 @@ import {
   InvalidPositionAccrualTimestampError as RawInvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError as RawInvalidPositionLossFactorError,
   MidnightPositionLib as RawMidnightPositionLib,
+  MissingLocalePartError as RawMissingLocalePartError,
   NegativeValueError as RawNegativeValueError,
   RetriesExhaustedError as RawRetriesExhaustedError,
   RetryStoppedError as RawRetryStoppedError,
@@ -305,6 +307,7 @@ describe("protocol facades", () => {
     [DivisionByZeroError, RawBlueDivisionByZeroError],
     [InvalidAddressError, RawBlueInvalidAddressError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
+    [MissingLocalePartError, RawMissingLocalePartError],
     [InvalidNumberError, RawBlueInvalidNumberError],
     [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],
     [

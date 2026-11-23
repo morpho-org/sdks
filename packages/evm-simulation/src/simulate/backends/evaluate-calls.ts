@@ -44,15 +44,16 @@ export function evaluateCalls(
           planned.type === "transaction" &&
           planned.transactionIndex === transactionIndex,
       )
-    )
+    ) {
       throw new InvalidSimulationResponseError(
         `eth_simulateV1 plan is missing transaction result ${transactionIndex}.`,
       );
+    }
     for (const [phase, assertions] of [
       ["before", transaction.assertBefore],
       ["after", transaction.assertAfter],
-    ] as const)
-      for (const assertionIndex of (assertions ?? []).keys())
+    ] as const) {
+      for (const assertionIndex of (assertions ?? []).keys()) {
         if (
           !calls.some(
             ({ planned }) =>
@@ -61,10 +62,13 @@ export function evaluateCalls(
               planned.phase === phase &&
               planned.assertionIndex === assertionIndex,
           )
-        )
+        ) {
           throw new InvalidSimulationResponseError(
             `eth_simulateV1 plan is missing assertion result ${transactionIndex}:${phase}:${assertionIndex}.`,
           );
+        }
+      }
+    }
   }
 
   // A preparation call that reverted did not produce its promised state —
@@ -86,6 +90,74 @@ export function evaluateCalls(
     );
   }
 
+  const reverted = evaluateTransactions(response, failures);
+  if (reverted !== undefined) {
+    return reverted;
+  }
+
+  const stateReads: ExecutedStateRead[] = [];
+  const failedReadIds = new Set<string>();
+  for (const { planned, result, error } of calls) {
+    if (planned.type !== "stateRead") {
+      continue;
+    }
+    if (!result.status) {
+      // A read planned in both phases is one cause: report it once.
+      if (failedReadIds.has(planned.read.id)) {
+        continue;
+      }
+      failedReadIds.add(planned.read.id);
+      failures.push(
+        new SlippageCheckUnavailableError(
+          planned.read.kind === "derivation"
+            ? `Derivation read "${planned.read.id}" for limits.operations[${planned.read.operationIndex}] failed. Check the operation subject (${planned.read.subject}) and its support for this view call.`
+            : `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
+          {
+            ...(planned.read.kind === "derivation"
+              ? {
+                  operationIndex: planned.read.operationIndex,
+                  operationType: planned.read.operationType,
+                }
+              : {}),
+            field: planned.read.id,
+            reason: "missingRead",
+            cause: error,
+          },
+        ),
+      );
+      continue;
+    }
+    stateReads.push({
+      phase: planned.phase,
+      read: planned.read,
+      returnData: result.returnData,
+    });
+  }
+
+  return Object.freeze({
+    ...deepFreeze({
+      plan,
+      block,
+      // Every failure was classified above: only successful calls remain.
+      calls: calls
+        .filter((entry) => entry.result.status)
+        .map(({ planned, result, logsMissing }) => ({
+          planned,
+          result,
+          logsMissing,
+        })),
+      stateReads,
+    }),
+    reverted: false,
+    failures: Object.freeze(failures),
+  });
+}
+/** Evaluate transactions in order, stopping at the first revert. @internal */
+function evaluateTransactions(
+  response: ParsedSimulationResponse,
+  failures: SimulationPackageError[],
+): SimulationExecution | undefined {
+  const { plan, block, calls } = response;
   for (const [
     transactionIndex,
     transaction,
@@ -132,35 +204,8 @@ export function evaluateCalls(
             `eth_simulateV1 plan is missing transaction result ${transactionIndex}.`,
           );
         }
-        const logAssertions = transaction.assertLogs;
-        if (logAssertions?.length) {
-          if (userCall.logsMissing) {
-            failures.push(
-              new InvalidSimulationResponseError(
-                `eth_simulateV1 omitted logs for transaction ${transactionIndex}. Log assertions cannot be evaluated.`,
-              ),
-            );
-          } else {
-            const logs = deepFreeze(
-              userCall.result.logs.map(
-                (log): RawLog => ({
-                  address: log.address.toLowerCase() as Address,
-                  topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
-                  data: log.data.toLowerCase() as Hex,
-                }),
-              ),
-            );
-            for (const [assertionIndex, assertion] of logAssertions.entries()) {
-              const failure = evaluateLogAssertion({
-                assertion,
-                logs,
-                transactionIndex,
-                assertionIndex,
-              });
-              if (failure !== undefined) failures.push(failure);
-            }
-          }
-        }
+        // Record log assertion failures before evaluating after-state assertions.
+        evaluateLogs({ userCall, transaction, transactionIndex, failures });
       }
 
       for (const [assertionIndex, assertion] of (assertions ?? []).entries()) {
@@ -186,61 +231,57 @@ export function evaluateCalls(
           phase,
           assertionIndex,
         });
-        if (failure !== undefined) failures.push(failure);
+        if (failure !== undefined) {
+          failures.push(failure);
+        }
       }
     }
   }
 
-  const stateReads: ExecutedStateRead[] = [];
-  const failedReadIds = new Set<string>();
-  for (const { planned, result, error } of calls) {
-    if (planned.type !== "stateRead") continue;
-    if (!result.status) {
-      // A read planned in both phases is one cause: report it once.
-      if (failedReadIds.has(planned.read.id)) continue;
-      failedReadIds.add(planned.read.id);
+  return undefined;
+}
+
+/** Evaluate log assertions on a frozen lowercase copy. @internal */
+function evaluateLogs({
+  userCall,
+  transaction,
+  transactionIndex,
+  failures,
+}: {
+  userCall: ParsedSimulationResponse["calls"][number];
+  transaction: ParsedSimulationResponse["plan"]["request"]["transactions"][number];
+  transactionIndex: number;
+  failures: SimulationPackageError[];
+}) {
+  const logAssertions = transaction.assertLogs;
+  if (logAssertions?.length) {
+    if (userCall.logsMissing) {
       failures.push(
-        new SlippageCheckUnavailableError(
-          planned.read.kind === "derivation"
-            ? `Derivation read "${planned.read.id}" for limits.operations[${planned.read.operationIndex}] failed. Check the operation subject (${planned.read.subject}) and its support for this view call.`
-            : `State read "${planned.read.id}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
-          {
-            ...(planned.read.kind === "derivation"
-              ? {
-                  operationIndex: planned.read.operationIndex,
-                  operationType: planned.read.operationType,
-                }
-              : {}),
-            field: planned.read.id,
-            reason: "missingRead",
-            cause: error,
-          },
+        new InvalidSimulationResponseError(
+          `eth_simulateV1 omitted logs for transaction ${transactionIndex}. Log assertions cannot be evaluated.`,
         ),
       );
-      continue;
+    } else {
+      const logs = deepFreeze(
+        userCall.result.logs.map(
+          (log): RawLog => ({
+            address: log.address.toLowerCase() as Address,
+            topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
+            data: log.data.toLowerCase() as Hex,
+          }),
+        ),
+      );
+      for (const [assertionIndex, assertion] of logAssertions.entries()) {
+        const failure = evaluateLogAssertion({
+          assertion,
+          logs,
+          transactionIndex,
+          assertionIndex,
+        });
+        if (failure !== undefined) {
+          failures.push(failure);
+        }
+      }
     }
-    stateReads.push({
-      phase: planned.phase,
-      read: planned.read,
-      returnData: result.returnData,
-    });
   }
-
-  return Object.freeze({
-    ...deepFreeze({
-      plan,
-      block,
-      // Every failure was classified above: only successful calls remain.
-      calls: calls
-        .filter((entry) => entry.result.status)
-        .map(({ planned, result, logsMissing }) => ({
-          planned,
-          result,
-          logsMissing,
-        })),
-      stateReads,
-    }),
-    reverted: false,
-    failures: Object.freeze(failures),
-  });
 }

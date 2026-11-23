@@ -31,7 +31,7 @@ const inputs = {
   account: IN_KIND_USER,
   vault: IN_KIND_VAULT,
   asset: IN_KIND_ASSET,
-  amount: 100n,
+  assets: 100n,
   maxSharePrice: 10n ** 27n,
   deadline: 2_000_000_000n,
   referralFeePct: 0n,
@@ -43,7 +43,7 @@ const step = {
   action: { type: "vaultV2Deposit", inputs, signatureRequestIds: {} },
 } as const satisfies Step;
 const plan: TransactionPlan = {
-  version: 1,
+  version: 2,
   chainId: 1,
   account: IN_KIND_USER,
   expiresAt: Number(inputs.deadline),
@@ -69,26 +69,55 @@ describe("stored plan compatibility", () => {
     });
   });
 
-  test.each([false, true])(
-    "all interpreters reject an unsupported saved version, empty: %s",
-    (empty) => {
-      const saved = serializeTransactionPlan({
+  test("all interpreters accept a stored force-redeem action without requests", async () => {
+    const forceRedeem = parseTransactionPlan(
+      serializeTransactionPlan({
         ...plan,
-        steps: empty ? [] : [step],
-      });
+        steps: [
+          {
+            id: "forceRedeem",
+            label: "Force redeem",
+            action: {
+              type: "vaultV2ForceRedeem",
+              inputs: {
+                chainId: inputs.chainId,
+                account: inputs.account,
+                vault: inputs.vault,
+                redeem: { shares: 100n },
+                deallocations: [{ adapter: IN_KIND_ASSET, assets: 100n }],
+              },
+            },
+          },
+        ],
+      }),
+    );
+    expect(getPendingSignatureRequests(forceRedeem)).toEqual([]);
+    expect(applySignatures(forceRedeem, [])).toEqual(forceRedeem);
+    const transaction = buildTransaction(forceRedeem, forceRedeem.steps[0]!);
+    expect(transaction.action.type).toBe("vaultV2ForceRedeem");
+    expect(buildTransactions(forceRedeem)).toEqual([transaction]);
+  });
+
+  test.each([
+    [1, false],
+    [1, true],
+    [3, false],
+    [3, true],
+  ] as const)(
+    "all interpreters reject saved version %s, empty: %s",
+    (version, empty) => {
       const unsupported = {
         ...plan,
-        version: 2,
+        version,
         steps: empty ? [] : [step],
       } as unknown as TransactionPlan;
-      expect(unsupported.version).toBe(2);
-      const error = new UnsupportedTransactionPlanVersionError(2);
+      const error = new UnsupportedTransactionPlanVersionError(version);
       expect(() =>
-        parseTransactionPlan(saved.replace('"version":1', '"version":2')),
+        parseTransactionPlan(serializeTransactionPlan(unsupported)),
       ).toThrow(error);
       expect(error).toMatchObject({
         name: "UnsupportedTransactionPlanVersionError",
-        version: 2,
+        version,
       });
       expect(() => getPendingSignatureRequests(unsupported)).toThrow(error);
       expect(() => buildTransaction(unsupported, step)).toThrow(error);
@@ -187,7 +216,7 @@ describe("stored plan action-layer validation", () => {
           account: IN_KIND_USER,
           token: IN_KIND_ASSET,
           spender: IN_KIND_USER,
-          amount: 100n,
+          assets: 100n,
         },
       },
     } as const satisfies Step;

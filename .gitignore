@@ -61,7 +61,7 @@ manifest.json
 logs
 *.log
 npm-debug.log*
-pnpm-debug.log*
+bun-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*

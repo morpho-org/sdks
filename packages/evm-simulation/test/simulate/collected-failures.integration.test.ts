@@ -4,7 +4,11 @@ import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
 } from "@morpho-org/morpho-ts/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -29,7 +33,7 @@ import { simulationClientFor } from "../../src/test-helpers/index.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const SPENDER = "0x3333333333333333333333333333333333333333";
@@ -114,6 +118,8 @@ describe.sequential("simulate collected failures", () => {
       expect.any(ConsumerLimitViolationError),
       expect.any(BlacklistViolationError),
     ]);
+    expect(report.verification).toEqual({ retention: "checked" });
+    expect(report.warnings).toEqual([]);
   });
 
   test("reports a failing assertion, then the unexpected approval", async ({
@@ -175,6 +181,8 @@ describe.sequential("simulate collected failures", () => {
       expect.any(SimulationAssertError),
       expect.any(UnexpectedTokenApprovalError),
     ]);
+    expect(report.verification).toEqual({ retention: "checked" });
+    expect(report.warnings).toEqual([]);
   });
 
   test("reports the earlier assertion failure, then the terminal revert", async ({
@@ -226,5 +234,7 @@ describe.sequential("simulate collected failures", () => {
       expect.any(SimulationAssertError),
       expect.any(SimulationRevertedError),
     ]);
+    expect(report).not.toHaveProperty("verification");
+    expect(report.warnings).toEqual([]);
   });
 });

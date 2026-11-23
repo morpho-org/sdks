@@ -22,7 +22,11 @@ import {
   vaultV2Abi,
 } from "@morpho-org/morpho-sdk/abis";
 import { Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createFaultProxy, expectFailClosed } from "@morpho-org/test/chaos";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -55,19 +59,20 @@ import {
   simulateOrThrow,
   simulationClientFor,
 } from "../../src/test-helpers/index.js";
-import { seededMarketData, seededVaultData } from "../setup.js";
+import {
+  deployIdleVaultV2,
+  seededMarketData,
+  seededVaultData,
+} from "../setup.js";
 
-/**
- * Pinned after the bundles contracts (BlueBundlesV1, VaultBundlesV1,
- * VaultExitBundlesV1) were deployed on mainnet — the shared 24_593_903 pin in
- * `test/setup.ts` predates them and predates this pipeline's supported routes.
- */
+// The near-LLTV borrow below depends on this block's cbBTC oracle price.
+// Recheck this test when bumping MAINNET_FORK_BLOCK.
 const test = createViemTest(mainnet, {
   forkUrl:
     process.env.MAINNET_RPC_URL ??
     getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -1140,22 +1145,19 @@ describe.sequential("simulate pipeline — vault V2", () => {
   }) => {
     const assets = parseUnits("10", 6);
     const recipient: Address = "0x0000000000000000000000000000000000000123";
+    const vault = await deployIdleVaultV2(client, USDC);
     await client.deal({ erc20: USDC, amount: assets });
-    await seededVaultData(
-      client,
-      client.extend(morphoViemExtension()).morpho.vaultV2(KEYROCK, mainnet.id),
-    );
     await client.writeContract({
       account: client.account,
       address: USDC,
       abi: erc20Abi,
       functionName: "approve",
-      args: [KEYROCK, assets],
+      args: [vault, assets],
     });
     const transactions = [
       {
         from: client.account.address,
-        to: KEYROCK,
+        to: vault,
         data: encodeFunctionData({
           abi: vaultV2Abi,
           functionName: "deposit",
@@ -1173,14 +1175,14 @@ describe.sequential("simulate pipeline — vault V2", () => {
     const sharesMinted = unchecked.transfers
       .filter(
         (transfer) =>
-          isAddressEqual(transfer.token, KEYROCK) &&
+          isAddressEqual(transfer.token, vault) &&
           isAddressEqual(transfer.to, recipient),
       )
       .reduce((total, transfer) => total + transfer.amount, 0n);
     expect(sharesMinted).toBeGreaterThan(0n);
     const operation = {
       type: "vaultV2Deposit" as const,
-      vault: KEYROCK,
+      vault,
       account: recipient,
       slippageTolerance: 0n,
       quote: { sharesMinted, assetsPaid: assets },
@@ -1551,13 +1553,14 @@ describe.sequential("simulate pipeline — vault exits", () => {
       morphoViemExtension({ supportSignature: false }),
     ).morpho;
     const source = morphoClient.vaultV1(STEAKHOUSE, mainnet.id);
-    const target = morphoClient.vaultV2(KEYROCK, mainnet.id);
+    const targetVault = await deployIdleVaultV2(client, USDC);
+    const target = morphoClient.vaultV2(targetVault, mainnet.id);
     const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 3600n;
     const migration = source.migrateToV2({
       assets: parseUnits("5", 6),
       userAddress: client.account.address,
       sourceVault: await source.getData(),
-      targetVault: await seededVaultData(client, target),
+      targetVault: await target.getData(),
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
       deadline,
     });
@@ -1574,7 +1577,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
           {
             type: "vaultV1MigrateToV2",
             sourceVault: STEAKHOUSE,
-            targetVault: KEYROCK,
+            targetVault,
             quote: {
               sharesMinted: (await target.getData()).toShares(
                 parseUnits("5", 6),

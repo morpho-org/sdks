@@ -106,7 +106,9 @@ export const resolveBundlesTokenRequirements = (
   });
   // Reject invalid pulls before an approval encoder can cap the requested amount.
   validateUint256Field("amount", params.amount);
-  if (params.amount === 0n) return [];
+  if (params.amount === 0n) {
+    return [];
+  }
 
   if (params.state.type === "approval") {
     return getRequirementsApproval({

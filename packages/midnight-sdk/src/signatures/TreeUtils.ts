@@ -43,7 +43,11 @@ import { RateRatifierV1 } from "./RateRatifierV1.js";
 import { Ratifier } from "./Ratifier.js";
 import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
-import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import {
+  isPowerOfTwo,
+  nextPowerOfTwo,
+  requireTreeItem,
+} from "./treeMathInternal.js";
 import type {
   AnyTree,
   AnyTreeSnapshot,
@@ -53,7 +57,9 @@ import type {
 } from "./treeTypes.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
-  if (isPowerOfTwo(offers.length)) return [...offers];
+  if (isPowerOfTwo(offers.length)) {
+    return [...offers];
+  }
   const paddedLength = nextPowerOfTwo(offers.length);
 
   return [
@@ -71,9 +77,11 @@ function assertLeafOffers(
 ): void {
   const seen = new Set<Hash>();
   for (const [index, offer] of offers.entries()) {
-    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) continue;
+    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) {
+      continue;
+    }
 
-    const leafHash = leafHashes[index]!;
+    const leafHash = requireTreeItem(leafHashes, index);
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate offer hash "${leafHash}" in tree.`);
     }
@@ -87,12 +95,17 @@ function assertLeafOffers(
 }
 
 function buildLayers(leaves: readonly Hash[]): readonly (readonly Hash[])[] {
-  const layers: Hash[][] = [[...leaves]];
-  let level = layers[0]!;
+  let level = [...leaves];
+  const layers = [level];
   while (level.length > 1) {
     const next: Hash[] = [];
     for (let i = 0; i < level.length; i += 2) {
-      next.push(TreeUtils.hashNode(level[i]!, level[i + 1]!));
+      next.push(
+        TreeUtils.hashNode(
+          requireTreeItem(level, i),
+          requireTreeItem(level, i + 1),
+        ),
+      );
     }
     layers.push(next);
     level = next;
@@ -108,7 +121,9 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
     );
   }
   const height = Math.log2(leaves.length);
-  if (height > MAX_TREE_HEIGHT) throw new InvalidTreeHeightError(height);
+  if (height > MAX_TREE_HEIGHT) {
+    throw new InvalidTreeHeightError(height);
+  }
 
   return height;
 }
@@ -120,7 +135,7 @@ function computeRootFromLeaves(leaves: readonly Hash[]): {
   const height = assertProvableLeaves(leaves);
   const layers = buildLayers(leaves);
 
-  return { root: layers[height]![0]!, height };
+  return { root: requireTreeItem(requireTreeItem(layers, height), 0), height };
 }
 
 /**
@@ -706,16 +721,16 @@ export namespace TreeUtils {
           }));
         }
       } else if (params.ratification.type === "ecrecover") {
-        if (params.ratification.signature != null) {
+        if (params.ratification.signature == null) {
           items = await EcrecoverRatifierUtils.ratify({
             tree,
-            signature: params.ratification.signature,
+            client: params.ratification.client,
             account: params.ratification.account,
           });
         } else {
           items = await EcrecoverRatifierUtils.ratify({
             tree,
-            client: params.ratification.client,
+            signature: params.ratification.signature,
             account: params.ratification.account,
           });
         }
@@ -1053,7 +1068,9 @@ export namespace TreeUtils {
     const layers = buildLayers(params.tree.leaves);
     const proof = layers
       .slice(0, -1)
-      .map((level, layerIndex) => level[(index >> layerIndex) ^ 1]!);
+      .map((level, layerIndex) =>
+        requireTreeItem(level, (index >> layerIndex) ^ 1),
+      );
 
     return deepFreeze({ root: params.tree.root, leafIndex, proof });
   }
@@ -1130,8 +1147,8 @@ export namespace TreeUtils {
       Array.from({ length: count }, (_, index) => ({
         root: params.tree.root,
         leafIndex: BigInt(index),
-        proof: siblingLayers.map(
-          (level, layerIndex) => level[(index >> layerIndex) ^ 1]!,
+        proof: siblingLayers.map((level, layerIndex) =>
+          requireTreeItem(level, (index >> layerIndex) ^ 1),
         ),
       })),
     );

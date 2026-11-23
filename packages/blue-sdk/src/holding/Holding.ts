@@ -79,7 +79,9 @@ export class Holding implements IHolding {
         allowance,
       ]),
     );
-    if (erc2612Nonce != null) this.erc2612Nonce = erc2612Nonce;
+    if (erc2612Nonce != null) {
+      this.erc2612Nonce = erc2612Nonce;
+    }
   }
 
   /**

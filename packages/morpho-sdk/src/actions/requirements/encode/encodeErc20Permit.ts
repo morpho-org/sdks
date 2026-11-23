@@ -3,19 +3,13 @@ import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import {
-  validateDeadline,
-  validateUserAddress,
-} from "../../../helpers/validate.js";
-import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
-import {
-  ChainIdMismatchError,
-  type Erc2612RequirementSignature,
-  ExpiredDeadlineError,
-  type ReferenceTimestampParams,
-  type Requirement,
+import { validateUserAddress } from "../../../helpers/validate.js";
+import { validateErc2612Permit } from "../../../reads/readErc2612Permit.js";
+import type {
+  Erc2612RequirementSignature,
+  ReferenceTimestampParams,
+  Requirement,
 } from "../../../types/index.js";
-import { validateClientChainId } from "../validateClientChainId.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams extends ReferenceTimestampParams {
@@ -105,29 +99,12 @@ export const encodeErc20Permit = async (
   const { token, owner, spender, amount, chainId, nonce, supportDeployless } =
     params;
 
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
-  }
-  validateRequirementSpender({
+  const deadline = await validateErc2612Permit(viemClient, {
     chainId,
     spender,
-    allowed: ["vaultBundlesV1", "blueBundlesV1"],
+    deadline: params.deadline,
+    now: params.now ?? Time.timestamp(),
   });
-
-  const timestamp = params.now ?? Time.timestamp();
-  // Validate an explicit deadline before the token-metadata read: this exported encoder can be
-  // called independently of the BlueBundlesV1 resolver, and an out-of-range or already-expired
-  // deadline otherwise surfaces only as a downstream wallet typed-data error or an on-chain revert.
-  if (params.deadline != null) {
-    validateDeadline(params.deadline);
-    if (params.deadline <= timestamp) {
-      throw new ExpiredDeadlineError(params.deadline, timestamp);
-    }
-  }
-  const deadline =
-    params.deadline ?? (params.now ?? Time.timestamp()) + Time.s.from.h(2n);
-
-  await validateClientChainId(viemClient, chainId);
   const tokenData = await fetchToken(token, viemClient, {
     deployless: supportDeployless,
   });

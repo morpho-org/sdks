@@ -131,6 +131,7 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    *   `parentAllocation` or `shares` is `0n`.
    * @throws {UnknownMarketAllocationError} when the nested Vault V1 withdraw queue references a
    *   market without an allocation.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when forward projection of an allocated nested market with
    *   positive debt requires an unsupported IRM.
    * @example
@@ -155,7 +156,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * ```
    */
   realAssets(timestamp?: BigIntish) {
-    if (this.parentAllocation === 0n || this.shares === 0n) return 0n;
+    if (this.parentAllocation === 0n || this.shares === 0n) {
+      return 0n;
+    }
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 
@@ -175,6 +178,7 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * @throws {UnknownMarketAllocationError} when the underlying V1 vault's withdraw
    * queue references a market without an allocation and both the parent allocation
    * and shares are non-zero.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when forward projection of an allocated
    * nested market with positive debt requires an unsupported IRM and both the
    * parent allocation and shares are non-zero.
@@ -197,7 +201,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   accrueInterest(timestamp: BigIntish) {
     // Mirror `realAssets`: an adapter with no parent allocation or shares never
     // inspects its nested vault, so leave it untouched.
-    if (this.parentAllocation === 0n || this.shares === 0n) return this;
+    if (this.parentAllocation === 0n || this.shares === 0n) {
+      return this;
+    }
     return new AccrualVaultV2MorphoVaultV1Adapter(
       this,
       this.accrualVaultV1.accrueInterest(timestamp),
@@ -273,7 +279,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     const recorded = allocations.find(
       (allocation) => allocation.id === this.adapterId,
     );
-    if (recorded == null || this.shares === 0n) return 0n;
+    if (recorded == null || this.shares === 0n) {
+      return 0n;
+    }
     return MathLib.zeroFloorSub(
       this.accrualVaultV1.toAssets(this.shares),
       recorded.allocation,
@@ -315,8 +323,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   maxWithdraw(_data: Hex) {
     // Vault V2 rejects deallocation when its tracked adapter allocation is zero,
     // even if the adapter holds residual Vault V1 shares from direct transfers.
-    if (this.parentAllocation === 0n)
+    if (this.parentAllocation === 0n) {
       return { value: 0n, limiter: CapacityLimitReason.position };
+    }
     return this.accrualVaultV1.maxWithdraw(this.shares);
   }
 }

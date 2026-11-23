@@ -16,13 +16,18 @@ import {
   SetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
   concatHex,
   encodeFunctionData,
   erc20Abi,
+  ethAddress,
   maxUint256,
   padHex,
   parseEther,
@@ -33,6 +38,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
 } from "../../src/index.js";
@@ -44,7 +50,7 @@ import {
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -625,6 +631,102 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
       },
     });
   });
+
+  for (const [extra, selfValue] of [
+    [0n, 0n],
+    [1n, 0n],
+    [0n, 1n],
+    [1n, 1n],
+  ] as const) {
+    test(`delegated sender checks extra internal ETH debit ${extra} with self-call value ${selfValue}`, async ({
+      client,
+    }) => {
+      const owner = await seedUser(client, { fundCollateralPull: false });
+      await client.setBalance({ address: owner, value: parseEther("2") });
+      const offers = await prepareBuyOffers(client);
+      const tx = build({
+        target: { type: "units", units: 123_457n, minSellerAssets: 100_000n },
+        takeableOffers: offers,
+        nativeAmount: SUPPLIED - selfValue,
+      });
+      const delegate: Address = "0x0000000000000000000000000000000000001235";
+      const recipient: Address = "0x0000000000000000000000000000000000001236";
+      if (selfValue > 0n) {
+        await client.setBalance({ address: recipient, value: parseEther("1") });
+        await client.deal({
+          erc20: wNative,
+          account: recipient,
+          amount: selfValue,
+        });
+        await client.writeContract({
+          account: recipient,
+          address: wNative,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [owner, maxUint256],
+        });
+      }
+      await client.setCode({
+        address: delegate,
+        bytecode: `0x5f5f5f5f60${toHex(extra, { size: 1 }).slice(2)}73${recipient.slice(2)}5af15000`,
+      });
+      await client.setCode({
+        address: owner,
+        bytecode: `0xef0100${delegate.slice(2)}`,
+      });
+      const report = await simulate(
+        configFor(client),
+        {
+          transactions: [
+            ...(selfValue > 0n
+              ? [
+                  {
+                    from: owner,
+                    to: wNative,
+                    data: encodeFunctionData({
+                      abi: erc20Abi,
+                      functionName: "transferFrom",
+                      args: [recipient, owner, selfValue],
+                    }),
+                  },
+                ]
+              : []),
+            asTransaction(owner, tx),
+            { from: owner, to: owner, data: "0x1234", value: selfValue },
+          ],
+          limits: toSimulationLimits(tx.action, {
+            owner,
+            receiver,
+            slippageTolerance: 0n,
+          }),
+        },
+        { timeoutMs: 30_000 },
+      );
+      expect(report.ok).toBe(true);
+      if (report.ok) {
+        expect(report.result).toHaveProperty(
+          "calls.length",
+          selfValue > 0n ? 3 : 2,
+        );
+      }
+      if (extra === 0n) {
+        expect(report.warnings).toEqual([]);
+      } else {
+        expect(report.warnings).toHaveLength(1);
+        expect(report.warnings[0]).toMatchObject({
+          code: "UNEXPECTED_TOKEN_TRANSFER",
+          token: ethAddress,
+          sender: owner,
+          recipients: expect.arrayContaining([recipient]),
+        });
+        expect(report.warnings[0]).toMatchObject({
+          code: "UNEXPECTED_TOKEN_TRANSFER",
+          severity: "warn",
+          chainId: client.chain.id,
+        });
+      }
+    });
+  }
 
   test("rejects a successful execution whose collateral credit misses the quote", async ({
     client,

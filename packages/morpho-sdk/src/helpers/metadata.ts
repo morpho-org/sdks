@@ -6,9 +6,12 @@ import type { Metadata } from "../types/index.js";
 const MAX_METADATA_TIMESTAMP = (1n << 32n) - 1n;
 
 function validateMetadataTimestamp(timestamp: Metadata["timestamp"]): void {
-  if (typeof timestamp !== "bigint") return;
-  if (timestamp < 0n)
+  if (typeof timestamp !== "bigint") {
+    return;
+  }
+  if (timestamp < 0n) {
     throw new NegativeInputError("metadata.timestamp", timestamp);
+  }
   if (timestamp > MAX_METADATA_TIMESTAMP) {
     throw new InputExceedsMaxError({
       field: "metadata.timestamp",
@@ -91,7 +94,9 @@ export function addTransactionMetadata(
   validateMetadataTimestamp(metadata.timestamp);
   const { data, ..._tx } = tx;
 
-  if (!data || data === "0x") return tx;
+  if (!data || data === "0x") {
+    return tx;
+  }
 
   const concatItems = [data];
 
@@ -111,15 +116,18 @@ export function addTransactionMetadata(
     // through to `isHex("0x0Xcafe")` and being silently dropped.
     const origin = metadata.origin.replace(/^0x/i, "");
 
-    if (!isHex(`0x${origin}`))
+    if (!isHex(`0x${origin}`)) {
       throw Error("Calldata origin must consists of only hex characters");
-    if (origin.length > 8)
+    }
+    if (origin.length > 8) {
       throw Error("Calldata origin must be at most 8 characters long");
+    }
     // Reject odd-length raw fragments. viem's `concatHex` would pad the
     // stray nibble to a whole byte at broadcast, corrupting the trailing
     // analytics byte on-chain.
-    if (origin.length % 2 !== 0)
+    if (origin.length % 2 !== 0) {
       throw Error("Calldata origin must have an even number of hex characters");
+    }
     concatItems.push(`0x${origin}`);
   } catch (error: unknown) {
     // eslint-disable-next-line no-console

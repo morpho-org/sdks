@@ -50,9 +50,7 @@ export function findForceExitFailures(params: {
     readonly deallocations: readonly ForceExitDeallocationQuote[];
   };
 } {
-  const failures: SlippageCheckUnavailableError[] = [];
-  const { logs, vault, morpho, account, operationType, requireDeallocations } =
-    params;
+  const { logs, vault, morpho, account, operationType } = params;
   let exitEvidenced = false;
   let penalty = 0n;
   const unpairedAdapters = new Set<string>();
@@ -93,8 +91,9 @@ export function findForceExitFailures(params: {
               data: log.data,
               topics,
             });
-            if (isAddressEqual(event.args.onBehalf, account))
+            if (isAddressEqual(event.args.onBehalf, account)) {
               exitEvidenced = true;
+            }
           } else if (topic0 === FORCE_DEALLOCATE) {
             eventName = "ForceDeallocate";
             const event = decodeEventLog({
@@ -139,14 +138,17 @@ export function findForceExitFailures(params: {
     }
     for (const force of forces) {
       if (!isAddressEqual(force.onBehalf, account)) {
-        if (force.penaltyAssets > 0n) penalizedAccounts.add(force.onBehalf);
+        if (force.penaltyAssets > 0n) {
+          penalizedAccounts.add(force.onBehalf);
+        }
         continue;
       }
       penalty += force.penaltyAssets;
       let withdrawal: (typeof withdrawals)[number] | undefined;
       for (let i = withdrawals.length - 1; i >= 0; i--) {
-        const candidate = withdrawals[i]!;
+        const candidate = withdrawals[i];
         if (
+          candidate !== undefined &&
           !candidate.paired &&
           candidate.index < force.index &&
           candidate.assets === force.assets &&
@@ -168,12 +170,43 @@ export function findForceExitFailures(params: {
       });
     }
   }
+  return {
+    failures: findForceExitEvidenceFailures(params, {
+      exitEvidenced,
+      penalizedAccounts,
+      unpairedAdapters,
+    }),
+    checked: { penalty, deallocations: [...deallocated.values()] },
+  };
+}
+
+function findForceExitEvidenceFailures(
+  {
+    account,
+    operationIndex,
+    operationType,
+    requireDeallocations,
+  }: Pick<
+    Parameters<typeof findForceExitFailures>[0],
+    "account" | "operationIndex" | "operationType" | "requireDeallocations"
+  >,
+  {
+    exitEvidenced,
+    penalizedAccounts,
+    unpairedAdapters,
+  }: {
+    exitEvidenced: boolean;
+    penalizedAccounts: ReadonlySet<Address>;
+    unpairedAdapters: ReadonlySet<string>;
+  },
+): SlippageCheckUnavailableError[] {
+  const failures: SlippageCheckUnavailableError[] = [];
   if (penalizedAccounts.size > 0) {
     failures.push(
       new SlippageCheckUnavailableError(
         `Cannot attribute "penalty" for "${operationType}": ForceDeallocate charged ${[...penalizedAccounts].join(", ")} instead of ${account}. Retry the simulation or report the RPC response.`,
         {
-          operationIndex: params.operationIndex,
+          operationIndex,
           operationType,
           field: "penalty",
           reason: "accountMismatch",
@@ -188,7 +221,7 @@ export function findForceExitFailures(params: {
       new SlippageCheckUnavailableError(
         `Missing "Withdraw" evidence for "${operationType}": the vault's ERC4626 exit log is absent from the simulated calls. Retry the simulation or report the RPC response.`,
         {
-          operationIndex: params.operationIndex,
+          operationIndex,
           operationType,
           field: "penalty",
           reason: "missingEvent",
@@ -201,7 +234,7 @@ export function findForceExitFailures(params: {
       new SlippageCheckUnavailableError(
         `Cannot attribute "deallocations" for "${operationType}": adapter(s) ${[...unpairedAdapters].join(", ")} produced no Blue "Withdraw" evidence; they may not be Blue market adapters. Retry the simulation or report the RPC response.`,
         {
-          operationIndex: params.operationIndex,
+          operationIndex,
           operationType,
           field: "deallocations",
           reason: "unmatchedEvent",
@@ -209,10 +242,7 @@ export function findForceExitFailures(params: {
       ),
     );
   }
-  return {
-    failures,
-    checked: { penalty, deallocations: [...deallocated.values()] },
-  };
+  return failures;
 }
 
 /**
@@ -233,6 +263,8 @@ export function measureForceExit(
     failures: [failure],
     checked,
   } = findForceExitFailures(params);
-  if (failure !== undefined) throw failure;
+  if (failure !== undefined) {
+    throw failure;
+  }
   return checked;
 }

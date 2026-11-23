@@ -1,5 +1,5 @@
 import { getChainAddress } from "@morpho-org/blue-sdk";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, OPTIMISM_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { MaximumFeeExceededError } from "@tetherto/wdk-wallet";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
@@ -16,7 +16,7 @@ const maybeDescribe = process.env.ERPC_SECRET ? describe : describe.skip;
 const test = createViemTest(optimism, {
   forkUrl: getErpcForkUrl(optimism.id, process.env.ERPC_SECRET),
   chainId: optimism.id,
-  forkBlockNumber: 158_700_000n,
+  forkBlockNumber: OPTIMISM_FORK_BLOCK,
   stepsTracing: false,
 });
 

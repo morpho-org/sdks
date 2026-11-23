@@ -73,7 +73,7 @@ export const createViemTest = <chain extends Chain>(
         cleanupFailure = error;
       }
 
-      if (fixtureFailed && cleanupFailed)
+      if (fixtureFailed && cleanupFailed) {
         throw createAnvilFailureCleanupError({
           cleanupError: cleanupFailure,
           failure: fixtureFailure,
@@ -81,8 +81,13 @@ export const createViemTest = <chain extends Chain>(
             "The Playwright fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
           summary: "Playwright fixture and Anvil cleanup both failed.",
         });
-      if (fixtureFailed) throw fixtureFailure;
-      if (cleanupFailed) throw cleanupFailure;
+      }
+      if (fixtureFailed) {
+        throw fixtureFailure;
+      }
+      if (cleanupFailed) {
+        throw cleanupFailure;
+      }
     },
   });
 };
@@ -105,9 +110,9 @@ export const expect = test.expect.extend({
     if (Number.isFinite(tolerance) && tolerance > 0) {
       // Scale the decimal tolerance rather than rounding either bigint to Number.
       const [coefficient, exponent] = tolerance.toExponential().split("e");
-      const [whole, fraction = ""] = coefficient!.split(".");
-      const threshold = BigInt(whole! + fraction);
-      const scale = decimals + Number(exponent) - fraction.length;
+      const threshold = BigInt(coefficient?.replace(".", "") ?? "");
+      const fractionLength = coefficient?.split(".")[1]?.length ?? 0;
+      const scale = decimals + Number(exponent) - fractionLength;
       pass =
         scale >= 0
           ? difference < threshold * 10n ** BigInt(scale)

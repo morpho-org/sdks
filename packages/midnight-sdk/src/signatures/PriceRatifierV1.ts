@@ -35,6 +35,7 @@ import {
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 import type { TreeData, TreeSnapshot } from "./treeTypes.js";
 
 const priceRatifierV1DataAbi = [
@@ -384,7 +385,7 @@ export namespace PriceRatifierV1 {
     const assignedOffers = assignRatifierV1Groups(normalized, groupId);
     const offers: Offer[] = [];
     const structs = normalized.map(({ allowedTaker }, index) => {
-      const offer = assignedOffers[index]!;
+      const offer = requireTreeItem(assignedOffers, index);
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), allowedTaker };
@@ -603,7 +604,7 @@ export namespace PriceRatifierV1 {
   }): Hex {
     const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
-    const entry = tree.entries[Number(proof.leafIndex)]!;
+    const entry = requireTreeItem(tree.entries, Number(proof.leafIndex));
 
     return encodeRatifierData({
       root: proof.root,
@@ -648,8 +649,8 @@ export namespace PriceRatifierV1 {
     });
 
     return tree.offers.map((offer, leafIndex) => {
-      const entry = tree.entries[leafIndex]!;
-      const proof = proofs[leafIndex]!;
+      const entry = requireTreeItem(tree.entries, leafIndex);
+      const proof = requireTreeItem(proofs, leafIndex);
 
       return {
         offer,

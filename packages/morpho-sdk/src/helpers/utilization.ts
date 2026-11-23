@@ -19,7 +19,9 @@ import {
  */
 export const resolveCapAccrualBuffer = (value?: BigIntish) => {
   const buffer = value == null ? DEFAULT_CAP_ACCRUAL_BUFFER : BigInt(value);
-  if (buffer < 0n) throw new NegativeInputError("capAccrualBuffer", buffer);
+  if (buffer < 0n) {
+    throw new NegativeInputError("capAccrualBuffer", buffer);
+  }
   return buffer;
 };
 
@@ -37,14 +39,16 @@ export const resolveCapAccrualBuffer = (value?: BigIntish) => {
  */
 export const resolveAllocatorCapHeadroom = (value?: bigint) => {
   const headroom = value ?? DEFAULT_ALLOCATOR_CAP_HEADROOM;
-  if (headroom < 0n)
+  if (headroom < 0n) {
     throw new NegativeInputError("allocatorCapHeadroom", headroom);
-  if (headroom > MathLib.WAD)
+  }
+  if (headroom > MathLib.WAD) {
     throw new InputExceedsMaxError({
       field: "allocatorCapHeadroom",
       value: headroom,
       max: MathLib.WAD,
     });
+  }
   return headroom;
 };
 
@@ -68,12 +72,15 @@ export const resolveMaxWithdrawalUtilization = (
     | "defaultMaxWithdrawalUtilization" = "maxWithdrawalUtilization",
 ) => {
   const utilization = value ?? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION;
-  if (utilization < 0n) throw new NegativeInputError(field, utilization);
-  if (utilization > MathLib.WAD)
+  if (utilization < 0n) {
+    throw new NegativeInputError(field, utilization);
+  }
+  if (utilization > MathLib.WAD) {
     throw new InputExceedsMaxError({
       field,
       value: utilization,
       max: MathLib.WAD,
     });
+  }
   return utilization;
 };

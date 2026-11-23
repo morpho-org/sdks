@@ -34,16 +34,100 @@ import type {
   MempoolPayloadValidationResult,
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
+  MidnightApiBookSide,
   MidnightApiBooksResult,
   MidnightApiBookTakeableOffersResult,
   MidnightApiClientParams,
   MidnightApiConfig,
   MidnightApiConstructorConfig,
   MidnightApiQuoteResult,
+  MidnightApiTake,
   MidnightApiTakeableOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
 } from "./types.js";
+
+interface QuoteSettlement {
+  readonly side: MidnightApiBookSide;
+  readonly settlementFee: bigint;
+  readonly takeableOffers: readonly MidnightApiTake[];
+}
+
+function computeQuoteFillByUnits(
+  { side, settlementFee, takeableOffers }: QuoteSettlement,
+  units: bigint,
+) {
+  let remainingUnits = units;
+  let filledUnits = 0n;
+  let filledAssets = 0n;
+  for (const take of takeableOffers) {
+    if (remainingUnits === 0n) {
+      break;
+    }
+    const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
+      offer: take.offer,
+      settlementFee,
+    });
+    const price = side === "asks" ? buyerPrice : sellerPrice;
+    const filled = take.units < remainingUnits ? take.units : remainingUnits;
+    filledUnits += filled;
+    filledAssets += MathLib.mulDiv(
+      filled,
+      price,
+      MathLib.WAD,
+      side === "asks" ? "Up" : "Down",
+    );
+    remainingUnits -= filled;
+  }
+  return { filledUnits, filledAssets };
+}
+
+function computeQuoteFillByAssets(
+  { side, settlementFee, takeableOffers }: QuoteSettlement,
+  assets: bigint,
+) {
+  let remainingAssets = assets;
+  let filledUnits = 0n;
+  let filledAssets = 0n;
+  for (const take of takeableOffers) {
+    if (remainingAssets === 0n) {
+      break;
+    }
+    const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
+      offer: take.offer,
+      settlementFee,
+    });
+    const makerPrice = side === "asks" ? sellerPrice : buyerPrice;
+    const settlementPrice = side === "asks" ? buyerPrice : sellerPrice;
+    const takeMakerAssets =
+      side === "asks"
+        ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
+        : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
+
+    const fillsEntireTake = takeMakerAssets <= remainingAssets;
+    const filled = fillsEntireTake
+      ? take.units
+      : MathLib.mulDiv(
+          remainingAssets,
+          MathLib.WAD,
+          makerPrice,
+          side === "asks" ? "Down" : "Up",
+        );
+    if (filled === 0n) {
+      continue;
+    }
+
+    filledUnits += filled;
+    filledAssets += MathLib.mulDiv(
+      filled,
+      settlementPrice,
+      MathLib.WAD,
+      side === "asks" ? "Up" : "Down",
+    );
+    remainingAssets = fillsEntireTake ? remainingAssets - takeMakerAssets : 0n;
+  }
+  return { filledUnits, filledAssets };
+}
 
 export type {
   FetchBookParams,
@@ -391,8 +475,9 @@ export class MidnightApi {
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
     const input = params;
-    if ((input.units == null) === (input.assets == null))
+    if ((input.units == null) === (input.assets == null)) {
       throw new InvalidMidnightApiQuoteTargetError();
+    }
     const settlementFee = BigInt(input.settlementFee ?? 0n);
     assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
@@ -438,76 +523,18 @@ export class MidnightApi {
       side: input.side,
       taker: input.taker,
     });
-    const averageWorstPrice =
-      "averageWorstPrice" in input && input.averageWorstPrice != null
-        ? input.averageWorstPrice
-        : "slippage" in input && input.slippage != null
-          ? responseAverageWorstPrice
-          : undefined;
-    const guard =
-      averageWorstPrice == null ? undefined : BigInt(averageWorstPrice);
+    let guard: bigint | undefined;
+    if ("averageWorstPrice" in input && input.averageWorstPrice != null) {
+      guard = BigInt(input.averageWorstPrice);
+    } else if ("slippage" in input && input.slippage != null) {
+      guard = BigInt(responseAverageWorstPrice);
+    }
     if (guard != null) {
-      let filledUnits = 0n;
-      let filledAssets = 0n;
-      if ("units" in input && input.units != null) {
-        let remainingUnits = BigInt(input.units);
-        for (const take of takeableOffers) {
-          if (remainingUnits === 0n) break;
-          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
-            offer: take.offer,
-            settlementFee,
-          });
-          const price = input.side === "asks" ? buyerPrice : sellerPrice;
-          const filled =
-            take.units < remainingUnits ? take.units : remainingUnits;
-          filledUnits += filled;
-          filledAssets += MathLib.mulDiv(
-            filled,
-            price,
-            MathLib.WAD,
-            input.side === "asks" ? "Up" : "Down",
-          );
-          remainingUnits -= filled;
-        }
-      } else {
-        let remainingAssets = BigInt(input.assets);
-        for (const take of takeableOffers) {
-          if (remainingAssets === 0n) break;
-          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
-            offer: take.offer,
-            settlementFee,
-          });
-          const makerPrice = input.side === "asks" ? sellerPrice : buyerPrice;
-          const settlementPrice =
-            input.side === "asks" ? buyerPrice : sellerPrice;
-          const takeMakerAssets =
-            input.side === "asks"
-              ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
-              : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
-
-          const fillsEntireTake = takeMakerAssets <= remainingAssets;
-          const filled = fillsEntireTake
-            ? take.units
-            : MathLib.mulDiv(
-                remainingAssets,
-                MathLib.WAD,
-                makerPrice,
-                input.side === "asks" ? "Down" : "Up",
-              );
-          if (filled === 0n) continue;
-
-          filledUnits += filled;
-          filledAssets += MathLib.mulDiv(
-            filled,
-            settlementPrice,
-            MathLib.WAD,
-            input.side === "asks" ? "Up" : "Down",
-          );
-          remainingAssets = fillsEntireTake
-            ? remainingAssets - takeMakerAssets
-            : 0n;
-        }
-      }
+      const settlement = { side: input.side, settlementFee, takeableOffers };
+      const { filledUnits, filledAssets } =
+        "units" in input && input.units != null
+          ? computeQuoteFillByUnits(settlement, BigInt(input.units))
+          : computeQuoteFillByAssets(settlement, BigInt(input.assets));
       if (filledUnits > 0n) {
         const averagePrice = MathLib.mulDiv(
           filledAssets,

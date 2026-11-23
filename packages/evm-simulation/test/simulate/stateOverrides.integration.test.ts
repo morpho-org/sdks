@@ -1,4 +1,4 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { type Address, hexToBigInt, toHex, zeroHash } from "viem";
 import { mainnet } from "viem/chains";
@@ -12,7 +12,7 @@ import {
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 const TARGET: Address = "0x0000000000000000000000000000000000001234";

@@ -34,8 +34,9 @@ import {
 const MAX_TIME_TO_MATURITY = 100n * 365n * 86_400n;
 
 function requirePublicationState<T>(value: T | undefined): T {
-  if (value === undefined)
+  if (value === undefined) {
     throw new UnknownDataError("Missing Midnight publication state.");
+  }
   return value;
 }
 
@@ -357,9 +358,75 @@ export async function fetchMidnightMakerOfferStates(params: {
     params.blockNumber ?? (await getBlockNumber(params.client));
   const block = await getBlock(params.client, { blockNumber });
   const midnight = getChainAddress(params.chainId, "midnight");
+  const targets = collectPublicationReadTargets(params.tree);
+  const { collaterals } = targets;
+  const values = await readPublicationContractState({
+    client: params.client,
+    midnight,
+    blockNumber,
+    targets,
+  });
+  const {
+    marketById,
+    consumedByGroup,
+    positionByOwner,
+    collateralStateByMarket,
+  } = indexPublicationContractState({ targets, values });
+  const codeByOracle = new Map(
+    await Promise.all(
+      [...new Set(collaterals.map(({ oracleKey }) => oracleKey))].map(
+        async (oracleKey) =>
+          [
+            oracleKey,
+            await getCode(params.client, {
+              address: requirePublicationState(
+                collaterals.find(({ oracleKey: key }) => key === oracleKey),
+              ).collateral.oracle,
+              blockNumber,
+            }),
+          ] as const,
+      ),
+    ),
+  );
+  const states = params.tree.offers.map((offer) => {
+    const id = MarketUtils.toId(offer.market);
+    const market = requirePublicationState(marketById.get(id.toLowerCase()));
+    const groupKey = `${offer.maker.toLowerCase()}:${offer.group.toLowerCase()}`;
+    const owner = requirePublicationState(
+      positionByOwner.get(`${id.toLowerCase()}:${offer.maker.toLowerCase()}`),
+    );
+    const uncreated = market.tickSpacing === 0;
+    const collateralStates = uncreated
+      ? requirePublicationState(collateralStateByMarket.get(id.toLowerCase()))
+      : [];
+    return {
+      consumed: requirePublicationState(consumedByGroup.get(groupKey)),
+      tickSpacing: market.tickSpacing,
+      continuousFee: BigInt(market.continuousFee),
+      credit: owner.credit,
+      debt: owner.debt,
+      market,
+      lltvEnabled: collateralStates.map(({ lltvEnabled }) => lltvEnabled),
+      liquidationCursorEnabled: collateralStates.map(
+        ({ liquidationCursorEnabled }) => liquidationCursorEnabled,
+      ),
+      oracleHasCode: uncreated
+        ? offerMarketParams(offer).collateralParams.map(
+            (collateral) =>
+              codeByOracle.get(collateral.oracle.toLowerCase()) !== undefined &&
+              codeByOracle.get(collateral.oracle.toLowerCase()) !== "0x",
+          )
+        : [],
+    };
+  });
+  return { states, now: block.timestamp };
+}
+
+/** Deduplicates the market, group, owner and collateral reads for a maker tree. @internal */
+function collectPublicationReadTargets(tree: Tree<"priceV1"> | Tree<"rateV1">) {
   const markets = [
     ...new Map(
-      params.tree.offers.map((offer) => {
+      tree.offers.map((offer) => {
         const market = MarketParams.from(offerMarketParams(offer));
         const id = MarketUtils.toId(market);
         return [id.toLowerCase(), { id, market }] as const;
@@ -368,7 +435,7 @@ export async function fetchMidnightMakerOfferStates(params: {
   ];
   const groups = [
     ...new Map(
-      params.tree.offers.map((offer) => [
+      tree.offers.map((offer) => [
         `${offer.maker.toLowerCase()}:${offer.group.toLowerCase()}`,
         { maker: offer.maker, group: offer.group },
       ]),
@@ -376,7 +443,7 @@ export async function fetchMidnightMakerOfferStates(params: {
   ];
   const owners = [
     ...new Map(
-      params.tree.offers.map((offer) => {
+      tree.offers.map((offer) => {
         const id = MarketUtils.toId(offer.market);
         return [
           `${id.toLowerCase()}:${offer.maker.toLowerCase()}`,
@@ -400,18 +467,26 @@ export async function fetchMidnightMakerOfferStates(params: {
       ]),
     ).values(),
   ];
-  const [
-    marketStates,
-    consumedValues,
-    creditValues,
-    debtValues,
-    defaultFees,
-    lltvEnabledByCollateral,
-    liquidationCursorEnabledByCollateral,
-  ] = await Promise.all([
+  return { markets, groups, owners, collaterals, defaultFeeTokens };
+}
+
+/** Reads contract state concurrently at the pinned publication block. @internal */
+async function readPublicationContractState({
+  client,
+  midnight,
+  blockNumber,
+  targets,
+}: {
+  readonly client: Client;
+  readonly midnight: Address;
+  readonly blockNumber: bigint;
+  readonly targets: ReturnType<typeof collectPublicationReadTargets>;
+}) {
+  const { markets, groups, owners, collaterals, defaultFeeTokens } = targets;
+  return Promise.all([
     Promise.all(
       markets.map(({ id }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "marketState" as const,
@@ -422,7 +497,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       groups.map(({ maker, group }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "consumed" as const,
@@ -433,7 +508,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       owners.map(({ id, maker }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "credit" as const,
@@ -444,7 +519,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       owners.map(({ id, maker }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "debt" as const,
@@ -455,7 +530,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       defaultFeeTokens.map((loanToken) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "defaultContinuousFee" as const,
@@ -466,7 +541,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       collaterals.map(({ collateral }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "isLltvEnabled" as const,
@@ -477,7 +552,7 @@ export async function fetchMidnightMakerOfferStates(params: {
     ),
     Promise.all(
       collaterals.map(({ collateral }) =>
-        readContract(params.client, {
+        readContract(client, {
           address: midnight,
           abi: midnightAbi,
           functionName: "isLiquidationCursorEnabled" as const,
@@ -487,6 +562,26 @@ export async function fetchMidnightMakerOfferStates(params: {
       ),
     ),
   ]);
+}
+
+/** Indexes validated contract results for per-offer publication state. @internal */
+function indexPublicationContractState({
+  targets,
+  values,
+}: {
+  readonly targets: ReturnType<typeof collectPublicationReadTargets>;
+  readonly values: Awaited<ReturnType<typeof readPublicationContractState>>;
+}) {
+  const { markets, groups, owners, collaterals, defaultFeeTokens } = targets;
+  const [
+    marketStates,
+    consumedValues,
+    creditValues,
+    debtValues,
+    defaultFees,
+    lltvEnabledByCollateral,
+    liquidationCursorEnabledByCollateral,
+  ] = values;
   const defaultFeeByLoanToken = new Map(
     defaultFeeTokens.map((loanToken, index) => [
       loanToken.toLowerCase(),
@@ -567,54 +662,12 @@ export async function fetchMidnightMakerOfferStates(params: {
       ),
     ]),
   );
-  const codeByOracle = new Map(
-    await Promise.all(
-      [...new Set(collaterals.map(({ oracleKey }) => oracleKey))].map(
-        async (oracleKey) =>
-          [
-            oracleKey,
-            await getCode(params.client, {
-              address: requirePublicationState(
-                collaterals.find(({ oracleKey: key }) => key === oracleKey),
-              ).collateral.oracle,
-              blockNumber,
-            }),
-          ] as const,
-      ),
-    ),
-  );
-  const states = params.tree.offers.map((offer) => {
-    const id = MarketUtils.toId(offer.market);
-    const market = requirePublicationState(marketById.get(id.toLowerCase()));
-    const groupKey = `${offer.maker.toLowerCase()}:${offer.group.toLowerCase()}`;
-    const owner = requirePublicationState(
-      positionByOwner.get(`${id.toLowerCase()}:${offer.maker.toLowerCase()}`),
-    );
-    const uncreated = market.tickSpacing === 0;
-    const collateralStates = uncreated
-      ? requirePublicationState(collateralStateByMarket.get(id.toLowerCase()))
-      : [];
-    return {
-      consumed: requirePublicationState(consumedByGroup.get(groupKey)),
-      tickSpacing: market.tickSpacing,
-      continuousFee: BigInt(market.continuousFee),
-      credit: owner.credit,
-      debt: owner.debt,
-      market,
-      lltvEnabled: collateralStates.map(({ lltvEnabled }) => lltvEnabled),
-      liquidationCursorEnabled: collateralStates.map(
-        ({ liquidationCursorEnabled }) => liquidationCursorEnabled,
-      ),
-      oracleHasCode: uncreated
-        ? offerMarketParams(offer).collateralParams.map(
-            (collateral) =>
-              codeByOracle.get(collateral.oracle.toLowerCase()) !== undefined &&
-              codeByOracle.get(collateral.oracle.toLowerCase()) !== "0x",
-          )
-        : [],
-    };
-  });
-  return { states, now: block.timestamp };
+  return {
+    marketById,
+    consumedByGroup,
+    positionByOwner,
+    collateralStateByMarket,
+  };
 }
 
 /**

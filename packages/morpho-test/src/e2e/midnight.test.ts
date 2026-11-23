@@ -1,4 +1,5 @@
 import {
+  InvalidMarketParameterError,
   MarketParams,
   Offer,
   OfferUtils,
@@ -36,6 +37,63 @@ describe("fundE2eMidnightWallets validation", () => {
       ).rejects.toThrow(E2eMidnightMarketRequiredError);
     },
   );
+
+  test("funds gas without a market when no assets are requested", async () => {
+    const mock = {
+      setCode: vi.fn().mockResolvedValue(undefined),
+      setBalance: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await fundE2eMidnightWallets(mock as unknown as AnvilTestClient<Chain>, {
+      wallets: { A: {} },
+    });
+
+    expect(mock.setCode).toHaveBeenCalledExactlyOnceWith({
+      address: E2E_MIDNIGHT_WALLETS.A,
+      bytecode: "0x",
+    });
+    expect(mock.setBalance).toHaveBeenCalledExactlyOnceWith({
+      address: E2E_MIDNIGHT_WALLETS.A,
+      value: parseEther("1"),
+    });
+  });
+
+  test("rejects missing markets before touching an earlier gas-only wallet", async () => {
+    const mock = {
+      setCode: vi.fn(),
+      setBalance: vi.fn(),
+    };
+
+    await expect(
+      fundE2eMidnightWallets(mock as unknown as AnvilTestClient<Chain>, {
+        wallets: { A: {}, B: { loanAssets: 1n } },
+      }),
+    ).rejects.toBeInstanceOf(E2eMidnightMarketRequiredError);
+
+    expect(mock.setCode).not.toHaveBeenCalled();
+    expect(mock.setBalance).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidMarketParameterError for empty collateral parameters", async () => {
+    const clientWithWalletSetup = {
+      setCode: vi.fn().mockResolvedValue(undefined),
+      setBalance: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AnvilTestClient<Chain>;
+    const market = {
+      collateralParams: [],
+    } as unknown as MarketParams;
+    const readMarket = vi.fn().mockReturnValueOnce(market);
+
+    await expect(
+      fundE2eMidnightWallets(clientWithWalletSetup, {
+        get market() {
+          return readMarket();
+        },
+        wallets: { A: { collateralAssets: 1n } },
+      }),
+    ).rejects.toBeInstanceOf(InvalidMarketParameterError);
+    expect(readMarket).toHaveBeenCalledOnce();
+  });
 });
 
 const offer = Offer.create({
@@ -65,9 +123,11 @@ const offer = Offer.create({
 });
 describe("fundE2eMidnightWallets collateral backing", () => {
   const token = "0xE2e0000000000000000000000000000000000004";
+  const params =
+    offer.market instanceof MarketParams ? offer.market : offer.market.params;
   const market = new MarketParams({
-    ...offer.market,
-    collateralParams: [{ ...offer.market.collateralParams[0]!, token }],
+    ...params,
+    collateralParams: [{ ...params.collateralParams[0]!, token }],
   });
 
   test.each([

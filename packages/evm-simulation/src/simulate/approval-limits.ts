@@ -19,10 +19,11 @@ const requiredAddress = (
   address: Address | null | undefined,
   name: string,
 ): Address => {
-  if (address == null || isAddressEqual(address, zeroAddress))
+  if (address == null || isAddressEqual(address, zeroAddress)) {
     throw new ApprovalCheckUnavailableError(
       `The chain registry does not provide a usable "${name}" address; approval checks cannot continue.`,
     );
+  }
   return address;
 };
 
@@ -33,10 +34,11 @@ const optionalAddress = (
 
 const operationToken = (operation: ResolvedApprovalOperation): Address => {
   const token = operation.approvalToken;
-  if (token === undefined)
+  if (token === undefined) {
     throw new ApprovalCheckUnavailableError(
       `Cannot resolve the token required by "${operation.limit.type}" at the pinned block.`,
     );
+  }
   return token;
 };
 
@@ -57,10 +59,11 @@ export function resolveApprovalLimits(params: {
     () => getChainAddresses(chainId),
     UnsupportedChainIdError,
   );
-  if (registry === undefined)
+  if (registry === undefined) {
     throw new ApprovalCheckUnavailableError(
       `The chain registry has no approval-check addresses for chain "${chainId}".`,
     );
+  }
 
   const morpho = requiredAddress(registry.blue, "blue");
   const permit2 = optionalAddress(registry.permit2);
@@ -76,61 +79,63 @@ export function resolveApprovalLimits(params: {
     const addToken = (token: Address, spender: Address) => {
       approvals.push({ type: "token", token, owner, spender });
     };
-    const addMidnightAuthorization = (authorized: Address) => {
-      // Throws: without the Midnight emitter, its grants cannot be checked.
-      requiredAddress(registry.midnight, "midnight");
-      approvals.push({
-        type: "midnightAuthorization",
-        onBehalf: owner,
-        authorized,
-      });
-    };
 
     switch (limit.type) {
       case "vaultV1Deposit":
       case "vaultV2Deposit":
         addToken(operationToken(operation), limit.vault);
-        if (vaultBundles !== undefined)
+        if (vaultBundles !== undefined) {
           addToken(operationToken(operation), vaultBundles);
-        if (permit2 !== undefined) addToken(operationToken(operation), permit2);
+        }
+        if (permit2 !== undefined) {
+          addToken(operationToken(operation), permit2);
+        }
         break;
       case "vaultV1Withdraw":
       case "vaultV1Redeem":
       case "vaultV2Withdraw":
       case "vaultV2Redeem":
-        if (vaultBundles !== undefined) addToken(limit.vault, vaultBundles);
+        if (vaultBundles !== undefined) {
+          addToken(limit.vault, vaultBundles);
+        }
         break;
       case "vaultV1InKindRedeem":
       case "vaultV2InKindRedeem":
       case "vaultV2ForceWithdraw":
-        if (vaultExitBundles !== undefined)
+        if (vaultExitBundles !== undefined) {
           addToken(limit.vault, vaultExitBundles);
+        }
         break;
       case "vaultV2ForceRedeem":
         break;
       case "vaultV1MigrateToV2":
-        if (vaultBundles !== undefined)
+        if (vaultBundles !== undefined) {
           addToken(limit.sourceVault, vaultBundles);
+        }
         break;
       case "blueSupply":
       case "blueRepay":
       case "blueRepayWithdrawCollateral":
       case "blueSupplyCollateral":
       case "blueSupplyCollateralBorrow":
-        if (blueBundles !== undefined)
+        if (blueBundles !== undefined) {
           addToken(operationToken(operation), blueBundles);
-        if (permit2 !== undefined) addToken(operationToken(operation), permit2);
+        }
+        if (permit2 !== undefined) {
+          addToken(operationToken(operation), permit2);
+        }
         addToken(operationToken(operation), morpho);
         if (
           blueBundles !== undefined &&
           (limit.type === "blueRepayWithdrawCollateral" ||
             limit.type === "blueSupplyCollateralBorrow")
-        )
+        ) {
           approvals.push({
             type: "morphoAuthorization",
             authorizer: owner,
             authorized: blueBundles,
           });
+        }
         break;
       case "blueBorrow":
       case "blueWithdraw":
@@ -152,16 +157,6 @@ export function resolveApprovalLimits(params: {
         }
         break;
       case "midnightSupplyCollateralBatch":
-        for (const token of new Set(
-          (operation.midnightApprovalTokens ?? []).map(
-            (approvalToken) => approvalToken.toLowerCase() as Address,
-          ),
-        )) {
-          addToken(token, requiredAddress(registry.midnight, "midnight"));
-        }
-        break;
-      case "midnightWithdrawCollateralBatch":
-        break;
       case "midnightRedeem":
       case "midnightTakeLend":
       case "midnightTakeBorrow":
@@ -172,29 +167,14 @@ export function resolveApprovalLimits(params: {
       case "midnightSupplyCollateral":
       case "midnightSupplyCollateralMakeBorrow":
       case "midnightSupplyBlueMakeLend":
-        addMidnightAuthorization(
-          requiredAddress(registry.midnightBundlesV2, "midnightBundlesV2"),
-        );
-        // Maker bundles with a borrow offer or Blue lend publish through a ratifier.
-        if (
-          limit.type === "midnightSupplyCollateralMakeBorrow" ||
-          limit.type === "midnightSupplyBlueMakeLend"
-        ) {
-          addMidnightAuthorization(
-            requiredAddress(registry.priceRatifierV1, "priceRatifierV1"),
-          );
-          addMidnightAuthorization(
-            requiredAddress(registry.rateRatifierV1, "rateRatifierV1"),
-          );
+        for (const approval of resolveMidnightApprovals(operation, {
+          owner,
+          registry,
+        })) {
+          approvals.push(approval);
         }
-        // Midnight pay-ins approve the paid token to Midnight or MidnightBundlesV2.
-        for (const token of operation.midnightApprovalTokens ?? []) {
-          addToken(token, requiredAddress(registry.midnight, "midnight"));
-          addToken(
-            token,
-            requiredAddress(registry.midnightBundlesV2, "midnightBundlesV2"),
-          );
-        }
+        break;
+      case "midnightWithdrawCollateralBatch":
         break;
       default: {
         const _exhaustive: never = limit;
@@ -219,4 +199,65 @@ export function resolveApprovalLimits(params: {
         : { ecrecoverAuthorizer: registry.ecrecoverAuthorizer }),
     },
   };
+}
+
+function resolveMidnightApprovals(
+  operation: ResolvedApprovalOperation,
+  {
+    owner,
+    registry,
+  }: { owner: Address; registry: ReturnType<typeof getChainAddresses> },
+): ApprovalLimit[] {
+  const { limit } = operation;
+  const approvals: ApprovalLimit[] = [];
+  const addToken = (token: Address, spender: Address) => {
+    approvals.push({ type: "token", token, owner, spender });
+  };
+  const addMidnightAuthorization = (authorized: Address) => {
+    // Throws: without the Midnight emitter, its grants cannot be checked.
+    requiredAddress(registry.midnight, "midnight");
+    approvals.push({
+      type: "midnightAuthorization",
+      onBehalf: owner,
+      authorized,
+    });
+  };
+
+  if (limit.type === "midnightSupplyCollateralBatch") {
+    // Append one approval per distinct collateral token.
+    for (const token of new Set(
+      (operation.midnightApprovalTokens ?? []).map(
+        (approvalToken) => approvalToken.toLowerCase() as Address,
+      ),
+    )) {
+      addToken(token, requiredAddress(registry.midnight, "midnight"));
+    }
+    return approvals;
+  }
+
+  // Append the bundle grant before any ratifier grants.
+  addMidnightAuthorization(
+    requiredAddress(registry.midnightBundlesV2, "midnightBundlesV2"),
+  );
+  // Maker bundles with a borrow offer or Blue lend publish through a ratifier.
+  if (
+    limit.type === "midnightSupplyCollateralMakeBorrow" ||
+    limit.type === "midnightSupplyBlueMakeLend"
+  ) {
+    addMidnightAuthorization(
+      requiredAddress(registry.priceRatifierV1, "priceRatifierV1"),
+    );
+    addMidnightAuthorization(
+      requiredAddress(registry.rateRatifierV1, "rateRatifierV1"),
+    );
+  }
+  // Midnight pay-ins approve the paid token to Midnight or MidnightBundlesV2.
+  for (const token of operation.midnightApprovalTokens ?? []) {
+    addToken(token, requiredAddress(registry.midnight, "midnight"));
+    addToken(
+      token,
+      requiredAddress(registry.midnightBundlesV2, "midnightBundlesV2"),
+    );
+  }
+  return approvals;
 }

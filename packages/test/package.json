@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/test",
   "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
-  "version": "2.14.0-next.1",
+  "version": "2.14.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -51,8 +51,8 @@
     }
   },
   "scripts": {
-    "prepublish": "pnpm build",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "prepublish": "bun run build",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
@@ -62,7 +62,7 @@
     "viem-tracer": "^1.8.0"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.5.0-0",
+    "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.6.0-0",
     "@playwright/test": "^1.48.1",
     "viem": "^2.21.10",
     "vitest": ">=2.1.2 <5.0.0"

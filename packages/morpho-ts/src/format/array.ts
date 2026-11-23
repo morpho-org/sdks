@@ -3,7 +3,7 @@ function formatItemsList(items: string[], lastSeparator: string): string {
     case 0:
       return "";
     case 1:
-      return items[0]!;
+      return items.join("");
     case 2:
       return `${items[0]} ${lastSeparator} ${items[1]}`;
     default:

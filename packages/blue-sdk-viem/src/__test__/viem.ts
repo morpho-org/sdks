@@ -42,16 +42,22 @@ export function mockDeploylessReads(
   reads: readonly (Hex | Error)[],
 ) {
   const base = handle.request.getMockImplementation();
-  if (base == null) throw new Error("mock client has no base implementation");
+  if (base == null) {
+    throw new Error("mock client has no base implementation");
+  }
 
   const queue = [...reads];
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
       const [tx] = (call.params ?? []) as [{ to?: Address }];
-      if (tx?.to == null && queue.length > 0) {
-        const next = queue.shift()!;
-        if (next instanceof Error) throw next;
-        return next;
+      if (tx?.to == null) {
+        const next = queue.shift();
+        if (next instanceof Error) {
+          throw next;
+        }
+        if (next != null) {
+          return next;
+        }
       }
     }
 
@@ -107,10 +113,14 @@ export function mockNativeBalance(
   balance: bigint,
 ) {
   const base = handle.request.getMockImplementation();
-  if (base == null) throw new Error("mock client has no base implementation");
+  if (base == null) {
+    throw new Error("mock client has no base implementation");
+  }
 
   handle.request.mockImplementation(async (call) => {
-    if (call.method === "eth_getBalance") return numberToHex(balance);
+    if (call.method === "eth_getBalance") {
+      return numberToHex(balance);
+    }
     return base(call);
   });
 }
@@ -124,6 +134,8 @@ export function extendRpc(
   fn: (call: Parameters<RpcHandler>[0], base: RpcHandler) => Promise<unknown>,
 ) {
   const base = handle.request.getMockImplementation();
-  if (base == null) throw new Error("mock client has no base implementation");
+  if (base == null) {
+    throw new Error("mock client has no base implementation");
+  }
   handle.request.mockImplementation((call) => fn(call, base));
 }

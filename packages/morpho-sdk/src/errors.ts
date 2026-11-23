@@ -71,6 +71,7 @@ export {
   InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
+  MissingLocalePartError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   RetriesExhaustedError,

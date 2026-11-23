@@ -191,7 +191,9 @@ export namespace OfferChainUtils {
       Number(maturityTimestamp - chainEndTimestamp) / SECONDS_PER_YEAR;
     const lowerRate = params.targetRate * (1 - FAVORABLE_RATE_DRIFT);
     /* v8 ignore next: positive finite targetRate validation keeps lowerRate positive for practical JS numbers. */
-    if (lowerRate <= 0) return [];
+    if (lowerRate <= 0) {
+      return [];
+    }
 
     const legs: FixedRateOfferChainLeg[] = [];
     let tauTop = tauInitial;
@@ -208,15 +210,23 @@ export namespace OfferChainUtils {
         priceInput = parseUnits(price.toFixed(18), 18);
       }
       const rawTick = TickLib.priceToTick(priceInput, 1n) - 1n;
-      if (rawTick < 0n || rawTick > MAX_TICK) break;
+      if (rawTick < 0n || rawTick > MAX_TICK) {
+        break;
+      }
 
       const tick = floorTickToSpacing(rawTick, tickSpacing);
-      if (legs.at(-1)?.tick === tick) break;
+      if (legs.at(-1)?.tick === tick) {
+        break;
+      }
 
       const tauMax = rateTau(tick, lowerRate);
       const tauMin = rateTau(tick, params.targetRate);
-      if (tauMin >= tauTop) break;
-      if (tauMin < tauStop) break;
+      if (tauMin >= tauTop) {
+        break;
+      }
+      if (tauMin < tauStop) {
+        break;
+      }
 
       const startTimestamp =
         maturityTimestamp -
@@ -369,7 +379,9 @@ export namespace OfferChainUtils {
 
     const tauCeiling = rateTau(ceilingTick, upperRate);
     let tauBottom = Math.max(tauStop, tauCeiling);
-    if (tauBottom >= tauInitial) return [];
+    if (tauBottom >= tauInitial) {
+      return [];
+    }
 
     const tauLegs: {
       readonly tick: bigint;
@@ -380,33 +392,30 @@ export namespace OfferChainUtils {
 
     for (; iteration < MAX_CHAIN_LEGS; iteration++) {
       const price = 1 / (1 + upperRate * tauBottom);
-      let priceInput: bigint;
-      if (!Number.isFinite(price) || price <= 0) {
-        priceInput = 0n;
-      } else {
-        /* v8 ignore next: positive rates that survive the grid-floor check keep lend-chain prices below one. */
-        if (price >= 1) {
-          priceInput = MathLib.WAD;
-        } else {
-          priceInput = parseUnits(price.toFixed(18), 18);
-        }
-      }
-      const rawTick = TickLib.priceToTick(priceInput, 1n);
+      const rawTick = TickLib.priceToTick(clampLendPrice(price), 1n);
       /* v8 ignore next: priceToTick returns in-range ticks; maxAlignedTick only tightens non-dividing spacing. */
-      if (rawTick < 0n || rawTick > MAX_TICK || rawTick > maxAlignedTick) break;
+      if (rawTick < 0n || rawTick > MAX_TICK || rawTick > maxAlignedTick) {
+        break;
+      }
 
       const alignedTick =
         ((rawTick + tickSpacing - 1n) / tickSpacing) * tickSpacing;
       /* v8 ignore next: non-dividing spacing boundary clamp is defensive; normal alignment is covered. */
       const tick = alignedTick < maxAlignedTick ? alignedTick : maxAlignedTick;
-      if (tauLegs.at(-1)?.tick === tick) break;
+      if (tauLegs.at(-1)?.tick === tick) {
+        break;
+      }
 
       const tauMax = rateTau(tick, params.targetRate);
       const tauMin = rateTau(tick, upperRate);
-      if (tauMax <= tauBottom) break;
+      if (tauMax <= tauBottom) {
+        break;
+      }
 
       tauLegs.push({ tick, tauMax, tauMin: Math.max(tauMin, tauBottom) });
-      if (tauMax >= tauInitial) break;
+      if (tauMax >= tauInitial) {
+        break;
+      }
 
       tauBottom = tauMax;
     }
@@ -421,7 +430,9 @@ export namespace OfferChainUtils {
     }
 
     const leftmostLeg = tauLegs.at(-1);
-    if (leftmostLeg && leftmostLeg.tauMax < tauInitial) return [];
+    if (leftmostLeg && leftmostLeg.tauMax < tauInitial) {
+      return [];
+    }
 
     return tauLegs
       .reverse()
@@ -527,10 +538,23 @@ function normalizeTimestamp(parameter: string, value: BigIntish) {
   return normalized;
 }
 
+function clampLendPrice(price: number): bigint {
+  if (!Number.isFinite(price) || price <= 0) {
+    return 0n;
+  }
+  /* v8 ignore next: positive rates that survive the grid-floor check keep lend-chain prices below one. */
+  if (price >= 1) {
+    return MathLib.WAD;
+  }
+  return parseUnits(price.toFixed(18), 18);
+}
+
 function rateTau(tick: bigint, rate: number): number {
   const price = Number(formatUnits(TickLib.tickToPrice(tick), 18));
   /* v8 ignore next: builders pass positive rates and discount ticks; this guards direct internal misuse. */
-  if (price <= 0 || price >= 1 || rate <= 0) return 0;
+  if (price <= 0 || price >= 1 || rate <= 0) {
+    return 0;
+  }
 
   return (1 / price - 1) / rate;
 }

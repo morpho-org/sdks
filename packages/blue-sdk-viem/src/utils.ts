@@ -64,17 +64,21 @@ export const isContractRevertError = (error: unknown): boolean => {
       if (
         cause instanceof ContractFunctionRevertedError ||
         cause instanceof ContractFunctionZeroDataError
-      )
+      ) {
         return true;
-      if (!(cause instanceof ExecutionRevertedError)) return false;
+      }
+      if (!(cause instanceof ExecutionRevertedError)) {
+        return false;
+      }
       if (
         cause.walk(
           (nested) =>
             nested instanceof RpcRequestError &&
             nested.code === ExecutionRevertedError.code,
         ) !== null
-      )
+      ) {
         return true;
+      }
 
       return !/gas required exceeds allowance/i.test(
         `${cause.details} ${cause.shortMessage}`,
@@ -146,8 +150,12 @@ export const isUndecodableResultError = (error: unknown): boolean =>
 export const catchRevertOnly =
   <T>(fallback: T) =>
   (error: unknown): T => {
-    if (isTransportError(error)) throw error;
-    if (isContractRevertError(error)) return fallback;
+    if (isTransportError(error)) {
+      throw error;
+    }
+    if (isContractRevertError(error)) {
+      return fallback;
+    }
     throw error;
   };
 
@@ -226,8 +234,9 @@ export const safeParseNumber = (value: number, decimals = 18) =>
  * ```
  */
 export const safeParseUnits = (strValue: string, decimals = 18) => {
-  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(strValue))
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(strValue)) {
     throw new InvalidNumberError(strValue);
+  }
 
   const negative = strValue.startsWith("-");
   const unsigned = strValue.replace(/^[-+]/, "");

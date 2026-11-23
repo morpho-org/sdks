@@ -5,6 +5,7 @@ import {
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
+  UnsupportedMarketIrmError,
 } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, erc5267Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
@@ -932,6 +933,26 @@ describe("MorphoBlue observed chain guards", () => {
 });
 
 describe("MorphoBlue position validation", () => {
+  test("error: UnsupportedMarketIrmError for exact-asset repayment", () => {
+    const entity = makeEntity();
+    const position = makePosition(marketParams);
+    const positionData = new AccrualPosition(
+      position,
+      new Market({ ...position.market, rateAtTarget: undefined }),
+    );
+    const now = positionData.market.lastUpdate + 1n;
+
+    expect(() =>
+      entity.repay({
+        userAddress,
+        positionData,
+        repayAssets: 1n,
+        now,
+        deadline: now + 60n,
+      }),
+    ).toThrow(UnsupportedMarketIrmError);
+  });
+
   test("error: MarketIdMismatchError across position-backed methods", () => {
     const entity = makeEntity();
     for (const [method, call] of getPositionWriteCalls(

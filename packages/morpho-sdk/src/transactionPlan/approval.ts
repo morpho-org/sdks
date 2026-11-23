@@ -1,4 +1,9 @@
-import { getPlanObject, validatePlanFields } from "./validation.js";
+import { InvalidTransactionPlanError } from "./error.js";
+import {
+  getPlanObject,
+  validatePlanField,
+  validatePlanFields,
+} from "./validation.js";
 
 /** @internal Validates the stored ERC-20 approval action's input shape. */
 export function validateApprovalPlanAction(
@@ -11,7 +16,17 @@ export function validateApprovalPlanAction(
     fields: {
       token: "address",
       spender: "address",
-      amount: "uint256 bigint",
     },
+  });
+  if ((inputs.assets === undefined) === (inputs.shares === undefined)) {
+    throw new InvalidTransactionPlanError({
+      path: `${path}.inputs`,
+      reason: "expected exactly one of assets or shares",
+    });
+  }
+  const field = inputs.assets === undefined ? "shares" : "assets";
+  validatePlanField(inputs[field], {
+    path: `${path}.inputs.${field}`,
+    type: "uint256 bigint",
   });
 }

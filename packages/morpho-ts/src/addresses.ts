@@ -233,10 +233,10 @@ const _addressesRegistry = {
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
 
     midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
-    midnightAdapterFactory: "0x797f6E11e55Fb115fE548Faa8F07152BA587bbd7",
-    midnightAdapterRateRatifierV1: "0x39c01afA4B3f827a0bfAa39cDC4610111f80BABc",
+    midnightAdapterFactory: "0xF2d0E464a66606f677395d6fb3327f2C44192Dd0",
+    midnightAdapterRateRatifierV1: "0x96C198659D55b9319f9B65b67df4682B2686bCf4",
     midnightAdapterPriceRatifierV1:
-      "0x8e38421bC293339798e9bD0c0a51690675D2f94b",
+      "0xbe432B472EE72c7dFB1D450d37f26494Af03eCCf",
     midnightBundlesV2: "0x0bF30B530f816a619C3F28a3b9f44C441122555D",
     midnightBlueBuyCallbackFactory:
       "0x7337f119Eca028bD39E0e543cEf71631D2333425",
@@ -1009,6 +1009,24 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x625Eb26d759ef8077202d4a5A63098B4B28616Db",
     wNative: "0xe538905cf8410324e03A5A23C1c177a474D59b2b",
   },
+  [ChainId.AlpenMainnet]: {
+    blue: "0x056Bc53136978BC5C4e5223376e5bb597acd1C7D",
+    adaptiveCurveIrm: "0xC11A0f6dB0613a088Bf73740430831647110Dcfa",
+    bundles: {
+      vaultExitBundlesV1: "0xDD1a91fA8bC97bd7622c387F503c800125075A90",
+      vaultBundlesV1: "0x9e6F4ca37eDe2E48FcecE993F9A3D79bcc07c6D7",
+      blueBundlesV1: "0xa3e4be8fB302A9674810300775a4FA6AAF8a9335",
+    },
+    vaultV2BluePublicAllocator: "0x85e56151Bb9eE1F85d023BfCb139C2154E56a7F8",
+    vaultV2Factory: "0xB2bEE825D90B50ab4c1b4e92a6DcD089AF974e29",
+    morphoMarketV1AdapterV2Factory:
+      "0x8aFAdE9d9EB5b7960F2A55FE69947B1DE63cd040",
+    morphoVaultV1AdapterFactory: "0xDD4cf297CA60990a2f32f5f9d3277b3012EEE216",
+    registryList: "0xe267BF3DEe2a0faEC4bCB603d83025eA43CB6b30",
+    chainlinkOracleFactory: "0xfbFB4190ea9dECB297cfb7813a3BCFb03F90cbF6",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
+    preLiquidationFactory: "0xd4e98ec7974F21c94069B155C49fFa5178398FFc",
+  },
 } as const;
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
@@ -1062,9 +1080,9 @@ const _deployments = {
     preLiquidationFactory: 23779056n,
 
     midnight: 48286884n,
-    midnightAdapterFactory: 52_510_848n,
-    midnightAdapterRateRatifierV1: 52_510_850n,
-    midnightAdapterPriceRatifierV1: 52_510_852n,
+    midnightAdapterFactory: 61_321_366n,
+    midnightAdapterRateRatifierV1: 61_321_319n,
+    midnightAdapterPriceRatifierV1: 61_321_329n,
     midnightBundlesV2: 52_251_677n,
     midnightBlueBuyCallbackFactory: 49_544_552n,
     midnightMempool: 48286884n,
@@ -1665,6 +1683,23 @@ const _deployments = {
     chainlinkOracleFactory: 73_110_334n,
     wNative: 40_894n,
   },
+  [ChainId.AlpenMainnet]: {
+    blue: 1_531_751n,
+    adaptiveCurveIrm: 1_531_751n,
+    bundles: {
+      vaultExitBundlesV1: 1_531_763n,
+      vaultBundlesV1: 1_531_762n,
+      blueBundlesV1: 1_531_764n,
+    },
+    vaultV2BluePublicAllocator: 1_531_761n,
+    vaultV2Factory: 1_531_755n,
+    morphoMarketV1AdapterV2Factory: 1_531_757n,
+    morphoVaultV1AdapterFactory: 1_531_760n,
+    registryList: 1_531_759n,
+    chainlinkOracleFactory: 1_531_752n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
+    preLiquidationFactory: 1_531_753n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
@@ -1709,7 +1744,9 @@ type RegistryInput<
  */
 export const getChainAddresses = (chainId: number): ChainAddresses => {
   const chainAddresses = blueAddresses[chainId];
-  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
+  if (chainAddresses == null) {
+    throw new UnsupportedChainIdError(chainId);
+  }
 
   return chainAddresses;
 };
@@ -1735,7 +1772,9 @@ export const getChainAddress = (
   label: AddressLabel,
 ): `0x${string}` => {
   const chainAddresses = blueAddresses[chainId];
-  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
+  if (chainAddresses == null) {
+    throw new UnsupportedChainIdError(chainId);
+  }
 
   let address: unknown = chainAddresses;
   for (const key of label.split(".")) {
@@ -1747,8 +1786,9 @@ export const getChainAddress = (
     address = address[key];
   }
 
-  if (typeof address !== "string")
+  if (typeof address !== "string") {
     throw new UnknownAddressError({ chainId, label: String(label) });
+  }
 
   return address as `0x${string}`;
 };
@@ -1925,7 +1965,9 @@ export function getUnwrappedToken(
   chainId: number,
 ) {
   const mapping = unwrappedTokensMapping[chainId];
-  if (mapping == null || wrappedToken == null) return undefined;
+  if (mapping == null || wrappedToken == null) {
+    return undefined;
+  }
 
   return (
     mapping[wrappedToken] ??
@@ -2052,7 +2094,9 @@ const isRegistryPrimitive = (value: unknown): value is RegistryPrimitive =>
   ["string", "bigint", "number", "boolean"].includes(typeof value);
 
 const cloneRegistryValue = <T>(value: T): T => {
-  if (!isRecord(value)) return value;
+  if (!isRecord(value)) {
+    return value;
+  }
 
   const next: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
@@ -2063,9 +2107,13 @@ const cloneRegistryValue = <T>(value: T): T => {
 };
 
 const canonicalizeRegistryValue = <T>(value: T): T => {
-  if (typeof value === "string") return getChecksumAddress(value) as T;
+  if (typeof value === "string") {
+    return getChecksumAddress(value) as T;
+  }
 
-  if (!isRecord(value)) return value;
+  if (!isRecord(value)) {
+    return value;
+  }
 
   const next: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
@@ -2088,8 +2136,9 @@ const areRegistryValuesEqual = ({
     type === "address" &&
     typeof base === "string" &&
     typeof patch === "string"
-  )
+  ) {
     return base.toLowerCase() === patch.toLowerCase();
+  }
 
   return base === patch;
 };
@@ -2109,8 +2158,9 @@ const assertRequiredBlueRegistry = ({
     isRecord(entry) &&
     typeof entry.blue === requiredValueType &&
     typeof entry.adaptiveCurveIrm === requiredValueType
-  )
+  ) {
     return;
+  }
 
   throw new IncompleteChainRegistryError({
     chainId,
@@ -2129,7 +2179,9 @@ const mergeRegistry = <T>({
   label: string;
   type: string;
 }): T => {
-  if (patch === undefined) return base;
+  if (patch === undefined) {
+    return base;
+  }
 
   if (isRecord(base) && isRecord(patch)) {
     const next: Record<string, unknown> = { ...base };
@@ -2252,135 +2304,145 @@ export function registerCustomAddresses<
     ChainDeployments
   >;
 } = {}) {
-  let nextAddresses: AddressRegistry | undefined;
-  let nextDeployments: DeploymentRegistry | undefined;
-  let nextUnwrappedTokens: typeof unwrappedTokensMapping | undefined;
-
-  if (customAddresses) {
-    const nextRegistry: Record<number, ChainAddresses> = {
-      ...addressesRegistry,
-    };
-
-    for (const [chainIdString, requestedAddresses] of Object.entries(
-      customAddresses,
-    )) {
-      const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = canonicalizeRegistryValue(requestedAddresses);
-
-      if (registeredEntry == null) {
-        assertRequiredBlueRegistry({
-          chainId,
-          entry: requestedEntry,
-          type: "address",
-        });
-      }
-
-      nextRegistry[chainId] =
-        registeredEntry == null
-          ? (requestedEntry as ChainAddresses)
-          : mergeRegistry({
-              base: registeredEntry,
-              patch: requestedEntry,
-              label: String(chainId),
-              type: "address",
-            });
-    }
-
-    nextAddresses = deepFreeze(nextRegistry) as AddressRegistry;
-  }
-
-  if (customDeployments) {
-    const nextRegistry: Record<number, ChainDeployments> = {
-      ...deployments,
-    };
-
-    for (const [chainIdString, requestedDeployments] of Object.entries(
-      customDeployments,
-    )) {
-      const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = cloneRegistryValue(requestedDeployments);
-
-      if (registeredEntry == null) {
-        assertRequiredBlueRegistry({
-          chainId,
-          entry: requestedEntry,
-          type: "deployment",
-        });
-      }
-
-      nextRegistry[chainId] =
-        registeredEntry == null
-          ? (requestedEntry as ChainDeployments)
-          : mergeRegistry({
-              base: registeredEntry,
-              patch: requestedEntry,
-              label: String(chainId),
-              type: "deployment",
-            });
-    }
-
-    nextDeployments = deepFreeze(nextRegistry) as DeploymentRegistry;
-  }
-
-  if (unwrappedTokens) {
-    // Patch keys that differ only by case from a registered key (or from an earlier key of the same
-    // patch) are rewritten onto that key, and values that differ only by case from the registered
-    // value are rewritten onto that value, so `mergeRegistry` compares the same token instead of
-    // adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
-    const alignedUnwrappedTokens = fromEntries(
-      entries(unwrappedTokens).map(([chainIdString, tokens]) => {
-        const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
-        const registeredKeys = keys(registered);
-        const aligned: Record<`0x${string}`, `0x${string}`> = {};
-
-        for (const [wrapped, unwrapped] of entries(tokens)) {
-          const wrappedChecksum = getChecksumAddress(wrapped);
-          const unwrappedChecksum = getChecksumAddress(unwrapped);
-          const key =
-            [...registeredKeys, ...keys(aligned)].find((candidate) =>
-              isHexEqual(candidate, wrappedChecksum),
-            ) ?? wrappedChecksum;
-          const previous = aligned[key] ?? registered[key];
-
-          if (
-            previous !== undefined &&
-            !isHexEqual(previous, unwrappedChecksum)
-          )
-            throw new RegistryValueAlreadyRegisteredError({
-              label: `unwrappedTokens.${chainIdString}.${key}`,
-              registeredValue: previous,
-              requestedValue: unwrappedChecksum,
-              type: "unwrapped token",
-            });
-
-          aligned[key] = previous ?? unwrappedChecksum;
-        }
-
-        return [chainIdString, aligned] as const;
-      }),
-    );
-
-    nextUnwrappedTokens = deepFreeze(
-      mergeRegistry({
-        base: unwrappedTokensMapping,
-        patch: alignedUnwrappedTokens,
-        label: "unwrappedTokens",
-        type: "unwrapped token",
-      }),
-    );
-  }
+  const nextAddresses =
+    customAddresses && prepareCustomAddresses(customAddresses);
+  const nextDeployments =
+    customDeployments && prepareCustomDeployments(customDeployments);
+  const nextUnwrappedTokens =
+    unwrappedTokens && prepareUnwrappedTokens(unwrappedTokens);
 
   if (nextAddresses) {
     addressesRegistry = nextAddresses;
     refreshAddressViews();
   }
-
   if (nextDeployments) {
     deployments = nextDeployments;
     refreshDeploymentViews();
   }
+  if (nextUnwrappedTokens) {
+    unwrappedTokensMapping = nextUnwrappedTokens;
+  }
+}
 
-  if (nextUnwrappedTokens) unwrappedTokensMapping = nextUnwrappedTokens;
+function prepareCustomAddresses(
+  customAddresses: Record<number, unknown>,
+): AddressRegistry {
+  const nextRegistry: Record<number, ChainAddresses> = {
+    ...addressesRegistry,
+  };
+
+  for (const [chainIdString, requestedAddresses] of Object.entries(
+    customAddresses,
+  )) {
+    const chainId = Number(chainIdString);
+    const registeredEntry = nextRegistry[chainId];
+    const requestedEntry = canonicalizeRegistryValue(requestedAddresses);
+
+    if (registeredEntry == null) {
+      assertRequiredBlueRegistry({
+        chainId,
+        entry: requestedEntry,
+        type: "address",
+      });
+    }
+
+    nextRegistry[chainId] =
+      registeredEntry == null
+        ? (requestedEntry as ChainAddresses)
+        : mergeRegistry({
+            base: registeredEntry,
+            patch: requestedEntry,
+            label: String(chainId),
+            type: "address",
+          });
+  }
+
+  return deepFreeze(nextRegistry) as AddressRegistry;
+}
+
+function prepareCustomDeployments(
+  customDeployments: Record<number, unknown>,
+): DeploymentRegistry {
+  const nextRegistry: Record<number, ChainDeployments> = {
+    ...deployments,
+  };
+
+  for (const [chainIdString, requestedDeployments] of Object.entries(
+    customDeployments,
+  )) {
+    const chainId = Number(chainIdString);
+    const registeredEntry = nextRegistry[chainId];
+    const requestedEntry = cloneRegistryValue(requestedDeployments);
+
+    if (registeredEntry == null) {
+      assertRequiredBlueRegistry({
+        chainId,
+        entry: requestedEntry,
+        type: "deployment",
+      });
+    }
+
+    nextRegistry[chainId] =
+      registeredEntry == null
+        ? (requestedEntry as ChainDeployments)
+        : mergeRegistry({
+            base: registeredEntry,
+            patch: requestedEntry,
+            label: String(chainId),
+            type: "deployment",
+          });
+  }
+
+  return deepFreeze(nextRegistry) as DeploymentRegistry;
+}
+
+function prepareUnwrappedTokens(
+  unwrappedTokens: Record<number, Record<`0x${string}`, `0x${string}`>>,
+) {
+  // Patch keys that differ only by case from a registered key (or from an earlier key of the same
+  // patch) are rewritten onto that key, and values that differ only by case from the registered
+  // value are rewritten onto that value, so `mergeRegistry` compares the same token instead of
+  // adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
+  const alignedUnwrappedTokens = fromEntries(
+    entries(unwrappedTokens).map(([chainIdString, tokens]) => {
+      const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
+      const registeredKeys = keys(registered);
+      const aligned: Record<`0x${string}`, `0x${string}`> = {};
+
+      for (const [wrapped, unwrapped] of entries(tokens)) {
+        const wrappedChecksum = getChecksumAddress(wrapped);
+        const unwrappedChecksum = getChecksumAddress(unwrapped);
+        const key =
+          [...registeredKeys, ...keys(aligned)].find((candidate) =>
+            isHexEqual(candidate, wrappedChecksum),
+          ) ?? wrappedChecksum;
+        const previous = aligned[key] ?? registered[key];
+
+        if (
+          previous !== undefined &&
+          !isHexEqual(previous, unwrappedChecksum)
+        ) {
+          throw new RegistryValueAlreadyRegisteredError({
+            label: `unwrappedTokens.${chainIdString}.${key}`,
+            registeredValue: previous,
+            requestedValue: unwrappedChecksum,
+            type: "unwrapped token",
+          });
+        }
+
+        aligned[key] = previous ?? unwrappedChecksum;
+      }
+
+      return [chainIdString, aligned] as const;
+    }),
+  );
+
+  return deepFreeze(
+    mergeRegistry({
+      base: unwrappedTokensMapping,
+      patch: alignedUnwrappedTokens,
+      label: "unwrappedTokens",
+      type: "unwrapped token",
+    }),
+  );
 }

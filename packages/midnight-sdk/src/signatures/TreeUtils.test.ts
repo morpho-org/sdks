@@ -244,9 +244,10 @@ describe("Tree.mempoolValidate", () => {
         maxAssets: 1_000n,
       }),
     ]);
-    const signature = await account.signTypedData(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
-    );
+    const signature = await account.signTypedData<
+      Record<string, unknown>,
+      "OfferTree"
+    >(EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }));
 
     await tree.mempoolValidate({
       chainId: 8453,
@@ -378,9 +379,10 @@ describe("TreeUtils.mempoolValidate", () => {
         maxAssets: 1_000n,
       }),
     ]);
-    const signature = await account.signTypedData(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
-    );
+    const signature = await account.signTypedData<
+      Record<string, unknown>,
+      "OfferTree"
+    >(EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }));
 
     await TreeUtils.mempoolValidate({
       chainId: 8453,

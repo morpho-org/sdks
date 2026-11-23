@@ -1,6 +1,11 @@
 import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import { MathLib, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -20,15 +25,21 @@ import { describe, expect } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../../src/abis.js";
 import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../../src/constants.js";
 import {
+  applySignatures,
+  buildTransactions,
   computeMinForceWithdrawSharePrice,
   computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
+  getPendingSignatureRequests,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
+  parseTransactionPlan,
+  prepareVaultV2ForceWithdraw,
   previewVaultV2ForceWithdraw,
   resolveVaultV2ForceWithdrawEligibility,
+  serializeTransactionPlan,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
   vaultV2ForceWithdraw,
@@ -49,7 +60,7 @@ const setupMarkets = [CbbtcUsdcBlue, WbtcUsdcSourceMarket] as const;
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_720_868n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 const balances = async (client: AnvilTestClient, vault: Address) => {
@@ -101,6 +112,156 @@ const requiredForceWithdrawAllowance = ({
 };
 
 describe("MorphoVaultV2.forceWithdraw integration", () => {
+  for (const branch of ["allowance", "approval", "permit"] as const) {
+    test(`TransactionPlan executes a restored forced exit with ${branch}`, async ({
+      client,
+    }) => {
+      const {
+        vault: vaultAddress,
+        adapter,
+        depositAndAllocate,
+      } = await setUpSingleAdapterVaultV2(client, {
+        asset: USDC,
+        markets: setupMarkets,
+        forceDeallocatePenalty: ONE_PERCENT,
+      });
+      await depositAndAllocate({
+        assets: parseUnits("1000", 6),
+        perMarket: [
+          { market: CbbtcUsdcBlue, assets: parseUnits("600", 6) },
+          { market: WbtcUsdcSourceMarket, assets: parseUnits("400", 6) },
+        ],
+      });
+      // Permit encoding checks wall time after async reads; advance only the local fork clock.
+      await client.setNextBlockTimestamp({ timestamp: Time.timestamp() });
+      await client.mine({ blocks: 1 });
+      const vault = client
+        .extend(morphoViemExtension({ supportSignature: branch === "permit" }))
+        .morpho.vaultV2(vaultAddress, mainnet.id);
+      const vaultData = await vault.getData();
+      expect(vaultData.assetBalance).toBe(0n);
+      const now = await client.timestamp();
+      const exitAssets = parseUnits("900", 6);
+      const deadline = now + 7200n;
+      const handle = withChainTimestamp(now, () =>
+        vault.forceWithdraw({
+          exitAssets,
+          vaultData,
+          userAddress: client.account.address,
+          deadline,
+        }),
+      );
+      if (branch === "allowance") {
+        const hash = await client.writeContract({
+          address: vaultAddress,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [handle.buildTx().to, maxUint256],
+        });
+        await client.waitForTransactionReceipt({ hash });
+      }
+      let plan = await withChainTimestamp(now, () =>
+        prepareVaultV2ForceWithdraw(client, {
+          chainId: mainnet.id,
+          account: client.account.address,
+          assets: exitAssets,
+          vault: vaultData,
+          expiresAt: Number(deadline),
+          supportSignature: branch === "permit",
+        }),
+      );
+      expect(plan.steps.map(({ action }) => action.type)).toEqual(
+        branch === "approval"
+          ? ["erc20Approval", "vaultV2ForceWithdraw"]
+          : ["vaultV2ForceWithdraw"],
+      );
+      expect(plan.signatureRequests.map(({ kind }) => kind)).toEqual(
+        branch === "permit" ? ["permit"] : [],
+      );
+      if (branch === "approval") {
+        expect(plan.steps[0]?.action).toMatchObject({
+          inputs: { spender: handle.buildTx().to, shares: maxUint256 },
+        });
+      }
+      const requirements = await withChainTimestamp(now, () =>
+        handle.getRequirements(),
+      );
+      const signatures = await Promise.all(
+        requirements
+          .filter(isRequirementSignature)
+          .map((requirement) =>
+            requirement.sign(client, client.account.address),
+          ),
+      );
+      const planSignatures = await Promise.all(
+        getPendingSignatureRequests(plan).map(async ({ id, typedData }) => ({
+          id,
+          signature: await client.signTypedData({
+            ...typedData,
+            account: client.account,
+          }),
+        })),
+      );
+      plan = applySignatures(plan, planSignatures);
+      // Resume without the entity or its client: building only consumes the parsed plan.
+      const restored = parseTransactionPlan(serializeTransactionPlan(plan));
+      const transactions = buildTransactions(restored);
+      expect(transactions).toEqual(buildTransactions(plan));
+      const expected = handle.buildTx(signatures);
+      expect(transactions.at(-1)).toMatchObject({
+        to: expected.to,
+        data: expected.data,
+        value: expected.value,
+      });
+      const preview = previewVaultV2ForceWithdraw(vaultData, {
+        requestedExitAssets: exitAssets,
+        timestamp: now,
+      });
+      if (!preview) throw new Error("Expected an exitable vault");
+      const initial = await balances(client, vaultAddress);
+      for (const transaction of transactions) {
+        const hash = await client.sendTransaction(transaction);
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        if (transaction.action.type === "vaultV2ForceWithdraw") {
+          const deallocations = parseEventLogs({
+            abi: vaultV2Abi,
+            logs: receipt.logs,
+            eventName: "ForceDeallocate",
+          });
+          expect(deallocations.length).toBeGreaterThan(0);
+          expect(
+            deallocations.every(({ args }) =>
+              isAddressEqual(args.adapter, adapter),
+            ),
+          ).toBe(true);
+          expect(
+            deallocations.reduce((total, { args }) => total + args.assets, 0n),
+          ).toBe(exitAssets - preview.penaltyAssets);
+          for (const { args } of deallocations) {
+            expect(args.penaltyAssets).toBe(
+              MathLib.wMulUp(args.assets, ONE_PERCENT),
+            );
+          }
+          const penaltyAssets = deallocations.reduce(
+            (total, { args }) => total + args.penaltyAssets,
+            0n,
+          );
+          expect(penaltyAssets).toBeGreaterThanOrEqual(preview.penaltyAssets);
+          expect(penaltyAssets - preview.penaltyAssets).toBeLessThan(
+            BigInt(deallocations.length),
+          );
+        }
+      }
+      const final = await balances(client, vaultAddress);
+      expect(final.assets - initial.assets).toBe(preview.netAssets);
+      expect(preview.penaltyAssets).toBeGreaterThan(0n);
+      expect(initial.shares - final.shares).toBeGreaterThan(0n);
+      expect(
+        (preview.netAssets * MathLib.RAY) / (initial.shares - final.shares),
+      ).toBeGreaterThanOrEqual(expected.action.args.minSharePriceE27);
+    });
+  }
+
   test("delivers the penalty-adjusted assets across two markets", async ({
     client,
   }) => {

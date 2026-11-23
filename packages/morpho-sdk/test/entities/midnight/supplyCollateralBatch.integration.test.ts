@@ -4,7 +4,7 @@ import {
   midnightAbi,
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { BASE_FORK_BLOCK, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -21,7 +21,7 @@ import { midnightSupplyCollateralBatch } from "../../../src/index.js";
 
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });
 

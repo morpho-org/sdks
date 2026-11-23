@@ -5,7 +5,7 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -34,7 +34,7 @@ import { seededVaultData } from "../setup.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 26_355_500n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ VAULT: Address }>({
   VAULT: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });

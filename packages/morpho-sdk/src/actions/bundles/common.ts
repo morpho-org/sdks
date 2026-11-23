@@ -157,13 +157,13 @@ export const resolveBundlesFunding = (
   const assets = amount ?? nativeAmount ?? 0n;
   if (assets < 0n) {
     throw new NegativeInputError(
-      amount != null ? "amount" : "nativeAmount",
+      amount == null ? "nativeAmount" : "amount",
       assets,
     );
   }
   if (assets === 0n) {
     throw new NonPositiveInputError(
-      amount != null ? "amount" : "nativeAmount",
+      amount == null ? "nativeAmount" : "amount",
       assets,
     );
   }
@@ -209,10 +209,13 @@ export const getBundlesTokenPermit = (params: {
   readonly requirementSignature?: TokenRequirementSignature;
 }): BundlesTokenPermit => {
   const { requirementSignature } = params;
-  if (requirementSignature == null) return { ...EMPTY_TOKEN_PERMIT };
+  if (requirementSignature == null) {
+    return { ...EMPTY_TOKEN_PERMIT };
+  }
   const { type } = requirementSignature.action;
-  if (type !== "permit" && type !== "permit2SignatureTransfer")
+  if (type !== "permit" && type !== "permit2SignatureTransfer") {
     throw new UnsupportedRequirementSignatureError(type);
+  }
   if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
     throw new DepositOwnerMismatchError(
       params.userAddress,
@@ -528,8 +531,12 @@ export const selectBundlesTokenRequirementSignature = (
     readonly deadline: bigint;
   },
 ): BundlesTokenRequirementSignature | undefined => {
-  if (signatures == null) return undefined;
-  if (signatures.length === 0) return undefined;
+  if (signatures == null) {
+    return undefined;
+  }
+  if (signatures.length === 0) {
+    return undefined;
+  }
   const selected = signatures.filter(
     (signature): signature is BundlesTokenRequirementSignature =>
       signature.action.type === "permit" ||
@@ -549,7 +556,9 @@ export const selectBundlesTokenRequirementSignature = (
     throw new AmbiguousRequirementSignaturesError("permit", selected.length);
   }
   const selectedSignature = selected[0];
-  if (selectedSignature == null) return undefined;
+  if (selectedSignature == null) {
+    return undefined;
+  }
   const { action } = selectedSignature;
   if (!isAddressEqual(action.args.spender, expected.spender)) {
     throw new BundlesPermitMismatchError({
@@ -559,9 +568,9 @@ export const selectBundlesTokenRequirementSignature = (
     });
   }
   const actualAmount =
-    selectedSignature.args.amount !== expected.amount
-      ? selectedSignature.args.amount
-      : action.args.amount;
+    selectedSignature.args.amount === expected.amount
+      ? action.args.amount
+      : selectedSignature.args.amount;
   if (actualAmount !== expected.amount) {
     throw new BundlesPermitMismatchError({
       field: "amount",
@@ -570,9 +579,9 @@ export const selectBundlesTokenRequirementSignature = (
     });
   }
   const actualDeadline =
-    selectedSignature.args.deadline !== expected.deadline
-      ? selectedSignature.args.deadline
-      : action.args.deadline;
+    selectedSignature.args.deadline === expected.deadline
+      ? action.args.deadline
+      : selectedSignature.args.deadline;
   if (actualDeadline !== expected.deadline) {
     throw new BundlesPermitMismatchError({
       field: "deadline",
@@ -618,7 +627,9 @@ export const selectBundlesSharesPermitSignature = (
   },
 ): Erc2612RequirementSignature | undefined => {
   const { permit } = selectRequirementSignatures(signatures, { permit: true });
-  if (permit == null) return undefined;
+  if (permit == null) {
+    return undefined;
+  }
   const { action } = permit;
   if (action.type !== "permit") {
     throw new BundlesPermitMismatchError({

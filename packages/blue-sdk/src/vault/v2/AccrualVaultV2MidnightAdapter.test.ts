@@ -40,6 +40,7 @@ const SECOND_ID = `0x${"02".padStart(64, "0")}` as const;
 function adapterInput() {
   return {
     ...vaultV2AdapterInput({ address: ADDRESS }),
+    type: "VaultV2MidnightAdapter" as const,
     asset: ADDRESS,
     midnight: OTHER,
     marketIds: [],
@@ -50,7 +51,7 @@ function adapterInput() {
     minNetBuyRate: 0n,
     maxNetSellRate: 0n,
     shortfallAllowance: 0n,
-    enterGateFactory: "0x0000000000000000000000000000000000000000",
+    enterGateFactory: zeroAddress,
   };
 }
 
@@ -111,6 +112,29 @@ function accrualAdapter(
 }
 
 describe("AccrualVaultV2MidnightAdapter", () => {
+  test("behavior: realAssets does not discount backward before lastUpdate", () => {
+    const adapter = accrualAdapter();
+    const snapshotAssets = adapter.realAssets(adapter.lastUpdate);
+
+    expect(snapshotAssets).toBe(500n);
+    expect(adapter.realAssets(adapter.lastUpdate - 1n)).toBe(snapshotAssets);
+    expect(adapter.realAssets(0n)).toBe(snapshotAssets);
+  });
+
+  test("behavior: realAssets is non-decreasing from lastUpdate through maturity", () => {
+    const adapter = accrualAdapter();
+    const timestamps = [adapter.lastUpdate, 150n, 199n, 200n, 250n];
+    let previousAssets = adapter.realAssets(adapter.lastUpdate);
+
+    for (const timestamp of timestamps) {
+      const assets = adapter.realAssets(timestamp);
+      expect(assets).toBeGreaterThanOrEqual(previousAssets);
+      previousAssets = assets;
+    }
+
+    expect(previousAssets).toBe(1_000n);
+  });
+
   test("exposes normalized bigint position and loss-factor values", () => {
     const adapter = accrualAdapter();
 
@@ -561,6 +585,7 @@ describe("AccrualVaultV2MidnightAdapter", () => {
     const blueAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...vaultV2AdapterInput({ address: ADAPTER }),
+        type: "VaultV2MorphoMarketV1AdapterV2",
         marketIds: [blueMarket.id],
         adaptiveCurveIrm: RECIPIENT,
         supplyShares: { [blueMarket.id]: 100_000_000n },

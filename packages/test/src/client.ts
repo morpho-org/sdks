@@ -157,6 +157,325 @@ export type DepositParameters<
   "abi" | "functionName"
 >;
 
+const createBaseAnvilClient = <chain extends Chain>(
+  transport: HttpTransport,
+  chain: chain,
+) =>
+  createTestClient({
+    chain,
+    mode: "anvil",
+    account: testAccount(),
+    // Anvil forwards a receipt lookup it can't answer to the fork RPC, which can
+    // take seconds to return null for a hash only Anvil knows. `txpool_content` is
+    // answered locally, so answer null for a pooled transaction without asking
+    // Anvil. This also covers viem-tracer's receipt check after each send.
+    transport: traced((parameters) => {
+      const { request, ...rest } = transport(parameters);
+
+      return {
+        ...rest,
+        request: async (args, options) => {
+          if (args.method === "eth_getTransactionReceipt") {
+            const [hash] = args.params as [Hash];
+            const { pending, queued } = (await request({
+              method: "txpool_content",
+            })) as GetTxpoolContentReturnType;
+            const isPooled = [pending, queued].some((pool) =>
+              Object.values(pool).some((txs) =>
+                Object.values(txs).some((tx) => tx.hash === hash),
+              ),
+            );
+            if (isPooled) {
+              return null;
+            }
+          }
+
+          return request(args, options);
+        },
+      } as ReturnType<HttpTransport>;
+    }),
+    cacheTime: Number.POSITIVE_INFINITY,
+    pollingInterval: 50,
+  })
+    .extend(dealActions)
+    .extend(traceActions)
+    .extend(publicActions)
+    .extend(walletActions);
+
+type BaseAnvilClient<chain extends Chain> = ReturnType<
+  typeof createBaseAnvilClient<chain>
+>;
+
+function createReceiptWaiter<chain extends Chain>(
+  client: BaseAnvilClient<chain>,
+) {
+  // viem waits for a new block before re-fetching a missing receipt, and
+  // dedupes that fetch into one already in flight. When Anvil mines during
+  // that request, automine produces no later block and the wait hangs, so
+  // poll the receipt directly unless the caller needs viem's other options.
+  // With `afterBlockNumber`, first wait for the local block to pass it:
+  // Anvil forwards a lookup that races automining to the fork RPC.
+  return async function waitForTransactionReceipt(
+    args: WaitForTransactionReceiptParameters<chain>,
+    afterBlockNumber?: bigint,
+  ) {
+    const { hash, timeout = 180_000, ...options } = args;
+    if (Object.values(options).some((option) => option !== undefined)) {
+      return viem_waitForTransactionReceipt(client, args);
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+
+    const poll = async () => {
+      if (afterBlockNumber !== undefined) {
+        while (
+          (await client.getBlockNumber({ cacheTime: 0 })) <= afterBlockNumber
+        ) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, client.pollingInterval),
+          );
+          if (timedOut) {
+            throw new WaitForTransactionReceiptTimeoutError({ hash });
+          }
+        }
+      }
+
+      while (true) {
+        try {
+          return await viem_getTransactionReceipt(client, { hash });
+        } catch (error) {
+          if (!(error instanceof TransactionReceiptNotFoundError)) {
+            throw error;
+          }
+        }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, client.pollingInterval),
+        );
+        if (timedOut) {
+          throw new WaitForTransactionReceiptTimeoutError({ hash });
+        }
+      }
+    };
+
+    try {
+      return await Promise.race([
+        poll(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            timedOut = true;
+            reject(new WaitForTransactionReceiptTimeoutError({ hash }));
+          }, timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+function createTokenActions<chain extends Chain>(
+  client: BaseAnvilClient<chain>,
+) {
+  return {
+    async approve<chainOverride extends Chain | undefined = undefined>(
+      this: Pick<AnvilTestClient<chain>, "writeContract">,
+      args: ApproveParameters<chain, chainOverride>,
+    ) {
+      const parameters = {
+        ...args,
+        abi: erc20Abi,
+        functionName: "approve" as const,
+      };
+      // TypeScript loses viem's generic chain options when spreading this union.
+      return this.writeContract(
+        parameters as typeof parameters &
+          WriteContractParameters<
+            typeof erc20Abi,
+            "approve",
+            [Address, bigint],
+            chain,
+            HDAccount,
+            chainOverride
+          >,
+      );
+    },
+    async balanceOf({
+      erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+      owner = client.account.address,
+    }: {
+      erc20?: Address;
+      owner?: Address;
+    } = {}) {
+      if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
+        return client.getBalance({ address: owner });
+      }
+
+      return client.readContract({
+        address: erc20,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [owner],
+      });
+    },
+    async allowance({
+      erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+      owner = client.account.address,
+      spender,
+    }: {
+      erc20?: Address;
+      owner?: Address;
+      spender: Address;
+    }) {
+      if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
+        return maxUint256;
+      }
+
+      return client.readContract({
+        address: erc20,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [owner, spender],
+      });
+    },
+
+    async maxWithdraw({
+      erc4626,
+      owner = client.account.address,
+    }: {
+      erc4626: Address;
+      owner?: Address;
+    }) {
+      return client.readContract({
+        address: erc4626,
+        abi: erc4626Abi,
+        functionName: "maxWithdraw",
+        args: [owner],
+      });
+    },
+    async previewMint({
+      erc4626,
+      shares,
+    }: {
+      erc4626: Address;
+      shares: bigint;
+    }) {
+      return client.readContract({
+        address: erc4626,
+        abi: erc4626Abi,
+        functionName: "previewMint",
+        args: [shares],
+      });
+    },
+    async convertToShares({
+      erc4626,
+      assets,
+    }: {
+      erc4626: Address;
+      assets: bigint;
+    }) {
+      return client.readContract({
+        address: erc4626,
+        abi: erc4626Abi,
+        functionName: "convertToShares",
+        args: [assets],
+      });
+    },
+    async convertToAssets({
+      erc4626,
+      shares,
+    }: {
+      erc4626: Address;
+      shares: bigint;
+    }) {
+      return client.readContract({
+        address: erc4626,
+        abi: erc4626Abi,
+        functionName: "convertToAssets",
+        args: [shares],
+      });
+    },
+    async deposit<chainOverride extends Chain | undefined = undefined>(
+      this: Pick<AnvilTestClient<chain>, "writeContract">,
+      args: DepositParameters<chain, chainOverride>,
+    ) {
+      const parameters = {
+        ...args,
+        abi: erc4626Abi,
+        functionName: "deposit" as const,
+      };
+      // TypeScript loses viem's generic chain options when spreading this union.
+      return this.writeContract(
+        parameters as typeof parameters &
+          WriteContractParameters<
+            typeof erc4626Abi,
+            "deposit",
+            [bigint, Address],
+            chain,
+            HDAccount,
+            chainOverride
+          >,
+      );
+    },
+  };
+}
+
+function createSendActions<chain extends Chain>(
+  client: BaseAnvilClient<chain>,
+  waitForTransactionReceipt: ReturnType<typeof createReceiptWaiter<chain>>,
+): Pick<
+  AnvilTestClient<chain>,
+  "writeContract" | "sendTransaction" | "sendRawTransaction"
+> {
+  const sendAndWait = async (send: () => Promise<Hash>) => {
+    const previousBlockNumber = (await client.getAutomine())
+      ? await client.getBlockNumber({ cacheTime: 0 })
+      : undefined;
+    const hash = await send();
+
+    if (previousBlockNumber !== undefined) {
+      await waitForTransactionReceipt({ hash }, previousBlockNumber);
+    }
+
+    return hash;
+  };
+  return {
+    async writeContract<
+      const abi extends Abi | readonly unknown[],
+      functionName extends ContractFunctionName<abi, "nonpayable" | "payable">,
+      args extends ContractFunctionArgs<
+        abi,
+        "nonpayable" | "payable",
+        functionName
+      >,
+      chainOverride extends Chain | undefined,
+    >(
+      args: WriteContractParameters<
+        abi,
+        functionName,
+        args,
+        chain,
+        HDAccount,
+        chainOverride
+      >,
+    ) {
+      return sendAndWait(() => viem_writeContract(client, args));
+    },
+    async sendTransaction<
+      const request extends SendTransactionRequest<chain, chainOverride>,
+      chainOverride extends Chain | undefined = undefined,
+    >(
+      args: SendTransactionParameters<chain, HDAccount, chainOverride, request>,
+    ) {
+      return sendAndWait(() => viem_sendTransaction(client, args));
+    },
+    async sendRawTransaction(args: SendRawTransactionParameters) {
+      return sendAndWait(() => viem_sendRawTransaction(client, args));
+    },
+  };
+}
+
 /**
  * Creates a viem test client for a local Anvil node, polling every 50 ms.
  *
@@ -190,312 +509,49 @@ export const createAnvilTestClient = <chain extends Chain>(
   transport: HttpTransport,
   chain: chain,
 ): AnvilTestClient<chain> =>
-  createTestClient({
-    chain,
-    mode: "anvil",
-    account: testAccount(),
-    // Anvil forwards a receipt lookup it can't answer to the fork RPC, which can
-    // take seconds to return null for a hash only Anvil knows. `txpool_content` is
-    // answered locally, so answer null for a pooled transaction without asking
-    // Anvil. This also covers viem-tracer's receipt check after each send.
-    transport: traced((parameters) => {
-      const { request, ...rest } = transport(parameters);
-
-      return {
-        ...rest,
-        request: async (args, options) => {
-          if (args.method === "eth_getTransactionReceipt") {
-            const [hash] = args.params as [Hash];
-            const { pending, queued } = (await request({
-              method: "txpool_content",
-            })) as GetTxpoolContentReturnType;
-            const isPooled = [pending, queued].some((pool) =>
-              Object.values(pool).some((txs) =>
-                Object.values(txs).some((tx) => tx.hash === hash),
-              ),
-            );
-            if (isPooled) return null;
-          }
-
-          return request(args, options);
-        },
-      } as ReturnType<HttpTransport>;
-    }),
-    cacheTime: Number.POSITIVE_INFINITY,
-    pollingInterval: 50,
-  })
-    .extend(dealActions)
-    .extend(traceActions)
-    .extend(publicActions)
-    .extend(walletActions)
-    .extend((client) => {
-      // viem waits for a new block before re-fetching a missing receipt, and
-      // dedupes that fetch into one already in flight. When Anvil mines during
-      // that request, automine produces no later block and the wait hangs, so
-      // poll the receipt directly unless the caller needs viem's other options.
-      // With `afterBlockNumber`, first wait for the local block to pass it:
-      // Anvil forwards a lookup that races automining to the fork RPC.
-      const waitForTransactionReceipt = async (
+  createBaseAnvilClient(transport, chain).extend((client) => {
+    const waitForTransactionReceipt = createReceiptWaiter(client);
+    return {
+      waitForTransactionReceipt: (
         args: WaitForTransactionReceiptParameters<chain>,
-        afterBlockNumber?: bigint,
-      ) => {
-        const { hash, timeout = 180_000, ...options } = args;
-        if (Object.values(options).some((option) => option !== undefined))
-          return viem_waitForTransactionReceipt(client, args);
+      ) => waitForTransactionReceipt(args),
 
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        let timedOut = false;
+      async timestamp() {
+        const latestBlock = await client.getBlock();
 
-        const poll = async () => {
-          if (afterBlockNumber !== undefined)
-            while (
-              (await client.getBlockNumber({ cacheTime: 0 })) <=
-              afterBlockNumber
-            ) {
-              await new Promise((resolve) =>
-                setTimeout(resolve, client.pollingInterval),
-              );
-              if (timedOut)
-                throw new WaitForTransactionReceiptTimeoutError({ hash });
-            }
+        return latestBlock.timestamp;
+      },
 
-          while (true) {
-            try {
-              return await viem_getTransactionReceipt(client, { hash });
-            } catch (error) {
-              if (!(error instanceof TransactionReceiptNotFoundError))
-                throw error;
-            }
+      /**
+       * Sets an account's gas fee-token balance on chains that require an ERC-20 fee token.
+       *
+       * @param params - Account and desired fee-token balance.
+       */
+      async setFeeTokenBalance(params: {
+        readonly account: Address;
+        readonly amount: bigint;
+      }) {
+        await setFeeTokenBalanceForClient(client, params);
+      },
+      ...createTokenActions(client),
+      async deployContractWait<const abi extends Abi | readonly unknown[]>(
+        args: DeployContractParameters<abi, chain, HDAccount>,
+      ) {
+        const hash = await client.deployContract(args);
+        const receipt = await waitForTransactionReceipt({ hash });
 
-            await new Promise((resolve) =>
-              setTimeout(resolve, client.pollingInterval),
-            );
-            if (timedOut)
-              throw new WaitForTransactionReceiptTimeoutError({ hash });
-          }
-        };
-
-        try {
-          return await Promise.race([
-            poll(),
-            new Promise<never>((_, reject) => {
-              timer = setTimeout(() => {
-                timedOut = true;
-                reject(new WaitForTransactionReceiptTimeoutError({ hash }));
-              }, timeout);
-            }),
-          ]);
-        } finally {
-          clearTimeout(timer);
+        if (receipt.contractAddress == null) {
+          throw Error("no contract address");
         }
-      };
 
-      const sendAndWait = async (send: () => Promise<Hash>) => {
-        const previousBlockNumber = (await client.getAutomine())
-          ? await client.getBlockNumber({ cacheTime: 0 })
-          : undefined;
-        const hash = await send();
-
-        if (previousBlockNumber !== undefined)
-          await waitForTransactionReceipt({ hash }, previousBlockNumber);
-
-        return hash;
-      };
-
-      return {
-        waitForTransactionReceipt: (
-          args: WaitForTransactionReceiptParameters<chain>,
-        ) => waitForTransactionReceipt(args),
-
-        async timestamp() {
-          const latestBlock = await client.getBlock();
-
-          return latestBlock.timestamp;
-        },
-
-        /**
-         * Sets an account's gas fee-token balance on chains that require an ERC-20 fee token.
-         *
-         * @param params - Account and desired fee-token balance.
-         */
-        async setFeeTokenBalance(params: {
-          readonly account: Address;
-          readonly amount: bigint;
-        }) {
-          await setFeeTokenBalanceForClient(client, params);
-        },
-
-        async approve<chainOverride extends Chain | undefined = undefined>(
-          args: ApproveParameters<chain, chainOverride>,
-        ) {
-          // @ts-expect-error
-          return this.writeContract({
-            ...args,
-            abi: erc20Abi,
-            functionName: "approve",
-          });
-        },
-        async balanceOf({
-          erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-          owner = client.account.address,
-        }: {
-          erc20?: Address;
-          owner?: Address;
-        } = {}) {
-          if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
-            return client.getBalance({ address: owner });
-
-          return client.readContract({
-            address: erc20,
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [owner],
-          });
-        },
-        async allowance({
-          erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-          owner = client.account.address,
-          spender,
-        }: {
-          erc20?: Address;
-          owner?: Address;
-          spender: Address;
-        }) {
-          if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
-            return maxUint256;
-
-          return client.readContract({
-            address: erc20,
-            abi: erc20Abi,
-            functionName: "allowance",
-            args: [owner, spender],
-          });
-        },
-
-        async maxWithdraw({
-          erc4626,
-          owner = client.account.address,
-        }: {
-          erc4626: Address;
-          owner?: Address;
-        }) {
-          return client.readContract({
-            address: erc4626,
-            abi: erc4626Abi,
-            functionName: "maxWithdraw",
-            args: [owner],
-          });
-        },
-        async previewMint({
-          erc4626,
-          shares,
-        }: {
-          erc4626: Address;
-          shares: bigint;
-        }) {
-          return client.readContract({
-            address: erc4626,
-            abi: erc4626Abi,
-            functionName: "previewMint",
-            args: [shares],
-          });
-        },
-        async convertToShares({
-          erc4626,
-          assets,
-        }: {
-          erc4626: Address;
-          assets: bigint;
-        }) {
-          return client.readContract({
-            address: erc4626,
-            abi: erc4626Abi,
-            functionName: "convertToShares",
-            args: [assets],
-          });
-        },
-        async convertToAssets({
-          erc4626,
-          shares,
-        }: {
-          erc4626: Address;
-          shares: bigint;
-        }) {
-          return client.readContract({
-            address: erc4626,
-            abi: erc4626Abi,
-            functionName: "convertToAssets",
-            args: [shares],
-          });
-        },
-        async deposit<chainOverride extends Chain | undefined = undefined>(
-          args: DepositParameters<chain, chainOverride>,
-        ) {
-          // @ts-expect-error
-          return this.writeContract({
-            ...args,
-            abi: erc4626Abi,
-            functionName: "deposit",
-          });
-        },
-
-        async deployContractWait<const abi extends Abi | readonly unknown[]>(
-          args: DeployContractParameters<abi, chain, HDAccount>,
-        ) {
-          const hash = await client.deployContract(args);
-          const receipt = await waitForTransactionReceipt({ hash });
-
-          if (receipt.contractAddress == null)
-            throw Error("no contract address");
-
-          return receipt as typeof receipt & { contractAddress: Address };
-        },
-        async writeContract<
-          const abi extends Abi | readonly unknown[],
-          functionName extends ContractFunctionName<
-            abi,
-            "nonpayable" | "payable"
-          >,
-          args extends ContractFunctionArgs<
-            abi,
-            "nonpayable" | "payable",
-            functionName
-          >,
-          chainOverride extends Chain | undefined,
-        >(
-          args: WriteContractParameters<
-            abi,
-            functionName,
-            args,
-            chain,
-            HDAccount,
-            chainOverride
-          >,
-        ) {
-          return sendAndWait(() => viem_writeContract(client, args));
-        },
-        async sendTransaction<
-          const request extends SendTransactionRequest<chain, chainOverride>,
-          chainOverride extends Chain | undefined = undefined,
-        >(
-          args: SendTransactionParameters<
-            chain,
-            HDAccount,
-            chainOverride,
-            request
-          >,
-        ) {
-          return sendAndWait(() => viem_sendTransaction(client, args));
-        },
-        async sendRawTransaction(args: SendRawTransactionParameters) {
-          return sendAndWait(() => viem_sendRawTransaction(client, args));
-        },
-
-        getFunctionCalls<
-          TAbi extends Abi,
-          TName extends ContractFunctionName<TAbi>,
-        >(args: GetFunctionCallsArgs<TAbi, TName>) {
-          return getFunctionCalls(client, args);
-        },
-      };
-    });
+        return receipt as typeof receipt & { contractAddress: Address };
+      },
+      ...createSendActions(client, waitForTransactionReceipt),
+      getFunctionCalls<
+        TAbi extends Abi,
+        TName extends ContractFunctionName<TAbi>,
+      >(args: GetFunctionCallsArgs<TAbi, TName>) {
+        return getFunctionCalls(client, args);
+      },
+    };
+  });

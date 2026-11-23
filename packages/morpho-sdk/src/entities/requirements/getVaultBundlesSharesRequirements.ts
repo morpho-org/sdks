@@ -10,6 +10,7 @@ import {
 } from "../../actions/index.js";
 import { validateClientChainId } from "../../actions/requirements/validateClientChainId.js";
 import { validateChainId } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
@@ -34,6 +35,8 @@ import {
  * @throws {ChainIdMismatchError} when the client declares, or its RPC reports via `eth_chainId`,
  *   another chain than `params.chainId`.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
+ * @throws {NonPositiveInputError} when the deadline is not positive.
+ * @throws {InputExceedsMaxError} when the deadline exceeds `maxUint256`.
  * @throws {viem.BaseError} when an allowance, permit nonce, or `eth_chainId` read fails.
  */
 export const getVaultBundlesSharesRequirements = async (
@@ -54,6 +57,8 @@ export const getVaultBundlesSharesRequirements = async (
   )[]
 > => {
   validateChainId(viemClient.chain?.id, params.chainId);
+  // Reject deadlines outside the positive uint256 range before reading state.
+  validateDeadline(params.deadline);
   const now = params.now ?? Time.timestamp();
   if (params.deadline <= now) {
     throw new ExpiredDeadlineError(params.deadline, now);
@@ -67,7 +72,9 @@ export const getVaultBundlesSharesRequirements = async (
     functionName: "allowance",
     args: [params.owner, spender],
   });
-  if (allowance >= params.requiredShareAllowance) return [];
+  if (allowance >= params.requiredShareAllowance) {
+    return [];
+  }
   if (params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,

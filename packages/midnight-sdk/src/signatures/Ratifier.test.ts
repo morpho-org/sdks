@@ -222,6 +222,19 @@ describe("Ratifier.normalizeRatifierTree", () => {
     },
   );
 
+  test("error: InvalidTreeError for a missing leaf in a sparse array", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+    const leaves = tree.leaves.slice();
+    delete leaves[0];
+
+    expect(() =>
+      Ratifier.normalizeRatifierTree({
+        tree: { ...tree, leaves },
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
   test("error: InvalidTreeHeightError", () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
 

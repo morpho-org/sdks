@@ -32,7 +32,7 @@ baselines remain in `.github/workflows/AGENTS.md`.
 
 - **Waives:** Root [§5 unit-test colocation](../AGENTS.md#5-testing).
 - **Scope:** Fixtures and helpers for `src/queries` in `midnight-sdk` and `blue-sdk-viem`, and their tests under each package's `test/` directory.
-- **Why:** `src/queries` holds only compiler-generated artifacts from Solidity sources under `contracts/` (excluding `interfaces/`) and re-export-only `index.ts` barrels; `pnpm compile` fails on anything else. Query fixtures and helpers therefore live under `test/`, with their tests as fork tests named `*.integration.test.ts`, since the unit project only runs `src/**/*.test.ts`.
+- **Why:** `src/queries` holds only compiler-generated artifacts from Solidity sources under `contracts/` (excluding `interfaces/`) and re-export-only `index.ts` barrels; `bun run compile` fails on anything else. Query fixtures and helpers therefore live under `test/`, with their tests as fork tests named `*.integration.test.ts`, since the unit project only runs `src/**/*.test.ts`.
 - **Approved in:** PR #508, which rejected source-less deployless query artifacts.
 - **Remove when:** Query fixtures and helpers can have colocated unit tests without violating the generated-artifact-only boundary and with those tests routed by the unit project.
 
@@ -75,3 +75,11 @@ baselines remain in `.github/workflows/AGENTS.md`.
 - **Why:** A report-returning successor would be a second entry point every consumer adopts and then leaves; the major changeset, migration guide and dependent audit stay required, and 8.x stays published. 8.x releases, such as 8.9.0 with the CCIP-Read fix and the client configuration, can ship from main until the first breaking 9.0 PR adds the release hold.
 - **Approved in:** [ADR-2026-11-17-evm-simulation-failure-report](./adrs/ADR-2026-11-17-evm-simulation-failure-report.md), with maintainer approval from Jinsuk Park (GitHub @jinmel): "I authorize retyping simulate() in 9.0.0 with no overlap minor", extended to the signature: "I want to ship this changes in current major release: make the viemClient a consumer obligation to provide, not within the evm-simulation. So simulate() should accept the `client` variable as first argument." For `findings` and `SimulationRejectedError`, published in 8.8.0 before any release hold: "just bump to 9.0.0" (@jinmel, 2026-11-18). For 8.9.0's client configuration, the client-first authorization above, confirmed after it merged: "I think enforcing a client configuration is too harsh. can we just keep it under documentation?" (@jinmel, 2026-11-18).
 - **Remove when:** `@morpho-org/evm-simulation` 9.0.0 is published, so the retype no longer relies on this waiver.
+
+## evm-simulation non-blocking sender-outflow findings
+
+- **Waives:** The [evm-simulation sender-outflow rule](../packages/evm-simulation/AGENTS.md) that undeclared sender outflows are fatal.
+- **Scope:** Only sender-outflow findings in `simulate`, reported as non-blocking typed `UNEXPECTED_TOKEN_TRANSFER` warnings in `report.warnings`. Chain-scoped paired emitters in the registry are handled separately. All other safety checks remain fatal; this does not downgrade their failures. Signing services, including the Actions API attestor, must reject non-empty `report.warnings` before release.
+- **Why:** False positives from shared-ledger and co-emitting tokens block legitimate flows. Keeping findings in the report lets consumers enforce their signing policy while the registry covers remaining false positives.
+- **Approved in:** PR #1115, by maintainer @Foulks-Plb.
+- **Remove when:** Consumers (Actions API attestor, Vault and Markets) gate or alert on non-empty warnings and the remaining false positives are covered by the registry; then restore fatal sender-outflow findings and remove this exception. The Actions API attestor's release gate must reject non-empty `report.warnings`, not merely alert.

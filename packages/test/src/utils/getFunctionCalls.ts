@@ -100,7 +100,9 @@ export async function getFunctionCalls<
   const calls: FunctionCall<TAbi, TName>[] = [];
 
   const walk = (node: OtsTraceNode | OtsTraceNode[]) => {
-    if (Array.isArray(node)) return node.forEach(walk);
+    if (Array.isArray(node)) {
+      return node.forEach(walk);
+    }
 
     if (node?.to && node?.input) {
       if (getAddress(node.to) === target) {
@@ -109,18 +111,23 @@ export async function getFunctionCalls<
             abi,
             data: node.input as Hex,
           });
-          if (call.functionName === functionName)
+          if (call.functionName === functionName) {
             calls.push(
               call as {
                 args: ContractFunctionArgs<TAbi, AbiStateMutability, TName>;
                 functionName: TName;
               },
             );
+          }
         } catch {}
       }
     }
-    if (Array.isArray(node?.calls)) node.calls.forEach(walk);
-    if (node?.children) node.children.forEach(walk);
+    if (Array.isArray(node?.calls)) {
+      node.calls.forEach(walk);
+    }
+    if (node?.children) {
+      node.children.forEach(walk);
+    }
   };
   walk(trace);
 

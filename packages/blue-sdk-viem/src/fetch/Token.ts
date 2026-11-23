@@ -30,7 +30,7 @@ import {
   type TokenMetadataField,
 } from "../error.js";
 import { abi, code } from "../queries/GetToken.js";
-import type { DeploylessFetchParameters } from "../types.js";
+import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import {
   catchRevertOnly,
   isContractRevertError,
@@ -51,7 +51,9 @@ import {
  * ```
  */
 export const decodeBytes32String = (hexOrStr: string) => {
-  if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });
+  if (isHex(hexOrStr)) {
+    return hexToString(hexOrStr, { size: 32 });
+  }
 
   return hexOrStr;
 };
@@ -79,8 +81,9 @@ const catchRevertOrMalformed =
       !isTransportError(error) &&
       !isContractRevertError(error) &&
       isUndecodableResultError(error)
-    )
+    ) {
       throw new MalformedTokenMetadataError(token, field, { cause: error });
+    }
     return catchRevertOnly(undefined)(error);
   };
 
@@ -154,8 +157,9 @@ export async function fetchToken(
 ) {
   const chainId = await getChainId(client);
 
-  if (typeof address === "string" && isAddressEqual(address, NATIVE_ADDRESS))
+  if (typeof address === "string" && isAddressEqual(address, NATIVE_ADDRESS)) {
     return Token.native(chainId);
+  }
 
   const { wstEth, stEth } = getChainAddresses(chainId);
   const isWstEth =
@@ -171,30 +175,20 @@ export async function fetchToken(
       functionName: "query",
       args: [address, isWstEth],
     }).catch((error: unknown) => {
-      if (isTransportError(error)) throw error;
+      if (isTransportError(error)) {
+        throw error;
+      }
       // The query's `MalformedReturnData` verdict holds in every deployless
       // mode: its returndata checks are stricter than the direct reads'.
-      let field: TokenMetadataField | undefined;
-      if (error instanceof BaseError) {
-        const revertError = error.walk(
-          (err) => err instanceof ContractFunctionRevertedError,
-        );
-        if (
-          revertError instanceof ContractFunctionRevertedError &&
-          revertError.data?.errorName === "MalformedReturnData"
-        ) {
-          const [selector] = revertError.data.args ?? [];
-          field =
-            typeof selector === "string"
-              ? MALFORMED_SELECTOR_FIELDS[selector.toLowerCase()]
-              : undefined;
-        }
-      }
-      if (field != null)
+      const field = getMalformedTokenMetadataField(error);
+      if (field != null) {
         throw new MalformedTokenMetadataError(address, field, {
           cause: error,
         });
-      if (deployless === "force") throw error;
+      }
+      if (deployless === "force") {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
       return undefined;
     });
@@ -214,16 +208,18 @@ export async function fetchToken(
         eip5267Domain,
       };
 
-      if (isWstEth && stEth != null)
+      if (isWstEth && stEth != null) {
         return new ExchangeRateWrappedToken(
           metadata,
           stEth,
           token.stEthPerWstEth,
         );
+      }
 
       const unwrapToken = getUnwrappedToken(address, chainId);
-      if (unwrapToken)
+      if (unwrapToken) {
         return new ConstantWrappedToken(metadata, unwrapToken, token.decimals);
+      }
 
       return new Token(metadata);
     }
@@ -238,87 +234,27 @@ export async function fetchToken(
       functionName: "decimals",
     }).then(
       (value) => {
-        if (!Number.isInteger(value) || value < 0 || value > 255)
+        if (!Number.isInteger(value) || value < 0 || value > 255) {
           throw new UnknownTokenError(address);
+        }
         return value;
       },
       (error) => {
-        if (isAbsentResult(error)) throw new UnknownTokenError(address);
+        if (isAbsentResult(error)) {
+          throw new UnknownTokenError(address);
+        }
         throw error;
       },
     ),
-    readContract(client, {
-      ...metadataParameters,
+    readTokenText(client, {
       address,
-      abi: erc20Abi,
       functionName: "symbol",
-    }).catch((error) => {
-      if (!isAbsentResult(error)) throw error;
-      // Raw `call` so the bytes32 retry rejects non-32-byte returndata:
-      // viem's `readContract` decode would ignore trailing bytes.
-      return call(client, {
-        ...metadataParameters,
-        to: address,
-        data: encodeFunctionData({
-          abi: erc20Abi_bytes32,
-          functionName: "symbol",
-        }),
-      })
-        .catch((callError: unknown) => {
-          // `call` wraps rejects in `CallExecutionError`; map them through
-          // the contract-error classifier so node reverts (e.g. -32603)
-          // classify exactly as `readContract` rejects do.
-          throw callError instanceof BaseError
-            ? getContractError(callError, {
-                abi: erc20Abi_bytes32,
-                functionName: "symbol",
-                address,
-                args: [],
-              })
-            : callError;
-        })
-        .then(({ data }) => {
-          if (data == null || data === "0x") return undefined;
-          if (size(data) !== 32)
-            throw new MalformedTokenMetadataError(address, "symbol");
-          return decodeBytes32String(data);
-        })
-        .catch(catchRevertOrMalformed(address, "symbol"));
+      metadataParameters,
     }),
-    readContract(client, {
-      ...metadataParameters,
+    readTokenText(client, {
       address,
-      abi: erc20Abi,
       functionName: "name",
-    }).catch((error) => {
-      if (!isAbsentResult(error)) throw error;
-      // Raw `call` so the bytes32 retry rejects non-32-byte returndata:
-      // viem's `readContract` decode would ignore trailing bytes.
-      return call(client, {
-        ...metadataParameters,
-        to: address,
-        data: encodeFunctionData({
-          abi: erc20Abi_bytes32,
-          functionName: "name",
-        }),
-      })
-        .catch((callError: unknown) => {
-          throw callError instanceof BaseError
-            ? getContractError(callError, {
-                abi: erc20Abi_bytes32,
-                functionName: "name",
-                address,
-                args: [],
-              })
-            : callError;
-        })
-        .then(({ data }) => {
-          if (data == null || data === "0x") return undefined;
-          if (size(data) !== 32)
-            throw new MalformedTokenMetadataError(address, "name");
-          return decodeBytes32String(data);
-        })
-        .catch(catchRevertOrMalformed(address, "name"));
+      metadataParameters,
     }),
     readContract(client, {
       ...metadataParameters,
@@ -369,8 +305,87 @@ export async function fetchToken(
   }
 
   const unwrapToken = getUnwrappedToken(address, chainId);
-  if (unwrapToken)
+  if (unwrapToken) {
     return new ConstantWrappedToken(token, unwrapToken, token.decimals);
+  }
 
   return new Token(token);
+}
+
+function getMalformedTokenMetadataField(error: unknown) {
+  if (!(error instanceof BaseError)) {
+    return undefined;
+  }
+
+  const revertError = error.walk(
+    (err) => err instanceof ContractFunctionRevertedError,
+  );
+  if (
+    !(revertError instanceof ContractFunctionRevertedError) ||
+    revertError.data?.errorName !== "MalformedReturnData"
+  ) {
+    return undefined;
+  }
+
+  const [selector] = revertError.data.args ?? [];
+  return typeof selector === "string"
+    ? MALFORMED_SELECTOR_FIELDS[selector.toLowerCase()]
+    : undefined;
+}
+
+function readTokenText(
+  client: Client,
+  {
+    address,
+    functionName,
+    metadataParameters,
+  }: {
+    readonly address: Address;
+    readonly functionName: "name" | "symbol";
+    readonly metadataParameters: FetchParameters & { readonly gas: bigint };
+  },
+) {
+  return readContract(client, {
+    ...metadataParameters,
+    address,
+    abi: erc20Abi,
+    functionName,
+  }).catch((error) => {
+    if (!isAbsentResult(error)) {
+      throw error;
+    }
+    // Raw `call` so the bytes32 retry rejects non-32-byte returndata:
+    // viem's `readContract` decode would ignore trailing bytes.
+    return call(client, {
+      ...metadataParameters,
+      to: address,
+      data: encodeFunctionData({
+        abi: erc20Abi_bytes32,
+        functionName,
+      }),
+    })
+      .catch((callError: unknown) => {
+        // `call` wraps rejects in `CallExecutionError`; map them through
+        // the contract-error classifier so node reverts (e.g. -32603)
+        // classify exactly as `readContract` rejects do.
+        throw callError instanceof BaseError
+          ? getContractError(callError, {
+              abi: erc20Abi_bytes32,
+              functionName,
+              address,
+              args: [],
+            })
+          : callError;
+      })
+      .then(({ data }) => {
+        if (data == null || data === "0x") {
+          return undefined;
+        }
+        if (size(data) !== 32) {
+          throw new MalformedTokenMetadataError(address, functionName);
+        }
+        return decodeBytes32String(data);
+      })
+      .catch(catchRevertOrMalformed(address, functionName));
+  });
 }

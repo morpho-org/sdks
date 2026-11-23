@@ -782,14 +782,13 @@ export namespace OfferUtils {
     readonly offers: Iterable<IOffer>;
   }): readonly Offer[] {
     const offerInputs = Array.from(params.offers);
-    if (offerInputs.length === 0) {
+    const offers = offerInputs.map((offer) => Offer.from(offer));
+    const [first] = offers;
+    if (first === undefined) {
       throw new InvalidOfferGroupError(
         "Provide at least one offer in the group.",
       );
     }
-
-    const offers = offerInputs.map((offer) => Offer.from(offer));
-    const first = offers[0]!;
 
     const expectedMaker = first.maker;
     const expectedBuy = first.buy;
@@ -1148,15 +1147,23 @@ export namespace OfferUtils {
     }
 
     const market = Market.from(offer.market);
-    if (timestamp < start || timestamp > expiry) return 0n;
-    if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
-    if (market.lossFactor >= maxUint128) return 0n;
+    if (timestamp < start || timestamp > expiry) {
+      return 0n;
+    }
+    if (continuousFeeCap < BigInt(market.continuousFee)) {
+      return 0n;
+    }
+    if (market.lossFactor >= maxUint128) {
+      return 0n;
+    }
     // A zero spacing marks an untouched market, which `take` creates with its default spacing.
     const tickSpacing =
       market.tickSpacing === 0
         ? DEFAULT_TICK_SPACING
         : BigInt(market.tickSpacing);
-    if (BigInt(offer.tick) % tickSpacing !== 0n) return 0n;
+    if (BigInt(offer.tick) % tickSpacing !== 0n) {
+      return 0n;
+    }
 
     const settlementFee = market.getSettlementFee(
       market.timeToMaturity(timestamp),
@@ -1166,16 +1173,22 @@ export namespace OfferUtils {
       offer,
       settlementFee,
     });
-    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
+    if (maxUnits > 0n) {
+      return MathLib.zeroFloorSub(maxUnits, consumed);
+    }
 
     const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
     if (!offer.buy) {
-      if (sellerPrice === 0n) return MathLib.MAX_UINT_256;
+      if (sellerPrice === 0n) {
+        return MathLib.MAX_UINT_256;
+      }
 
       return MathLib.mulDivDown(remainingAssets, MathLib.WAD, sellerPrice);
     }
 
-    if (buyerPrice === 0n) return MathLib.MAX_UINT_256;
+    if (buyerPrice === 0n) {
+      return MathLib.MAX_UINT_256;
+    }
 
     return ((remainingAssets + 1n) * MathLib.WAD - 1n) / buyerPrice;
   }

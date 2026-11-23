@@ -84,8 +84,12 @@ export function previewVaultV2InKindRedeem(
     }))
     .filter(({ allocationAssets }) => allocationAssets > 0n)
     .toSorted(({ allocationAssets: a }, { allocationAssets: b }) => {
-      if (a === b) return 0;
-      if (a > b) return -1;
+      if (a === b) {
+        return 0;
+      }
+      if (a > b) {
+        return -1;
+      }
       return 1;
     });
 
@@ -99,7 +103,9 @@ export function previewVaultV2InKindRedeem(
     const inKindExitAssets = exitAssets - idleAssets;
     const netAssets = MathLib.wDivDown(inKindExitAssets, MathLib.WAD + penalty);
 
-    if (idleAssets === 0n && netAssets === 0n) return [];
+    if (idleAssets === 0n && netAssets === 0n) {
+      return [];
+    }
 
     return [
       {

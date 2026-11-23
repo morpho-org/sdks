@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { MathLib } from "@morpho-org/morpho-ts";
 import * as fc from "fast-check";
 import {
@@ -163,14 +164,14 @@ describe("RateRatifierV1.hashLeaf", () => {
   });
 
   test("behavior: rate changes the leaf hash", () => {
-    const offer = leaf().offer;
+    const offer = OfferUtils.toStruct({ offer: leaf().offer });
     const zero = RateRatifierV1.hashLeaf({
-      offer: { ...offer, group: offer.group },
+      offer,
       rate: 0n,
       allowedTaker: zeroAddress,
     });
     const nonZero = RateRatifierV1.hashLeaf({
-      offer: { ...offer, group: offer.group },
+      offer,
       rate: 1n,
       allowedTaker: zeroAddress,
     });
@@ -385,11 +386,11 @@ describe("RateRatifierV1.buildDescriptor", () => {
     const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
 
     expect(Object.isFrozen(offer)).toBe(false);
-    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
+    const [resolved] = descriptor.offers;
+    assert(resolved instanceof Offer);
+    expect(Object.isFrozen(resolved)).toBe(false);
     expect(offer.hash).toBe(OfferUtils.hash(offer));
-    expect(descriptor.offers[0]!.hash).toBe(
-      OfferUtils.hash(descriptor.offers[0]!),
-    );
+    expect(resolved.hash).toBe(OfferUtils.hash(resolved));
   });
 
   test("behavior: defaults group to the rate-aware singleton id", () => {
@@ -491,8 +492,9 @@ describe("RateRatifierV1.buildDescriptor", () => {
     const l = { ...leaf(), offer: { ...leaf().offer, group } };
     const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
 
-    expect(offer!.group).toBe(group);
-    expect(offer!.hasExplicitGroup).toBe(true);
+    assert(offer instanceof Offer);
+    expect(offer.group).toBe(group);
+    expect(offer.hasExplicitGroup).toBe(true);
   });
 
   test("behavior: groupId is order-independent across leaves", () => {
@@ -545,6 +547,39 @@ describe("RateRatifierV1.buildDescriptor", () => {
           leaves: [zeroHash, ...descriptor.leaves.slice(1)],
         },
       }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test.each([
+    { slot: "visible", index: 1 },
+    { slot: "padding", index: 3 },
+  ])(
+    "error: InvalidTreeError for a missing $slot snapshot entry",
+    ({ index }) => {
+      const descriptor = RateRatifierV1.buildDescriptor([
+        leaf(),
+        leaf({ maxUnits: 7n }),
+        leaf({ maxUnits: 8n }),
+      ]);
+      const entries = [...descriptor.entries];
+      delete entries[index];
+
+      expect(() =>
+        RateRatifierV1.ratify({ tree: { ...descriptor, entries } }),
+      ).toThrow(InvalidTreeError);
+    },
+  );
+
+  test("error: InvalidTreeError for a null snapshot leaf hash", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+    const leaves = [...descriptor.leaves];
+    leaves[1] = null as unknown as Hex;
+
+    expect(() =>
+      RateRatifierV1.ratify({ tree: { ...descriptor, leaves } }),
     ).toThrow(InvalidTreeError);
   });
 });

@@ -127,17 +127,21 @@ export async function fetchVaultV2Adapter(
       : false,
   ]);
 
-  if (isMorphoVaultV1Adapter)
+  if (isMorphoVaultV1Adapter) {
     return fetchVaultV2MorphoVaultV1Adapter(address, client, parameters);
+  }
 
-  if (isMorphoMarketV1Adapter)
+  if (isMorphoMarketV1Adapter) {
     return fetchVaultV2MorphoMarketV1Adapter(address, client, parameters);
+  }
 
-  if (isMorphoMarketV1AdapterV2)
+  if (isMorphoMarketV1AdapterV2) {
     return fetchVaultV2MorphoMarketV1AdapterV2(address, client, parameters);
+  }
 
-  if (isMidnightAdapter)
+  if (isMidnightAdapter) {
     return fetchVaultV2MidnightAdapter(address, client, parameters);
+  }
 
   throw new UnsupportedVaultV2AdapterError(address);
 }
@@ -243,25 +247,29 @@ export async function fetchAccrualVaultV2Adapter(
       : false,
   ]);
 
-  if (isMorphoVaultV1Adapter)
+  if (isMorphoVaultV1Adapter) {
     return fetchAccrualVaultV2MorphoVaultV1Adapter(address, client, parameters);
+  }
 
-  if (isMorphoMarketV1Adapter)
+  if (isMorphoMarketV1Adapter) {
     return fetchAccrualVaultV2MorphoMarketV1Adapter(
       address,
       client,
       parameters,
     );
+  }
 
-  if (isMorphoMarketV1AdapterV2)
+  if (isMorphoMarketV1AdapterV2) {
     return fetchAccrualVaultV2MorphoMarketV1AdapterV2(
       address,
       client,
       parameters,
     );
+  }
 
-  if (isMidnightAdapter)
+  if (isMidnightAdapter) {
     return fetchAccrualVaultV2MidnightAdapter(address, client, parameters);
+  }
 
   throw new UnsupportedVaultV2AdapterError(address);
 }

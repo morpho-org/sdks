@@ -4,6 +4,7 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   ContractFunctionRevertedError,
   erc20Abi,
+  maxUint96,
   maxUint256,
   zeroAddress,
 } from "viem";
@@ -32,6 +33,8 @@ const params = {
   now: 100n,
   deadline: 200n,
   deployless: false,
+  permitId: "permit",
+  approvalId: (index: number) => `approval:${index + 1}`,
 };
 
 test.each([0n, 7n])(
@@ -95,9 +98,13 @@ test("rejects a permit requirement without a concrete nonce", () => {
   ).toThrow(new UnexpectedRequirementSignatureError("permit"));
 });
 
-test.each([0n, maxUint256])(
-  "converts an approval for %s with prepared context and stable field order",
-  (amount) => {
+test.each(
+  (["assets", "shares"] as const).flatMap((denomination) =>
+    [0n, maxUint256].map((amount) => ({ denomination, amount })),
+  ),
+)(
+  "converts an approval for $amount $denomination with prepared context and stable field order",
+  ({ denomination, amount }) => {
     const requirement = encodeErc20Approval({
       token: usdc,
       spender: params.spender,
@@ -108,6 +115,7 @@ test.each([0n, maxUint256])(
       id: "custom:approval",
       chainId: 1,
       account: IN_KIND_USER,
+      denomination,
     });
     expect(step).toEqual({
       id: "custom:approval",
@@ -116,7 +124,8 @@ test.each([0n, maxUint256])(
         type: "erc20Approval",
         inputs: {
           token: usdc,
-          ...requirement.action.args,
+          spender: requirement.action.args.spender,
+          [denomination]: amount,
           chainId: 1,
           account: IN_KIND_USER,
         },
@@ -125,7 +134,7 @@ test.each([0n, maxUint256])(
     expect(Object.keys(step.action.inputs)).toEqual([
       "token",
       "spender",
-      "amount",
+      denomination,
       "chainId",
       "account",
     ]);
@@ -151,7 +160,7 @@ test.each([false, true])(
         ...params,
         supportSignature,
       }),
-    ).toEqual([]);
+    ).toEqual({ approvals: [] });
     expect(handle.request).toHaveBeenCalledTimes(1);
   },
 );
@@ -170,14 +179,20 @@ test("disabled signature support approves a permit-capable token without probing
     functionName: "nonces",
     result: 7n,
   });
-  const requirements = await getTokenRequirements(handle.client, {
+  const { approvals } = await getTokenRequirements(handle.client, {
     ...params,
     supportSignature: false,
   });
-  expect(requirements.map(({ action }) => action)).toEqual([
+  expect(approvals.map(({ action }) => action)).toEqual([
     {
       type: "erc20Approval",
-      args: { spender: params.spender, amount: maxUint256 },
+      inputs: {
+        token: usdc,
+        spender: params.spender,
+        assets: maxUint256,
+        chainId: 1,
+        account: params.owner,
+      },
     },
   ]);
   expect(handle.request).toHaveBeenCalledTimes(1);
@@ -191,14 +206,43 @@ test("enabled signature support excludes DAI without probing its non-standard pe
     functionName: "allowance",
     result: 0n,
   });
-  const requirements = await getTokenRequirements(handle.client, {
+  const { approvals } = await getTokenRequirements(handle.client, {
     ...params,
     token: dai!,
     supportSignature: true,
   });
-  expect(requirements[0]?.action.type).toBe("erc20Approval");
+  expect(approvals[0]?.action.type).toBe("erc20Approval");
   expect(handle.request).toHaveBeenCalledTimes(1);
 });
+
+test.each([
+  {
+    token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    amounts: [0n, maxUint256],
+  },
+  { token: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", amounts: [maxUint96] },
+] as const)(
+  "prepares the required approval amounts for $token",
+  async ({ token, amounts }) => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 1n,
+    });
+    const { approvals } = await getTokenRequirements(handle.client, {
+      ...params,
+      token,
+      supportSignature: false,
+    });
+    expect(
+      approvals.map(({ id, action }) => [id, action.inputs.assets]),
+    ).toEqual(
+      amounts.map((amount, index) => [params.approvalId(index), amount]),
+    );
+  },
+);
 
 test("enabled signature support falls back to approval when nonces reverts", async () => {
   const handle = createMockClient(mainnet);
@@ -212,20 +256,21 @@ test("enabled signature support falls back to approval when nonces reverts", asy
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
       const [tx] = call.params as [{ data: string }];
-      if (tx.data.startsWith("0x7ecebe00"))
+      if (tx.data.startsWith("0x7ecebe00")) {
         throw new ContractFunctionRevertedError({
           abi: erc2612Abi,
           functionName: "nonces",
         });
+      }
     }
     return request(call);
   });
-  const requirements = await getTokenRequirements(handle.client, {
+  const { approvals } = await getTokenRequirements(handle.client, {
     ...params,
     supportSignature: true,
   });
-  expect(requirements[0]?.action).toMatchObject({
+  expect(approvals[0]?.action).toMatchObject({
     type: "erc20Approval",
-    args: { amount: maxUint256 },
+    inputs: { assets: maxUint256 },
   });
 });

@@ -1,0 +1,17 @@
+{
+  "1": {
+    "block": 26456605,
+    "primary": "0xf30ddb16ea5aad5ad0c5f544419e93f6b6fe854968e2f8706f8137b89cdcf85a",
+    "paired": "0x96066508463c04287ae26fbd123e7f5e23e298e9beff104e13020b86df1eb0d3"
+  },
+  "999": {
+    "block": 51773096,
+    "primary": "0xa732611e1fca3ad2795d7e527467a6fb95a574dd7b77e25bcd5bdbb8f8a4f9a9",
+    "paired": "0x7fd5526b48101fdc980b813ee5cca079d1e732ab8264095d674ee797d594ab21"
+  },
+  "5042": {
+    "block": 32229724,
+    "primary": "0xc9987bd3af6b26a030951faa7eacc017b68343aeedf3ce5fe68f821c4b93939d",
+    "paired": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+  }
+}

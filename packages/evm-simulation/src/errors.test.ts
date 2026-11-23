@@ -29,6 +29,7 @@ import {
   UnexpectedMorphoAuthorizationError,
   UnexpectedSimulationError,
   UnexpectedTokenApprovalError,
+  UnexpectedTokenTransferError,
   UnsupportedChainError,
   UnsupportedLimitActionError,
   UnsupportedOperationError,
@@ -53,6 +54,7 @@ const ERROR_GROUPS = [
 const ERROR_GROUP_BY_CODE = {
   BLACKLIST_ERROR: SimulationSafetyError,
   UNEXPECTED_TOKEN_APPROVAL: SimulationSafetyError,
+  UNEXPECTED_TOKEN_TRANSFER: SimulationSafetyError,
   UNEXPECTED_MORPHO_AUTHORIZATION: SimulationSafetyError,
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: SimulationSafetyError,
   CONSUMER_LIMIT_VIOLATION: SimulationExecutionError,
@@ -77,6 +79,7 @@ const ERROR_GROUP_BY_CODE = {
 const SEVERITY_BY_CLASS = {
   BlacklistViolationError: "fatal",
   UnexpectedTokenApprovalError: "fatal",
+  UnexpectedTokenTransferError: "fatal",
   UnexpectedMorphoAuthorizationError: "fatal",
   UnexpectedMidnightAuthorizationError: "fatal",
   ConsumerLimitViolationError: "warn",
@@ -178,6 +181,7 @@ const errors = [
     operations: 2,
   }),
   new UnsupportedLimitActionError("unknownAction"),
+  new UnexpectedTokenTransferError({ token: A, sender: A, recipients: [A] }),
 ];
 
 describe("SlippageCheckUnavailableError", () => {
@@ -298,6 +302,7 @@ describe("SimulationPackageError", () => {
         "AMBIGUOUS_EXPECTED_QUOTE",
         "UNSUPPORTED_LIMIT_ACTION",
         "UNEXPECTED_TOKEN_APPROVAL",
+        "UNEXPECTED_TOKEN_TRANSFER",
         "UNEXPECTED_MORPHO_AUTHORIZATION",
         "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
         "APPROVAL_CHECK_UNAVAILABLE",
@@ -370,6 +375,7 @@ describe("SimulationPackageError", () => {
           "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
           "UNEXPECTED_MORPHO_AUTHORIZATION",
           "UNEXPECTED_TOKEN_APPROVAL",
+          "UNEXPECTED_TOKEN_TRANSFER",
         ],
       }
     `);
@@ -554,7 +560,7 @@ describe("severity", () => {
       Object.values(SEVERITY_BY_CLASS);
     const count = (level: SimulationErrorSeverity) =>
       severities.filter((severity) => severity === level).length;
-    expect([count("fatal"), count("error"), count("warn")]).toEqual([4, 14, 4]);
+    expect([count("fatal"), count("error"), count("warn")]).toEqual([5, 14, 4]);
   });
 
   test("behavior: groups set the default and only UnusedAuthorizationError overrides it", () => {

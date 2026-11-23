@@ -21,7 +21,7 @@ General Vault V1 operations remain supported.
 ## Installation
 
 ```bash
-pnpm add @morpho-org/morpho-sdk
+npm install @morpho-org/morpho-sdk
 ```
 
 Read [Dead-share validators](./DEAD-SHARE-PROTECTION.md) for the exported checks. Builders do not
@@ -77,7 +77,9 @@ then call `buildTx()` without a separate root signature.
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
-Robinhood Chain, Arc, and X Layer. Custom deployments can still be configured with `registerCustomAddresses`.
+Robinhood Chain, Arc, X Layer, and Alpen. Alpen has no registered Vault V1 factory, wrapped-native
+token, or Permit2; native-token funding is not enabled there. Custom deployments can still be
+configured with `registerCustomAddresses`.
 
 ## How it works
 
@@ -277,7 +279,38 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 > **Beta:** TransactionPlan is experimental; breaking changes may ship in minor releases.
 > Existing entity flows remain the recommended stable path during the shadow-mode rollout.
 
-Prepare a Vault V2 deposit or withdrawal plan, then sign its pending requests with your wallet.
+Preparers emit stored format `version: 2`. Version 1 (including SDK 9.7.0 plans) is rejected with
+`UnsupportedTransactionPlanVersionError`; migrate trusted saved plans' fields and version before
+restoring them. There is no legacy parser.
+
+Prepare a Vault V2 deposit, withdrawal, force-withdraw or exact-share redemption plan, or a Vault V1 deposit or withdrawal plan with
+`prepareVaultV1Deposit` or `prepareVaultV1Withdraw` and a `fetchAccrualVault` snapshot, then sign its pending requests with your wallet.
+Deposit and withdrawal preparers take `assets`; redemption takes `shares`. Stored operation inputs
+use the same names, except native-funded deposits store `nativeAssets` instead of `assets`.
+Stored ERC-20 approval inputs likewise use `assets` for underlying-token approvals or `shares`
+for vault-share approvals. See the [TransactionPlan format and migration notes](./src/transactionPlan/README.md).
+Pass the caller-fetched `AccrualVault` (V1) or `AccrualVaultV2` (V2) once as `vault` for deposits,
+and the matching snapshot as `vault` for withdrawals;
+the contract address comes from `vault.address`. Only deposit preparation accepts `deployless`.
+
+V1 and V2 deposits share preparation and validation; use `assets` for either preparer and
+`nativeAssets` in stored native funding. The snapshot is not retained in the stored plan.
+
+V1 and V2 withdrawal plans also share preparation and validation: both prepare and store gross
+`assets`, alongside the stored `requiredShareAllowance` quote. Neither accepts a slippage override.
+
+`prepareVaultV1Redeem` prepares a Vault V1 exact-share redemption. Its required `shareToken: Token`
+supplies the vault address and share-permit domain metadata; no accrual snapshot is required.
+
+V1 and V2 redemptions both prepare and store exact `shares`. Their shared authorization resolver
+also serves ordinary withdrawals: chain checks, code checks and requirements run concurrently,
+while the requirements helper checks the RPC chain before allowance or nonce reads.
+
+Migration plans take exactly one of `assets` or `shares`, store `vault: sourceVault` and derived
+`maxSharePrice`, and translate that bound to the entity/ABI `maxSharePriceVaultV2` argument.
+Pass the caller-fetched source and target snapshots once each, as `sourceVault: AccrualVault` and
+`targetVault: AccrualVaultV2`. Their assets must match and their addresses must differ.
+
 `applySignatures(plan, signatures)` synchronously verifies every supplied signature before attaching
 it, without a client or RPC. It validates all requests against their actions, including permit/action
 deadline agreement, rejects unknown or duplicate input IDs, and recovers the permit owner from the
@@ -291,21 +324,98 @@ arbitrary ERC-1271 or ERC-6492 signatures.
 and uint256 ranges, unique IDs, references, action chain/account agreement and permit consistency,
 including requests with existing signatures. It allows extra keys. Malformed JSON, shapes or
 references throw `InvalidTransactionPlanError` with a JSON `path` and `reason`; unsupported versions
-and action types retain their dedicated errors. Serialization remains unchecked. Parsing uses no
-clock or RPC and does not check expiry, live state, signature ownership or action-layer business
-constraints. It does not prove authenticity or intent: tampered-but-well-formed, internally consistent
-plans pass, so integrators must still protect stored plans.
+and action types retain their dedicated errors. Serialization remains unchecked. Parsing verifies
+stored signatures against their expected signers offline and rejects signatures from the wrong
+signer. It uses no clock or RPC and does not check expiry, live state or action-layer business
+constraints. A successful parse does not prove intent or protect unsigned fields, so integrators
+must still protect stored plans.
 
-When existing allowance is insufficient, withdrawal plans request an unlimited (`maxUint256`)
+Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
+`blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `vaultV1Deposit`, `vaultV1Withdraw`,
+`vaultV1Redeem`, `vaultV1InKindRedeem`, `vaultV1MigrateToV2`,
+`vaultV2Deposit`, `vaultV2Withdraw`, `vaultV2Redeem`,
+`vaultV2ForceWithdraw`, `vaultV2ForceRedeem` and `vaultV2InKindRedeem`. Builders return plain `Readonly<Transaction>` objects without step metadata.
+
+| Prepare function | Operation |
+| --- | --- |
+| `prepareBlueSupply` | Supply loan assets to a Blue market |
+| `prepareBlueSupplyCollateral` | Supply collateral to a Blue market without borrowing |
+| `prepareBlueSupplyCollateralBorrow` | Supply collateral, borrow, or perform both atomically on Blue |
+| `prepareVaultV2Deposit` | Deposit assets into Vault V2 |
+| `prepareVaultV2Withdraw` | Withdraw assets from Vault V2 |
+| `prepareVaultV2Redeem` | Redeem an exact number of Vault V2 shares |
+| `prepareVaultV2ForceWithdraw` | Force-withdraw a penalty-inclusive asset amount from Vault V2 |
+| `prepareVaultV2ForceRedeem` | Force-deallocate and redeem an exact number of Vault V2 shares |
+| `prepareVaultV2InKindRedeem` | Exit a penalty-inclusive asset amount from Vault V2 in kind (idle assets and Blue supply positions) |
+| `prepareVaultV1Deposit` | Deposit assets into Vault V1 |
+| `prepareVaultV1Withdraw` | Withdraw assets from Vault V1 |
+| `prepareVaultV1Redeem` | Redeem an exact number of Vault V1 shares |
+| `prepareVaultV1InKindRedeem` | Redeem Vault V1 shares in kind |
+| `prepareVaultV1MigrateToV2` | Migrate exclusive `assets` or `shares` from Vault V1 into Vault V2 |
+
+`prepareBlueSupply` takes a caller-fetched market snapshot. With insufficient ERC-20 allowance,
+it requests an unlimited approval or an exact-amount ERC-2612 permit for BlueBundlesV1.
+Native funding is available only when the loan token is the chain's wrapped native token (wNative)
+and requires neither an approval nor a permit. Like deposit preparers, supply preparation takes
+`assets` with `funding: { type: "native" }`; the stored supply action retains gross `assets` and
+records the native funding as `nativeAssets`.
+
+`prepareBlueSupplyCollateral` takes a caller-fetched market snapshot and `collateralAssets`.
+With insufficient ERC-20 allowance, it requests an unlimited approval or an exact-amount ERC-2612
+permit for BlueBundlesV1. Native funding is available only for wNative collateral, needs neither
+approval nor permit, and stores `nativeAssets` equal to `collateralAssets`.
+
+`prepareVaultV2ForceRedeem` takes `vaultAddress` and top-level `shares`, with no snapshot.
+Caller-supplied `deallocations[].assets` and `shares` are fixed on one `vaultV2ForceRedeem` step
+with no approvals or signature requests. It accepts neither `supportSignature` nor `deployless`.
+`expiresAt` is plan metadata only, not an onchain deadline.
+
+`prepareVaultV2Deposit` and `prepareVaultV2Withdraw` take one `vault: AccrualVaultV2` snapshot.
+`prepareVaultV1MigrateToV2` takes `sourceVault: AccrualVault` and `targetVault: AccrualVaultV2` snapshots.
+
+Preparers with token authorization default to `supportSignature: false`. With `true`, ERC-2612 tokens use permits and other
+tokens fall back to direct approval; no Permit2 or fetch requests are generated. Callers fetch
+snapshots before preparation. Builders return plain SDK transactions without step IDs or kinds.
+
+When existing allowance is insufficient, withdrawal, redemption and migration plans request an unlimited (`maxUint256`)
 ERC-2612 vault-share permit or direct share approval. The quote's `requiredShareAllowance` remains
-the minimum needed for that withdrawal; later withdrawals reuse sufficient allowance without a
+the minimum needed for that exit; later exits reuse sufficient allowance without a
 new signature. Deposit asset permits must instead sign the exact pull amount, not an unlimited
-value. Existing stored withdrawal permits covering the minimum allowance remain supported.
+value. Finite format-2 withdrawal permits that cover the quoted minimum allowance remain valid;
+this finite-permit compatibility does not apply to force-withdraw plans.
 
-Only deposit plans accept `slippageTolerance`, which sets their on-chain maximum share price.
-Withdrawal plans do not accept it: the share-allowance quote uses `DEFAULT_SLIPPAGE_TOLERANCE`
-internally, but withdrawals have no on-chain share-price or maximum-shares bound. A price drop
+Deposit and migration plans accept `slippageTolerance`, which sets their on-chain maximum share price.
+`vaultV1Withdraw` and `vaultV2Withdraw` plans do not accept it: the share-allowance quote uses `DEFAULT_SLIPPAGE_TOLERANCE`
+internally, but these ordinary withdrawals have no on-chain share-price or maximum-shares bound. A price drop
 before inclusion can burn more shares than quoted.
+
+`vaultV1InKindRedeem` and `vaultV2InKindRedeem` are also asset-denominated, with no on-chain share-price or maximum-shares
+bound. A price drop before inclusion can burn more shares than quoted.
+Each preparer takes one caller-fetched `vault` snapshot (`AccrualVault` for V1, `AccrualVaultV2`
+for V2) and no `deployless` option.
+V1 and V2 prepare and stored in-kind quantities use `assets`; builders translate to the stable entity/ABI
+`amount`. Share approvals store `shares`, while ERC-2612 typed data retains `value`.
+
+Use `prepareVaultV2ForceWithdraw` with one caller-fetched `vault: AccrualVaultV2` snapshot for a
+penalty-inclusive asset exit; it accepts no `deployless` option. Prepare and stored `assets`
+include the penalty. Optional `slippageTolerance` derives the stored on-chain `minSharePriceE27`
+floor from the snapshot, using the entity default when omitted; plans accept no raw floor override.
+Share allowances and permits target VaultExitBundlesV1, and any permit
+must be unlimited (`maxUint256`).
+
+`prepareVaultV2ForceRedeem` takes `vaultAddress`, top-level `shares`, and ordered deallocations
+with `assets`. It creates a native vault multicall with no `supportSignature` or `deployless`
+option. Stored inputs retain `vault` and `redeem.shares`; the entity method is unchanged.
+
+Use `prepareVaultV2Redeem(client, { shareToken, chainId, account, shares, supportSignature })`
+to burn exactly `shares`; pass the account's share balance for a full redemption.
+`supportSignature` defaults to `false` (direct approval); `true` uses an ERC-2612 share
+permit when allowance is insufficient. No Permit2 is used. Exact-share redemption needs
+no quote: `shareToken: Token` is required, but an address-only `new Token({ address })` is sufficient.
+An accrual snapshot also satisfies `Token`. Redemption sets no minimum assets received and accepts
+neither `slippageTolerance` nor `deployless`.
+Plans are serializable data; `buildTransaction` and `buildTransactions` return plain
+frozen SDK transactions without step `id` or `kind` fields.
 
 ```typescript
 import {
@@ -328,10 +438,13 @@ async function finalize(wallet: WalletClient, plan: TransactionPlan) {
 }
 ```
 
-Protect stored plans: verification checks permit consistency and signers, not whether stored action
-inputs match your intended operation. Builders do not reverify signatures in restored plans. Do not
-change the plan after applying signatures. Empty signature input still validates all requests and
-returns the original plan; omitted IDs retain their existing signatures.
+Parsing, inspection and builders reverify stored signatures offline against their requests and
+actions. Permits bind owner, token, spender, value, nonce, deadline and chain; Morpho authorizations
+bind owner, authorized address, nonce, deadline and chain, not operation amounts, markets or referral
+fees/recipients. Integrators must protect those unsigned fields and check that the plan matches their
+intent. Empty signature input still validates all requests and returns the original plan; omitted
+IDs retain their existing signatures. Supplied IDs can replace invalid stored signatures, but every
+replacement is verified.
 
 ### Midnight: take a fixed-rate offer
 
@@ -522,13 +635,13 @@ Link this package to your app for local debugging:
 
 ```bash
 # In this morpho-sdk project
-pnpm build
-pnpm link
+bun run build
+bun link
 ```
 
 ```bash
 # In your other project
-pnpm link @morpho-org/morpho-sdk
+bun link @morpho-org/morpho-sdk
 ```
 
 Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).

@@ -56,34 +56,37 @@ export async function assertTransactionTargetsHaveCode(params: {
   const checked = new Map<Address, Promise<`0x${string}` | undefined>>();
   // Start every distinct target's read up front so the RPCs run concurrently.
   for (const transaction of transactions) {
-    if (transaction.data === "0x" || checked.has(transaction.to)) continue;
+    if (transaction.data === "0x" || checked.has(transaction.to)) {
+      continue;
+    }
     const code = overrides.get(transaction.to.toLowerCase())?.code;
     checked.set(
       transaction.to,
-      (code !== undefined
-        ? Promise.resolve(code)
-        : rpc("eth_getCode", () => {
+      (code === undefined
+        ? rpc("eth_getCode", () => {
             params.signal?.throwIfAborted();
             return getBytecode(client, {
               address: transaction.to,
               blockNumber,
             });
           })
+        : Promise.resolve(code)
       ).then((resolvedCode) => {
         if (
           resolvedCode === undefined ||
           !/^0xef0100[0-9a-f]{40}$/i.test(resolvedCode)
-        )
+        ) {
           return resolvedCode;
+        }
         // EIP-7702 follows one delegation; a code-less delegate is still a no-op.
         const delegate = getAddress(`0x${resolvedCode.slice(8)}`);
         const delegateCode = overrides.get(delegate.toLowerCase())?.code;
-        return delegateCode !== undefined
-          ? delegateCode
-          : rpc("eth_getCode", () => {
+        return delegateCode === undefined
+          ? rpc("eth_getCode", () => {
               params.signal?.throwIfAborted();
               return getBytecode(client, { address: delegate, blockNumber });
-            });
+            })
+          : delegateCode;
       }),
     );
   }
@@ -97,7 +100,12 @@ export async function assertTransactionTargetsHaveCode(params: {
   {
     const keys = [...checked.keys()];
     const settled = await Promise.allSettled([...checked.values()]);
-    settled.forEach((outcome, index) => outcomes.set(keys[index]!, outcome));
+    for (const [index, key] of keys.entries()) {
+      const outcome = settled[index];
+      if (outcome !== undefined) {
+        outcomes.set(key, outcome);
+      }
+    }
   }
   const fieldErrors: string[] = [];
   let firstRejection:
@@ -106,17 +114,22 @@ export async function assertTransactionTargetsHaveCode(params: {
       })
     | undefined;
   for (const [index, transaction] of transactions.entries()) {
-    if (transaction.data === "0x") continue;
+    if (transaction.data === "0x") {
+      continue;
+    }
     const outcome = outcomes.get(transaction.to);
-    if (outcome === undefined) continue;
+    if (outcome === undefined) {
+      continue;
+    }
     if (outcome.status === "rejected") {
       // A non-RPC failure must not hide behind a sibling's RPC outage.
       if (
         firstRejection === undefined ||
         (firstRejection.reason instanceof RpcTransportError &&
           !(outcome.reason instanceof RpcTransportError))
-      )
+      ) {
         firstRejection = outcome;
+      }
       continue;
     }
     const bytecode = outcome.value;
@@ -135,5 +148,7 @@ export async function assertTransactionTargetsHaveCode(params: {
       fieldErrors,
     );
   }
-  if (firstRejection !== undefined) throw firstRejection.reason;
+  if (firstRejection !== undefined) {
+    throw firstRejection.reason;
+  }
 }

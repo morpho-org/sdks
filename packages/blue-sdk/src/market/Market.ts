@@ -1,4 +1,4 @@
-import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { NegativeValueError, Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { BlueErrors, UnsupportedMarketIrmError } from "../errors.js";
 import {
   AdaptiveCurveIrmLib,
@@ -122,8 +122,12 @@ export class Market implements IMarket {
     this.fee = fee;
     this.price = price;
 
-    if (rateAtTarget != null) this.rateAtTarget = rateAtTarget;
-    if (deadSupplyShares != null) this.deadSupplyShares = deadSupplyShares;
+    if (rateAtTarget != null) {
+      this.rateAtTarget = rateAtTarget;
+    }
+    if (deadSupplyShares != null) {
+      this.deadSupplyShares = deadSupplyShares;
+    }
   }
 
   /**
@@ -159,7 +163,9 @@ export class Market implements IMarket {
    * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable.
    */
   get apyAtTarget() {
-    if (this.rateAtTarget == null) return;
+    if (this.rateAtTarget == null) {
+      return;
+    }
 
     return MarketUtils.rateToApy(this.rateAtTarget);
   }
@@ -300,7 +306,9 @@ export class Market implements IMarket {
    * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalBorrowAssets === 0n) return 0;
+    if (this.totalBorrowAssets === 0n) {
+      return 0;
+    }
     const borrowRate = this.getEndBorrowRate(timestamp);
 
     return MarketUtils.rateToApy(
@@ -334,7 +342,9 @@ export class Market implements IMarket {
    * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalBorrowAssets === 0n) return 0n;
+    if (this.totalBorrowAssets === 0n) {
+      return 0n;
+    }
     const borrowRate = this.getAvgBorrowRate(timestamp);
 
     return MathLib.wMulUp(
@@ -361,6 +371,7 @@ export class Market implements IMarket {
    * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `lastUpdate`. At or before `lastUpdate`, returns an unchanged copy without projecting interest or rewinding the timestamp.
    * @returns A new `Market`, unchanged for past or equal timestamps; otherwise with accrued asset totals and fee shares, updated `lastUpdate`, and projected `rateAtTarget`.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    * @example
    * ```ts
@@ -385,13 +396,16 @@ export class Market implements IMarket {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
-    if (timestamp <= this.lastUpdate) return new Market(this);
+    if (timestamp <= this.lastUpdate) {
+      return new Market(this);
+    }
     if (
       this.rateAtTarget == null &&
       this.params.irm !== ZERO_ADDRESS &&
       this.totalBorrowAssets === 0n
-    )
+    ) {
       return new Market({ ...this, lastUpdate: timestamp });
+    }
 
     const { elapsed, avgBorrowRate, endRateAtTarget } =
       this.getAccrualBorrowRates(timestamp);
@@ -402,11 +416,20 @@ export class Market implements IMarket {
       elapsed,
     );
 
+    const totals = {
+      totalBorrowAssets: this.totalBorrowAssets + interest,
+      totalSupplyAssets: this.totalSupplyAssets + interest,
+      totalSupplyShares: this.totalSupplyShares + feeShares,
+    };
+    for (const [total, value] of Object.entries(totals)) {
+      if (value > MathLib.MAX_UINT_128) {
+        throw new BlueErrors.TotalOverflow(total, value);
+      }
+    }
+
     return new Market({
       ...this,
-      totalSupplyAssets: this.totalSupplyAssets + interest,
-      totalBorrowAssets: this.totalBorrowAssets + interest,
-      totalSupplyShares: this.totalSupplyShares + feeShares,
+      ...totals,
       lastUpdate: timestamp,
       rateAtTarget: endRateAtTarget,
     });
@@ -414,6 +437,7 @@ export class Market implements IMarket {
 
   /**
    * Applies a supply to an interest-accrued copy of this market.
+   * @throws {BlueErrors.TotalOverflow} when accrual or the operation exceeds a market uint128 total.
    * @param assets Loan assets to supply, or zero when `shares` is provided.
    * @param shares Supply shares to mint, or zero when `assets` is provided.
    * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
@@ -440,20 +464,37 @@ export class Market implements IMarket {
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n) === (shares === 0n))
+    if ((assets === 0n) === (shares === 0n)) {
       throw new BlueErrors.InconsistentInput(assets, shares);
+    }
+
+    let normalizedAssets = assets;
+    let normalizedShares = shares;
 
     const market = this.accrueInterest(timestamp);
 
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    if (shares === 0n) shares = market.toSupplyShares(assets, "Down");
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    else assets = market.toSupplyAssets(shares, "Up");
+    if (normalizedShares === 0n) {
+      normalizedShares = market.toSupplyShares(normalizedAssets, "Down");
+    } else {
+      normalizedAssets = market.toSupplyAssets(normalizedShares, "Up");
+    }
 
-    market.totalSupplyAssets += assets;
-    market.totalSupplyShares += shares;
+    market.totalSupplyAssets += normalizedAssets;
+    if (market.totalSupplyAssets > MathLib.MAX_UINT_128) {
+      throw new BlueErrors.TotalOverflow(
+        "totalSupplyAssets",
+        market.totalSupplyAssets,
+      );
+    }
+    market.totalSupplyShares += normalizedShares;
+    if (market.totalSupplyShares > MathLib.MAX_UINT_128) {
+      throw new BlueErrors.TotalOverflow(
+        "totalSupplyShares",
+        market.totalSupplyShares,
+      );
+    }
 
-    return { market, assets, shares };
+    return { market, assets: normalizedAssets, shares: normalizedShares };
   }
 
   /**
@@ -463,8 +504,10 @@ export class Market implements IMarket {
    * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The updated market and normalized asset and share amounts.
    * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
-   * @throws {BlueErrors.InsufficientLiquidity} when the withdrawal exceeds the accrued market's liquidity.
+   * @throws {BlueErrors.InsufficientLiquidity} when a withdrawal within total supply exceeds the accrued market's liquidity.
+   * @throws {NegativeValueError} when burning shares would make total supply shares negative.
    * @example
    * ```ts
    * import { ChainId, getChainAddress, Market, MarketParams } from "@morpho-org/blue-sdk";
@@ -485,23 +528,36 @@ export class Market implements IMarket {
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n) === (shares === 0n))
+    if ((assets === 0n) === (shares === 0n)) {
       throw new BlueErrors.InconsistentInput(assets, shares);
+    }
+
+    let normalizedAssets = assets;
+    let normalizedShares = shares;
 
     const market = this.accrueInterest(timestamp);
 
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    if (shares === 0n) shares = market.toSupplyShares(assets, "Up");
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    else assets = market.toSupplyAssets(shares, "Down");
+    if (normalizedShares === 0n) {
+      normalizedShares = market.toSupplyShares(normalizedAssets, "Up");
+    } else {
+      normalizedAssets = market.toSupplyAssets(normalizedShares, "Down");
+    }
 
-    market.totalSupplyAssets -= assets;
-    market.totalSupplyShares -= shares;
+    if (normalizedShares > market.totalSupplyShares) {
+      throw new NegativeValueError(
+        "totalSupplyShares",
+        market.totalSupplyShares - normalizedShares,
+      );
+    }
 
-    if (market.totalBorrowAssets > market.totalSupplyAssets)
+    market.totalSupplyAssets -= normalizedAssets;
+    market.totalSupplyShares -= normalizedShares;
+
+    if (market.totalBorrowAssets > market.totalSupplyAssets) {
       throw new BlueErrors.InsufficientLiquidity(market.id);
+    }
 
-    return { market, assets, shares };
+    return { market, assets: normalizedAssets, shares: normalizedShares };
   }
 
   /**
@@ -513,6 +569,7 @@ export class Market implements IMarket {
    * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {BlueErrors.InsufficientLiquidity} when the borrow exceeds the accrued market's liquidity.
+   * @throws {BlueErrors.TotalOverflow} when accrual or the operation exceeds a market uint128 total.
    * @example
    * ```ts
    * import { ChainId, Market } from "@morpho-org/blue-sdk";
@@ -534,23 +591,41 @@ export class Market implements IMarket {
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n) === (shares === 0n))
+    if ((assets === 0n) === (shares === 0n)) {
       throw new BlueErrors.InconsistentInput(assets, shares);
+    }
+
+    let normalizedAssets = assets;
+    let normalizedShares = shares;
 
     const market = this.accrueInterest(timestamp);
 
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    if (shares === 0n) shares = market.toBorrowShares(assets, "Up");
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    else assets = market.toBorrowAssets(shares, "Down");
+    if (normalizedShares === 0n) {
+      normalizedShares = market.toBorrowShares(normalizedAssets, "Up");
+    } else {
+      normalizedAssets = market.toBorrowAssets(normalizedShares, "Down");
+    }
 
-    market.totalBorrowAssets += assets;
-    market.totalBorrowShares += shares;
+    market.totalBorrowAssets += normalizedAssets;
+    if (market.totalBorrowAssets > MathLib.MAX_UINT_128) {
+      throw new BlueErrors.TotalOverflow(
+        "totalBorrowAssets",
+        market.totalBorrowAssets,
+      );
+    }
+    market.totalBorrowShares += normalizedShares;
+    if (market.totalBorrowShares > MathLib.MAX_UINT_128) {
+      throw new BlueErrors.TotalOverflow(
+        "totalBorrowShares",
+        market.totalBorrowShares,
+      );
+    }
 
-    if (market.totalBorrowAssets > market.totalSupplyAssets)
+    if (market.totalBorrowAssets > market.totalSupplyAssets) {
       throw new BlueErrors.InsufficientLiquidity(market.id);
+    }
 
-    return { market, assets, shares };
+    return { market, assets: normalizedAssets, shares: normalizedShares };
   }
 
   /**
@@ -563,6 +638,8 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to accrue interest before repaying. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still repaying.
    * @returns The accrued market after repayment, along with the resolved `assets` and `shares` repaid.
    * @throws {BlueErrors.InconsistentInput} If both or neither of `assets` and `shares` are non-zero.
+   * @throws {NegativeValueError} when burning shares would make total borrow shares negative.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -571,23 +648,35 @@ export class Market implements IMarket {
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n) === (shares === 0n))
+    if ((assets === 0n) === (shares === 0n)) {
       throw new BlueErrors.InconsistentInput(assets, shares);
+    }
+
+    let normalizedAssets = assets;
+    let normalizedShares = shares;
 
     const market = this.accrueInterest(timestamp);
 
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    if (shares === 0n) shares = market.toBorrowShares(assets, "Down");
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    else assets = market.toBorrowAssets(shares, "Up");
+    if (normalizedShares === 0n) {
+      normalizedShares = market.toBorrowShares(normalizedAssets, "Down");
+    } else {
+      normalizedAssets = market.toBorrowAssets(normalizedShares, "Up");
+    }
+
+    if (normalizedShares > market.totalBorrowShares) {
+      throw new NegativeValueError(
+        "totalBorrowShares",
+        market.totalBorrowShares - normalizedShares,
+      );
+    }
 
     market.totalBorrowAssets = MathLib.zeroFloorSub(
       market.totalBorrowAssets,
-      assets,
+      normalizedAssets,
     );
-    market.totalBorrowShares -= shares;
+    market.totalBorrowShares -= normalizedShares;
 
-    return { market, assets, shares };
+    return { market, assets: normalizedAssets, shares: normalizedShares };
   }
 
   /**
@@ -834,7 +923,9 @@ export class Market implements IMarket {
     options?: MaxBorrowOptions,
   ): CapacityLimit | undefined {
     const maxBorrowAssets = this.getMaxBorrowAssets(collateral, options);
-    if (maxBorrowAssets == null) return;
+    if (maxBorrowAssets == null) {
+      return;
+    }
 
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const maxBorrowableAssets = MathLib.zeroFloorSub(
@@ -844,11 +935,12 @@ export class Market implements IMarket {
 
     const { liquidity } = this;
 
-    if (maxBorrowableAssets > liquidity)
+    if (maxBorrowableAssets > liquidity) {
       return {
         value: liquidity,
         limiter: CapacityLimitReason.liquidity,
       };
+    }
 
     return {
       value: maxBorrowableAssets,
@@ -867,11 +959,12 @@ export class Market implements IMarket {
   ): CapacityLimit {
     const borrowAssets = this.toBorrowAssets(borrowShares);
 
-    if (borrowAssets > loanTokenBalance)
+    if (borrowAssets > loanTokenBalance) {
       return {
         value: loanTokenBalance,
         limiter: CapacityLimitReason.balance,
       };
+    }
 
     return {
       value: borrowAssets,
@@ -892,11 +985,12 @@ export class Market implements IMarket {
     const supplyAssets = this.toSupplyAssets(supplyShares);
     const { liquidity } = this;
 
-    if (supplyAssets > liquidity)
+    if (supplyAssets > liquidity) {
       return {
         value: liquidity,
         limiter: CapacityLimitReason.liquidity,
       };
+    }
 
     return {
       value: supplyAssets,
@@ -921,13 +1015,16 @@ export class Market implements IMarket {
       position,
       options,
     );
-    if (withdrawableCollateral == null) return;
+    if (withdrawableCollateral == null) {
+      return;
+    }
 
-    if (position.collateral > withdrawableCollateral)
+    if (position.collateral > withdrawableCollateral) {
       return {
         value: withdrawableCollateral,
         limiter: CapacityLimitReason.collateral,
       };
+    }
 
     return {
       value: position.collateral,

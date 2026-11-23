@@ -26,11 +26,14 @@ vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
 
 import { BlacklistViolationError } from "../../errors.js";
 import { makeCall, makeTransferLog } from "../../test-helpers/index.js";
-import { parseTransfers } from "../parsing/transfers.js";
+import { parseTransfers as parseRawTransfers } from "../parsing/transfers.js";
 import {
   assertNoBundlesRetention,
-  findBundlesRetentionFailures,
+  checkBundlesRetention,
 } from "./bundles-retention.js";
+
+const parseTransfers = (calls: Parameters<typeof parseRawTransfers>[0]) =>
+  parseRawTransfers(calls, { chainId: 1 }).transfers;
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
@@ -125,21 +128,23 @@ describe("assertNoBundlesRetention", () => {
   });
 
   it("warns and skips when blue-sdk knows the chain but has no restricted intermediary config", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-
-    expect(() =>
-      assertNoBundlesRetention({
-        chainId: NO_BUNDLES_CHAIN_ID,
-        transfers: [],
-        assetChanges: [],
-        logger,
-      }),
-    ).not.toThrow();
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
-      { chainId: NO_BUNDLES_CHAIN_ID },
-    );
+    const result = checkBundlesRetention({
+      chainId: NO_BUNDLES_CHAIN_ID,
+      transfers: [],
+      assetChanges: [],
+    });
+    expect(result).toMatchObject({
+      status: "skipped-unsupported-chain",
+      failures: [],
+      warnings: [
+        {
+          code: "RETENTION_CHECK_SKIPPED",
+          severity: "warn",
+          chainId: NO_BUNDLES_CHAIN_ID,
+          reason: "missing-restricted-addresses",
+        },
+      ],
+    });
   });
 
   it("propagates unexpected SDK errors instead of swallowing them", () => {
@@ -250,7 +255,6 @@ describe("assertNoBundlesRetention", () => {
   it("warns instead of throwing when bundles contract is swept (net negative) above dust", () => {
     // Bundles contract sends more than it receives in this bundle — a pre-existing
     // balance is being drawn down, not retained by the current bundle.
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
@@ -263,26 +267,25 @@ describe("assertNoBundlesRetention", () => {
       ]),
     ]);
 
-    expect(() =>
-      assertNoBundlesRetention({
-        chainId: 1,
-        transfers,
-        assetChanges: [],
-        logger,
-      }),
-    ).not.toThrow();
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Simulation detected pre-existing balance being swept from a restricted bundles contract",
-      {
-        changes: [
-          {
-            address: BUNDLES_TARGET,
-            token: USDC,
-            netSwept: "1000000",
-          },
-        ],
-      },
-    );
+    const result = checkBundlesRetention({
+      chainId: 1,
+      transfers,
+      assetChanges: [],
+    });
+    expect(result).toMatchObject({
+      status: "checked",
+      failures: [],
+      warnings: [
+        {
+          code: "BUNDLES_BALANCE_SWEPT",
+          severity: "warn",
+          chainId: 1,
+          address: BUNDLES_TARGET,
+          token: USDC,
+          netSwept: 1000000n,
+        },
+      ],
+    });
   });
 
   it("flags retention per (bundles contract,token) pair — tokenA retained, tokenB clean", () => {
@@ -597,15 +600,28 @@ describe("assertNoBundlesRetention", () => {
   });
 });
 
-describe("findBundlesRetentionFailures", () => {
+describe("checkBundlesRetention", () => {
   const address = getAddress(getChainAddresses(1).bundles!.vaultBundlesV1!);
   const params = { chainId: 1, transfers: [], assetChanges: [] };
 
   test("returns no failure for empty flows and unsupported chains", () => {
-    expect(findBundlesRetentionFailures(params)).toEqual([]);
-    expect(findBundlesRetentionFailures({ ...params, chainId: -1 })).toEqual(
-      [],
-    );
+    expect(checkBundlesRetention(params)).toEqual({
+      status: "checked",
+      failures: [],
+      warnings: [],
+    });
+    expect(checkBundlesRetention({ ...params, chainId: -1 })).toMatchObject({
+      status: "skipped-unsupported-chain",
+      failures: [],
+      warnings: [
+        {
+          code: "RETENTION_CHECK_SKIPPED",
+          severity: "warn",
+          chainId: -1,
+          reason: "unsupported-chain",
+        },
+      ],
+    });
   });
 
   test("preserves the aggregate retention error and native-before-token order", () => {
@@ -624,7 +640,7 @@ describe("findBundlesRetentionFailures", () => {
         },
       ],
     };
-    const failures = findBundlesRetentionFailures(input);
+    const { failures } = checkBundlesRetention(input);
     expect(failures).toHaveLength(1);
     expect(failures[0]).toBeInstanceOf(BlacklistViolationError);
     expect(failures[0]?.assetChanges).toEqual([

@@ -156,10 +156,14 @@ export const validateMidnightTakeFeasibility = <T extends TakeableOfferLike>(
   params: MidnightTakeFeasibilityParams<T>,
 ): readonly T[] => {
   // The raw builder rejects an empty list with `EmptyMidnightTakeableOffersError`.
-  if (params.takeableOffers.length === 0) return params.takeableOffers;
+  if (params.takeableOffers.length === 0) {
+    return params.takeableOffers;
+  }
   const { marketData, now, deadline } = params;
   // The entity checked the deadline on an earlier clock read; recheck so the fee window is never empty.
-  if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+  if (deadline <= now) {
+    throw new ExpiredDeadlineError(deadline, now);
+  }
   const maturity = marketData.params.maturity;
   const marketFee = BigInt(marketData.continuousFee);
   // Reject buy fee and debt violations before evaluating settlement fees or offers.
@@ -234,11 +238,14 @@ function resolveRepayTarget(
   },
 ) {
   if (target.type === "units") {
-    if (target.units === maxUint256) return undefined;
+    if (target.units === maxUint256) {
+      return undefined;
+    }
     return { field: "target.units" as const, value: target.units };
   }
-  if (target.minUnits > debt)
+  if (target.minUnits > debt) {
     return { field: "target.minUnits" as const, value: target.minUnits };
+  }
   return {
     field: "target.assets" as const,
     value: netOfReferralFee(target.assets, referralFeePct),
@@ -250,7 +257,9 @@ function assertMidnightBuyBounds(
   params: MidnightTakeFeasibilityParams,
   marketFee: bigint,
 ): void {
-  if (params.side !== "buy") return;
+  if (params.side !== "buy") {
+    return;
+  }
   if (params.maxContinuousFee < marketFee) {
     throw new MidnightContinuousFeeAboveMaxError({
       maxContinuousFee: params.maxContinuousFee,
@@ -289,21 +298,34 @@ function getOfferPriceReason(
   | undefined {
   // The bundle converts every buy assets target price outside its per-offer catch.
   if (params.side === "buy" && params.target.type === "assets") {
-    if (!tickInRange) return "tickOutOfRange";
-    if (offerPrice + maxFee === 0n) return "zeroBuyerPrice";
-    if (offerPrice + minFee > MathLib.WAD) return "buyerPriceAboveOne";
+    if (!tickInRange) {
+      return "tickOutOfRange";
+    }
+    if (offerPrice + maxFee === 0n) {
+      return "zeroBuyerPrice";
+    }
+    if (offerPrice + minFee > MathLib.WAD) {
+      return "buyerPriceAboveOne";
+    }
     return undefined;
   }
   // Every sell converts a buy offer's price outside the catch too.
-  if (params.side !== "sell") return undefined;
-  if (!tickInRange) return "tickOutOfRange";
-  if (offerPrice === 0n) return "zeroBuyerPrice";
+  if (params.side !== "sell") {
+    return undefined;
+  }
+  if (!tickInRange) {
+    return "tickOutOfRange";
+  }
+  if (offerPrice === 0n) {
+    return "zeroBuyerPrice";
+  }
   // An assets target also divides by the seller price, which is zero at the fee.
   if (
     offerPrice < minFee ||
     (params.target.type === "assets" && offerPrice === minFee)
-  )
+  ) {
     return "priceBelowSettlementFee";
+  }
   return undefined;
 }
 
@@ -324,19 +346,33 @@ function getOfferDeadReason(
 ):
   | MidnightTakeableOffersNotFillableError["offers"][number]["reason"]
   | undefined {
-  if (units === 0n) return "zeroUnits";
-  if (!tickInRange) return "tickOutOfRange";
-  if (offer.expiry < params.now) return "expired";
-  if (offer.start > params.deadline) return "notStarted";
-  if (isAddressEqual(offer.maker, params.accountAddress)) return "selfTake";
-  if (offer.continuousFeeCap < marketFee)
+  if (units === 0n) {
+    return "zeroUnits";
+  }
+  if (!tickInRange) {
+    return "tickOutOfRange";
+  }
+  if (offer.expiry < params.now) {
+    return "expired";
+  }
+  if (offer.start > params.deadline) {
+    return "notStarted";
+  }
+  if (isAddressEqual(offer.maker, params.accountAddress)) {
+    return "selfTake";
+  }
+  if (offer.continuousFeeCap < marketFee) {
     return "continuousFeeCapBelowMarketFee";
+  }
   if (
     params.side === "sell" &&
     !isAddressEqual(offer.receiverIfMakerIsSeller, zeroAddress)
-  )
+  ) {
     return "receiverIfMakerIsSellerNotZero";
-  if (sellableCredit === 0n) return "marketMatured";
+  }
+  if (sellableCredit === 0n) {
+    return "marketMatured";
+  }
   return undefined;
 }
 
@@ -368,7 +404,9 @@ function collectOfferCapacity(
       minFee,
       maxFee,
     });
-    if (priceReason) removed.add(index);
+    if (priceReason) {
+      removed.add(index);
+    }
     const reason =
       priceReason ??
       getOfferDeadReason(
@@ -395,7 +433,9 @@ function collectOfferCapacity(
 function resolveRequiredUnits(params: MidnightTakeFeasibilityParams): bigint {
   const { target, referralFeePct } = params;
   if (params.side === "sell") {
-    if (target.type === "units") return target.units;
+    if (target.type === "units") {
+      return target.units;
+    }
     return grossFromNetAssets({ netAssets: target.assets, referralFeePct });
   }
   if (params.target.type === "units") {

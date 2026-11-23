@@ -1,4 +1,8 @@
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 
 const DROPPED_REQUEST_HEADERS = new Set([
@@ -23,6 +27,140 @@ export interface ForkProxy {
   readonly url: `http://127.0.0.1:${number}`;
   /** Closes the server and its open connections. Idempotent. */
   readonly close: () => void;
+}
+
+const isNodeInfoRequest = (
+  request: unknown,
+): request is { readonly id?: unknown } =>
+  typeof request === "object" &&
+  request !== null &&
+  "method" in request &&
+  request.method === "anvil_nodeInfo";
+
+function partitionRequests(body: Buffer) {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body.toString());
+  } catch {}
+  const isBatch = Array.isArray(payload);
+  const requests: unknown[] = Array.isArray(payload) ? payload : [payload];
+  const localResponses = requests.filter(isNodeInfoRequest).map(({ id }) => ({
+    jsonrpc: "2.0",
+    id: id ?? null,
+    error: { code: -32601, message: "Method not found" },
+  }));
+  return {
+    isBatch,
+    localResponses,
+    forwardedRequests: requests.filter(
+      (request) => !isNodeInfoRequest(request),
+    ),
+  };
+}
+
+function forwardHeaders(req: IncomingMessage, authorization?: string) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (value === undefined || DROPPED_REQUEST_HEADERS.has(name)) {
+      continue;
+    }
+    for (const item of [value].flat()) {
+      headers.append(name, item);
+    }
+  }
+  if (authorization !== undefined && !headers.has("authorization")) {
+    headers.set("authorization", authorization);
+  }
+  return headers;
+}
+
+async function sendUpstreamResponse(
+  res: ServerResponse,
+  {
+    upstream,
+    localResponses,
+  }: {
+    readonly upstream: Response;
+    readonly localResponses: ReturnType<
+      typeof partitionRequests
+    >["localResponses"];
+  },
+) {
+  let responseBody = Buffer.from(await upstream.arrayBuffer());
+  if (localResponses.length > 0) {
+    try {
+      const upstreamResponses: unknown = JSON.parse(responseBody.toString());
+      if (Array.isArray(upstreamResponses)) {
+        responseBody = Buffer.from(
+          JSON.stringify([...upstreamResponses, ...localResponses]),
+        );
+      }
+    } catch {}
+  }
+
+  const responseHeaders: Record<string, string> = {};
+  upstream.headers.forEach((value, name) => {
+    if (!DROPPED_RESPONSE_HEADERS.has(name)) {
+      responseHeaders[name] = value;
+    }
+  });
+  res.writeHead(upstream.status, responseHeaders).end(responseBody);
+}
+
+function sendProxyError(res: ServerResponse, error: unknown) {
+  // Only the error name and code: messages can contain the upstream URL.
+  const { name, cause } = error instanceof Error ? error : new Error();
+  const code =
+    typeof cause === "object" &&
+    cause !== null &&
+    "code" in cause &&
+    typeof cause.code === "string"
+      ? `: ${cause.code}`
+      : "";
+  if (!res.headersSent) {
+    res.writeHead(502, { "content-type": "text/plain" });
+  }
+  res.end(`The fork proxy could not reach the fork RPC (${name}${code}).`);
+}
+
+function createForkRequestHandler(target: string, authorization?: string) {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    const controller = new AbortController();
+    res.once("close", () => {
+      if (!res.writableFinished) {
+        controller.abort();
+      }
+    });
+
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const body = Buffer.concat(chunks);
+      const { isBatch, localResponses, forwardedRequests } =
+        partitionRequests(body);
+      if (localResponses.length > 0 && forwardedRequests.length === 0) {
+        res
+          .writeHead(200, { "content-type": "application/json" })
+          .end(JSON.stringify(isBatch ? localResponses : localResponses[0]));
+        return;
+      }
+
+      const upstream = await fetch(target, {
+        method: req.method,
+        headers: forwardHeaders(req, authorization),
+        body:
+          localResponses.length === 0
+            ? body
+            : JSON.stringify(forwardedRequests),
+        signal: controller.signal,
+      });
+      await sendUpstreamResponse(res, { upstream, localResponses });
+    } catch (error) {
+      sendProxyError(res, error);
+    }
+  };
 }
 
 /**
@@ -53,100 +191,7 @@ export const startForkProxy = async (
     target = url.href;
   }
 
-  const server = createServer(async (req, res) => {
-    const controller = new AbortController();
-    res.once("close", () => {
-      if (!res.writableFinished) controller.abort();
-    });
-
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const body = Buffer.concat(chunks);
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(body.toString());
-      } catch {}
-      const requests: unknown[] = Array.isArray(payload) ? payload : [payload];
-      const isNodeInfoRequest = (
-        request: unknown,
-      ): request is { readonly id?: unknown } =>
-        typeof request === "object" &&
-        request !== null &&
-        "method" in request &&
-        request.method === "anvil_nodeInfo";
-      const nodeInfoRequests = requests.filter(isNodeInfoRequest);
-      const localResponses = nodeInfoRequests.map(({ id }) => ({
-        jsonrpc: "2.0",
-        id: id ?? null,
-        error: { code: -32601, message: "Method not found" },
-      }));
-      const forwardedRequests = requests.filter(
-        (request) => !isNodeInfoRequest(request),
-      );
-
-      if (localResponses.length > 0 && forwardedRequests.length === 0) {
-        res
-          .writeHead(200, { "content-type": "application/json" })
-          .end(
-            JSON.stringify(
-              Array.isArray(payload) ? localResponses : localResponses[0],
-            ),
-          );
-        return;
-      }
-
-      const headers = new Headers();
-      for (const [name, value] of Object.entries(req.headers)) {
-        if (value === undefined || DROPPED_REQUEST_HEADERS.has(name)) continue;
-        for (const item of [value].flat()) headers.append(name, item);
-      }
-      if (authorization !== undefined && !headers.has("authorization"))
-        headers.set("authorization", authorization);
-      const upstream = await fetch(target, {
-        method: req.method,
-        headers,
-        body:
-          localResponses.length === 0
-            ? body
-            : JSON.stringify(forwardedRequests),
-        signal: controller.signal,
-      });
-
-      let responseBody = Buffer.from(await upstream.arrayBuffer());
-      if (localResponses.length > 0) {
-        try {
-          const upstreamResponses: unknown = JSON.parse(
-            responseBody.toString(),
-          );
-          if (Array.isArray(upstreamResponses))
-            responseBody = Buffer.from(
-              JSON.stringify([...upstreamResponses, ...localResponses]),
-            );
-        } catch {}
-      }
-
-      const responseHeaders: Record<string, string> = {};
-      upstream.headers.forEach((value, name) => {
-        if (!DROPPED_RESPONSE_HEADERS.has(name)) responseHeaders[name] = value;
-      });
-      res.writeHead(upstream.status, responseHeaders).end(responseBody);
-    } catch (error) {
-      // Only the error name and code: messages can contain the upstream URL.
-      const { name, cause } = error instanceof Error ? error : new Error();
-      const code =
-        typeof cause === "object" &&
-        cause !== null &&
-        "code" in cause &&
-        typeof cause.code === "string"
-          ? `: ${cause.code}`
-          : "";
-      if (!res.headersSent)
-        res.writeHead(502, { "content-type": "text/plain" });
-      res.end(`The fork proxy could not reach the fork RPC (${name}${code}).`);
-    }
-  });
+  const server = createServer(createForkRequestHandler(target, authorization));
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

@@ -1,4 +1,4 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { BASE_HISTORICAL_FORK_BLOCK, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 import { base } from "viem/chains";
@@ -10,7 +10,7 @@ const test = createViemTest(base, {
   forkUrl:
     process.env.BASE_RPC_URL ??
     getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 53_249_570,
+  forkBlockNumber: BASE_HISTORICAL_FORK_BLOCK,
 });
 
 test.for([

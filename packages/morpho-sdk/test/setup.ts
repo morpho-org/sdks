@@ -2,13 +2,16 @@ import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
 
+// Vault V1 adapter allocations used by the ForceRedeem fixtures.
+const FORCE_REDEEM_FORK_BLOCK = 24_593_903n;
+
 /**
  * This test will run on `mainnet`
  */
 export const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 24_593_903n,
+  forkBlockNumber: FORCE_REDEEM_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     // The test account (0xf39Fd6…) has EIP-7702 delegation code on mainnet at

@@ -84,7 +84,9 @@ export const midnightCancelOffers = (
   if (isAddressEqual(onBehalf, zeroAddress)) {
     throw new MidnightZeroOnBehalfError("onBehalf");
   }
-  if (groups.length === 0) throw new EmptyMidnightGroupCancellationsError();
+  if (groups.length === 0) {
+    throw new EmptyMidnightGroupCancellationsError();
+  }
   const seen = new Set<string>();
   for (const [index, group] of groups.entries()) {
     // Validation only; rejects groups that are not 32-byte hex.

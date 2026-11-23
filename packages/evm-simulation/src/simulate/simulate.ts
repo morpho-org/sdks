@@ -21,9 +21,11 @@ import { runSimulation } from "./run-simulation.js";
  */
 function withCcipReadDisabled(client: SimulationClient): SimulationClient {
   const copy: SimulationClient = { ...client, ccipRead: false };
-  for (const [key, value] of Object.entries(copy))
-    if (typeof value === "function" && key !== "request" && key !== "extend")
+  for (const [key, value] of Object.entries(copy)) {
+    if (typeof value === "function" && key !== "request" && key !== "extend") {
       Reflect.deleteProperty(copy, key);
+    }
+  }
   return copy;
 }
 
@@ -135,6 +137,8 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   the signed `authorizer`, `authorized`, `isAuthorized`, and `nonce`.
  * - `UnexpectedTokenApprovalError`: when a sender-granted token, permit,
  *   Permit2, or NFT approval is outside the derived and explicit allowlist.
+ * - `UnexpectedTokenTransferError`: by default, when a sender outflow is outside
+ *   the operation-derived spending set and the verified paired-emitter exception.
  * - `UnexpectedMorphoAuthorizationError`: when a sender-granted Morpho
  *   authorization is outside the derived and explicit allowlist.
  * - `UnexpectedMidnightAuthorizationError`: when a sender-granted Midnight
@@ -204,12 +208,36 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   `SimulationValidationError`. A looked-up state block without
  *   number/hash is reported as `InvalidSimulationResponseError`.
  *
+ * Sender-outflow findings (`UnexpectedTokenTransferError`, code
+ * `UNEXPECTED_TOKEN_TRANSFER`) never block or enter `failures`. They are kept in a
+ * frozen `report.warnings` array, present on success and failure reports even when
+ * empty. Each warning is frozen plain data with severity `"warn"`, code, token,
+ * sender, recipients and chainId. Integrators gating signing must inspect warnings,
+ * even when `ok` is true. The SDK performs no logging. Deprecated `options.logger`
+ * is accepted but ignored; read `report.warnings` instead. It will be removed in
+ * a future major after the coexistence minor. The error class remains exported.
+ * Success and failure reports include `verification.retention` (`"checked"` or
+ * `"skipped-unsupported-chain"`) only after retention ran with complete user logs.
+ * Omitted user logs (unlike explicit `logs: []`), early failures, reverts and
+ * unusable transfer evidence omit `verification`. Any `MALFORMED_TRANSFER_LOG`
+ * warning also omits it because the parser discarded transfer evidence, while
+ * warnings and failures from the remaining records are preserved.
+ * A skip also emits `RETENTION_CHECK_SKIPPED`. Other diagnostics describe malformed
+ * transfer logs, wrapped-native event mismatches and swept intermediary balances.
+ * Every transfer from a listed paired emitter
+ * is ignored when its primary token is spendable on that chain, without requiring
+ * primary transfer evidence or matching transactions, participants, amounts or
+ * event counts. Ignored paired emitters produce no warning; `limits: "none"` skips
+ * sender-outflow detection.
+ *
  * @param client - A viem client the caller owns, with `chain` set; its
  *   transport must support `eth_simulateV1`. The simulated chain is
  *   `client.chain.id`, sent on every call inside `eth_simulateV1`, so nodes
  *   that check it reject a wrong-chain endpoint. The SDK sends no
  *   `eth_chainId` and sets no retry policy, and every request runs on a copy
  *   of the client with CCIP-Read off; the caller's client is not changed.
+ *   Use one trusted RPC backend per simulation: the SDK cannot verify that
+ *   reads routed to different nodes used the same fork.
  * @param params - Quote-only `SimulateParams` or additive `SimulateInputParams`.
  * @param params.transactions - The bundle's transactions, in execution order.
  *   All must share the same `from`. Each transaction may include caller-supplied
@@ -250,7 +278,7 @@ function withCcipReadDisabled(client: SimulationClient): SimulationClient {
  *   state, applied once before all simulated calls, including checks. None is
  *   added automatically. Results describe hypothetical state, not broadcast
  *   guarantees; metadata reads outside `eth_simulateV1` still use onchain state.
- * @param options - Optional `logger`, `timeoutMs` (whole-simulation deadline,
+ * @param options - Optional `timeoutMs` (whole-simulation deadline,
  *   default 5000 ms; an expired deadline is reported as `RpcTransportError`),
  *   `blockOverrides.gasLimit`, `callGasLimit` and `parentHashCheck`; an invalid
  *   value is reported as `SimulationValidationError`.
@@ -323,7 +351,8 @@ export function simulate(
  * See {@link simulate} for execution modes, funding, and normalized outputs.
  * @param client - A viem client the caller owns, with `chain` set.
  * @param params - Bundle and input-based or mixed limits.
- * @param options - Optional logger, deadline and simulated-block settings.
+ * @param options - Optional deadline, per-call gas and simulated-block settings.
+ *   Deprecated `logger` is accepted but ignored; use `report.warnings`.
  * @returns A frozen {@link SimulationInputReport}; when `ok`, `result` is a
  *   {@link VerifiedSimulationInputResult} with checked input bounds. Besides
  *   the failures listed on the quote-only overload, the report carries:
@@ -408,7 +437,9 @@ export async function simulate(
     });
   } catch (cause) {
     // A failure that stops the run is reported alone; RPC calls already wrap theirs.
-    if (isSimulationPackageError(cause)) return toFailureReport([cause]);
+    if (isSimulationPackageError(cause)) {
+      return toFailureReport([cause]);
+    }
     throw new UnexpectedSimulationError("Simulation failed unexpectedly.", {
       cause,
     });

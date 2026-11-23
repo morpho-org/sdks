@@ -114,11 +114,11 @@ export class VaultV2MidnightAdapter
 
   /**
    * Returns the market-family allocation-cap id (collateral params, RCF
-   * threshold and liquidator gate; maturity and enter gate excluded).
+   * threshold, liquidator gate and enter gate; maturity excluded).
    *
    * @param market - Midnight market fields used by the family id.
    * @returns The family allocation-cap id.
-   * @throws {viem.InvalidAddressError} when a token, oracle, or the liquidator gate is not a valid address.
+   * @throws {viem.InvalidAddressError} when a token, oracle, or either gate is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts
@@ -128,13 +128,14 @@ export class VaultV2MidnightAdapter
    *   collateralParams: [],
    *   rcfThreshold: 0n,
    *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   enterGate: "0x0000000000000000000000000000000000000000",
    * });
    * ```
    */
   static familyCapId(
     market: Pick<
       IVaultV2MidnightAdapterMarket,
-      "collateralParams" | "rcfThreshold" | "liquidatorGate"
+      "collateralParams" | "rcfThreshold" | "liquidatorGate" | "enterGate"
     >,
   ): Hash {
     return VaultV2MidnightAdapterUtils.familyCapId(market);
@@ -216,7 +217,7 @@ export class VaultV2MidnightAdapter
    *
    * @param market - Midnight market fields used by the adapter.
    * @returns Adapter, family, and collateral-token cap ids in contract order.
-   * @throws {viem.InvalidAddressError} when the liquidator gate, a token, or an oracle is not a valid address.
+   * @throws {viem.InvalidAddressError} when the liquidator gate, enter gate, a token, or an oracle is not a valid address.
    * @throws {viem.IntegerOutOfRangeError} when an integer field is not a uint256.
    * @example
    * ```ts

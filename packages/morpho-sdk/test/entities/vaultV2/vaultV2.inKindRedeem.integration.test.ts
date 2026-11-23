@@ -11,7 +11,11 @@ import {
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -43,7 +47,7 @@ const setupMarkets = [CbbtcUsdcBlue, WbtcUsdcSourceMarket] as const;
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_720_868n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 const submitAndAccept = async (params: {

@@ -23,6 +23,7 @@ export const SIMULATION_ERROR_CODES = [
   "AMBIGUOUS_EXPECTED_QUOTE",
   "UNSUPPORTED_LIMIT_ACTION",
   "UNEXPECTED_TOKEN_APPROVAL",
+  "UNEXPECTED_TOKEN_TRANSFER",
   "UNEXPECTED_MORPHO_AUTHORIZATION",
   "UNEXPECTED_MIDNIGHT_AUTHORIZATION",
   "APPROVAL_CHECK_UNAVAILABLE",
@@ -33,9 +34,9 @@ export const SIMULATION_ERROR_CODES = [
 export type SimulationErrorCode = (typeof SIMULATION_ERROR_CODES)[number];
 
 /**
- * Default log level of an SDK error, named like pino's levels so it indexes a logger with no mapping.
- * Every severity blocks the bundle: `simulate` returns no result for `warn` as for `fatal`. It is
- * for logging and alerting only; a failed report's `severity` is the highest of its failures'.
+ * Classification of an SDK failure, compatible with common alert levels.
+ * Every entry in `report.failures` blocks regardless of severity. A failed
+ * report's `severity` is the highest of its failures', excluding warnings.
  */
 export type SimulationErrorSeverity = "fatal" | "error" | "warn";
 
@@ -122,8 +123,13 @@ export class UnusedAuthorizationError extends SimulationExecutionError {
       }
     >,
   ) {
+    const event = {
+      erc2612Permit: "Approval",
+      blueAuthorizationSignature: "IncrementNonce",
+      midnightAuthorizationSignature: "SetIsAuthorized",
+    }[authorization.type];
     super(
-      `Authorization "${authorizationIndex}" (${authorization.type}) has no matching ${authorization.type === "erc2612Permit" ? "Approval" : authorization.type === "blueAuthorizationSignature" ? "IncrementNonce" : "SetIsAuthorized"} event in the bundle. Include and execute the signed request in the final transactions.`,
+      `Authorization "${authorizationIndex}" (${authorization.type}) has no matching ${event} event in the bundle. Include and execute the signed request in the final transactions.`,
     );
   }
 }
@@ -471,6 +477,46 @@ export class SlippageCheckUnavailableError extends SimulationInfrastructureError
   }
 }
 
+/**
+ * A sender outflow uses a token not spendable by the declared operations.
+ * Converted to a plain `SimulationWarning` with severity `"warn"`, never a blocking failure.
+ * Integrators gating signing must inspect report warnings.
+ * Extends {@link SimulationSafetyError}.
+ */
+export class UnexpectedTokenTransferError extends SimulationSafetyError {
+  override readonly name = "UnexpectedTokenTransferError";
+  readonly code = "UNEXPECTED_TOKEN_TRANSFER";
+  /** Token whose movements are not declared. */
+  readonly token: Address;
+  /** Simulation owner losing or forwarding tokens. */
+  readonly sender: Address;
+  /** Recipients observed in parsed transfer events. */
+  readonly recipients: readonly Address[];
+
+  /**
+   * Identify the undeclared token, sender and observed recipients.
+   * @param params.token - Token whose sender movements are not declared.
+   * @param params.sender - Simulation owner losing or forwarding tokens.
+   * @param params.recipients - Observed recipients, empty when unknown.
+   */
+  constructor({
+    token,
+    sender,
+    recipients,
+  }: {
+    readonly token: Address;
+    readonly sender: Address;
+    readonly recipients: readonly Address[];
+  }) {
+    super(
+      `Unexpected transfer of token "${token}" from sender "${sender}" to ${recipients.length === 0 ? "an unknown recipient" : recipients.join(", ")}. Do not sign this request.`,
+    );
+    this.recipients = [...recipients];
+    this.token = token;
+    this.sender = sender;
+  }
+}
+
 /** A sender-granted token approval or permit is not allowed by the request. Extends {@link SimulationSafetyError}. */
 export class UnexpectedTokenApprovalError extends SimulationSafetyError {
   override readonly name = "UnexpectedTokenApprovalError";
@@ -804,25 +850,30 @@ export class LimitAccountMismatchError extends SimulationInvalidRequestError {
     /** The address the action encodes, or the passed option when `field` is `"receiver"` or `"options.onBehalf"`. */
     readonly actual: Address;
   }) {
-    super(
-      mismatch.field === "receiver"
-        ? `receiver: "${mismatch.actual}" was passed, but this action pays ` +
-            `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
-            `receiver or set it to owner; only vaultV2ForceRedeem, ` +
-            `midnightRedeem, midnightTakeBorrow, ` +
-            `midnightSupplyCollateralTakeBorrow, midnightTakeWithdraw and a ` +
-            `collateral-withdrawing midnightRepayWithdrawCollateral or ` +
-            `midnightTakeRepayWithdrawCollateral encode a distinct receiver.`
-        : mismatch.field === "options.onBehalf"
-          ? `onBehalf: "${mismatch.actual}" was passed, but this action ` +
-            `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
-            `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
-            `and midnightRedeem act on a distinct account.`
-          : `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
-            `limit measures "${mismatch.expected}". Build the action for the ` +
-            `same account passed as owner/receiver, or as onBehalf on ` +
-            `midnightSupplyCollateral or midnightRedeem`,
-    );
+    let message: string;
+    if (mismatch.field === "receiver") {
+      message =
+        `receiver: "${mismatch.actual}" was passed, but this action pays ` +
+        `msg.sender, so the limit measures "${mismatch.expected}". Omit ` +
+        `receiver or set it to owner; only vaultV2ForceRedeem, ` +
+        `midnightRedeem, midnightTakeBorrow, ` +
+        `midnightSupplyCollateralTakeBorrow, midnightTakeWithdraw and a ` +
+        `collateral-withdrawing midnightRepayWithdrawCollateral or ` +
+        `midnightTakeRepayWithdrawCollateral encode a distinct receiver.`;
+    } else if (mismatch.field === "options.onBehalf") {
+      message =
+        `onBehalf: "${mismatch.actual}" was passed, but this action ` +
+        `credits msg.sender, so the limit measures "${mismatch.expected}". ` +
+        `Omit onBehalf or set it to owner; only midnightSupplyCollateral ` +
+        `and midnightRedeem act on a distinct account.`;
+    } else {
+      message =
+        `${mismatch.field}: action encodes "${mismatch.actual}" but the ` +
+        `limit measures "${mismatch.expected}". Build the action for the ` +
+        `same account passed as owner/receiver, or as onBehalf on ` +
+        `midnightSupplyCollateral or midnightRedeem`;
+    }
+    super(message);
     this.field = mismatch.field;
     this.expected = mismatch.expected;
     this.actual = mismatch.actual;
@@ -935,6 +986,7 @@ const ERROR_NAME_BY_CODE: Readonly<
   AMBIGUOUS_EXPECTED_QUOTE: ["AmbiguousExpectedQuoteError"],
   UNSUPPORTED_LIMIT_ACTION: ["UnsupportedLimitActionError"],
   UNEXPECTED_TOKEN_APPROVAL: ["UnexpectedTokenApprovalError"],
+  UNEXPECTED_TOKEN_TRANSFER: ["UnexpectedTokenTransferError"],
   UNEXPECTED_MORPHO_AUTHORIZATION: ["UnexpectedMorphoAuthorizationError"],
   UNEXPECTED_MIDNIGHT_AUTHORIZATION: ["UnexpectedMidnightAuthorizationError"],
   APPROVAL_CHECK_UNAVAILABLE: ["ApprovalCheckUnavailableError"],
@@ -963,19 +1015,29 @@ const ERROR_NAME_BY_CODE: Readonly<
 export function isSimulationPackageError(
   value: unknown,
 ): value is SimulationPackageError {
-  if (typeof value !== "object" || value === null) return false;
-  if (value instanceof SimulationPackageError) return true;
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  if (value instanceof SimulationPackageError) {
+    return true;
+  }
   const { name, message, code } = value as {
     name?: unknown;
     message?: unknown;
     code?: unknown;
   };
-  if (typeof message !== "string") return false;
-  if (typeof name !== "string" || typeof code !== "string") return false;
-  if (!(SIMULATION_ERROR_CODES as readonly string[]).includes(code))
+  if (typeof message !== "string") {
     return false;
-  if (!ERROR_NAME_BY_CODE[code as SimulationErrorCode].includes(name))
+  }
+  if (typeof name !== "string" || typeof code !== "string") {
     return false;
+  }
+  if (!(SIMULATION_ERROR_CODES as readonly string[]).includes(code)) {
+    return false;
+  }
+  if (!ERROR_NAME_BY_CODE[code as SimulationErrorCode].includes(name)) {
+    return false;
+  }
   const { severity } = value as { severity?: unknown };
   return severity === "fatal" || severity === "error" || severity === "warn";
 }

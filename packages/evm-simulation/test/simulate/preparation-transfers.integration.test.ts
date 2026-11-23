@@ -1,5 +1,9 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import solc from "solc";
 import { type Abi, encodeFunctionData, erc20Abi } from "viem";
@@ -59,7 +63,7 @@ const artifact = compiled.contracts["Token.sol"].SideEffectToken;
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });

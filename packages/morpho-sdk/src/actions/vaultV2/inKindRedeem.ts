@@ -73,7 +73,9 @@ export const vaultV2InKindRedeem = ({
 }: VaultV2InKindRedeemParams): Readonly<
   Transaction<VaultV2InKindRedeemAction>
 > => {
-  if (args.amount <= 0n) throw new NonPositiveInputError("amount", args.amount);
+  if (args.amount <= 0n) {
+    throw new NonPositiveInputError("amount", args.amount);
+  }
   validateDeadline(args.deadline);
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const marketParamsList = args.marketParamsList.map((marketParams) => ({
@@ -106,7 +108,9 @@ export const vaultV2InKindRedeem = ({
       ],
     }),
   };
-  if (metadata) tx = addTransactionMetadata(tx, metadata);
+  if (metadata) {
+    tx = addTransactionMetadata(tx, metadata);
+  }
 
   return deepFreeze({
     ...tx,

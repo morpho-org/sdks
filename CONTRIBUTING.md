@@ -7,14 +7,14 @@ This monorepo contains the TypeScript SDK packages used to interact with the Mor
 ### Prerequisites
 
 - Node.js `>=26 <27`
-- pnpm `11`, declared by the root `packageManager` field
+- Bun `1.4.5`, declared by the root `packageManager` field
 - Git
 - Optional: a Morpho eRPC key (`ERPC_SECRET`); without it, hand-written fork suites use the chain's public RPC and registry E2E suites are skipped
 
-Enable pnpm through Corepack if needed:
+Install the declared Bun version if needed:
 
 ```bash
-corepack enable
+curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.5"
 ```
 
 ### Clone and Install
@@ -22,24 +22,43 @@ corepack enable
 ```bash
 git clone https://github.com/morpho-org/sdks.git
 cd sdks
-pnpm install --frozen-lockfile
+bun run install:checked
 ```
+
+### Change Dependencies
+
+From the repository root, use `bun run deps:add <package> --dev` or
+`bun run deps:update [package] [--latest]`. These commands resolve with
+`--lockfile-only --ignore-scripts`, validate every locked npm publication timestamp,
+then run `bun install --frozen-lockfile` only if validation passes. Resolution
+does not install packages or run lifecycle scripts. A failed check leaves manifest
+and lockfile changes for review or reversion.
+
+Add `--workspace packages/<name>` to either command to edit an existing workspace,
+for example `bun run deps:add --workspace packages/morpho-ts is-number@7.0.0 --dev`.
+Without it, the root manifest is edited. Outside, nested and symlinked paths are
+rejected; validation and the frozen install always run at the repository root.
+
+The Bun security scanner also checks resolved dependencies before raw
+`bun add`, `bun update`, and `bun install` can install them. Use
+`install:checked` for an existing lockfile and the guarded commands for updates
+to validate the entire lockfile.
 
 ### Run Checks
 
 Run the root checks before opening a PR:
 
 ```bash
-pnpm lint
-pnpm test
+bun run lint
+bun run test
 ```
 
-Fork suites need Foundry's Anvil v1.9.0, the version CI pins (`foundryup -i v1.9.0`). On older Anvil versions, the Base Midnight fork tests fail.
+Fork suites need an Anvil that supports `--no-bal` (v1.9.0 or later). CI uses Foundry v1.10.0 (`foundryup -i v1.10.0`). On Anvil versions older than v1.9.0, the Base Midnight fork tests fail.
 
 Hand-written Anvil fork suites fall back to the chain's public RPC when `ERPC_SECRET` is unset. Registry-driven E2E suites require the Morpho eRPC and skip eligible chains without the secret; WDK integration suites are skipped without it. Outside contributors can run tests that do not require those fork suites:
 
 ```bash
-pnpm test
+bun run test
 ```
 
 Registry-driven E2E suites run every scenario on each chain whose address registry has the
@@ -49,9 +68,9 @@ chains by id or `ChainId` name; selecting a chain without `ERPC_SECRET` throws
 public RPC, but registry-driven E2E forks and WDK integration suites are skipped without an eRPC key:
 
 ```bash
-pnpm test:e2e                                    # every eligible chain when ERPC_SECRET is set
-E2E_CHAINS=BaseMainnet pnpm test:e2e             # one chain (or E2E_CHAINS=8453)
-pnpm test:e2e -t e2e/vaultV2                     # one scenario family
+bun run test:e2e                                    # every eligible chain when ERPC_SECRET is set
+E2E_CHAINS=BaseMainnet bun run test:e2e             # one chain (or E2E_CHAINS=8453)
+bun run test:e2e -t e2e/vaultV2                     # one scenario family
 ```
 
 Keep one E2E scenario per action untagged, and tag each further variant with
@@ -62,14 +81,14 @@ tests and their scheduled run covers them. Reproduce that selection locally with
 Other useful commands:
 
 ```bash
-pnpm build
-pnpm test:coverage
-pnpm coverage:report
+bun run build
+bun run test:coverage
+bun run coverage:report
 ```
 
 ## Code Style
 
-Biome owns formatting and linting. Run `pnpm lint` before pushing; the repository also runs Biome through lint-staged when hooks are installed.
+Biome owns formatting and linting. Run `bun run lint` before pushing; the repository also runs Biome through lint-staged when hooks are installed.
 
 ## How This Repository Is Released
 
@@ -80,7 +99,7 @@ This repository holds the source of each published release. Every push to `main`
 1. Create a focused branch from `main`.
 2. Make the smallest coherent change, one concern per PR.
 3. Add or update tests when behavior changes. Colocate `*.test.ts` unit tests with their modules; put `*.integration.test.ts` fork/integration tests under the package's `test/` directory.
-4. Run `pnpm lint` and `pnpm test`.
+4. Run `bun run lint` and `bun run test`.
 
 Maintainers port accepted changes to the development repository, and they reach `main` with the next release.
 

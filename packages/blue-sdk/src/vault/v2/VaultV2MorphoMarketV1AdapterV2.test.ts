@@ -25,6 +25,7 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
     const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...vaultV2AdapterInput(),
+        type: "VaultV2MorphoMarketV1AdapterV2",
         marketIds: [m.id],
         adaptiveCurveIrm: ADAPTER,
         supplyShares: { [m.id]: 500_000n },
@@ -65,6 +66,7 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
     const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...vaultV2AdapterInput(),
+        type: "VaultV2MorphoMarketV1AdapterV2",
         marketIds: [m.id],
         adaptiveCurveIrm: ADAPTER,
         supplyShares: {},
@@ -88,6 +90,7 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
     const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...vaultV2AdapterInput(),
+        type: "VaultV2MorphoMarketV1AdapterV2",
         marketIds: [m.id],
         adaptiveCurveIrm: ADAPTER,
         supplyShares: { [m.id]: 100n },

@@ -1,4 +1,4 @@
-import { getErpcForkUrl } from "@morpho-org/test";
+import { BASE_FORK_BLOCK, getErpcForkUrl } from "@morpho-org/test";
 import { createFaultProxy, type FaultProxy } from "@morpho-org/test/chaos";
 import { createViemTest } from "@morpho-org/test/vitest";
 import type { Address } from "viem";
@@ -9,7 +9,7 @@ import { simulationClientFor } from "../../src/test-helpers/index.js";
 
 const baseTest = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 41_290_768n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 });
 

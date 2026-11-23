@@ -56,7 +56,9 @@ const toBoundaryError = (
   label: RpcLabel,
   error: unknown,
 ): SimulationPackageError => {
-  if (error instanceof SimulationPackageError) return error;
+  if (error instanceof SimulationPackageError) {
+    return error;
+  }
   // Only the structured signal (viem's class or the simulate code) selects the
   // funding message; "insufficient funds" message text alone keeps the generic one.
   const insufficientFunds =
@@ -103,11 +105,12 @@ const toBoundaryError = (
       error.status === undefined &&
       error.cause instanceof SyntaxError) ||
     (error instanceof UnknownRpcError && error.cause instanceof TypeError)
-  )
+  ) {
     return new InvalidSimulationResponseError(
       `${label} returned a body that is not a valid JSON-RPC response. Check that the RPC URL points at a JSON-RPC endpoint.`,
       { cause: error },
     );
+  }
 
   return new RpcTransportError(
     "RPC request failed. Check the endpoint and try again.",

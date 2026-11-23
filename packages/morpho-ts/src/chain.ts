@@ -44,6 +44,7 @@ export enum ChainId {
   MegaEthMainnet = 4326,
   RobinhoodMainnet = 4663,
   XLayerMainnet = 196,
+  AlpenMainnet = 29032,
 }
 
 /** Explorer, native currency, and identifier metadata for a supported chain. */
@@ -463,6 +464,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
       explorerUrl: "https://www.oklink.com/x-layer",
       identifier: "xlayer",
+    },
+    [ChainId.AlpenMainnet]: {
+      name: "Alpen",
+      id: ChainId.AlpenMainnet,
+      nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 },
+      explorerUrl: "https://explorer.mainnet.alpen.org",
+      identifier: "alpen",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

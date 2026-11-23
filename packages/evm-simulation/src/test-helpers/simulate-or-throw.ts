@@ -15,8 +15,12 @@ const TEST_TIMEOUT_MS = 30_000;
 export function unwrapReport<T>(
   report: { readonly ok: true; readonly result: T } | SimulationFailure,
 ): T {
-  if (report.ok) return report.result;
-  if (report.failures.length === 1) throw report.failures[0];
+  if (report.ok) {
+    return report.result;
+  }
+  if (report.failures.length === 1) {
+    throw report.failures[0];
+  }
   throw new AggregateError(
     report.failures,
     "Simulation reported several failures.",
@@ -70,13 +74,17 @@ export async function simulateOrThrowFirst(
     timeoutMs: TEST_TIMEOUT_MS,
     ...options,
   });
-  if (report.ok) return report.result;
+  if (report.ok) {
+    return report.result;
+  }
   throw report.failures[0];
 }
 
 /** Test adapter: throw a reverted execution's terminal revert, else return the execution. */
 export function throwRevert<T extends SimulationExecution>(execution: T): T {
-  if (execution.reverted) throw execution.failures.at(-1);
+  if (execution.reverted) {
+    throw execution.failures.at(-1);
+  }
   return execution;
 }
 

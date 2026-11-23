@@ -43,6 +43,7 @@ import {
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 import type { TreeData, TreeSnapshot } from "./treeTypes.js";
 
 const rateRatifierV1DataAbi = [
@@ -327,7 +328,9 @@ export namespace RateRatifierV1 {
    */
   export function memberHash(leaf: RateRatifierV1Leaf): Hash {
     const rate = BigInt(leaf.rate);
-    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+    if (rate < 0n) {
+      throw new InvalidRateRatifierV1RateError(rate);
+    }
 
     return hashLeaf({
       offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
@@ -429,19 +432,22 @@ export namespace RateRatifierV1 {
   ): RateRatifierV1TreeDescriptor {
     const normalized = leaves.map((leaf) => {
       const rate = BigInt(leaf.rate);
-      if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+      if (rate < 0n) {
+        throw new InvalidRateRatifierV1RateError(rate);
+      }
 
       const allowedTaker = leaf.allowedTaker ?? zeroAddress;
       const input = Offer.from(leaf.offer);
-      if (input.tick < MIN_TICK)
+      if (input.tick < MIN_TICK) {
         throw new InvalidRateRatifierV1TickError(input.tick, MIN_TICK);
+      }
 
       return { offer: input, rate, allowedTaker };
     });
     const assignedOffers = assignRatifierV1Groups(normalized, groupId);
     const offers: Offer[] = [];
     const structs = normalized.map(({ rate, allowedTaker }, index) => {
-      const offer = assignedOffers[index]!;
+      const offer = requireTreeItem(assignedOffers, index);
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), rate, allowedTaker };
@@ -475,9 +481,12 @@ export namespace RateRatifierV1 {
     ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
       leafStruct.offer.ratifier,
     validateEntry: (entry: RateRatifierV1LeafStruct) => {
-      if (entry.rate < 0n) throw new InvalidRateRatifierV1RateError(entry.rate);
-      if (entry.offer.tick < MIN_TICK)
+      if (entry.rate < 0n) {
+        throw new InvalidRateRatifierV1RateError(entry.rate);
+      }
+      if (entry.offer.tick < MIN_TICK) {
         throw new InvalidRateRatifierV1TickError(entry.offer.tick, MIN_TICK);
+      }
     },
     label: "RateRatifierV1",
     type: "rateV1",
@@ -686,7 +695,7 @@ export namespace RateRatifierV1 {
   }): Hex {
     const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
-    const entry = tree.entries[Number(proof.leafIndex)]!;
+    const entry = requireTreeItem(tree.entries, Number(proof.leafIndex));
 
     return encodeRatifierData({
       root: proof.root,
@@ -734,8 +743,8 @@ export namespace RateRatifierV1 {
     });
 
     return tree.offers.map((offer, leafIndex) => {
-      const entry = tree.entries[leafIndex]!;
-      const proof = proofs[leafIndex]!;
+      const entry = requireTreeItem(tree.entries, leafIndex);
+      const proof = requireTreeItem(proofs, leafIndex);
 
       return {
         offer,
@@ -783,7 +792,9 @@ export namespace RateRatifierV1 {
     readonly buy: boolean;
   }): bigint {
     const rate = BigInt(params.rate);
-    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+    if (rate < 0n) {
+      throw new InvalidRateRatifierV1RateError(rate);
+    }
     const timeToMaturity = BigInt(params.timeToMaturity);
     if (timeToMaturity < 0n) {
       throw new InvalidRateRatifierV1TimeError(
@@ -864,7 +875,9 @@ export namespace RateRatifierV1 {
         buy: params.offer.buy,
       });
     } catch (error) {
-      if (error instanceof RateRatifierV1BoundOverflowError) return false;
+      if (error instanceof RateRatifierV1BoundOverflowError) {
+        return false;
+      }
       throw error;
     }
     const offerPrice = TickLib.tickToPrice(params.offer.tick);

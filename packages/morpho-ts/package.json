@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "Framework-free TypeScript helpers and shared Morpho primitives: addresses, ABIs, math, typed errors, time and formatting utilities.",
-  "version": "4.5.0-next.1",
+  "version": "4.5.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -42,8 +42,8 @@
     "MIGRATION-v3-to-v4.md"
   ],
   "scripts": {
-    "prepublish": "pnpm build",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "prepublish": "bun run build",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },

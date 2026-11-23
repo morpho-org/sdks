@@ -3,6 +3,7 @@ import { MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import type { AnvilTestClient } from "@morpho-org/test";
+import { MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -23,7 +24,7 @@ import { seededMarketData } from "../setup.js";
 const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL ?? "https://eth.drpc.org",
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });

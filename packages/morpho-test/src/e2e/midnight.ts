@@ -1,5 +1,6 @@
 import { strictEqual } from "node:assert";
 import {
+  InvalidMarketParameterError,
   Market,
   MarketParams,
   midnightAbi,
@@ -68,7 +69,9 @@ export const createE2eMidnightMarket = async (
   const loanAsset = getE2eAsset(chainId);
   const loanToken = loanAsset.address.toLowerCase() as Address;
 
-  if (loanAsset.requiresInstall) await installE2eAsset(client, loanToken);
+  if (loanAsset.requiresInstall) {
+    await installE2eAsset(client, loanToken);
+  }
   await installE2eAsset(client, collateralToken);
   const oracle = await installE2eOracle(client);
 
@@ -106,6 +109,8 @@ export const createE2eMidnightMarket = async (
 /**
  * Clears code and funds gas for named wallets, adding requested assets and approvals to their
  * existing balances and allowances.
+ * @throws {E2eMidnightMarketRequiredError} If assets are requested without a market.
+ * @throws {InvalidMarketParameterError} If collateral funding is requested without collateral parameters.
  */
 export const fundE2eMidnightWallets = async (
   client: AnvilTestClient<Chain>,
@@ -120,17 +125,20 @@ export const fundE2eMidnightWallets = async (
     readonly approve?: Address;
   },
 ): Promise<void> => {
+  const market = params.market;
   const hasAssetFunding = Object.values(params.wallets).some(
     (wallet) => wallet?.loanAssets != null || wallet?.collateralAssets != null,
   );
-  if (hasAssetFunding && params.market == null)
+  if (hasAssetFunding && market == null) {
     throw new E2eMidnightMarketRequiredError();
-
+  }
   for (const walletName of Object.keys(
     E2E_MIDNIGHT_WALLETS,
   ) as E2eMidnightWallet[]) {
     const funding = params.wallets[walletName];
-    if (funding == null) continue;
+    if (funding == null) {
+      continue;
+    }
 
     const account = E2E_MIDNIGHT_WALLETS[walletName];
     await client.setCode({ address: account, bytecode: "0x" });
@@ -141,15 +149,22 @@ export const fundE2eMidnightWallets = async (
       readonly amount: bigint;
       readonly useNativeFunding: boolean;
     }[] = [];
-    if (funding.collateralAssets != null) {
+    if (funding.collateralAssets != null && market != null) {
+      const collateral = market.collateralParams[0];
+      if (collateral == null) {
+        throw new InvalidMarketParameterError({
+          parameter: "collateralParams",
+          value: market.collateralParams.length,
+          instruction: "Provide at least one collateral.",
+        });
+      }
       assetsToFund.push({
-        token: params.market!.collateralParams[0]!.token,
+        token: collateral.token,
         amount: funding.collateralAssets,
         useNativeFunding: false,
       });
     }
-    if (funding.loanAssets != null) {
-      const market = params.market!;
+    if (funding.loanAssets != null && market != null) {
       assetsToFund.push({
         token: market.loanToken,
         amount: funding.loanAssets,
@@ -179,11 +194,12 @@ export const fundE2eMidnightWallets = async (
         if (
           isAddressEqual(token, collateralToken) &&
           (await client.getCode({ address: token })) === E2E_ASSET_BYTECODE
-        )
+        ) {
           await client.setBalance({
             address: token,
             value: (await client.getBalance({ address: token })) + amount,
           });
+        }
       }
 
       strictEqual(
@@ -275,18 +291,26 @@ export const getE2eTakeableOffers = (params: {
     | TreeSnapshot<"rateV1">;
   readonly units: bigint;
 }): readonly E2eTakeableOffer[] => {
-  const items =
-    params.tree.type === "priceV1"
-      ? PriceRatifierV1.ratify({ tree: params.tree })
-      : params.tree.type === "rateV1"
-        ? RateRatifierV1.ratify({ tree: params.tree })
-        : params.tree.type === "setter"
-          ? SetterRatifier.ratify({ tree: params.tree })
-          : SetterRatifierUtils.ratify({ tree: params.tree });
+  const items = ratifyE2eTree(params.tree);
 
   return items.map(({ offer, ratifierData }) => ({
     units: params.units,
     offer: OfferUtils.toStruct({ offer }),
     ratifierData,
   }));
+};
+
+const ratifyE2eTree = (
+  tree: Parameters<typeof getE2eTakeableOffers>[0]["tree"],
+) => {
+  if (tree.type === "priceV1") {
+    return PriceRatifierV1.ratify({ tree });
+  }
+  if (tree.type === "rateV1") {
+    return RateRatifierV1.ratify({ tree });
+  }
+  if (tree.type === "setter") {
+    return SetterRatifier.ratify({ tree });
+  }
+  return SetterRatifierUtils.ratify({ tree });
 };

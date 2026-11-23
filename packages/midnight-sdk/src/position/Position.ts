@@ -357,8 +357,9 @@ export class AccrualPosition extends Position implements IAccrualPosition {
         () => this.market.getCollateralByIndex(normalizedIndex),
         UnknownCollateralIndexError,
       ) == null
-    )
+    ) {
       return undefined;
+    }
 
     return this.collateral[Number(normalizedIndex)] ?? 0n;
   }

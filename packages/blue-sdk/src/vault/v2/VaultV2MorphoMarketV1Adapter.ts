@@ -171,7 +171,10 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     super(adapter);
   }
 
-  /** {@inheritDoc IAccrualVaultV2Adapter.realAssets} */
+  /**
+   * {@inheritDoc IAccrualVaultV2Adapter.realAssets}
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
+   */
   realAssets(timestamp?: BigIntish) {
     return this.positions.reduce(
       (total, position) =>
@@ -190,6 +193,7 @@ export class AccrualVaultV2MorphoMarketV1Adapter
    * @param timestamp The timestamp at which to accrue interest.
    * @returns A new `AccrualVaultV2MorphoMarketV1Adapter` with contributing
    * positions accrued to `timestamp`.
+   * @throws {BlueErrors.TotalOverflow} when projected market accrual exceeds a uint128 total.
    * @throws {UnsupportedMarketIrmError} when forward projection of a market with
    * positive debt requires an unsupported IRM.
    * @example
@@ -301,7 +305,9 @@ export class AccrualVaultV2MorphoMarketV1Adapter
       params,
     );
     const recorded = allocations.find((allocation) => allocation.id === id);
-    if (recorded == null) return 0n;
+    if (recorded == null) {
+      return 0n;
+    }
     const position = this.positions.find(
       (entry) => entry.marketId === params.id,
     );

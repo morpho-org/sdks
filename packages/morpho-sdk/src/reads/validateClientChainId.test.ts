@@ -2,7 +2,7 @@ import { createMockClient } from "@morpho-org/test/mock";
 import { BaseError } from "viem";
 import { base, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { ChainIdMismatchError } from "../../types/index.js";
+import { ChainIdMismatchError } from "../types/index.js";
 import { validateClientChainId } from "./validateClientChainId.js";
 
 describe("validateClientChainId", () => {

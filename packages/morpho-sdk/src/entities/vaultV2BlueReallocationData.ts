@@ -135,8 +135,9 @@ const createCapReserveState = (
 
 const cloneCapReserveState = (state: CapReserveState): CapReserveState => {
   const touchedPairs = new Map<string, Map<string, CapReservePair>>();
-  for (const [vault, pairs] of state.touchedPairs)
+  for (const [vault, pairs] of state.touchedPairs) {
     touchedPairs.set(vault, new Map(pairs));
+  }
 
   return {
     initialMarkets: { ...state.initialMarkets },
@@ -230,7 +231,9 @@ const findAddressKey = <T>(
   record: Readonly<Record<Address, T>>,
   address: Address,
 ) => {
-  if (Object.hasOwn(record, address)) return address;
+  if (Object.hasOwn(record, address)) {
+    return address;
+  }
   return (Object.keys(record) as Address[]).find((key) =>
     isAddressEqual(key, address),
   );
@@ -253,7 +256,9 @@ const getAdapterIds = (
 ) => {
   const key = `${adapter.address}:${market.id}`;
   const cached = cache.get(key);
-  if (cached != null) return cached;
+  if (cached != null) {
+    return cached;
+  }
 
   const ids = adapter.ids(market.params);
   cache.set(key, ids);
@@ -262,13 +267,16 @@ const getAdapterIds = (
 
 const resolveMaxPenalty = (value: bigint | undefined) => {
   const penalty = value ?? DEFAULT_MAX_REALLOCATION_PENALTY;
-  if (penalty < 0n) throw new NegativeInputError("maxPenalty", penalty);
-  if (penalty > MAX_REALLOCATION_PENALTY)
+  if (penalty < 0n) {
+    throw new NegativeInputError("maxPenalty", penalty);
+  }
+  if (penalty > MAX_REALLOCATION_PENALTY) {
     throw new InputExceedsMaxError({
       field: "maxPenalty",
       value: penalty,
       max: MAX_REALLOCATION_PENALTY,
     });
+  }
   return penalty;
 };
 
@@ -307,7 +315,9 @@ const cloneAdapter = (
   adapter: IAccrualVaultV2Adapter,
   markets: Record<MarketId, Market | undefined>,
 ) => {
-  if (adapter.type === "VaultV2MidnightAdapter") return adapter;
+  if (adapter.type === "VaultV2MidnightAdapter") {
+    return adapter;
+  }
 
   const base = {
     address: adapter.address,
@@ -315,7 +325,7 @@ const cloneAdapter = (
     skimRecipient: adapter.skimRecipient,
   };
 
-  if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
     return new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...base,
@@ -327,14 +337,16 @@ const cloneAdapter = (
       // adapter observes the same global Morpho market state.
       adapter.markets.map((market) => getCanonicalMarket(markets, market)),
     );
+  }
 
-  if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter)
+  if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
     return new AccrualVaultV2MorphoMarketV1Adapter(
       { ...base, marketParamsList: [...adapter.marketParamsList] },
       adapter.positions.map((position) => clonePosition(position, markets)),
     );
+  }
 
-  if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)
+  if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
     return new AccrualVaultV2MorphoVaultV1Adapter(
       {
         ...base,
@@ -344,6 +356,7 @@ const cloneAdapter = (
       cloneAccrualVault(adapter.accrualVaultV1, markets),
       adapter.shares,
     );
+  }
 
   throw new UnsupportedVaultV2AdapterError(adapter.address);
 };
@@ -637,7 +650,9 @@ export class VaultV2BlueReallocationData
    */
   public getMarket(marketId: MarketId): ReadonlyMarketSnapshot {
     const market = this.mutableMarkets[marketId];
-    if (market == null) throw new UnknownReallocationMarketError(marketId);
+    if (market == null) {
+      throw new UnknownReallocationMarketError(marketId);
+    }
     return market;
   }
 
@@ -676,7 +691,9 @@ export class VaultV2BlueReallocationData
   private getMutableVault(vault: Address) {
     const key = findAddressKey(this.mutableVaults, vault);
     const data = key == null ? undefined : this.mutableVaults[key];
-    if (data == null) throw new UnknownReallocationVaultError(vault);
+    if (data == null) {
+      throw new UnknownReallocationVaultError(vault);
+    }
     return data;
   }
 
@@ -716,8 +733,9 @@ export class VaultV2BlueReallocationData
   public getAllocation(vault: Address, id: Hash) {
     const key = findAddressKey(this.allocations, vault);
     const allocation = key == null ? undefined : this.allocations[key]?.[id];
-    if (allocation == null)
+    if (allocation == null) {
       throw new UnknownReallocationAllocationError(vault, id);
+    }
     return allocation;
   }
 
@@ -752,8 +770,9 @@ export class VaultV2BlueReallocationData
    */
   public getPublicAllocatorConfig(vault: Address) {
     const config = this.getOptionalPublicAllocatorConfig(vault);
-    if (config == null)
+    if (config == null) {
       throw new UnknownReallocationPublicAllocatorConfigError(vault);
+    }
     return config;
   }
 
@@ -766,8 +785,9 @@ export class VaultV2BlueReallocationData
    */
   private getOptionalPublicAllocatorConfig(vault: Address) {
     const key = findAddressKey(this.publicAllocatorConfigs, vault);
-    if (key == null)
+    if (key == null) {
       throw new UnknownReallocationPublicAllocatorConfigError(vault);
+    }
     return this.publicAllocatorConfigs[key];
   }
 
@@ -801,8 +821,9 @@ export class VaultV2BlueReallocationData
   public getActiveAdapters(vault: Address): ReadonlySet<Address> {
     const key = findAddressKey(this.activeAdapters, vault);
     const adapters = key == null ? undefined : this.activeAdapters[key];
-    if (adapters == null)
+    if (adapters == null) {
       throw new UnknownReallocationActiveAdaptersError(vault);
+    }
     return adapters;
   }
 
@@ -851,11 +872,12 @@ export class VaultV2BlueReallocationData
       key == null
         ? undefined
         : this.marketPublicAllocatorConfigs[key]?.[adapterMarketCapId];
-    if (config == null)
+    if (config == null) {
       throw new UnknownReallocationMarketPublicAllocatorConfigError(
         vault,
         adapterMarketCapId,
       );
+    }
     return config;
   }
 
@@ -902,7 +924,9 @@ export class VaultV2BlueReallocationData
         candidate instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
         isAddressEqual(candidate.address, adapter),
     );
-    if (data == null) throw new UnknownReallocationAdapterError(vault, adapter);
+    if (data == null) {
+      throw new UnknownReallocationAdapterError(vault, adapter);
+    }
     return data;
   }
 
@@ -1046,7 +1070,9 @@ export class VaultV2BlueReallocationData
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2BlueReallocationData;
   } {
-    if (options.enabled === false) return { reallocations: [], data: this };
+    if (options.enabled === false) {
+      return { reallocations: [], data: this };
+    }
 
     const maxWithdrawalUtilization = resolveMaxWithdrawalUtilization(
       options.maxWithdrawalUtilization,
@@ -1233,7 +1259,7 @@ export class VaultV2BlueReallocationData
     /** Lowercased vault addresses whose accepted idle legs together leave at most `allocatorCapHeadroom` of the vault's starting idle. */
     readonly idleBoundVaults: ReadonlySet<string>;
   } {
-    if (options.enabled === false)
+    if (options.enabled === false) {
       return {
         reallocations: [],
         data: this,
@@ -1241,6 +1267,7 @@ export class VaultV2BlueReallocationData
         allocatorCapBoundTargets: new Set(),
         idleBoundVaults: new Set(),
       };
+    }
 
     this.getMarket(marketId);
     const timestamp =
@@ -1270,65 +1297,12 @@ export class VaultV2BlueReallocationData
     const idleBoundVaults = new Set<string>();
     const initialIdleAssets = new Map<string, bigint>();
     const idleTakenAssets = new Map<string, bigint>();
-    // Onchain, market interest is booked once at transaction start, on pre-plan
-    // positions at pre-plan rates, and stays on touched positions' cap ids.
-    // This reserve state is shared across every planner pass and leg of the plan.
-    // biome-ignore lint/complexity/useMaxParams: a pair is identified by its vault, adapter, and market.
-    const getPair = (
-      vault: Address,
-      adapter: ReadonlyMarketAdapterSnapshot,
-      market: ReadonlyMarketSnapshot,
-    ): CapReservePair => {
-      const key = `${vault}:${adapter.address}:${market.id}`.toLowerCase();
-      const touched = reserves.touchedPairs.get(vault.toLowerCase())?.get(key);
-      if (touched != null) return touched;
-      const shares = adapter.supplyShares[market.id] ?? 0n;
-      return {
-        key,
-        ids: getAdapterIds(adapterIdsCache, adapter, market),
-        reserve: (reserveState) => {
-          let reserve = reserveState.reserveByPairKey.get(key);
-          if (reserve == null) {
-            let accruals = reserveState.marketAccruals.get(market.id);
-            if (accruals == null) {
-              const initialMarket = reserveState.initialMarkets[market.id];
-              if (initialMarket == null)
-                throw new UnknownReallocationMarketError(market.id);
-              accruals = [
-                initialMarket.accrueInterest(timestamp),
-                initialMarket.accrueInterest(timestamp + capAccrualBuffer),
-              ];
-              reserveState.marketAccruals.set(market.id, accruals);
-            }
-            const [atTimestamp, projected] = accruals;
-            reserve = MathLib.zeroFloorSub(
-              projected.toSupplyAssets(shares),
-              atTimestamp.toSupplyAssets(shares),
-            );
-            reserveState.reserveByPairKey.set(key, reserve);
-          }
-          return reserve;
-        },
-      };
-    };
-    // biome-ignore lint/complexity/useMaxParams: the reserve is scoped to one vault, cap id, and candidate set.
-    const capReserve = (
-      vault: Address,
-      id: Hash,
-      candidatePairs: readonly CapReservePair[],
-    ) => {
-      let reserve = 0n;
-      const seen = new Set<string>();
-      for (const pair of [
-        ...(reserves.touchedPairs.get(vault.toLowerCase())?.values() ?? []),
-        ...candidatePairs,
-      ]) {
-        if (seen.has(pair.key) || !pair.ids.includes(id)) continue;
-        seen.add(pair.key);
-        reserve += pair.reserve(reserves);
-      }
-      return reserve;
-    };
+    const { getPair, capReserve } = createCapReserveResolvers({
+      reserves,
+      adapterIdsCache,
+      timestamp,
+      capAccrualBuffer,
+    });
 
     while (remainingAssets == null || remainingAssets > 0n) {
       const candidates = vaults
@@ -1354,25 +1328,10 @@ export class VaultV2BlueReallocationData
             setMarkets: data.setMarkets.bind(data),
             applyPublicReallocation: data.applyPublicReallocation.bind(data),
           };
-          const idleState = resolveVaultCandidateIdleState(params);
-          if (idleState == null) return;
-          const { availableIdleAssets } = idleState;
-          const vaultAddressKey = vaultAddress.toLowerCase();
-          if (!initialIdleAssets.has(vaultAddressKey))
-            initialIdleAssets.set(vaultAddressKey, availableIdleAssets);
-          let activeAdapters = activeAdaptersCache.get(vaultAddress);
-          if (activeAdapters == null) {
-            activeAdapters = new Set(
-              [...data.getActiveAdapters(vaultAddress)].map((adapter) =>
-                adapter.toLowerCase(),
-              ),
-            );
-            activeAdaptersCache.set(vaultAddress, activeAdapters);
-          }
-          return planVaultCandidate({
+          return planCachedVaultCandidate({
             ...params,
-            ...idleState,
-            activeAdapters,
+            initialIdleAssets,
+            activeAdaptersCache,
           });
         })
         .filter(
@@ -1383,7 +1342,7 @@ export class VaultV2BlueReallocationData
         );
 
       const largest = candidates[0];
-      if (largest == null)
+      if (largest == null) {
         return {
           reallocations,
           data,
@@ -1391,6 +1350,7 @@ export class VaultV2BlueReallocationData
           allocatorCapBoundTargets,
           idleBoundVaults,
         };
+      }
 
       const updates = getAcceptedCandidateUpdates({
         candidate: largest,
@@ -1423,8 +1383,9 @@ export class VaultV2BlueReallocationData
       });
       data = transition.data;
       simulationContext = transition.context;
-      if (remainingAssets != null)
+      if (remainingAssets != null) {
         remainingAssets -= acceptedReallocation.assets;
+      }
     }
 
     return {
@@ -1485,7 +1446,9 @@ export class VaultV2BlueReallocationData
     marketId: MarketId,
     options?: VaultV2BluePublicAllocatorOptions,
   ) {
-    if (options?.enabled === false) return 0n;
+    if (options?.enabled === false) {
+      return 0n;
+    }
 
     const capAccrualBuffer = resolveCapAccrualBuffer(options?.capAccrualBuffer);
     const maxPenalty = resolveMaxPenalty(options?.maxPenalty);
@@ -1566,8 +1529,9 @@ export class VaultV2BlueReallocationData
     if (
       options?.enabled === false ||
       DEFAULT_SUPPLY_TARGET_UTILIZATION > utilization
-    )
+    ) {
       return market.getBorrowToUtilization(utilization);
+    }
 
     const availableLiquidity = this.clone()
       .computeVaultV2BlueReallocationsAtUtilizationInPlace({
@@ -1597,10 +1561,14 @@ export class VaultV2BlueReallocationData
   private getLatestSnapshotTimestamp() {
     let timestamp = this.timestamp ?? 0n;
     for (const market of Object.values(this.markets)) {
-      if (market != null) timestamp = MathLib.max(timestamp, market.lastUpdate);
+      if (market != null) {
+        timestamp = MathLib.max(timestamp, market.lastUpdate);
+      }
     }
     for (const vault of Object.values(this.vaults)) {
-      if (vault != null) timestamp = MathLib.max(timestamp, vault.lastUpdate);
+      if (vault != null) {
+        timestamp = MathLib.max(timestamp, vault.lastUpdate);
+      }
     }
     return timestamp;
   }
@@ -1691,8 +1659,9 @@ export class VaultV2BlueReallocationData
     }
 
     // Idle allocations also credit the instance's explicit Blue liquidity balance.
-    if (reallocation.from.type === "idle")
+    if (reallocation.from.type === "idle") {
       data.creditIdleReallocationBalance(reallocation, targetMarket);
+    }
 
     if (firstTotalAssets == null) {
       const firstAllocation = data.accrueReallocationFirstAllocation({
@@ -1760,10 +1729,12 @@ export class VaultV2BlueReallocationData
     const targetSupplyShares =
       (targetAdapter.supplyShares[targetMarket.id] ?? 0n) + supply.shares;
     targetAdapter.supplyShares[targetMarket.id] = targetSupplyShares;
-    if (!targetAdapter.marketIds.includes(targetMarket.id))
+    if (!targetAdapter.marketIds.includes(targetMarket.id)) {
       targetAdapter.marketIds.push(targetMarket.id);
-    if (!targetAdapter.markets.some(({ id }) => id === targetMarket.id))
+    }
+    if (!targetAdapter.markets.some(({ id }) => id === targetMarket.id)) {
       targetAdapter.markets.push(supply.market);
+    }
     this.setMarkets([supply.market], probe ? [targetAdapter] : undefined);
 
     const simulatedChange =
@@ -1774,8 +1745,9 @@ export class VaultV2BlueReallocationData
     for (const id of targetIds) {
       const allocation = this.getAllocation(reallocation.vault, id);
       const allocations = this.mutableAllocations[allocationsKey];
-      if (allocations == null)
+      if (allocations == null) {
         throw new UnknownReallocationAllocationError(reallocation.vault, id);
+      }
       allocations[id] = {
         ...allocation,
         allocation: allocation.allocation + targetChange,
@@ -1792,11 +1764,14 @@ export class VaultV2BlueReallocationData
       this.mutableBlueBalances,
       targetMarket.params.loanToken,
     );
-    if (blueBalanceKey == null) return;
+    if (blueBalanceKey == null) {
+      return;
+    }
     const blueBalance = this.mutableBlueBalances[blueBalanceKey];
-    if (blueBalance != null)
+    if (blueBalance != null) {
       this.mutableBlueBalances[blueBalanceKey] =
         blueBalance + reallocation.assets;
+    }
   }
 
   /** Builds the isolated markets, adapter views and caps used by a transition probe. @internal */
@@ -1836,14 +1811,16 @@ export class VaultV2BlueReallocationData
       for (const key of getDependentProbeAdapterKeys(
         sourceVault,
         sourceMarket.id,
-      ))
+      )) {
         adapterKeysToClone.add(key);
+      }
       for (const id of getAdapterIds(
         adapterIdsCache,
         this.getMutableAdapter(reallocation.vault, reallocation.from.adapter),
         sourceMarket,
-      ))
+      )) {
         allocationIdsToClone.add(id);
+      }
     }
 
     const data = new VaultV2BlueReallocationData({
@@ -1863,8 +1840,9 @@ export class VaultV2BlueReallocationData
     if (sourceAllocationsKey != null) {
       const sourceAllocations = this.mutableAllocations[sourceAllocationsKey];
       const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
-      for (const id of allocationIdsToClone)
+      for (const id of allocationIdsToClone) {
         allocations[id] = sourceAllocations?.[id];
+      }
       data.mutableAllocations[sourceAllocationsKey] = allocations;
     }
     return data;
@@ -2001,7 +1979,9 @@ export class VaultV2BlueReallocationData
       this.mutableMarkets[market.id] = market;
       changedMarketIds.add(market.id);
     }
-    if (changedMarketIds.size === 0) return;
+    if (changedMarketIds.size === 0) {
+      return;
+    }
 
     const adapters = collectAdaptersToRefresh(
       this.mutableVaults,
@@ -2012,7 +1992,9 @@ export class VaultV2BlueReallocationData
         markets: this.mutableMarkets,
         changedMarketIds,
       });
-      if (update != null) Object.assign(adapter, update);
+      if (update != null) {
+        Object.assign(adapter, update);
+      }
     }
   }
 }
@@ -2028,13 +2010,20 @@ function collectAdaptersToRefresh(
     // AccrualPosition constructors copy their Market, so rebuild those adapter
     // views as well as repointing V2 adapters whenever the canonical state moves.
     for (const vault of Object.values(vaults)) {
-      if (vault == null) continue;
-      for (const adapter of vault.accrualAdapters) adapters.add(adapter);
-      if (vault.accrualLiquidityAdapter != null)
+      if (vault == null) {
+        continue;
+      }
+      for (const adapter of vault.accrualAdapters) {
+        adapters.add(adapter);
+      }
+      if (vault.accrualLiquidityAdapter != null) {
         adapters.add(vault.accrualLiquidityAdapter);
+      }
     }
   } else {
-    for (const adapter of adaptersToRefresh) adapters.add(adapter);
+    for (const adapter of adaptersToRefresh) {
+      adapters.add(adapter);
+    }
   }
 
   return adapters;
@@ -2052,7 +2041,9 @@ function refreshAdapterMarkets(
   },
 ) {
   if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
-    if (!adapter.markets.some(({ id }) => changedMarketIds.has(id))) return;
+    if (!adapter.markets.some(({ id }) => changedMarketIds.has(id))) {
+      return;
+    }
     return {
       markets: adapter.markets.map((adapterMarket) =>
         getCanonicalMarket(markets, adapterMarket),
@@ -2062,8 +2053,9 @@ function refreshAdapterMarkets(
   if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
     if (
       !adapter.positions.some(({ marketId }) => changedMarketIds.has(marketId))
-    )
+    ) {
       return;
+    }
     return {
       positions: adapter.positions.map((position) =>
         clonePosition(position, markets),
@@ -2075,8 +2067,9 @@ function refreshAdapterMarkets(
       ![...adapter.accrualVaultV1.allocations.keys()].some((marketId) =>
         changedMarketIds.has(marketId),
       )
-    )
+    ) {
       return;
+    }
     return {
       accrualVaultV1: cloneAccrualVault(adapter.accrualVaultV1, markets),
     };
@@ -2157,13 +2150,17 @@ function getDependentProbeAdapterKeys(
   sourceMarketId: MarketId,
 ) {
   const keys = new Set<string>();
-  if (sourceVault == null) return keys;
+  if (sourceVault == null) {
+    return keys;
+  }
   const adapters = new Set(sourceVault.accrualAdapters);
-  if (sourceVault.accrualLiquidityAdapter != null)
+  if (sourceVault.accrualLiquidityAdapter != null) {
     adapters.add(sourceVault.accrualLiquidityAdapter);
+  }
   for (const adapter of adapters) {
-    if (adapterReferencesMarket(adapter, sourceMarketId))
+    if (adapterReferencesMarket(adapter, sourceMarketId)) {
       keys.add(adapter.address.toLowerCase());
+    }
   }
   return keys;
 }
@@ -2206,11 +2203,12 @@ function getAcceptedCandidateUpdates({
     sourcePair: acceptedSourcePair,
     allocatorHeadroom: acceptedAllocatorHeadroom,
   } = largest;
-  if (acceptedReallocation.assets >= acceptedAllocatorHeadroom)
+  if (acceptedReallocation.assets >= acceptedAllocatorHeadroom) {
     // BluePublicAllocator caps are per vault and target adapter.
     allocatorCapBoundTargets.push(
       `${acceptedReallocation.vault.toLowerCase()}:${acceptedReallocation.to.adapter.toLowerCase()}`,
     );
+  }
   if (acceptedReallocation.from.type === "idle") {
     const vaultKey = acceptedReallocation.vault.toLowerCase();
     const taken =
@@ -2224,8 +2222,9 @@ function getAcceptedCandidateUpdates({
         initial,
         MathLib.wMulUp(initial, allocatorCapHeadroom),
       )
-    )
+    ) {
       idleBoundVaults.push(vaultKey);
+    }
   }
   const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
   const existingPairs = reserves.touchedPairs.get(touchedVaultKey);
@@ -2235,14 +2234,16 @@ function getAcceptedCandidateUpdates({
       ? [[touchedVaultKey, touchedVaultPairs] as const]
       : [];
   const touchedPairEntries: (readonly [string, CapReservePair])[] = [];
-  if (!touchedVaultPairs.has(acceptedTargetPair.key))
+  if (!touchedVaultPairs.has(acceptedTargetPair.key)) {
     touchedPairEntries.push([acceptedTargetPair.key, acceptedTargetPair]);
+  }
   if (
     acceptedSourcePair != null &&
     !touchedVaultPairs.has(acceptedSourcePair.key) &&
     acceptedSourcePair.key !== acceptedTargetPair.key
-  )
+  ) {
     touchedPairEntries.push([acceptedSourcePair.key, acceptedSourcePair]);
+  }
   return {
     allocatorCapBoundTargets,
     idleTakenAssets: idleTakenEntries,
@@ -2251,6 +2252,90 @@ function getAcceptedCandidateUpdates({
     touchedVaultEntries,
     touchedPairEntries,
   };
+}
+
+/**
+ * Creates cap-reserve readers over the shared in-place planning caches.
+ * Returned readers populate reserve caches as in the utilization pass.
+ * @internal
+ */
+function createCapReserveResolvers({
+  reserves,
+  adapterIdsCache,
+  timestamp,
+  capAccrualBuffer,
+}: {
+  readonly reserves: CapReserveState;
+  readonly adapterIdsCache: Map<string, AdapterIds>;
+  readonly timestamp: bigint;
+  readonly capAccrualBuffer: bigint;
+}) {
+  // Onchain, market interest is booked once at transaction start, on pre-plan
+  // positions at pre-plan rates, and stays on touched positions' cap ids.
+  // This reserve state is shared across every planner pass and leg of the plan.
+  // biome-ignore lint/complexity/useMaxParams: a pair is identified by its vault, adapter, and market.
+  const getPair = (
+    vault: Address,
+    adapter: ReadonlyMarketAdapterSnapshot,
+    market: ReadonlyMarketSnapshot,
+  ): CapReservePair => {
+    const key = `${vault}:${adapter.address}:${market.id}`.toLowerCase();
+    const touched = reserves.touchedPairs.get(vault.toLowerCase())?.get(key);
+    if (touched != null) {
+      return touched;
+    }
+    const shares = adapter.supplyShares[market.id] ?? 0n;
+    return {
+      key,
+      ids: getAdapterIds(adapterIdsCache, adapter, market),
+      reserve: (reserveState) => {
+        let reserve = reserveState.reserveByPairKey.get(key);
+        if (reserve == null) {
+          let accruals = reserveState.marketAccruals.get(market.id);
+          if (accruals == null) {
+            const initialMarket = reserveState.initialMarkets[market.id];
+            if (initialMarket == null) {
+              throw new UnknownReallocationMarketError(market.id);
+            }
+            accruals = [
+              initialMarket.accrueInterest(timestamp),
+              initialMarket.accrueInterest(timestamp + capAccrualBuffer),
+            ];
+            reserveState.marketAccruals.set(market.id, accruals);
+          }
+          const [atTimestamp, projected] = accruals;
+          reserve = MathLib.zeroFloorSub(
+            projected.toSupplyAssets(shares),
+            atTimestamp.toSupplyAssets(shares),
+          );
+          reserveState.reserveByPairKey.set(key, reserve);
+        }
+        return reserve;
+      },
+    };
+  };
+  // biome-ignore lint/complexity/useMaxParams: the reserve is scoped to one vault, cap id, and candidate set.
+  const capReserve = (
+    vault: Address,
+    id: Hash,
+    candidatePairs: readonly CapReservePair[],
+  ) => {
+    let reserve = 0n;
+    const seen = new Set<string>();
+    for (const pair of [
+      ...(reserves.touchedPairs.get(vault.toLowerCase())?.values() ?? []),
+      ...candidatePairs,
+    ]) {
+      if (seen.has(pair.key) || !pair.ids.includes(id)) {
+        continue;
+      }
+      seen.add(pair.key);
+      reserve += pair.reserve(reserves);
+    }
+    return reserve;
+  };
+
+  return { getPair, capReserve };
 }
 
 /** Explicit state and operations used while planning one vault's candidate. @internal */
@@ -2312,6 +2397,42 @@ type CandidateCapParameters = VaultCandidateParameters &
     readonly targetMarket: ReadonlyMarketSnapshot;
   };
 
+/**
+ * Plans one vault candidate, caching its initial idle assets and active adapters in place.
+ * @internal
+ */
+function planCachedVaultCandidate(
+  params: VaultCandidateParameters & {
+    readonly initialIdleAssets: Map<string, bigint>;
+    readonly activeAdaptersCache: Map<Address, ReadonlySet<string>>;
+  },
+) {
+  const { vaultAddress, data, initialIdleAssets, activeAdaptersCache } = params;
+  const idleState = resolveVaultCandidateIdleState(params);
+  if (idleState == null) {
+    return;
+  }
+  const { availableIdleAssets } = idleState;
+  const vaultAddressKey = vaultAddress.toLowerCase();
+  if (!initialIdleAssets.has(vaultAddressKey)) {
+    initialIdleAssets.set(vaultAddressKey, availableIdleAssets);
+  }
+  let activeAdapters = activeAdaptersCache.get(vaultAddress);
+  if (activeAdapters == null) {
+    activeAdapters = new Set(
+      [...data.getActiveAdapters(vaultAddress)].map((adapter) =>
+        adapter.toLowerCase(),
+      ),
+    );
+    activeAdaptersCache.set(vaultAddress, activeAdapters);
+  }
+  return planVaultCandidate({
+    ...params,
+    ...idleState,
+    activeAdapters,
+  });
+}
+
 /** Resolves an eligible vault's idle balance before initializing candidate caches. @internal */
 function resolveVaultCandidateIdleState(params: VaultCandidateParameters) {
   const {
@@ -2326,15 +2447,20 @@ function resolveVaultCandidateIdleState(params: VaultCandidateParameters) {
 
   const targetMarket = data.getMarket(marketId);
   const publicAllocatorConfig = getOptionalPublicAllocatorConfig(vaultAddress);
-  if (publicAllocatorConfig == null) return;
+  if (publicAllocatorConfig == null) {
+    return;
+  }
   const vault = data.getVault(vaultAddress);
   if (
     !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
     publicAllocatorConfig.penalty >
       (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
-  )
+  ) {
     return;
-  if (penalty != null && publicAllocatorConfig.penalty !== penalty) return;
+  }
+  if (penalty != null && publicAllocatorConfig.penalty !== penalty) {
+    return;
+  }
   const donatedPenaltyAssetsKey = findAddressKey(
     simulationContext.donatedPenaltyAssets,
     vaultAddress,
@@ -2343,10 +2469,11 @@ function resolveVaultCandidateIdleState(params: VaultCandidateParameters) {
     donatedPenaltyAssetsKey == null
       ? 0n
       : simulationContext.donatedPenaltyAssets[donatedPenaltyAssetsKey];
-  if (donatedPenaltyAssets == null)
+  if (donatedPenaltyAssets == null) {
     throw new UnknownDataError(
       `Missing donated penalty assets for "${vaultAddress}".`,
     );
+  }
   // Exclude rounded penalty dust from idle candidates so one donation
   // cannot replenish liquidity for another same-plan reallocation.
   const availableIdleAssets = MathLib.zeroFloorSub(
@@ -2378,6 +2505,13 @@ function planVaultCandidate(
     MathLib.MAX_UINT_128,
     targetMarket.totalSupplyAssets,
   );
+  if (
+    targetSupplyHeadroom === 0n ||
+    targetMarket.toSupplyShares(1n, "Down") >
+      MathLib.zeroFloorSub(MathLib.MAX_UINT_128, targetMarket.totalSupplyShares)
+  ) {
+    return;
+  }
   const minimumSupply = targetMarket.supply(1n, 0n);
   const rawCandidates: ReallocationCandidate[] = [];
 
@@ -2385,7 +2519,7 @@ function planVaultCandidate(
   // typed getter errors below must propagate. Only explicit zero caps or
   // disabled permissions make an adapter ineligible.
 
-  for (const adapter of vault.accrualAdapters)
+  for (const adapter of vault.accrualAdapters) {
     rawCandidates.push(
       ...planTargetAdapterCandidates({
         ...params,
@@ -2399,6 +2533,7 @@ function planVaultCandidate(
         adapter,
       }),
     );
+  }
 
   const capCompatibleCandidates: ReallocationCandidate[] = [];
 
@@ -2408,7 +2543,9 @@ function planVaultCandidate(
       ...candidate,
       targetMarket,
     });
-    if (compatible != null) capCompatibleCandidates.push(compatible);
+    if (compatible != null) {
+      capCompatibleCandidates.push(compatible);
+    }
   }
 
   return capCompatibleCandidates.sort(
@@ -2436,19 +2573,23 @@ function planTargetAdapterCandidates(
     vault,
     targetMarket,
     activeAdapters,
-    targetSupplyHeadroom,
     minimumSupply,
     adapter,
   } = params;
   const rawCandidates: ReallocationCandidate[] = [];
 
-  if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) return [];
-  if (!isAddressEqual(adapter.parentVault, vaultAddress)) return [];
+  if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+    return [];
+  }
+  if (!isAddressEqual(adapter.parentVault, vaultAddress)) {
+    return [];
+  }
   if (
     !isAddressEqual(targetMarket.params.loanToken, vault.asset) ||
     !isAddressEqual(targetMarket.params.irm, adapter.adaptiveCurveIrm)
-  )
+  ) {
     return [];
+  }
 
   const targetPair = getPair(vaultAddress, adapter, targetMarket);
   const [adapterCapId, collateralCapId, adapterMarketCapId] = getAdapterIds(
@@ -2464,8 +2605,9 @@ function planTargetAdapterCandidates(
     !isAddressEqual(marketPublicAllocatorConfig.vault, vaultAddress) ||
     !isAddressEqual(marketPublicAllocatorConfig.adapter, adapter.address) ||
     !activeAdapters.has(adapter.address.toLowerCase())
-  )
+  ) {
     return [];
+  }
 
   const adapterCapAllocation = data.getAllocation(vaultAddress, adapterCapId);
   const collateralCapAllocation = data.getAllocation(
@@ -2481,8 +2623,9 @@ function planTargetAdapterCandidates(
     collateralCapAllocation,
     adapterMarketCapAllocation,
   ];
-  if (targetAllocations.some(({ absoluteCap }) => absoluteCap === 0n))
+  if (targetAllocations.some(({ absoluteCap }) => absoluteCap === 0n)) {
     return [];
+  }
 
   const adapterShares = adapter.supplyShares[marketId] ?? 0n;
   const expectedSupplyAssets = targetMarket.toSupplyAssets(adapterShares);
@@ -2523,13 +2666,12 @@ function planTargetAdapterCandidates(
     .map(({ id }) => id);
   // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
   if (
-    targetSupplyHeadroom === 0n ||
     allocatorHeadroom === 0n ||
     minimumSupply.shares < minimumSupply.assets ||
-    minimumSupply.market.totalSupplyShares > MathLib.MAX_UINT_128 ||
     blockedTargetIds.includes(adapterMarketCapId)
-  )
+  ) {
     return [];
+  }
 
   const sourceParams = {
     ...params,
@@ -2539,7 +2681,9 @@ function planTargetAdapterCandidates(
     blockedTargetIds,
   };
   const idleCandidate = planIdleCandidate(sourceParams);
-  if (idleCandidate != null) rawCandidates.push(idleCandidate);
+  if (idleCandidate != null) {
+    rawCandidates.push(idleCandidate);
+  }
   rawCandidates.push(...planSourceAdapterCandidates(sourceParams));
 
   return rawCandidates;
@@ -2597,10 +2741,15 @@ function planSourceAdapterCandidates(
   const { vault, vaultAddress, activeAdapters } = params;
   const candidates: ReallocationCandidate[] = [];
   for (const sourceAdapter of vault.accrualAdapters) {
-    if (!(sourceAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2))
+    if (!(sourceAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
       continue;
-    if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress)) continue;
-    if (!activeAdapters.has(sourceAdapter.address.toLowerCase())) continue;
+    }
+    if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress)) {
+      continue;
+    }
+    if (!activeAdapters.has(sourceAdapter.address.toLowerCase())) {
+      continue;
+    }
 
     for (const sourceMarketReference of sourceAdapter.markets) {
       const candidate = planSourceMarketCandidate({
@@ -2608,7 +2757,9 @@ function planSourceAdapterCandidates(
         sourceAdapter,
         sourceMarketReference,
       });
-      if (candidate != null) candidates.push(candidate);
+      if (candidate != null) {
+        candidates.push(candidate);
+      }
     }
   }
   return candidates;
@@ -2650,9 +2801,12 @@ function planSourceMarketCandidate(
   if (
     !isAddressEqual(sourceMarket.params.loanToken, vault.asset) ||
     !isAddressEqual(sourceMarket.params.irm, sourceAdapter.adaptiveCurveIrm)
-  )
+  ) {
     return;
-  if (sourceMarket.id.toLowerCase() === normalizedMarketId) return;
+  }
+  if (sourceMarket.id.toLowerCase() === normalizedMarketId) {
+    return;
+  }
 
   const sourceIds = getAdapterIds(adapterIdsCache, sourceAdapter, sourceMarket);
   const [, , sourceAdapterMarketCapId] = sourceIds;
@@ -2664,19 +2818,26 @@ function planSourceMarketCandidate(
     !isAddressEqual(sourceConfig.vault, vaultAddress) ||
     !isAddressEqual(sourceConfig.adapter, sourceAdapter.address) ||
     !sourceConfig.canPullFromMarket
-  )
+  ) {
     return;
+  }
 
   const sourceAllocations = sourceIds.map((id) =>
     data.getAllocation(vaultAddress, id),
   );
-  if (sourceAllocations.some(({ allocation }) => allocation === 0n)) return;
+  if (sourceAllocations.some(({ allocation }) => allocation === 0n)) {
+    return;
+  }
 
   const sourceSupplyShares = sourceAdapter.supplyShares[sourceMarket.id] ?? 0n;
-  if (sourceSupplyShares === 0n) return;
+  if (sourceSupplyShares === 0n) {
+    return;
+  }
 
   // A withdrawal can create target headroom only for shared cap IDs.
-  if (blockedTargetIds.some((id) => !sourceIds.includes(id))) return;
+  if (blockedTargetIds.some((id) => !sourceIds.includes(id))) {
+    return;
+  }
 
   const sourcePair = getPair(vaultAddress, sourceAdapter, sourceMarket);
   const accruedSourceMarket = sourceMarket.accrueInterest(timestamp);
@@ -2690,7 +2851,9 @@ function planSourceMarketCandidate(
     expectedSourceSupplyAssets,
     accruedSourceMarket.getWithdrawToUtilization(maxWithdrawalUtilization),
   );
-  if (assets <= 0n) return;
+  if (assets <= 0n) {
+    return;
+  }
 
   return {
     reallocation: {
@@ -2730,7 +2893,7 @@ function fitCandidateCaps(
   const targetIds = targetPair.ids;
   const sourceIds = new Set<Hash>(sourcePair?.ids ?? []);
   const reserveById = new Map<Hash, bigint>();
-  for (const id of targetIds)
+  for (const id of targetIds) {
     reserveById.set(
       id,
       capReserve(
@@ -2739,6 +2902,7 @@ function fitCandidateCaps(
         sourcePair == null ? [targetPair] : [targetPair, sourcePair],
       ),
     );
+  }
 
   const probeParams = { ...params, targetIds, sourceIds, reserveById };
 
@@ -2775,13 +2939,14 @@ function fitCandidateCaps(
     }
   }
 
-  if (selectedAssets > 0n && probe?.withinAllCaps === true)
+  if (selectedAssets > 0n && probe?.withinAllCaps === true) {
     return {
       reallocation: { ...reallocation, assets: selectedAssets },
       targetPair,
       sourcePair,
       allocatorHeadroom,
     };
+  }
 }
 
 /** Simulates one candidate amount and tests its reserved target-cap headroom. @internal */
@@ -2810,8 +2975,9 @@ function probeCandidateReallocation(
     targetMarket.totalSupplyShares +
       targetMarket.toSupplyShares(assets, "Down") >
     MathLib.MAX_UINT_128
-  )
+  ) {
     return;
+  }
 
   const postTransition = _try(
     () =>
@@ -2826,7 +2992,9 @@ function probeCandidateReallocation(
     ReallocationAllocationUnderflowError,
     ReallocationAdapterSupplySharesUnderflowError,
   );
-  if (postTransition == null) return;
+  if (postTransition == null) {
+    return;
+  }
 
   // Vault V2 checks relative caps against the transient firstTotalAssets,
   // which stays fixed after the vault's first allocation in a transaction.
@@ -2849,7 +3017,9 @@ function probeCandidateReallocation(
       allocation.allocation + (reserveById.get(id) ?? 0n) <= capacity;
     if (!withinCap) {
       withinAllCaps = false;
-      if (!sourceIds.has(id)) withinUpperBounds = false;
+      if (!sourceIds.has(id)) {
+        withinUpperBounds = false;
+      }
     }
   }
   return { withinAllCaps, withinUpperBounds };
@@ -2872,9 +3042,11 @@ function findCandidateUpperBound(
     if (
       probeCandidateReallocation({ ...probeParams, assets })
         ?.withinUpperBounds === true
-    )
+    ) {
       lower = assets;
-    else upper = assets - 1n;
+    } else {
+      upper = assets - 1n;
+    }
   }
   return lower;
 }
@@ -2929,13 +3101,17 @@ function getReallocationTransferShortfall(
   blueBalance: bigint,
 ): bigint {
   const penaltyAssets = getBlueBundlesV1PenaltyAssets(reallocations);
-  if (penaltyAssets === 0n) return 0n;
+  if (penaltyAssets === 0n) {
+    return 0n;
+  }
   let shortfall = MathLib.zeroFloorSub(penaltyAssets, blueBalance);
   let balance = MathLib.zeroFloorSub(blueBalance, penaltyAssets);
   for (const { from, assets } of reallocations) {
-    if (from.type === "idle") balance += assets;
-    else
+    if (from.type === "idle") {
+      balance += assets;
+    } else {
       shortfall = MathLib.max(shortfall, MathLib.zeroFloorSub(assets, balance));
+    }
   }
   return shortfall;
 }
@@ -2964,7 +3140,9 @@ function planVaultOperation(params: OperationPlanParameters) {
     idleBoundVaults,
   };
   for (const penalty of penaltyTiers) {
-    if (type === "refinance" && penalty === MathLib.WAD) continue;
+    if (type === "refinance" && penalty === MathLib.WAD) {
+      continue;
+    }
     state = planOperationPenaltyTier({ ...params, penalty, state });
   }
   return summarizeOperationPlan({ ...params, state });
@@ -2990,7 +3168,9 @@ function planOperationPenaltyTier(
   for (const utilization of [maxWithdrawalUtilization, MathLib.WAD]) {
     const isFreeFriendlyPass = penalty === 0n && isFriendlyPass;
     isFriendlyPass = false;
-    if (state.remainingShortfall === 0n && !isFreeFriendlyPass) continue;
+    if (state.remainingShortfall === 0n && !isFreeFriendlyPass) {
+      continue;
+    }
 
     const result = planOperationUtilizationPass({
       ...params,
@@ -3022,31 +3202,25 @@ function planOperationUtilizationPass(
   },
 ) {
   const { penalty } = params;
-  let {
-    reserves,
-    data,
-    context,
-    remainingShortfall,
-    accountingShortfall,
-    allocatorCapBoundTargets,
-    idleBoundVaults,
-  } = params.state;
-  let reallocations = [...params.state.reallocations];
+  let state: OperationPlanState = {
+    ...params.state,
+    reallocations: [...params.state.reallocations],
+  };
   let triedFullCapacityAttempt = params.triedFullCapacityAttempt;
   let passMaxAssets = getOperationPassBudget(params);
   const retryPaidPass = penalty > 0n;
   let lo = retryPaidPass ? passMaxAssets - 1n : 0n;
   let tryFullCapacityAttempt = false;
   let isFullCapacityRetryPath = false;
-  const beforePassRemainingShortfall = remainingShortfall;
-  const beforePassAccountingShortfall = accountingShortfall;
+  const beforePassRemainingShortfall = state.remainingShortfall;
+  const beforePassAccountingShortfall = state.accountingShortfall;
   // Grow by grossed-up gaps, bisect to the smallest found, and keep the best for non-monotonic shared-cap fitting.
   const passStart = retryPaidPass
     ? {
-        data: data.clone(),
-        context,
-        reserves: cloneCapReserveState(reserves),
-        reallocationCount: reallocations.length,
+        data: state.data.clone(),
+        context: state.context,
+        reserves: cloneCapReserveState(state.reserves),
+        reallocationCount: state.reallocations.length,
       }
     : undefined;
   let previousPassReallocatedAssets = 0n;
@@ -3058,37 +3232,16 @@ function planOperationUtilizationPass(
     const isFullCapacityAttempt = tryFullCapacityAttempt;
     tryFullCapacityAttempt = false;
     if (passStart != null) {
-      data = passStart.data.clone();
-      context = passStart.context;
-      reserves = cloneCapReserveState(passStart.reserves);
-      reallocations.length = passStart.reallocationCount;
+      state = restoreOperationPassStart({ state, passStart });
     }
     const attempt = executeOperationAttempt({
       ...params,
-      state: {
-        reserves,
-        reallocations,
-        data,
-        context,
-        remainingShortfall,
-        accountingShortfall,
-        allocatorCapBoundTargets,
-        idleBoundVaults,
-      },
+      state,
       isFullCapacityAttempt,
       passMaxAssets,
       isFullCapacityRetryPath,
     });
-    ({
-      reserves,
-      reallocations,
-      data,
-      context,
-      remainingShortfall,
-      accountingShortfall,
-      allocatorCapBoundTargets,
-      idleBoundVaults,
-    } = attempt.state);
+    state = attempt.state;
     const {
       pass,
       physicalShortfall,
@@ -3096,21 +3249,16 @@ function planOperationUtilizationPass(
       attemptCoversShortfall,
       passReallocatedAssets,
     } = attempt;
-    if (passStart == null) break;
-    if (isFullCapacityAttempt) passMaxAssets = passReallocatedAssets;
+    if (passStart == null) {
+      break;
+    }
+    if (isFullCapacityAttempt) {
+      passMaxAssets = passReallocatedAssets;
+    }
 
     bestAttempt = chooseOperationBestAttempt({
       ...params,
-      state: {
-        reserves,
-        reallocations,
-        data,
-        context,
-        remainingShortfall,
-        accountingShortfall,
-        allocatorCapBoundTargets,
-        idleBoundVaults,
-      },
+      state,
       bestAttempt,
       beforePassAccountingShortfall,
       isFullCapacityRetryPath,
@@ -3131,13 +3279,15 @@ function planOperationUtilizationPass(
       previousPassReallocatedAssets,
       isFullCapacityAttempt,
       attemptCoversShortfall,
-      accountingShortfall,
+      accountingShortfall: state.accountingShortfall,
       physicalShortfall,
       passReallocatedAssets,
-      remainingShortfall,
+      remainingShortfall: state.remainingShortfall,
       penalty,
     });
-    if (next.type === "break") break;
+    if (next.type === "break") {
+      break;
+    }
     ({
       lo,
       hi,
@@ -3151,16 +3301,7 @@ function planOperationUtilizationPass(
   }
   const finalState = finishOperationPass({
     ...params,
-    state: {
-      reserves,
-      reallocations,
-      data,
-      context,
-      remainingShortfall,
-      accountingShortfall,
-      allocatorCapBoundTargets,
-      idleBoundVaults,
-    },
+    state,
     passStart,
     bestAttempt,
     beforePassRemainingShortfall,
@@ -3171,6 +3312,25 @@ function planOperationUtilizationPass(
     state: finalState,
     triedFullCapacityAttempt,
   };
+}
+
+/**
+ * Restores working data and reserves and truncates the shared reallocation array in place.
+ * Other attempt results remain available to the retry search.
+ * @internal
+ */
+function restoreOperationPassStart({
+  state,
+  passStart,
+}: {
+  readonly state: OperationPlanState;
+  readonly passStart: OperationPassStart;
+}): OperationPlanState {
+  const data = passStart.data.clone();
+  const context = passStart.context;
+  const reserves = cloneCapReserveState(passStart.reserves);
+  state.reallocations.length = passStart.reallocationCount;
+  return { ...state, data, context, reserves };
 }
 
 /** Summarizes liquidity-bound legs and the accounting and physical funding result. @internal */
@@ -3198,8 +3358,9 @@ function summarizeOperationPlan(
     if (
       !allocatorCapBoundTargets.has(key) &&
       !(from.type === "idle" && idleBoundVaults.has(vault.toLowerCase()))
-    )
+    ) {
       unboundAssets += assets;
+    }
   }
   const penaltyAssets = getBlueBundlesV1PenaltyAssets(reallocations);
   const idleAssets = reallocations.reduce(
@@ -3502,7 +3663,7 @@ function chooseOperationBestAttempt(
     isBetterAttempt &&
     (!isFullCapacityRetryPath ||
       (attemptCoversShortfall && attemptTransferShortfall === 0n))
-  )
+  ) {
     return {
       data,
       context,
@@ -3513,6 +3674,7 @@ function chooseOperationBestAttempt(
       passReallocatedAssets,
       priority: attemptPriority,
     };
+  }
   return bestAttempt;
 }
 
@@ -3569,7 +3731,9 @@ function advanceOperationPassSearch(
   }));
 
   if (hi != null) {
-    if (hi - lo <= 1n) return { type: "break" };
+    if (hi - lo <= 1n) {
+      return { type: "break" };
+    }
     passMaxAssets = (lo + hi) / 2n;
     return {
       type: "continue",
@@ -3584,8 +3748,9 @@ function advanceOperationPassSearch(
     };
   }
 
-  if (isFullCapacityAttempt && !attemptCoversShortfall)
+  if (isFullCapacityAttempt && !attemptCoversShortfall) {
     return { type: "break" };
+  }
   if (
     accountingShortfall === 0n &&
     previousPhysicalShortfall != null &&
@@ -3614,8 +3779,9 @@ function advanceOperationPassSearch(
   if (
     passReallocatedAssets <= previousPassReallocatedAssets ||
     penalty === MathLib.WAD
-  )
+  ) {
     return { type: "break" };
+  }
   previousPassReallocatedAssets = passReallocatedAssets;
   passMaxAssets += MathLib.mulDivUp(
     remainingShortfall,
@@ -3705,9 +3871,11 @@ function updateOperationSearchBracket(params: {
 }) {
   let { lo, hi } = params;
   const { passMaxAssets, attemptCoversShortfall } = params;
-  if (attemptCoversShortfall)
+  if (attemptCoversShortfall) {
     hi = hi == null ? passMaxAssets : MathLib.min(hi, passMaxAssets);
-  else lo = MathLib.max(lo, passMaxAssets);
+  } else {
+    lo = MathLib.max(lo, passMaxAssets);
+  }
   return { lo, hi };
 }
 
@@ -3723,13 +3891,17 @@ type ReallocationOperation = NonNullable<
 /** Validates the operation amount and fee before reading its snapshot. @internal */
 function resolveOperationFeeAssets(operation: ReallocationOperation): bigint {
   const { amount } = operation;
-  if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
+  if (amount <= 0n) {
+    throw new NonPositiveInputError("amount", amount);
+  }
   const referralFeePct =
     operation.type === "refinance" ? (operation.referralFeePct ?? 0n) : 0n;
-  if (referralFeePct < 0n)
+  if (referralFeePct < 0n) {
     throw new NegativeInputError("referralFeePct", referralFeePct);
-  if (referralFeePct >= MathLib.WAD)
+  }
+  if (referralFeePct >= MathLib.WAD) {
     throw new ReferralFeePctExceededError(referralFeePct);
+  }
   const feeAssets =
     operation.type === "refinance"
       ? getBlueBundlesV1ReferralFeeAssets(amount, referralFeePct)
@@ -3760,8 +3932,12 @@ function getOperationMarketTotals({
   }
 
   let newTotalBorrowAssets = market.totalBorrowAssets;
-  if (type === "borrow") newTotalBorrowAssets += amount;
-  if (type === "refinance") newTotalBorrowAssets += amount + feeAssets;
+  if (type === "borrow") {
+    newTotalBorrowAssets += amount;
+  }
+  if (type === "refinance") {
+    newTotalBorrowAssets += amount + feeAssets;
+  }
   const newTotalSupplyAssets =
     type === "withdraw"
       ? market.totalSupplyAssets - amount
@@ -3808,7 +3984,9 @@ function selectOperationPlan(params: OperationPlanSelectionParameters) {
       { headroom: allocatorCapHeadroom },
     );
     // Shared-cap fitting is not monotonic in the budget.
-    if (!selected.coversShortfall && target.coversShortfall) selected = target;
+    if (!selected.coversShortfall && target.coversShortfall) {
+      selected = target;
+    }
   }
   let available = MathLib.max(
     target.reallocatedAssets,
@@ -3818,10 +3996,13 @@ function selectOperationPlan(params: OperationPlanSelectionParameters) {
   const fullCapBudgets =
     allocatorCapHeadroom > 0n ? [absoluteShortfall, requiredAssets] : [];
   for (const maxAssets of fullCapBudgets) {
-    if (selected.coversShortfall) break;
+    if (selected.coversShortfall) {
+      break;
+    }
     selected = plan(maxAssets, { headroom: 0n });
-    if (selected.reallocatedAssets > available)
+    if (selected.reallocatedAssets > available) {
       available = selected.reallocatedAssets;
+    }
   }
 
   // Reject unfunded plans before comparing optional physical-balance alternatives.
@@ -3847,7 +4028,9 @@ function assertSelectedOperationFunding(
     absoluteShortfall,
     marketId,
   } = params;
-  if (selected.coversShortfall) return;
+  if (selected.coversShortfall) {
+    return;
+  }
 
   const selectedTransferShortfall = hasExplicitBlueBalance
     ? getReallocationTransferShortfall(selected.reallocations, blueBalance)
@@ -3861,12 +4044,13 @@ function assertSelectedOperationFunding(
     selected.reallocatedAssets >= absoluteShortfall &&
     (!hasExplicitBlueBalance ||
       (selected.physicalShortfall === 0n && selectedTransferShortfall === 0n))
-  )
+  ) {
     throw new InputExceedsMaxError({
       field: "reallocationPenaltyAssets",
       value: selectedPenaltyAssets,
       max: amount,
     });
+  }
   throw new InsufficientSharedLiquidityError({
     marketId,
     shortfall: MathLib.max(
@@ -3913,8 +4097,9 @@ function choosePhysicalBalancePlan(
       alternative.coversShortfall &&
       getBlueBundlesV1PenaltyAssets(alternative.reallocations) <
         getBlueBundlesV1PenaltyAssets(selected.reallocations)
-    )
+    ) {
       selected = alternative;
+    }
   }
 
   return selected;

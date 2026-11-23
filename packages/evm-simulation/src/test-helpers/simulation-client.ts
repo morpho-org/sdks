@@ -11,7 +11,9 @@ export const keepErrorStatus = async (
   init?: RequestInit,
 ): Promise<Response> => {
   const response = await fetch(input, init);
-  if (response.ok) return response;
+  if (response.ok) {
+    return response;
+  }
   const headers = new Headers(response.headers);
   headers.delete("content-type");
   return new Response(response.body, {

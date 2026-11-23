@@ -26,7 +26,7 @@ import {
   wrappedBackedTokenAbi,
 } from "../abis.js";
 import { abi, code } from "../queries/GetHolding.js";
-import type { DeploylessFetchParameters } from "../types.js";
+import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { catchRevertOnly, isTransportError } from "../utils.js";
 
 /** Lookup table used to decode optional deployless boolean results. */
@@ -78,7 +78,7 @@ export async function fetchHolding(
 ) {
   const chainId = await getChainId(client);
 
-  if (isAddressEqual(token, NATIVE_ADDRESS))
+  if (isAddressEqual(token, NATIVE_ADDRESS)) {
     return new Holding({
       user,
       token,
@@ -93,6 +93,7 @@ export async function fetchHolding(
           })
         : 0n,
     });
+  }
 
   const isPermissionedBackedToken = [
     ...(permissionedBackedTokens[chainId] ?? []),
@@ -130,7 +131,9 @@ export async function fetchHolding(
         canTransfer: optionalBoolean[canTransfer],
       });
     } catch (error) {
-      if (deployless === "force" || isTransportError(error)) throw error;
+      if (deployless === "force" || isTransportError(error)) {
+        throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -155,7 +158,9 @@ export async function fetchHolding(
     Promise.all(
       ERC20_ALLOWANCE_RECIPIENTS.map(async (label) => {
         const spender = getValue(chainAddresses, label);
-        if (spender == null) return [label, 0n] as const;
+        if (spender == null) {
+          return [label, 0n] as const;
+        }
 
         return [
           label,
@@ -208,37 +213,66 @@ export async function fetchHolding(
     canTransfer: hasErc20WrapperPermission,
   });
 
-  if (whitelistControllerAggregator)
-    holding.canTransfer = await readContract(client, {
+  holding.canTransfer = await readHoldingTransferPermission(client, {
+    whitelistControllerAggregator,
+    identityRegistry,
+    user,
+    parameters,
+    fallback: hasErc20WrapperPermission,
+  });
+
+  return holding;
+}
+
+async function readHoldingTransferPermission(
+  client: Client,
+  {
+    whitelistControllerAggregator,
+    identityRegistry,
+    user,
+    parameters,
+    fallback,
+  }: {
+    readonly whitelistControllerAggregator: Address | undefined;
+    readonly identityRegistry: Address | undefined;
+    readonly user: Address;
+    readonly parameters: FetchParameters;
+    readonly fallback: boolean;
+  },
+) {
+  if (whitelistControllerAggregator) {
+    return readContract(client, {
       ...parameters,
       abi: whitelistControllerAggregatorV2Abi,
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",
       args: [user],
     }).catch(catchRevertOnly(undefined));
-  else if (
-    identityRegistry != null &&
-    !isAddressEqual(identityRegistry, zeroAddress)
-  ) {
-    const isVerified = await readContract(client, {
-      ...parameters,
-      abi: erc3643IdentityRegistryAbi,
-      address: identityRegistry,
-      functionName: "isVerified",
-      args: [user],
-    }).catch(catchRevertOnly(undefined));
-
-    if (isVerified != null) holding.canTransfer = isVerified;
-    else {
-      const registryCode =
-        parameters.stateOverride?.find(({ address }) =>
-          isAddressEqual(address, identityRegistry),
-        )?.code ??
-        (await getCode(client, { ...parameters, address: identityRegistry }));
-      if (registryCode && registryCode !== "0x")
-        holding.canTransfer = undefined;
-    }
   }
 
-  return holding;
+  if (
+    identityRegistry == null ||
+    isAddressEqual(identityRegistry, zeroAddress)
+  ) {
+    return fallback;
+  }
+
+  const isVerified = await readContract(client, {
+    ...parameters,
+    abi: erc3643IdentityRegistryAbi,
+    address: identityRegistry,
+    functionName: "isVerified",
+    args: [user],
+  }).catch(catchRevertOnly(undefined));
+
+  if (isVerified != null) {
+    return isVerified;
+  }
+
+  const registryCode =
+    parameters.stateOverride?.find(({ address }) =>
+      isAddressEqual(address, identityRegistry),
+    )?.code ??
+    (await getCode(client, { ...parameters, address: identityRegistry }));
+  return registryCode && registryCode !== "0x" ? undefined : fallback;
 }

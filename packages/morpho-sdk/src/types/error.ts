@@ -1054,7 +1054,10 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
-/** Thrown when a runtime crypto API is required but unavailable. */
+/**
+ * Thrown when a runtime crypto API is required but unavailable.
+ * @deprecated This error is never thrown by the SDK and will be removed in the next major version.
+ */
 export class CryptoUnavailableError extends Error {
   constructor(feature: string) {
     super(`Crypto API is required for ${feature} but is unavailable.`);
@@ -1197,11 +1200,17 @@ export class ChainWNativeMissingError extends Error {
 
 /** Thrown when a vault entity's address does not match the vault address embedded in the call's args. */
 export class VaultAddressMismatchError extends Error {
+  /** Vault targeted by the caller. */
+  readonly expected: Address;
+  /** Vault address found in the supplied snapshot. */
+  readonly actual: Address;
   constructor(vaultAddress: Address, argsVaultAddress: Address) {
     super(
       `Vault address mismatch between vault: ${vaultAddress} and args: ${argsVaultAddress}`,
     );
     this.name = "VaultAddressMismatchError";
+    this.expected = vaultAddress;
+    this.actual = argsVaultAddress;
   }
 }
 

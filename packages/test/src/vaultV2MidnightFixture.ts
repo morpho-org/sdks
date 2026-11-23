@@ -41,11 +41,10 @@ export const DEFAULT_MIDNIGHT_ADAPTER_DURATIONS = [
 ] as const;
 
 /**
- * Installs the frozen vault-v2@e7821fd `MidnightAdapterFactory` at the registry
+ * Installs vault-v2@bbeda7b27ae80abcf070e0158cb8a31e87bb2286 `MidnightAdapterFactory` at the registry
  * address on the fork: deploys it with the registry Midnight, then copies its
- * runtime code (immutables included) to `address`. No official deployment of
- * this version exists yet, so the registry address still holds the pre-audit
- * factory onchain.
+ * runtime code (immutables included) to `address`. The pinned Base fork block
+ * predates the registry factory's deployment.
  *
  * @param params.client - Base Anvil test client.
  * @param params.address - Address that receives the factory code.
@@ -66,10 +65,13 @@ export const installMidnightAdapterFactory = async (params: {
     ]),
   });
   const { contractAddress } = await client.waitForTransactionReceipt({ hash });
-  if (contractAddress == null)
+  if (contractAddress == null) {
     throw new MidnightAdapterFactoryDeploymentError(hash);
+  }
   const code = await client.getCode({ address: contractAddress });
-  if (code == null) throw new MidnightAdapterFactoryCodeError(contractAddress);
+  if (code == null) {
+    throw new MidnightAdapterFactoryCodeError(contractAddress);
+  }
   await client.setCode({ address: params.address, bytecode: code });
 };
 
@@ -90,9 +92,9 @@ export interface MidnightAdapterCollateralCap {
 
 /** Market fields needed to configure adapter caps. */
 export interface MidnightAdapterMarketCap {
-  /** Entry gate (`zeroAddress` when ungated); not part of any cap ID. */
+  /** Entry gate (`zeroAddress` when ungated); part of the family cap ID. */
   readonly enterGate: Address;
-  /** Liquidation gate (`zeroAddress` when ungated); part of the `family` cap ID. */
+  /** Liquidation gate (`zeroAddress` when ungated); part of the family cap ID. */
   readonly liquidatorGate: Address;
   /** Recovery close factor threshold. */
   readonly rcfThreshold: bigint;
@@ -224,12 +226,14 @@ export const configureVaultV2MidnightAdapterCaps = async (params: {
           },
           { type: "uint256" },
           { type: "address" },
+          { type: "address" },
         ],
         [
-          "family",
+          "collateralParams/rcfThreshold/liquidatorGate/enterGate",
           market.collateralParams,
           market.rcfThreshold,
           market.liquidatorGate,
+          market.enterGate,
         ],
       ),
       ...market.collateralParams.map((collateral) =>
@@ -268,11 +272,10 @@ export const configureVaultV2MidnightAdapterCaps = async (params: {
 /**
  * Creates a Base-fork Vault V2 and one or more registry-factory Midnight adapters.
  *
- * @remarks Adapter ABI and factory code source: morpho-org/vault-v2@e7821fd
- * (frozen, not yet deployed). The fixture installs that factory at the registry
- * address with {@link installMidnightAdapterFactory}. Once the official factory
- * is deployed, point the registry at it, move the fork block past its deploy
- * block and drop the install step.
+ * @remarks Factory code source: morpho-org/vault-v2@bbeda7b27ae80abcf070e0158cb8a31e87bb2286
+ * (Cantina audit revision). The fixture installs that factory at the registry
+ * address with {@link installMidnightAdapterFactory} because the pinned Base
+ * fork block predates its deployment.
  *
  * The fixture raises `maxTtm` with `increaseMaxTtm` before adding each adapter, grants allocator
  * access to both the test account and adapter, and enables adapter, market, and

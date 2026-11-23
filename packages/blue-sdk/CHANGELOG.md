@@ -1,5 +1,28 @@
 # @morpho-org/blue-sdk
 
+## 8.4.0
+
+### Minor Changes
+
+- Reject withdrawals and repayments that burn more shares than the market holds instead of returning negative share totals.
+
+  Withdrawals above the market's total supply, including through `AccrualPosition.withdraw`, now throw `NegativeValueError` instead of `BlueErrors.InsufficientLiquidity`. Position withdrawals and repayments that burn more than the market's total shares now throw `NegativeValueError` instead of `BlueErrors.InsufficientPosition`.
+
+- Reject supplies and borrows that would push market asset or share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Reduce the operation amount when this error occurs.
+- Reject interest accrual that would push market asset or supply share totals past uint128 with `BlueErrors.TotalOverflow`, matching Morpho's onchain limits. Accrual at or before the market snapshot remains unchanged.
+
+### Patch Changes
+
+- Add Alpen mainnet (chain 29032) metadata and Morpho Blue, Vault V2, adapter factory, allocator, oracle factory, pre-liquidation and standalone bundle deployments with their creation blocks. Pin an Alpen fork block for registry-driven tests. Midnight, a Vault V1 factory, wrapped-native tokens and Permit2 are not registered on Alpen.
+
+  Patch maintained direct runtime dependents of morpho-ts so their latest releases resolve the new registry entry. Raise blue-sdk's morpho-ts peer floor to 4.5.0 so re-exported registry reads also resolve Alpen.
+
+- Clarify control flow with explicit blocks and remove unnecessary assertions without changing public behavior.
+- Cap `PreLiquidationPosition.seizableCollateral` repayable shares at the borrower's shares, matching the contract when the pre-liquidation close factor exceeds 100%.
+- Return zero from `PreLiquidationPosition.seizableCollateral` when the full seizure would fail Morpho's post-repay health check at the market oracle price. It now also returns `undefined` when debt remains after the repay and the market oracle price is unavailable.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.5.0
+
 ## 8.4.0-next.2
 
 ### Patch Changes

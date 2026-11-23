@@ -1,18 +1,16 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, isAddressEqual } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   validateMarketParamsId,
   validateUint256Field,
 } from "../../helpers/validate.js";
-import {
-  type AuthorizationRequirementSignature,
-  type BlueRefinanceAction,
-  type Metadata,
-  RefinanceSameMarketError,
-  RefinanceTokenMismatchError,
-  type Transaction,
-  type VaultV2BlueReallocation,
+import type {
+  AuthorizationRequirementSignature,
+  BlueRefinanceAction,
+  Metadata,
+  Transaction,
+  VaultV2BlueReallocation,
 } from "../../types/index.js";
 import {
   type BlueBundlesV1CommonParams,
@@ -22,6 +20,7 @@ import {
   getBlueBundlesV1SignedAuthorization,
   normalizeBlueBundlesV1CommonParams,
 } from "./common.js";
+import { validateBlueRefinanceMarkets } from "./refinanceValidation.js";
 
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
@@ -124,24 +123,8 @@ export const blueRefinance = (
   validateMarketParamsId(sourceMarketParams);
   validateMarketParamsId(destinationMarketParams);
   const { userAddress, maxLtv, authorizationSignature } = params.args;
-  if (sourceMarketParams.id === destinationMarketParams.id) {
-    throw new RefinanceSameMarketError(sourceMarketParams.id);
-  }
-  if (
-    !isAddressEqual(
-      sourceMarketParams.loanToken,
-      destinationMarketParams.loanToken,
-    ) ||
-    !isAddressEqual(
-      sourceMarketParams.collateralToken,
-      destinationMarketParams.collateralToken,
-    )
-  ) {
-    throw new RefinanceTokenMismatchError(
-      sourceMarketParams.id,
-      destinationMarketParams.id,
-    );
-  }
+  // Reject same-market migrations and token mismatches before encoding.
+  validateBlueRefinanceMarkets(sourceMarketParams, destinationMarketParams);
   validateUint256Field("maxLtv", maxLtv);
 
   const common: BlueBundlesV1CommonParams = {

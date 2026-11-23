@@ -6,13 +6,14 @@ import {
   ContractFunctionRevertedError,
   decodeFunctionData,
   erc20Abi,
+  getAddress,
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
   type TypedData,
   toFunctionSelector,
   toHex,
-  zeroAddress,
+  zeroHash,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { readContract } from "viem/actions";
@@ -24,13 +25,11 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { morphoViemExtension } from "../../client/index.js";
 import { computeVaultMaxShareAllowance } from "../../helpers/index.js";
 import {
   ExpiredDeadlineError,
   InputExceedsMaxError,
   NonPositiveInputError,
-  VaultAddressMismatchError,
 } from "../../types/index.js";
 import {
   applySignatures,
@@ -46,11 +45,10 @@ import {
 
 const vaultData = inKindVaultV2Data();
 const params = {
-  vault: vaultData.address,
-  vaultData,
+  vault: vaultData,
   chainId: 1,
   account: IN_KIND_USER,
-  amount: 100n,
+  assets: 100n,
 };
 
 test.each([
@@ -94,7 +92,7 @@ test.each([
       computeVaultMaxShareAllowance({
         vaultData,
         deadline: BigInt(expectedExpiry),
-        assets: params.amount,
+        assets: params.assets,
         slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
       }),
     );
@@ -106,9 +104,10 @@ test("withdrawal plan params do not accept slippage tolerance", () => {
   expectTypeOf<VaultV2WithdrawPlanParams>().not.toHaveProperty(
     "slippageTolerance",
   );
+  expectTypeOf<VaultV2WithdrawPlanParams>().not.toHaveProperty("deployless");
 });
 
-test("withdrawal calldata matches the entity flow with default slippage", async () => {
+test("withdrawal calldata encodes the amount, referral fee and no share permit", async () => {
   const handle = createMockClient(mainnet);
   mockRead(handle, {
     address: vaultData.address,
@@ -130,31 +129,39 @@ test("withdrawal calldata matches the entity flow with default slippage", async 
   expect(plan.signatureRequests).toEqual([]);
   const step = plan.steps[1]!;
   assert(step.action.type === "vaultV2Withdraw");
+  expect(step.action.inputs.vault).toBe(params.vault.address);
   expect(step.action.inputs.requiredShareAllowance).toBe(
     computeVaultMaxShareAllowance({
       vaultData,
       deadline: BigInt(expiresAt),
-      assets: params.amount,
+      assets: params.assets,
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
     }),
   );
-  const entityTx = handle.client
-    .extend(morphoViemExtension())
-    .morpho.vaultV2(params.vault, params.chainId)
-    .withdraw({
-      amount: params.amount,
-      vaultData,
-      userAddress: params.account,
-      deadline: BigInt(expiresAt),
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-      referralFeePct: 25_000000000000000n,
-      referralFeeRecipient: IN_KIND_USER,
-    })
-    .buildTx();
   const tx = buildTransaction(plan, plan.steps[1]!);
-  expect(tx.data).toBe(entityTx.data);
-  expect(tx.to).toBe(entityTx.to);
-  expect(tx.value).toBe(entityTx.value);
+  expect(decodeFunctionData({ abi: vaultBundlesV1Abi, data: tx.data })).toEqual(
+    {
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        getAddress(params.vault.address),
+        params.assets,
+        0n,
+        {
+          value: 0n,
+          nonce: 0n,
+          deadline: BigInt(expiresAt),
+          v: 0,
+          r: zeroHash,
+          s: zeroHash,
+        },
+        25_000000000000000n,
+        getAddress(IN_KIND_USER),
+        BigInt(expiresAt),
+      ],
+    },
+  );
+  expect(tx.to).toBe(getChainAddress(params.chainId, "bundles.vaultBundlesV1"));
+  expect(tx.value).toBe(0n);
 });
 
 test.each([-1n, 0n, 1n])(
@@ -165,7 +172,7 @@ test.each([-1n, 0n, 1n])(
     const expected = computeVaultMaxShareAllowance({
       vaultData,
       deadline: BigInt(expiresAt),
-      assets: params.amount,
+      assets: params.assets,
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
     });
     expect(expected).toBeGreaterThan(1n);
@@ -173,7 +180,7 @@ test.each([-1n, 0n, 1n])(
       computeVaultMaxShareAllowance({
         vaultData,
         deadline: BigInt(expiresAt),
-        assets: params.amount,
+        assets: params.assets,
         slippageTolerance: 0n,
       }),
     );
@@ -198,14 +205,6 @@ test.each([-1n, 0n, 1n])(
   },
 );
 
-test("rejects a snapshot for another vault before RPC reads", async () => {
-  const handle = createMockClient(mainnet);
-  await expect(
-    prepareVaultV2Withdraw(handle.client, { ...params, vault: zeroAddress }),
-  ).rejects.toBeInstanceOf(VaultAddressMismatchError);
-  expect(handle.request).not.toHaveBeenCalled();
-});
-
 test.each([
   [0n, NonPositiveInputError],
   [-1n, NonPositiveInputError],
@@ -215,7 +214,7 @@ test.each([
   async (amount, error) => {
     const handle = createMockClient(mainnet);
     await expect(
-      prepareVaultV2Withdraw(handle.client, { ...params, amount }),
+      prepareVaultV2Withdraw(handle.client, { ...params, assets: amount }),
     ).rejects.toBeInstanceOf(error);
     expect(handle.request).not.toHaveBeenCalled();
   },
@@ -239,7 +238,7 @@ test("defaults to direct approval of vault shares to VaultBundlesV1", async () =
     account: params.account,
     token: vaultData.address,
     spender: getChainAddress(1, "bundles.vaultBundlesV1"),
-    amount: maxUint256,
+    shares: maxUint256,
   });
   expect(plan.signatureRequests).toEqual([]);
   expect(plan.steps.map(({ id, label }) => [id, label])).toEqual([
@@ -313,11 +312,12 @@ test("prepares an unlimited share permit and preserves its value through storage
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
       const [tx] = call.params as readonly [{ data?: string }];
-      if (tx.data?.startsWith(toFunctionSelector("eip712Domain()")))
+      if (tx.data?.startsWith(toFunctionSelector("eip712Domain()"))) {
         throw new ContractFunctionRevertedError({
           abi: erc5267Abi,
           functionName: "eip712Domain",
         });
+      }
     }
     return baseRequest(call);
   });
@@ -383,7 +383,8 @@ test("prepares an unlimited share permit and preserves its value through storage
   expect(step.action.inputs.requiredShareAllowance).toBeGreaterThan(0n);
   expect(step.action.inputs.requiredShareAllowance).toBeLessThan(maxUint256);
   const request = plan.signatureRequests[0]!;
-  // Finite permits in stored v1 plans remain valid when they cover the quoted minimum.
+  assert(request.kind === "permit");
+  // Finite permits remain valid in format 2 when they cover the quoted minimum.
   for (const amount of [
     maxUint256,
     step.action.inputs.requiredShareAllowance,

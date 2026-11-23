@@ -46,7 +46,9 @@ export namespace MathLib {
    * @throws InvalidBitLengthError when `nBits` is not positive or not divisible by four.
    */
   export function maxUint(nBits: number) {
-    if (nBits <= 0 || nBits % 4 !== 0) throw new InvalidBitLengthError(nBits);
+    if (nBits <= 0 || nBits % 4 !== 0) {
+      throw new InvalidBitLengthError(nBits);
+    }
 
     return BigInt(`0x${"f".repeat(nBits / 4)}`);
   }
@@ -215,8 +217,9 @@ export namespace MathLib {
     const normalizedX = BigInt(x);
     const normalizedY = BigInt(y);
     const normalizedDenominator = BigInt(denominator);
-    if (normalizedDenominator === 0n)
+    if (normalizedDenominator === 0n) {
       throw new DivisionByZeroError("denominator");
+    }
 
     return (normalizedX * normalizedY) / normalizedDenominator;
   }
@@ -239,8 +242,9 @@ export namespace MathLib {
     const normalizedX = BigInt(x);
     const normalizedY = BigInt(y);
     const normalizedDenominator = BigInt(denominator);
-    if (normalizedDenominator === 0n)
+    if (normalizedDenominator === 0n) {
       throw new DivisionByZeroError("denominator");
+    }
 
     const product = normalizedX * normalizedY;
     const roundup = product % normalizedDenominator > 0n ? 1n : 0n;

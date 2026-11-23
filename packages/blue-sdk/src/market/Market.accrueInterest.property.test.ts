@@ -14,9 +14,12 @@ import {
   type AccruedInterestState,
   accruedInterestRef,
   blueAccrualRevertsRef,
+  blueAccrualUint128RevertsRef,
+  blueAccrualUint256RevertsRef,
   VIRTUAL_ASSETS,
 } from "../__test__/blueAccrualReference.js";
 import { marketInput, marketParams } from "../__test__/fixtures.js";
+import { BlueErrors } from "../errors.js";
 import { MathLib } from "../math/MathLib.js";
 import { SharesMath } from "../math/SharesMath.js";
 import { Market } from "./Market.js";
@@ -55,7 +58,7 @@ const accruedInterestCaseArb = fc.record({
 });
 const revertingAccruedInterestCaseArb = accruedInterestCaseArb.filter(
   ({ state, borrowRate, elapsed }) =>
-    blueAccrualRevertsRef({ borrowRate, state, elapsed }),
+    blueAccrualUint256RevertsRef({ borrowRate, state, elapsed }),
 );
 const positiveElapsedAccruedInterestCaseArb = fc.record({
   state: marketStateArb,
@@ -248,7 +251,7 @@ describe("MarketUtils.getAccruedInterest", () => {
     },
   );
 
-  // SDK divergence: accrual doesn't revert past uint256/uint128 like Morpho; drop `.fails` once it does.
+  // MathLib does not yet reject uint256 intermediate overflows.
   test.fails.prop([revertingAccruedInterestCaseArb], {
     numRuns: 1_000,
     examples: [
@@ -261,8 +264,8 @@ describe("MarketUtils.getAccruedInterest", () => {
             totalBorrowShares: MathLib.MAX_UINT_128,
             fee: MAX_FEE,
           },
-          borrowRate: 4n * MAX_RATE_AT_TARGET,
-          elapsed: SECONDS_PER_YEAR,
+          borrowRate: MathLib.MAX_UINT_256,
+          elapsed: 2n,
         },
       ],
     ],
@@ -278,6 +281,72 @@ describe("MarketUtils.getAccruedInterest", () => {
 
 // morpho-blue src/Morpho.sol _accrueInterest
 describe("Market.accrueInterest", () => {
+  test.prop([marketForwardCaseArb], {
+    numRuns: 1_000,
+    examples: [
+      [
+        {
+          state: {
+            totalBorrowAssets: 18526n,
+            totalSupplyShares: 0n,
+            totalBorrowShares: 1000000n,
+            fee: 0n,
+            totalSupplyAssets: MathLib.MAX_UINT_128,
+          },
+          rateAtTarget: 31709791n,
+          elapsed: 6808843n,
+        },
+      ],
+    ],
+  })(
+    "behavior: throws where Morpho reverts at uint128 bounds only",
+    ({ state, rateAtTarget, elapsed }) => {
+      const { avgBorrowRate: borrowRate } = marketAccrualRef({
+        state,
+        rateAtTarget,
+        elapsed,
+      });
+      const args = { state, borrowRate, elapsed };
+      fc.pre(!blueAccrualUint256RevertsRef(args));
+      fc.pre(blueAccrualUint128RevertsRef(args));
+      const original = new Market(marketInput({ ...state, rateAtTarget }));
+      const snapshot = new Market(original);
+      expect(() =>
+        original.accrueInterest(original.lastUpdate + elapsed),
+      ).toThrow(BlueErrors.TotalOverflow);
+      expect(original).toStrictEqual(snapshot);
+    },
+  );
+
+  test("behavior: exactly uint128 max is valid and one past throws", () => {
+    const input = marketInput({
+      totalSupplyAssets: MathLib.MAX_UINT_128 - 1n,
+      totalBorrowAssets: WAD,
+      fee: 0n,
+      rateAtTarget: MIN_RATE_AT_TARGET,
+    });
+    const original = new Market(input);
+    const { interest } = accruedInterestRef({
+      state: input,
+      borrowRate: original.getAvgBorrowRate(101n),
+      elapsed: 1n,
+    });
+    const atLimit = new Market({
+      ...input,
+      totalSupplyAssets: MathLib.MAX_UINT_128 - interest,
+    });
+    expect(atLimit.accrueInterest(101n).totalSupplyAssets).toBe(
+      MathLib.MAX_UINT_128,
+    );
+    const overLimit = new Market({
+      ...input,
+      totalSupplyAssets: MathLib.MAX_UINT_128 - interest + 1n,
+    });
+    expect(() => overLimit.accrueInterest(101n)).toThrow(
+      BlueErrors.TotalOverflow,
+    );
+  });
+
   test.prop([marketForwardCaseArb], { numRuns: 1_000 })(
     "default",
     ({ state, rateAtTarget, elapsed }) => {

@@ -21,11 +21,16 @@ import {
   SetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
   concatHex,
+  encodeFunctionData,
   erc20Abi,
   maxUint256,
   padHex,
@@ -38,6 +43,7 @@ import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
+  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
 import {
@@ -55,7 +61,7 @@ const takeRepayViolation = (field: string) => (error: unknown) =>
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -689,6 +695,56 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
         limits: wrongReceiverLimits,
       }),
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+  });
+
+  test("withdrawal-only limits warn on an appended loan-token transfer", async ({
+    client,
+  }) => {
+    const { user } = await setUp(client);
+    await client.deal({ erc20: usdc, account: user, amount: 1n });
+    const tx = midnightRepayWithdrawCollateral({
+      chainId: base.id,
+      market,
+      repay: { type: "assets", assets: 0n },
+      collateralWithdrawals: [{ collateralIndex: 0n, assets: 1n }],
+      collateralReceiver: RECEIVER,
+      deadline: Time.timestamp() + 600n,
+    });
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [
+          asTransaction(user, tx),
+          {
+            from: user,
+            to: usdc,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [OTHER, 1n],
+            }),
+          },
+        ],
+        limits: toSimulationLimits(tx.action, {
+          owner: user,
+          receiver: RECEIVER,
+        }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(true);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toMatchObject({
+      code: "UNEXPECTED_TOKEN_TRANSFER",
+      severity: "warn",
+      chainId: client.chain.id,
+    });
+    expect(report.warnings[0]).toMatchObject({
+      code: "UNEXPECTED_TOKEN_TRANSFER",
+      token: usdc,
+      sender: user,
+      recipients: [OTHER],
+    });
   });
 
   test("repeated finite-index withdrawals aggregate with repayment", async ({

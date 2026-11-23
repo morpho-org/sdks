@@ -43,9 +43,12 @@ export namespace MidnightMarketLib {
    * ```
    */
   export function id(midnight: string, encodedMarket: string): `0x${string}` {
-    if (!isAddress(midnight)) throw new InvalidAddressError(midnight);
-    if (!HEX_BYTES.test(encodedMarket))
+    if (!isAddress(midnight)) {
+      throw new InvalidAddressError(midnight);
+    }
+    if (!HEX_BYTES.test(encodedMarket)) {
       throw new InvalidHexError(encodedMarket);
+    }
 
     const creationHash = keccak_256(
       concatBytes(SSTORE2_PREFIX, hexToBytes(encodedMarket.slice(2))),

@@ -9,6 +9,7 @@ import {
 } from "../types/index.js";
 import {
   InvalidCalldataOriginError,
+  InvalidTransactionPlanError,
   NonIntegerInputError,
   ZeroAccountError,
 } from "./error.js";
@@ -18,6 +19,12 @@ const now = 1_700_000_000n;
 const params = { chainId: 1, account: IN_KIND_USER };
 
 describe("resolveIntent", () => {
+  test("rejects a malformed account", () => {
+    expect(() => resolveIntent({ ...params, account: "0x1" }, now)).toThrow(
+      InvalidTransactionPlanError,
+    );
+  });
+
   test("rejects a zero account", () => {
     expect(() =>
       resolveIntent({ ...params, account: zeroAddress }, now),

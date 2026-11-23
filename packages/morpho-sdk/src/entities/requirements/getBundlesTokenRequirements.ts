@@ -14,13 +14,13 @@ import {
   validateChainId,
   validateRequirementSpender,
 } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   type BundlesTokenSignatureRequirement,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InputExceedsMaxError,
   NegativeInputError,
-  NonPositiveInputError,
   type ReferenceTimestampParams,
   type Transaction,
 } from "../../types/index.js";
@@ -146,16 +146,8 @@ export const getBundlesTokenRequirements = async (
       max: maxUint256,
     });
   }
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  if (params.deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: params.deadline,
-      max: maxUint256,
-    });
-  }
+  // Reject deadlines outside the positive uint256 range before reading state.
+  validateDeadline(params.deadline);
   // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
   // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
   // this too, but the exported resolver must guard its own callers.
@@ -163,7 +155,9 @@ export const getBundlesTokenRequirements = async (
   if (params.deadline <= timestamp) {
     throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
-  if (params.amount === 0n) return [];
+  if (params.amount === 0n) {
+    return [];
+  }
   await validateClientChainId(viemClient, params.chainId);
 
   const allowance = await readContract(viemClient, {
@@ -172,7 +166,9 @@ export const getBundlesTokenRequirements = async (
     functionName: "allowance",
     args: [params.owner, params.spender],
   });
-  if (allowance >= params.amount) return [];
+  if (allowance >= params.amount) {
+    return [];
+  }
 
   const { dai } = getChainAddresses(params.chainId);
 
@@ -191,7 +187,9 @@ export const getBundlesTokenRequirements = async (
       now: timestamp,
       supportDeployless: params.supportDeployless,
     });
-    if (isDefined(permit)) return [permit];
+    if (isDefined(permit)) {
+      return [permit];
+    }
   }
 
   return resolveBundlesTokenRequirements({

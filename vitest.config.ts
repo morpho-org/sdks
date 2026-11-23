@@ -152,11 +152,9 @@ export default defineConfig({
           ],
           include: [
             "packages/evm-simulation/src/**/*.test.ts",
-            "packages/evm-simulation/test/e2e/**/*.test.ts",
+            "packages/evm-simulation/test/**/*.test.ts",
           ],
-          exclude: [
-            "packages/evm-simulation/test/e2e/**/*.integration.test.ts",
-          ],
+          exclude: ["packages/evm-simulation/test/**/*.integration.test.ts"],
           globals: true,
           environment: "node",
         },

@@ -152,19 +152,22 @@ export function findPreparationTransferFailures(
 ): readonly SimulationValidationError[] {
   const failures: SimulationValidationError[] = [];
   for (const { planned, result } of calls) {
-    if (planned.type !== "preparation") continue;
+    if (planned.type !== "preparation") {
+      continue;
+    }
     if (
       result.logs.some((log) =>
         [TRANSFER_TOPIC, DEPOSIT_TOPIC, WITHDRAWAL_TOPIC].some(
           (topic) => topic === log.topics[0]?.toLowerCase(),
         ),
       )
-    )
+    ) {
       failures.push(
         new SimulationValidationError(
           `Preview authorization "${planned.authorizationIndex}" preparation call "${planned.callIndex}" emitted asset transfers. Simulate the authorization as a transaction in final mode to check its asset flows.`,
         ),
       );
+    }
   }
 
   return failures;

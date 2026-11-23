@@ -269,6 +269,28 @@ export class InvalidHexError extends Error {
 }
 
 /**
+ * Thrown when a locale's number formatter omits a required separator.
+ *
+ * @example
+ * ```ts
+ * import { MissingLocalePartError } from "@morpho-org/morpho-ts";
+ *
+ * throw new MissingLocalePartError("en-US", "decimal");
+ * ```
+ */
+export class MissingLocalePartError extends Error {
+  public constructor(
+    public readonly locale: string,
+    public readonly part: "decimal" | "group",
+  ) {
+    super(
+      `Number formatter for locale "${locale}" omitted the "${part}" separator. Use a runtime with complete Intl number formatting support.`,
+    );
+    this.name = "MissingLocalePartError";
+  }
+}
+
+/**
  * Thrown when the retry attempt budget is exhausted, preserving the last failure as `cause`.
  *
  * @example
@@ -384,8 +406,9 @@ export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
     if (
       errorClasses.length === 0 ||
       errorClasses.some((errorClass) => error instanceof errorClass)
-    )
+    ) {
       return;
+    }
 
     throw error;
   };
@@ -393,7 +416,9 @@ export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
   try {
     const res = accessor();
 
-    if (res instanceof Promise) return res.catch(maybeCatchError);
+    if (res instanceof Promise) {
+      return res.catch(maybeCatchError);
+    }
     return res;
   } catch (error) {
     return maybeCatchError(error);

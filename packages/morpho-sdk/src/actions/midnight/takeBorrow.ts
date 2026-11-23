@@ -168,11 +168,12 @@ export const midnightTakeBorrow = (
     throw new UnboundedMidnightTakeInputError("deadline");
   }
   validateDeadline(params.deadline);
-  if (params.referralFeeRecipient !== undefined)
+  if (params.referralFeeRecipient !== undefined) {
     validateMidnightAddress(
       "referralFeeRecipient",
       params.referralFeeRecipient,
     );
+  }
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   validateMidnightReferralFeeCap(referralFeePct);
   validateMidnightSellTargetBounds({ target, referralFeePct });

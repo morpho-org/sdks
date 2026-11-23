@@ -47,9 +47,37 @@ describe("encodeErc20Permit", () => {
     });
     expect(permit.action.args.deadline).toBe(now + 7_200n);
   });
+
+  test("uses permit inputs exposed through prototype getters", async ({
+    client,
+  }) => {
+    class PermitInputs {
+      get spender() {
+        return blueBundlesV1;
+      }
+      get chainId() {
+        return mainnet.id;
+      }
+      get deadline() {
+        return 2_000n;
+      }
+    }
+    const params = Object.assign(new PermitInputs(), {
+      token: usdc,
+      owner: client.account.address,
+      amount: mockAmount,
+      nonce: mockNonce,
+      now: 1_000n,
+    });
+    const permit = await encodeErc20Permit(client, params);
+    expect(permit.action.args.deadline).toBe(2_000n);
+    expect(permit.action.typedData.message.deadline).toBe(2_000n);
+  });
   const { usdc } = addressesRegistry[mainnet.id];
   const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
-  if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");
+  if (blueBundlesV1 == null) {
+    throw new Error("BlueBundlesV1 is not registered");
+  }
 
   const mockAmount = 1000000n;
   const mockNonce = 0n;
@@ -101,8 +129,9 @@ describe("encodeErc20Permit", () => {
       }[] = Array.isArray(parsed) ? parsed : [parsed];
       const responses = calls.map(handle);
       const failed = responses.find((response) => response.status !== 200);
-      if (failed != null || !Array.isArray(parsed))
+      if (failed != null || !Array.isArray(parsed)) {
         return failed ?? responses[0]!;
+      }
       return new Response(
         JSON.stringify(await Promise.all(responses.map((r) => r.json()))),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -117,20 +146,25 @@ describe("encodeErc20Permit", () => {
       async (faultSelector) => {
         let faultedCalls = 0;
         stubJsonRpc((body) => {
-          if (body.method === "eth_chainId") return rpcResult(body.id, "0x1");
+          if (body.method === "eth_chainId") {
+            return rpcResult(body.id, "0x1");
+          }
           const [tx] = (body.params ?? []) as [{ to?: Address; data?: string }];
           const selector = String(tx?.data).slice(0, 10).toLowerCase();
           if (selector === faultSelector) {
             faultedCalls += 1;
             return new Response("rate limited", { status: 429 });
           }
-          if (selector === "0x313ce567")
+          if (selector === "0x313ce567") {
             return rpcResult(body.id, erc20Result("decimals", 6));
-          if (selector === "0x95d89b41")
+          }
+          if (selector === "0x95d89b41") {
             return rpcResult(body.id, erc20Result("symbol", "USDC"));
-          if (selector === "0x06fdde03")
+          }
+          if (selector === "0x06fdde03") {
             return rpcResult(body.id, erc20Result("name", "USD Coin"));
-          if (selector === "0x84b0196e")
+          }
+          if (selector === "0x84b0196e") {
             return rpcResult(
               body.id,
               encodeFunctionResult({
@@ -147,6 +181,7 @@ describe("encodeErc20Permit", () => {
                 ],
               }),
             );
+          }
           return new Response(`unhandled ${selector}`, { status: 500 });
         });
 
@@ -169,16 +204,21 @@ describe("encodeErc20Permit", () => {
 
     test("error: a 429 on name() propagates as infra through the deployless fallback", async () => {
       stubJsonRpc((body) => {
-        if (body.method === "eth_chainId") return rpcResult(body.id, "0x1");
+        if (body.method === "eth_chainId") {
+          return rpcResult(body.id, "0x1");
+        }
         const [tx] = (body.params ?? []) as [{ to?: Address; data?: string }];
         const selector = String(tx?.data).slice(0, 10).toLowerCase();
-        if (tx?.to == null || selector === "0x06fdde03")
+        if (tx?.to == null || selector === "0x06fdde03") {
           return new Response("rate limited", { status: 429 });
-        if (selector === "0x313ce567")
+        }
+        if (selector === "0x313ce567") {
           return rpcResult(body.id, erc20Result("decimals", 6));
-        if (selector === "0x95d89b41")
+        }
+        if (selector === "0x95d89b41") {
           return rpcResult(body.id, erc20Result("symbol", "USDC"));
-        if (selector === "0x84b0196e")
+        }
+        if (selector === "0x84b0196e") {
           return rpcResult(
             body.id,
             encodeFunctionResult({
@@ -195,6 +235,7 @@ describe("encodeErc20Permit", () => {
               ],
             }),
           );
+        }
         return new Response(`unhandled ${selector}`, { status: 500 });
       });
 
@@ -214,13 +255,17 @@ describe("encodeErc20Permit", () => {
 
     test("error: a token without name() or eip712Domain() rejects with MissingPermitDomainNameError", async () => {
       stubJsonRpc((body) => {
-        if (body.method === "eth_chainId") return rpcResult(body.id, "0x1");
+        if (body.method === "eth_chainId") {
+          return rpcResult(body.id, "0x1");
+        }
         const [tx] = (body.params ?? []) as [{ to?: Address; data?: string }];
         const selector = String(tx?.data).slice(0, 10).toLowerCase();
-        if (selector === "0x313ce567")
+        if (selector === "0x313ce567") {
           return rpcResult(body.id, erc20Result("decimals", 6));
-        if (selector === "0x95d89b41")
+        }
+        if (selector === "0x95d89b41") {
           return rpcResult(body.id, erc20Result("symbol", "USDC"));
+        }
         return rpcResult(body.id, "0x");
       });
 
@@ -265,8 +310,9 @@ describe("encodeErc20Permit", () => {
         const calls = Array.isArray(body) ? body : [body];
         methods.push(...calls.map(({ method }) => method));
         const [call] = calls;
-        if (calls.length === 1 && call?.method === "eth_chainId")
+        if (calls.length === 1 && call?.method === "eth_chainId") {
           return rpcResult(call.id, "0x2105");
+        }
         return new Response("unexpected request", { status: 500 });
       });
 

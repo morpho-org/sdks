@@ -138,10 +138,14 @@ export function previewVaultV2ForceWithdraw(
     referralFeePct = 0n,
     referralFeeRecipient,
   } = params;
-  if (requestedExitAssets <= 0n) return undefined;
+  if (requestedExitAssets <= 0n) {
+    return undefined;
+  }
   // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
   // deliver — above `withdrawnAssets` for a negative fee, non-positive at or beyond WAD.
-  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) return undefined;
+  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) {
+    return undefined;
+  }
   if (
     referralFeePct > 0n &&
     (referralFeeRecipient == null ||
@@ -154,7 +158,9 @@ export function previewVaultV2ForceWithdraw(
     vaultData,
     adapterOverride,
   );
-  if (eligibility.type !== "eligible") return undefined;
+  if (eligibility.type !== "eligible") {
+    return undefined;
+  }
 
   const capacity = computeVaultV2ForceWithdrawPlan({
     vaultData,
@@ -166,7 +172,9 @@ export function previewVaultV2ForceWithdraw(
   const exitAssets = MathLib.min(requestedExitAssets, capacity.maxExitAssets);
   // A vault with no exitable capacity caps `maxExitAssets` to `0`; the planner rejects a
   // non-positive amount, so short-circuit to the "not previewable" verdict before re-planning.
-  if (exitAssets <= 0n) return undefined;
+  if (exitAssets <= 0n) {
+    return undefined;
+  }
   // Re-plan at the capped amount so every returned leg describes the same exit.
   const plan =
     exitAssets === requestedExitAssets
@@ -179,7 +187,9 @@ export function previewVaultV2ForceWithdraw(
           timestamp,
         });
 
-  if (plan.withdrawnAssets <= 0n) return undefined;
+  if (plan.withdrawnAssets <= 0n) {
+    return undefined;
+  }
 
   const defaultMinSharePriceE27 = computePreviewMinSharePrice(vaultData, {
     timestamp,

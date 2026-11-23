@@ -966,20 +966,22 @@ describe("fetchAccrualVaultV2 with Midnight adapters", () => {
   );
 
   midnightAccrualTest(
-    "reads a non-Midnight vault deployless while the registered Midnight factory lacks isCreated",
+    "reads a non-Midnight vault deployless when the registered Midnight factory reverts",
     async ({ client }) => {
-      // The Base registry still points at the pre-audit factory; no replacement is installed here.
+      const factory = getChainAddress(
+        ChainId.BaseMainnet,
+        "midnightAdapterFactory",
+      );
+      await client.setCode({ address: factory, bytecode: "0x60006000fd" });
+
       await expect(
         readContract(client, {
-          address: getChainAddress(
-            ChainId.BaseMainnet,
-            "midnightAdapterFactory",
-          ),
+          address: factory,
           abi: midnightAdapterFactoryAbi,
           functionName: "isCreated",
           args: [zeroAddress],
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/reverted/i);
 
       const [deployless, multicall, vault, vaultMulticall] = await Promise.all([
         fetchAccrualVaultV2(vaultV2MarketV1V2, client, { deployless: "force" }),

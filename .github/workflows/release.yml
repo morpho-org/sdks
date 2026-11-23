@@ -59,16 +59,22 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
 
-      - run: pnpm install --frozen-lockfile
+      - name: Check dependency release age before install
+        run: node scripts/check-release-age.ts --all
 
-      - run: pnpm build:ci
+      - run: bun install --frozen-lockfile
+
+      - run: bun run build:ci
 
       - name: Pack publishable tarballs
         run: node scripts/publish/pack.ts --out "$RUNNER_TEMP/tarballs"

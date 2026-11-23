@@ -291,6 +291,8 @@ actions. Operations beyond Vault V2 deposit and withdrawal are not specified her
 
 ## References
 
+- Stored-signature verification and restored-header validation superseded by ADR-2026-11-19-transaction-plan-validation-boundary.
+- Stored shape and supported version superseded by ADR-2026-11-17-transaction-plan-format-v2.
 - ADR-2026-09-23-stateless-entity-flows:
   building depends on the data it receives, not a live handle's hidden state.
 - ADR-2026-10-21-unlimited-sdk-approvals:

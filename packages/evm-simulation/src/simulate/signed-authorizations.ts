@@ -63,7 +63,9 @@ export function findSignedAuthorizationUseFailures(
       }
     }
     if (params.logs === undefined) {
-      if (missingLogsReported) continue;
+      if (missingLogsReported) {
+        continue;
+      }
       failures.push(
         new ApprovalCheckUnavailableError(
           "Simulation response omitted user-transaction logs; signature-use checks cannot run. Retry with an RPC that returns eth_simulateV1 logs.",
@@ -77,17 +79,21 @@ export function findSignedAuthorizationUseFailures(
       if (
         used.has(index) ||
         !isAddressEqual(log.address, domain.verifyingContract)
-      )
+      ) {
         return false;
+      }
       const [topic, ...topics] = log.topics.map(
         (rawTopic) => rawTopic.toLowerCase() as Hex,
       );
       if (authorization.type === "midnightAuthorizationSignature") {
         if (
           !isAddressEqual(domain.verifyingContract, params.ecrecoverAuthorizer)
-        )
+        ) {
           return false;
-        if (topic === undefined) return false;
+        }
+        if (topic === undefined) {
+          return false;
+        }
         try {
           const event = decodeEventLog({
             abi: midnightEcrecoverAuthorizerAbi,
@@ -112,8 +118,9 @@ export function findSignedAuthorizationUseFailures(
         topic === undefined ||
         log.topics.length !== 3 ||
         log.data.length !== 66
-      )
+      ) {
         return false;
+      }
       try {
         if (authorization.type === "erc2612Permit") {
           const event = decodeEventLog({
@@ -130,7 +137,9 @@ export function findSignedAuthorizationUseFailures(
             event.args.value === permit.value
           );
         }
-        if (!isAddressEqual(log.address, params.morpho)) return false;
+        if (!isAddressEqual(log.address, params.morpho)) {
+          return false;
+        }
         const event = decodeEventLog({
           abi: blueAbi,
           eventName: "IncrementNonce",
@@ -164,5 +173,7 @@ export function assertSignedAuthorizationsUsed(
   params: SignedAuthorizationUseParams,
 ): void {
   const [failure] = findSignedAuthorizationUseFailures(params);
-  if (failure !== undefined) throw failure;
+  if (failure !== undefined) {
+    throw failure;
+  }
 }

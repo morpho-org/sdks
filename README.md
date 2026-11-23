@@ -38,6 +38,8 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 #### Development
 
+For a local checkout, run `bun run install:checked` to validate the entire lockfile before a frozen install. The repository's Bun security scanner also checks publication ages before raw Bun commands install dependencies.
+
 - [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): TypeScript package to handle all things time & format-related
 
 - [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`)
@@ -53,8 +55,8 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 ### Test coverage
 
 1. Install `lcov`: `sudo apt install lcov`
-2. Generate coverage info: `pnpm test:coverage`
-3. Generate hierarchical coverage report: `pnpm coverage:report`
+2. Generate coverage info: `bun run test:coverage`
+3. Generate hierarchical coverage report: `bun run coverage:report`
 
 ## Developer
 
@@ -71,7 +73,7 @@ See [THREAT_MODEL.md](./THREAT_MODEL.md) for what the SDKs trust, including the 
 
 Here's a tutorial on how to link a specific package to debug at runtime:
 
-1. From the repository in which you want to link the package: `pnpm link ../your/relative/path/to/sdks/packages/blue-sdk`
+1. From `packages/blue-sdk`, register the package with `bun link`. Then, from the repository in which you want to link it, run `bun link @morpho-org/blue-sdk`.
 
 ```diff
 -    "@morpho-org/blue-sdk": "5.0.0",
@@ -86,7 +88,7 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 +  "types": "lib/index.d.ts"
 ```
 
-3. In a separate process, start: `pnpm --dir packages/blue-sdk build --watch`
+3. In a separate process, start: `bun run --cwd packages/blue-sdk build --watch`
 
 ## Authors
 

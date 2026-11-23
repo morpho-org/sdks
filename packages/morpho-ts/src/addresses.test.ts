@@ -148,6 +148,86 @@ describe("getChainAddress", () => {
 });
 
 describe("addressesRegistry", () => {
+  test.each([
+    ["blue", "0x056Bc53136978BC5C4e5223376e5bb597acd1C7D", 1_531_751n],
+    [
+      "adaptiveCurveIrm",
+      "0xC11A0f6dB0613a088Bf73740430831647110Dcfa",
+      1_531_751n,
+    ],
+    [
+      "vaultV2Factory",
+      "0xB2bEE825D90B50ab4c1b4e92a6DcD089AF974e29",
+      1_531_755n,
+    ],
+    [
+      "vaultV2BluePublicAllocator",
+      "0x85e56151Bb9eE1F85d023BfCb139C2154E56a7F8",
+      1_531_761n,
+    ],
+    [
+      "morphoMarketV1AdapterV2Factory",
+      "0x8aFAdE9d9EB5b7960F2A55FE69947B1DE63cd040",
+      1_531_757n,
+    ],
+    [
+      "morphoVaultV1AdapterFactory",
+      "0xDD4cf297CA60990a2f32f5f9d3277b3012EEE216",
+      1_531_760n,
+    ],
+    ["registryList", "0xe267BF3DEe2a0faEC4bCB603d83025eA43CB6b30", 1_531_759n],
+    [
+      "chainlinkOracleFactory",
+      "0xfbFB4190ea9dECB297cfb7813a3BCFb03F90cbF6",
+      1_531_752n,
+    ],
+    [
+      "preLiquidationFactory",
+      "0xd4e98ec7974F21c94069B155C49fFa5178398FFc",
+      1_531_753n,
+    ],
+  ] as const)(
+    "behavior: exposes Alpen %s and its creation block",
+    (...[label, address, block]) => {
+      expect(getChainAddress(ChainId.AlpenMainnet, label)).toBe(address);
+      expect(deployments[ChainId.AlpenMainnet][label]).toBe(block);
+    },
+  );
+
+  test("behavior: exposes Alpen standalone bundles and their creation blocks", () => {
+    expect(addressesRegistry[ChainId.AlpenMainnet].bundles).toStrictEqual({
+      vaultExitBundlesV1: "0xDD1a91fA8bC97bd7622c387F503c800125075A90",
+      vaultBundlesV1: "0x9e6F4ca37eDe2E48FcecE993F9A3D79bcc07c6D7",
+      blueBundlesV1: "0xa3e4be8fB302A9674810300775a4FA6AAF8a9335",
+    });
+    expect(deployments[ChainId.AlpenMainnet].bundles).toStrictEqual({
+      vaultExitBundlesV1: 1_531_763n,
+      vaultBundlesV1: 1_531_762n,
+      blueBundlesV1: 1_531_764n,
+    });
+  });
+
+  test.each([
+    "metaMorphoFactory",
+    "morphoMarketV1AdapterFactory",
+    "permit2",
+    "wNative",
+    "midnight",
+    "midnightBundlesV2",
+    "midnightBlueBuyCallbackFactory",
+    "midnightMempool",
+    "ecrecoverRatifier",
+    "ecrecoverAuthorizer",
+    "setterRatifier",
+    "priceRatifierV1",
+    "rateRatifierV1",
+  ] as const)("error: Alpen has no registered %s", (label) => {
+    expect(getChainAddresses(ChainId.AlpenMainnet)[label]).toBeUndefined();
+    expect(() => getChainAddress(ChainId.AlpenMainnet, label)).toThrow(
+      UnknownAddressError,
+    );
+  });
+
   test("default", () => {
     expect("midnight" in addressesRegistry[ChainId.EthMainnet]).toBe(true);
   });
@@ -270,18 +350,18 @@ describe("addressesRegistry", () => {
 
   test("behavior: exposes Base Midnight adapter deployment addresses", () => {
     expect(getChainAddress(ChainId.BaseMainnet, "midnightAdapterFactory")).toBe(
-      "0x797f6E11e55Fb115fE548Faa8F07152BA587bbd7",
+      "0xF2d0E464a66606f677395d6fb3327f2C44192Dd0",
     );
     expect(
       getChainAddress(ChainId.BaseMainnet, "midnightAdapterRateRatifierV1"),
-    ).toBe("0x39c01afA4B3f827a0bfAa39cDC4610111f80BABc");
+    ).toBe("0x96C198659D55b9319f9B65b67df4682B2686bCf4");
     expect(
       getChainAddress(ChainId.BaseMainnet, "midnightAdapterPriceRatifierV1"),
-    ).toBe("0x8e38421bC293339798e9bD0c0a51690675D2f94b");
+    ).toBe("0xbe432B472EE72c7dFB1D450d37f26494Af03eCCf");
     expect(deployments[ChainId.BaseMainnet]).toMatchObject({
-      midnightAdapterFactory: 52_510_848n,
-      midnightAdapterRateRatifierV1: 52_510_850n,
-      midnightAdapterPriceRatifierV1: 52_510_852n,
+      midnightAdapterFactory: 61_321_366n,
+      midnightAdapterRateRatifierV1: 61_321_319n,
+      midnightAdapterPriceRatifierV1: 61_321_329n,
     });
   });
 

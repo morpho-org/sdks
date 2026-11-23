@@ -16,6 +16,7 @@ import type {
 import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
 import type { RatifierTreeInput } from "./TreeUtils.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -362,7 +363,7 @@ export namespace SetterRatifierUtils {
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
-      ratifierData: encodeRatifierData(proofs[leafIndex]!),
+      ratifierData: encodeRatifierData(requireTreeItem(proofs, leafIndex)),
     }));
   }
 }

@@ -78,7 +78,9 @@ export const blueWithdrawBuyCallback = (
   const { callbackAddress, userAddress, shares } = params.args;
   validateMarketParamsId(marketParams);
   validateUint256Field("shares", shares);
-  if (shares === 0n) throw new NonPositiveInputError("shares", shares);
+  if (shares === 0n) {
+    throw new NonPositiveInputError("shares", shares);
+  }
 
   let tx = {
     to: getChainAddress(chainId, "blue"),

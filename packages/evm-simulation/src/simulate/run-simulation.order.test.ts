@@ -8,6 +8,7 @@ import {
   RpcTransportError,
   type SimulationPackageError,
   SimulationValidationError,
+  UnexpectedTokenTransferError,
 } from "../errors.js";
 import { simulate } from "../index.js";
 import { simulationClientFor } from "../test-helpers/index.js";
@@ -19,6 +20,7 @@ const CHECKS = [
   "approvalEvents",
   "preparationTransfers",
   "signedAuthorizationUse",
+  "senderTransfers",
   "slippage",
   "retention",
 ] as const;
@@ -77,12 +79,31 @@ vi.mock("./verify-slippage.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./verify-slippage.js")>()),
   findOperationSlippageFailures: () => ({
     failures: failuresOf("slippage"),
-    checked: [],
+    checked: [
+      {
+        operation: "vaultV2Deposit",
+        vault: TARGET,
+        account: OWNER,
+        receiver: OWNER,
+        checkedLimits: {
+          quote: { assetsPaid: 1n, sharesMinted: 1n },
+          slippageTolerance: 0n,
+        },
+      },
+    ],
   }),
+}));
+vi.mock("./sender-transfers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./sender-transfers.js")>()),
+  findUnexpectedSenderTransfers: () => failuresOf("senderTransfers"),
 }));
 vi.mock("./pipeline/bundles-retention.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./pipeline/bundles-retention.js")>()),
-  findBundlesRetentionFailures: () => failuresOf("retention"),
+  checkBundlesRetention: () => ({
+    status: "checked",
+    warnings: [],
+    failures: failuresOf("retention"),
+  }),
 }));
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
@@ -97,6 +118,12 @@ const FAILURES: Record<Check, () => SimulationPackageError> = {
   approvalEvents: () => new ApprovalCheckUnavailableError("approval event"),
   preparationTransfers: () => new SimulationValidationError("preparation"),
   signedAuthorizationUse: () => new RpcTransportError("signed use"),
+  senderTransfers: () =>
+    new UnexpectedTokenTransferError({
+      token: TARGET,
+      sender: OWNER,
+      recipients: [TARGET],
+    }),
   slippage: () => new InvalidSimulationResponseError("slippage"),
   retention: () => new BlacklistViolationError("retention"),
 };
@@ -125,15 +152,107 @@ beforeEach(() => {
 afterEach(() => {
   forced.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
-describe("runSimulation failure order", () => {
+describe.sequential("runSimulation failure order", () => {
+  test.each([false, true])(
+    "behavior: warnings are deterministic plain data without logging (later failures=%s)",
+    async (laterFailures) => {
+      forced.set("senderTransfers", [
+        FAILURES.senderTransfers(),
+        FAILURES.senderTransfers(),
+      ]);
+      const failures = laterFailures
+        ? [FAILURES.slippage(), FAILURES.retention()]
+        : [];
+      if (laterFailures) {
+        forced.set("slippage", [failures[0]!]);
+        forced.set("retention", [failures[1]!]);
+      }
+      const client = simulationClientFor(RPC_URL, 1);
+      const request = {
+        transactions: [TRANSACTION],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { assetsPaid: 1n, sharesMinted: 1n },
+              slippageTolerance: 0n,
+            },
+          ],
+        },
+      } as const;
+      const spies = ["warn", "info", "error", "log"].map((method) =>
+        vi.spyOn(console, method as "warn").mockImplementation(() => {
+          throw new Error("Unexpected logging side effect");
+        }),
+      );
+      const baseline = await simulate(client, request);
+      const fail = () => {
+        throw new Error("Deprecated logger must not run");
+      };
+      const logger = {
+        info: vi.fn(fail),
+        warn: vi.fn(fail),
+        error: vi.fn(fail),
+      };
+      const report = await simulate(client, request, { logger });
+      Object.values(logger).forEach((method) =>
+        expect(method).not.toHaveBeenCalled(),
+      );
+      spies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
+      expect(report).toEqual(baseline);
+      expect(report.warnings).toEqual([
+        expect.objectContaining({
+          code: "UNEXPECTED_TOKEN_TRANSFER",
+          severity: "warn",
+          chainId: 1,
+          token: TARGET,
+          sender: OWNER,
+          recipients: [TARGET],
+        }),
+        expect.objectContaining({
+          code: "UNEXPECTED_TOKEN_TRANSFER",
+          severity: "warn",
+          chainId: 1,
+          token: TARGET,
+          sender: OWNER,
+          recipients: [TARGET],
+        }),
+      ]);
+      for (const warning of report.warnings) {
+        expect(warning).not.toBeInstanceOf(Error);
+        expect(Object.isFrozen(warning)).toBe(true);
+        if (warning.code === "UNEXPECTED_TOKEN_TRANSFER")
+          expect(Object.isFrozen(warning.recipients)).toBe(true);
+      }
+      expect(report.verification).toEqual({ retention: "checked" });
+      expect(Object.isFrozen(report.warnings)).toBe(true);
+      expect(report.ok).toBe(!laterFailures);
+      if (!report.ok) expect(report.failures).toEqual(failures);
+    },
+  );
+
   test.prop([fc.subarray([...CHECKS], { minLength: 1 })], { numRuns: 50 })(
     "[INV-08] behavior: failures match the failing post-execution checks in pipeline order",
     async (failing) => {
       forced.clear();
-      const expected = failing.map((check) => FAILURES[check]());
-      failing.forEach((check, index) => forced.set(check, [expected[index]!]));
+      const expected = failing.flatMap((check) => {
+        const errors =
+          check === "senderTransfers"
+            ? [FAILURES[check](), FAILURES[check]()]
+            : [FAILURES[check]()];
+        forced.set(check, errors);
+        return errors;
+      });
+      const warnings = expected.filter(
+        (error) => error instanceof UnexpectedTokenTransferError,
+      );
+      const blocking = expected.filter(
+        (error) => !(error instanceof UnexpectedTokenTransferError),
+      );
       const report = await simulate(simulationClientFor(RPC_URL, 1), {
         transactions: [TRANSACTION],
         limits: {
@@ -147,12 +266,26 @@ describe("runSimulation failure order", () => {
           ],
         },
       });
-      expect(report.ok).toBe(false);
-      if (report.ok) return;
-      expect(report.failures).toEqual(expected);
-      report.failures.forEach((failure, index) =>
-        expect(failure).toBe(expected[index]),
+      expect(report.warnings).toEqual(
+        warnings.map(() =>
+          expect.objectContaining({
+            code: "UNEXPECTED_TOKEN_TRANSFER",
+            severity: "warn",
+            chainId: 1,
+            token: TARGET,
+            sender: OWNER,
+            recipients: [TARGET],
+          }),
+        ),
       );
+      expect(report.verification).toEqual({ retention: "checked" });
+      expect(report.ok).toBe(blocking.length === 0);
+      if (!report.ok) {
+        expect(report.failures).toEqual(blocking);
+        report.failures.forEach((failure, index) =>
+          expect(failure).toBe(blocking[index]),
+        );
+      }
     },
   );
 });

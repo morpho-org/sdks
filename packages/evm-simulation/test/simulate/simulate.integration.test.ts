@@ -2,7 +2,11 @@ import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { metaMorphoAbi } from "@morpho-org/morpho-ts/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -27,12 +31,11 @@ import {
 } from "../../src/test-helpers/index.js";
 import { seededMarketData } from "../setup.js";
 
-// Pinned with the bundles deployments the verified pipeline routes through —
-// the shared 24_593_903 pin in `test/setup.ts` predates them.
+// Pinned after the bundles deployments the verified pipeline routes through.
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });

@@ -19,7 +19,11 @@ import {
   Tree,
 } from "@morpho-org/morpho-sdk/midnight/entities";
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -38,6 +42,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
 import {
@@ -49,7 +54,7 @@ import { seededMarketData } from "../setup.js";
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
   stepsTracing: false,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
@@ -479,12 +484,22 @@ describe.sequential("midnightSupplyBlueMakeLend limits — Base fork", () => {
     const operation = limits.operations[0];
     if (operation?.type !== "midnightSupplyBlueMakeLend")
       throw new Error("expected a Midnight Blue parking limit");
-    const error = await simulateOrThrowFirst(configFor(client), {
-      transactions: [asTransaction(user, tx)],
-      limits: {
-        operations: [{ ...operation, loanToken: wNative }],
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [asTransaction(user, tx)],
+        limits: {
+          operations: [{ ...operation, loanToken: wNative }],
+        },
       },
-    }).catch((caught: unknown) => caught);
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    const error = report.ok
+      ? undefined
+      : report.failures.find(
+          (failure) => failure instanceof ConsumerLimitViolationError,
+        );
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain("midnightSupplyBlueMakeLend");
     expect((error as Error).message).toContain("assetsPaid");

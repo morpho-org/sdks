@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { MissingLocalePartError } from "../errors.js";
 import {
   convertNumStrFromEffectiveTo,
   convertNumStrToLocal,
@@ -8,6 +9,40 @@ import {
 } from "./locale.js";
 
 describe("getLocaleSymbols", () => {
+  test.each(["decimal", "group"] as const)(
+    "error: MissingLocalePartError for missing %s",
+    (part) => {
+      const parts = new Intl.NumberFormat("en-US").formatToParts(12345.6);
+      const spy = vi
+        .spyOn(Intl.NumberFormat.prototype, "formatToParts")
+        .mockReturnValueOnce(parts.filter((entry) => entry.type !== part));
+      try {
+        expect(() => getLocaleSymbols("en-US")).toThrow(MissingLocalePartError);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  test("error: MissingLocalePartError for empty parts", () => {
+    const spy = vi
+      .spyOn(Intl.NumberFormat.prototype, "formatToParts")
+      .mockReturnValueOnce([]);
+    try {
+      expect(() => getLocaleSymbols("en-US")).toThrow(MissingLocalePartError);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("MissingLocalePartError preserves locale and part", () => {
+    const error = new MissingLocalePartError("en-US", "group");
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("MissingLocalePartError");
+    expect(error.locale).toBe("en-US");
+    expect(error.part).toBe("group");
+  });
+
   test("returns en-US symbols", () => {
     const r = getLocaleSymbols("en-US");
     expect(r.decimalSymbol).toBe(".");

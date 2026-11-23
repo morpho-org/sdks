@@ -13,6 +13,7 @@ export {
   InvalidPositionAccrualStateError,
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
+  MissingLocalePartError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   RetriesExhaustedError,

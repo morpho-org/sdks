@@ -1,6 +1,5 @@
 import type { Address } from "@morpho-org/blue-sdk";
-import { isAddressEqual, maxUint256 } from "viem";
-import { APPROVE_ONLY_ONCE_TOKENS } from "../../helpers/constant.js";
+import { getTokenApprovalAmounts } from "../../helpers/tokenApproval.js";
 import type { ERC20ApprovalAction, Transaction } from "../../types/index.js";
 import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
 
@@ -54,34 +53,12 @@ export const getRequirementsApproval = (params: {
     allowances,
   } = params;
 
-  const approvals: Transaction<ERC20ApprovalAction>[] = [];
-
-  if (allowances < spendAmount) {
-    if (
-      APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
-        isAddressEqual(token, address),
-      ) &&
-      allowances > 0n
-    ) {
-      approvals.push(
-        encodeErc20Approval({
-          token: address,
-          spender,
-          amount: 0n,
-          chainId,
-        }),
-      );
-    }
-
-    approvals.push(
-      encodeErc20Approval({
-        token: address,
-        spender,
-        amount: maxUint256,
-        chainId,
-      }),
-    );
-  }
-
-  return approvals;
+  return getTokenApprovalAmounts({
+    token: address,
+    chainId,
+    allowance: allowances,
+    spendAmount,
+  }).map((amount) =>
+    encodeErc20Approval({ token: address, spender, amount, chainId }),
+  );
 };

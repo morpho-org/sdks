@@ -19,7 +19,11 @@ import {
   SetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -37,6 +41,7 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  simulate,
   toSimulationLimits,
 } from "../../src/index.js";
 import {
@@ -47,7 +52,7 @@ import {
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -443,12 +448,20 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
     });
     const result = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        receiver: RECEIVER,
-        market: MarketUtils.toStruct(market),
-        slippageTolerance: 0n,
-      }),
+      limits: {
+        operations: [
+          ...toSimulationLimits(tx.action, {
+            owner: user,
+            receiver: RECEIVER,
+            market: MarketUtils.toStruct(market),
+            slippageTolerance: 0n,
+          }).operations,
+          ...toSimulationLimits(seed.action, {
+            owner: user,
+            market: MarketUtils.toStruct(market),
+          }).operations,
+        ],
+      },
     });
     expect(result.verification.operations[0]).toMatchObject({
       operation: "midnightTakeBorrow",
@@ -471,13 +484,21 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
     });
     const error = await simulateOrThrowFirst(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        receiver: RECEIVER,
-        market: MarketUtils.toStruct(market),
-        slippageTolerance: 0n,
-        expected: { unitsSold: 1n },
-      }),
+      limits: {
+        operations: [
+          ...toSimulationLimits(tx.action, {
+            owner: user,
+            receiver: RECEIVER,
+            market: MarketUtils.toStruct(market),
+            slippageTolerance: 0n,
+            expected: { unitsSold: 1n },
+          }).operations,
+          ...toSimulationLimits(seed.action, {
+            owner: user,
+            market: MarketUtils.toStruct(market),
+          }).operations,
+        ],
+      },
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain("midnightTakeBorrow");
@@ -772,25 +793,35 @@ describe.sequential("Midnight take sell limits — Base fork", () => {
       receiver: user,
       referralFeeRecipient: OTHER,
     });
-    const error = await simulateOrThrowFirst(configFor(client), {
-      transactions: [
-        asTransaction(user, tx),
-        {
-          from: user,
-          to: usdc,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "transfer",
-            args: [OTHER, 101n],
-          }),
-          value: 0n,
-        },
-      ],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        receiver: user,
-      }),
-    }).catch((caught: unknown) => caught);
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [
+          asTransaction(user, tx),
+          {
+            from: user,
+            to: usdc,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [OTHER, 101n],
+            }),
+            value: 0n,
+          },
+        ],
+        limits: toSimulationLimits(tx.action, {
+          owner: user,
+          receiver: user,
+        }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(false);
+    const error = report.ok
+      ? undefined
+      : report.failures.find(
+          (failure) => failure instanceof ConsumerLimitViolationError,
+        );
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain("midnightTakeBorrow");
     expect((error as Error).message).toContain("assetsReceived");

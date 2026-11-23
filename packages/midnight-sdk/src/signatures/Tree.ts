@@ -182,7 +182,9 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
   public static from(
     tree: AnyTree | AnyTreeSnapshot | TreeCreateRequest | TreeInput,
   ): AnyTree | Tree {
-    if (tree instanceof Tree) return tree;
+    if (tree instanceof Tree) {
+      return tree;
+    }
     // Portable snapshots resume through descriptor validation instead of rebuilding.
     if (
       !Array.isArray(tree) &&
@@ -194,7 +196,9 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
         ? Tree.fromDescriptor(tree as AnyTreeSnapshot)
         : Tree.fromDescriptor(tree as TreeSnapshot<undefined>);
     }
-    if ("type" in tree && tree.type != null) return Tree.create(tree);
+    if ("type" in tree && tree.type != null) {
+      return Tree.create(tree);
+    }
     return Tree.create(Array.isArray(tree) ? tree : [tree]);
   }
 
@@ -379,9 +383,12 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
               : offer,
           ),
         };
-        if (descriptor.type === "ecrecover")
+        if (descriptor.type === "ecrecover") {
           return new Tree("ecrecover", normalized);
-        if (descriptor.type === "setter") return new Tree("setter", normalized);
+        }
+        if (descriptor.type === "setter") {
+          return new Tree("setter", normalized);
+        }
         return new Tree(undefined, normalized);
       }
       default:

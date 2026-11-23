@@ -34,14 +34,18 @@ export const REVERT_ERRORS_ABI: readonly (Abi[number] & { type: "error" })[] = [
  * @internal
  */
 export function formatRevert(data: Hex | undefined): string | undefined {
-  if (data === undefined || data.length < 10) return undefined;
+  if (data === undefined || data.length < 10) {
+    return undefined;
+  }
   // A selector collision cannot establish which ABI shape the contract used.
   const matches = REVERT_ERRORS_ABI.filter(
     (item) =>
       toFunctionSelector(formatAbiItem(item)) ===
       data.slice(0, 10).toLowerCase(),
   );
-  if (matches.length > 1) return undefined;
+  if (matches.length > 1) {
+    return undefined;
+  }
   // Decode failures do not replace the original revert with a decoder error.
   return _try(() => {
     const { abiItem, errorName, args } = decodeErrorResult({

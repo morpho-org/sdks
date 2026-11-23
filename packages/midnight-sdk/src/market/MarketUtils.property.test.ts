@@ -10,27 +10,36 @@ const WAD = MathLib.WAD;
 const DAY = 86_400n;
 
 // Midnight src/Midnight.sol settlementFee breakpoints.
-const BREAKPOINTS = [0n, 1n, 7n, 30n, 90n, 180n, 360n].map((d) => d * DAY);
+const BREAKPOINTS = [
+  0n,
+  DAY,
+  7n * DAY,
+  30n * DAY,
+  90n * DAY,
+  180n * DAY,
+  360n * DAY,
+] as const;
 
 const refSettlementFee = (
   cbps: SettlementFeeCbps,
   timeToMaturity: bigint,
 ): bigint => {
-  const fees = cbps.map((cbp) => BigInt(cbp) * CBP);
-  if (timeToMaturity >= BREAKPOINTS[6]!) return fees[6]!;
+  if (timeToMaturity >= BREAKPOINTS[6]) return BigInt(cbps[6]) * CBP;
 
-  const [start, end, feeLower, feeUpper] =
-    timeToMaturity < BREAKPOINTS[1]!
-      ? ([BREAKPOINTS[0], BREAKPOINTS[1], fees[0], fees[1]] as const)
-      : timeToMaturity < BREAKPOINTS[2]!
-        ? ([BREAKPOINTS[1], BREAKPOINTS[2], fees[1], fees[2]] as const)
-        : timeToMaturity < BREAKPOINTS[3]!
-          ? ([BREAKPOINTS[2], BREAKPOINTS[3], fees[2], fees[3]] as const)
-          : timeToMaturity < BREAKPOINTS[4]!
-            ? ([BREAKPOINTS[3], BREAKPOINTS[4], fees[3], fees[4]] as const)
-            : timeToMaturity < BREAKPOINTS[5]!
-              ? ([BREAKPOINTS[4], BREAKPOINTS[5], fees[4], fees[5]] as const)
-              : ([BREAKPOINTS[5], BREAKPOINTS[6], fees[5], fees[6]] as const);
+  const [start, end, cbpLower, cbpUpper] =
+    timeToMaturity < BREAKPOINTS[1]
+      ? ([BREAKPOINTS[0], BREAKPOINTS[1], cbps[0], cbps[1]] as const)
+      : timeToMaturity < BREAKPOINTS[2]
+        ? ([BREAKPOINTS[1], BREAKPOINTS[2], cbps[1], cbps[2]] as const)
+        : timeToMaturity < BREAKPOINTS[3]
+          ? ([BREAKPOINTS[2], BREAKPOINTS[3], cbps[2], cbps[3]] as const)
+          : timeToMaturity < BREAKPOINTS[4]
+            ? ([BREAKPOINTS[3], BREAKPOINTS[4], cbps[3], cbps[4]] as const)
+            : timeToMaturity < BREAKPOINTS[5]
+              ? ([BREAKPOINTS[4], BREAKPOINTS[5], cbps[4], cbps[5]] as const)
+              : ([BREAKPOINTS[5], BREAKPOINTS[6], cbps[5], cbps[6]] as const);
+  const feeLower = BigInt(cbpLower) * CBP;
+  const feeUpper = BigInt(cbpUpper) * CBP;
 
   return (
     (feeLower * (end - timeToMaturity) + feeUpper * (timeToMaturity - start)) /
@@ -40,7 +49,7 @@ const refSettlementFee = (
 
 const refAdjacentFees = (cbps: SettlementFeeCbps, timeToMaturity: bigint) => {
   const fees = cbps.map((cbp) => BigInt(cbp) * CBP);
-  if (timeToMaturity >= BREAKPOINTS[6]!) return [fees[6]!, fees[6]!] as const;
+  if (timeToMaturity >= BREAKPOINTS[6]) return [fees[6]!, fees[6]!] as const;
 
   for (let i = 1; i <= 6; i += 1) {
     if (timeToMaturity < BREAKPOINTS[i]!) {

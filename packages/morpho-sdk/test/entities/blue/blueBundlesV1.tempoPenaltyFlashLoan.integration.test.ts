@@ -1,7 +1,7 @@
 import { getChainAddresses, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, TEMPO_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   encodeAbiParameters,
@@ -19,7 +19,6 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 
-const FORK_BLOCK = 46_605_340n;
 const LOAN_TOKEN = "0x20c0000000000000000000006a37DA5C996874BE";
 const COLLATERAL_TOKEN = "0x20C000000000000000000000c412Ec89D0c08be5";
 const VAULT = "0x0D136e26B4D9e4836fc5cb202baeb49Cb6f5df48";
@@ -43,9 +42,11 @@ const TEMPO_TIP20_BALANCES_SLOT = 9n;
 
 const forkSecret =
   process.env.ERPC_SECRET || process.env.MORPHO_ERPC_DEV_API_KEY;
+// Penalty calculations depend on this block's oracle prices and vault liquidity.
+// Recheck this regression when bumping TEMPO_FORK_BLOCK.
 const tempoTest = createViemTest(tempo, {
   forkUrl: getErpcForkUrl(tempo.id, forkSecret),
-  forkBlockNumber: FORK_BLOCK,
+  forkBlockNumber: TEMPO_FORK_BLOCK,
   pruneHistory: false,
   stepsTracing: false,
 });
@@ -57,19 +58,19 @@ describe.skipIf(!forkSecret)(
       "fixed plan executes under the penalty flash loan",
       async ({ client }) => {
         const borrower = client.account.address;
-        const block = await client.getBlock({ blockNumber: FORK_BLOCK });
+        const block = await client.getBlock({ blockNumber: TEMPO_FORK_BLOCK });
         const [loanDecimals, collateralDecimals] = await Promise.all([
           client.readContract({
             address: LOAN_TOKEN,
             abi: erc20Abi,
             functionName: "decimals",
-            blockNumber: FORK_BLOCK,
+            blockNumber: TEMPO_FORK_BLOCK,
           }),
           client.readContract({
             address: COLLATERAL_TOKEN,
             abi: erc20Abi,
             functionName: "decimals",
-            blockNumber: FORK_BLOCK,
+            blockNumber: TEMPO_FORK_BLOCK,
           }),
         ]);
         expect(loanDecimals).toBe(6);
@@ -163,19 +164,19 @@ describe.skipIf(!forkSecret)(
       "main's plan reverts with transfer reverted",
       async ({ client }) => {
         const borrower = client.account.address;
-        const block = await client.getBlock({ blockNumber: FORK_BLOCK });
+        const block = await client.getBlock({ blockNumber: TEMPO_FORK_BLOCK });
         const [loanDecimals, collateralDecimals] = await Promise.all([
           client.readContract({
             address: LOAN_TOKEN,
             abi: erc20Abi,
             functionName: "decimals",
-            blockNumber: FORK_BLOCK,
+            blockNumber: TEMPO_FORK_BLOCK,
           }),
           client.readContract({
             address: COLLATERAL_TOKEN,
             abi: erc20Abi,
             functionName: "decimals",
-            blockNumber: FORK_BLOCK,
+            blockNumber: TEMPO_FORK_BLOCK,
           }),
         ]);
         expect(loanDecimals).toBe(6);

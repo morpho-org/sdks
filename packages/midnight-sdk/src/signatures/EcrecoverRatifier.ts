@@ -40,6 +40,7 @@ import type {
 import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
 import type { RatifierTreeInput } from "./TreeUtils.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import { requireTreeItem } from "./treeMathInternal.js";
 
 const treeTypeHashes = [
   "0x270da1ebafc0f24637af3612fb8c3a1d828fcb56d3637c24e86dd006b12ca7f9",
@@ -131,7 +132,9 @@ const typedDataTypes = {
 } as const;
 
 const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
-  if (offers.length === 1) return offers[0]!;
+  if (offers.length === 1) {
+    return requireTreeItem(offers, 0);
+  }
   const mid = offers.length / 2;
   return [
     buildTreeValue(offers.slice(0, mid)),
@@ -140,8 +143,12 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
 };
 
 function toCanonicalYParity(v: number): 0 | 1 {
-  if (v === 27) return 0;
-  if (v === 28) return 1;
+  if (v === 27) {
+    return 0;
+  }
+  if (v === 28) {
+    return 1;
+  }
 
   throw new InvalidEcrecoverSignatureVError(v);
 }
@@ -501,7 +508,9 @@ export namespace EcrecoverRatifierUtils {
    */
   export function treeTypeHash(height: number) {
     const typehash = treeTypeHashes[height];
-    if (typehash == null) throw new InvalidTreeHeightError(height);
+    if (typehash == null) {
+      throw new InvalidTreeHeightError(height);
+    }
 
     return typehash;
   }
@@ -888,7 +897,9 @@ export namespace EcrecoverRatifierUtils {
       tree: params.tree,
       label: "Ecrecover",
     });
-    const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+    const expectedChainId = MarketParams.from(
+      requireTreeItem(tree.offers, 0).market,
+    ).chainId;
     for (const offer of tree.offers.slice(1)) {
       const offerChainId = MarketParams.from(offer.market).chainId;
       if (offerChainId !== expectedChainId) {
@@ -964,7 +975,7 @@ export namespace EcrecoverRatifierUtils {
   ): Signature<number, number> & { readonly v: number } {
     if (typeof signature !== "string") {
       const v =
-        signature.v != null ? Number(signature.v) : Number(signature.yParity);
+        signature.v == null ? Number(signature.yParity) : Number(signature.v);
       return {
         v: v < 27 ? v + 27 : v,
         r: signature.r,
@@ -1210,9 +1221,19 @@ export namespace EcrecoverRatifierUtils {
       label: "Ecrecover",
     });
     let signature: Signature<number, number> & { readonly v: number };
-    if (params.signature != null) {
+    if (params.signature == null) {
+      signature = toSignature(
+        await sign({
+          tree,
+          client: params.client,
+          account: params.account,
+        }),
+      );
+    } else {
       signature = toSignature(params.signature);
-      const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+      const expectedChainId = MarketParams.from(
+        requireTreeItem(tree.offers, 0).market,
+      ).chainId;
       for (const offer of tree.offers.slice(1)) {
         const offerChainId = MarketParams.from(offer.market).chainId;
         if (offerChainId !== expectedChainId) {
@@ -1244,14 +1265,6 @@ export namespace EcrecoverRatifierUtils {
       if (!isValidSignature) {
         throw new InvalidTypedDataSignatureError(signer);
       }
-    } else {
-      signature = toSignature(
-        await sign({
-          tree,
-          client: params.client,
-          account: params.account,
-        }),
-      );
     }
 
     const proofs = TreeUtils.buildProofs({
@@ -1263,7 +1276,7 @@ export namespace EcrecoverRatifierUtils {
       offer,
       ratifierData: encodeRatifierData({
         signature,
-        ...proofs[leafIndex]!,
+        ...requireTreeItem(proofs, leafIndex),
       }),
     }));
   }

@@ -1,0 +1,14 @@
+[install]
+linker = "isolated"
+hoist = false
+globalStore = false
+auto = "disable"
+# Preserve the existing three-day dependency release delay (Bun uses seconds).
+minimumReleaseAge = 259200
+
+[install.security]
+scanner = "./scripts/release-age-scanner.ts"
+
+[run]
+bun = false
+shell = "system"

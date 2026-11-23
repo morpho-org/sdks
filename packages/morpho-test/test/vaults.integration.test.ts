@@ -1,5 +1,5 @@
 import { ChainId } from "@morpho-org/blue-sdk";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, erc4626Abi, isAddressEqual } from "viem";
 import { mainnet } from "viem/chains";
@@ -8,7 +8,7 @@ import { vaults } from "../src/fixtures/vaults.js";
 
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
-  forkBlockNumber: 22_000_000,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 describe("mainnet vault fixture metadata", () => {

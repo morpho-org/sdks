@@ -224,6 +224,34 @@ describe("PreLiquidationPosition", () => {
     expect(position.seizableCollateral).toBeUndefined();
   });
 
+  test("seizable collateral is undefined when remaining debt needs an unavailable market oracle", () => {
+    const position = new PreLiquidationPosition(
+      { ...mainnetPositionInput, borrowShares: 170_000_000_000_000_000n },
+      { ...mainnetMarket, price: undefined },
+    );
+
+    expect(position.isLiquidatable).toBe(true);
+    expect(position.seizableCollateral).toBeUndefined();
+  });
+
+  test("full repayment does not require the market oracle", () => {
+    const position = new PreLiquidationPosition(
+      {
+        ...mainnetPositionInput,
+        borrowShares: 170_000_000_000_000_000n,
+        preLiquidationParams: {
+          ...mainnetPreLiquidationParams,
+          preLCF1: MathLib.WAD,
+          preLCF2: MathLib.WAD,
+        },
+      },
+      { ...mainnetMarket, price: undefined },
+    );
+
+    expect(position.isLiquidatable).toBe(true);
+    expect(position.seizableCollateral).toBeGreaterThan(0n);
+  });
+
   test("accrueInterest preserves pre-liquidation semantics", () => {
     const position = preLiquidationPosition();
     const accrued = position.accrueInterest(200n);

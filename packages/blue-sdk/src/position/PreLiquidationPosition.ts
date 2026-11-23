@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 import { ORACLE_PRICE_SCALE } from "../constants.js";
-import { type IMarket, Market } from "../market/index.js";
+import { type IMarket, Market, MarketUtils } from "../market/index.js";
 import { MathLib, SharesMath } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 import { AccrualPosition, type IAccrualPosition } from "./Position.js";
@@ -113,16 +113,17 @@ export class PreLiquidationPosition
         lltv: BigInt(preLiquidationParams.preLltv),
       },
       price:
-        preLiquidationOraclePrice != null
-          ? BigInt(preLiquidationOraclePrice)
-          : undefined,
+        preLiquidationOraclePrice == null
+          ? undefined
+          : BigInt(preLiquidationOraclePrice),
     });
 
     this.preLiquidationParams = new PreLiquidationParams(preLiquidationParams);
     this.preLiquidation = preLiquidation;
 
-    if (preLiquidationOraclePrice != null)
+    if (preLiquidationOraclePrice != null) {
       this.preLiquidationOraclePrice = BigInt(preLiquidationOraclePrice);
+    }
 
     this._baseMarket = new Market(market);
   }
@@ -154,10 +155,14 @@ export class PreLiquidationPosition
    */
   get isHealthy() {
     const { collateralValue } = this;
-    if (collateralValue == null) return;
+    if (collateralValue == null) {
+      return;
+    }
 
     const { borrowAssets } = this;
-    if (borrowAssets > MathLib.wMulDown(collateralValue, this._lltv)) return;
+    if (borrowAssets > MathLib.wMulDown(collateralValue, this._lltv)) {
+      return;
+    }
 
     return (
       borrowAssets <=
@@ -170,7 +175,9 @@ export class PreLiquidationPosition
    */
   get isLiquidatable() {
     const { collateralValue } = this;
-    if (collateralValue == null) return;
+    if (collateralValue == null) {
+      return;
+    }
 
     const { borrowAssets } = this;
 
@@ -183,14 +190,23 @@ export class PreLiquidationPosition
 
   /**
    * @inheritdoc `undefined` if the pre-liquidation's oracle reverts.
+   * Returns zero if the full seizure would leave the post-repay position unhealthy
+   * at the market oracle price. Does not search for a smaller executable seizure.
+   * `undefined` if remaining debt requires a market oracle price that is unavailable.
    */
   get seizableCollateral() {
-    if (this._market.price == null) return;
+    if (this._market.price == null) {
+      return;
+    }
 
-    if (!this.isLiquidatable) return 0n;
+    if (!this.isLiquidatable) {
+      return 0n;
+    }
 
     const { ltv } = this;
-    if (ltv == null) return;
+    if (ltv == null) {
+      return;
+    }
 
     const quotient = MathLib.wDivDown(
       ltv - this.preLiquidationParams.preLltv,
@@ -215,10 +231,34 @@ export class PreLiquidationPosition
       this.preLiquidationParams.getIncentiveFactor(quotient),
     );
 
-    return MathLib.mulDivDown(
+    const seizedCollateral = MathLib.mulDivDown(
       repayableAssets,
       ORACLE_PRICE_SCALE,
       this._market.price,
     );
+
+    const borrowShares = this.borrowShares - repayableShares;
+    if (borrowShares === 0n) {
+      return seizedCollateral;
+    }
+
+    const repaidAssets = this._baseMarket.toBorrowAssets(repayableShares);
+    const isHealthy = MarketUtils.isHealthy(
+      { collateral: this.collateral - seizedCollateral, borrowShares },
+      {
+        ...this._baseMarket,
+        totalBorrowAssets: MathLib.max(
+          this._baseMarket.totalBorrowAssets - repaidAssets,
+          0n,
+        ),
+        totalBorrowShares: this._baseMarket.totalBorrowShares - repayableShares,
+      },
+      this._baseMarket.params,
+    );
+    if (isHealthy == null) {
+      return;
+    }
+
+    return isHealthy ? seizedCollateral : 0n;
   }
 }

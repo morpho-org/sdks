@@ -21,7 +21,9 @@ export const validateMidnightUint128Field = (
   field: string,
   value: bigint,
 ): void => {
-  if (value < 0n) throw new NegativeInputError(field, value);
+  if (value < 0n) {
+    throw new NegativeInputError(field, value);
+  }
   if (value > maxUint128) {
     throw new InputExceedsMaxError({ field, value, max: maxUint128 });
   }

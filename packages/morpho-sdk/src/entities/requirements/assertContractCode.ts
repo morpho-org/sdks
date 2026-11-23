@@ -74,7 +74,9 @@ export const assertRegistryTargetsHaveCode = async (
 ): Promise<void> => {
   const seen = new Set<Address>();
   for (const target of targets) {
-    if (seen.has(target.address)) continue;
+    if (seen.has(target.address)) {
+      continue;
+    }
     seen.add(target.address);
     try {
       await assertContractCode(client, {
@@ -83,7 +85,9 @@ export const assertRegistryTargetsHaveCode = async (
         role: target.role,
       });
     } catch (error) {
-      if (!(error instanceof MissingContractCodeError)) throw error;
+      if (!(error instanceof MissingContractCodeError)) {
+        throw error;
+      }
       try {
         await validateClientChainId(client, chainId);
       } catch (probeError) {

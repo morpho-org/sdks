@@ -111,62 +111,66 @@ describe("VaultV2MidnightAdapter", () => {
     expect(adapter.midnight).toBe(MIDNIGHT);
   });
 
-  test("matches contract cap-id encodings and ids order", () => {
-    const collateral = {
-      token: ADDRESS,
-      lltv: 860_000_000_000_000_000n,
-      liquidationCursor: 800_000_000_000_000_000n,
-      oracle: OTHER,
-    };
-    const market: IVaultV2MidnightAdapterMarket = {
-      collateralParams: [collateral],
-      maturity: 100n,
-      rcfThreshold: 42n,
-      enterGate: ADDRESS,
-      liquidatorGate: OTHER,
-    };
-    const adapter = new VaultV2MidnightAdapter(adapterInput());
-    const tuple = {
-      type: "tuple",
-      components: [
-        { name: "token", type: "address" },
-        { name: "lltv", type: "uint256" },
-        { name: "liquidationCursor", type: "uint256" },
-        { name: "oracle", type: "address" },
-      ],
-    } as const;
-
-    expect(VaultV2MidnightAdapter.collateralTokenCapId(ADDRESS)).toBe(
-      taggedHash({
-        tag: "collateralToken",
-        types: [{ type: "address" }],
-        values: [ADDRESS],
-      }),
-    );
-    expect(VaultV2MidnightAdapter.familyCapId(market)).toBe(
-      taggedHash({
-        tag: "family",
-        types: [
-          { type: "tuple[]", components: tuple.components },
-          { type: "uint256" },
-          { type: "address" },
+  test.each([ADDRESS, "0x0000000000000000000000000000000000000000"] as const)(
+    "matches current contract family cap-id encoding for enterGate %s",
+    (enterGate) => {
+      const collateral = {
+        token: ADDRESS,
+        lltv: 860_000_000_000_000_000n,
+        liquidationCursor: 800_000_000_000_000_000n,
+        oracle: OTHER,
+      };
+      const market: IVaultV2MidnightAdapterMarket = {
+        collateralParams: [collateral],
+        maturity: 100n,
+        rcfThreshold: 42n,
+        enterGate,
+        liquidatorGate: OTHER,
+      };
+      const adapter = new VaultV2MidnightAdapter(adapterInput());
+      const tuple = {
+        type: "tuple",
+        components: [
+          { name: "token", type: "address" },
+          { name: "lltv", type: "uint256" },
+          { name: "liquidationCursor", type: "uint256" },
+          { name: "oracle", type: "address" },
         ],
-        values: [[collateral], 42n, OTHER],
-      }),
-    );
-    expect(VaultV2MidnightAdapter.durationCapId(ADDRESS, 3600n)).toBe(
-      taggedHash({
-        tag: "this/duration",
-        types: [{ type: "address" }, { type: "uint256" }],
-        values: [ADDRESS, 3600n],
-      }),
-    );
-    expect(adapter.ids(market)).toStrictEqual([
-      adapter.adapterId,
-      VaultV2MidnightAdapter.familyCapId(market),
-      VaultV2MidnightAdapter.collateralTokenCapId(ADDRESS),
-    ]);
-  });
+      } as const;
+
+      expect(VaultV2MidnightAdapter.collateralTokenCapId(ADDRESS)).toBe(
+        taggedHash({
+          tag: "collateralToken",
+          types: [{ type: "address" }],
+          values: [ADDRESS],
+        }),
+      );
+      expect(VaultV2MidnightAdapter.familyCapId(market)).toBe(
+        taggedHash({
+          tag: "collateralParams/rcfThreshold/liquidatorGate/enterGate",
+          types: [
+            { type: "tuple[]", components: tuple.components },
+            { type: "uint256" },
+            { type: "address" },
+            { type: "address" },
+          ],
+          values: [[collateral], 42n, OTHER, enterGate],
+        }),
+      );
+      expect(VaultV2MidnightAdapter.durationCapId(ADDRESS, 3600n)).toBe(
+        taggedHash({
+          tag: "this/duration",
+          types: [{ type: "address" }, { type: "uint256" }],
+          values: [ADDRESS, 3600n],
+        }),
+      );
+      expect(adapter.ids(market)).toStrictEqual([
+        adapter.adapterId,
+        VaultV2MidnightAdapter.familyCapId(market),
+        VaultV2MidnightAdapter.collateralTokenCapId(ADDRESS),
+      ]);
+    },
+  );
 
   test("computes duration allocations as suffix totals", () => {
     const marketData = {

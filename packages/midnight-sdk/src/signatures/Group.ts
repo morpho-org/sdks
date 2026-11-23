@@ -149,8 +149,12 @@ export class Group implements IGroup {
    * ```
    */
   public static from(entry: GroupInput): Group {
-    if (entry instanceof Group) return entry;
-    if (GroupUtils.isGroupInput(entry)) return new Group(entry.offers);
+    if (entry instanceof Group) {
+      return entry;
+    }
+    if (GroupUtils.isGroupInput(entry)) {
+      return new Group(entry.offers);
+    }
 
     return new Group([entry as IOffer]);
   }

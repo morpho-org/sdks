@@ -6,7 +6,13 @@ import {
   type DeploymentRegistry,
   deployments,
 } from "@morpho-org/morpho-ts";
-import { getErpcForkUrl } from "@morpho-org/test";
+import {
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+  OPTIMISM_FORK_BLOCK,
+  TEMPO_FORK_BLOCK,
+} from "@morpho-org/test";
 import type { Address } from "viem";
 
 /** An E2E scenario family and the registry labels it needs on a chain. */
@@ -25,20 +31,21 @@ export interface E2eScenario {
  * can still run when every required label has a registered deployment block.
  */
 export const E2E_FORK_BLOCKS: { readonly [chainId: number]: bigint } = {
-  [ChainId.EthMainnet]: 26_140_000n,
-  [ChainId.OptimismMainnet]: 157_880_000n,
+  [ChainId.EthMainnet]: MAINNET_FORK_BLOCK,
+  [ChainId.OptimismMainnet]: OPTIMISM_FORK_BLOCK,
   [ChainId.Unichain]: 60_620_000n,
   [ChainId.PolygonMainnet]: 95_110_000n,
   [ChainId.MonadMainnet]: 111_305_000n,
   [ChainId.WorldChainMainnet]: 36_017_000n,
   [ChainId.StableMainnet]: 42_151_000n,
   [ChainId.HyperliquidMainnet]: 47_899_000n,
-  [ChainId.TempoMainnet]: 43_016_000n,
+  [ChainId.TempoMainnet]: TEMPO_FORK_BLOCK,
   [ChainId.RobinhoodMainnet]: 82_418_000n,
   [ChainId.ArcMainnet]: 24_719_000n,
-  [ChainId.BaseMainnet]: 52_290_000n,
+  [ChainId.BaseMainnet]: BASE_FORK_BLOCK,
   [ChainId.ArbitrumMainnet]: 512_540_000n,
   [ChainId.KatanaMainnet]: 44_627_000n,
+  29032: 1_585_357n,
 };
 
 /** A required deployment and its registered address. */
@@ -163,8 +170,9 @@ export const getE2eEligibility = ({
   const missing = scenario.requires.filter(
     (label) => typeof lookup(chainAddresses, label) !== "string",
   );
-  if (missing.length > 0)
+  if (missing.length > 0) {
     return { status: "missingDeployments", chainId, missing };
+  }
 
   const chainDeployments = (registries.deployments ?? deployments)[chainId];
   const pinned = (registries.forkBlocks ?? E2E_FORK_BLOCKS)[chainId];
@@ -172,15 +180,18 @@ export const getE2eEligibility = ({
   const undatedDeployments: E2eDeployment[] = [];
   for (const label of scenario.requires) {
     const block = lookup(chainDeployments, label);
-    if (typeof block === "bigint") known.push(block);
-    else
+    if (typeof block === "bigint") {
+      known.push(block);
+    } else {
       undatedDeployments.push({
         label,
         address: lookup(chainAddresses, label) as Address,
       });
+    }
   }
-  if (pinned == null && (undatedDeployments.length > 0 || known.length === 0))
+  if (pinned == null && (undatedDeployments.length > 0 || known.length === 0)) {
     return { status: "missingForkBlock", chainId };
+  }
 
   const forkBlockNumber = known.reduce(
     (max, block) => (block > max ? block : max),
@@ -291,25 +302,34 @@ export const getE2eRuns = ({
     const chainId = /^\d+$/.test(entry)
       ? Number(entry)
       : ChainId[entry as keyof typeof ChainId];
-    if (typeof chainId !== "number" || !knownChainIds.has(chainId))
+    if (typeof chainId !== "number" || !knownChainIds.has(chainId)) {
       throw new E2eUnknownChainError(entry);
+    }
 
     return chainId;
   });
 
   return matrix.flatMap((entry): E2eRun[] => {
-    if (entry.status === "missingDeployments") return [];
+    if (entry.status === "missingDeployments") {
+      return [];
+    }
     const chainId =
       entry.status === "eligible" ? entry.target.chainId : entry.chainId;
-    if (selectedIds.length > 0 && !selectedIds.includes(chainId)) return [];
-    if (entry.status === "missingForkBlock")
+    if (selectedIds.length > 0 && !selectedIds.includes(chainId)) {
+      return [];
+    }
+    if (entry.status === "missingForkBlock") {
       throw new E2eForkBlockMissingError(scenario.name, chainId);
+    }
 
     const { target } = entry;
     const forkUrl = getErpcForkUrl(target.chainId, env.ERPC_SECRET);
-    if (forkUrl !== undefined) return [{ status: "run", target, forkUrl }];
-    if (selectedIds.length > 0)
+    if (forkUrl !== undefined) {
+      return [{ status: "run", target, forkUrl }];
+    }
+    if (selectedIds.length > 0) {
       throw new E2eErpcSecretUnsetError(target.chainName);
+    }
 
     return [
       {

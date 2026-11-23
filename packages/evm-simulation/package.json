@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/evm-simulation",
   "description": "EVM simulation engine for Morpho transactions.",
-  "version": "9.0.0-next.1",
+  "version": "9.1.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -21,8 +21,8 @@
     "lib"
   ],
   "scripts": {
-    "prepublish": "pnpm build",
-    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
+    "prepublish": "bun run build",
+    "build": "tsc --noEmit && bun run build:cjs && bun run build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "test": "vitest --root ../.. --project evm-simulation",

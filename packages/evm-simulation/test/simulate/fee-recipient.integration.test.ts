@@ -1,5 +1,5 @@
 import { metaMorphoAbi, vaultV2Abi } from "@morpho-org/morpho-sdk/abis";
-import { getErpcForkUrl } from "@morpho-org/test";
+import { getErpcForkUrl, MAINNET_FORK_BLOCK } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   decodeFunctionResult,
@@ -18,7 +18,7 @@ import {
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 26_356_434n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 });
 
 for (const [version, vault, feeRecipient] of [

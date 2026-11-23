@@ -39,7 +39,9 @@ export const setFeeTokenBalance = async (
   >,
   params: { readonly account: Address; readonly amount: bigint },
 ): Promise<void> => {
-  if (client.chain.id !== TEMPO_CHAIN_ID) return;
+  if (client.chain.id !== TEMPO_CHAIN_ID) {
+    return;
+  }
 
   const index = keccak256(
     encodeAbiParameters(
@@ -59,7 +61,7 @@ export const setFeeTokenBalance = async (
     args: [params.account],
   });
 
-  if (actual !== params.amount)
+  if (actual !== params.amount) {
     throw new AnvilFeeTokenFundingError({
       token: TEMPO_FEE_TOKEN,
       account: params.account,
@@ -67,4 +69,5 @@ export const setFeeTokenBalance = async (
       expected: params.amount,
       balancesSlot: TEMPO_FEE_TOKEN_BALANCES_SLOT,
     });
+  }
 };

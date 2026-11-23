@@ -18,7 +18,11 @@ import {
   SetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  BASE_FORK_BLOCK,
+  getErpcForkUrl,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -46,7 +50,7 @@ import {
 const test = createViemTest(base, {
   forkUrl: getErpcForkUrl(base.id, process.env.ERPC_SECRET),
   chainId: base.id,
-  forkBlockNumber: 52_252_000n,
+  forkBlockNumber: BASE_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof base> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -459,11 +463,20 @@ describe.sequential("Midnight takeLend limits — Base fork", () => {
     });
     const result = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        market: MarketUtils.toStruct(market),
-        slippageTolerance: 0n,
-      }),
+      limits: {
+        operations: [
+          ...toSimulationLimits(tx.action, {
+            owner: user,
+            market: MarketUtils.toStruct(market),
+            slippageTolerance: 0n,
+          }).operations,
+          ...toSimulationLimits(seed.action, {
+            owner: user,
+            onBehalf: offerMaker,
+            market: MarketUtils.toStruct(market),
+          }).operations,
+        ],
+      },
     });
     expect(result.verification.operations[0]).toMatchObject({
       operation: "midnightTakeLend",
@@ -487,12 +500,21 @@ describe.sequential("Midnight takeLend limits — Base fork", () => {
     });
     const error = await simulateOrThrow(configFor(client), {
       transactions: [asTransaction(user, seed), asTransaction(user, tx)],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        market: MarketUtils.toStruct(market),
-        slippageTolerance: 0n,
-        expected: { assetsPaid: 1n },
-      }),
+      limits: {
+        operations: [
+          ...toSimulationLimits(tx.action, {
+            owner: user,
+            market: MarketUtils.toStruct(market),
+            slippageTolerance: 0n,
+            expected: { assetsPaid: 1n },
+          }).operations,
+          ...toSimulationLimits(seed.action, {
+            owner: user,
+            onBehalf: offerMaker,
+            market: MarketUtils.toStruct(market),
+          }).operations,
+        ],
+      },
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ConsumerLimitViolationError);
     expect((error as Error).message).toContain("midnightTakeLend");

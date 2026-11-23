@@ -140,6 +140,7 @@ export class AccrualVaultV2MidnightAdapter
   /**
    * Values each held market's loss-adjusted net credit with hyperbolic discounting before maturity.
    * At or after maturity, a market is valued at face value. Stored market data is not projected.
+   * Timestamps before `lastUpdate` are valued at `lastUpdate`.
    *
    * @param timestamp - Valuation timestamp in Unix seconds.
    * @returns Total discounted Midnight net credit in loan-asset units.
@@ -206,7 +207,7 @@ export class AccrualVaultV2MidnightAdapter
     return VaultV2MidnightAdapterUtils.realAssets(
       this,
       this.markets,
-      timestamp,
+      MathLib.max(BigInt(timestamp), this.lastUpdate),
     );
   }
 

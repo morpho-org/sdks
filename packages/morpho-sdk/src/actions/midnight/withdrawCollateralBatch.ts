@@ -89,7 +89,9 @@ export const midnightWithdrawCollateralBatch = (
   );
   const calls = params.collateralWithdrawals.map(
     ({ collateralIndex, assets }) => {
-      if (assets <= 0n) throw new NonPositiveInputError("assets", assets);
+      if (assets <= 0n) {
+        throw new NonPositiveInputError("assets", assets);
+      }
       validateMidnightUint128Field("assets", assets);
       // Reject indexes not configured on the market.
       MarketUtils.getCollateralByIndex(params.market, collateralIndex);
@@ -115,7 +117,9 @@ export const midnightWithdrawCollateralBatch = (
       args: [calls],
     }),
   };
-  if (params.metadata) tx = addTransactionMetadata(tx, params.metadata);
+  if (params.metadata) {
+    tx = addTransactionMetadata(tx, params.metadata);
+  }
   return deepFreeze({
     ...tx,
     action: {

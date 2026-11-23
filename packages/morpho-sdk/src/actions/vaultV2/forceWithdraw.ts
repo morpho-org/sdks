@@ -107,8 +107,9 @@ export const vaultV2ForceWithdraw = ({
 }: VaultV2ForceWithdrawParams): Readonly<
   Transaction<VaultV2ForceWithdrawAction>
 > => {
-  if (args.exitAssets <= 0n)
+  if (args.exitAssets <= 0n) {
     throw new NonPositiveInputError("exitAssets", args.exitAssets);
+  }
   validateUint256Field("exitAssets", args.exitAssets);
   validateDeadline(args.deadline);
   // `0n` stays valid — it is the intentional "no on-chain bound" opt-out — but a value the uint256
@@ -144,7 +145,9 @@ export const vaultV2ForceWithdraw = ({
       ],
     }),
   };
-  if (metadata) tx = addTransactionMetadata(tx, metadata);
+  if (metadata) {
+    tx = addTransactionMetadata(tx, metadata);
+  }
 
   return deepFreeze({
     ...tx,

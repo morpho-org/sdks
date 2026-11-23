@@ -16,6 +16,13 @@ import type {
   SimulationResult,
   SimulationTransaction,
 } from "./types.js";
+import type { SimulationWarning } from "./warnings.js";
+
+/** Retention coverage after the stage ran with complete user logs and no discarded transfer records. */
+export interface SimulationReportVerification {
+  /** Checked against configured restricted addresses, or skipped because none are configured. */
+  readonly retention: "checked" | "skipped-unsupported-chain";
+}
 
 /** One operation described by the caller's `limits.operations`. */
 export type SimulatedOperation = {
@@ -82,8 +89,12 @@ export interface VerifiedSimulationInputResult extends SimulationResult {
 
 /** Failure branch of a simulation report: the bundle is rejected and no result exists. */
 export interface SimulationFailure {
+  /** Frozen non-blocking diagnostics, always present; inspect before signing. */
+  readonly warnings: readonly SimulationWarning[];
+  /** Present only when retention ran with complete user logs and no discarded transfers, even if other checks failed. */
+  readonly verification?: SimulationReportVerification;
   readonly ok: false;
-  /** Highest severity of `failures` (`fatal` > `error` > `warn`); index a logger with it. */
+  /** Highest severity of `failures` (`fatal` > `error` > `warn`). */
   readonly severity: SimulationErrorSeverity;
   /** Every SDK failure of the run, flat, in pipeline order; never empty. */
   readonly failures: readonly SimulationPackageError[];
@@ -91,10 +102,22 @@ export interface SimulationFailure {
 
 /** Report returned by `simulate` for quote-only `SimulateParams`. Read `result` only after `ok`. */
 export type SimulationReport =
-  | { readonly ok: true; readonly result: VerifiedSimulationResult }
+  | {
+      readonly ok: true;
+      readonly result: VerifiedSimulationResult;
+      /** Frozen non-blocking diagnostics, always present; inspect before signing. */
+      readonly warnings: readonly SimulationWarning[];
+      readonly verification?: SimulationReportVerification;
+    }
   | SimulationFailure;
 
 /** Report returned by `simulate` for `SimulateInputParams`. Read `result` only after `ok`. */
 export type SimulationInputReport =
-  | { readonly ok: true; readonly result: VerifiedSimulationInputResult }
+  | {
+      readonly ok: true;
+      readonly result: VerifiedSimulationInputResult;
+      /** Frozen non-blocking diagnostics, always present; inspect before signing. */
+      readonly warnings: readonly SimulationWarning[];
+      readonly verification?: SimulationReportVerification;
+    }
   | SimulationFailure;

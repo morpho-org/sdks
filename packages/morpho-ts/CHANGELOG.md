@@ -1,5 +1,15 @@
 # @morpho-org/morpho-ts
 
+## 4.5.0
+
+### Minor Changes
+
+- Add Alpen mainnet (chain 29032) metadata and Morpho Blue, Vault V2, adapter factory, allocator, oracle factory, pre-liquidation and standalone bundle deployments with their creation blocks. Pin an Alpen fork block for registry-driven tests. Midnight, a Vault V1 factory, wrapped-native tokens and Permit2 are not registered on Alpen.
+
+  Patch maintained direct runtime dependents of morpho-ts so their latest releases resolve the new registry entry. Raise blue-sdk's morpho-ts peer floor to 4.5.0 so re-exported registry reads also resolve Alpen.
+
+- `getLocaleSymbols` and the locale helpers that call it now throw `MissingLocalePartError` when Intl omits the decimal or group separator, where before they threw a `TypeError`. Re-export `MissingLocalePartError` from `@morpho-org/morpho-sdk/errors`.
+
 ## 4.5.0-next.1
 
 ### Minor Changes

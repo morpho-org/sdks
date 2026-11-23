@@ -338,6 +338,21 @@ describe("VaultV2 Midnight adapter", () => {
       });
       const address = adapters[0]?.address;
       if (address === undefined) throw new Error("Expected a Midnight adapter");
+      for (const enterGate of [zeroAddress, testAccount(19).address]) {
+        const gatedMarket = { ...MarketUtils.toStruct(market), enterGate };
+        const ids = await client.readContract({
+          address,
+          abi: midnightAdapterAbi,
+          functionName: "ids",
+          args: [gatedMarket],
+        });
+        expect(ids).toEqual(
+          VaultV2MidnightAdapterUtils.ids({
+            adapterId: VaultV2MidnightAdapter.adapterCapId(address),
+            market: gatedMarket,
+          }),
+        );
+      }
       const factory = getChainAddress(
         ChainId.BaseMainnet,
         "midnightAdapterFactory",

@@ -13,7 +13,11 @@ import {
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
-import { type AnvilTestClient, getErpcForkUrl } from "@morpho-org/test";
+import {
+  type AnvilTestClient,
+  getErpcForkUrl,
+  MAINNET_FORK_BLOCK,
+} from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -36,6 +40,7 @@ import {
   type InputOperationLimit,
   SimulationValidationError,
   SlippageCheckUnavailableError,
+  simulate,
   toSimulationAuthorizations,
 } from "../../src/index.js";
 import {
@@ -47,7 +52,7 @@ import { seededMarketData, seededVaultData } from "../setup.js";
 const test = createViemTest(mainnet, {
   forkUrl: getErpcForkUrl(mainnet.id, process.env.ERPC_SECRET),
   chainId: mainnet.id,
-  forkBlockNumber: 25_832_676n,
+  forkBlockNumber: MAINNET_FORK_BLOCK,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     await client.setCode({ address: client.account.address, bytecode: "0x" });
@@ -189,16 +194,24 @@ async function check(
           },
         ]
       : [];
-  await expect(
-    simulateOrThrowFirst(config, {
+  const wrongSubjectReport = await simulate(
+    config,
+    {
       ...params,
       limits: { operations: [wrongSubject], approvals },
-    }),
-  ).rejects.toBeInstanceOf(
-    operation.type === "vaultV1MigrateToV2"
-      ? SlippageCheckUnavailableError
-      : ConsumerLimitViolationError,
+    },
+    { timeoutMs: 30_000 },
   );
+  expect(wrongSubjectReport).toMatchObject({
+    ok: false,
+    failures: expect.arrayContaining([
+      expect.any(
+        operation.type === "vaultV1MigrateToV2"
+          ? SlippageCheckUnavailableError
+          : ConsumerLimitViolationError,
+      ),
+    ]),
+  });
   if (
     operation.type === "vaultV1Withdraw" ||
     operation.type === "vaultV2Withdraw" ||
@@ -219,12 +232,20 @@ async function check(
         limits: { operations: [{ ...operation, quote }] },
       }),
     ).resolves.toBeDefined();
-    await expect(
-      simulateOrThrowFirst(config, {
+    const wrongQuotedSubjectReport = await simulate(
+      config,
+      {
         ...params,
         limits: { operations: [{ ...wrongSubject, quote }], approvals },
-      }),
-    ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(wrongQuotedSubjectReport).toMatchObject({
+      ok: false,
+      failures: expect.arrayContaining([
+        expect.any(ConsumerLimitViolationError),
+      ]),
+    });
   }
   if (
     operation.type === "vaultV1Redeem" ||
@@ -1100,8 +1121,9 @@ test("assets-mode migration rejects a different V1 source vault", async ({
       limits: { operations: [operation] },
     }),
   ).resolves.toBeDefined();
-  await expect(
-    simulateOrThrowFirst(config, {
+  const report = await simulate(
+    config,
+    {
       ...params,
       limits: {
         operations: [{ ...operation, sourceVault: V1 }],
@@ -1114,8 +1136,13 @@ test("assets-mode migration rejects a different V1 source vault", async ({
           },
         ],
       },
-    }),
-  ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
+    },
+    { timeoutMs: 30_000 },
+  );
+  expect(report).toMatchObject({
+    ok: false,
+    failures: expect.arrayContaining([expect.any(ConsumerLimitViolationError)]),
+  });
 }, 180_000);
 
 test("migration derives both assets and shares modes, net of referral fee", async ({
