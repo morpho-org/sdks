@@ -1,5 +1,41 @@
 # @morpho-org/evm-simulation
 
+## 9.1.0
+
+### Minor Changes
+
+- Reject fetched Midnight market metadata whose derived ID differs from the requested market, preventing slippage and approval checks from using another market's tokens.
+
+  For Midnight collateral supplies with explicit `assetPaid`, an all-zero fetched market now reports `APPROVAL_CHECK_UNAVAILABLE` instead of `VALIDATION_ERROR`.
+
+- Replace SDK logging with structured simulation warnings. Deprecate `options.logger` and the exported `SimulationLogger` type without removing them: the option is accepted but ignored, and no logger method is invoked. Keep both through at least one coexistence minor before removal in a future major.
+
+  Both report variants always include `warnings: readonly SimulationWarning[]`: frozen plain data discriminated by `code`, with severity `"warn"` and chain-specific context. Undeclared sender outflows never enter `failures`; warnings are non-blocking. `simulate` now returns `ok: true` when these are the only findings. Other diagnostics cover skipped retention, swept intermediary balances, malformed transfer logs and wrapped-native event mismatches. All other failures remain blocking, and verified paired emitters retain their chain-scoped exception.
+
+  Read `report.verification.retention` for `"checked"` or `"skipped-unsupported-chain"`. It is present on successes and failures that reached retention with complete user-transaction logs and no discarded transfer records, and omitted for any `MALFORMED_TRANSFER_LOG` warning, when user logs are missing (unlike explicit empty `logs: []`), on early failures, reverts or unusable transfer evidence. Warnings and blocking findings from remaining evidence are preserved. Skips also produce `RETENTION_CHECK_SKIPPED` warnings.
+
+  Transfer-signature logs must have three topics, except that four-topic ERC-721 events with empty data (`"0x"`) remain silently ignored as out of scope. Other topic counts, including four-topic events with non-empty data, produce `MALFORMED_TRANSFER_LOG` and omit report-level `verification`.
+
+  Migration: stop relying on `logger` (deprecated and ignored) and handle diagnostics in your own application. Existing callers may keep the option during migration. Signing callers must update an `ok`-only gate, for example:
+
+  ```ts
+  const report = await simulate(client, params);
+  if (!report.ok) throw new Error("Simulation failed");
+  if (report.warnings.length > 0)
+    throw new Error("Simulation warnings require review");
+  if (report.verification?.retention !== "checked")
+    throw new Error("Retention was not checked");
+  return report.result.simulationTxs;
+  ```
+
+  See the [structured warnings migration guide](https://github.com/morpho-org/sdks/blob/main/docs/migrations/evm-simulation-structured-warnings.md).
+
+### Patch Changes
+
+- Ignore all transfers from verified paired emitters when their primary token is spendable on the same chain: legacy EURe's EURe v2 emitter on Ethereum, wstHYPE's stHYPE emitter on HyperEVM, and USDC's native mirror on Arc mainnet. No primary transfer evidence or transaction, participant, amount or event-count matching is required. Preserve primary-token checks and all transfer evidence in reports; other undeclared outflows still fail.
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.0.2
+
 ## 9.0.0
 
 ### Major Changes

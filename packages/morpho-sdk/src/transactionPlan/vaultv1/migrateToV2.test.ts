@@ -2,19 +2,12 @@ import { type AccrualVaultV2, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import {
-  erc20Abi,
-  maxUint256,
-  serializeSignature,
-  toHex,
-  zeroAddress,
-} from "viem";
+import { erc20Abi, maxUint256, toHex, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_ASSET,
-  IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV1Data,
   inKindVaultV2Data,
@@ -47,6 +40,7 @@ import {
   type VaultV1MigrateToV2PlanParams,
 } from "./migrateToV2.js";
 
+const IN_KIND_USER = privateKeyToAccount(toHex(1n, { size: 32 })).address;
 const target = IN_KIND_USER;
 
 test.each([
@@ -294,12 +288,10 @@ describe("Vault V1 migration plans", () => {
       );
     }
   });
-  test("signed and allowance-only plans round-trip to identical bytes", () => {
-    const signature = serializeSignature({
-      r: toHex(1n, { size: 32 }),
-      s: toHex(2n, { size: 32 }),
-      yParity: 0,
-    });
+  test("signed and allowance-only plans round-trip to identical bytes", async () => {
+    const signature = await privateKeyToAccount(
+      toHex(1n, { size: 32 }),
+    ).signTypedData(request.typedData);
     const signed = { ...plan, signatureRequests: [{ ...request, signature }] };
     const noPermit: TransactionPlan = {
       ...plan,

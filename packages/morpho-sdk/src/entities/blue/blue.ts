@@ -32,6 +32,10 @@ import {
   validateBlueBundlesV1NativeFunding,
 } from "../../actions/blue/common.js";
 import {
+  validateBlueRefinanceQuote,
+  validateBlueRefinanceSource,
+} from "../../actions/blue/refinanceValidation.js";
+import {
   blueBorrow,
   blueRefinance,
   blueRepay,
@@ -51,12 +55,11 @@ import {
   validateChainId,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
-  validateRepayAmount,
-  validateRepayShares,
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
 import { resolveTransactionMetadata } from "../../helpers/metadata.js";
+import { quoteBlueRepay } from "../../helpers/quoteBlueRepay.js";
 import { validateMarketParamsId } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -90,8 +93,6 @@ import {
   NotBlueBuyCallbackError,
   ReallocationsRequireBorrowError,
   type ReferenceTimestampParams,
-  RefinanceSameMarketError,
-  RefinanceTokenMismatchError,
   type RequirementSignature,
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
@@ -1293,44 +1294,14 @@ export class MorphoBlue implements BlueActions {
     readonly deadline: bigint;
     readonly now: bigint;
   }) {
-    const saturatedRepay = repayShares === maxUint256;
-    const simulatedRepayShares = saturatedRepay
-      ? positionData.borrowShares
-      : repayShares;
-    if (repayAssets > 0n) {
-      validateRepayAmount({
-        positionData,
-        repayAssets,
-        marketId: this.marketParams.id,
-      });
-    } else if (repayShares > 0n && !saturatedRepay) {
-      validateRepayShares({
-        positionData,
-        repayShares,
-        marketId: this.marketParams.id,
-      });
-    }
-    const quoteHorizon = this.getBlueBundlesV1QuoteTimestamp(
-      positionData.market.lastUpdate,
+    return quoteBlueRepay({
+      positionData,
+      marketId: this.marketParams.id,
+      repayAssets,
+      repayShares,
+      deadline,
       now,
-    );
-    if (repayShares > 0n && deadline > quoteHorizon) {
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: deadline,
-        max: quoteHorizon,
-      });
-    }
-    const accrualTimestamp = repayShares > 0n ? deadline : quoteHorizon;
-    const accruedPosition = positionData.accrueInterest(accrualTimestamp);
-    let expectedRepayAssets = repayAssets;
-    if (repayAssets <= 0n && repayShares > 0n) {
-      expectedRepayAssets = accruedPosition.market.toBorrowAssets(
-        simulatedRepayShares,
-        "Up",
-      );
-    }
-    return { simulatedRepayShares, accruedPosition, expectedRepayAssets };
+    });
   }
 
   private async getTokenRequirements(
@@ -2329,30 +2300,12 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
-    if (positionData.borrowShares <= 0n) {
-      throw new NonPositiveInputError(
-        "positionData.borrowShares",
-        positionData.borrowShares,
-      );
-    }
-    if (this.marketParams.id === destination.marketParams.id) {
-      throw new RefinanceSameMarketError(this.marketParams.id);
-    }
-    if (
-      !isAddressEqual(
-        this.marketParams.loanToken,
-        destination.marketParams.loanToken,
-      ) ||
-      !isAddressEqual(
-        this.marketParams.collateralToken,
-        destination.marketParams.collateralToken,
-      )
-    ) {
-      throw new RefinanceTokenMismatchError(
-        this.marketParams.id,
-        destination.marketParams.id,
-      );
-    }
+    // Reject an empty source debt or incompatible markets before quoting.
+    validateBlueRefinanceSource({
+      sourceMarketParams: this.marketParams,
+      destinationMarketParams: destination.marketParams,
+      borrowShares: positionData.borrowShares,
+    });
     if (destination.positionData == null) {
       throw new MissingAccrualPositionError(destination.marketParams.id);
     }
@@ -2363,32 +2316,14 @@ export class MorphoBlue implements BlueActions {
     });
 
     const reallocations = [...(params.reallocations ?? [])];
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
+    // Reject migrations that cannot meet the buffered destination LLTV.
+    validateBlueRefinanceQuote({
+      destinationMarketParams: destination.marketParams,
+      sourcePosition: positionData,
+      destinationPosition: destination.positionData,
       reallocations,
-      destination.marketParams,
-    );
-    const penaltyAssets = getBlueBundlesV1PenaltyAssets(publicAllocations);
-    const accrualTimestamp = this.getBlueBundlesV1QuoteTimestamp(
-      MathLib.max(
-        positionData.market.lastUpdate,
-        destination.positionData.market.lastUpdate,
-      ),
-      createdAt,
-    );
-    const accruedSourcePosition = positionData.accrueInterest(accrualTimestamp);
-    const accruedDestinationPosition =
-      destination.positionData.accrueInterest(accrualTimestamp);
-    const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
-      accruedSourcePosition.borrowAssets,
       referralFeePct,
-    );
-    validatePositionHealth({
-      positionData: accruedDestinationPosition,
-      additionalCollateral: accruedSourcePosition.collateral,
-      borrowAmount:
-        accruedSourcePosition.borrowAssets + penaltyAssets + referralFeeAssets,
-      marketId: destination.marketParams.id,
-      lltv: destination.marketParams.lltv,
+      now: createdAt,
     });
 
     return {

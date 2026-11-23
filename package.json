@@ -15,7 +15,7 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "packageManager": "bun@1.4.4",
+  "packageManager": "bun@1.4.5",
   "workspaces": {
     "packages": [
       "packages/*"

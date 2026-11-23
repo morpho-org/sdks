@@ -98,8 +98,12 @@ test("preserves chain mismatch and missing code error types", async () => {
     const handle = createMockClient(mainnet);
     const request = handle.request.getMockImplementation()!;
     handle.request.mockImplementation(async (args) => {
-      if (args.method === "eth_chainId") return chainId;
-      if (args.method === "eth_getCode") return bytecode;
+      if (args.method === "eth_chainId") {
+        return chainId;
+      }
+      if (args.method === "eth_getCode") {
+        return bytecode;
+      }
       return request(args);
     });
     mockRead(handle, {
@@ -386,6 +390,7 @@ test("prepares an unlimited share permit and preserves its value through storage
   expect(step.action.inputs.requiredShareAllowance).toBeGreaterThan(0n);
   expect(step.action.inputs.requiredShareAllowance).toBeLessThan(maxUint256);
   const request = plan.signatureRequests[0]!;
+  assert(request.kind === "permit");
   expect(() => buildTransactions({ ...plan, signatureRequests: [] })).toThrow(
     new IncompleteTransactionPlanError(request.id),
   );

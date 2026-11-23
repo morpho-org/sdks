@@ -43,8 +43,8 @@ import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
   SimulationRevertedError,
+  simulate,
   toSimulationLimits,
-  UnexpectedTokenTransferError,
 } from "../../src/index.js";
 import {
   simulateOrThrowFirst,
@@ -697,7 +697,7 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   });
 
-  test("withdrawal-only limits reject an appended loan-token transfer", async ({
+  test("withdrawal-only limits warn on an appended loan-token transfer", async ({
     client,
   }) => {
     const { user } = await setUp(client);
@@ -710,26 +710,36 @@ describe.sequential("Midnight repay-withdraw limits — Base fork", () => {
       collateralReceiver: RECEIVER,
       deadline: Time.timestamp() + 600n,
     });
-    const error = await simulateOrThrowFirst(configFor(client), {
-      transactions: [
-        asTransaction(user, tx),
-        {
-          from: user,
-          to: usdc,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "transfer",
-            args: [OTHER, 1n],
-          }),
-        },
-      ],
-      limits: toSimulationLimits(tx.action, {
-        owner: user,
-        receiver: RECEIVER,
-      }),
-    }).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(UnexpectedTokenTransferError);
-    expect(error).toMatchObject({
+    const report = await simulate(
+      configFor(client),
+      {
+        transactions: [
+          asTransaction(user, tx),
+          {
+            from: user,
+            to: usdc,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [OTHER, 1n],
+            }),
+          },
+        ],
+        limits: toSimulationLimits(tx.action, {
+          owner: user,
+          receiver: RECEIVER,
+        }),
+      },
+      { timeoutMs: 30_000 },
+    );
+    expect(report.ok).toBe(true);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toMatchObject({
+      code: "UNEXPECTED_TOKEN_TRANSFER",
+      severity: "warn",
+      chainId: client.chain.id,
+    });
+    expect(report.warnings[0]).toMatchObject({
       code: "UNEXPECTED_TOKEN_TRANSFER",
       token: usdc,
       sender: user,

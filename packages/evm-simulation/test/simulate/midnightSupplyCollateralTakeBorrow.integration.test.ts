@@ -38,9 +38,9 @@ import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   ConsumerLimitViolationError,
+  simulate,
   toSimulationLimits,
   UnexpectedTokenApprovalError,
-  UnexpectedTokenTransferError,
 } from "../../src/index.js";
 import {
   simulateOrThrow,
@@ -674,7 +674,7 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
         address: owner,
         bytecode: `0xef0100${delegate.slice(2)}`,
       });
-      const result = simulateOrThrow(
+      const report = await simulate(
         configFor(client),
         {
           transactions: [
@@ -702,21 +702,28 @@ describe.sequential("Midnight supplyCollateralTakeBorrow limits — Base fork", 
         },
         { timeoutMs: 30_000 },
       );
-      if (extra === 0n) {
-        await expect(result).resolves.toHaveProperty(
+      expect(report.ok).toBe(true);
+      if (report.ok) {
+        expect(report.result).toHaveProperty(
           "calls.length",
           selfValue > 0n ? 3 : 2,
         );
+      }
+      if (extra === 0n) {
+        expect(report.warnings).toEqual([]);
       } else {
-        await expect(result).rejects.toMatchObject({
+        expect(report.warnings).toHaveLength(1);
+        expect(report.warnings[0]).toMatchObject({
           code: "UNEXPECTED_TOKEN_TRANSFER",
           token: ethAddress,
           sender: owner,
           recipients: expect.arrayContaining([recipient]),
         });
-        await expect(result).rejects.toBeInstanceOf(
-          UnexpectedTokenTransferError,
-        );
+        expect(report.warnings[0]).toMatchObject({
+          code: "UNEXPECTED_TOKEN_TRANSFER",
+          severity: "warn",
+          chainId: client.chain.id,
+        });
       }
     });
   }

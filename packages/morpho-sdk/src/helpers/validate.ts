@@ -12,7 +12,7 @@ import {
   type MarketInput as MidnightMarketInput,
   MarketUtils as MidnightMarketUtils,
 } from "@morpho-org/midnight-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
+import { isDefined, isHexEqual } from "@morpho-org/morpho-ts";
 import {
   type Address,
   isAddress,
@@ -605,7 +605,7 @@ export const validateNativeVaultAsset = (
  * @param params.lltv - The market's liquidation LTV.
  * @param params.marketId - The market identifier (for error messages).
  * @returns `void` when the post-withdraw position stays within the safe LTV threshold.
- * @throws {MarketIdMismatchError} when `positionData.marketId` differs from `marketId`.
+ * @throws {MarketIdMismatchError} when the two market IDs differ beyond hex casing.
  * @throws {WithdrawExceedsCollateralError} when `withdrawAmount` exceeds the position's collateral.
  * @throws {MissingMarketPriceError} when the position carries debt but the market has no oracle price.
  * @throws {WithdrawMakesPositionUnhealthyError} when the remaining collateral cannot cover the debt
@@ -638,7 +638,7 @@ export const validatePositionHealthAfterWithdraw = (params: {
 }): void => {
   const { positionData, withdrawAmount, lltv, marketId } = params;
 
-  if (positionData.marketId !== marketId) {
+  if (!isHexEqual(positionData.marketId, marketId)) {
     throw new MarketIdMismatchError(positionData.marketId, marketId);
   }
   if (withdrawAmount > positionData.collateral) {

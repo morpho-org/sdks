@@ -83,6 +83,7 @@ export interface VaultV2ForceWithdrawPlanParams
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds `MAX_SLIPPAGE_TOLERANCE`.
  * @throws {InputExceedsMaxError} when the fee exceeds 10,000 bps, an input exceeds uint256 or the expiry exceeds the fee-projection horizon.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
+ * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @throws {ChainIdMismatchError} when the client declares or serves another chain.
  * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.

@@ -82,6 +82,7 @@ export interface VaultV1InKindRedeemPlanParams
  * @throws {NonPositiveInputError} when `expiresAt`, `assets` or the computed required shares are not positive.
  * @throws {ExpiredDeadlineError} when `expiresAt` is not in the future.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
+ * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @throws {ChainIdMismatchError} when the client declares or its RPC serves another chain.
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.

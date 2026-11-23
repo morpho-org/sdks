@@ -2,9 +2,9 @@ import { SimulationValidationError } from "../../errors.js";
 import type { SimulationOptions } from "../../types.js";
 
 const OPTION_KEYS: ReadonlySet<string> = new Set([
-  "logger",
   "blockOverrides",
   "callGasLimit",
+  "logger",
   "parentHashCheck",
   "timeoutMs",
 ]);
@@ -19,6 +19,7 @@ const BLOCK_OVERRIDE_KEYS: ReadonlySet<string> = new Set(["gasLimit"]);
  * bigint, or a `parentHashCheck` that is set but not a boolean.
  *
  * @param options - The caller's options.
+ * @returns Nothing when all options are valid.
  * @throws {SimulationValidationError} When an option value is invalid.
  * @internal
  */

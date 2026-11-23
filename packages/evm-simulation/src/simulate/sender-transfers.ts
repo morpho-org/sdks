@@ -3,6 +3,7 @@ import { UnexpectedTokenTransferError } from "../errors.js";
 import type { Transfer } from "../types.js";
 import { resolveApprovalLimits } from "./approval-limits.js";
 import type { ResolvedApprovalOperation } from "./backends/resolve-assets.js";
+import { PAIRED_EMITTERS } from "./paired-emitters.js";
 
 /** Resolve spendable tokens from operation subjects and approval tokens, never explicit approvals. @internal */
 export function resolveSenderSpendTokens(params: {
@@ -73,20 +74,27 @@ export function resolveSenderSpendTokens(params: {
   return allowed;
 }
 
-/** Reject net losses and non-burn outgoing transfers of undeclared tokens, even if returned later. @internal */
+/** Reject undeclared sender outflows, ignoring listed paired emitters of spendable primaries on this chain. @internal */
 export function findUnexpectedSenderTransfers(params: {
+  readonly chainId: number;
   readonly owner: Address;
   readonly transfers: readonly Transfer[];
   readonly allowed: ReadonlySet<string>;
   /** Gross ETH debit cap when no native pay-in measurement covers the sender. */
   readonly nativeValueBudget?: bigint;
 }): UnexpectedTokenTransferError[] {
+  const allowed = new Set(params.allowed);
+  for (const pair of PAIRED_EMITTERS[params.chainId] ?? []) {
+    if (params.allowed.has(pair.primary.toLowerCase())) {
+      allowed.add(pair.paired.toLowerCase());
+    }
+  }
   const tokens = new Map<
     string,
     { token: Address; net: bigint; recipients: Set<Address>; outgoing: boolean }
   >();
   for (const { token, from, to, amount } of params.transfers) {
-    if (amount === 0n || params.allowed.has(token.toLowerCase())) {
+    if (amount === 0n || allowed.has(token.toLowerCase())) {
       continue;
     }
     const sends = isAddressEqual(from, params.owner);

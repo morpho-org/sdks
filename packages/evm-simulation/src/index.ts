@@ -130,6 +130,7 @@ export type {
   SimulationInputReport,
   SimulationInputVerification,
   SimulationReport,
+  SimulationReportVerification,
   SimulationVerification,
   VerifiedSimulationInputResult,
   VerifiedSimulationResult,
@@ -156,3 +157,4 @@ export type {
   SimulationTransaction,
   Transfer,
 } from "./types.js";
+export type { SimulationWarning } from "./warnings.js";

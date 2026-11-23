@@ -7,7 +7,9 @@ import { erc2612Abi, erc5267Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
+  decodeFunctionData,
   erc20Abi,
+  getAddress,
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
@@ -21,7 +23,7 @@ import {
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { morphoViemExtension } from "../../client/index.js";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import { computeVaultMaxSharePrice } from "../../helpers/index.js";
 import {
@@ -140,7 +142,7 @@ test.each([
   },
 );
 
-test("fee and slippage deposit calldata matches the entity flow", async () => {
+test("deposit calldata encodes the quoted slippage bound and referral fee", async () => {
   const handle = createMockClient(mainnet);
   mockRead(handle, {
     address: vaultData.asset,
@@ -162,23 +164,28 @@ test("fee and slippage deposit calldata matches the entity flow", async () => {
     "vaultV2Deposit",
   ]);
   expect(plan.signatureRequests).toEqual([]);
-  const entityTx = handle.client
-    .extend(morphoViemExtension())
-    .morpho.vaultV2(params.vault.address, params.chainId)
-    .deposit({
-      amount: params.assets,
-      vaultData,
-      userAddress: params.account,
-      deadline: BigInt(expiresAt),
-      slippageTolerance,
-      referralFeePct: 25_000000000000000n,
-      referralFeeRecipient: IN_KIND_USER,
-    })
-    .buildTx();
   const tx = buildTransactions(plan)[1]!;
-  expect(tx.data).toBe(entityTx.data);
-  expect(tx.to).toBe(entityTx.to);
-  expect(tx.value).toBe(entityTx.value);
+  expect(decodeFunctionData({ abi: vaultBundlesV1Abi, data: tx.data })).toEqual(
+    {
+      functionName: "vaultBundlesV1Deposit",
+      args: [
+        getAddress(params.vault.address),
+        params.assets,
+        computeVaultMaxSharePrice({
+          vaultData,
+          deadline: BigInt(expiresAt),
+          assets: params.assets,
+          slippageTolerance,
+        }),
+        { kind: 0, data: "0x" },
+        25_000000000000000n,
+        getAddress(IN_KIND_USER),
+        BigInt(expiresAt),
+      ],
+    },
+  );
+  expect(tx.to).toBe(getChainAddress(params.chainId, "bundles.vaultBundlesV1"));
+  expect(tx.value).toBe(0n);
 });
 
 test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
@@ -237,8 +244,12 @@ test("rejects the wrong chain before a failing allowance read", async () => {
   const handle = createMockClient(mainnet);
   const request = handle.request.getMockImplementation()!;
   handle.request.mockImplementation(async (args) => {
-    if (args.method === "eth_chainId") return "0x2105";
-    if (args.method === "eth_call") throw new Error("allowance read failed");
+    if (args.method === "eth_chainId") {
+      return "0x2105";
+    }
+    if (args.method === "eth_call") {
+      throw new Error("allowance read failed");
+    }
     return request(args);
   });
   await expect(
@@ -259,7 +270,9 @@ test.for([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
       release = resolve;
     });
     handle.request.mockImplementation(async (args) => {
-      if (args.method !== "eth_chainId") await gate;
+      if (args.method !== "eth_chainId") {
+        await gate;
+      }
       return request(args);
     });
     mockRead(handle, {
@@ -293,8 +306,12 @@ test.each([prepareVaultV2Deposit, prepareVaultV2Withdraw])(
       const handle = createMockClient(mainnet);
       const request = handle.request.getMockImplementation()!;
       handle.request.mockImplementation(async (args) => {
-        if (args.method === "eth_chainId") return chainId;
-        if (args.method === "eth_getCode") return bytecode;
+        if (args.method === "eth_chainId") {
+          return chainId;
+        }
+        if (args.method === "eth_getCode") {
+          return bytecode;
+        }
         return request(args);
       });
       mockRead(handle, {

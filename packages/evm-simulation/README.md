@@ -68,7 +68,7 @@ failure the SDK did not classify (a bug or a foreign error).
 
 Every call inside `eth_simulateV1`, including preparation calls, state reads and assertions, carries `client.chain.id` as a hex quantity, so nodes that check it (geth, Anvil, Monad and Stable do) reject an endpoint on another chain; that rejection is reported as `RpcTransportError`. The SDK sends no `eth_chainId`: pointing the client at the right chain is your obligation.
 
-The client's transport must reach a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` in `options` to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` in `options` to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` in `options` to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. `options.timeoutMs` (default 5000) is one deadline for the whole simulation: after it passes, no further read starts and the report fails with `RpcTransportError`. It cannot abort a request your transport has already sent, so set the transport's `timeout` (viem's default is 10 s) to at most `timeoutMs`. viem reports an HTTP error reply whose body is not JSON but is labeled `application/json` as a status-less parse failure, which the SDK reports as `InvalidSimulationResponseError`; to keep such replies an `RpcTransportError`, pass a `fetchFn` that drops `content-type` from non-2xx responses. RPC failures, timeouts and reverts are reported as typed failures. The optional logger still reports parsing and retention warnings.
+The client's transport must reach a JSON-RPC endpoint that supports `eth_simulateV1`. Requests send `validation: false` so gas is not charged. Monad (chain 143) is handled internally: its nodes reject `false`, so it sends `true` (its simulated block charges no gas either way), and it pins to the `finalized` block by default because its `latest` block is not final — supply a finalized block when passing `block`. On Monad, `gasUsed` reports the call's gas limit, not the gas consumed. Set `blockOverrides.gasLimit` in `options` to send that gas limit as the simulated block's `blockOverrides.gasLimit`; without it, no block override is sent. Set `callGasLimit` in `options` to send it as `gas` on every simulated call; without it, no per-call `gas` is sent. This includes state reads and assertions. A call that needs more gas than `callGasLimit` runs out of gas and fails as a revert or a read/assertion failure, so set it above the heaviest expected call. On geth-style nodes, it must also fit in the gas left in the simulated block. Set `parentHashCheck` in `options` to turn on or off the check that the simulated block's `parentHash` is the pinned block hash. It defaults to off on Stable (chain 988), whose nodes report a `parentHash` that never matches the pinned block, and on for every other chain. The block number and timestamp checks always apply. `options.timeoutMs` (default 5000) is one deadline for the whole simulation: after it passes, no further read starts and the report fails with `RpcTransportError`. It cannot abort a request your transport has already sent, so set the transport's `timeout` (viem's default is 10 s) to at most `timeoutMs`. viem reports an HTTP error reply whose body is not JSON but is labeled `application/json` as a status-less parse failure, which the SDK reports as `InvalidSimulationResponseError`; to keep such replies an `RpcTransportError`, pass a `fetchFn` that drops `content-type` from non-2xx responses. RPC failures, timeouts and reverts are reported as typed failures. Parsing and retention diagnostics are returned in `report.warnings`; the SDK performs no logging.
 
 Use one trusted RPC backend on the configured chain for the entire simulation.
 A `fallback([...])` transport or a load-balanced URL can route the block
@@ -140,10 +140,13 @@ Upgrading from v7? See the [v7 → v8 migration guide](../../docs/migrations/evm
 
 ### API surface
 
+For deprecated, ignored logging callbacks and the new signing gate, see the
+[structured warnings migration guide](https://github.com/morpho-org/sdks/blob/main/docs/migrations/evm-simulation-structured-warnings.md).
+
 All symbols below are re-exported from the package root.
 
 - `simulate(client, params, options?)` — run a bundle through the simulation pipeline.
-- Client and option types: `SimulationClient`, `SimulationOptions`, `SimulationLogger`.
+- Client, option and diagnostic types: `SimulationClient`, `SimulationOptions`, `SimulationWarning`, `SimulationReportVerification`; deprecated `SimulationLogger` remains exported.
 - Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`, `Assertion`, `LogAssertion`, `AssertionBounds`, `StateBlock` (the optional `SimulateParams.block`: `{ number, hash, timestamp }`), `SimulationStateOverrides` (the optional `SimulateParams.stateOverrides` account map), and `SimulationAccountOverride` (per-account `code`, `balance`, `nonce`, `state` and `stateDiff`).
 - Assertion helpers: `erc20BalanceAssertion` (token balance), `nativeBalanceAssertion` (native balance), and `maxDepositAssertion` (vault deposit cap); all use inclusive `min`/`max` bounds.
 - `toSimulationAuthorizations({ owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
@@ -659,13 +662,77 @@ still require a registered Morpho Blue address and otherwise report
 #### Sender outflow check
 
 With `SimulationLimits` or `SimulationInputLimits`, sender outflows are also checked after
-transfer derivation. A token not spendable by the declared operations causes
-`UnexpectedTokenTransferError` (`UNEXPECTED_TOKEN_TRANSFER`, fatal): do not sign the request.
-The check rejects any net sender loss, including burns, and any positive outgoing transfer
+transfer derivation. **Undeclared sender outflows are non-blocking warnings**:
+`UnexpectedTokenTransferError` findings never enter `report.failures`, and the report
+is `ok: true` if nothing else fails. All other failures remain blocking.
+
+Both success and failure reports always carry `warnings: readonly SimulationWarning[]`,
+a frozen array of recursively frozen plain data, empty when no warnings exist.
+Each warning has a discriminating `code`, `severity: "warn"`, `message` and `chainId`.
+Sender-outflow warnings add `token`, `sender` and `recipients`; they are not Error instances.
+**Integrators who gate signing must inspect `report.warnings`, even when `ok` is true.**
+The SDK performs no logging. `options.logger` and `SimulationLogger` are deprecated and ignored: the option remains accepted, but no method is invoked. Read `report.warnings` instead; both legacy symbols stay through at least one coexistence minor before removal in a future major. Consumers decide whether to reject, alert or accept warnings.
+
+| Warning code | Additional context |
+| --- | --- |
+| `UNEXPECTED_TOKEN_TRANSFER` | Token, sender and recipients |
+| `RETENTION_CHECK_SKIPPED` | `reason`: `unsupported-chain` or `missing-restricted-addresses` |
+| `BUNDLES_BALANCE_SWEPT` | Restricted address, token and bigint `netSwept` in token base units, one warning per pair |
+| `MALFORMED_TRANSFER_LOG` | Log address, topics, data, transaction index and reason; the log was skipped |
+| `WRAPPED_NATIVE_DEDUP_MISS` | Token, mint/burn kind, transaction index and data |
+| `WRAPPED_NATIVE_MIRROR_DETECTED` | The same context, when a configured non-mirroring wrapper emits a matching mirror |
+
+Transfer-signature logs must have three topics, except that four-topic ERC-721
+events with empty data (`"0x"`) remain outside the parser's scope and are silently
+ignored. Other topic counts, including four-topic events with non-empty data,
+produce `MALFORMED_TRANSFER_LOG` and omit report-level `verification`.
+
+`report.verification.retention` is `"checked"` when the retention stage checks
+configured restricted intermediaries (even if it finds retained value), or
+`"skipped-unsupported-chain"` when blue-sdk does not know the chain or catalogs
+neither standalone bundles nor `midnightBundlesV2`. Skips also produce
+`RETENTION_CHECK_SKIPPED`. Success and failure reports include `verification`
+only after retention ran with every user transaction's logs present and no
+transfer records discarded by the parser. Any `MALFORMED_TRANSFER_LOG` warning
+omits `verification`, while warnings and failures from remaining evidence are
+preserved. Omitted user-transaction logs omit coverage, even with `limits: "none"`;
+explicit empty `logs: []` are valid evidence. Early failures, reverts and unusable transfer
+evidence also omit it instead of claiming a completed check. This report-level
+coverage is separate from `result.verification`, which describes operation limits.
+Warnings never affect `ok` or a failure report's severity. Their order follows the
+pipeline: transfer parsing, sender outflows, then retention diagnostics. No logging,
+clock or randomness participates in warning construction. Bigint warning context
+needs application-owned JSON serialization.
+
+The check detects any net sender loss, including burns, and any positive outgoing transfer
 to another non-zero address, even if returned later. Incoming transfers, self-transfers and
-zero amounts do not fail. Native movements come from `traceTransfers`, excluding gas.
+zero amounts do not produce findings. Native movements come from `traceTransfers`, excluding gas.
 Preparation transfers already fail separately; together these checks cover transactions and
 preparations. Assertion calls are not transfer-checked and [must be view calls](#assertions).
+
+Verified paired emitters have a directional, chain-scoped exception. When a listed
+primary token is spendable, every transfer from its paired emitter is ignored by
+the sender-outflow check on that chain. No primary transfer evidence, transaction,
+sender, recipient, amount or one-to-one matching is required. The primary token
+keeps all existing checks. Ignored paired emitters produce no warning. Transfer evidence
+remains in the report and other checks.
+
+| Chain | Spendable primary | Ignored paired emitter |
+|---|---|---|
+| Ethereum (1) | Legacy EURe `0x3231Cb76718CDeF2155FC47b5286d82e6eDA273f` | EURe v2 `0x39b8B6385416f4cA36a20319F70D28621895279D` |
+| HyperEVM (999) | wstHYPE `0x94e8396e0869c9F2200760aF0621aFd240E1CF38` | stHYPE `0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1` |
+| Arc mainnet (5042) | USDC `0x3600000000000000000000000000000000000000` | Native mirror `0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE` |
+
+See [identity and shared-ledger evidence](https://github.com/morpho-org/sdks/blob/main/packages/evm-simulation/test/paired-emitters.md) for issuer
+sources, pinned code reads and integration tests. Standard Anvil cannot reproduce
+Arc's native ledger; its pinned live-RPC test checks the native/ERC-20 interfaces
+without broadcasting transactions.
+
+These exceptions trust the verified representation relationships: **no amount bound
+is enforced for any paired emitter**, even if no primary transfer occurs. They do not
+authorize the reverse direction or apply on other chains. A paired emitter whose
+primary is not spendable retains the normal sender-outflow check. No Arc testnet pair
+has been verified for this registry.
 
 Spendable tokens use the operation subjects and resolved tokens used by the approval allowlist,
 not calldata or unrelated quote overrides. Existing vault and market tokens are resolved at the
@@ -685,7 +752,7 @@ operation measures sender ETH. An inactive placeholder or a measurement from ano
 cannot provide that exemption. A Midnight collateral wallet bound permits only the native value it already
 charges: total gross traced sender ETH debits must not exceed that value. Incoming ETH,
 refunds and self-transfers do not increase this budget. Extra internal sends from a delegated
-sender fail with `UNEXPECTED_TOKEN_TRANSFER`.
+sender produce non-blocking `UNEXPECTED_TOKEN_TRANSFER` warnings in the report.
 Explicit `limits.approvals`
 authorizes permissions only and does not extend the spending set. These checks do not constrain
 recipients or replace amount bounds for declared tokens. Tokens with missing or dishonest
@@ -1227,6 +1294,14 @@ if (!report.ok) {
   }
   return;
 }
+if (report.warnings.length > 0) {
+  for (const warning of report.warnings) alerts.page(warning.code, warning.message);
+  return;
+}
+if (report.verification?.retention !== "checked") {
+  ui.showError("Retention verification requires review");
+  return;
+}
 return report.result;
 ```
 
@@ -1241,15 +1316,20 @@ Every concrete error extends exactly one of these exported parent classes:
 
 | Group | Classes |
 | --- | --- |
-| `SimulationSafetyError`         | `BlacklistViolationError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`                                                                                         |
+| `SimulationSafetyError`         | `BlacklistViolationError`, `UnexpectedTokenApprovalError`, `UnexpectedMorphoAuthorizationError`, `UnexpectedMidnightAuthorizationError`, `UnexpectedTokenTransferError`                                                                                         |
 | `SimulationExecutionError`       | `ConsumerLimitViolationError`, `SimulationAssertError`, `SimulationLogAssertError`, `UnusedAuthorizationError`, `SimulationRevertedError`                                                                                       |
 | `SimulationInvalidRequestError` | `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `AuthorizationRequestMismatchError`, `LimitAccountMismatchError`, `MissingExpectedQuoteError`, `AmbiguousExpectedQuoteError`, `UnsupportedLimitActionError` |
 | `SimulationInfrastructureError` | `SlippageCheckUnavailableError`, `ApprovalCheckUnavailableError`, `RpcTransportError`, `InvalidSimulationResponseError`, `UnexpectedSimulationError`                                     |
 
-All four block the bundle; groups say who acts, not how bad it is.
+All four groups block the bundle except for the controlled sender-outflow reporting
+case: `UnexpectedTokenTransferError` findings are converted to plain
+`UNEXPECTED_TOKEN_TRANSFER` report warnings with severity `"warn"`, not Error instances.
+The error class remains exported for compatibility; its class hierarchy does not
+make report warnings blocking. `simulate` returns `ok: true` when nothing else fails.
+Groups say who acts, not how bad it is.
 
 Every error also carries `severity: SimulationErrorSeverity`, a default log
-level named like pino's levels, so it indexes a logger with no mapping:
+level named like common alert levels:
 
 | Severity | Errors |
 | --- | --- |
@@ -1258,11 +1338,11 @@ level named like pino's levels, so it indexes a logger with no mapping:
 | `"error"` | `UnusedAuthorizationError`, every `SimulationInvalidRequestError` and every `SimulationInfrastructureError` |
 
 `UnusedAuthorizationError` is `"error"` because the signed request stays valid
-and the integrator assembled the bundle wrong. Every severity blocks the bundle:
+and the integrator assembled the bundle wrong. Every entry in `report.failures` blocks the bundle regardless of severity:
 a `"warn"` failure returns no result, as a `"fatal"` one does. A failed report's
 `severity` is the highest of its failures' (`"fatal"` > `"error"` > `"warn"`), so it
-levels the run as a whole. Log each failure under pino's `err` key, which keeps its
-`message` and `stack`: `for (const err of report.failures) logger[err.severity]({ err })`. `toSimulationErrorResponse` does not include severity, and
+levels the run as a whole. Consumers own error reporting and alerting.
+`toSimulationErrorResponse` does not include severity, and
 `isSimulationPackageError` accepts only objects with a known `severity`, so
 `toSimulationErrorResponse` maps a structural error without one, such as an error
 from an 8.x copy of the package, to the generic `UNEXPECTED_SIMULATION_ERROR` response.
@@ -1276,7 +1356,9 @@ failure. `toSimulationLimits` is not part of a run and still throws its typed er
 ## Handling failures in an API service
 
 Return a transaction only from an `ok` report. Every failure blocks the
-transaction response, including RPC outages and timeouts. RPC failures become
+transaction response, including RPC outages and timeouts. Integrators gating signing
+must also inspect `report.warnings` and `report.verification`. The template below
+rejects all warnings before returning transactions. RPC failures become
 `RpcTransportError` with code `RPC_TRANSPORT_ERROR` and the original viem error
 as `cause`. SDK failures use `SimulationPackageError` and are returned in the report. Any
 other unexpected failure, including a local viem error, rejects with
@@ -1304,23 +1386,29 @@ import {
 declare const client: SimulationClient;
 declare const params: SimulateParams;
 declare const requestId: string;
-type Log = (fields: { err: unknown; requestId: string }) => void;
-declare const logger: { fatal: Log; error: Log; warn: Log };
+declare const recordError: (error: unknown, requestId: string) => void;
 
 async function prepareTransactionResponse() {
   try {
     const report = await simulate(client, params);
-    if (report.ok)
+    if (report.ok) {
+      if (report.warnings.length > 0 || report.verification?.retention !== "checked")
+        return {
+          ok: false as const,
+          errors: [{ code: "SIMULATION_REVIEW_REQUIRED", message: "Simulation warnings or incomplete retention verification require review" }],
+          warnings: report.warnings.map(({ code, message, chainId }) => ({ code, message, chainId })),
+        };
       return { ok: true as const, transactions: report.result.simulationTxs };
+    }
     for (const error of report.failures)
-      logger[error.severity]({ err: error, requestId });
+      recordError(error, requestId);
     return {
       ok: false as const,
       errors: report.failures.map(toSimulationErrorResponse),
       requestId,
     };
   } catch (error) {
-    logger.error({ err: error, requestId });
+    recordError(error, requestId);
     return { ok: false as const, errors: [toSimulationErrorResponse(error)], requestId };
   }
 }
@@ -1348,7 +1436,9 @@ execution against later onchain state.
 | Your own mapping from error codes to log levels | `report.severity`, or `failure.severity` |
 | `simulate(config, { chainId, ... })` with `config.chains` entries of 8.9.0's `{ client }` (`ChainSimulationClientConfig`) | `simulate(client, params, options?)`: pass that entry's `client` as the first argument; `params.chainId`, `ChainSimulationClientConfig` and `ChainSimulationConfigEntry` are removed |
 | `config.chains` entries with `simulateV1Url` | Create a viem client with `chain` set and `http(url)`, and pass it as the first argument. A non-JSON error body labeled `application/json` is then reported as `InvalidSimulationResponseError` instead of `RpcTransportError`, unless your transport's `fetchFn` drops `content-type` on non-2xx replies |
-| `ChainSimulationConfig` `blockOverrides`, `callGasLimit`, `parentHashCheck`, and `SimulationConfig.logger` | The same fields in `options` |
+| `ChainSimulationConfig` `blockOverrides`, `callGasLimit`, and `parentHashCheck` | The same fields in `options` |
+| `SimulationConfig.logger` | Move from the removed config to `options.logger` only for compatibility; the option is deprecated and ignored |
+| `options.logger` / `SimulationLogger` | Deprecated, accepted but ignored; consume `report.warnings` and `report.verification`. Removal follows at least one coexistence minor, in a future major |
 | `SimulationConfig.timeoutMs` | `options.timeoutMs`, with the same whole-simulation deadline; set your transport's `timeout` to at most this value |
 | A client rejected for lacking `ccipRead: false` | Accepted; `simulate` turns CCIP-Read off on its own copy |
 | `InvalidChainIdError` | Removed; a node rejecting `client.chain.id` reports `RpcTransportError` |

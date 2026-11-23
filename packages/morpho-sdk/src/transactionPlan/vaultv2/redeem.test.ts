@@ -6,16 +6,13 @@ import {
   custom,
   erc20Abi,
   maxUint256,
-  serializeSignature,
   toHex,
   zeroAddress,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
-import { describe, expect, expectTypeOf, test } from "vitest";
-import {
-  IN_KIND_USER,
-  IN_KIND_VAULT,
-} from "../../../test/fixtures/inKindRedeem.js";
+import { assert, describe, expect, expectTypeOf, test } from "vitest";
+import { IN_KIND_VAULT } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { encodeVaultSharesPermit } from "../../actions/requirements/encode/encodeVaultSharesPermit.js";
 import { vaultV2Redeem } from "../../actions/vaultV2/redeem.js";
@@ -28,6 +25,7 @@ import {
 } from "../../types/index.js";
 import {
   IncompleteTransactionPlanError,
+  InvalidTransactionPlanError,
   TransactionPlanSignatureMismatchError,
 } from "../error.js";
 import {
@@ -43,6 +41,7 @@ import {
   type VaultV2RedeemPlanParams,
 } from "./redeem.js";
 
+const IN_KIND_USER = privateKeyToAccount(toHex(1n, { size: 32 })).address;
 const deadline = 2_000_000_000n;
 const spender = getChainAddress(1, "bundles.vaultBundlesV1");
 const requirement = encodeVaultSharesPermit({
@@ -55,11 +54,9 @@ const requirement = encodeVaultSharesPermit({
   deadline,
   now: 1n,
 });
-const signature = serializeSignature({
-  r: toHex(1n, { size: 32 }),
-  s: toHex(2n, { size: 32 }),
-  yParity: 0,
-});
+const signature = await privateKeyToAccount(
+  toHex(1n, { size: 32 }),
+).signTypedData(requirement.action.typedData);
 const id = "vaultV2Redeem:tokenPermit";
 const inputs = {
   chainId: 1,
@@ -322,6 +319,7 @@ describe("Vault V2 redeem plan encoding", () => {
 
   test("error: rejects a share permit below the exact redeemed amount", async () => {
     const request = pending.signatureRequests[0]!;
+    assert(request.kind === "permit");
     const plan: TransactionPlan = {
       ...pending,
       signatureRequests: [
@@ -352,7 +350,7 @@ describe("Vault V2 redeem plan encoding", () => {
     ).toThrow(TransactionPlanSignatureMismatchError);
   });
 
-  test("behavior: builds from the action's own chain and account, not the plan header", () => {
+  test("error: rejects a header inconsistent with the action", () => {
     const plan = {
       ...pending,
       signatureRequests: pending.signatureRequests.map((request) => ({
@@ -360,8 +358,8 @@ describe("Vault V2 redeem plan encoding", () => {
         signature,
       })),
     };
-    expect(
+    expect(() =>
       buildTransactions({ ...plan, chainId: 8453, account: zeroAddress }),
-    ).toEqual(buildTransactions(plan));
+    ).toThrow(InvalidTransactionPlanError);
   });
 });

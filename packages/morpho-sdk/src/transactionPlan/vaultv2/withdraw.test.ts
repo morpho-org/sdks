@@ -6,12 +6,14 @@ import {
   ContractFunctionRevertedError,
   decodeFunctionData,
   erc20Abi,
+  getAddress,
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
   type TypedData,
   toFunctionSelector,
   toHex,
+  zeroHash,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { readContract } from "viem/actions";
@@ -23,7 +25,6 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { morphoViemExtension } from "../../client/index.js";
 import { computeVaultMaxShareAllowance } from "../../helpers/index.js";
 import {
   ExpiredDeadlineError,
@@ -106,7 +107,7 @@ test("withdrawal plan params do not accept slippage tolerance", () => {
   expectTypeOf<VaultV2WithdrawPlanParams>().not.toHaveProperty("deployless");
 });
 
-test("withdrawal calldata matches the entity flow with default slippage", async () => {
+test("withdrawal calldata encodes the amount, referral fee and no share permit", async () => {
   const handle = createMockClient(mainnet);
   mockRead(handle, {
     address: vaultData.address,
@@ -137,23 +138,30 @@ test("withdrawal calldata matches the entity flow with default slippage", async 
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
     }),
   );
-  const entityTx = handle.client
-    .extend(morphoViemExtension())
-    .morpho.vaultV2(params.vault.address, params.chainId)
-    .withdraw({
-      amount: params.assets,
-      vaultData,
-      userAddress: params.account,
-      deadline: BigInt(expiresAt),
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-      referralFeePct: 25_000000000000000n,
-      referralFeeRecipient: IN_KIND_USER,
-    })
-    .buildTx();
   const tx = buildTransaction(plan, plan.steps[1]!);
-  expect(tx.data).toBe(entityTx.data);
-  expect(tx.to).toBe(entityTx.to);
-  expect(tx.value).toBe(entityTx.value);
+  expect(decodeFunctionData({ abi: vaultBundlesV1Abi, data: tx.data })).toEqual(
+    {
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        getAddress(params.vault.address),
+        params.assets,
+        0n,
+        {
+          value: 0n,
+          nonce: 0n,
+          deadline: BigInt(expiresAt),
+          v: 0,
+          r: zeroHash,
+          s: zeroHash,
+        },
+        25_000000000000000n,
+        getAddress(IN_KIND_USER),
+        BigInt(expiresAt),
+      ],
+    },
+  );
+  expect(tx.to).toBe(getChainAddress(params.chainId, "bundles.vaultBundlesV1"));
+  expect(tx.value).toBe(0n);
 });
 
 test.each([-1n, 0n, 1n])(
@@ -304,11 +312,12 @@ test("prepares an unlimited share permit and preserves its value through storage
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
       const [tx] = call.params as readonly [{ data?: string }];
-      if (tx.data?.startsWith(toFunctionSelector("eip712Domain()")))
+      if (tx.data?.startsWith(toFunctionSelector("eip712Domain()"))) {
         throw new ContractFunctionRevertedError({
           abi: erc5267Abi,
           functionName: "eip712Domain",
         });
+      }
     }
     return baseRequest(call);
   });
@@ -374,6 +383,7 @@ test("prepares an unlimited share permit and preserves its value through storage
   expect(step.action.inputs.requiredShareAllowance).toBeGreaterThan(0n);
   expect(step.action.inputs.requiredShareAllowance).toBeLessThan(maxUint256);
   const request = plan.signatureRequests[0]!;
+  assert(request.kind === "permit");
   // Finite permits remain valid in format 2 when they cover the quoted minimum.
   for (const amount of [
     maxUint256,

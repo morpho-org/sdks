@@ -596,8 +596,16 @@ describe("evaluateCalls", () => {
     expect(transactionCalls.map(({ result }) => result.logs)).toEqual(
       baselineTransactionCalls.map(({ result }) => result.logs),
     );
-    expect(parseTransfers(execution.calls.map(({ result }) => result))).toEqual(
-      parseTransfers(baseline.calls.map(({ result }) => result)),
+    expect(
+      parseTransfers(
+        execution.calls.map(({ result }) => result),
+        { chainId: 1 },
+      ).transfers,
+    ).toEqual(
+      parseTransfers(
+        baseline.calls.map(({ result }) => result),
+        { chainId: 1 },
+      ).transfers,
     );
   });
 

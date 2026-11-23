@@ -692,6 +692,27 @@ describe("validatePositionHealthAfterWithdraw", () => {
     ).not.toThrow();
   });
 
+  test.each([
+    ["uppercase", marketParams.id.slice(2).toUpperCase()],
+    [
+      "mixed-case",
+      marketParams.id.slice(2).replace(/[a-f]/, (hex) => hex.toUpperCase()),
+    ],
+  ])("accepts the same market ID in %s hex", (_, hex) => {
+    const positionData = makePosition({ borrowShares: 0n });
+    const marketId = `0x${hex}` as typeof marketParams.id;
+    expect(marketId).not.toBe(positionData.marketId);
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData,
+        withdrawAmount: 1n,
+        lltv,
+        marketId,
+      }),
+    ).not.toThrow();
+  });
+
   test("should throw MissingMarketPriceError when price is undefined and there is debt", () => {
     const market = makeMarket({ price: undefined });
     const pos = makePosition({

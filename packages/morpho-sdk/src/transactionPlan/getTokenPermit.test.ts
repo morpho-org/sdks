@@ -17,11 +17,13 @@ import {
   IN_KIND_USER,
   inKindVaultV2Data,
 } from "../../test/fixtures/inKindRedeem.js";
+import { ExpiredDeadlineError, NonPositiveInputError } from "../types/index.js";
 import { getTokenPermit } from "./getTokenPermit.js";
 import { prepareVaultV2Deposit } from "./vaultv2/deposit.js";
 
 const { usdc, dai, bundles } = addressesRegistry[mainnet.id];
 const params = {
+  id: "tokenPermit",
   token: usdc,
   owner: zeroAddress,
   spender: bundles!.vaultBundlesV1!,
@@ -96,8 +98,8 @@ function mockPermitToken(scenario = "matching", token: Address = usdc) {
 test("returns the ERC-2612 requirement when nonce, domain and separator match", async () => {
   const handle = mockPermitToken();
   const permit = await getTokenPermit(handle.client, params);
-  expect(permit?.action.type).toBe("permit");
-  expect(permit?.action.args).toEqual({
+  expect(permit?.kind).toBe("permit");
+  expect(permit?.args).toEqual({
     spender: params.spender,
     amount: 1n,
     nonce: 0n,
@@ -113,6 +115,20 @@ test("returns undefined for DAI without reading its nonce", async () => {
   expect(handle.request).not.toHaveBeenCalled();
 });
 
+test.each([
+  [0n, NonPositiveInputError],
+  [params.now, ExpiredDeadlineError],
+] as const)(
+  "rejects permit deadline %s before reading metadata",
+  async (deadline, ErrorClass) => {
+    const handle = mockPermitToken();
+    await expect(
+      getTokenPermit(handle.client, { ...params, deadline }),
+    ).rejects.toBeInstanceOf(ErrorClass);
+    expect(handle.request).toHaveBeenCalledTimes(1);
+  },
+);
+
 test("propagates nonce transport errors instead of treating the token as unsupported", async () => {
   const handle = createMockClient(mainnet);
   const error = new HttpRequestError({
@@ -123,7 +139,9 @@ test("propagates nonce transport errors instead of treating the token as unsuppo
   await expect(getTokenPermit(handle.client, params)).rejects.toSatisfy(
     (caught: Error) => {
       let cause: unknown = caught;
-      while (cause instanceof Error && cause !== error) cause = cause.cause;
+      while (cause instanceof Error && cause !== error) {
+        cause = cause.cause;
+      }
       return cause === error;
     },
   );

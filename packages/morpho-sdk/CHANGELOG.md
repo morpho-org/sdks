@@ -1,5 +1,11 @@
 # @morpho-org/morpho-sdk
 
+## 10.0.2
+
+### Patch Changes
+
+- Building a Vault V2 force-redeem transaction no longer freezes the caller’s deallocations or their market parameters. The returned transaction remains frozen, with unchanged calldata.
+
 ## 10.0.1
 
 ### Patch Changes

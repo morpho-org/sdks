@@ -7,14 +7,14 @@ This monorepo contains the TypeScript SDK packages used to interact with the Mor
 ### Prerequisites
 
 - Node.js `>=26 <27`
-- Bun `1.4.4`, declared by the root `packageManager` field
+- Bun `1.4.5`, declared by the root `packageManager` field
 - Git
 - Optional: a Morpho eRPC key (`ERPC_SECRET`); without it, hand-written fork suites use the chain's public RPC and registry E2E suites are skipped
 
 Install the declared Bun version if needed:
 
 ```bash
-curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.5"
 ```
 
 ### Clone and Install

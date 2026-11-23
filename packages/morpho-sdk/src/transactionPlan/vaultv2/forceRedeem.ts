@@ -101,6 +101,7 @@ export interface VaultV2ForceRedeemPlanParams
  * @throws {NonIntegerInputError} If `expiresAt` is not a safe integer.
  * @throws {ExpiredDeadlineError} If `expiresAt` is not in the future.
  * @throws {InvalidCalldataOriginError} If `calldataOrigin` is empty, malformed or has an odd number of hex digits.
+ * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @example
  * ```ts
  * import { prepareVaultV2ForceRedeem, type TransactionPlan } from "@morpho-org/morpho-sdk";

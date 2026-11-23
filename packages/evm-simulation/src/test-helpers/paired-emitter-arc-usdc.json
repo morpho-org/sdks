@@ -1,0 +1,33 @@
+{
+  "name": "Arc USDC / native mirror",
+  "chainId": 5042,
+  "primary": "0x3600000000000000000000000000000000000000",
+  "paired": "0xfffffffffffffffffffffffffffffffffffffffe",
+  "source": {
+    "method": "eth_simulateV1",
+    "stateBlock": 32229724,
+    "simulatedBlock": 32229725,
+    "holderEvidenceTx": "0xdc7979ecb7bb14487d5aad40c50255463671e866799dc9f263ac8c8187bd52cf",
+    "holder": "0xcd077a62695ab6a0c69ac9329d8727225b6273dd"
+  },
+  "logs": [
+    {
+      "address": "0xfffffffffffffffffffffffffffffffffffffffe",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x000000000000000000000000cd077a62695ab6a0c69ac9329d8727225b6273dd",
+        "0x000000000000000000000000111111111111111111111111111111111111abcd"
+      ],
+      "data": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+    },
+    {
+      "address": "0x3600000000000000000000000000000000000000",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x000000000000000000000000cd077a62695ab6a0c69ac9329d8727225b6273dd",
+        "0x000000000000000000000000111111111111111111111111111111111111abcd"
+      ],
+      "data": "0x00000000000000000000000000000000000000000000000000000000000f4240"
+    }
+  ]
+}

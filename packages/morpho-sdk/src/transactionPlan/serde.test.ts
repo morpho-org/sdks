@@ -12,19 +12,22 @@ import {
   getTypesForEIP712Domain,
   hashDomain,
   maxUint256,
-  serializeSignature,
   type TypedData,
   toHex,
   zeroAddress,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_ASSET,
-  IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV2Data,
 } from "../../test/fixtures/inKindRedeem.js";
+import {
+  BundlesPermitMismatchError,
+  InvalidSignatureError,
+} from "../types/error.js";
 import {
   InvalidTransactionPlanError,
   UnsupportedTransactionPlanActionError,
@@ -36,6 +39,7 @@ import type { SignatureRequest, Step, TransactionPlan } from "./types.js";
 import { prepareVaultV2Deposit } from "./vaultv2/deposit.js";
 import { prepareVaultV2Withdraw } from "./vaultv2/withdraw.js";
 
+const IN_KIND_USER = privateKeyToAccount(toHex(1n, { size: 32 })).address;
 const spender = getChainAddress(1, "bundles.vaultBundlesV1");
 const inputs = {
   chainId: 1,
@@ -63,17 +67,17 @@ const typedData = getPermitTypedData(
   },
   1,
 );
-const permitRequest = (id: string): SignatureRequest => ({
+const permitRequest = (
+  id: string,
+): Extract<SignatureRequest, { kind: "permit" }> => ({
   id,
   kind: "permit",
   typedData,
   args: permitArgs,
 });
-const signature = serializeSignature({
-  r: toHex(1n, { size: 32 }),
-  s: toHex(2n, { size: 32 }),
-  yParity: 0,
-});
+const signature = await privateKeyToAccount(
+  toHex(1n, { size: 32 }),
+).signTypedData(typedData);
 const approveStep = {
   id: "approval",
   label: "Approve",
@@ -110,6 +114,22 @@ const completePlan: TransactionPlan = {
   signatureRequests: [{ ...permitRequest("tokenPermit"), signature }],
 };
 describe("serializeTransactionPlan and parseTransactionPlan", () => {
+  test("stored version-2 Morpho authorization builds unchanged", () => {
+    const fixture =
+      '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"morphoAuthorization","label":"Authorize BlueBundlesV1","action":{"type":"morphoAuthorization","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"}}}],"signatureRequests":[]}';
+    expect(
+      buildTransactions(parseTransactionPlan(fixture)).map(
+        ({ to, data, value }) => ({ to, data, value }),
+      ),
+    ).toEqual([
+      {
+        to: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        data: "0xeecea00000000000000000000000000038b0c12ab81976e9417d4ebfe2a34db6df22e6ad0000000000000000000000000000000000000000000000000000000000000001",
+        value: 0n,
+      },
+    ]);
+  });
+
   test("rejects a 9.7.0-shaped saved plan before interpreting legacy amount fields", () => {
     const legacyVersion = 1;
     const { assets, ...legacyInputs } = inputs;
@@ -154,21 +174,67 @@ describe("serializeTransactionPlan and parseTransactionPlan", () => {
     ]);
   });
 
-  test("stored version-2 force withdrawal with a permit builds unchanged", () => {
+  test("stored version-2 force withdrawal rejects a forged permit", () => {
     const fixture =
       '{"version":2,"chainId":1,"account":"0x0000000000000000000000000000000000001004","expiresAt":2000000000,"steps":[{"id":"vaultV2ForceWithdraw","label":"Force withdraw from vault","action":{"type":"vaultV2ForceWithdraw","inputs":{"chainId":1,"account":"0x0000000000000000000000000000000000001004","vault":"0x0000000000000000000000000000000000001001","deadline":{"$bigint":"2000000000"},"referralFeePct":{"$bigint":"1000000000000000"},"referralFeeRecipient":"0x0000000000000000000000000000000000001003","adapter":"0x0000000000000000000000000000000000001002","assets":{"$bigint":"100"},"minSharePriceE27":{"$bigint":"980000000000000000000000000"}},"signatureRequestIds":{"tokenPermit":"tokenPermit"}}}],"signatureRequests":[{"id":"tokenPermit","kind":"permit","typedData":{"domain":{"name":"Vault","version":"1","chainId":1,"verifyingContract":"0x0000000000000000000000000000000000001001"},"types":{"Permit":[{"name":"owner","type":"address"},{"name":"spender","type":"address"},{"name":"value","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"deadline","type":"uint256"}]},"message":{"owner":"0x0000000000000000000000000000000000001004","spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","value":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"nonce":{"$bigint":"0"},"deadline":{"$bigint":"2000000000"}},"primaryType":"Permit"},"args":{"spender":"0xaf85aF286637A033BE7d59ED8cC566afa3309B02","amount":{"$bigint":"115792089237316195423570985008687907853269984665640564039457584007913129639935"},"deadline":{"$bigint":"2000000000"},"nonce":{"$bigint":"0"}},"signature":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000021b"}],"calldataOrigin":"0xcafe"}';
-    expect(
-      buildTransactions(parseTransactionPlan(fixture)).map(
-        ({ to, data, value }) => ({ to, data, value }),
-      ),
-    ).toEqual([
-      {
-        to: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
-        data: "0x902118db0000000000000000000000000000000000000000000000000000000000001001000000000000000000000000000000000000000000000000000000000000100200000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000032aa31273a87dac54000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000077359400000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000010030000000000000000000000000000000000000000000000000000000077359400cafe",
-        value: 0n,
-      },
-    ]);
+    expect(() => parseTransactionPlan(fixture)).toThrow(
+      InvalidTransactionPlanError,
+    );
+    expect(() => parseTransactionPlan(fixture)).toThrow(
+      expect.objectContaining({
+        path: "$.signatureRequests[0].signature",
+        reason: "expected a valid low-s signature from the request owner",
+        cause: expect.any(InvalidSignatureError),
+      }),
+    );
   });
+  test.each(["encoding", "owner"] as const)(
+    "reports the failing stored signature after a valid request: %s",
+    async (problem) => {
+      const badSignature =
+        problem === "encoding"
+          ? "0x"
+          : await privateKeyToAccount(toHex(2n, { size: 32 })).signTypedData(
+              typedData,
+            );
+      const saved: TransactionPlan = {
+        ...completePlan,
+        steps: [
+          ...completePlan.steps,
+          {
+            ...depositStep,
+            id: "secondDeposit",
+            action: {
+              ...depositStep.action,
+              signatureRequestIds: { tokenPermit: "secondPermit" },
+            },
+          },
+        ],
+        signatureRequests: [
+          ...completePlan.signatureRequests,
+          { ...permitRequest("secondPermit"), signature: badSignature },
+        ],
+      };
+      const errorClass =
+        problem === "encoding"
+          ? BundlesPermitMismatchError
+          : InvalidSignatureError;
+      expect(() => getPendingSignatureRequests(saved)).toThrow(errorClass);
+      expect(() => buildTransactions(saved)).toThrow(errorClass);
+      expect(() =>
+        parseTransactionPlan(serializeTransactionPlan(saved)),
+      ).toThrow(
+        expect.objectContaining({
+          path: "$.signatureRequests[1].signature",
+          reason:
+            problem === "encoding"
+              ? "expected a compact or serialized ECDSA signature"
+              : "expected a valid low-s signature from the request owner",
+          cause: expect.any(errorClass),
+        }),
+      );
+    },
+  );
   test("stored version-2 force redemption with both adapter shapes builds unchanged", () => {
     const fixture =
       '{"version":2,"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","expiresAt":2000000000,"steps":[{"id":"vaultV2ForceRedeem","label":"Force redeem from vault","action":{"type":"vaultV2ForceRedeem","inputs":{"chainId":1,"account":"0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf","vault":"0x0000000000000000000000000000000000001001","redeem":{"shares":{"$bigint":"100"}},"deallocations":[{"adapter":"0x0000000000000000000000000000000000001010","assets":{"$bigint":"60"},"marketParams":{"loanToken":"0x0000000000000000000000000000000000001003","collateralToken":"0x0000000000000000000000000000000000001004","oracle":"0x0000000000000000000000000000000000001005","irm":"0x0000000000000000000000000000000000001006","lltv":{"$bigint":"800000000000000000"}}},{"adapter":"0x0000000000000000000000000000000000001020","assets":{"$bigint":"40"}}]}}}],"signatureRequests":[]}';
@@ -696,8 +762,9 @@ describe("restored plan validation", () => {
     >;
     const keys = path.replaceAll(/\[(\d+)\]/g, ".$1").split(".");
     let target = saved;
-    for (const key of keys.slice(0, -1))
+    for (const key of keys.slice(0, -1)) {
       target = target[key] as Record<string, unknown>;
+    }
     target[keys.at(-1)!] = value;
     const parse = () => parseTransactionPlan(JSON.stringify(saved));
     expect(parse).toThrow(InvalidTransactionPlanError);
@@ -984,7 +1051,7 @@ describe("restored plan validation", () => {
     },
   );
 
-  test("allows extra keys, expired plans, unverified signatures and well-formed tampering", () => {
+  test("allows extra keys, expired plans and changes to unsigned fields", () => {
     const changed = structuredClone(completePlan);
     Object.assign(changed, {
       expiresAt: -1,
@@ -995,11 +1062,12 @@ describe("restored plan validation", () => {
       Object.assign(step, { extra: true });
       Object.assign(step.action, { extra: true });
       Object.assign(step.action.inputs, { extra: 1 });
-      if (step.action.type === "vaultV2Deposit")
+      if (step.action.type === "vaultV2Deposit") {
         Object.assign(step.action.inputs, { maxSharePrice: maxUint256 });
+      }
     }
     for (const request of changed.signatureRequests) {
-      Object.assign(request, { extra: true, signature: "0x1234" });
+      Object.assign(request, { extra: true });
       Object.assign(request.args, { extra: true });
       Object.assign(request.typedData, { extra: true });
       Object.assign(request.typedData.domain!, { extra: true });

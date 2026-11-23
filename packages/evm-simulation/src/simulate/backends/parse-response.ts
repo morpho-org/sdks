@@ -4,6 +4,7 @@ import {
   type SimulationPackageError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
+import { MISSING_LOG_DATA } from "../parsing/transfers.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
 import type { StateRead } from "../state/contract.js";
 
@@ -224,6 +225,9 @@ export function parseSimulationResponse(params: {
                   address: log.address,
                   topics: log.topics,
                   data: log.data ?? "0x",
+                  ...(log.data === undefined
+                    ? { [MISSING_LOG_DATA]: true }
+                    : {}),
                 };
               }),
         status: call.status === "0x1",

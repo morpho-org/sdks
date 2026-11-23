@@ -118,6 +118,8 @@ describe.sequential("simulate collected failures", () => {
       expect.any(ConsumerLimitViolationError),
       expect.any(BlacklistViolationError),
     ]);
+    expect(report.verification).toEqual({ retention: "checked" });
+    expect(report.warnings).toEqual([]);
   });
 
   test("reports a failing assertion, then the unexpected approval", async ({
@@ -179,6 +181,8 @@ describe.sequential("simulate collected failures", () => {
       expect.any(SimulationAssertError),
       expect.any(UnexpectedTokenApprovalError),
     ]);
+    expect(report.verification).toEqual({ retention: "checked" });
+    expect(report.warnings).toEqual([]);
   });
 
   test("reports the earlier assertion failure, then the terminal revert", async ({
@@ -230,5 +234,7 @@ describe.sequential("simulate collected failures", () => {
       expect.any(SimulationAssertError),
       expect.any(SimulationRevertedError),
     ]);
+    expect(report).not.toHaveProperty("verification");
+    expect(report.warnings).toEqual([]);
   });
 });

@@ -2,6 +2,77 @@ import type { Address } from "viem";
 
 /**
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A caller-provided Blue market or position snapshot was read on a different chain.
+ * @example
+ * ```ts
+ * import { BlueSnapshotChainMismatchError } from "@morpho-org/morpho-sdk";
+ * const error = new BlueSnapshotChainMismatchError(8453, 1);
+ * ```
+ */
+export class BlueSnapshotChainMismatchError extends Error {
+  /**
+   * @param snapshotChainId - Chain the snapshot was read from.
+   * @param chainId - Chain the operation targets.
+   */
+  public constructor(
+    public readonly snapshotChainId: number,
+    public readonly chainId: number,
+  ) {
+    super(
+      `Expected a Blue snapshot on chain "${chainId}", got "${snapshotChainId}". Fetch the snapshot on the operation chain.`,
+    );
+    this.name = "BlueSnapshotChainMismatchError";
+  }
+}
+
+/**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
+ * A caller-provided Blue market snapshot describes a different market state than the market
+ * embedded in the position snapshot, so quotes and health checks would mix two states.
+ * @example
+ * ```ts
+ * import { BlueSnapshotStateMismatchError } from "@morpho-org/morpho-sdk";
+ * const error = new BlueSnapshotStateMismatchError({
+ *   field: "totalBorrowAssets",
+ *   positionValue: 100n,
+ *   marketValue: 200n,
+ * });
+ * ```
+ */
+export class BlueSnapshotStateMismatchError extends Error {
+  /** Market state field that differs between the snapshots. */
+  public readonly field: string;
+  /** Value in the market embedded in the position snapshot. */
+  public readonly positionValue: bigint | undefined;
+  /** Value in the market snapshot. */
+  public readonly marketValue: bigint | undefined;
+
+  /**
+   * @param params.field - Market state field that differs between the snapshots.
+   * @param params.positionValue - Value in the market embedded in the position snapshot.
+   * @param params.marketValue - Value in the market snapshot.
+   */
+  public constructor({
+    field,
+    positionValue,
+    marketValue,
+  }: {
+    readonly field: string;
+    readonly positionValue: bigint | undefined;
+    readonly marketValue: bigint | undefined;
+  }) {
+    super(
+      `Expected market snapshot ${field} "${positionValue}" from the position snapshot, got "${marketValue}". Fetch the market and position snapshots from the same market state.`,
+    );
+    this.field = field;
+    this.positionValue = positionValue;
+    this.marketValue = marketValue;
+    this.name = "BlueSnapshotStateMismatchError";
+  }
+}
+
+/**
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  * Thrown when an operation's account is the zero address.
  * @example
  * ```ts

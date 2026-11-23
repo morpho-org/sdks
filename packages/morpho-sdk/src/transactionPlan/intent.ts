@@ -11,10 +11,14 @@ import {
   NonIntegerInputError,
   ZeroAccountError,
 } from "./error.js";
+import {
+  validateCalldataOriginLength,
+  validatePlanField,
+} from "./validation.js";
 
 /**
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
- * Which balance pays a deposit: the vault asset, or native currency the bundle wraps.
+ * Which balance funds an operation: the ERC-20 token, or native currency the bundle wraps.
  */
 export type Funding = { readonly type: "erc20" } | { readonly type: "native" };
 
@@ -40,7 +44,7 @@ export interface IntentParams {
   readonly supportSignature?: boolean;
   /** Unix seconds. Defaults to two hours from now. */
   readonly expiresAt?: number;
-  /** Optional attribution bytes appended verbatim to every built transaction's calldata. */
+  /** Optional attribution bytes (at most 1 MiB) appended verbatim to every built transaction's calldata. */
   readonly calldataOrigin?: Hex;
   /** Whether token metadata reads for permits may use deployless aggregation. */
   readonly deployless?: boolean;
@@ -75,6 +79,7 @@ export function resolveIntent(params: IntentParams, now: bigint): Intent {
   if (params.account === zeroAddress) {
     throw new ZeroAccountError(params.account);
   }
+  validatePlanField(params.account, { path: "$.account", type: "address" });
   const expiresAt = params.expiresAt ?? Number(now + Time.s.from.h(2n));
   const deadline = toSafeInteger("expiresAt", expiresAt);
   if (deadline <= 0n) {
@@ -100,13 +105,15 @@ export function resolveIntent(params: IntentParams, now: bigint): Intent {
   }
 
   const { calldataOrigin } = params;
-  if (
-    calldataOrigin !== undefined &&
-    (!isHex(calldataOrigin, { strict: true }) ||
+  if (calldataOrigin !== undefined) {
+    if (
+      !isHex(calldataOrigin, { strict: true }) ||
       calldataOrigin.length <= 2 ||
-      calldataOrigin.length % 2 !== 0)
-  ) {
-    throw new InvalidCalldataOriginError(calldataOrigin);
+      calldataOrigin.length % 2 !== 0
+    ) {
+      throw new InvalidCalldataOriginError(calldataOrigin);
+    }
+    validateCalldataOriginLength(calldataOrigin);
   }
 
   return {

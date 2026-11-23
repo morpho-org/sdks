@@ -5,6 +5,17 @@ export * from "./entities/requirements/index.js";
 export * from "./helpers/index.js";
 export type {
   Action,
+  BlueBorrowPlanParams,
+  BlueMarketSnapshot,
+  BluePositionSnapshot,
+  BlueRefinancePlanParams,
+  BlueRepayPlanParams,
+  BlueRepayWithdrawCollateralPlanParams,
+  BlueSupplyCollateralBorrowPlanParams,
+  BlueSupplyCollateralPlanParams,
+  BlueSupplyPlanParams,
+  BlueWithdrawCollateralPlanParams,
+  BlueWithdrawPlanParams,
   Funding,
   IntentParams,
   ReferralFee,
@@ -25,6 +36,8 @@ export type {
 } from "./transactionPlan/index.js";
 export {
   applySignatures,
+  BlueSnapshotChainMismatchError,
+  BlueSnapshotStateMismatchError,
   buildTransaction,
   buildTransactions,
   getPendingSignatureRequests,
@@ -33,6 +46,15 @@ export {
   InvalidTransactionPlanError,
   NonIntegerInputError,
   parseTransactionPlan,
+  prepareBlueBorrow,
+  prepareBlueRefinance,
+  prepareBlueRepay,
+  prepareBlueRepayWithdrawCollateral,
+  prepareBlueSupply,
+  prepareBlueSupplyCollateral,
+  prepareBlueSupplyCollateralBorrow,
+  prepareBlueWithdraw,
+  prepareBlueWithdrawCollateral,
   prepareVaultV1Deposit,
   prepareVaultV1InKindRedeem,
   prepareVaultV1MigrateToV2,
@@ -48,6 +70,7 @@ export {
   TransactionPlanSignatureMismatchError,
   UnsupportedTransactionPlanActionError,
   UnsupportedTransactionPlanVersionError,
+  validateBlueMarketSnapshot,
   ZeroAccountError,
 } from "./transactionPlan/index.js";
 export * from "./types/index.js";

@@ -4,7 +4,7 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, zeroAddress } from "viem";
 import { expect, test } from "vitest";
 import { TransactionPlanSignatureMismatchError } from "./error.js";
-import { validateSignatureRequest } from "./permit.js";
+import { validateVaultPermitRequest } from "./permit.js";
 import type { Action, SignatureRequest } from "./types.js";
 
 const account = "0x0000000000000000000000000000000000000001";
@@ -84,20 +84,23 @@ test.each(actions)(
         1,
       ),
     });
-    expect(() => validateSignatureRequest(request(10n), action)).not.toThrow();
-    expect(() => validateSignatureRequest(request(9n), action)).toThrow(
+    expect(() =>
+      validateVaultPermitRequest(request(10n), action),
+    ).not.toThrow();
+    expect(() => validateVaultPermitRequest(request(9n), action)).toThrow(
       new TransactionPlanSignatureMismatchError("permit", "value"),
     );
-    if (isDeposit)
-      expect(() => validateSignatureRequest(request(11n), action)).toThrow(
+    if (isDeposit) {
+      expect(() => validateVaultPermitRequest(request(11n), action)).toThrow(
         new TransactionPlanSignatureMismatchError("permit", "value"),
       );
-    else
+    } else {
       expect(() =>
-        validateSignatureRequest(request(11n), action),
+        validateVaultPermitRequest(request(11n), action),
       ).not.toThrow();
+    }
     expect(() =>
-      validateSignatureRequest(
+      validateVaultPermitRequest(
         request(10n, { tokenAddress: zeroAddress }),
         action,
       ),
@@ -108,7 +111,7 @@ test.each(actions)(
       ),
     );
     expect(() =>
-      validateSignatureRequest(
+      validateVaultPermitRequest(
         request(10n, { spenderAddress: zeroAddress }),
         action,
       ),
@@ -116,10 +119,10 @@ test.each(actions)(
       new TransactionPlanSignatureMismatchError("permit", "message.spender"),
     );
     expect(() =>
-      validateSignatureRequest({ ...request(10n), id: "other" }, action),
+      validateVaultPermitRequest({ ...request(10n), id: "other" }, action),
     ).toThrow(new TransactionPlanSignatureMismatchError("other", "reference"));
     expect(() =>
-      validateSignatureRequest(request(10n), {
+      validateVaultPermitRequest(request(10n), {
         type: "erc20Approval",
         inputs: { chainId: 1, account, token, spender, assets: 10n },
       }),

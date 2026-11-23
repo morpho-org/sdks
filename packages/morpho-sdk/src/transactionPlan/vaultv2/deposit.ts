@@ -43,6 +43,7 @@ export interface VaultV2DepositPlanParams
  * @throws {InputExceedsMaxError} when `referralFee.bps` exceeds 10,000 or `assets` exceeds uint256.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds `MAX_SLIPPAGE_TOLERANCE`.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
+ * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @throws {ReferralFeePctExceededError} when `referralFee.bps` equals 10,000; the normalized fee must be below WAD.
  * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient or a zero recipient.
  * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a vault whose asset is not wNative.

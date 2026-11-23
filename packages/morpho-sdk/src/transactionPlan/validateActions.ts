@@ -11,10 +11,20 @@ export function validateTransactionPlanActions(steps: readonly Step[]): void {
   for (const step of steps) {
     const actionType = step.action.type;
     if (
+      actionType !== "blueRefinance" &&
       actionType !== "erc20Approval" &&
       actionType !== "vaultV1Deposit" &&
       actionType !== "vaultV1MigrateToV2" &&
       actionType !== "vaultV1InKindRedeem" &&
+      actionType !== "blueSupply" &&
+      actionType !== "blueSupplyCollateral" &&
+      actionType !== "blueBorrow" &&
+      actionType !== "blueSupplyCollateralBorrow" &&
+      actionType !== "blueRepay" &&
+      actionType !== "blueWithdraw" &&
+      actionType !== "blueWithdrawCollateral" &&
+      actionType !== "blueRepayWithdrawCollateral" &&
+      actionType !== "morphoAuthorization" &&
       actionType !== "vaultV2Deposit" &&
       actionType !== "vaultV2Withdraw" &&
       actionType !== "vaultV2Redeem" &&

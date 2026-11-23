@@ -7,6 +7,7 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
 } from "../errors.js";
+import { freezeWarning } from "../warnings.js";
 import { toFailureReport } from "./failure-report.js";
 
 const SEVERITY_RANK = { warn: 0, error: 1, fatal: 2 } as const;
@@ -28,10 +29,48 @@ describe("toFailureReport", () => {
   test("default: keeps the failures in order and freezes the report", () => {
     const failures = [assertFailure(), new SimulationRevertedError("reverted")];
     const report = toFailureReport(failures);
-    expect(report).toEqual({ ok: false, severity: "warn", failures });
+    expect(report).toEqual({
+      ok: false,
+      severity: "warn",
+      failures,
+      warnings: [],
+    });
     expect(report.failures).not.toBe(failures);
     expect(Object.isFrozen(report)).toBe(true);
     expect(Object.isFrozen(report.failures)).toBe(true);
+    expect(Object.isFrozen(report.warnings)).toBe(true);
+  });
+
+  test("keeps a frozen copy of warnings without changing failure severity", () => {
+    const warnings = [
+      freezeWarning({
+        code: "UNEXPECTED_TOKEN_TRANSFER",
+        severity: "warn",
+        chainId: 1,
+        message: "outflow",
+        token: "0x0000000000000000000000000000000000000001",
+        sender: "0x0000000000000000000000000000000000000002",
+        recipients: [],
+      }),
+    ];
+    const failures = [assertFailure()];
+    const report = toFailureReport(failures, { warnings });
+    expect(report).toEqual({ ok: false, severity: "warn", failures, warnings });
+    expect(report.warnings).not.toBe(warnings);
+    expect(report.warnings[0]?.severity).toBe("warn");
+    expect(Object.isFrozen(report.warnings)).toBe(true);
+    warnings.length = 0;
+    expect(report.warnings).toHaveLength(1);
+  });
+
+  test("only includes frozen verification when the stage ran", () => {
+    const failure = assertFailure();
+    expect(toFailureReport([failure])).not.toHaveProperty("verification");
+    const verification = { retention: "checked" } as const;
+    const report = toFailureReport([failure], { verification });
+    expect(report.verification).toEqual(verification);
+    expect(report.verification).not.toBe(verification);
+    expect(Object.isFrozen(report.verification)).toBe(true);
   });
 
   test.each([

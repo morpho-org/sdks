@@ -1,3 +1,5 @@
+import { Token } from "@morpho-org/blue-sdk";
+import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
 import type { Erc2612RequirementSignature } from "../types/index.js";
@@ -8,6 +10,7 @@ import {
 import type { Action, SignatureRequest } from "./types.js";
 import {
   getPlanObject,
+  matchesAddress,
   validatePlanField,
   validatePlanFields,
 } from "./validation.js";
@@ -87,118 +90,166 @@ export function validatePermitPlanRequest(
 }
 
 /** @internal Checks a permit's signing payload against its referencing action and encoding arguments. */
-export function validateSignatureRequest(
+export function validateVaultPermitRequest(
   request: SignatureRequest,
   action: Action,
 ): void {
-  const { chainId, account } = action.inputs;
-  const { domain, message, primaryType } = request.typedData;
+  if (request.kind !== "permit") {
+    throw new TransactionPlanSignatureMismatchError(request.id, "reference");
+  }
   let spenderKey: "bundles.vaultBundlesV1" | "bundles.vaultExitBundlesV1";
   let asset: Address;
-  let amountMatches: boolean;
+  let amount: bigint | undefined;
+  let exact = false;
   switch (action.type) {
-    case "vaultV2ForceRedeem":
-      throw new TransactionPlanSignatureMismatchError(request.id, "reference");
-    case "erc20Approval":
-      throw new TransactionPlanSignatureMismatchError(request.id, "reference");
     case "vaultV2Deposit":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.asset;
-      amountMatches = request.args.amount === action.inputs.assets;
+      amount = action.inputs.assets;
+      exact = true;
       break;
     case "vaultV1Deposit":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.asset;
-      amountMatches = request.args.amount === action.inputs.assets;
+      amount = action.inputs.assets;
+      exact = true;
       break;
     case "vaultV1Withdraw":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.vault;
-      amountMatches =
-        request.args.amount >= action.inputs.requiredShareAllowance;
+      amount = action.inputs.requiredShareAllowance;
       break;
     case "vaultV2Withdraw":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.vault;
-      amountMatches =
-        request.args.amount >= action.inputs.requiredShareAllowance;
+      amount = action.inputs.requiredShareAllowance;
       break;
     case "vaultV2Redeem":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.vault;
-      amountMatches = request.args.amount >= action.inputs.shares;
+      amount = action.inputs.shares;
       break;
     case "vaultV1Redeem":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.vault;
-      amountMatches = request.args.amount >= action.inputs.shares;
+      amount = action.inputs.shares;
       break;
     case "vaultV2ForceWithdraw":
       spenderKey = "bundles.vaultExitBundlesV1";
       asset = action.inputs.vault;
-      amountMatches = request.args.amount === maxUint256;
+      amount = maxUint256;
+      exact = true;
       break;
     case "vaultV1MigrateToV2":
       spenderKey = "bundles.vaultBundlesV1";
       asset = action.inputs.sourceVault;
-      amountMatches =
-        request.args.amount >= action.inputs.requiredShareAllowance;
+      amount = action.inputs.requiredShareAllowance;
       break;
     case "vaultV2InKindRedeem":
       spenderKey = "bundles.vaultExitBundlesV1";
       asset = action.inputs.vault;
-      amountMatches = request.args.amount === maxUint256;
+      amount = maxUint256;
+      exact = true;
       break;
     case "vaultV1InKindRedeem":
       spenderKey = "bundles.vaultExitBundlesV1";
       asset = action.inputs.vault;
-      amountMatches = request.args.amount === maxUint256;
+      amount = maxUint256;
+      exact = true;
       break;
-    default: {
-      const _exhaustive: never = action;
+    default:
       throw new TransactionPlanSignatureMismatchError(request.id, "reference");
-    }
   }
   if (action.signatureRequestIds.tokenPermit !== request.id) {
     throw new TransactionPlanSignatureMismatchError(request.id, "reference");
   }
-  const spender = getChainAddress(chainId, spenderKey);
+  validateTokenPermitRequest(request, {
+    chainId: action.inputs.chainId,
+    account: action.inputs.account,
+    deadline: action.inputs.deadline,
+    bundler: spenderKey,
+    asset,
+    amount,
+    exact,
+  });
+}
+
+/** @internal Binds the signing payload and encoding arguments to a registered bundle's token pull. */
+export function validateTokenPermitRequest(
+  request: Extract<SignatureRequest, { kind: "permit" }>,
+  pull: {
+    readonly chainId: number;
+    readonly account: Address;
+    readonly deadline: bigint | undefined;
+    readonly bundler:
+      | "bundles.vaultBundlesV1"
+      | "bundles.vaultExitBundlesV1"
+      | "bundles.blueBundlesV1";
+    readonly asset: Address;
+    readonly amount: bigint | undefined;
+    readonly exact: boolean;
+  },
+): void {
+  const { chainId, account, asset, amount, exact } = pull;
+  const { domain, message, types, primaryType } = request.typedData;
+  const spender = getChainAddress(chainId, pull.bundler);
   const checks: readonly (readonly [string, boolean])[] = [
     ["domain.chainId", domain?.chainId === chainId],
     [
       "domain.verifyingContract",
-      typeof domain?.verifyingContract === "string" &&
-        domain.verifyingContract.toLowerCase() === asset.toLowerCase(),
+      matchesAddress(domain?.verifyingContract, asset),
     ],
-    [
-      "message.owner",
-      typeof message?.owner === "string" &&
-        message.owner.toLowerCase() === account.toLowerCase(),
-    ],
-    [
-      "message.spender",
-      typeof message?.spender === "string" &&
-        message.spender.toLowerCase() === spender.toLowerCase(),
-    ],
-    [
-      "args.spender",
-      typeof request.args.spender === "string" &&
-        request.args.spender.toLowerCase() === spender.toLowerCase(),
-    ],
+    ["message.owner", matchesAddress(message?.owner, account)],
+    ["message.spender", matchesAddress(message?.spender, spender)],
+    ["args.spender", matchesAddress(request.args.spender, spender)],
     ["message.value", message?.value === request.args.amount],
-    ["value", amountMatches],
+    [
+      "value",
+      exact
+        ? request.args.amount === amount
+        : amount !== undefined && request.args.amount >= amount,
+    ],
     ["message.nonce", message?.nonce === request.args.nonce],
     ["message.deadline", message?.deadline === request.args.deadline],
     ["primaryType", primaryType === "Permit"],
+    [
+      "args.deadline",
+      pull.deadline === undefined || request.args.deadline === pull.deadline,
+    ],
   ];
   const mismatch = checks.find(([, matches]) => !matches);
   if (mismatch) {
     throw new TransactionPlanSignatureMismatchError(request.id, mismatch[0]);
   }
+  const expected = getPermitTypedData(
+    {
+      erc20: new Token({ address: asset, name: domain?.name ?? "" }),
+      owner: account,
+      spender,
+      allowance: request.args.amount,
+      nonce: request.args.nonce,
+      deadline: request.args.deadline,
+    },
+    chainId,
+  ).types.Permit;
+  const fields = types?.Permit;
+  if (
+    !Array.isArray(fields) ||
+    Object.keys(types).length !== 1 ||
+    fields.length !== expected.length ||
+    !expected.every(
+      ({ name, type }, index) =>
+        fields[index]?.name === name &&
+        fields[index]?.type === type &&
+        Object.keys(fields[index]).length === 2,
+    )
+  ) {
+    throw new TransactionPlanSignatureMismatchError(request.id, "types");
+  }
 }
 
 /** @internal Rebuilds a token permit from the action's account/asset and its resolved signature requests. */
-export function getVaultPermit(
+export function getSignedTokenPermit(
   requests: readonly SignatureRequest[],
   {
     id,
@@ -217,6 +268,9 @@ export function getVaultPermit(
   if (request?.signature === undefined) {
     throw new IncompleteTransactionPlanError(id);
   }
+  if (request.kind !== "permit") {
+    throw new TransactionPlanSignatureMismatchError(id, "reference");
+  }
   return {
     action: {
       type: request.kind,
@@ -233,3 +287,6 @@ export function getVaultPermit(
     },
   };
 }
+
+/** @internal Alias for existing Vault V2 plan builders. */
+export { getSignedTokenPermit as getVaultPermit };

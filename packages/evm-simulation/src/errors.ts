@@ -34,9 +34,9 @@ export const SIMULATION_ERROR_CODES = [
 export type SimulationErrorCode = (typeof SIMULATION_ERROR_CODES)[number];
 
 /**
- * Default log level of an SDK error, named like pino's levels so it indexes a logger with no mapping.
- * Every severity blocks the bundle: `simulate` returns no result for `warn` as for `fatal`. It is
- * for logging and alerting only; a failed report's `severity` is the highest of its failures'.
+ * Classification of an SDK failure, compatible with common alert levels.
+ * Every entry in `report.failures` blocks regardless of severity. A failed
+ * report's `severity` is the highest of its failures', excluding warnings.
  */
 export type SimulationErrorSeverity = "fatal" | "error" | "warn";
 
@@ -477,7 +477,12 @@ export class SlippageCheckUnavailableError extends SimulationInfrastructureError
   }
 }
 
-/** A sender outflow uses a token not spendable by the declared operations. Extends {@link SimulationSafetyError}. */
+/**
+ * A sender outflow uses a token not spendable by the declared operations.
+ * Converted to a plain `SimulationWarning` with severity `"warn"`, never a blocking failure.
+ * Integrators gating signing must inspect report warnings.
+ * Extends {@link SimulationSafetyError}.
+ */
 export class UnexpectedTokenTransferError extends SimulationSafetyError {
   override readonly name = "UnexpectedTokenTransferError";
   readonly code = "UNEXPECTED_TOKEN_TRANSFER";

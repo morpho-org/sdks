@@ -6,7 +6,7 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, maxUint256 } from "viem";
 import { signTypedData } from "viem/actions";
 import { mainnet } from "viem/chains";
-import { describe, expect, expectTypeOf } from "vitest";
+import { assert, describe, expect, expectTypeOf } from "vitest";
 import {
   IN_KIND_USER,
   IN_KIND_VAULT,
@@ -253,6 +253,7 @@ describe("Vault V1 redeem TransactionPlan", () => {
       supportSignature: true,
     });
     const request = plan.signatureRequests[0]!;
+    assert(request.kind === "permit");
     const amount = params.shares - 1n;
     const tampered = {
       ...plan,

@@ -19,8 +19,12 @@ import type {
   CheckedInputOperationLimit,
   CheckedOperationLimit,
 } from "../limits.js";
-import type { SimulationInputReport } from "../result.js";
+import type {
+  SimulationInputReport,
+  SimulationReportVerification,
+} from "../result.js";
 import type { SimulationClient, SimulationOptions } from "../types.js";
+import { freezeWarning, type SimulationWarning } from "../warnings.js";
 import { resolveApprovalLimits } from "./approval-limits.js";
 import {
   assertPendingApprovals,
@@ -39,7 +43,7 @@ import {
 import { deriveQuote } from "./derive-quote.js";
 import { toFailureReport } from "./failure-report.js";
 import { parseTransfers } from "./parsing/index.js";
-import { findBundlesRetentionFailures } from "./pipeline/bundles-retention.js";
+import { checkBundlesRetention } from "./pipeline/bundles-retention.js";
 import { validateOptions } from "./pipeline/validate-options.js";
 import { planExecution } from "./plan/plan-execution.js";
 import {
@@ -154,7 +158,7 @@ export async function runSimulation(params: {
   readonly request: ParsedRequest;
 }): Promise<SimulationInputReport> {
   const { options, request } = params;
-  // Called only to reject invalid option values before any RPC call.
+  // Reject invalid options before any RPC call.
   validateOptions(options);
   const signal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const withinDeadline = deadlineRunner(signal);
@@ -167,7 +171,11 @@ export async function runSimulation(params: {
     withinDeadline,
     environment,
   });
-  return verifyExecution({ ...params, environment, ...prepared });
+  return verifyExecution({
+    ...params,
+    environment,
+    ...prepared,
+  });
 }
 
 /** Race each pending stage against the single whole-simulation deadline. @internal */
@@ -411,11 +419,12 @@ async function resolveAndExecute(context: PipelineContext) {
 
 /** Collect post-execution failures in pipeline order and assemble success. @internal */
 function verifyExecution(context: VerificationContext): SimulationInputReport {
-  const { request, options, environment, execution } = context;
+  const { request, environment, execution } = context;
+  const warnings: SimulationWarning[] = [];
   const { preview, owner, morpho } = environment;
   // A revert is terminal: nothing after it is checked.
   if (execution.reverted) {
-    return toFailureReport(execution.failures);
+    return toFailureReport(execution.failures, { warnings });
   }
   const userCalls = execution.calls
     .filter((call) => call.planned.type === "transaction")
@@ -461,6 +470,7 @@ function verifyExecution(context: VerificationContext): SimulationInputReport {
     skippedOperationIndices,
   } = resolveMeasurements({
     context,
+    warnings,
     userCalls,
     skipTransferChecks,
     failures,
@@ -489,44 +499,50 @@ function verifyExecution(context: VerificationContext): SimulationInputReport {
     }),
   );
 
-  const slippage = skipTransferChecks
-    ? undefined
-    : collect(() =>
-        findOperationSlippageFailures({
-          ctx,
-          operations: derivedOperations,
-          before,
-          after,
-          reportedMissingReadIds,
-          skippedOperationIndices,
-          transfers,
-          logs: userCalls.map((call) => call.logs),
-          morpho,
-          requestTransactions: request.transactions,
-        }),
-      );
+  if (skipTransferChecks) {
+    return toFailureReport(failures, { warnings });
+  }
+  const slippage = collect(() =>
+    findOperationSlippageFailures({
+      ctx,
+      operations: derivedOperations,
+      before,
+      after,
+      reportedMissingReadIds,
+      skippedOperationIndices,
+      transfers,
+      logs: userCalls.map((call) => call.logs),
+      morpho,
+      requestTransactions: request.transactions,
+    }),
+  );
   if (slippage !== undefined) {
     failures.push(...slippage.failures);
   }
 
   // Retention reads only user-transaction transfers.
-  if (!skipTransferChecks) {
-    failures.push(
-      ...findBundlesRetentionFailures({
-        chainId: request.chainId,
-        transfers,
-        assetChanges,
-        logger: options.logger,
-      }),
-    );
-  }
+  const retention = checkBundlesRetention({
+    chainId: request.chainId,
+    transfers,
+    assetChanges,
+  });
+  failures.push(...retention.failures);
+  warnings.push(...retention.warnings);
+  const verification =
+    execution.calls.some(
+      (call) => call.planned.type === "transaction" && call.logsMissing,
+    ) || warnings.some((warning) => warning.code === "MALFORMED_TRANSFER_LOG")
+      ? undefined
+      : Object.freeze({ retention: retention.status });
   if (failures.length > 0) {
-    return toFailureReport(failures);
+    return toFailureReport(failures, { warnings, verification });
   }
   const checked = slippage?.checked ?? [];
 
   return assembleSuccess({
     request,
+    warnings,
+    verification,
     ctx,
     derivedOperations,
     checked,
@@ -712,6 +728,7 @@ function checkEventEvidence({
 /** Derive transfers, decode both state phases and derive operation expectations. @internal */
 function resolveMeasurements({
   context,
+  warnings,
   userCalls,
   skipTransferChecks,
   failures,
@@ -719,13 +736,14 @@ function resolveMeasurements({
   collect,
 }: {
   context: VerificationContext;
+  warnings: SimulationWarning[];
   userCalls: Parameters<typeof assembleResult>[0]["userCalls"];
   skipTransferChecks: boolean;
   failures: SimulationPackageError[];
   reportedMissingReadIds: Set<string>;
   collect: <T>(check: () => T) => T | undefined;
 }) {
-  const { request, options, execution, observations } = context;
+  const { request, execution, observations } = context;
   const { addresses } = context.environment;
   const decodePhase = (phase: "before" | "after") => {
     const values = new Map<string, ReturnType<typeof decodeStateRead>>();
@@ -749,15 +767,17 @@ function resolveMeasurements({
     return values;
   };
   const verified = NO_WNATIVE_MIRROR_WRAPPERS.get(request.chainId);
-  const transfers = parseTransfers(userCalls, {
+  const parsed = parseTransfers(userCalls, {
+    chainId: request.chainId,
     wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
     wNativeEmitsTransfer: !(
       verified !== undefined &&
       addresses?.wNative != null &&
       isAddressEqual(addresses.wNative, verified)
     ),
-    logger: options.logger,
   });
+  const { transfers } = parsed;
+  warnings.push(...parsed.warnings);
 
   const assetChanges = groupAssetChanges(
     transfers.flatMap(({ token, from, to, amount }) => [
@@ -767,14 +787,26 @@ function resolveMeasurements({
   );
 
   if (!skipTransferChecks && context.senderSpendTokens !== undefined) {
-    failures.push(
-      ...findUnexpectedSenderTransfers({
-        owner: context.environment.owner,
-        transfers,
-        allowed: context.senderSpendTokens,
-        nativeValueBudget: context.senderNativeValueBudget,
-      }),
-    );
+    for (const finding of findUnexpectedSenderTransfers({
+      chainId: request.chainId,
+      owner: context.environment.owner,
+      transfers,
+      allowed: context.senderSpendTokens,
+      nativeValueBudget: context.senderNativeValueBudget,
+    })) {
+      warnings.push(
+        freezeWarning({
+          code: finding.code,
+          severity: "warn",
+          message:
+            "Undeclared sender token outflow detected; simulation continues without blocking.",
+          token: finding.token,
+          sender: finding.sender,
+          recipients: finding.recipients,
+          chainId: request.chainId,
+        }),
+      );
+    }
   }
 
   const before = decodePhase("before");
@@ -826,6 +858,8 @@ function resolveMeasurements({
 /** Strip internal limit fields when assembling the frozen success report. @internal */
 function assembleSuccess({
   request,
+  warnings,
+  verification,
   ctx,
   derivedOperations,
   checked,
@@ -835,6 +869,8 @@ function assembleSuccess({
   assetChanges,
 }: {
   request: ParsedRequest;
+  warnings: readonly SimulationWarning[];
+  verification?: SimulationReportVerification;
   ctx: CheckContext;
   derivedOperations: ReturnType<
     typeof resolveMeasurements
@@ -842,7 +878,7 @@ function assembleSuccess({
   checked: ReturnType<typeof findOperationSlippageFailures>["checked"];
   authorizations: Parameters<typeof assembleResult>[0]["authorizations"];
   userCalls: Parameters<typeof assembleResult>[0]["userCalls"];
-  transfers: ReturnType<typeof parseTransfers>;
+  transfers: ReturnType<typeof parseTransfers>["transfers"];
   assetChanges: ReturnType<typeof groupAssetChanges>;
 }): SimulationInputReport {
   const assembled = assembleResult({
@@ -885,5 +921,10 @@ function assembleSuccess({
     transfers,
     assetChanges,
   });
-  return Object.freeze({ ok: true, result: assembled });
+  return Object.freeze({
+    ok: true,
+    result: assembled,
+    warnings: Object.freeze([...warnings]),
+    ...(verification === undefined ? {} : { verification }),
+  });
 }

@@ -94,6 +94,7 @@ export interface VaultV2InKindRedeemPlanParams
  * @throws {NonPositiveInputError} when `expiresAt` or `assets` is not positive.
  * @throws {ExpiredDeadlineError} when the deadline has elapsed before preparation or permit creation finishes.
  * @throws {InvalidCalldataOriginError} when `calldataOrigin` is empty, malformed or has an odd number of hex digits.
+ * @throws {InvalidTransactionPlanError} when `account` is malformed or `calldataOrigin` exceeds 1 MiB.
  * @throws {ChainIdMismatchError} when the client declares or its endpoint serves another chain.
  * @throws {VaultV2SingleAdapterRequiredError} when the snapshot does not contain exactly one adapter.
  * @throws {AdapterNotPartOfVaultError} when `adapter` differs from the snapshot's sole adapter.

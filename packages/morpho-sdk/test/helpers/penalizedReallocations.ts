@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
+  fetchAccrualPosition,
   readContractRestructured,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
@@ -148,6 +149,18 @@ export async function createScenario(
   const morpho = client.extend(morphoViemExtension()).morpho;
   const source = morpho.blue(sourceMarket, mainnet.id);
   const destination = morpho.blue(destinationMarket, mainnet.id);
+  const scenario = await createRefinanceScenario(client, vaultConfigs);
+  const reallocationData = await destination.getVaultV2BlueReallocationData({
+    vaultAddresses: scenario.vaults.map(({ vault }) => vault),
+    block: await client.getBlock(),
+  });
+  return { ...scenario, source, destination, reallocationData };
+}
+
+export async function createRefinanceScenario(
+  client: AnvilTestClient,
+  vaultConfigs: Parameters<typeof createScenario>[1],
+) {
   const { blue } = getChainAddresses(mainnet.id);
   assert(blue != null);
   const marketState = await readContractRestructured(client, {
@@ -203,8 +216,12 @@ export async function createScenario(
   });
   const [sourcePositionBeforeAccrual, destinationPositionBeforeAccrual] =
     await Promise.all([
-      source.getPositionData(client.account.address),
-      destination.getPositionData(client.account.address),
+      fetchAccrualPosition(client.account.address, sourceMarket.id, client),
+      fetchAccrualPosition(
+        client.account.address,
+        destinationMarket.id,
+        client,
+      ),
     ]);
   const initialQuoteTimestamp =
     MathLib.max(
@@ -252,8 +269,12 @@ export async function createScenario(
   });
   const block = await client.getBlock();
   const [sourcePosition, destinationPosition] = await Promise.all([
-    source.getPositionData(client.account.address),
-    destination.getPositionData(client.account.address),
+    fetchAccrualPosition(client.account.address, sourceMarket.id, client, {
+      blockNumber: block.number,
+    }),
+    fetchAccrualPosition(client.account.address, destinationMarket.id, client, {
+      blockNumber: block.number,
+    }),
   ]);
   const quoteTimestamp =
     MathLib.max(
@@ -268,18 +289,5 @@ export async function createScenario(
     destinationPosition.accrueInterest(quoteTimestamp).borrowAssets,
   ).toBeGreaterThan(destinationDebtBeforeAccrual);
   const amount = sourcePosition.accrueInterest(quoteTimestamp).borrowAssets;
-  const reallocationData = await destination.getVaultV2BlueReallocationData({
-    vaultAddresses: vaults.map(({ vault }) => vault),
-    block,
-  });
-  return {
-    client,
-    source,
-    destination,
-    sourcePosition,
-    destinationPosition,
-    amount,
-    reallocationData,
-    vaults,
-  };
+  return { client, sourcePosition, destinationPosition, amount, vaults };
 }

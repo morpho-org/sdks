@@ -88,7 +88,7 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
         mode === "permit" ? ["permit"] : [],
       );
       for (const step of plan.steps) {
-        if (step.action.type === "erc20Approval")
+        if (step.action.type === "erc20Approval") {
           expect(step.action.inputs).toEqual({
             token: sourceVault,
             spender,
@@ -96,6 +96,7 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
             chainId: client.chain.id,
             account: client.account.address,
           });
+        }
       }
       const signatures = await Promise.all(
         getPendingSignatureRequests(plan).map(async ({ id, typedData }) => ({
@@ -104,12 +105,16 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
         })),
       );
       plan = applySignatures(plan, signatures);
-      if (mode === "permit")
-        expect(plan.signatureRequests[0]?.args.amount).toBe(maxUint256);
+      const firstRequest = plan.signatureRequests[0];
+      const request =
+        firstRequest?.kind === "permit" ? firstRequest : undefined;
+      expect(request).toBe(firstRequest);
+      if (mode === "permit") {
+        expect(request?.args.amount).toBe(maxUint256);
+      }
       const restored = parseTransactionPlan(serializeTransactionPlan(plan));
       const transactions = buildTransactions(restored);
       expect(transactions).toEqual(buildTransactions(plan));
-      const request = plan.signatureRequests[0];
       const permit = request?.signature
         ? [
             {
@@ -147,8 +152,11 @@ describe("TransactionPlan Vault V1 migration on a pinned mainnet fork", () => {
       }
       const remaining = await client.balanceOf({ erc20: sourceVault });
       expect(remaining).toBeLessThan(shares);
-      if (mode !== "approval") expect(remaining).toBe(0n);
-      else expect(remaining).toBeGreaterThan(0n);
+      if (mode !== "approval") {
+        expect(remaining).toBe(0n);
+      } else {
+        expect(remaining).toBeGreaterThan(0n);
+      }
       expect(await client.balanceOf({ erc20: targetVault })).toBeGreaterThan(
         beforeTarget,
       );

@@ -13,6 +13,7 @@ import {
   ExecutionRevertedError,
   erc4626Abi,
   ethAddress,
+  type Hex,
   HttpRequestError,
   isAddressEqual,
   RpcError,
@@ -86,6 +87,36 @@ const isTransportFailure = (cause: unknown): boolean => {
 /** Midnight market struct as returned by `toMarket`. @internal */
 type MidnightMarket = MidnightMarketStruct;
 
+/** Check fetched identity without accepting normalization of collateral indices. @internal */
+function midnightMarketMismatch(
+  market: MidnightMarket,
+  { marketId, type }: { marketId: Hex; type: ParsedOperationLimit["type"] },
+) {
+  const recovery = MIDNIGHT_MARKET_INPUT_OPERATION_TYPES.some(
+    (acceptedType) => acceptedType === type,
+  )
+    ? ' If this bundle creates the market, pass the market struct via "market".'
+    : "";
+  if (isAddressEqual(market.loanToken, zeroAddress)) {
+    return `toMarket("${marketId}") returned empty market data.${recovery}`;
+  }
+  const receivedMarketId = MidnightMarketUtils.toId(market);
+  const reordered = market.collateralParams.some((entry, index) => {
+    const previous = market.collateralParams[index - 1];
+    return (
+      previous !== undefined &&
+      MidnightMarketUtils.compareCollateralTokens(previous, entry) >= 0
+    );
+  });
+  if (reordered) {
+    return `toMarket("${marketId}") returned non-canonical collateral order. Check the RPC endpoint.${recovery}`;
+  }
+  if (receivedMarketId.toLowerCase() !== marketId.toLowerCase()) {
+    return `toMarket("${marketId}") returned params for market "${receivedMarketId}". Check the RPC endpoint.${recovery}`;
+  }
+  return undefined;
+}
+
 /**
  * Resolve underlying tokens for typed inputs and quotes without explicit tokens,
  * and the subject token needed for approval checks at the pinned block. Quote
@@ -112,7 +143,7 @@ type MidnightMarket = MidnightMarketStruct;
  *   positively identified first-market supply.
  * @throws {SlippageCheckUnavailableError} For reverted, malformed, or empty
  *   metadata; an unconfigured Midnight collateral index outside a collateral
- *   supply; or Blue market params that do not hash to the requested market id.
+ *   supply; or Blue or Midnight market params that do not match the requested market id.
  * @throws {ApprovalCheckUnavailableError} For unavailable approval-token metadata.
  * @internal
  */
@@ -656,8 +687,8 @@ async function resolveSourcePair({
   let pair = tokens.get(key);
   if (pair === undefined) {
     try {
+      signal?.throwIfAborted();
       if (source.type === "market") {
-        signal?.throwIfAborted();
         const values = await readContract(client, {
           address: morpho,
           abi: blueAbi,
@@ -699,7 +730,6 @@ async function resolveSourcePair({
         source.type === "midnightCollateral" ||
         source.type === "midnightLoan"
       ) {
-        signal?.throwIfAborted();
         const market = await readContract(client, {
           address: midnight,
           abi: midnightAbi,
@@ -707,13 +737,26 @@ async function resolveSourcePair({
           args: [source.marketId],
           blockNumber,
         });
+        const mismatch = midnightMarketMismatch(market, {
+          ...source,
+          type: limit.type,
+        });
+        if (mismatch !== undefined) {
+          throw new SlippageCheckUnavailableError(mismatch, {
+            operationIndex: index,
+            operationType: limit.type,
+            field: evidenceField,
+            reason: isAddressEqual(market.loanToken, zeroAddress)
+              ? "emptyData"
+              : "missingRead",
+          });
+        }
         markets.set(key, market);
         pair = [
           market.loanToken,
           ...market.collateralParams.map((entry) => entry.token),
         ];
       } else {
-        signal?.throwIfAborted();
         const asset = await readContract(client, {
           address: source.vault,
           abi: erc4626Abi,
@@ -1052,6 +1095,10 @@ async function readMidnightApprovalMarket(
         args: [limit.marketId],
         blockNumber,
       });
+      const mismatch = midnightMarketMismatch(market, limit);
+      if (mismatch !== undefined) {
+        throw new ApprovalCheckUnavailableError(mismatch);
+      }
       markets.set(midnightKey, market);
       midnightPair = [
         market.loanToken,
@@ -1059,6 +1106,9 @@ async function readMidnightApprovalMarket(
       ];
       tokens.set(midnightKey, midnightPair);
     } catch (cause) {
+      if (cause instanceof ApprovalCheckUnavailableError) {
+        throw cause;
+      }
       if (isTransportFailure(cause)) {
         throw new RpcTransportError(
           "RPC request failed. Check the endpoint and try again.",

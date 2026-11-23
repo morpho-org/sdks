@@ -23,12 +23,8 @@ import {
 } from "../types/index.js";
 import { InvalidTransactionPlanError } from "./error.js";
 import { type Funding, type IntentParams, resolveIntent } from "./intent.js";
-import {
-  buildApprovalStep,
-  buildPermitSignatureRequest,
-  getTokenRequirements,
-} from "./requirements.js";
-import type { SignatureRequest, Step, TransactionPlan } from "./types.js";
+import { getTokenRequirements } from "./requirements.js";
+import type { TransactionPlan } from "./types.js";
 import {
   validatePlanField,
   validatePlanFields,
@@ -125,10 +121,11 @@ export async function prepareVaultDeposit<
     now,
   );
   const spender = getChainAddress(chainId, "bundles.vaultBundlesV1");
+  const tokenPermitRequestId = `${params.type}:tokenPermit`;
   const [requirements] = await Promise.all([
     validateClientChainId(client, chainId).then(() =>
       native
-        ? []
+        ? undefined
         : getTokenRequirements(client, {
             token: asset,
             spender,
@@ -139,34 +136,20 @@ export async function prepareVaultDeposit<
             now,
             supportSignature: intent.supportSignature,
             deployless: intent.deployless,
+            permitId: tokenPermitRequestId,
+            approvalId: (index) =>
+              index === 0
+                ? `${params.type}:approval`
+                : `${params.type}:approval:${index + 1}`,
           }),
     ),
     assertRegistryTargetsHaveCode(client, chainId, [
       { role: "bundles.vaultBundlesV1", address: spender },
     ]),
   ]);
-  const approvals: Step[] = [];
-  const signatureRequests: SignatureRequest[] = [];
-  const tokenPermitRequestId = `${params.type}:tokenPermit`;
-  for (const requirement of requirements) {
-    if ("sign" in requirement) {
-      signatureRequests.push(
-        buildPermitSignatureRequest(requirement, tokenPermitRequestId),
-      );
-    } else {
-      approvals.push(
-        buildApprovalStep(requirement, {
-          id:
-            approvals.length === 0
-              ? `${params.type}:approval`
-              : `${params.type}:approval:${approvals.length + 1}`,
-          chainId,
-          account,
-          denomination: "assets",
-        }),
-      );
-    }
-  }
+  const approvals = requirements?.approvals ?? [];
+  const signatureRequests =
+    requirements?.permit === undefined ? [] : [requirements.permit];
   return deepFreeze(
     structuredClone({
       version: 2,

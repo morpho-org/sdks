@@ -324,17 +324,23 @@ arbitrary ERC-1271 or ERC-6492 signatures.
 and uint256 ranges, unique IDs, references, action chain/account agreement and permit consistency,
 including requests with existing signatures. It allows extra keys. Malformed JSON, shapes or
 references throw `InvalidTransactionPlanError` with a JSON `path` and `reason`; unsupported versions
-and action types retain their dedicated errors. Serialization remains unchecked. Parsing uses no
-clock or RPC and does not check expiry, live state, signature ownership or action-layer business
-constraints. It does not prove authenticity or intent: tampered-but-well-formed, internally consistent
-plans pass, so integrators must still protect stored plans.
+and action types retain their dedicated errors. Serialization remains unchecked. Parsing verifies
+stored signatures against their expected signers offline and rejects signatures from the wrong
+signer. It uses no clock or RPC and does not check expiry, live state or action-layer business
+constraints. A successful parse does not prove intent or protect unsigned fields, so integrators
+must still protect stored plans.
 
-Supported action types are `erc20Approval`, `vaultV1Deposit`, `vaultV1Withdraw`, `vaultV1Redeem`, `vaultV1InKindRedeem`, `vaultV1MigrateToV2`,
+Supported action types are `erc20Approval`, `morphoAuthorization`, `blueSupply`,
+`blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `vaultV1Deposit`, `vaultV1Withdraw`,
+`vaultV1Redeem`, `vaultV1InKindRedeem`, `vaultV1MigrateToV2`,
 `vaultV2Deposit`, `vaultV2Withdraw`, `vaultV2Redeem`,
 `vaultV2ForceWithdraw`, `vaultV2ForceRedeem` and `vaultV2InKindRedeem`. Builders return plain `Readonly<Transaction>` objects without step metadata.
 
 | Prepare function | Operation |
 | --- | --- |
+| `prepareBlueSupply` | Supply loan assets to a Blue market |
+| `prepareBlueSupplyCollateral` | Supply collateral to a Blue market without borrowing |
+| `prepareBlueSupplyCollateralBorrow` | Supply collateral, borrow, or perform both atomically on Blue |
 | `prepareVaultV2Deposit` | Deposit assets into Vault V2 |
 | `prepareVaultV2Withdraw` | Withdraw assets from Vault V2 |
 | `prepareVaultV2Redeem` | Redeem an exact number of Vault V2 shares |
@@ -346,6 +352,18 @@ Supported action types are `erc20Approval`, `vaultV1Deposit`, `vaultV1Withdraw`,
 | `prepareVaultV1Redeem` | Redeem an exact number of Vault V1 shares |
 | `prepareVaultV1InKindRedeem` | Redeem Vault V1 shares in kind |
 | `prepareVaultV1MigrateToV2` | Migrate exclusive `assets` or `shares` from Vault V1 into Vault V2 |
+
+`prepareBlueSupply` takes a caller-fetched market snapshot. With insufficient ERC-20 allowance,
+it requests an unlimited approval or an exact-amount ERC-2612 permit for BlueBundlesV1.
+Native funding is available only when the loan token is the chain's wrapped native token (wNative)
+and requires neither an approval nor a permit. Like deposit preparers, supply preparation takes
+`assets` with `funding: { type: "native" }`; the stored supply action retains gross `assets` and
+records the native funding as `nativeAssets`.
+
+`prepareBlueSupplyCollateral` takes a caller-fetched market snapshot and `collateralAssets`.
+With insufficient ERC-20 allowance, it requests an unlimited approval or an exact-amount ERC-2612
+permit for BlueBundlesV1. Native funding is available only for wNative collateral, needs neither
+approval nor permit, and stores `nativeAssets` equal to `collateralAssets`.
 
 `prepareVaultV2ForceRedeem` takes `vaultAddress` and top-level `shares`, with no snapshot.
 Caller-supplied `deallocations[].assets` and `shares` are fixed on one `vaultV2ForceRedeem` step
@@ -420,10 +438,13 @@ async function finalize(wallet: WalletClient, plan: TransactionPlan) {
 }
 ```
 
-Protect stored plans: verification checks permit consistency and signers, not whether stored action
-inputs match your intended operation. Builders do not reverify signatures in restored plans. Do not
-change the plan after applying signatures. Empty signature input still validates all requests and
-returns the original plan; omitted IDs retain their existing signatures.
+Parsing, inspection and builders reverify stored signatures offline against their requests and
+actions. Permits bind owner, token, spender, value, nonce, deadline and chain; Morpho authorizations
+bind owner, authorized address, nonce, deadline and chain, not operation amounts, markets or referral
+fees/recipients. Integrators must protect those unsigned fields and check that the plan matches their
+intent. Empty signature input still validates all requests and returns the original plan; omitted
+IDs retain their existing signatures. Supplied IDs can replace invalid stored signatures, but every
+replacement is verified.
 
 ### Midnight: take a fixed-rate offer
 

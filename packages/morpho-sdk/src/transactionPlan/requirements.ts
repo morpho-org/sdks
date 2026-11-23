@@ -1,6 +1,9 @@
 import { type Address, type Client, erc20Abi } from "viem";
 import { readContract } from "viem/actions";
-import { getRequirementsApproval } from "../actions/requirements/getRequirementsApproval.js";
+import {
+  capTokenApproval,
+  getTokenApprovalAmounts,
+} from "../helpers/tokenApproval.js";
 import { UnexpectedRequirementSignatureError } from "../types/error.js";
 import type {
   ERC20ApprovalAction,
@@ -21,7 +24,7 @@ import type { Action, SignatureRequest, Step } from "./types.js";
 export function buildPermitSignatureRequest(
   requirement: Pick<Requirement<Erc2612RequirementSignature>, "action">,
   id: string,
-): SignatureRequest {
+): Extract<SignatureRequest, { kind: "permit" }> {
   const { nonce, ...args } = requirement.action.args;
   if (nonce === undefined) {
     throw new UnexpectedRequirementSignatureError(requirement.action.type);
@@ -72,11 +75,6 @@ export function buildApprovalStep(
   };
 }
 
-/** @internal Token pull prerequisites: direct approvals or an ERC-2612 permit. */
-type TokenRequirement =
-  | Readonly<Transaction<ERC20ApprovalAction>>
-  | Requirement<Erc2612RequirementSignature>;
-
 interface TokenRequirementsParams {
   readonly token: Address;
   readonly spender: Address;
@@ -87,40 +85,64 @@ interface TokenRequirementsParams {
   readonly now: bigint;
   readonly supportSignature: boolean;
   readonly deployless: boolean | undefined;
+  readonly permitId: string;
+  readonly approvalId: (index: number) => string;
 }
 
 /**
- * @internal Resolves the token prerequisite of a VaultBundlesV1 pull without Permit2. A sufficient
+ * @internal Resolves the token prerequisite of a bundles pull without Permit2. A sufficient
  * direct allowance yields nothing. Otherwise signature support prefers an ERC-2612 permit when
  * available and falls back to a direct unlimited approval. Without signature support, always approve.
  */
 export async function getTokenRequirements(
   client: Client,
   params: TokenRequirementsParams,
-): Promise<readonly TokenRequirement[]> {
+): Promise<{
+  readonly approvals: Step<Extract<Action, { type: "erc20Approval" }>>[];
+  readonly permit?: Extract<SignatureRequest, { kind: "permit" }>;
+}> {
+  const { token, spender, amount, owner, chainId, permitId, approvalId } =
+    params;
   // The allowance is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
   const allowance = await readContract(client, {
     abi: erc20Abi,
-    address: params.token,
+    address: token,
     functionName: "allowance",
-    args: [params.owner, params.spender],
+    args: [owner, spender],
   });
-  if (allowance >= params.amount) {
-    return [];
+  if (allowance >= amount) {
+    return { approvals: [] };
   }
   if (params.supportSignature) {
     const permit = await getTokenPermit(client, {
       ...params,
+      id: permitId,
       supportDeployless: params.deployless,
     });
     if (permit !== undefined) {
-      return [permit];
+      return { approvals: [], permit };
     }
   }
-  return getRequirementsApproval({
-    address: params.token,
-    chainId: params.chainId,
-    args: { spendAmount: params.amount, spender: params.spender },
-    allowances: allowance,
+  const amounts = getTokenApprovalAmounts({
+    token,
+    chainId,
+    allowance,
+    spendAmount: amount,
   });
+  return {
+    approvals: amounts.map((approvalAmount, index) => ({
+      id: approvalId(index),
+      label: "Approve token spending",
+      action: {
+        type: "erc20Approval",
+        inputs: {
+          token,
+          spender,
+          assets: capTokenApproval({ token, chainId, amount: approvalAmount }),
+          chainId,
+          account: owner,
+        },
+      },
+    })),
+  };
 }

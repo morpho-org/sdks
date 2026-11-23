@@ -1,14 +1,15 @@
 # TransactionPlan
 
 TransactionPlan prepares immutable, serializable recipes for Vault V1 and V2 deposits, asset withdrawals and
-exact-share redemptions, plus Vault V1 to V2 migrations, Vault V2 forced asset exits and force redemptions. Consumers own the client, wallet, storage and submission. The SDK
+exact-share redemptions, plus Vault V1 to V2 migrations, Vault V2 forced asset exits and force redemptions,
+and supplying loan assets to Blue markets. Consumers own the client, wallet, storage and submission. The SDK
 does not sign or retain a client in a plan. Stable entity handles remain the recommended path
 during beta. See the [package guide](../../README.md#transactionplan-sign-and-verify-permits)
 for signature attachment and transaction building.
 
 ## Field mapping: prepare → stored inputs → entity and ABI
 
-This is the complete field-name mapping for all eleven vault actions and their approval steps.
+This maps fields for all eleven vault actions, Blue supply, and their approval steps.
 Shared intent rows describe vault preparers; derived approvals carry only their listed inputs.
 Shared rows apply alongside each vault action's rows, with the exceptions stated below. The stored
 column means `action.inputs` unless it explicitly says **top-level plan** or **request**.
@@ -27,18 +28,20 @@ An em dash means the value is not stored or not encoded, not a zero-valued argum
 | --- | --- | --- | --- | --- |
 | All actions | `chainId` | `chainId`; also top-level plan `chainId` | Entity factory/action vault context `chainId` → chain selection, no calldata field | Integer chain ID |
 | All actions | `account` | `account`; also top-level plan `account` | `userAddress` → bundle uses `msg.sender`; force-redeem uses `onBehalf` and `redeem.recipient` → deallocation owner and redeem receiver/owner | Address; signer, sender, share owner and recipient are the same account |
-| All except migration | `vault.address` (snapshot operations), `shareToken.address` (redemptions), or `vaultAddress: Address` (force-redeem) | `vault` | Entity factory/action vault address → ABI `vault` (force-redeem instead calls that vault directly) | Address derived from the supplied snapshot/token, or supplied directly for force-redeem |
+| Vault actions except migration | `vault.address` (snapshot operations), `shareToken.address` (redemptions), or `vaultAddress: Address` (force-redeem) | `vault` | Entity factory/action vault address → ABI `vault` (force-redeem instead calls that vault directly) | Address derived from the supplied snapshot/token, or supplied directly for force-redeem |
 | All actions | `expiresAt?` | `deadline = BigInt(expiresAt)`; top-level plan `expiresAt` stays a number; force-redeem stores only top-level expiry | `deadline` → ABI `deadline`; force-redeem has neither argument | Unix seconds; defaults to two hours from preparation |
-| Deposits, withdrawals, redemptions, migration, force-withdraw | `referralFee?.bps`, `referralFee?.recipient` | `referralFeePct`, `referralFeeRecipient` | Same names → same ABI names | Basis points → WAD ratio (`BigInt(bps) * 10n ** 14n`); recipient address; defaults to zero fee/zero address |
+| Deposits, withdrawals, redemptions, migration, force-withdraw, Blue supply | `referralFee?.bps`, `referralFee?.recipient` | `referralFeePct`, `referralFeeRecipient` | Same names → same ABI names | Basis points → WAD ratio (`BigInt(bps) * 10n ** 14n`); recipient address; defaults to zero fee/zero address |
 | In-kind exits and force-redeem | No `referralFee` param | — | — | These plans do not route referral fees |
 | All actions | `calldataOrigin?` | Top-level plan `calldataOrigin`, not an input | Related entity option `metadata.origin` accepts at most 4 bytes, optionally preceded by a 4-byte timestamp; plan builder appends `calldataOrigin` directly to transaction `data`, not an ABI argument | Plan accepts any non-empty, even-length hex attribution bytes |
 | All except force-redeem | `supportSignature?` | Not stored as a flag; determines approval steps or permit requests | Entity option `supportSignature` → referenced signature becomes action `requirementSignature` → `assetPermit` / `sharesPermit` | Boolean, default false; SDK never signs |
-| Deposits only | `deployless?` | — | Underlying-token permit metadata reads honor entity option `supportDeployless` | Optional boolean; preparation-only read strategy; other preparers have no such option |
+| Deposits and Blue supply | `deployless?` | — | Underlying/loan-token permit metadata reads honor entity option `supportDeployless` | Optional boolean; preparation-only read strategy |
 | Deposits, withdrawals, force-withdraw, in-kind exits | `vault: AccrualVault` (V1) or `vault: AccrualVaultV2` (V2) | Snapshot is not stored; its address and derived fields below are kept | Entity `vaultData` → — | One caller-fetched V1/V2 accrual snapshot, not a quantity |
 | Redemptions | `shareToken: Token` (required for both V1 and V2) | Token is not stored; its address is `vault` | Share-token metadata for permit resolution → — | No accrual snapshot or asset quote; an address-only Token is sufficient for V2 |
 | `vaultV2Deposit` | `assets`, `funding?: {type: "erc20" \| "native"}` | Exactly one of `assets` / `nativeAssets` | Entity/action `amount` / `nativeAmount` → `vaultBundlesV1Deposit.assets`; native funding also sets `tx.value` | Gross asset/native base units before referral fee; native asset must wrap to the vault asset |
 | `vaultV1Deposit` | `assets`, `funding?: {type: "erc20" \| "native"}` | Exactly one of `assets` / `nativeAssets` | Entity/action `amount` / `nativeAmount` → `vaultBundlesV1Deposit.assets`; native funding also sets `tx.value` | Gross asset/native base units before referral fee; native asset must wrap to the vault asset |
 | Both deposits | `slippageTolerance?`; `vault.asset` | Derived `maxSharePrice`; `asset` | Entity `slippageTolerance` derives action `maxSharePrice` → ABI `maxSharePriceE27`; `asset` is action vault context, not a calldata argument | WAD tolerance → RAY maximum price; asset address |
+| `blueSupply` | `marketId`, `marketData`, `assets`, `funding?` | Plain `marketParams` tuple, gross `assets`, optional `nativeAssets` | Stored `nativeAssets` maps to action `nativeAmount`; `blueBundlesV1Supply` takes the market tuple and gross assets; native funding also sets `tx.value` | Exclusive native funding requires a wrapped-native loan token and sets `nativeAssets = assets` |
+| ERC-2612 Blue supply request | Derived from loan-token metadata and requirements; ERC-20 funding only | Action references the request via `signatureRequestIds.tokenPermit` | `requirementSignature` supplies the encoded loan-token permit to `blueBundlesV1Supply` | Signed amount equals gross `assets`; spender is BlueBundlesV1 |
 | `vaultV2Withdraw` | `assets` | `assets` | Entity/action `amount` → `vaultBundlesV1Withdraw.assets` (ABI `shares = 0`) | Gross asset base units before referral fee |
 | `vaultV1Withdraw` | `assets` | `assets` | Entity/action `amount` → `vaultBundlesV1Withdraw.assets` (ABI `shares = 0`) | Gross asset base units before referral fee |
 | Both withdrawals | Snapshot quote, no explicit allowance or slippage param | Derived `requiredShareAllowance` | Used only to resolve authorization, not an ABI limit | Share base units of the withdrawing vault; not a maximum-shares bound |
@@ -110,9 +113,13 @@ New force-redemption plans take `vaultAddress`, top-level `shares`, and asset-de
 `deallocations[].assets`. Stored inputs use `vault` and `redeem.shares`. No `supportSignature` or
 `deployless` option is accepted because this native vault multicall needs no token permissions.
 
-`parseTransactionPlan` validates structure and internal consistency, not authenticity, intent,
-expiry, live state or stored signature validity. Protect stored plans independently; a successful
-parse is not authorization to submit them.
+`parseTransactionPlan`, inspection and builders validate structure and internal consistency and
+reject stored signatures from the wrong signer offline. Permits bind owner, token, spender, value, nonce, deadline
+and chain; Morpho authorizations bind owner, authorized address, nonce, deadline and chain, not
+operation amounts, markets or referral fees/recipients. Integrators must protect unsigned fields;
+a successful parse does not prove intent or authorize submission. Validation checks that deadlines
+are no earlier than `expiresAt`, but reads no clock or live state and does not establish that the
+plan is still usable onchain. `applySignatures` verifies replacements and retained signatures.
 
 ## V1 asset withdrawals
 

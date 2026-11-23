@@ -1,7 +1,7 @@
-import { type Address, MathLib } from "@morpho-org/blue-sdk";
+import type { Address } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from "viem";
-import { MAX_TOKEN_APPROVALS } from "../../../helpers/constant.js";
+import { encodeFunctionData, erc20Abi } from "viem";
+import { capTokenApproval } from "../../../helpers/tokenApproval.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
 
@@ -45,7 +45,7 @@ interface EncodeErc20ApprovalParams {
 export const encodeErc20Approval = (
   params: EncodeErc20ApprovalParams,
 ): Transaction<ERC20ApprovalAction> => {
-  const { token, spender, amount, chainId } = params;
+  const { token, spender, chainId } = params;
   // Reject approval targets outside the SDK's registered protocol spenders.
   validateRequirementSpender({
     chainId,
@@ -60,12 +60,7 @@ export const encodeErc20Approval = (
     ],
   });
 
-  const amountValue = MathLib.min(
-    amount,
-    // Checksum the lookup key so a differently-cased token still resolves its per-token cap
-    // instead of falling back to `maxUint256`, which UNI/ONDO/COMP/FLUID reject above `uint96`.
-    MAX_TOKEN_APPROVALS[chainId]?.[getAddress(token)] ?? maxUint256,
-  );
+  const amountValue = capTokenApproval(params);
 
   return deepFreeze({
     to: token,

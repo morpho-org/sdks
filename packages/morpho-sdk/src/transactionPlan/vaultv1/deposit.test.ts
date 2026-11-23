@@ -2,18 +2,12 @@ import { Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import {
-  erc20Abi,
-  maxUint256,
-  serializeSignature,
-  toHex,
-  zeroAddress,
-} from "viem";
+import { erc20Abi, maxUint256, toHex, zeroAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_ASSET,
-  IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV1Data,
 } from "../../../test/fixtures/inKindRedeem.js";
@@ -24,12 +18,16 @@ import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
 } from "../../types/index.js";
-import { IncompleteTransactionPlanError } from "../error.js";
+import {
+  IncompleteTransactionPlanError,
+  InvalidTransactionPlanError,
+} from "../error.js";
 import { buildTransactions } from "../plan.js";
 import { parseTransactionPlan, serializeTransactionPlan } from "../serde.js";
 import type { Step, TransactionPlan } from "../types.js";
 import { prepareVaultV1Deposit } from "./deposit.js";
 
+const IN_KIND_USER = privateKeyToAccount(toHex(1n, { size: 32 })).address;
 const vaultData = inKindVaultV1Data();
 const params = {
   vault: vaultData,
@@ -39,6 +37,18 @@ const params = {
 };
 
 describe("prepareVaultV1Deposit", () => {
+  test("error: rejects attribution over 1 MiB before RPC reads", async () => {
+    const mock = createMockClient(mainnet);
+    await expect(
+      prepareVaultV1Deposit(mock.client, {
+        ...params,
+        now: 1_700_000_000n,
+        calldataOrigin: `0x${"ab".repeat(1024 * 1024 + 1)}`,
+      }),
+    ).rejects.toThrow(InvalidTransactionPlanError);
+    expect(mock.request).not.toHaveBeenCalled();
+  });
+
   test.each([
     { explicitNow: true, customExpiry: false },
     { explicitNow: true, customExpiry: true },
@@ -173,71 +183,69 @@ describe("prepareVaultV1Deposit", () => {
   });
 });
 
-describe("vaultV1Deposit plan step", () => {
-  const spender = getChainAddress(1, "bundles.vaultBundlesV1");
-  const inputs = {
-    chainId: 1,
-    account: IN_KIND_USER,
-    vault: IN_KIND_VAULT,
-    asset: IN_KIND_ASSET,
-    maxSharePrice: 10n ** 27n,
-    assets: 100n,
-    deadline: 2_000_000_000n,
-    referralFeePct: 0n,
-    referralFeeRecipient: zeroAddress,
-  };
-  const permitArgs = {
-    spender,
-    amount: inputs.assets,
-    deadline: inputs.deadline,
-    nonce: 0n,
-  };
-  const typedData = getPermitTypedData(
+const spender = getChainAddress(1, "bundles.vaultBundlesV1");
+const inputs = {
+  chainId: 1,
+  account: IN_KIND_USER,
+  vault: IN_KIND_VAULT,
+  asset: IN_KIND_ASSET,
+  maxSharePrice: 10n ** 27n,
+  assets: 100n,
+  deadline: 2_000_000_000n,
+  referralFeePct: 0n,
+  referralFeeRecipient: zeroAddress,
+};
+const permitArgs = {
+  spender,
+  amount: inputs.assets,
+  deadline: inputs.deadline,
+  nonce: 0n,
+};
+const typedData = getPermitTypedData(
+  {
+    erc20: new Token({ address: IN_KIND_ASSET, name: "Asset" }),
+    owner: IN_KIND_USER,
+    allowance: permitArgs.amount,
+    ...permitArgs,
+  },
+  1,
+);
+const signature = await privateKeyToAccount(
+  toHex(1n, { size: 32 }),
+).signTypedData(typedData);
+const depositStep = {
+  id: "vaultV1Deposit",
+  label: "Deposit into vault",
+  action: {
+    type: "vaultV1Deposit",
+    inputs,
+    signatureRequestIds: { tokenPermit: "vaultV1Deposit:tokenPermit" },
+  },
+} as const satisfies Step;
+const pendingPlan: TransactionPlan = {
+  version: 2,
+  chainId: 1,
+  account: IN_KIND_USER,
+  expiresAt: Number(inputs.deadline),
+  steps: [depositStep],
+  signatureRequests: [
     {
-      erc20: new Token({ address: IN_KIND_ASSET, name: "Asset" }),
-      owner: IN_KIND_USER,
-      allowance: permitArgs.amount,
-      ...permitArgs,
+      id: "vaultV1Deposit:tokenPermit",
+      kind: "permit",
+      typedData,
+      args: permitArgs,
     },
-    1,
-  );
-  const signature = serializeSignature({
-    r: toHex(1n, { size: 32 }),
-    s: toHex(2n, { size: 32 }),
-    yParity: 0,
-  });
-  const depositStep = {
-    id: "vaultV1Deposit",
-    label: "Deposit into vault",
-    action: {
-      type: "vaultV1Deposit",
-      inputs,
-      signatureRequestIds: { tokenPermit: "vaultV1Deposit:tokenPermit" },
-    },
-  } as const satisfies Step;
-  const pendingPlan: TransactionPlan = {
-    version: 2,
-    chainId: 1,
-    account: IN_KIND_USER,
-    expiresAt: Number(inputs.deadline),
-    steps: [depositStep],
-    signatureRequests: [
-      {
-        id: "vaultV1Deposit:tokenPermit",
-        kind: "permit",
-        typedData,
-        args: permitArgs,
-      },
-    ],
-  };
-  const completePlan = {
-    ...pendingPlan,
-    signatureRequests: pendingPlan.signatureRequests.map((request) => ({
-      ...request,
-      signature,
-    })),
-  };
+  ],
+};
+const completePlan = {
+  ...pendingPlan,
+  signatureRequests: pendingPlan.signatureRequests.map((request) => ({
+    ...request,
+    signature,
+  })),
+};
 
+describe("vaultV1Deposit plan step", () => {
   test("default: builds the same transaction as the vaultV1Deposit action", () => {
     const { asset, chainId, account, assets, ...args } = inputs;
     const expected = vaultV1Deposit({

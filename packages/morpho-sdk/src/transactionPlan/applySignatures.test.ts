@@ -24,8 +24,16 @@ import {
   BundlesPermitMismatchError,
   InvalidSignatureError,
 } from "../types/error.js";
-import { TransactionPlanSignatureMismatchError } from "./error.js";
-import { applySignatures, buildTransactions } from "./plan.js";
+import {
+  InvalidTransactionPlanError,
+  TransactionPlanSignatureMismatchError,
+} from "./error.js";
+import {
+  applySignatures,
+  buildTransactions,
+  getPendingSignatureRequests,
+} from "./plan.js";
+import { parseTransactionPlan, serializeTransactionPlan } from "./serde.js";
 import type { TransactionPlan } from "./types.js";
 
 const owner = privateKeyToAccount(toHex(1n, { size: 32 }));
@@ -72,6 +80,97 @@ const plan: TransactionPlan = deepFreeze({
     },
   ],
   signatureRequests: [{ id: "permit", kind: "permit", args, typedData }],
+});
+
+test("audit: stored signatures are recovered at every boundary", async () => {
+  const signature = await other.signTypedData(typedData);
+  const stored = {
+    ...plan,
+    signatureRequests: [{ ...plan.signatureRequests[0]!, signature }],
+  };
+  expect(() => buildTransactions(stored)).toThrow(InvalidSignatureError);
+  expect(() => getPendingSignatureRequests(stored)).toThrow(
+    InvalidSignatureError,
+  );
+  expect(() => applySignatures(stored, [])).toThrow(InvalidSignatureError);
+  expect(() => parseTransactionPlan(serializeTransactionPlan(stored))).toThrow(
+    InvalidTransactionPlanError,
+  );
+});
+
+test("audit: a consistently changed permit amount invalidates the old signature", async () => {
+  const stored = structuredClone(plan);
+  const signature = await owner.signTypedData(typedData);
+  Object.assign(stored.steps[0]!.action.inputs, { assets: 101n });
+  Object.assign(stored.signatureRequests[0]!.args, { amount: 101n });
+  Object.assign(stored.signatureRequests[0]!.typedData.message, {
+    value: 101n,
+  });
+  Object.assign(stored.signatureRequests[0]!, { signature });
+  expect(() => buildTransactions(stored)).toThrow(InvalidSignatureError);
+});
+
+test("audit: signed permits still validate action consistency", async () => {
+  const stored = structuredClone(plan);
+  Object.assign(stored.steps[0]!.action.inputs, { assets: 101n });
+  Object.assign(stored.signatureRequests[0]!, {
+    signature: await owner.signTypedData(typedData),
+  });
+  expect(() => getPendingSignatureRequests(stored)).toThrow(
+    TransactionPlanSignatureMismatchError,
+  );
+});
+
+test.each(["0x1", "0xgg", `0x${"00".repeat(1024 * 1024 + 1)}`])(
+  "audit: rejects malformed or oversized origin %#",
+  (calldataOrigin) => {
+    const stored = { ...plan, calldataOrigin } as TransactionPlan;
+    expect(() => buildTransactions(stored)).toThrow(
+      InvalidTransactionPlanError,
+    );
+    expect(() => getPendingSignatureRequests(stored)).toThrow(
+      InvalidTransactionPlanError,
+    );
+    expect(() =>
+      parseTransactionPlan(serializeTransactionPlan(stored)),
+    ).toThrow(InvalidTransactionPlanError);
+  },
+);
+
+test.each(["chain", "account", "requestId", "stepId", "expiry"])(
+  "audit: validates direct plan headers: %s",
+  (field) => {
+    const stored = structuredClone(plan);
+    if (field === "chain") Object.assign(stored, { chainId: 8453 });
+    if (field === "account") Object.assign(stored, { account: other.address });
+    if (field === "requestId")
+      Object.assign(stored, {
+        signatureRequests: [
+          ...stored.signatureRequests,
+          stored.signatureRequests[0],
+        ],
+      });
+    if (field === "stepId")
+      Object.assign(stored, { steps: [...stored.steps, stored.steps[0]] });
+    if (field === "expiry")
+      Object.assign(stored, { expiresAt: Number(args.deadline) + 1 });
+    expect(() => getPendingSignatureRequests(stored)).toThrow(
+      InvalidTransactionPlanError,
+    );
+    expect(() => buildTransactions(stored)).toThrow(
+      InvalidTransactionPlanError,
+    );
+  },
+);
+
+test("audit: rejects one permit referenced by two steps", () => {
+  const stored = {
+    ...plan,
+    steps: [...plan.steps, { ...plan.steps[0]!, id: "second" }],
+  };
+  expect(() => getPendingSignatureRequests(stored)).toThrow(
+    TransactionPlanSignatureMismatchError,
+  );
 });
 
 test.each([false, true])(
@@ -125,6 +224,44 @@ test("preserves omitted signatures and shares untouched requests", async () => {
   ]);
   expect(signed.signatureRequests[1]).toBe(original.signatureRequests[1]);
   expect(applySignatures(signed, [])).toBe(signed);
+});
+
+test("repairs only the stored signatures named by the updates", async () => {
+  const badSignature = await other.signTypedData(typedData);
+  const signature = await owner.signTypedData(typedData);
+  const request = plan.signatureRequests[0]!;
+  const step = plan.steps[0]!;
+  assert(step.action.type === "vaultV2Deposit");
+  const stored: TransactionPlan = deepFreeze({
+    ...plan,
+    steps: [
+      step,
+      {
+        ...step,
+        id: "second",
+        action: {
+          ...step.action,
+          signatureRequestIds: { tokenPermit: "secondPermit" },
+        },
+      },
+    ],
+    signatureRequests: [
+      { ...request, signature: badSignature },
+      { ...request, id: "secondPermit" },
+    ],
+  });
+  const repaired = applySignatures(stored, [{ id: "permit", signature }]);
+  expect(repaired.signatureRequests[0]?.signature).toBe(signature);
+  expect(getPendingSignatureRequests(repaired).map(({ id }) => id)).toEqual([
+    "secondPermit",
+  ]);
+  expect(stored.signatureRequests[0]?.signature).toBe(badSignature);
+  expect(() =>
+    applySignatures(stored, [{ id: "secondPermit", signature }]),
+  ).toThrow(InvalidSignatureError);
+  expect(() =>
+    applySignatures(stored, [{ id: "permit", signature: badSignature }]),
+  ).toThrow(InvalidSignatureError);
 });
 
 test("rejects a signature from another key", async () => {
@@ -247,15 +384,15 @@ test("empty input validates requests and returns the identical plan", () => {
   );
 });
 
-test("uses the action and EIP-712 chain rather than the informational header", async () => {
+test("rejects a header chain that disagrees with the action", async () => {
   const signature = await owner.signTypedData(typedData);
-  const signed = applySignatures({ ...plan, chainId: 8453 }, [
-    { id: "permit", signature },
-  ]);
-  expect(signed.signatureRequests[0]?.signature).toBe(signature);
+  expect(() =>
+    applySignatures({ ...plan, chainId: 8453 }, [{ id: "permit", signature }]),
+  ).toThrow(InvalidTransactionPlanError);
 });
 
-propertyTest.prop([
+// fast-check reads Vitest's global current test, which concurrent siblings can clear.
+propertyTest.sequential.prop([
   fc.record({
     key: fc.bigInt({ min: 1n, max: secp256k1.CURVE.n - 1n }),
     nonce: fc.bigInt({ min: 0n, max: 2n ** 256n - 1n }),
@@ -266,6 +403,7 @@ propertyTest.prop([
   async ({ key, nonce, compact }) => {
     const account = privateKeyToAccount(toHex(key, { size: 32 }));
     const request = plan.signatureRequests[0]!;
+    assert(request.kind === "permit");
     const data = {
       ...typedData,
       message: { ...typedData.message, owner: account.address, nonce },
@@ -280,6 +418,7 @@ propertyTest.prop([
     assert(step.action.type === "vaultV2Deposit");
     const target: TransactionPlan = {
       ...plan,
+      account: account.address,
       steps: [
         {
           ...step,

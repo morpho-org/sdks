@@ -111,14 +111,15 @@ describe("prepareVaultV2InKindRedeem", () => {
       expect(prepared.signatureRequests).toHaveLength(
         authorization === "permit" ? 1 : 0,
       );
-      if (authorization === "permit")
+      if (authorization === "permit") {
         expect(prepared.signatureRequests[0]?.args.deadline).toBe(
           BigInt(expectedExpiry),
         );
-      else
+      } else {
         expect(buildTransactions(prepared)).toHaveLength(
           authorization === "approval" ? 2 : 1,
         );
+      }
     },
   );
   test.each([false, true])(
@@ -136,11 +137,12 @@ describe("prepareVaultV2InKindRedeem", () => {
           ? ["vaultV2InKindRedeem"]
           : ["erc20Approval", "vaultV2InKindRedeem"],
       );
-      if (!supportSignature)
+      if (!supportSignature) {
         expect(plan.steps[0]?.action.inputs).toMatchObject({
           spender: getChainAddress(1, "bundles.vaultExitBundlesV1"),
           shares: maxUint256,
         });
+      }
       const pending = parseTransactionPlan(serializeTransactionPlan(plan));
       expect(() =>
         parseTransactionPlan(
@@ -293,10 +295,10 @@ describe("buildVaultV2InKindRedeem", () => {
     ]) {
       const changed = {
         ...plan,
-        signatureRequests: plan.signatureRequests.map((request) => ({
-          ...request,
-          args: { ...request.args, ...args },
-        })),
+        signatureRequests: plan.signatureRequests.map((request) => {
+          assert(request.kind === "permit");
+          return { ...request, args: { ...request.args, ...args } };
+        }),
       };
       expect(() => getPendingSignatureRequests(changed)).toThrow(
         TransactionPlanSignatureMismatchError,

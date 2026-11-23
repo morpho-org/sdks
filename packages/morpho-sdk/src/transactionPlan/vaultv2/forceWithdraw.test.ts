@@ -2,7 +2,7 @@ import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, maxUint256, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
-import { expect, expectTypeOf, test } from "vitest";
+import { assert, expect, expectTypeOf, test } from "vitest";
 import {
   IN_KIND_USER,
   IN_KIND_VAULT,
@@ -78,14 +78,15 @@ test.each(
     expect(plan.signatureRequests).toHaveLength(
       authorization === "permit" ? 1 : 0,
     );
-    if (authorization === "permit")
+    if (authorization === "permit") {
       expect(plan.signatureRequests[0]?.args.deadline).toBe(
         BigInt(expectedExpiry),
       );
-    else
+    } else {
       expect(sdk.buildTransactions(plan)).toHaveLength(
         authorization === "approval" ? 2 : 1,
       );
+    }
   },
 );
 
@@ -133,10 +134,11 @@ test.each(
     const restored = sdk.parseTransactionPlan(
       sdk.serializeTransactionPlan(plan),
     );
-    if (allowance === 0n)
+    if (allowance === 0n) {
       expect(restored.steps[0]?.action.inputs).toMatchObject({
         shares: maxUint256,
       });
+    }
     expect(sdk.buildTransactions(restored)).toEqual(
       sdk.buildTransactions(plan),
     );
@@ -153,16 +155,20 @@ test.each(
       .buildTx();
     expect(sdk.buildTransactions(restored).at(-1)).toMatchObject(expected);
     const step = restored.steps.at(-1)!;
-    const transaction = sdk.buildTransaction(
-      { ...restored, chainId: 8453, account: IN_KIND_VAULT },
-      step,
-    );
+    expect(() =>
+      sdk.buildTransaction(
+        { ...restored, chainId: 8453, account: IN_KIND_VAULT },
+        step,
+      ),
+    ).toThrow(sdk.InvalidTransactionPlanError);
+    const transaction = sdk.buildTransaction(restored, step);
     expect(transaction).toEqual(expected);
     expect(Object.isFrozen(transaction)).toBe(true);
     expect(transaction).not.toHaveProperty("id");
     expect(transaction).not.toHaveProperty("kind");
-    if (step.action.type !== "vaultV2ForceWithdraw")
+    if (step.action.type !== "vaultV2ForceWithdraw") {
       throw new Error("Expected a force-withdraw step");
+    }
     expect(step.action.inputs.assets).toBe(51n);
     expect(step.action.inputs.minSharePriceE27).toBe(
       expected.action.args.minSharePriceE27,
@@ -255,6 +261,7 @@ test.each([true, false])(
     });
     expect(plan.signatureRequests).toHaveLength(1);
     const request = plan.signatureRequests[0]!;
+    assert(request.kind === "permit");
     expect(request.args.amount).toBe(maxUint256);
     expect(request.typedData.message.value).toBe(maxUint256);
     expect(sdk.getPendingSignatureRequests(plan)).toEqual([request]);
@@ -279,10 +286,7 @@ test.each([true, false])(
       ],
     };
     expect(() => sdk.buildTransactions(mismatched)).toThrow(
-      expect.objectContaining({
-        name: "BundlesPermitMismatchError",
-        field: "deadline",
-      }),
+      sdk.InvalidTransactionPlanError,
     );
     const altered = {
       ...plan,

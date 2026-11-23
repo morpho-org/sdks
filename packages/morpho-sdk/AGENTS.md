@@ -17,6 +17,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 | **Client** | no | no | no | factory for entities |
 | **Entity** | yes (RPC) | no | yes | lazy `{ buildTx, getRequirements }` |
 | **Action** | no | yes | **no** | deep-frozen `Transaction` |
+| **Internal reads** (`src/reads/`) | yes (RPC) | no | yes | validated data shared by Entity and TransactionPlan flows, never handles or requirements |
 | **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | per-function contract |
 
 Cross-layer leaks (entities encoding calldata, actions reading state, helpers depending on entities) are an API design failure, not an implementation detail. Redesign the boundary; do not add a shortcut.

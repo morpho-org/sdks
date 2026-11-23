@@ -203,9 +203,9 @@ describe("Vault V2 force-redeem plan", () => {
       { adapter: zeroAddress, assets: 40n },
     ]);
     expect(buildVaultV2ForceRedeem(step.action)).toEqual(built);
-    expect(
+    expect(() =>
       buildTransactions({ ...restored, chainId: 999, account: zeroAddress }),
-    ).toEqual([built]);
+    ).toThrow(InvalidTransactionPlanError);
     expect(b.request).not.toHaveBeenCalled();
   });
 

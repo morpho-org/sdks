@@ -17,6 +17,7 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { toSimulationErrorResponse } from "../../error-response.js";
 import {
   ApprovalCheckUnavailableError,
   RpcTransportError,
@@ -75,6 +76,181 @@ const limit: ParsedOperationLimit = {
 };
 
 describe("resolveAssets", () => {
+  test("error: approval identity mismatch stays visible in the public error response", async () => {
+    const handle = createMockClient(mainnet);
+    const otherMarket = {
+      ...suppliedMidnightMarket,
+      loanToken: vault,
+    } as const;
+    mockRead(handle, {
+      address: suppliedMidnightMarket.midnight,
+      abi: midnightAbi,
+      functionName: "toMarket",
+      result: otherMarket,
+    });
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      midnight: suppliedMidnightMarket.midnight,
+      operations: [
+        {
+          type: "midnightSupplyCollateral",
+          marketId: suppliedMidnightMarketId,
+          collateralIndex: 0n,
+          assetPaid: collateral,
+          quote: { assetsPaid: 10n, collateralSupplied: 10n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApprovalCheckUnavailableError);
+    const response = toSimulationErrorResponse(error);
+    expect(response.message).toContain(suppliedMidnightMarketId);
+    expect(response.message).toContain(MidnightMarketUtils.toId(otherMarket));
+  });
+  test.each([undefined, collateral] as const)(
+    "error: all-zero Midnight metadata retains recovery advice (assetPaid=%s)",
+    async (assetPaid) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: suppliedMidnightMarket.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: {
+          chainId: 0n,
+          midnight: zeroAddress,
+          loanToken: zeroAddress,
+          collateralParams: [],
+          maturity: 0n,
+          rcfThreshold: 0n,
+          enterGate: zeroAddress,
+          liquidatorGate: zeroAddress,
+        },
+      });
+      const error = await resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        midnight: suppliedMidnightMarket.midnight,
+        operations: [
+          {
+            type: "midnightSupplyCollateral",
+            marketId: suppliedMidnightMarketId,
+            collateralIndex: 0n,
+            quote: { assetsPaid: 10n, collateralSupplied: 10n },
+            slippageTolerance: 0n,
+            ...(assetPaid === undefined ? {} : { assetPaid }),
+          },
+        ],
+        blockNumber: 1n,
+      }).catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(
+        assetPaid === undefined
+          ? SlippageCheckUnavailableError
+          : ApprovalCheckUnavailableError,
+      );
+      if (assetPaid === undefined) {
+        expect(error).toMatchObject({
+          reason: "emptyData",
+          field: "assetsPaid",
+        });
+      }
+      expect(
+        toSimulationErrorResponse(error).message.split(
+          'pass the market struct via "market"',
+        ),
+      ).toHaveLength(2);
+    },
+  );
+  test.each([undefined, vault] as const)(
+    "error: reordered Midnight collateral fails closed (assetPaid=%s)",
+    async (assetPaid) => {
+      const market = {
+        ...suppliedMidnightMarket,
+        collateralParams: [
+          ...suppliedMidnightMarket.collateralParams,
+          { ...suppliedMidnightMarket.collateralParams[0]!, token: vault },
+        ],
+      } as const;
+      const canonical = MidnightMarketUtils.toStruct(market);
+      const id = MidnightMarketUtils.toId(canonical);
+      expect(MidnightMarketUtils.toId(market)).toBe(id);
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: market.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: market,
+      });
+      await expect(
+        resolveAssets({
+          client: handle.client,
+          morpho: zeroAddress,
+          midnight: market.midnight,
+          operations: [
+            {
+              type: "midnightSupplyCollateral",
+              marketId: id,
+              collateralIndex: 0n,
+              quote: { assetsPaid: 10n, collateralSupplied: 10n },
+              slippageTolerance: 0n,
+              ...(assetPaid === undefined ? {} : { assetPaid }),
+            },
+          ],
+          blockNumber: 1n,
+        }),
+      ).rejects.toBeInstanceOf(
+        assetPaid === undefined
+          ? SlippageCheckUnavailableError
+          : ApprovalCheckUnavailableError,
+      );
+    },
+  );
+  test.each(
+    ([undefined, vault] as const).flatMap((assetPaid) =>
+      [
+        { loanToken: vault },
+        { collateralParams: [] },
+        { chainId: 8453n },
+        { midnight: vault },
+        { maturity: suppliedMidnightMarket.maturity + 1n },
+      ].map((mutation) => ({ assetPaid, mutation })),
+    ),
+  )(
+    "error: mismatched Midnight metadata fails closed (assetPaid=$assetPaid, $mutation)",
+    async ({ assetPaid, mutation }) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: suppliedMidnightMarket.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: { ...suppliedMidnightMarket, ...mutation },
+      });
+      await expect(
+        resolveAssets({
+          client: handle.client,
+          morpho: zeroAddress,
+          midnight: suppliedMidnightMarket.midnight,
+          operations: [
+            {
+              type: "midnightSupplyCollateral",
+              marketId: suppliedMidnightMarketId,
+              collateralIndex: 0n,
+              quote: { assetsPaid: 10n, collateralSupplied: 10n },
+              slippageTolerance: 0n,
+              ...(assetPaid === undefined ? {} : { assetPaid }),
+            },
+          ],
+          blockNumber: 1n,
+        }),
+      ).rejects.toBeInstanceOf(
+        assetPaid === undefined
+          ? SlippageCheckUnavailableError
+          : ApprovalCheckUnavailableError,
+      );
+      expect(handle.request).toHaveBeenCalledTimes(1);
+    },
+  );
   test.each(
     (
       [
@@ -132,6 +308,15 @@ describe("resolveAssets", () => {
         field,
         reason,
       });
+      if (
+        type === "midnightWithdrawCollateralBatch" &&
+        reason === "emptyData"
+      ) {
+        await expect(resolution).rejects.toHaveProperty(
+          "message",
+          expect.not.stringContaining('pass the market struct via "market"'),
+        );
+      }
     },
   );
   test.each([
@@ -650,39 +835,40 @@ describe("resolveAssets", () => {
   });
   test("behavior: combined Midnight supply maps collateral indices and loan proceeds", async () => {
     const handle = createMockClient(mainnet);
+    const midnightMarket = {
+      chainId: BigInt(mainnet.id),
+      midnight: zeroAddress,
+      loanToken: loan,
+      collateralParams: [
+        {
+          token: collateral,
+          lltv: 0n,
+          liquidationCursor: 0n,
+          oracle: zeroAddress,
+        },
+        {
+          token: vault,
+          lltv: 0n,
+          liquidationCursor: 0n,
+          oracle: zeroAddress,
+        },
+      ],
+      maturity: 2_000_000_000n,
+      rcfThreshold: 0n,
+      enterGate: zeroAddress,
+      liquidatorGate: zeroAddress,
+    } as const;
     mockRead(handle, {
       address: zeroAddress,
       abi: midnightAbi,
       functionName: "toMarket",
-      result: {
-        chainId: BigInt(mainnet.id),
-        midnight: zeroAddress,
-        loanToken: loan,
-        collateralParams: [
-          {
-            token: collateral,
-            lltv: 0n,
-            liquidationCursor: 0n,
-            oracle: zeroAddress,
-          },
-          {
-            token: vault,
-            lltv: 0n,
-            liquidationCursor: 0n,
-            oracle: zeroAddress,
-          },
-        ],
-        maturity: 2_000_000_000n,
-        rcfThreshold: 0n,
-        enterGate: zeroAddress,
-        liquidatorGate: zeroAddress,
-      },
+      result: MidnightMarketUtils.toStruct(midnightMarket),
     });
     const operation: ParsedOperationLimit = {
       type: "midnightSupplyCollateralTakeBorrow",
-      marketId,
+      marketId: MidnightMarketUtils.toId(midnightMarket),
       quote: {
-        collateralSupplies: [{ collateralIndex: 1n, assets: 10n }],
+        collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
         unitsSold: 5n,
         assetsReceived: 5n,
       },
@@ -697,7 +883,7 @@ describe("resolveAssets", () => {
     });
     expect(result[0]?.assetsReceived).toBe(loan);
     expect(result[0]?.midnightCollateralTokens).toEqual([
-      { collateralIndex: 1n, token: vault },
+      { collateralIndex: 0n, token: vault },
     ]);
     expect(result[0]?.midnightApprovalTokens).toEqual([vault]);
   });
@@ -1470,9 +1656,33 @@ describe("resolveAssets", () => {
 describe("resolveAssets — Midnight collateral", () => {
   const midnight = "0x0000000000000000000000000000000000000004";
   const secondCollateral = "0x0000000000000000000000000000000000000005";
+  const midnightMarket = {
+    chainId: 1n,
+    midnight,
+    loanToken: loan,
+    collateralParams: [
+      {
+        token: collateral,
+        lltv: 0n,
+        liquidationCursor: 0n,
+        oracle: zeroAddress,
+      },
+      {
+        token: secondCollateral,
+        lltv: 0n,
+        liquidationCursor: 0n,
+        oracle: zeroAddress,
+      },
+    ],
+    maturity: 0n,
+    rcfThreshold: 0n,
+    enterGate: zeroAddress,
+    liquidatorGate: zeroAddress,
+  } as const;
+  const midnightMarketId = MidnightMarketUtils.toId(midnightMarket);
   const midnightLimit = {
     type: "midnightSupplyCollateral",
-    marketId,
+    marketId: midnightMarketId,
     collateralIndex: 1n,
     quote: { assetsPaid: 10n, collateralSupplied: 10n },
     slippageTolerance: 0n,
@@ -1494,29 +1704,7 @@ describe("resolveAssets — Midnight collateral", () => {
       address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
-      result: {
-        chainId: 1n,
-        midnight,
-        loanToken: loan,
-        collateralParams: [
-          {
-            token: collateral,
-            lltv: 0n,
-            liquidationCursor: 0n,
-            oracle: zeroAddress,
-          },
-          {
-            token: secondCollateral,
-            lltv: 0n,
-            liquidationCursor: 0n,
-            oracle: zeroAddress,
-          },
-        ],
-        maturity: 0n,
-        rcfThreshold: 0n,
-        enterGate: zeroAddress,
-        liquidatorGate: zeroAddress,
-      },
+      result: midnightMarket,
     });
 
   test("behavior: the paid token is the market collateral at collateralIndex, read once per market", async () => {
@@ -1663,7 +1851,7 @@ describe("resolveAssets — Midnight collateral", () => {
         code: "VALIDATION_ERROR",
         message:
           assetPaid === undefined
-            ? `Cannot resolve the token for "${type}" asset source "midnight:${marketId}": the market has no collateral at the quoted index. Check collateralIndex. If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
+            ? `Cannot resolve the token for "${type}" asset source "midnight:${midnightMarketId}": the market has no collateral at the quoted index. Check collateralIndex. If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
             : `Cannot resolve the token approval required by "${type}" at the pinned block. If this bundle creates the market, pass the market struct via "market".`,
         fieldErrors: [
           "limits.operations[0].collateralIndex: the market has no collateral at this index",
@@ -1709,7 +1897,7 @@ describe("resolveAssets — Midnight collateral", () => {
         code: "VALIDATION_ERROR",
         message:
           assetPaid === undefined
-            ? `Cannot resolve the token for "${type}" asset source "midnight:${marketId}". If this bundle creates the market, pass the market struct via "market". If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
+            ? `Cannot resolve the token for "${type}" asset source "midnight:${midnightMarketId}". If this bundle creates the market, pass the market struct via "market". If the market does not exist yet at the state block, set assetPaid to exactly collateralParams[collateralIndex].token; it is not checked.`
             : `Cannot resolve the token approval required by "${type}" at the pinned block. If this bundle creates the market, pass the market struct via "market".`,
         fieldErrors: [
           "limits.operations[0].assetPaid: required for a market the bundle creates",
@@ -1743,7 +1931,6 @@ describe("resolveAssets — Midnight collateral", () => {
           result: {
             ...suppliedMidnightMarket,
             loanToken: zeroAddress,
-            collateralParams: [],
           },
         });
       else
@@ -1800,7 +1987,7 @@ describe("resolveAssets — Midnight collateral", () => {
     mockToMarket(handle);
     const redeemLimit: ParsedOperationLimit = {
       type: "midnightRedeem",
-      marketId,
+      marketId: midnightMarketId,
       quote: { assetsReceived: 10n, creditRedeemed: 10n },
       slippageTolerance: 0n,
     };
@@ -1826,20 +2013,20 @@ describe("resolveAssets — Midnight collateral", () => {
     const operations: ParsedOperationLimit[] = [
       {
         type: "midnightTakeLend",
-        marketId,
+        marketId: midnightMarketId,
         quote: { assetsPaid: 10n, unitsBought: 10n },
         slippageTolerance: 0n,
       },
       {
         type: "midnightTakeBorrow",
-        marketId,
+        marketId: midnightMarketId,
         quote: { unitsSold: 10n, assetsReceived: 10n },
         assetReceived: collateral,
         slippageTolerance: 0n,
       },
       {
         type: "midnightTakeWithdraw",
-        marketId,
+        marketId: midnightMarketId,
         quote: { creditRedeemed: 10n, assetsReceived: 10n },
         assetReceived: collateral,
         slippageTolerance: 0n,
@@ -1883,7 +2070,7 @@ describe("resolveAssets — Midnight collateral", () => {
       mockToMarket(handle);
       const repayLimit: ParsedOperationLimit = {
         type,
-        marketId,
+        marketId: midnightMarketId,
         quote: { assetsPaid: 10n, debtRepaid: 10n },
         slippageTolerance: 0n,
       };
@@ -1932,7 +2119,7 @@ describe("resolveAssets — Midnight collateral", () => {
           operations: [
             {
               type,
-              marketId,
+              marketId: midnightMarketId,
               quote: {
                 assetsPaid: 10n,
                 debtRepaid: 10n,
@@ -1971,7 +2158,7 @@ describe("resolveAssets — Midnight collateral", () => {
         operations: [
           {
             type: "midnightRedeem",
-            marketId,
+            marketId: midnightMarketId,
             quote: { assetsReceived: 10n, creditRedeemed: 10n },
             slippageTolerance: 0n,
             assetReceived: collateral,
@@ -2006,7 +2193,7 @@ describe("resolveAssets — Midnight collateral", () => {
         operations: [
           {
             type: "midnightTakeBorrow",
-            marketId,
+            marketId: midnightMarketId,
             quote: { unitsSold: 10n, assetsReceived: 10n },
             slippageTolerance: 0n,
             assetReceived: collateral,
@@ -2014,9 +2201,7 @@ describe("resolveAssets — Midnight collateral", () => {
         ],
         blockNumber: 1n,
       }),
-    ).rejects.toThrow(
-      'If this bundle creates the market, pass the market struct via "market".',
-    );
+    ).rejects.toBeInstanceOf(SlippageCheckUnavailableError);
   });
   test("behavior: a supplied market resolves a new market's tokens and position struct without toMarket", async () => {
     const handle = createMockClient(mainnet);
@@ -2229,7 +2414,7 @@ describe("resolveAssets — Midnight collateral", () => {
         operations: [
           {
             type: "midnightRepayWithdrawCollateral",
-            marketId,
+            marketId: midnightMarketId,
             quote: { assetsPaid: 10n, debtRepaid: 10n },
             slippageTolerance: 0n,
           },

@@ -10,7 +10,7 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { assert, describe, expect } from "vitest";
 import { fetchAccrualVault } from "../../../src/fetch.js";
 import {
   applySignatures,
@@ -37,11 +37,13 @@ const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 function expectNoPermit2(plan: TransactionPlan) {
   for (const { action } of plan.steps) {
     expect(["erc20Approval", "vaultV1Deposit"]).toContain(action.type);
-    if (action.type === "erc20Approval")
+    if (action.type === "erc20Approval") {
       expect(action.inputs.spender).toBe(vaultBundlesV1);
+    }
   }
   for (const request of plan.signatureRequests) {
     expect(request.kind).toBe("permit");
+    assert(request.kind === "permit");
     expect(request.args.spender).toBe(vaultBundlesV1);
   }
 }
@@ -328,7 +330,7 @@ describe("TransactionPlan Vault V1 on a pinned mainnet fork", () => {
       expect(plan.signatureRequests.map(({ kind }) => kind)).toEqual(
         mode === "permit" ? ["permit"] : [],
       );
-      if (mode === "approval")
+      if (mode === "approval") {
         expect(plan.steps[0]?.action).toMatchObject({
           inputs: {
             token: SteakhouseUsdcVaultV1.address,
@@ -336,11 +338,13 @@ describe("TransactionPlan Vault V1 on a pinned mainnet fork", () => {
             shares: maxUint256,
           },
         });
-      if (mode === "permit")
+      }
+      if (mode === "permit") {
         expect(plan.signatureRequests[0]).toMatchObject({
           args: { amount: maxUint256 },
           typedData: { message: { value: maxUint256 } },
         });
+      }
       const signatures = await Promise.all(
         getPendingSignatureRequests(plan).map(async ({ id, typedData }) => ({
           id,
@@ -357,7 +361,10 @@ describe("TransactionPlan Vault V1 on a pinned mainnet fork", () => {
       const fresh = client.extend(
         morphoViemExtension({ supportSignature: true }),
       );
-      const request = restored.signatureRequests[0];
+      const firstRequest = restored.signatureRequests[0];
+      const request =
+        firstRequest?.kind === "permit" ? firstRequest : undefined;
+      expect(request).toBe(firstRequest);
       const expected = fresh.morpho
         .vaultV1(SteakhouseUsdcVaultV1.address, client.chain.id)
         .withdraw({

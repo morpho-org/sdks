@@ -61,7 +61,7 @@ describe("makeTransferLog", () => {
       to: VAULT,
       amount: 42n,
     });
-    const parsed = parseTransfers([makeCall([log])]);
+    const parsed = parseTransfers([makeCall([log])], { chainId: 1 }).transfers;
 
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toEqual({

@@ -6,13 +6,13 @@ import {
   parseEther,
   zeroAddress,
 } from "viem";
-import { vi } from "vitest";
 import {
   encodeUint256,
   makeCall,
   padAddress,
 } from "../../test-helpers/index.js";
-import type { RawLog, SimulationLogger } from "../../types.js";
+import type { RawLog } from "../../types.js";
+import type { SimulationWarning } from "../../warnings.js";
 import {
   DEPOSIT_TOPIC,
   parseTransfers as parseRawTransfers,
@@ -28,10 +28,21 @@ const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const NON_MIRRORING_WARN =
   "kept zero-address wNative Transfer matching a same-call Deposit/Withdrawal; chain is listed as non-mirroring — if this repeats for every wrap/unwrap the wrapper now mirrors and must be removed from the list";
 
+const parseWithOptions = (
+  calls: Parameters<typeof parseRawTransfers>[0],
+  options: Omit<Parameters<typeof parseRawTransfers>[1], "chainId"> & {
+    warnings?: SimulationWarning[];
+  } = {},
+) => {
+  const { warnings, ...metadata } = options;
+  const parsed = parseRawTransfers(calls, { chainId: 1, ...metadata });
+  warnings?.push(...parsed.warnings);
+  return parsed.transfers;
+};
 const parseTransfers = (
   calls: Parameters<typeof parseRawTransfers>[0],
-  logger?: SimulationLogger,
-) => parseRawTransfers(calls, { wNative: WETH, logger });
+  warnings?: SimulationWarning[],
+) => parseWithOptions(calls, { wNative: WETH, warnings });
 
 describe("parseTransfers", () => {
   it("parses a standard ERC20 Transfer", () => {
@@ -100,7 +111,7 @@ describe("parseTransfers", () => {
   });
 
   it("skips Transfer logs with short-topic (hex length < 66)", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: USDC,
@@ -108,12 +119,12 @@ describe("parseTransfers", () => {
         data: encodeUint256(1000n),
       },
     ];
-    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(parseTransfers([makeCall(logs)], warnings)).toEqual([]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("skips logs where data is not a 32-byte uint256 word", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: USDC,
@@ -121,12 +132,12 @@ describe("parseTransfers", () => {
         data: "0x" as Hex, // empty — would throw on BigInt('0x')
       },
     ];
-    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(parseTransfers([makeCall(logs)], warnings)).toEqual([]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("skips WETH9 Withdrawal with short topic or bad data", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -134,12 +145,12 @@ describe("parseTransfers", () => {
         data: encodeUint256(1n),
       },
     ];
-    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(parseTransfers([makeCall(logs)], warnings)).toEqual([]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("skips WETH9 Deposit with short topic or bad data", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -147,8 +158,8 @@ describe("parseTransfers", () => {
         data: encodeUint256(1n),
       },
     ];
-    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(parseTransfers([makeCall(logs)], warnings)).toEqual([]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("deduplicates WETH9 unwrap (Withdrawal + burn Transfer)", () => {
@@ -206,7 +217,7 @@ describe("parseTransfers", () => {
 
   it("pairs one unwrap Transfer with one Withdrawal", () => {
     const amount = 1000000000000000000n;
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -233,7 +244,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCall(logs)], logger);
+    const result = parseTransfers([makeCall(logs)], warnings);
 
     expect(result).toHaveLength(2);
     expect(
@@ -242,12 +253,12 @@ describe("parseTransfers", () => {
           from === getAddress(USER) && to === zeroAddress && value === amount,
       ),
     ).toBe(true);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
   });
 
   it("pairs one mint Transfer with one Deposit", () => {
     const amount = 1000000000000000000n;
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -274,7 +285,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCall(logs)], logger);
+    const result = parseTransfers([makeCall(logs)], warnings);
 
     expect(result).toHaveLength(2);
     expect(
@@ -283,7 +294,7 @@ describe("parseTransfers", () => {
           from === zeroAddress && to === getAddress(USER) && value === amount,
       ),
     ).toBe(true);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
   });
 
   it("keeps one independent unwrap Transfer without a registered wNative", () => {
@@ -314,7 +325,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseRawTransfers([makeCall(logs)]);
+    const result = parseWithOptions([makeCall(logs)]);
 
     expect(result).toHaveLength(2);
     expect(
@@ -332,8 +343,8 @@ describe("parseTransfers", () => {
     "keeps an unpaired non-mirroring $kind Transfer without logging",
     ({ from, to }) => {
       const amount = 1000000000000000000n;
-      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-      const result = parseRawTransfers(
+      const warnings: SimulationWarning[] = [];
+      const result = parseWithOptions(
         [
           makeCall([
             {
@@ -346,7 +357,7 @@ describe("parseTransfers", () => {
         {
           wNative: WETH,
           wNativeEmitsTransfer: false,
-          logger,
+          warnings,
         },
       );
 
@@ -359,14 +370,13 @@ describe("parseTransfers", () => {
           txIdx: 0,
         },
       ]);
-      expect(logger.warn).not.toHaveBeenCalled();
-      expect(logger.info).not.toHaveBeenCalled();
+      expect(warnings).toEqual([]);
     },
   );
 
   it("keeps zero-address WETH9-shaped unwrap transfers when the wrapper does not mirror", () => {
     const amount = 1000000000000000000n;
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -384,10 +394,10 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseRawTransfers([makeCall(logs)], {
+    const result = parseWithOptions([makeCall(logs)], {
       wNative: WETH,
       wNativeEmitsTransfer: false,
-      logger,
+      warnings,
     });
 
     expect(result).toEqual([
@@ -406,19 +416,24 @@ describe("parseTransfers", () => {
         txIdx: 0,
       },
     ]);
-    expect(logger.warn).toHaveBeenCalledWith(NON_MIRRORING_WARN, {
-      token: WETH,
-      kind: "burn",
-      txIdx: 0,
-      data: encodeUint256(amount),
-    });
-    expect(logger.warn).toHaveBeenCalledOnce();
-    expect(logger.info).not.toHaveBeenCalled();
+    expect(warnings).toMatchObject([
+      {
+        code: "WRAPPED_NATIVE_MIRROR_DETECTED",
+        severity: "warn",
+        chainId: 1,
+        message: NON_MIRRORING_WARN,
+        token: WETH,
+        kind: "burn",
+        txIdx: 0,
+        data: encodeUint256(amount),
+      },
+    ]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("keeps zero-address WETH9-shaped deposit transfers when the wrapper does not mirror", () => {
     const amount = 1000000000000000000n;
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: WETH,
@@ -436,10 +451,10 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseRawTransfers([makeCall(logs)], {
+    const result = parseWithOptions([makeCall(logs)], {
       wNative: WETH,
       wNativeEmitsTransfer: false,
-      logger,
+      warnings,
     });
 
     expect(result).toEqual([
@@ -458,14 +473,19 @@ describe("parseTransfers", () => {
         txIdx: 0,
       },
     ]);
-    expect(logger.warn).toHaveBeenCalledWith(NON_MIRRORING_WARN, {
-      token: WETH,
-      kind: "mint",
-      txIdx: 0,
-      data: encodeUint256(amount),
-    });
-    expect(logger.warn).toHaveBeenCalledOnce();
-    expect(logger.info).not.toHaveBeenCalled();
+    expect(warnings).toMatchObject([
+      {
+        code: "WRAPPED_NATIVE_MIRROR_DETECTED",
+        severity: "warn",
+        chainId: 1,
+        message: NON_MIRRORING_WARN,
+        token: WETH,
+        kind: "mint",
+        txIdx: 0,
+        data: encodeUint256(amount),
+      },
+    ]);
+    expect(warnings).toHaveLength(1);
   });
 
   test("behavior: matches event signatures and pairs case-insensitively", () => {
@@ -522,7 +542,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    expect(parseRawTransfers([makeCall(logs)], { wNative: WETH })).toEqual([]);
+    expect(parseWithOptions([makeCall(logs)], { wNative: WETH })).toEqual([]);
   });
 
   test("behavior: rejects WETH9 events without deduplicating ERC20 transfers on known tokenless chains", () => {
@@ -544,7 +564,7 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    expect(parseRawTransfers(calls, { wNative: null })).toEqual([
+    expect(parseWithOptions(calls, { wNative: null })).toEqual([
       {
         token: DAI,
         from: zeroAddress,
@@ -571,7 +591,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    expect(parseRawTransfers([makeCall(logs)])).toEqual([
+    expect(parseWithOptions([makeCall(logs)])).toEqual([
       {
         token: DAI,
         from: zeroAddress,
@@ -622,7 +642,7 @@ describe("parseTransfers", () => {
   });
 
   it("skips a malformed log and warns, while still returning valid transfers", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
 
     const validLog: RawLog = {
       address: USDC,
@@ -635,15 +655,78 @@ describe("parseTransfers", () => {
       data: "0xinvalid" as Hex, // wrong length
     };
 
-    const result = parseTransfers([makeCall([validLog, malformedLog])], logger);
+    const result = parseTransfers(
+      [makeCall([validLog, malformedLog])],
+      warnings,
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0]!.amount).toBe(1000000n);
-    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(warnings).toHaveLength(1);
   });
 
+  it.each([1, 2, 4, 5])(
+    "warns on a Transfer with %i topics and non-empty data without discarding valid transfers",
+    (topicCount) => {
+      const warnings: SimulationWarning[] = [];
+      const validLog: RawLog = {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1n),
+      };
+      const malformedLog = {
+        ...validLog,
+        topics: [
+          ...validLog.topics,
+          encodeUint256(1n),
+          encodeUint256(2n),
+        ].slice(0, topicCount),
+      };
+      const transfers = parseTransfers(
+        [makeCall([malformedLog, validLog])],
+        warnings,
+      );
+      expect(transfers).toHaveLength(1);
+      expect(transfers[0]!.amount).toBe(1n);
+      expect(warnings).toMatchObject([
+        {
+          code: "MALFORMED_TRANSFER_LOG",
+          severity: "warn",
+          chainId: 1,
+          address: USDC,
+          topics: malformedLog.topics,
+          reason: "ERC20 Transfer: bad topic/data length",
+        },
+      ]);
+    },
+  );
+
+  it.each(["omitted", "undefined", "empty"])(
+    "distinguishes four-topic Transfer data that is %s from explicit ERC-721 data",
+    (dataKind) => {
+      const warnings: SimulationWarning[] = [];
+      const data = dataKind === "empty" ? "0x" : undefined;
+      const log = {
+        address: USDC,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          padAddress(VAULT),
+          encodeUint256(1n),
+        ],
+        ...(dataKind === "omitted" ? {} : { data }),
+      } as RawLog;
+      expect(parseTransfers([makeCall([log])], warnings)).toEqual([]);
+      if (dataKind === "empty") expect(warnings).toEqual([]);
+      else
+        expect(warnings).toMatchObject([
+          { code: "MALFORMED_TRANSFER_LOG", chainId: 1, txIdx: 0 },
+        ]);
+    },
+  );
+
   it("warns and skips logs that fail after length validation", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: "0xnotanaddress" as Address,
@@ -652,14 +735,17 @@ describe("parseTransfers", () => {
       },
     ];
 
-    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Skipping malformed log during transfer parsing",
-      expect.objectContaining({
+    expect(parseTransfers([makeCall(logs)], warnings)).toEqual([]);
+    expect(warnings).toMatchObject([
+      {
+        code: "MALFORMED_TRANSFER_LOG",
+        severity: "warn",
+        chainId: 1,
+        txIdx: 0,
         address: "0xnotanaddress",
         reason: expect.stringContaining("Address"),
-      }),
-    );
+      },
+    ]);
   });
 
   it("sorts equal token/from/to transfers by amount", () => {
@@ -761,7 +847,7 @@ describe("parseTransfers", () => {
   });
 
   test("behavior: WETH9 unwrap dedup is scoped to the same tx (cross-tx not deduped)", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const amount = 1_000_000_000_000_000_000n;
     // Tx 0 has the Withdrawal; tx 1 has a same-amount Transfer to zero on the
     // same WETH contract. Under the old flat dedup these would have collided;
@@ -790,18 +876,23 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    const result = parseTransfers(calls, logger);
+    const result = parseTransfers(calls, warnings);
     expect(result).toHaveLength(2);
     expect(result.map((t) => t.txIdx).sort()).toEqual([0, 1]);
-    expect(logger.warn).toHaveBeenCalledOnce();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("WETH9 dedup miss"),
-      expect.objectContaining({ kind: "burn", txIdx: 1 }),
-    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings).toMatchObject([
+      {
+        code: "WRAPPED_NATIVE_DEDUP_MISS",
+        severity: "warn",
+        chainId: 1,
+        kind: "burn",
+        txIdx: 1,
+      },
+    ]);
   });
 
   test("behavior: WETH9 wrap dedup miss across txs warns (split Deposit + mint Transfer)", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const amount = 1_000_000_000_000_000_000n;
     const calls = [
       makeCall([
@@ -824,13 +915,18 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    const result = parseTransfers(calls, logger);
+    const result = parseTransfers(calls, warnings);
     expect(result).toHaveLength(2);
-    expect(logger.warn).toHaveBeenCalledOnce();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("WETH9 dedup miss"),
-      expect.objectContaining({ kind: "mint", txIdx: 1 }),
-    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings).toMatchObject([
+      {
+        code: "WRAPPED_NATIVE_DEDUP_MISS",
+        severity: "warn",
+        chainId: 1,
+        kind: "mint",
+        txIdx: 1,
+      },
+    ]);
   });
 
   test("behavior: zero-address Transfer on non-wnative token does not warn", () => {
@@ -838,7 +934,7 @@ describe("parseTransfers", () => {
     // USDC is not wnative-shaped and the burn-shaped Transfer is just a
     // legitimate mint. No warning should fire (otherwise we'd spam logs on
     // every real ERC20 mint/burn).
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: USDC,
@@ -851,14 +947,14 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCall(logs)], logger);
+    const result = parseTransfers([makeCall(logs)], warnings);
     expect(result).toHaveLength(1);
     expect(result[0]!.from).toBe(zeroAddress);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
   });
 
   test("behavior: zero-address burn Transfer on non-wnative token does not warn", () => {
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const warnings: SimulationWarning[] = [];
     const logs: RawLog[] = [
       {
         address: USDC,
@@ -871,9 +967,9 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCall(logs)], logger);
+    const result = parseTransfers([makeCall(logs)], warnings);
     expect(result).toHaveLength(1);
     expect(result[0]!.to).toBe(zeroAddress);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
   });
 });

@@ -1,10 +1,14 @@
-import type { InputMarketParams } from "@morpho-org/blue-sdk";
+import type { InputMarketParams, MarketParams } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
+import type { BlueRepayParams } from "../actions/blue/repay.js";
+import type { BlueRepayWithdrawCollateralParams } from "../actions/blue/repayWithdrawCollateral.js";
+import type { BlueSupplyCollateralBorrowParams } from "../actions/blue/supplyCollateralBorrow.js";
 import type {
+  AuthorizationSignatureArgs,
   PermitAction,
   RequirementTypedData,
-  TransactionAction,
   VaultV1MigrateToV2AmountArgs,
+  VaultV2BlueReallocation,
 } from "../types/index.js";
 
 interface ActionInputs {
@@ -33,12 +37,11 @@ type VaultSignatureRequestIds = {
 };
 
 /**
- * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
- * Recipes supported by vault plans. Each `type` equals the `action.type` of the
- * {@link TransactionAction} it builds.
+ * Recipes supported by TransactionPlan.
  * Snapshot-derived values such as the asset and the quote are fixed on `inputs` at preparation;
  * each action also carries its own chain and account on `inputs`.
- * the role map `signatureRequestIds` is a step's only request reference.
+ * The role map `signatureRequestIds` is a step's only request reference.
+ * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
  */
 export type Action =
   | {
@@ -81,6 +84,121 @@ export type Action =
       readonly signatureRequestIds: VaultSignatureRequestIds;
     }
   | {
+      readonly type: "blueSupply";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: Readonly<InputMarketParams>;
+        readonly assets: bigint;
+        readonly nativeAssets?: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+      };
+      readonly signatureRequestIds: VaultSignatureRequestIds;
+    }
+  | {
+      readonly type: "blueBorrow";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: MarketParams;
+        readonly borrowAssets: bigint;
+        readonly maxLtv: bigint;
+        readonly reallocations: readonly VaultV2BlueReallocation[];
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+        readonly authorizationNonce: bigint;
+      };
+      readonly signatureRequestIds: { readonly morphoAuthorization?: string };
+    }
+  | {
+      readonly type: "blueSupplyCollateralBorrow";
+      readonly inputs: ActionInputs &
+        Omit<
+          BlueSupplyCollateralBorrowParams["args"],
+          | "userAddress"
+          | "requirementSignature"
+          | "authorizationSignature"
+          | "reallocations"
+          | "nativeAmount"
+        > & {
+          readonly marketParams: BlueSupplyCollateralBorrowParams["market"]["marketParams"];
+          readonly nativeAssets?: bigint;
+          readonly reallocations: readonly VaultV2BlueReallocation[];
+          readonly authorizationNonce?: bigint;
+        };
+      readonly signatureRequestIds: {
+        readonly tokenPermit?: string;
+        readonly morphoAuthorization?: string;
+      };
+    }
+  | {
+      readonly type: "blueRepay";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: InputMarketParams;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+        readonly nativeAssets?: bigint;
+      } & Omit<
+          BlueRepayParams["args"],
+          "userAddress" | "requirementSignature" | "nativeAmount"
+        >;
+      readonly signatureRequestIds: VaultSignatureRequestIds;
+    }
+  | {
+      readonly type: "blueWithdraw";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: Pick<
+          MarketParams,
+          "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
+        >;
+        readonly withdrawAssets: bigint;
+        readonly withdrawShares: bigint;
+        readonly reallocations: readonly VaultV2BlueReallocation[];
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+        /** Morpho nonce pinned when preparing an inline authorization signature. */
+        readonly authorizationNonce?: bigint;
+      };
+      readonly signatureRequestIds: { readonly morphoAuthorization?: string };
+    }
+  | {
+      readonly type: "blueWithdrawCollateral";
+      readonly signatureRequestIds: { readonly morphoAuthorization?: string };
+      readonly inputs: ActionInputs & {
+        readonly marketParams: Readonly<InputMarketParams>;
+        readonly collateralAssets: bigint;
+        readonly maxLtv: bigint;
+        readonly authorizationNonce?: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+      };
+    }
+  | {
+      readonly type: "blueRepayWithdrawCollateral";
+      readonly inputs: ActionInputs &
+        Omit<
+          BlueRepayWithdrawCollateralParams["args"],
+          | "userAddress"
+          | "requirementSignature"
+          | "authorizationSignature"
+          | "nativeAmount"
+        > & {
+          readonly authorizationNonce?: bigint;
+          readonly nativeAssets?: bigint;
+          readonly referralFeePct: bigint;
+          readonly referralFeeRecipient: Address;
+          readonly marketParams: Pick<
+            BlueRepayWithdrawCollateralParams["market"]["marketParams"],
+            "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
+          >;
+        };
+      readonly signatureRequestIds: {
+        readonly tokenPermit?: string;
+        readonly morphoAuthorization?: string;
+      };
+    }
+  | {
       readonly type: "erc20Approval";
       readonly inputs: ActionInputs & {
         readonly token: Address;
@@ -89,6 +207,18 @@ export type Action =
           | { readonly assets: bigint; readonly shares?: never }
           | { readonly shares: bigint; readonly assets?: never }
         );
+    }
+  | {
+      readonly type: "blueSupplyCollateral";
+      readonly inputs: ActionInputs & {
+        readonly marketParams: Omit<MarketParams, "liquidationIncentiveFactor">;
+        readonly collateralAssets: bigint;
+        readonly nativeAssets?: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+      };
+      readonly signatureRequestIds: { readonly tokenPermit?: string };
     }
   | {
       readonly type: "vaultV2Deposit";
@@ -165,6 +295,25 @@ export type Action =
         readonly minSharePriceE27: bigint;
       };
       readonly signatureRequestIds: VaultSignatureRequestIds;
+    }
+  | {
+      readonly type: "blueRefinance";
+      readonly inputs: ActionInputs & {
+        readonly sourceMarketParams: Readonly<MarketParams>;
+        readonly destinationMarketParams: Readonly<MarketParams>;
+        readonly maxLtv: bigint;
+        readonly deadline: bigint;
+        readonly referralFeePct: bigint;
+        readonly referralFeeRecipient: Address;
+        readonly reallocations: readonly VaultV2BlueReallocation[];
+        /** Expected Morpho nonce when the migration consumes an inline authorization. */
+        readonly authorizationNonce?: bigint;
+      };
+      readonly signatureRequestIds: { readonly morphoAuthorization?: string };
+    }
+  | {
+      readonly type: "morphoAuthorization";
+      readonly inputs: ActionInputs;
     };
 
 /**
@@ -178,21 +327,31 @@ export interface Step<TAction extends Action = Action> {
 }
 
 /**
+ * ERC-2612 permit or Morpho Blue authorization exposed as `{ id, kind, typedData }`.
+ * `signature` is undefined until the account signs `typedData`.
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
- * ERC-2612 permit request exposed as `{ id, kind, typedData }`. `signature` is undefined until the
- * account signs `typedData`. Protocol milestones add further `kind`s such as Blue authorization.
  */
-export interface SignatureRequest {
+export type SignatureRequest = {
   readonly id: string;
-  readonly kind: "permit";
   readonly typedData: RequirementTypedData;
-  readonly args: PermitAction["args"] & { readonly nonce: bigint };
   readonly signature?: Hex;
-}
+} & (
+  | {
+      readonly kind: "permit";
+      readonly args: PermitAction["args"] & { readonly nonce: bigint };
+    }
+  | {
+      readonly kind: "morphoAuthorization";
+      readonly args: Omit<
+        AuthorizationSignatureArgs,
+        "signature" | "isAuthorized"
+      >;
+    }
+);
 
 /**
  * @experimental TransactionPlan is in beta; breaking changes may ship in minor releases.
- * Data-only operation prepared for one chain and account from the caller's intent and a vault
+ * Data-only operation prepared for one chain and account from the caller's intent and a protocol
  * snapshot. Every step and signature request carries its own `id`, unique within the plan. Once
  * prepared, a plan is static: only signatures are added before building.
  */

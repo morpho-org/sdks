@@ -64,14 +64,24 @@ function makeResult(): VerifiedSimulationResult {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRunSimulation.mockResolvedValue({ ok: true, result: makeResult() });
+  mockRunSimulation.mockResolvedValue({
+    ok: true,
+    result: makeResult(),
+    warnings: [],
+    verification: { retention: "checked" },
+  });
 });
 
 describe.sequential("simulate — pipeline delegation", () => {
   it("delegates to runSimulation with the parsed request and config", async () => {
     const config = makeConfig();
     const result = await simulate(config, makeParams());
-    expect(result).toEqual({ ok: true, result: makeResult() });
+    expect(result).toEqual({
+      ok: true,
+      result: makeResult(),
+      warnings: [],
+      verification: { retention: "checked" },
+    });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
     const arg = mockRunSimulation.mock.calls[0]![0];
     expect(arg.client.chain.id).toBe(1);
@@ -106,7 +116,12 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeConfig(),
       makeParams({ mode: "preview" }),
     );
-    expect(result).toEqual({ ok: true, result: makeResult() });
+    expect(result).toEqual({
+      ok: true,
+      result: makeResult(),
+      warnings: [],
+      verification: { retention: "checked" },
+    });
   });
 
   it("preview with authorizations executes through the pipeline", async () => {
@@ -123,7 +138,12 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeConfig(),
       makeParams({ mode: "preview", authorizations }),
     );
-    expect(result).toEqual({ ok: true, result: makeResult() });
+    expect(result).toEqual({
+      ok: true,
+      result: makeResult(),
+      warnings: [],
+      verification: { retention: "checked" },
+    });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
@@ -142,7 +162,12 @@ describe.sequential("simulate — pipeline delegation", () => {
         },
       }),
     );
-    expect(result).toEqual({ ok: true, result: makeResult() });
+    expect(result).toEqual({
+      ok: true,
+      result: makeResult(),
+      warnings: [],
+      verification: { retention: "checked" },
+    });
     expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
@@ -225,6 +250,7 @@ describe.sequential("simulate — error propagation", () => {
     const report = {
       ok: false,
       severity: "error",
+      warnings: [],
       failures: [
         new RpcTransportError("RPC failed"),
         new SimulationRevertedError(
@@ -248,6 +274,7 @@ describe.sequential("simulate — error propagation", () => {
       ok: false,
       severity: error.severity,
       failures: [error],
+      warnings: [],
     });
     expect(report.ok ? report.result : undefined).toBeUndefined();
     expect(Object.isFrozen(report)).toBe(true);

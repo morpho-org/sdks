@@ -2,7 +2,18 @@ import type { MarketId } from "@morpho-org/blue-sdk";
 import { type Address, ethAddress, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { UnexpectedTokenTransferError } from "../errors.js";
-import type { Transfer } from "../types.js";
+import { makeCall, makeTransferLog } from "../test-helpers/index.js";
+import arcUsdcLogs from "../test-helpers/paired-emitter-arc-usdc.json" with {
+  type: "json",
+};
+import eureLogs from "../test-helpers/paired-emitter-eure.json" with {
+  type: "json",
+};
+import wstHypeLogs from "../test-helpers/paired-emitter-wsthype.json" with {
+  type: "json",
+};
+import type { RawLog, Transfer } from "../types.js";
+import { parseTransfers } from "./parsing/transfers.js";
 import {
   findUnexpectedSenderTransfers,
   resolveSenderSpendTokens,
@@ -15,6 +26,247 @@ const weth: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const vault: Address = "0x3333333333333333333333333333333333333333";
 const marketId =
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as MarketId;
+
+const pairs = [
+  {
+    name: "legacy EURe / EURe v2",
+    chainId: 1,
+    primary: "0x3231Cb76718CDeF2155FC47b5286d82e6eDA273f",
+    paired: "0x39b8B6385416f4cA36a20319F70D28621895279D",
+    primaryAmount: 221807379888574931n,
+    pairedAmount: 221807379888574931n,
+  },
+  {
+    name: "wstHYPE / stHYPE",
+    chainId: 999,
+    primary: "0x94e8396e0869c9F2200760aF0621aFd240E1CF38",
+    paired: "0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1",
+    primaryAmount: 289318008520960n,
+    pairedAmount: 300212164354264n,
+  },
+  {
+    name: "Arc USDC / native mirror",
+    chainId: 5042,
+    primary: "0x3600000000000000000000000000000000000000",
+    paired: "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE",
+    primaryAmount: 1_000_000n,
+    pairedAmount: 10n ** 18n,
+  },
+] as const;
+
+describe.each([eureLogs, wstHypeLogs, arcUsdcLogs])(
+  "recorded eth_simulateV1 logs: $name",
+  (fixture) => {
+    const parse = () =>
+      parseTransfers([makeCall(fixture.logs as RawLog[])], {
+        chainId: 1,
+        ...{ wNative: null },
+      }).transfers;
+    const params = {
+      chainId: fixture.chainId,
+      owner: fixture.source.holder as Address,
+      allowed: new Set([fixture.primary]),
+    };
+
+    test("accepts the paired emitter when the primary is spendable on its chain", () => {
+      const transfers = parse();
+      expect(transfers).toHaveLength(2);
+      expect(transfers.map(({ token }) => token.toLowerCase())).toEqual(
+        expect.arrayContaining([fixture.primary, fixture.paired]),
+      );
+      expect(findUnexpectedSenderTransfers({ ...params, transfers })).toEqual(
+        [],
+      );
+    });
+
+    test("flags the paired emitter when nothing is spendable", () => {
+      const findings = findUnexpectedSenderTransfers({
+        ...params,
+        transfers: parse(),
+        allowed: new Set(),
+      });
+      expect(findings).toHaveLength(2);
+      expect(
+        findings.find(({ token }) => token.toLowerCase() === fixture.paired),
+      ).toBeInstanceOf(UnexpectedTokenTransferError);
+    });
+
+    test("flags the paired emitter on a different chain", () => {
+      const findings = findUnexpectedSenderTransfers({
+        ...params,
+        transfers: parse(),
+        chainId: fixture.chainId === 1 ? 999 : 1,
+      });
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toBeInstanceOf(UnexpectedTokenTransferError);
+      expect(findings[0]?.token.toLowerCase()).toBe(fixture.paired);
+    });
+  },
+);
+
+describe.each(pairs)("paired emitters: $name", (pair) => {
+  const primary = (): Transfer => ({
+    token: pair.primary,
+    from: owner,
+    to: recipient,
+    amount: pair.primaryAmount,
+    txIdx: 0,
+  });
+  const paired = (): Transfer => ({
+    ...primary(),
+    token: pair.paired,
+    amount: pair.pairedAmount,
+  });
+  const checkPair = (transfers: readonly Transfer[]) =>
+    findUnexpectedSenderTransfers({
+      chainId: pair.chainId,
+      owner,
+      transfers,
+      allowed: new Set([pair.primary.toLowerCase()]),
+    });
+
+  test("accepts parsed real-shaped logs without removing transfer evidence", () => {
+    const transfers = parseTransfers(
+      [makeCall([makeTransferLog(paired()), makeTransferLog(primary())])],
+      { chainId: 1, ...{ wNative: null } },
+    ).transfers;
+    expect(transfers).toHaveLength(2);
+    expect(checkPair(transfers)).toEqual([]);
+    expect(transfers).toHaveLength(2);
+    expect(checkPair([...transfers].reverse())).toEqual([]);
+  });
+
+  test("allows empty evidence and harmless incoming, self and zero transfers", () => {
+    expect(checkPair([])).toEqual([]);
+    expect(
+      checkPair([
+        { ...paired(), from: recipient, to: owner },
+        { ...paired(), to: owner },
+        { ...paired(), amount: 0n },
+      ]),
+    ).toEqual([]);
+  });
+
+  test.each([
+    ["missing primary", () => [paired()]],
+    ["different recipient", () => [primary(), { ...paired(), to: vault }]],
+    ["different transaction", () => [primary(), { ...paired(), txIdx: 1 }]],
+    [
+      "different primary sender",
+      () => [{ ...primary(), from: vault }, paired()],
+    ],
+    ["zero primary amount", () => [{ ...primary(), amount: 0n }, paired()]],
+    [
+      "incoming primary",
+      () => [{ ...primary(), from: recipient, to: owner }, paired()],
+    ],
+    ["self primary", () => [{ ...primary(), to: owner }, paired()]],
+  ] as const)("ignores paired emitter despite %s", (_name, transfers) => {
+    expect(checkPair(transfers())).toEqual([]);
+  });
+
+  test("ignores any number of paired events without requiring primary transfer evidence", () => {
+    const mirror = paired();
+    expect(checkPair([mirror, mirror])).toEqual([]);
+    expect(checkPair([primary(), mirror, mirror])).toEqual([]);
+    expect(checkPair([primary(), primary(), mirror, mirror])).toEqual([]);
+  });
+
+  test("does not mutate the caller's spendable set", () => {
+    const allowed = new Set([pair.primary.toLowerCase()]);
+    expect(
+      findUnexpectedSenderTransfers({
+        chainId: pair.chainId,
+        owner,
+        allowed,
+        transfers: [paired()],
+      }),
+    ).toEqual([]);
+    expect([...allowed]).toEqual([pair.primary.toLowerCase()]);
+  });
+
+  test("still flags unrelated undeclared tokens", () => {
+    expect(checkPair([{ ...paired(), token: weth }])).toHaveLength(1);
+  });
+
+  test("matches addresses case-insensitively", () => {
+    expect(
+      checkPair([
+        {
+          ...primary(),
+          token: pair.primary.toLowerCase() as Address,
+          from: owner.toUpperCase().replace("0X", "0x") as Address,
+        },
+        { ...paired(), token: pair.paired.toLowerCase() as Address },
+      ]),
+    ).toEqual([]);
+  });
+
+  test.each([8453, 5042002])("rejects on unregistered chain %s", (chainId) => {
+    const failures = findUnexpectedSenderTransfers({
+      chainId,
+      owner,
+      transfers: [primary(), paired()],
+      allowed: new Set([pair.primary.toLowerCase()]),
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(UnexpectedTokenTransferError);
+  });
+
+  test("rejects when the primary is not allowed; the exception is directional", () => {
+    const failures = findUnexpectedSenderTransfers({
+      chainId: pair.chainId,
+      owner,
+      transfers: [primary(), paired()],
+      allowed: new Set(),
+    });
+    expect(failures).toHaveLength(2);
+    expect(
+      failures.every((f) => f instanceof UnexpectedTokenTransferError),
+    ).toBe(true);
+    expect(
+      findUnexpectedSenderTransfers({
+        chainId: pair.chainId,
+        owner,
+        transfers: [primary(), paired()],
+        allowed: new Set([pair.paired.toLowerCase()]),
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("ignores all paired transfers even if returned later", () => {
+    expect(
+      checkPair([
+        primary(),
+        paired(),
+        paired(),
+        { ...paired(), from: recipient, to: owner },
+      ]),
+    ).toEqual([]);
+  });
+
+  test("an unrelated allowed token cannot cover the paired emitter", () => {
+    expect(
+      findUnexpectedSenderTransfers({
+        chainId: pair.chainId,
+        owner,
+        allowed: new Set([usdc.toLowerCase()]),
+        transfers: [{ ...primary(), token: usdc }, paired()],
+      }),
+    ).toHaveLength(1);
+  });
+
+  test.each([-1n, 1n, 10n ** 30n])(
+    "ignores paired delta %s without an amount check",
+    (delta) => {
+      const failures = checkPair([
+        primary(),
+        { ...paired(), amount: pair.pairedAmount + delta },
+      ]);
+      expect(failures).toEqual([]);
+    },
+  );
+});
 // biome-ignore lint/complexity/useMaxParams: positional fixture builder
 const transfer = (
   token: Address,
@@ -39,7 +291,7 @@ const allowed = resolveSenderSpendTokens({
   ],
 });
 const check = (transfers: readonly Transfer[]) =>
-  findUnexpectedSenderTransfers({ owner, transfers, allowed });
+  findUnexpectedSenderTransfers({ chainId: 1, owner, transfers, allowed });
 
 describe("sender transfers", () => {
   test.each([10n ** 18n, 123456789n * 10n ** 18n])(
@@ -87,6 +339,7 @@ describe("sender transfers", () => {
     "wallet-bound native funding rejects extra debit %s even if returned",
     (extra) => {
       const failures = findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed,
         nativeValueBudget: 3n,
@@ -110,6 +363,7 @@ describe("sender transfers", () => {
   test("native budgets allow empty evidence but do not offset burns with incoming ETH", () => {
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed,
         nativeValueBudget: 0n,
@@ -118,6 +372,7 @@ describe("sender transfers", () => {
     ).toEqual([]);
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed,
         nativeValueBudget: 0n,
@@ -131,6 +386,7 @@ describe("sender transfers", () => {
   test("fully measured ETH payments use their native measurement rather than the wallet budget", () => {
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed: new Set([ethAddress.toLowerCase()]),
         nativeValueBudget: 0n,
@@ -216,6 +472,7 @@ describe("sender transfers", () => {
     });
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         transfers: [transfer(vault, 1n, owner, zeroAddress)],
         allowed: tokens,
@@ -247,6 +504,7 @@ describe("sender transfers", () => {
       });
       expect(
         findUnexpectedSenderTransfers({
+          chainId: 1,
           owner,
           transfers: [transfer(usdc, 1n)],
           allowed: tokens,
@@ -311,12 +569,14 @@ describe("sender transfers", () => {
       expect(tokens.has(usdc.toLowerCase())).toBe(active);
       expect(
         findUnexpectedSenderTransfers({
+          chainId: 1,
           owner,
           allowed: tokens,
           transfers: [],
         }),
       ).toEqual([]);
       const failures = findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed: tokens,
         transfers: [transfer(usdc, 1n), transfer(usdc, 1n, recipient, owner)],
@@ -349,6 +609,7 @@ describe("sender transfers", () => {
     });
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         allowed: tokens,
         transfers: [transfer(usdc, 1n)],
@@ -375,6 +636,7 @@ describe("sender transfers", () => {
     expect(tokens.has(recipient.toLowerCase())).toBe(false);
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         transfers: [transfer(vault, 1n)],
         allowed: tokens,
@@ -404,6 +666,7 @@ describe("sender transfers", () => {
     });
     expect(
       findUnexpectedSenderTransfers({
+        chainId: 1,
         owner,
         transfers: [transfer(usdc, 1n), transfer(weth, 1n)],
         allowed: tokens,
@@ -429,6 +692,7 @@ describe("sender transfers", () => {
       ],
     });
     const failures = findUnexpectedSenderTransfers({
+      chainId: 1,
       owner,
       transfers: [transfer(usdc, 1n)],
       allowed: tokens,
@@ -460,6 +724,7 @@ describe("sender transfers", () => {
       });
       expect(
         findUnexpectedSenderTransfers({
+          chainId: 1,
           owner,
           transfers: [transfer(usdc, 1n)],
           allowed: tokens,

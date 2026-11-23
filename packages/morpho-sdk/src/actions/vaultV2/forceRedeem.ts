@@ -53,7 +53,8 @@ export interface VaultV2ForceRedeemParams {
  *   penalty is taken.
  * @param params.metadata - Optional analytics metadata attached to the multicall transaction.
  * @returns A deep-frozen `Transaction<VaultV2ForceRedeemAction>` with `to`, `value`, `data`, and
- *   the typed `action` discriminator the simulation layer consumes.
+ *   the typed `action` discriminator the simulation layer consumes. Input deallocations and their
+ *   market parameters are not frozen.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.
  * @throws {NonPositiveInputError} when `redeem.shares <= 0n` or any deallocation amount is
  *   non-positive.
@@ -121,7 +122,25 @@ export const vaultV2ForceRedeem = ({
       type: "vaultV2ForceRedeem",
       args: {
         vault: vaultAddress,
-        deallocations: deallocations.map((d) => ({ ...d })),
+        deallocations: deallocations.map((deallocation) => {
+          const { adapter, amount, marketParams } = deallocation;
+          return {
+            adapter,
+            amount,
+            ...(Object.hasOwn(deallocation, "marketParams") && {
+              marketParams: marketParams && {
+                loanToken: marketParams.loanToken,
+                collateralToken: marketParams.collateralToken,
+                oracle: marketParams.oracle,
+                irm: marketParams.irm,
+                lltv: marketParams.lltv,
+                id: marketParams.id,
+                liquidationIncentiveFactor:
+                  marketParams.liquidationIncentiveFactor,
+              },
+            }),
+          };
+        }),
         redeem: {
           shares: redeem.shares,
           recipient: redeem.recipient,

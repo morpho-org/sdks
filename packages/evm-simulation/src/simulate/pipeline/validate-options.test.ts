@@ -7,8 +7,18 @@ describe("validateOptions", () => {
     expect(() => validateOptions({})).not.toThrow();
   });
 
+  it("accepts the deprecated ignored logger, including undefined", () => {
+    expect(() => validateOptions({ logger: undefined })).not.toThrow();
+    const fail = () => {
+      throw new Error("must not run");
+    };
+    expect(() =>
+      validateOptions({ logger: { info: fail, warn: fail, error: fail } }),
+    ).not.toThrow();
+  });
+
   it("rejects unknown keys such as 8.x's simulateV1Url", () => {
-    const options = { logger: undefined, simulateV1Url: "https://rpc" };
+    const options = { simulateV1Url: "https://rpc" };
     expect(() => validateOptions(options as SimulationOptions)).toThrow(
       SimulationValidationError,
     );

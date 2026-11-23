@@ -5,11 +5,9 @@ import {
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress, getAddress } from "viem";
 import { BlacklistViolationError } from "../../errors.js";
-import type {
-  AccountAssetChanges,
-  SimulationLogger,
-  Transfer,
-} from "../../types.js";
+import type { SimulationReportVerification } from "../../result.js";
+import type { AccountAssetChanges, Transfer } from "../../types.js";
+import { freezeWarning, type SimulationWarning } from "../../warnings.js";
 
 /**
  * Dust tolerance for standalone bundles retention, in raw token units.
@@ -32,7 +30,6 @@ interface AssertNoBundlesRetentionParams {
   chainId: number;
   transfers: Transfer[];
   assetChanges: readonly AccountAssetChanges[];
-  logger?: SimulationLogger;
 }
 
 /**
@@ -65,20 +62,20 @@ interface AssertNoBundlesRetentionParams {
  *   package's public API (only re-exported from the internal pipeline barrel).
  * @param params.chainId - Chain whose blue-sdk `bundles` and `midnightBundlesV2`
  *   registry entries define the restricted address set. Chains cataloging
- *   neither are skipped (a `logger.warn` records the skip).
+ *   neither are skipped with a structured warning and explicit coverage status.
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
  * @param params.assetChanges - Per-account native-ETH deltas, the source of
  *   truth for native value stuck in a restricted contract.
- * @param params.logger - Optional logger. Receives retention-check skip warnings
- *   and pre-existing-balance sweep telemetry (net-negative flow).
- * @returns An aggregate failure containing every retained address/token pair,
- *   or an empty array when no value above the dust threshold is retained.
+ * @returns Retention coverage, non-blocking diagnostics and any aggregate retained-value failure.
  */
-export function findBundlesRetentionFailures(
-  params: AssertNoBundlesRetentionParams,
-): readonly BlacklistViolationError[] {
-  const { chainId, transfers, assetChanges, logger } = params;
+export function checkBundlesRetention(params: AssertNoBundlesRetentionParams): {
+  readonly status: SimulationReportVerification["retention"];
+  readonly warnings: readonly SimulationWarning[];
+  readonly failures: readonly BlacklistViolationError[];
+} {
+  const { chainId, transfers, assetChanges } = params;
+  const warnings: SimulationWarning[] = [];
 
   // Standalone bundles contracts and `MidnightBundlesV2` are transient
   // intermediaries that route user value and must never retain it.
@@ -87,12 +84,19 @@ export function findBundlesRetentionFailures(
     addresses = getChainAddresses(chainId);
   } catch (error) {
     if (error instanceof UnsupportedChainIdError) {
-      // Loud warn: this disables a "never bypassable" check for the chain.
-      // Consumers relying on the guarantee must handle this signal.
-      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
-        chainId,
-      });
-      return [];
+      return {
+        status: "skipped-unsupported-chain",
+        failures: [],
+        warnings: [
+          freezeWarning({
+            code: "RETENTION_CHECK_SKIPPED",
+            severity: "warn",
+            chainId,
+            message: "Chain not supported by blue-sdk, retention check skipped",
+            reason: "unsupported-chain",
+          }),
+        ],
+      };
     }
     throw error;
   }
@@ -109,11 +113,20 @@ export function findBundlesRetentionFailures(
   if (restrictedAddresses.size === 0) {
     // blue-sdk knows the chain but cataloged no restricted intermediary for it.
     // Treat the same as UnsupportedChainIdError — retention check skipped.
-    logger?.warn(
-      "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
-      { chainId },
-    );
-    return [];
+    return {
+      status: "skipped-unsupported-chain",
+      failures: [],
+      warnings: [
+        freezeWarning({
+          code: "RETENTION_CHECK_SKIPPED",
+          severity: "warn",
+          chainId,
+          message:
+            "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
+          reason: "missing-restricted-addresses",
+        }),
+      ],
+    };
   }
 
   // Map keyed by (address, token) → structured entry. Avoids string parse-back.
@@ -168,41 +181,47 @@ export function findBundlesRetentionFailures(
 
   const entries = [...flow.values()];
   const drained = entries.filter((e) => e.netChange < -DUST_THRESHOLD);
-  if (drained.length > 0) {
-    logger?.warn(
-      "Simulation detected pre-existing balance being swept from a restricted bundles contract",
-      {
-        changes: drained.map((e) => ({
-          address: e.address,
-          token: e.token,
-          netSwept: (-e.netChange).toString(),
-        })),
-      },
+  for (const entry of drained) {
+    warnings.push(
+      freezeWarning({
+        code: "BUNDLES_BALANCE_SWEPT",
+        severity: "warn",
+        chainId,
+        message:
+          "Simulation detected pre-existing balance being swept from a restricted bundles contract",
+        address: entry.address,
+        token: entry.token,
+        netSwept: -entry.netChange,
+      }),
     );
   }
 
   const retained = entries.filter((e) => e.netChange > DUST_THRESHOLD);
 
   if (retained.length > 0) {
-    return [
-      new BlacklistViolationError(
-        "Simulation detected asset transfers retained by restricted bundles contracts",
-        retained.map((e) => ({
-          address: e.address,
-          token: e.token,
-          netRetained: e.netChange,
-        })),
-      ),
-    ];
+    return {
+      status: "checked",
+      warnings,
+      failures: [
+        new BlacklistViolationError(
+          "Simulation detected asset transfers retained by restricted bundles contracts",
+          retained.map((e) => ({
+            address: e.address,
+            token: e.token,
+            netRetained: e.netChange,
+          })),
+        ),
+      ],
+    };
   }
-  return [];
+  return { status: "checked", warnings, failures: [] };
 }
 
 /** Reject the aggregate bundles-retention failure, if present. @internal */
 export function assertNoBundlesRetention(
   params: AssertNoBundlesRetentionParams,
 ): void {
-  const [failure] = findBundlesRetentionFailures(params);
+  const [failure] = checkBundlesRetention(params).failures;
   if (failure !== undefined) {
     throw failure;
   }

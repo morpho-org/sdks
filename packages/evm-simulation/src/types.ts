@@ -13,7 +13,7 @@ export type SimulationClient = Client<Transport, Chain>;
 
 /** Optional settings for one `simulate()` call. */
 export interface SimulationOptions {
-  /** Receives the SDK's diagnostic logs. */
+  /** @deprecated Ignored. Read `report.warnings` instead; will be removed in a future major after the coexistence minor. */
   readonly logger?: SimulationLogger;
   /**
    * Whole-simulation deadline in milliseconds (default 5000). After it passes,
@@ -50,6 +50,13 @@ export interface SimulationOptions {
    * `parentHash` that never matches the pinned block.
    */
   readonly parentHashCheck?: boolean;
+}
+
+/** @deprecated Ignored by the SDK. Read `report.warnings` instead; will be removed in a future major after the coexistence minor. */
+export interface SimulationLogger {
+  info(message: string, data?: Record<string, unknown>): void;
+  warn(message: string, data?: Record<string, unknown>): void;
+  error(message: string, data?: Record<string, unknown>): void;
 }
 
 // ─── Call-site data ────────────────────────────────────────────────────────────
@@ -203,13 +210,6 @@ export interface SimulationResult {
   readonly transfers: readonly Transfer[];
   /** Net per-asset balance changes, grouped by account, over the whole bundle. */
   readonly assetChanges: readonly AccountAssetChanges[];
-}
-
-/** Minimal structured logger the package calls for warnings and info. */
-export interface SimulationLogger {
-  info(message: string, data?: Record<string, unknown>): void;
-  warn(message: string, data?: Record<string, unknown>): void;
-  error(message: string, data?: Record<string, unknown>): void;
 }
 
 // ─── Internal (consumed by backend / pipeline) ───────────────────────────────

@@ -33,13 +33,14 @@ Repo-wide principles. The `Client → Entity → Action` layering of `morpho-sdk
 ### Immutability and class APIs
 
 - Helpers never mutate inputs; they may return an input or reuse an existing object unless their documented contract explicitly requires a fresh object.
+- Do not cache promises in mutable state. Cache the resolved value if needed. The [in-flight `getRequirements()` exception](./packages/morpho-sdk/AGENTS.md#architecture) still applies.
 - Do not use classes as value bags. If a type has no meaningful behavior beyond construction, copying, or a one-line conversion, model it as a `type`/`interface` and use local pure conversion where needed. Classes are for typed errors and domain objects with real behavior.
 - Never `deepFreeze` a class instance. Use readonly fields/types for API intent. `deepFreeze` is reserved for function outputs that are expected to be immutable descriptors submitted onchain or signed immediately after construction.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 - If a public helper would primarily return an instance of a public class, expose it as a static class method instead of a `*Utils` factory: prefer `Offer.create(...)`, `Group.create(...)`, `Tree.create(...)` over `OfferUtils.buildOffer(...)` or `OfferUtils.buildTree(...)` returning class instances.
 - Class-specific methods and getters delegate to pure `*Utils` namespace functions that accept readonly plain JavaScript objects compatible with the class's public shape. `*Utils` namespaces own deterministic object-compatible behavior, validation, encoding math, and struct reshaping; they are not the primary constructor surface for a class instance.
 
-> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (no input mutation), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (testability), [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) (early returns), [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) (single source of truth).
+> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (no input mutation), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (testability and promise caching), [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) (early returns), [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) (single source of truth).
 
 ---
 
@@ -168,6 +169,16 @@ The tooling decision is recorded in [ADR-2026-11-18](./docs/adrs/ADR-2026-11-18-
 - **`liquidity-sdk-viem` deprecation window.** Only the three-month source-removal wait is waived; npm deprecation notices and continued availability of published versions remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#liquidity-sdk-deprecation-window)).
 - **Migration guides on every major**, with codemods where mechanical.
 - **Experimental TransactionPlan APIs.** Only the scoped beta exports are exempt from major bumps and deprecation steps; minor changesets and stored-format guards remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#experimental-transactionplan-apis)).
+  This includes the Blue snapshot exports: `BlueMarketSnapshot`, `BluePositionSnapshot`, `BlueSnapshotChainMismatchError`, `BlueSnapshotStateMismatchError`, and `validateBlueMarketSnapshot`.
+  Blue supply exports `prepareBlueSupply` and `BlueSupplyPlanParams` are also covered.
+  For Blue collateral supply, the scoped exports are `prepareBlueSupplyCollateral` and `BlueSupplyCollateralPlanParams`.
+  Borrow plans also include `prepareBlueBorrow` and `BlueBorrowPlanParams`.
+  It also includes `prepareBlueSupplyCollateralBorrow` and `BlueSupplyCollateralBorrowPlanParams`.
+  This includes Blue repay plans: `prepareBlueRepay` and `BlueRepayPlanParams`.
+  It also includes `prepareBlueWithdraw` and `BlueWithdrawPlanParams`.
+  It also includes `prepareBlueWithdrawCollateral` and `BlueWithdrawCollateralPlanParams`.
+  This includes `prepareBlueRepayWithdrawCollateral` and `BlueRepayWithdrawCollateralPlanParams`.
+  The Blue refinance exports `prepareBlueRefinance` and `BlueRefinancePlanParams` are also covered.
 - **`evm-simulation` 9.0 `simulate` retype.** Only the successor, deprecation and coexistence-minor steps are waived, for `simulate` in `@morpho-org/evm-simulation` 9.0.0: its return type, its client-first signature, and the removal of `params.chainId`, `SimulationConfig`, `ChainSimulationConfig` and `InvalidChainIdError`, plus 8.9.0's `ChainSimulationClientConfig` and `ChainSimulationConfigEntry` and 8.8.0's `findings` and `SimulationRejectedError` name; the major changeset, migration guide and dependent audit remain required (see [docs/EXCEPTIONS.md](./docs/EXCEPTIONS.md#evm-simulation-report-returning-simulate)).
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
@@ -179,15 +190,16 @@ The tooling decision is recorded in [ADR-2026-11-18](./docs/adrs/ADR-2026-11-18-
 
 ## 8. Code style & tooling
 
-- Bun 1.4.4 + Node ≥26. Root checks: `bun run lint` and `bun run test`.
+- Bun 1.4.5 + Node ≥26. Root checks: `bun run lint` and `bun run test`.
 - Knip gates unused files, dependencies, and exports in `bun run lint`; public barrel exports aren't flagged (entry files).
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
+- Never push a working branch with `--no-verify`. Fix what the hook flags, or report the hook if it is broken.
 - Reuse semantic helpers exposed by direct dependencies instead of hand-rolling equivalents. When available, use viem's `isAddressEqual` for EVM address equality, and use `_try(accessor, ExpectedError)` for optional typed lookups. Always name the expected errors so unrelated failures propagate, and do not pass an accessor that can legitimately return `undefined` unless successful absence is explicitly tagged (for example with `null`). Lowercasing remains valid when normalization itself—not equality—is the goal, such as normalized map/set keys or deterministic output.
 - One concern per PR.
 
-> Applied by persona: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md).
+> Applied by personas: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) and [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (working-branch pushes in CI, conditional).
 
 ---
 
@@ -224,7 +236,7 @@ Baseline personas (always fire):
 | [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) | §1, [`morpho-sdk` Architecture](./packages/morpho-sdk/AGENTS.md#architecture) (layering), §2 (rule 5), §3, §4, §7 | Package boundaries, public surface and deprecation lifecycle, NodeNext import discipline, boundary-level type discipline. |
 | [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
 | [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) | [`morpho-sdk` Architecture](./packages/morpho-sdk/AGENTS.md#architecture) (Action layer), §1, §2, §5 (security invariants), §10 (review integrity rules) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
-| [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body), §10 (review integrity rules) | Swallowed errors, missing error states, dead code paths. |
+| [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §1 (promise caching), §2 (handling depth for rule 2 — see persona body), §10 (review integrity rules) | Swallowed errors, cached promises, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
 | [`documentation`](./.agents/pr-review-engine/agents/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
 | [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) | §5, §2 (rule 6), [`morpho-sdk` Architecture](./packages/morpho-sdk/AGENTS.md#architecture) (cross-handle statelessness tests) | Missing tests for new code paths and onchain interactions. |
@@ -233,7 +245,7 @@ Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) | `HAS_CI_RELEASE` (computed in [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) Step 4 — the single source of truth for the changed-file patterns that flip this flag, including review-control files) | §10 (the rules below) |
+| [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) | `HAS_CI_RELEASE` (computed in [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) Step 4 — the single source of truth for the changed-file patterns that flip this flag, including review-control files) | §8 (working-branch pushes in CI), §10 (the rules below) |
 | [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) | `HAS_PLUGIN_SKILLS` (any change under `.agents/**`, `.claude/**`, a `SKILL.md`, or a `.claude-plugin/*.json`) | §1 (single source of truth), §10 (this inventory) |
 
 Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/pr-review-engine/SKILL.md` Step 4. The `skill-authoring` persona checks that these inventory invariants — engine roster, this table, and the `> Applied by personas:` backlinks — stay in sync.
@@ -340,7 +352,7 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - Test command: `bun run test run --project <name>` for a single package (project names in `vitest.config.ts`; `bun run test` runs the full vitest suite). Go through the `test` script, not bare `vitest`: it wraps vitest in `dotenv --`, which fork projects need for `ERPC_SECRET`.
 - Checks: `bun run lint` (Biome `check` plus jsdoc-coverage, address, security-invariants, script-typecheck and knip gates) and `bun run build` (recursive `tsc` build of all packages).
 - Knowledge homes: [`MISSION.md`](./MISSION.md) for principles, this file for engineering rules, [`docs/EXCEPTIONS.md`](./docs/EXCEPTIONS.md) for scoped or temporary rule waivers, [`docs/adrs/`](./docs/adrs/) for frozen decision records, [`docs/jsdoc-style.md`](./docs/jsdoc-style.md) for JSDoc style, and per-package `AGENTS.md` files for package rules and glossaries.
-- Automated reviewer: [`.github/workflows/AGENTS.md`](./.github/workflows/AGENTS.md) says which reviewer runs on PRs, how to request a review and how to wait for its verdict; that file is not part of the public snapshot. Locally, `/review-pr-{gh,local}` runs the in-repo review engine.
+- Automated reviewer: see [the workflow guidance](./.github/workflows/AGENTS.md#automated-pr-review), which is not part of the public snapshot. Locally, `/review-pr-{gh,local}` runs the in-repo review engine.
 - Release policy: Changesets — every semver-relevant change to published package source ships a changeset; merging to `main`/`next` refreshes a release PR. Merging it on `main` syncs a public snapshot to `morpho-org/sdks`, whose `release.yml` publishes to npm (see §7, [`docs/release/public-repo-setup.md`](./docs/release/public-repo-setup.md) and [`docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md`](./docs/adrs/ADR-2026-05-12-release-pr-publish-on-push.md)).
 
 Retired in-repo workflows — use the shared skills from morpho-org/internal-skills instead:

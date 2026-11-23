@@ -47,7 +47,9 @@ describe("integration: vault V2 deposit", () => {
   ];
 
   it("emits three transfers with the expected token/from/to/amount triples", () => {
-    const transfers = parseTransfers([makeCall(depositLogs)]);
+    const transfers = parseTransfers([makeCall(depositLogs)], {
+      chainId: 1,
+    }).transfers;
     expect(transfers).toHaveLength(3);
 
     const byRole = {
@@ -93,7 +95,9 @@ describe("integration: WETH wrap/unwrap", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCall(logs)]);
+    const transfers = parseTransfers([makeCall(logs)], {
+      chainId: 1,
+    }).transfers;
     expect(transfers).toHaveLength(1);
     expect(transfers[0]!.to).toBe(getAddress(USER));
     expect(transfers[0]!.amount).toBe(amount);
@@ -114,7 +118,9 @@ describe("integration: WETH wrap/unwrap", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCall(logs)]);
+    const transfers = parseTransfers([makeCall(logs)], {
+      chainId: 1,
+    }).transfers;
     expect(transfers).toHaveLength(1);
     expect(transfers[0]!.from).toBe(getAddress(USER));
     expect(transfers[0]!.amount).toBe(amount);
@@ -143,7 +149,9 @@ describe("integration: multi-token market operation", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCall(logs)]);
+    const transfers = parseTransfers([makeCall(logs)], {
+      chainId: 1,
+    }).transfers;
     expect(transfers).toHaveLength(2);
 
     const wethIn = transfers.find((t) => t.token === getAddress(WETH));
@@ -179,7 +187,7 @@ describe("integration: determinism", () => {
       },
     ];
 
-    const result = parseTransfers([makeCall(logs)]);
+    const result = parseTransfers([makeCall(logs)], { chainId: 1 }).transfers;
     expect(result).toHaveLength(2);
     // DAI (0x6B) sorts before USDC (0xA0) in canonical order.
     expect(result[0]!.token.toLowerCase()).toBe(DAI.toLowerCase());
@@ -202,8 +210,10 @@ describe("integration: determinism", () => {
       data: enc256(200n),
     };
 
-    expect(parseTransfers([makeCall([log1, log2])])).toEqual(
-      parseTransfers([makeCall([log2, log1])]),
+    expect(
+      parseTransfers([makeCall([log1, log2])], { chainId: 1 }).transfers,
+    ).toEqual(
+      parseTransfers([makeCall([log2, log1])], { chainId: 1 }).transfers,
     );
   });
 });

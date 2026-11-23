@@ -19,7 +19,6 @@ import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/morphoViemExtension.js";
 import * as sdk from "../../index.js";
 import {
-  BundlesPermitMismatchError,
   EmptyMarketParamsListError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementSignature,
@@ -27,6 +26,7 @@ import {
 import {
   IncompleteTransactionPlanError,
   InvalidTransactionPlanError,
+  TransactionPlanSignatureMismatchError,
 } from "../error.js";
 import {
   applySignatures,
@@ -258,9 +258,11 @@ describe("prepareVaultV1InKindRedeem", () => {
           : step,
       ),
     };
-    expect(() => buildTransactions(edited)).toThrow(BundlesPermitMismatchError);
     expect(() => buildTransactions(edited)).toThrow(
-      expect.objectContaining({ field: "deadline" }),
+      TransactionPlanSignatureMismatchError,
+    );
+    expect(() => buildTransactions(edited)).toThrow(
+      expect.objectContaining({ field: "args.deadline" }),
     );
   });
 
