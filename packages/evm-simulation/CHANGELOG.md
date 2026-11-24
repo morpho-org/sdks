@@ -1,5 +1,22 @@
 # @morpho-org/evm-simulation
 
+## 9.1.1-next.0
+
+### Patch Changes
+
+- Retarget the prerelease-only Vault V2 Midnight adapter integration from vault-v2 `e7821fd` to `de2b5116eba5c03fb8e8ecfa9708569bc25c5ce1`. This updates the new Midnight surface before its first stable release; existing stable Blue adapter APIs are unchanged.
+
+  `VaultV2MidnightAdapter.familyCapId` and `VaultV2MidnightAdapterUtils.familyCapId` now require `enterGate` alongside `collateralParams`, `rcfThreshold`, and `liquidatorGate`. They use the `"collateralParams/rcfThreshold/liquidatorGate/enterGate"` domain and include `enterGate` in the encoded tuple. Markets with different enter gates no longer share family caps. Recompute stored family-cap IDs; the previous `"family"` IDs target the old contracts, even for ungated markets.
+
+  The canonical `midnightAdapterAbi` and its re-exported facades now reflect the pinned contract. Replace `setMinNetBuyRate`, `setMaxNetSellRate`, and `setShortfallAllowance` with their increase/decrease variants. Rate arguments remain absolute targets; shortfall allowance arguments are deltas. Submit and execute `decreaseMinNetBuyRate`, `increaseMaxNetSellRate`, and `increaseShortfallAllowance` through the adapter timelock, even when its delay is zero. Their counterparts are immediate curator calls. Updated events and rate-bound errors are included.
+
+  The Base registry now points to the vault-v2 `bbeda7b` deployment of the Midnight adapter factory and its rate and price ratifiers, with their deployment blocks. The Base Midnight address is unchanged. Adapters created by the previous factory are not recognized by the new factory. Fork fixtures install the new factory at its registry address because their pinned block predates the deployment; deterministic fixture adapter addresses change. Upgrade the maintained packages together when using the new Midnight surface.
+
+- Updated dependencies
+  - @morpho-org/morpho-sdk@10.1.0-next.0
+  - @morpho-org/blue-sdk@8.5.0-next.0
+  - @morpho-org/morpho-ts@4.6.0-next.0
+
 ## 9.1.0
 
 ### Minor Changes

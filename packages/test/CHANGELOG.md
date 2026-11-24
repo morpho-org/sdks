@@ -1,5 +1,37 @@
 # @morpho-org/test
 
+## 2.15.0-next.0
+
+### Minor Changes
+
+- Add a reusable Base-fork fixture for Vault V2 Midnight adapters with an optional Vault V2 salt and factory durations.
+- Align the Vault V2 Midnight adapter integration with the frozen `MidnightAdapter` interface (morpho-org/vault-v2@e7821fd). The adapter, factory and ratifier ABIs are regenerated, so the factory detects adapters with `isCreated`, `createMidnightAdapter` takes per-adapter `durations` and an `enterGateFactory`, and `maxTtm` changes through `increaseMaxTtm` and `decreaseMaxTtm`.
+
+  `VaultV2MidnightAdapter` replaces `minRate`, `noSalesWithShortfall` and `noSalesBelowFaceValue` with `minNetBuyRate`, `maxNetSellRate` and `shortfallAllowance`, and adds `enterGateFactory`. Market data renames `rate` to `netRate` and adds `forceRemoved` and `minForceSellPrice`. `VaultV2MidnightAdapterUtils` returns the frozen cap ids (adapter, `familyCapId`, then one collateral-token id per collateral; duration ids use the `"this/duration"` tag) and values markets from live Midnight net credit once a market has a loss factor. The `VaultV2MidnightAdapterUtils` helpers `collateralParamsCapId`, `gateCapId` and `rcfThresholdCapId`, and the `VaultV2MidnightAdapter` statics `collateralParamsCapId`, `enterGateCapId`, `liquidatorGateCapId` and `rcfThresholdCapId`, are removed; use `familyCapId` and `collateralTokenCapId` instead.
+
+  Vault exits through a Midnight liquidity adapter now follow the frozen adapter's `withdrawToVault` path. When `liquidityData` encodes a held, non-force-removed market of the vault asset, `AccrualVaultV2MidnightAdapter.maxWithdraw` returns the adapter's accrued credit capped by the market's `withdrawable` liquidity (limiter `liquidity`) instead of zero. Accrual snapshots carry the market's `withdrawable` liquidity (fetched from Midnight `marketState`), `VaultV2MidnightAdapterUtils` adds `marketId` and `maxWithdraw`, and morpho-sdk `withdraw` and `redeem` accept exits up to idle assets plus that amount. Deposits through a Midnight liquidity adapter still have zero capacity. `@morpho-org/morpho-ts` adds `MidnightMarketLib.id` (and `InvalidHexError`), the shared SSTORE2/CREATE2 market-id hash that both `VaultV2MidnightAdapterUtils.marketId` and midnight-sdk's `MarketUtils.toId` now call.
+
+  `@morpho-org/test` adds `installMidnightAdapterFactory` (throwing `MidnightAdapterFactoryDeploymentError` or `MidnightAdapterFactoryCodeError`) and `MIDNIGHT_ADAPTER_IDLE_FUNDING_DATA` for fork tests.
+
+### Patch Changes
+
+- Retarget the prerelease-only Vault V2 Midnight adapter integration from vault-v2 `e7821fd` to `de2b5116eba5c03fb8e8ecfa9708569bc25c5ce1`. This updates the new Midnight surface before its first stable release; existing stable Blue adapter APIs are unchanged.
+
+  `VaultV2MidnightAdapter.familyCapId` and `VaultV2MidnightAdapterUtils.familyCapId` now require `enterGate` alongside `collateralParams`, `rcfThreshold`, and `liquidatorGate`. They use the `"collateralParams/rcfThreshold/liquidatorGate/enterGate"` domain and include `enterGate` in the encoded tuple. Markets with different enter gates no longer share family caps. Recompute stored family-cap IDs; the previous `"family"` IDs target the old contracts, even for ungated markets.
+
+  The canonical `midnightAdapterAbi` and its re-exported facades now reflect the pinned contract. Replace `setMinNetBuyRate`, `setMaxNetSellRate`, and `setShortfallAllowance` with their increase/decrease variants. Rate arguments remain absolute targets; shortfall allowance arguments are deltas. Submit and execute `decreaseMinNetBuyRate`, `increaseMaxNetSellRate`, and `increaseShortfallAllowance` through the adapter timelock, even when its delay is zero. Their counterparts are immediate curator calls. Updated events and rate-bound errors are included.
+
+  The Base registry now points to the vault-v2 `bbeda7b` deployment of the Midnight adapter factory and its rate and price ratifiers, with their deployment blocks. The Base Midnight address is unchanged. Adapters created by the previous factory are not recognized by the new factory. Fork fixtures install the new factory at its registry address because their pinned block predates the deployment; deterministic fixture adapter addresses change. Upgrade the maintained packages together when using the new Midnight surface.
+
+- Align morpho-ts peers with the 4.6.0 release line containing the shared Midnight ABIs and `MidnightPositionLib`. Blue SDK, Blue SDK Viem and Midnight SDK require `^4.6.0-0`, accepting the planned `4.6.0-next` prereleases while rejecting stable 4.5.0, which lacks these exports. Blue SDK Viem requires `@morpho-org/blue-sdk` `^8.5.0-0` for the Midnight adapter entities.
+
+  The test packages retain their older stable morpho-ts alternatives and explicitly accept `4.6.0-next` prereleases. Only `@morpho-org/test/midnight` requires the new 4.6 exports; the root and `/fixtures` entrypoints remain independent of morpho-ts. Morpho Test also accepts Blue SDK 8.5, Test 2.15 and Midnight SDK 2.7 and 2.8 prereleases. Its Test peer is `^2.14.0 || ^2.15.0-0`: stable 2.14.0 contains the registry constants used by the shared fixtures, but the 2.14.0 prereleases do not.
+
+- Refactor internal Anvil process, RPC proxy, and fixture helpers without changing the public API or behavior.
+- The Vault V2 Midnight adapter fixture (`createVaultV2MidnightAdapterFixture`, `configureVaultV2MidnightAdapterCaps`, `takeVaultV2MidnightAdapterOffer`, `advanceVaultV2MidnightFixtureTime`, `BASE_MIDNIGHT_FORK_BLOCK_NUMBER`, `MAX_MIDNIGHT_ADAPTER_MARKETS` and their types) moves from the root and `/fixtures` entrypoints to the new `@morpho-org/test/midnight` subpath, and `@morpho-org/morpho-ts` becomes an optional peer dependency (`^2.7.0 || ^3.0.0 || ^4.0.0 || ^4.6.0-0`: the older stable alternatives plus the `4.6.0-next` prereleases) instead of a runtime dependency. The root and `/fixtures` helpers do not import morpho-ts, so they install and load with any morpho-ts version in that range or with none at all; only `@morpho-org/test/midnight` needs morpho-ts 4.6 or later (its `4.6.0-next` prereleases included), and projects that use it resolve one morpho-ts copy with a single set of error classes.
+- Updated dependencies
+  - @morpho-org/morpho-ts@4.6.0-next.0
+
 ## 2.14.0
 
 ### Minor Changes

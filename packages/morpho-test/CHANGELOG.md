@@ -1,5 +1,19 @@
 # @morpho-org/morpho-test
 
+## 4.4.1-next.0
+
+### Patch Changes
+
+- Align morpho-ts peers with the 4.6.0 release line containing the shared Midnight ABIs and `MidnightPositionLib`. Blue SDK, Blue SDK Viem and Midnight SDK require `^4.6.0-0`, accepting the planned `4.6.0-next` prereleases while rejecting stable 4.5.0, which lacks these exports. Blue SDK Viem requires `@morpho-org/blue-sdk` `^8.5.0-0` for the Midnight adapter entities.
+
+  The test packages retain their older stable morpho-ts alternatives and explicitly accept `4.6.0-next` prereleases. Only `@morpho-org/test/midnight` requires the new 4.6 exports; the root and `/fixtures` entrypoints remain independent of morpho-ts. Morpho Test also accepts Blue SDK 8.5, Test 2.15 and Midnight SDK 2.7 and 2.8 prereleases. Its Test peer is `^2.14.0 || ^2.15.0-0`: stable 2.14.0 contains the registry constants used by the shared fixtures, but the 2.14.0 prereleases do not.
+
+- Updated dependencies
+  - @morpho-org/midnight-sdk@2.8.0-next.0
+  - @morpho-org/blue-sdk@8.5.0-next.0
+  - @morpho-org/test@2.15.0-next.0
+  - @morpho-org/morpho-ts@4.6.0-next.0
+
 ## 4.4.0
 
 ### Minor Changes

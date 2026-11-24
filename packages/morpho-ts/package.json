@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "Framework-free TypeScript helpers and shared Morpho primitives: addresses, ABIs, math, typed errors, time and formatting utilities.",
-  "version": "4.5.0",
+  "version": "4.6.0-next.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
